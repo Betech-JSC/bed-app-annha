@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "jsx": "react",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ],
+      "@assets/*": [
+        "assets/*"
+      ],
+      "@reducers/*": [
+        "reducers/*"
+      ]
+    }
+  },
+  "extends": "expo/tsconfig.base"
+}

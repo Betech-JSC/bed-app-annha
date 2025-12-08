@@ -1,0 +1,83 @@
+{
+  "expo": {
+    "name": "skysend",
+    "scheme": "skysend",
+    "slug": "react-native-boilerplate",
+    "version": "1.0.0",
+    "projectId": "363ab25f-f7bc-4a57-869d-c054d3e254f7",
+    "updates": {
+      "enabled": true,
+      "fallbackToCacheTimeout": 0
+    },
+    "jsEngine": "hermes",
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "experiments": {
+      "tsconfigPaths": true
+    },
+    "plugins": [
+      "expo-router",
+        [
+          "expo-notifications",
+          {
+            "icon": "./assets/icon.png",
+            "color": "#ffffff",
+            "defaultChannel": "default",
+            "enableBackgroundRemoteNotifications": true,
+            "sounds": [
+              "./assets/noti.wav"
+            ]
+          }
+        ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "skysend",
+          "organization": "betech-gg"
+        }
+      ]
+    ],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.toannguyen112.reactnativeboilerplate",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "usesNonExemptEncryption": false,
+      "config": {
+        "usesPushNotifications": true,
+        "googleSignIn": {
+          "reservedClientId": "YOUR_IOS_REVERSED_CLIENT_ID"
+        }
+      },
+      "googleServicesFile": "./GoogleService-Info.plist"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.toannguyen112.reactnativeboilerplate",
+      "googleServicesFile": "./google-services.json"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "363ab25f-f7bc-4a57-869d-c054d3e254f7"
+      }
+    }
+  }
+}
