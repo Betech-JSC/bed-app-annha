@@ -4,11 +4,12 @@ export default function ProjectsLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
         animation: "slide_from_right",
       }}
     >
       <Stack.Screen name="index" />
+      <Stack.Screen name="create" />
       <Stack.Screen name="[id]" />
       <Stack.Screen name="[id]/contract" />
       <Stack.Screen name="[id]/payments" />

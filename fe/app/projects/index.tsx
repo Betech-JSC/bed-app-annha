@@ -11,6 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
+import LogoutButton from "@/components/LogoutButton";
 
 export default function ProjectsListScreen() {
   const router = useRouter();
@@ -26,9 +27,7 @@ export default function ProjectsListScreen() {
     try {
       setLoading(true);
       const response = await projectApi.getProjects({ my_projects: true });
-      if (response.success) {
-        setProjects(response.data.data || []);
-      }
+      setProjects(response.data.data || []);
     } catch (error) {
       console.error("Error loading projects:", error);
     } finally {
@@ -134,12 +133,15 @@ export default function ProjectsListScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Danh Sách Dự Án</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push("/projects/create")}
-        >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <LogoutButton variant="icon" />
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => router.push("/projects/create")}
+          >
+            <Ionicons name="add" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -191,6 +193,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "700",
     color: "#1F2937",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   addButton: {
     width: 40,

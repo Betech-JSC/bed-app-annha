@@ -23,8 +23,8 @@ return new class extends Migration
             $table->string('image', 100)->nullable();
             $table->string('phone', 100)->nullable();
 
-            $table->string('role')->default('sender')
-                ->comment('User role: sender, customer');
+            $table->string('role')->default('admin')
+                ->comment('User role: admin (super admin only)');
             $table->rememberToken();
             $table->timestamps();
             $table->softDeletes();

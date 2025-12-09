@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,8 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Modal,
+  FlatList,
 } from "react-native";
 import { CreateBonusData } from "@/api/bonusApi";
+import { employeesApi, Employee } from "@/api/employeesApi";
+import { Ionicons } from "@expo/vector-icons";
 
 interface BonusFormProps {
   onSubmit: (data: CreateBonusData) => void;
@@ -31,6 +35,48 @@ export default function BonusForm({
     description: initialData?.description || "",
   });
 
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
+    null
+  );
+
+  useEffect(() => {
+    loadEmployees();
+    if (initialData?.user_id) {
+      // Load selected employee if provided
+      loadEmployee(initialData.user_id);
+    }
+  }, []);
+
+  const loadEmployees = async () => {
+    try {
+      const response = await employeesApi.getEmployees({ per_page: 100 });
+      if (response.success) {
+        setEmployees(response.data || []);
+      }
+    } catch (error) {
+      console.error("Error loading employees:", error);
+    }
+  };
+
+  const loadEmployee = async (userId: number) => {
+    try {
+      const response = await employeesApi.getEmployeeById(userId);
+      if (response.success) {
+        setSelectedEmployee(response.data);
+      }
+    } catch (error) {
+      console.error("Error loading employee:", error);
+    }
+  };
+
+  const handleSelectEmployee = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setFormData({ ...formData, user_id: employee.id });
+    setShowEmployeeModal(false);
+  };
+
   const handleSubmit = () => {
     if (!formData.user_id || !formData.amount) {
       return;
@@ -41,6 +87,26 @@ export default function BonusForm({
   return (
     <ScrollView style={styles.container}>
       <View style={styles.form}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Nhân viên *</Text>
+          <TouchableOpacity
+            style={styles.selectButton}
+            onPress={() => setShowEmployeeModal(true)}
+          >
+            <Text
+              style={[
+                styles.selectButtonText,
+                !selectedEmployee && styles.selectButtonPlaceholder,
+              ]}
+            >
+              {selectedEmployee
+                ? selectedEmployee.name
+                : "Chọn nhân viên"}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Loại thưởng</Text>
           <View style={styles.radioGroup}>
@@ -118,6 +184,43 @@ export default function BonusForm({
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        visible={showEmployeeModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowEmployeeModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Chọn nhân viên</Text>
+            <TouchableOpacity
+              onPress={() => setShowEmployeeModal(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={employees}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.employeeItem}
+                onPress={() => handleSelectEmployee(item)}
+              >
+                <View style={styles.employeeInfo}>
+                  <Text style={styles.employeeName}>{item.name}</Text>
+                  <Text style={styles.employeeEmail}>{item.email}</Text>
+                </View>
+                {selectedEmployee?.id === item.id && (
+                  <Ionicons name="checkmark-circle" size={24} color="#3B82F6" />
+                )}
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -200,5 +303,65 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  selectButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  selectButtonText: {
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  selectButtonPlaceholder: {
+    color: "#9CA3AF",
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+  modalHeader: {
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  closeButton: {
+    padding: 4,
+  },
+  employeeItem: {
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  employeeInfo: {
+    flex: 1,
+  },
+  employeeName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  employeeEmail: {
+    fontSize: 14,
+    color: "#6B7280",
   },
 });

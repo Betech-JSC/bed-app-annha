@@ -55,6 +55,12 @@ export default function ProjectDetailScreen() {
       color: "#F59E0B",
     },
     {
+      title: "Quản Lý Doanh Thu",
+      icon: "trending-up-outline",
+      route: `/projects/${id}/revenue`,
+      color: "#10B981",
+    },
+    {
       title: "Chi Phí Dự Án",
       icon: "calculator-outline",
       route: `/projects/${id}/costs`,

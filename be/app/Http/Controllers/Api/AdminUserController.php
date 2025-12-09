@@ -17,9 +17,9 @@ class AdminUserController extends Controller
     {
         $query = User::with(['wallet']);
 
-        // Filter theo role
-        if ($request->has('role') && in_array($request->role, ['sender', 'customer'])) {
-            $query->where('role', $request->role);
+        // Filter theo role (chỉ admin)
+        if ($request->has('role') && $request->role === 'admin') {
+            $query->where('role', 'admin');
         }
 
         // Filter theo status (active/banned)
@@ -128,7 +128,7 @@ class AdminUserController extends Controller
             'name' => 'sometimes|string|max:255',
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'phone' => 'sometimes|string|max:20',
-            'role' => ['sometimes', Rule::in(['sender', 'customer'])],
+            'role' => ['sometimes', Rule::in(['admin'])],
             'password' => 'sometimes|string|min:6',
         ]);
 
@@ -218,5 +218,82 @@ class AdminUserController extends Controller
             'message' => 'Đã xóa tài khoản vĩnh viễn',
         ]);
     }
-}
 
+    /**
+     * Thống kê tổng quan nhân viên (HR dashboard)
+     */
+    public function stats()
+    {
+        $totalEmployees = User::whereNull('deleted_at')->count();
+        $activeEmployees = User::whereNull('deleted_at')->count();
+        $onLeave = 0; // TODO: Implement leave tracking
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total' => $totalEmployees,
+                'active' => $activeEmployees,
+                'on_leave' => $onLeave,
+            ],
+        ]);
+    }
+
+    /**
+     * Thống kê chi tiết nhân viên
+     */
+    public function employeeStats(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        $month = $request->get('month', date('m'));
+        $year = $request->get('year', date('Y'));
+
+        // Get time tracking stats
+        $timeTrackings = \App\Models\TimeTracking::where('user_id', $user->id)
+            ->whereYear('check_in_at', $year)
+            ->whereMonth('check_in_at', $month)
+            ->where('status', 'approved')
+            ->get();
+
+        $totalHours = $timeTrackings->sum('total_hours') ?? 0;
+        $totalDays = $timeTrackings->count();
+
+        // Get payroll stats
+        $payrolls = \App\Models\Payroll::where('user_id', $user->id)
+            ->whereYear('period_start', $year)
+            ->whereMonth('period_start', $month)
+            ->get();
+
+        $totalSalary = $payrolls->sum('net_salary') ?? 0;
+
+        // Get bonuses
+        $bonuses = \App\Models\Bonus::where('user_id', $user->id)
+            ->whereYear('created_at', $year)
+            ->whereMonth('created_at', $month)
+            ->get();
+
+        $totalBonuses = $bonuses->sum('amount') ?? 0;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'employee' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ],
+                'time_tracking' => [
+                    'total_hours' => $totalHours,
+                    'total_days' => $totalDays,
+                ],
+                'payroll' => [
+                    'total_salary' => $totalSalary,
+                ],
+                'bonuses' => [
+                    'total' => $totalBonuses,
+                    'count' => $bonuses->count(),
+                ],
+            ],
+        ]);
+    }
+}

@@ -11,13 +11,20 @@ export default function IndexScreen() {
   useEffect(() => {
     // Check if user is logged in
     if (user?.token) {
-      // User is logged in, redirect to projects
-      router.replace("/projects");
+      // User is logged in, redirect based on role
+      const userRole = user?.role?.toLowerCase();
+      if (userRole === "admin") {
+        // Super Admin hoặc Admin -> vào HR module
+        router.replace("/hr");
+      } else {
+        // User thường -> vào projects
+        router.replace("/projects");
+      }
     } else {
       // User is not logged in, redirect to login
       router.replace("/login");
     }
-  }, [user?.token]);
+  }, [user?.token, user?.role]);
 
   return (
     <View style={styles.container}>

@@ -14,3 +14,4 @@ export { default as BonusForm } from "./BonusForm";
 export { default as CalendarView } from "./CalendarView";
 export { default as SalaryConfigForm } from "./SalaryConfigForm";
 export { default as ExportButtons } from "./ExportButtons";
+export { default as LogoutButton } from "./LogoutButton";

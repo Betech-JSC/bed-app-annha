@@ -8,7 +8,8 @@
         "heroku-postbuild": "npm run build",
         "dev": "vite",
         "build": "vite build && vite build --ssr",
-        "socket": "php artisan reverb:start"
+        "socket": "php artisan reverb:start",
+        "fresh": "php artisan migrate:fresh --seed"
     },
     "devDependencies": {
         "@inertiajs/vue3": "^1.0.15",

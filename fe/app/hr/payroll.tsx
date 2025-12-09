@@ -12,6 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import { payrollApi, Payroll } from "@/api/payrollApi";
 import { Ionicons } from "@expo/vector-icons";
+import ExportButtons from "@/components/ExportButtons";
 
 export default function PayrollScreen() {
   const router = useRouter();
@@ -127,6 +128,11 @@ export default function PayrollScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Bảng Lương</Text>
+        <ExportButtons />
+      </View>
+
       <FlatList
         data={payrolls}
         renderItem={renderItem}
@@ -136,6 +142,7 @@ export default function PayrollScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
+            <Ionicons name="cash-outline" size={64} color="#9CA3AF" />
             <Text style={styles.emptyText}>Không có dữ liệu</Text>
           </View>
         }
@@ -153,6 +160,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  header: {
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 12,
   },
   card: {
     backgroundColor: "#FFFFFF",
@@ -224,5 +243,6 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: "#6B7280",
+    marginTop: 16,
   },
 });

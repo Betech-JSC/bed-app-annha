@@ -17,13 +17,18 @@ class AuthController extends Controller
 {
     public function register(Request $request)
     {
+        // Disable register - chỉ tạo user qua seeder hoặc admin panel
+        return ApiResponse::error('Đăng ký tài khoản đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.', 403);
+
+        // Code cũ đã được comment để tham khảo
+        /*
         try {
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'email' => 'required|string|email|max:255|unique:users',
                 'phone' => 'nullable|string|max:20',
                 'password' => 'required|string|min:8',
-                'role' => 'nullable|string|in:sender,customer',
+                'role' => 'nullable|string|in:admin', // Chỉ cho phép admin
                 'fcm_token' => 'nullable|string', // FCM token từ frontend
             ]);
 
@@ -31,12 +36,13 @@ class AuthController extends Controller
                 return ApiResponse::validationError($validator);
             }
 
+            // Chỉ cho phép tạo user với role admin (super admin)
             $userData = [
                 'name' => $request->name,
                 'email' => $request->email,
                 'phone' => $request->phone,
                 'password' => Hash::make($request->password),
-                'role' => $request->role ?? 'customer', // Default to customer if not provided
+                'role' => 'admin', // Chỉ tạo admin
             ];
 
             // Lưu FCM token nếu có
@@ -63,6 +69,7 @@ class AuthController extends Controller
         } catch (\Throwable $th) {
             return ApiResponse::error('An error occurred: ' . $th->getMessage());
         }
+        */
     }
 
     public function login(Request $request)

@@ -30,6 +30,8 @@ use App\Http\Controllers\Api\AcceptanceStageController;
 use App\Http\Controllers\Api\DefectController;
 use App\Http\Controllers\Api\ProjectProgressController;
 use App\Http\Controllers\Api\ProjectDocumentController;
+use App\Http\Controllers\Api\RevenueController;
+use App\Http\Controllers\Api\CostController;
 use App\Http\Controllers\Api\TimeTrackingController;
 use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\BonusController;
@@ -73,68 +75,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('kyc/submit', [\App\Http\Controllers\Api\KycController::class, 'submit']);
     Route::get('kyc/status', [\App\Http\Controllers\Api\KycController::class, 'status']);
 
-    // Ví điện tử
-    Route::get('wallets/me', [WalletController::class, 'me']);
-    Route::get('wallets/transactions', [WalletController::class, 'transactions']);
-    Route::post('wallets/deposit', [WalletController::class, 'deposit']);
-    Route::post('wallets/deposits/{uuid}/confirm', [WalletController::class, 'confirmDeposit']);
-    Route::post('wallets/deposits/{uuid}/approve', [WalletController::class, 'approveDeposit']);
 
-    // Tìm kiếm Flight phù hợp (Filter Search cho Sender)
-    Route::get('/flights/search', [FlightSearchController::class, 'index'])
-        ->name('flights.search');
 
-    // Danh sách chuyến bay
-    Route::get('/flights', [FlightController::class, 'index']);
-
-    // Đăng chuyến bay
-    Route::post('/flights/store', [FlightController::class, 'store'])
-        ->name('flights.store');
-
-    // Chi tiết chuyến bay
-    Route::get('flights/{id}/show', [FlightController::class, 'show']);
-    Route::put('flights/{id}/update', [FlightController::class, 'update']);
-
-    // Hủy chuyến bay
-    Route::delete('/flights/{id}/destroy', [FlightController::class, 'destroy'])
-        ->name('flights.destroy');
-
-    // Xác thực chuyến bay
-    Route::post('/flights/{id}/verify', [FlightController::class, 'verify']);
-
-    // Gửi yêu cầu riêng cho 1 hành khách (Private Request)
-    Route::post('private-requests/sent', [RequestController::class, 'sent']);
-
-    // Tạo request cho chuyến bay
-    Route::post('private-requests/store', [RequestController::class, 'store']);
-
-    // Hủy request
-    Route::post('private-requests/{id}/cancel', [RequestController::class, 'cancel']);
-
-    // Lấy danh sách yêu cầu riêng đã gửi
-    Route::get('private-requests', [RequestController::class, 'index']);
-
-    // Chi tiết requests
-    Route::get('private-requests/{id}/show', [RequestController::class, 'show']);
-
-    // Lấy danh sách requests của một flight (cho customer)
-    Route::get('flights/{flightId}/requests', [RequestController::class, 'getRequestsByFlight']);
-
-    // Xác nhận request 
-    Route::post('/requests/{id}/accept', [RequestController::class, 'accept']);
-    Route::post('/requests/{id}/decline', [RequestController::class, 'decline']);
-
-    // Danh sách requets đang chờ
-    Route::get('/requests/listPendingRequests', [RequestController::class, 'listPendingRequests']);
-
-    // Customer: danh sách yêu cầu ưu tiên/gấp
-    Route::get('/customer/requests/priority', [RequestController::class, 'priorityForCustomer']);
-
-    // Customer: danh sách yêu cầu phù hợp
-    Route::get('/customer/requests/matching', [RequestController::class, 'matchingForCustomer']);
-
-    // Sender: danh sách khách hàng có sẵn để gửi request
-    Route::get('/sender/available-customers', [FlightController::class, 'availableCustomers']);
 
     // ===================================================================
     // PROJECT MANAGEMENT ROUTES
@@ -164,6 +106,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/additional-costs', [AdditionalCostController::class, 'store']);
         Route::post('/{projectId}/additional-costs/{id}/approve', [AdditionalCostController::class, 'approve']);
         Route::post('/{projectId}/additional-costs/{id}/reject', [AdditionalCostController::class, 'reject']);
+
+        // Revenue Management
+        Route::get('/{projectId}/revenue/summary', [RevenueController::class, 'projectSummary']);
+        Route::get('/{projectId}/revenue/dashboard', [RevenueController::class, 'dashboard']);
+        Route::get('/{projectId}/revenue/costs-by-category', [RevenueController::class, 'costsByCategory']);
+
+        // Costs Management
+        Route::get('/{projectId}/costs', [CostController::class, 'index']);
+        Route::post('/{projectId}/costs', [CostController::class, 'store']);
+        Route::put('/{projectId}/costs/{id}', [CostController::class, 'update']);
+        Route::delete('/{projectId}/costs/{id}', [CostController::class, 'destroy']);
+        Route::post('/{projectId}/costs/{id}/submit', [CostController::class, 'submit']);
+        Route::post('/{projectId}/costs/{id}/approve-management', [CostController::class, 'approveByManagement']);
+        Route::post('/{projectId}/costs/{id}/approve-accountant', [CostController::class, 'approveByAccountant']);
+        Route::post('/{projectId}/costs/{id}/reject', [CostController::class, 'reject']);
 
         // Personnel
         Route::get('/{projectId}/personnel', [ProjectPersonnelController::class, 'index']);
@@ -236,6 +193,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/work-schedule/{id}', [WorkScheduleController::class, 'update']);
         Route::delete('/work-schedule/{id}', [WorkScheduleController::class, 'destroy']);
         Route::get('/work-schedule/calendar', [WorkScheduleController::class, 'calendar']);
+
+        // Employees (using AdminUserController)
+        Route::get('/employees', [AdminUserController::class, 'index']);
+        Route::get('/employees/{id}', [AdminUserController::class, 'show']);
+        Route::get('/employees/stats', [AdminUserController::class, 'stats']);
+        Route::get('/employees/{id}/stats', [AdminUserController::class, 'employeeStats']);
     });
 
     // User routes (không cần HR role)
@@ -261,27 +224,6 @@ Route::controller(AuthController::class)->group(function () {
     Route::post('auth/{provider}/login', 'handleProviderCallback');
 });
 
-// Lấy danh sách tất cả sân bay
-Route::get('/airports', [AirportController::class, 'index']);
-
-// Tìm kiếm sân bay theo từ khóa (code, name_vi, name_en, city_code)
-Route::get('/airports/search', [AirportController::class, 'search']);
-
-// Lấy chi tiết 1 sân bay theo code (IATA/ICAO)
-Route::get('/airports/{code}', [AirportController::class, 'show']);
-
-// Danh sách hãng hàng không nội địa
-Route::get('/airlines', [AirlineController::class, 'index']);
-
-// Tìm kiếm hãng hàng không
-Route::get('/airlines/search', [AirlineController::class, 'search']);
-
-// Chi tiết hãng hàng không theo mã IATA/ICAO
-Route::get('/airlines/{code}', [AirlineController::class, 'show']);
-
-// Phương thức thanh toán
-Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
-Route::get('/payment-methods/{code}', [PaymentMethodController::class, 'show']);
 
 
 // routes/api.php

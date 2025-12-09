@@ -8,6 +8,8 @@ use Illuminate\Support\Str;
 
 class Payroll extends Model
 {
+    protected $table = 'payroll';
+
     protected $fillable = [
         'uuid',
         'user_id',

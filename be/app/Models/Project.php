@@ -77,6 +77,11 @@ class Project extends Model
         return $this->hasMany(AdditionalCost::class);
     }
 
+    public function costs(): HasMany
+    {
+        return $this->hasMany(Cost::class);
+    }
+
     public function personnel(): HasMany
     {
         return $this->hasMany(ProjectPersonnel::class);

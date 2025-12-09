@@ -11,7 +11,9 @@ import { useRouter } from "expo-router";
 import { timeTrackingApi } from "@/api/timeTrackingApi";
 import { payrollApi } from "@/api/payrollApi";
 import { bonusApi } from "@/api/bonusApi";
+import { employeesApi } from "@/api/employeesApi";
 import { Ionicons } from "@expo/vector-icons";
+import LogoutButton from "@/components/LogoutButton";
 
 export default function HRDashboardScreen() {
   const router = useRouter();
@@ -30,17 +32,19 @@ export default function HRDashboardScreen() {
   const loadStats = async () => {
     try {
       setLoading(true);
-      const [timeTrackingRes, payrollRes, bonusesRes] = await Promise.all([
-        timeTrackingApi.getTimeTracking({ status: "pending", page: 1 }),
-        payrollApi.getPayroll({ status: "calculated", page: 1 }),
-        bonusApi.getBonuses({ status: "pending", page: 1 }),
-      ]);
+      const [timeTrackingRes, payrollRes, bonusesRes, employeesRes] =
+        await Promise.all([
+          timeTrackingApi.getTimeTracking({ status: "pending", page: 1 }),
+          payrollApi.getPayroll({ status: "calculated", page: 1 }),
+          bonusApi.getBonuses({ status: "pending", page: 1 }),
+          employeesApi.getEmployees({ page: 1, per_page: 1 }),
+        ]);
 
       setStats({
         pendingTimeTracking: timeTrackingRes.data?.total || 0,
         pendingPayroll: payrollRes.data?.total || 0,
         pendingBonuses: bonusesRes.data?.total || 0,
-        totalEmployees: 0, // TODO: Get from users API
+        totalEmployees: employeesRes.data?.pagination?.total || 0,
       });
     } catch (error) {
       console.error("Error loading stats:", error);
@@ -61,6 +65,7 @@ export default function HRDashboardScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Quản Lý Nhân Sự</Text>
+        <LogoutButton variant="icon" />
       </View>
 
       <View style={styles.statsContainer}>
@@ -154,6 +159,9 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   title: {
     fontSize: 24,

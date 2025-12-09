@@ -27,13 +27,28 @@ export default function RegisterScreen() {
     phone: "",
     password: "",
     confirmPassword: "",
-    role: "customer" as "sender" | "customer",
+    role: "admin" as "admin",
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleRegister = async () => {
+    // Đăng ký đã bị vô hiệu hóa - chỉ cho phép super admin
+    Alert.alert(
+      "Đăng ký đã bị vô hiệu hóa",
+      "Chức năng đăng ký tài khoản đã bị vô hiệu hóa. Chỉ Super Admin mới có thể truy cập ứng dụng. Vui lòng liên hệ quản trị viên để được cấp tài khoản.",
+      [
+        {
+          text: "Quay lại đăng nhập",
+          onPress: () => router.replace("/login"),
+        },
+      ]
+    );
+    return;
+
+    // Code cũ đã được comment
+    /*
     // Validation
     if (!formData.name || !formData.email || !formData.password) {
       Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin bắt buộc");
@@ -90,7 +105,7 @@ export default function RegisterScreen() {
         Alert.alert("Thành công", "Đăng ký thành công!", [
           {
             text: "OK",
-            onPress: () => router.replace("/projects"),
+            onPress: () => router.replace("/hr"),
           },
         ]);
       } else {
@@ -104,6 +119,7 @@ export default function RegisterScreen() {
     } finally {
       setLoading(false);
     }
+    */
   };
 
   return (

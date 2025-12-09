@@ -4,7 +4,7 @@ export default function TimeTrackingLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
         animation: "slide_from_right",
       }}
     >

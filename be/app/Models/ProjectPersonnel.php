@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProjectPersonnel extends Model
 {
+    protected $table = 'project_personnel';
+
     protected $fillable = [
         'project_id',
         'user_id',

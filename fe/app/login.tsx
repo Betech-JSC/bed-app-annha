@@ -50,7 +50,7 @@ export default function LoginScreen() {
         fcm_token: fcmToken,
       });
 
-      if (response.data.success && response.data.data?.user) {
+      if (response.data.success) {
         const userData = response.data.data.user;
 
         // Save user to Redux
@@ -66,8 +66,15 @@ export default function LoginScreen() {
           })
         );
 
-        // Redirect based on role or to projects
-        router.replace("/projects");
+        // Redirect based on role
+        const userRole = userData.role?.toLowerCase();
+        if (userRole === "admin") {
+          // Super Admin hoặc Admin -> vào HR module
+          router.replace("/hr");
+        } else {
+          // User thường -> vào projects
+          router.replace("/projects");
+        }
       } else {
         Alert.alert("Lỗi", response.data.message || "Đăng nhập thất bại");
       }

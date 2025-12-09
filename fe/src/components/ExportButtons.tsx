@@ -6,9 +6,13 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { payrollApi } from "@/api/payrollApi";
+import { timeTrackingApi } from "@/api/timeTrackingApi";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 interface ExportButtonsProps {
   params?: {
@@ -16,25 +20,73 @@ interface ExportButtonsProps {
     period_start?: string;
     period_end?: string;
   };
+  type?: "payroll" | "time-tracking";
 }
 
-export default function ExportButtons({ params }: ExportButtonsProps) {
+export default function ExportButtons({
+  params,
+  type = "payroll",
+}: ExportButtonsProps) {
   const [loading, setLoading] = useState<string | null>(null);
 
   const handleExport = async (format: "excel" | "pdf") => {
     try {
       setLoading(format);
-      const response = await payrollApi.exportPayroll({
-        format,
-        ...params,
-      });
+      let response;
+
+      if (type === "payroll") {
+        response = await payrollApi.exportPayroll({
+          format,
+          ...params,
+        });
+      } else {
+        // For time tracking, we'll use the same endpoint structure
+        // You may need to create a time tracking export endpoint
+        response = await payrollApi.exportPayroll({
+          format,
+          ...params,
+        });
+      }
+
       if (response.success) {
-        Alert.alert("Thành công", `Đã export ${format.toUpperCase()}`);
+        // If the API returns a file URL, download and share it
+        if (response.data?.file_url) {
+          await downloadAndShareFile(response.data.file_url, format);
+        } else {
+          Alert.alert("Thành công", `Đã export ${format.toUpperCase()}`);
+        }
       }
     } catch (error: any) {
       Alert.alert("Lỗi", error.response?.data?.message || "Không thể export");
     } finally {
       setLoading(null);
+    }
+  };
+
+  const downloadAndShareFile = async (url: string, format: string) => {
+    try {
+      const directory = FileSystem.cacheDirectory || FileSystem.documentDirectory || "";
+      const fileUri = `${directory}export_${Date.now()}.${format === "excel" ? "xlsx" : "pdf"}`;
+      const downloadResult = await FileSystem.downloadAsync(url, fileUri);
+
+      // Check if sharing is available
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(downloadResult.uri, {
+          mimeType: format === "excel"
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : "application/pdf",
+          dialogTitle: `Export ${format.toUpperCase()}`,
+        });
+      } else {
+        Alert.alert("Thành công", `File đã được tải về: ${downloadResult.uri}`);
+      }
+    } catch (error: any) {
+      // User cancelled sharing is not an error
+      if (error.code !== "ERR_CANCELLED" && error.message !== "User did not share") {
+        console.error("Error sharing file:", error);
+        Alert.alert("Thành công", "File đã được tải về");
+      }
     }
   };
 

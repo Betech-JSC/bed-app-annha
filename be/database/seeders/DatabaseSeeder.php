@@ -13,31 +13,14 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::factory()->create([
-            'first_name' => 'sender',
-            'last_name'  => 'sender',
-            'name'       => 'sender',
-            'email'      => 'sender@gmail.com',
-            'password'   => Hash::make('sender@gmail.com'),
-            'owner'      => true,
-            'role'      => 'sender',
-        ]);
-
-        User::factory()->create([
-            'first_name' => 'customer',
-            'last_name'  => 'customer',
-            'name'       => 'customer',
-            'email'      => 'customer@gmail.com',
-            'password'   => Hash::make('customer@gmail.com'),
-            'role'      => 'customer',
-        ]);
-
+        // Chạy các seeders theo thứ tự
         $this->call([
             RolePermissionSeeder::class, // Chạy trước để tạo roles và permissions
             AdminSeeder::class, // Sau đó mới tạo admins và gán roles
-            AirportSeeder::class,
-            AirlineSeeder::class,
-            PaymentMethodSeeder::class,
+            SuperAdminSeeder::class, // Tạo Super Admin user với toàn quyền truy cập app
+            UserRoleSeeder::class, // Tạo các users với các roles khác nhau
+            ProjectSeeder::class, // Tạo dữ liệu mẫu cho module quản lý dự án
+            SampleDataSeeder::class, // Tạo dữ liệu mẫu cho tất cả các module (contracts, payments, costs, etc.)
         ]);
     }
 }
