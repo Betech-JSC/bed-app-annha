@@ -1,325 +1,309 @@
-// Login Screen - Professional UI/UX
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  SafeAreaView,
   ActivityIndicator,
 } from "react-native";
-import api from "@/api/api";
 import { useRouter } from "expo-router";
-import { useDispatch, useSelector } from "react-redux";
-import { setUser } from "@/reducers/userSlice";
-import { RootState } from "@/store";
-import { MaterialIcons } from "@expo/vector-icons";
+import { useDispatch } from "react-redux";
+import api from "@/api/api";
+import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
-import Constants from "expo-constants";
-import { getDatabase, ref, set } from "firebase/database";
-import { app } from "@/firebaseConfig";
-import SocialMedia from "./components/SocialMedia";
+import { setUser } from "@/reducers/userSlice";
 
 export default function LoginScreen() {
-  const dispatch = useDispatch();
   const router = useRouter();
-  const user = useSelector((state: RootState) => state.user);
-
-  // Tất cả hooks phải được gọi trước conditional return
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const dispatch = useDispatch();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Redirect nếu đã đăng nhập
-  useEffect(() => {
-    if (user?.token && user?.role) {
-      if (user.role === "sender") {
-        router.replace("/(tabs)/(sender)/home");
-      } else if (user.role === "customer") {
-        router.replace("/(tabs)/(customer)/home_customer");
-      }
-    }
-  }, [user, router]);
-
-  // Nếu đang check auth, hiển thị loading
-  if (user?.token && user?.role) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background-light dark:bg-background-dark">
-        <ActivityIndicator size="large" color="#2563EB" />
-      </View>
-    );
-  }
-
-  const validateForm = () => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!formData.email.trim()) {
-      newErrors.email = "Vui lòng nhập email";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Email không hợp lệ";
-    }
-
-    if (!formData.password) {
-      newErrors.password = "Vui lòng nhập mật khẩu";
-    } else if (formData.password.length < 8) {
-      newErrors.password = "Mật khẩu phải có ít nhất 8 ký tự";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleLogin = async () => {
-    if (!validateForm()) {
+    if (!email || !password) {
+      Alert.alert("Lỗi", "Vui lòng nhập đầy đủ email và mật khẩu");
       return;
     }
 
     setLoading(true);
 
     try {
-      // Lấy Expo Push Token trước khi login
-      let expoPushToken = "";
-
-      const tokenData = await Notifications.getExpoPushTokenAsync();
-      expoPushToken = tokenData.data;
-
-      // Gửi FCM token trong request login
-      const loginPayload: any = {
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password,
-      };
-
-      // Chỉ gửi fcm_token nếu có giá trị
-      if (expoPushToken && expoPushToken.trim() !== "") {
-        loginPayload.fcm_token = expoPushToken;
-        console.log("Sending FCM token to backend:", expoPushToken);
+      // Get FCM token if available
+      let fcmToken = null;
+      try {
+        const tokenData = await Notifications.getExpoPushTokenAsync();
+        fcmToken = tokenData.data;
+      } catch (error) {
+        console.log("Could not get FCM token:", error);
       }
 
-      const response = await api.post("login", loginPayload);
+      const response = await api.post("/login", {
+        email,
+        password,
+        fcm_token: fcmToken,
+      });
 
-      if (response.status === 200 || response.data?.success) {
-        const userData = response.data?.data?.user || response.data?.data;
-        const token = userData?.token;
+      if (response.data.success && response.data.data?.user) {
+        const userData = response.data.data.user;
 
-        if (!token) {
-          throw new Error("Không nhận được token từ server");
-        }
+        // Save user to Redux
+        dispatch(
+          setUser({
+            id: userData.id?.toString() || null,
+            name: userData.name || null,
+            email: userData.email || null,
+            role: userData.role || null,
+            phone: userData.phone || null,
+            token: userData.token || null,
+            password: null,
+          })
+        );
 
-        const user = { ...userData };
-        delete user.token;
-
-        // Lấy role từ user data hoặc mặc định là customer
-        const userRole = user.role || "customer";
-        const userWithRole = {
-          ...user,
-          role: userRole,
-          token: token,
-        };
-
-        // Lưu token lên Firebase (backup)
-        if (expoPushToken && user.id) {
-          try {
-            const db = getDatabase(app);
-            await set(ref(db, `users/${user.id}/expo_push_token`), expoPushToken);
-          } catch (error) {
-            console.warn("Không thể lưu push token vào Firebase:", error);
-          }
-        }
-
-        // Lưu user vào Redux
-        dispatch(setUser(userWithRole));
-
-        // Redirect theo role - sử dụng replace để không thể quay lại
-        if (userWithRole.role === "sender") {
-          router.replace("/(tabs)/(sender)/home");
-        } else {
-          router.replace("/(tabs)/(customer)/home_customer");
-        }
-
-        // Lưu user vào Redux
-        dispatch(setUser(userWithRole));
-
-        // Redirect theo role
-        if (userWithRole.role === "sender") {
-          router.replace("/(tabs)/(sender)/home");
-        } else {
-          router.replace("/(tabs)/(customer)/home_customer");
-        }
+        // Redirect based on role or to projects
+        router.replace("/projects");
       } else {
-        throw new Error(response.data?.message || "Đăng nhập thất bại");
+        Alert.alert("Lỗi", response.data.message || "Đăng nhập thất bại");
       }
     } catch (error: any) {
-      console.error("Login error:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        error.message ||
-        "Đăng nhập thất bại. Vui lòng kiểm tra lại email và mật khẩu.";
-
-      // Xử lý validation errors từ backend
-      if (error.response?.data?.errors) {
-        const backendErrors = error.response.data.errors;
-        const newErrors: { [key: string]: string } = {};
-        Object.keys(backendErrors).forEach((key) => {
-          newErrors[key] = Array.isArray(backendErrors[key])
-            ? backendErrors[key][0]
-            : backendErrors[key];
-        });
-        setErrors(newErrors);
-      } else {
-        Alert.alert("Lỗi đăng nhập", errorMessage);
-      }
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Đăng nhập thất bại. Vui lòng thử lại."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background-light dark:bg-background-dark">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
-          <View className="px-6 pt-6 pb-4">
-            <View className="items-center mb-8">
-              <View className="h-20 w-20 items-center justify-center rounded-full bg-primary/10 mb-4">
-                <MaterialIcons name="flight" size={40} color="#2563EB" />
-              </View>
-              <Text className="text-3xl font-bold text-primary mb-2">SkySend</Text>
-              <Text className="text-base text-center text-text-secondary dark:text-gray-400">
-                Đăng nhập để tiếp tục
-              </Text>
-            </View>
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Đăng Nhập</Text>
+            <Text style={styles.subtitle}>
+              Chào mừng bạn trở lại!
+            </Text>
           </View>
 
-          {/* Form */}
-          <View className="flex-1 px-6 py-4">
-            <View className="gap-5">
-              {/* Email */}
-              <View>
-                <Text className="text-sm font-semibold text-text-primary dark:text-white mb-2">
-                  Email <Text className="text-red-500">*</Text>
-                </Text>
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color="#6B7280"
+                  style={styles.inputIcon}
+                />
                 <TextInput
-                  className={`border rounded-2xl px-4 py-4 text-base bg-white dark:bg-slate-800 text-text-primary dark:text-white ${errors.email
-                    ? "border-red-500"
-                    : "border-gray-300 dark:border-gray-600"
-                    }`}
-                  placeholder="example@email.com"
-                  placeholderTextColor="#9CA3AF"
+                  style={styles.input}
+                  placeholder="Nhập email của bạn"
+                  value={email}
+                  onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  value={formData.email}
-                  onChangeText={(value) => {
-                    setFormData({ ...formData, email: value });
-                    if (errors.email) setErrors({ ...errors, email: "" });
-                  }}
-                  editable={!loading}
+                  autoComplete="email"
                 />
-                {errors.email && (
-                  <Text className="text-red-500 text-xs mt-1">{errors.email}</Text>
-                )}
               </View>
+            </View>
 
-              {/* Password */}
-              <View>
-                <Text className="text-sm font-semibold text-text-primary dark:text-white mb-2">
-                  Mật khẩu <Text className="text-red-500">*</Text>
-                </Text>
-                <View className="relative">
-                  <TextInput
-                    className={`border rounded-2xl px-4 py-4 pr-12 text-base bg-white dark:bg-slate-800 text-text-primary dark:text-white ${errors.password
-                      ? "border-red-500"
-                      : "border-gray-300 dark:border-gray-600"
-                      }`}
-                    placeholder="Nhập mật khẩu"
-                    placeholderTextColor="#9CA3AF"
-                    secureTextEntry={!showPassword}
-                    value={formData.password}
-                    onChangeText={(value) => {
-                      setFormData({ ...formData, password: value });
-                      if (errors.password) setErrors({ ...errors, password: "" });
-                    }}
-                    editable={!loading}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Mật khẩu</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color="#6B7280"
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập mật khẩu"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeIcon}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-outline" : "eye-off-outline"}
+                    size={20}
+                    color="#6B7280"
                   />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-4"
-                  >
-                    <MaterialIcons
-                      name={showPassword ? "visibility" : "visibility-off"}
-                      size={24}
-                      color="#6B7280"
-                    />
-                  </TouchableOpacity>
-                </View>
-                {errors.password && (
-                  <Text className="text-red-500 text-xs mt-1">{errors.password}</Text>
-                )}
-              </View>
-
-              {/* Forgot Password */}
-              <TouchableOpacity
-                onPress={() => router.push("/forgot-password")}
-                className="self-end"
-              >
-                <Text className="text-primary text-sm font-medium">
-                  Quên mật khẩu?
-                </Text>
-              </TouchableOpacity>
-
-              {/* Submit Button */}
-              <TouchableOpacity
-                onPress={handleLogin}
-                disabled={loading}
-                className={`mt-2 py-4 rounded-2xl ${loading ? "bg-gray-400" : "bg-primary"
-                  } shadow-lg`}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text className="text-white text-center text-lg font-bold">
-                    Đăng nhập
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Divider */}
-              <View className="flex-row items-center gap-4 my-4">
-                <View className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
-                <Text className="text-text-secondary dark:text-gray-400 text-sm">Hoặc</Text>
-                <View className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
-              </View>
-
-
-              {/* Register Link */}
-              <View className="flex-row justify-center items-center gap-2 mt-4">
-                <Text className="text-text-secondary dark:text-gray-400">
-                  Chưa có tài khoản?
-                </Text>
-                <TouchableOpacity onPress={() => router.push("/role-selection")}>
-                  <Text className="text-primary font-semibold">Đăng ký ngay</Text>
                 </TouchableOpacity>
               </View>
             </View>
+
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={() => router.push("/forgot-password")}
+            >
+              <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.loginButtonText}>Đăng Nhập</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Hoặc</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={() => router.push("/register")}
+            >
+              <Text style={styles.registerButtonText}>
+                Chưa có tài khoản? Đăng ký ngay
+              </Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 24,
+  },
+  content: {
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
+  },
+  header: {
+    marginBottom: 32,
+    alignItems: "center",
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#6B7280",
+  },
+  form: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 12,
+    backgroundColor: "#F9FAFB",
+  },
+  inputIcon: {
+    marginLeft: 12,
+  },
+  input: {
+    flex: 1,
+    padding: 14,
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  eyeIcon: {
+    padding: 12,
+  },
+  forgotPassword: {
+    alignSelf: "flex-end",
+    marginBottom: 24,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: "#3B82F6",
+    fontWeight: "500",
+  },
+  loginButton: {
+    backgroundColor: "#3B82F6",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
+  },
+  loginButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E5E7EB",
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  registerButton: {
+    padding: 16,
+    alignItems: "center",
+  },
+  registerButtonText: {
+    fontSize: 14,
+    color: "#3B82F6",
+    fontWeight: "500",
+  },
+});

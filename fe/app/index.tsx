@@ -1,33 +1,42 @@
-// app/index.tsx - Entry point with auth check
 import React, { useEffect } from "react";
-import { View, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSelector } from "react-redux";
-import '../global.css';
+import type { RootState } from "@/src/reducers/index";
 
-export default function Index() {
+export default function IndexScreen() {
   const router = useRouter();
-  const user = useSelector((state: any) => state.user);
+  const user = useSelector((state: RootState) => state.user);
 
   useEffect(() => {
     // Check if user is logged in
-    if (user?.token && user?.role) {
-      // Redirect to appropriate home based on role
-      if (user.role === "sender") {
-        router.replace("/(tabs)/(sender)/home");
-      } else if (user.role === "customer") {
-        router.replace("/(tabs)/(customer)/home_customer");
-      }
+    if (user?.token) {
+      // User is logged in, redirect to projects
+      router.replace("/projects");
     } else {
-      // Not logged in, go to welcome screen
-      router.replace("/welcome");
+      // User is not logged in, redirect to login
+      router.replace("/login");
     }
-  }, [user, router]);
+  }, [user?.token]);
 
-  // Show loading while checking auth
   return (
-    <View className="flex-1 items-center justify-center bg-background-light dark:bg-background-dark">
-      <ActivityIndicator size="large" color="#2563EB" />
+    <View style={styles.container}>
+      <ActivityIndicator size="large" color="#3B82F6" />
+      <Text style={styles.loadingText}>Đang tải...</Text>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#6B7280",
+  },
+});

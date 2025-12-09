@@ -1,0 +1,398 @@
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { projectApi, Project } from "@/api/projectApi";
+import { Ionicons } from "@expo/vector-icons";
+
+export default function ProjectDetailScreen() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const [project, setProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProject();
+  }, [id]);
+
+  const loadProject = async () => {
+    try {
+      setLoading(true);
+      const response = await projectApi.getProject(id!);
+      if (response.success) {
+        setProject(response.data);
+      }
+    } catch (error) {
+      console.error("Error loading project:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const menuItems = [
+    {
+      title: "Giá Trị Hợp Đồng",
+      icon: "document-text-outline",
+      route: `/projects/${id}/contract`,
+      color: "#3B82F6",
+    },
+    {
+      title: "Đã Thanh Toán",
+      icon: "cash-outline",
+      route: `/projects/${id}/payments`,
+      color: "#10B981",
+    },
+    {
+      title: "Phát Sinh Ngoài Báo Giá",
+      icon: "add-circle-outline",
+      route: `/projects/${id}/additional-costs`,
+      color: "#F59E0B",
+    },
+    {
+      title: "Chi Phí Dự Án",
+      icon: "calculator-outline",
+      route: `/projects/${id}/costs`,
+      color: "#8B5CF6",
+    },
+    {
+      title: "Nhân Sự Tham Gia",
+      icon: "people-outline",
+      route: `/projects/${id}/personnel`,
+      color: "#EC4899",
+    },
+    {
+      title: "Nhà Thầu Phụ",
+      icon: "business-outline",
+      route: `/projects/${id}/subcontractors`,
+      color: "#06B6D4",
+    },
+    {
+      title: "Hồ Sơ & Tài Liệu",
+      icon: "folder-outline",
+      route: `/projects/${id}/documents`,
+      color: "#6366F1",
+    },
+    {
+      title: "Nhật Ký Công Trình",
+      icon: "calendar-outline",
+      route: `/projects/${id}/logs`,
+      color: "#14B8A6",
+    },
+    {
+      title: "Nghiệm Thu",
+      icon: "checkmark-circle-outline",
+      route: `/projects/${id}/acceptance`,
+      color: "#22C55E",
+    },
+    {
+      title: "Lỗi Ghi Nhận",
+      icon: "warning-outline",
+      route: `/projects/${id}/defects`,
+      color: "#EF4444",
+    },
+    {
+      title: "Tiến Độ Thi Công",
+      icon: "trending-up-outline",
+      route: `/projects/${id}/progress`,
+      color: "#F97316",
+    },
+  ];
+
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
+  if (!project) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>Không tìm thấy dự án</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Chi Tiết Dự Án</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      <View style={styles.projectInfo}>
+        <View style={styles.projectHeader}>
+          <View style={styles.projectTitleSection}>
+            <Text style={styles.projectName}>{project.name}</Text>
+            <Text style={styles.projectCode}>{project.code}</Text>
+          </View>
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor:
+                  project.status === "in_progress"
+                    ? "#10B98120"
+                    : project.status === "completed"
+                      ? "#3B82F620"
+                      : "#6B728020",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color:
+                    project.status === "in_progress"
+                      ? "#10B981"
+                      : project.status === "completed"
+                        ? "#3B82F6"
+                        : "#6B7280",
+                },
+              ]}
+            >
+              {project.status === "in_progress"
+                ? "Đang thi công"
+                : project.status === "completed"
+                  ? "Hoàn thành"
+                  : "Lập kế hoạch"}
+            </Text>
+          </View>
+        </View>
+
+        {project.description && (
+          <Text style={styles.description}>{project.description}</Text>
+        )}
+
+        <View style={styles.infoGrid}>
+          <View style={styles.infoItem}>
+            <Ionicons name="person-outline" size={20} color="#6B7280" />
+            <Text style={styles.infoLabel}>Khách hàng</Text>
+            <Text style={styles.infoValue}>
+              {project.customer?.name || "N/A"}
+            </Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+            <Text style={styles.infoLabel}>Ngày bắt đầu</Text>
+            <Text style={styles.infoValue}>
+              {project.start_date
+                ? new Date(project.start_date).toLocaleDateString("vi-VN")
+                : "Chưa có"}
+            </Text>
+          </View>
+        </View>
+
+        {project.progress && (
+          <View style={styles.progressCard}>
+            <Text style={styles.progressLabel}>Tiến độ tổng thể</Text>
+            <View style={styles.progressBar}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${project.progress.overall_percentage}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressText}>
+              {project.progress.overall_percentage}%
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.menuSection}>
+        <Text style={styles.sectionTitle}>Quản Lý Dự Án</Text>
+        {menuItems.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.menuItem}
+            onPress={() => router.push(item.route)}
+          >
+            <View
+              style={[styles.menuIconContainer, { backgroundColor: item.color + "20" }]}
+            >
+              <Ionicons name={item.icon as any} size={24} color={item.color} />
+            </View>
+            <Text style={styles.menuItemText}>{item.title}</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  placeholder: {
+    width: 32,
+  },
+  projectInfo: {
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    marginBottom: 12,
+  },
+  projectHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  projectTitleSection: {
+    flex: 1,
+    marginRight: 12,
+  },
+  projectName: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  projectCode: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  description: {
+    fontSize: 14,
+    color: "#6B7280",
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  infoGrid: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+  },
+  infoItem: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  progressCard: {
+    padding: 16,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+  },
+  progressLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#3B82F6",
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#3B82F6",
+    textAlign: "center",
+  },
+  menuSection: {
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 12,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    marginBottom: 8,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+  },
+  menuIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  menuItemText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#1F2937",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#EF4444",
+  },
+});

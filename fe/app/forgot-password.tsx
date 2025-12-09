@@ -1,230 +1,228 @@
-// Forgot Password Screen
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    SafeAreaView,
-    ActivityIndicator,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useSelector } from "react-redux";
-import { RootState } from "@/store";
-import { MaterialIcons } from "@expo/vector-icons";
 import api from "@/api/api";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function ForgotPasswordScreen() {
-    const router = useRouter();
-    const user = useSelector((state: RootState) => state.user);
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
 
-    // Tất cả hooks phải được gọi trước conditional return
-    const [email, setEmail] = useState("");
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [success, setSuccess] = useState(false);
-
-    // Redirect nếu đã đăng nhập
-    useEffect(() => {
-        if (user?.token && user?.role) {
-            if (user.role === "sender") {
-                router.replace("/(tabs)/(sender)/home");
-            } else if (user.role === "customer") {
-                router.replace("/(tabs)/(customer)/home_customer");
-            }
-        }
-    }, [user, router]);
-
-    // Nếu đang check auth, hiển thị loading
-    if (user?.token && user?.role) {
-        return (
-            <View className="flex-1 items-center justify-center bg-background-light dark:bg-background-dark">
-                <ActivityIndicator size="large" color="#2563EB" />
-            </View>
-        );
+  const handleSubmit = async () => {
+    if (!email) {
+      Alert.alert("Lỗi", "Vui lòng nhập email");
+      return;
     }
 
-    const validateEmail = (email: string) => {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    };
+    setLoading(true);
 
-    const handleSubmit = async () => {
-        setError("");
+    try {
+      const response = await api.post("/forgot-password", { email });
 
-        if (!email.trim()) {
-            setError("Vui lòng nhập email của bạn");
-            return;
-        }
+      if (response.data.success) {
+        Alert.alert(
+          "Thành công",
+          response.data.message ||
+          "Chúng tôi đã gửi link đặt lại mật khẩu đến email của bạn. Vui lòng kiểm tra hộp thư.",
+          [
+            {
+              text: "OK",
+              onPress: () => router.back(),
+            },
+          ]
+        );
+      } else {
+        Alert.alert("Lỗi", response.data.message || "Có lỗi xảy ra");
+      }
+    } catch (error: any) {
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Có lỗi xảy ra. Vui lòng thử lại."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        if (!validateEmail(email)) {
-            setError("Email không hợp lệ");
-            return;
-        }
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.content}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          </TouchableOpacity>
 
-        setLoading(true);
+          <View style={styles.header}>
+            <Ionicons name="lock-closed-outline" size={64} color="#3B82F6" />
+            <Text style={styles.title}>Quên Mật Khẩu</Text>
+            <Text style={styles.subtitle}>
+              Nhập email của bạn để nhận link đặt lại mật khẩu
+            </Text>
+          </View>
 
-        try {
-            const response = await api.post("/forgot-password", {
-                email: email.trim().toLowerCase(),
-            });
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color="#6B7280"
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập email của bạn"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                />
+              </View>
+            </View>
 
-            if (response.data?.success || response.status === 200) {
-                setSuccess(true);
-                Alert.alert(
-                    "Thành công",
-                    "Chúng tôi đã gửi link đặt lại mật khẩu đến email của bạn. Vui lòng kiểm tra hộp thư và làm theo hướng dẫn.",
-                    [
-                        {
-                            text: "OK",
-                            onPress: () => router.back(),
-                        },
-                    ]
-                );
-            } else {
-                throw new Error(response.data?.message || "Không thể gửi email");
-            }
-        } catch (error: any) {
-            console.error("Forgot password error:", error);
-            const errorMessage =
-                error.response?.data?.message ||
-                error.response?.data?.error ||
-                error.message ||
-                "Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại.";
-
-            if (error.response?.data?.errors) {
-                const backendErrors = error.response.data.errors;
-                if (backendErrors.email) {
-                    setError(
-                        Array.isArray(backendErrors.email)
-                            ? backendErrors.email[0]
-                            : backendErrors.email
-                    );
-                } else {
-                    setError(errorMessage);
-                }
-            } else {
-                setError(errorMessage);
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <SafeAreaView className="flex-1 bg-background-light dark:bg-background-dark">
-            <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                className="flex-1"
+            <TouchableOpacity
+              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
             >
-                <ScrollView
-                    contentContainerStyle={{ flexGrow: 1 }}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* Header */}
-                    <View className="px-6 pt-6 pb-4">
-                        <TouchableOpacity onPress={() => router.back()} className="mb-4">
-                            <MaterialIcons name="arrow-back" size={28} color="#1F2937" className="dark:text-white" />
-                        </TouchableOpacity>
-                        <View className="items-center mb-6">
-                            <View className="h-20 w-20 items-center justify-center rounded-full bg-primary/10 mb-4">
-                                <MaterialIcons name="lock-reset" size={40} color="#2563EB" />
-                            </View>
-                            <Text className="text-3xl font-bold text-text-primary dark:text-white mb-2">
-                                Quên mật khẩu?
-                            </Text>
-                            <Text className="text-base text-center text-text-secondary dark:text-gray-400 max-w-xs">
-                                Nhập email của bạn và chúng tôi sẽ gửi link đặt lại mật khẩu
-                            </Text>
-                        </View>
-                    </View>
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitButtonText}>Gửi Link Đặt Lại</Text>
+              )}
+            </TouchableOpacity>
 
-                    {/* Form */}
-                    <View className="flex-1 px-6 py-4">
-                        {success ? (
-                            <View className="items-center justify-center flex-1">
-                                <View className="h-24 w-24 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30 mb-6">
-                                    <MaterialIcons name="check-circle" size={48} color="#10B981" />
-                                </View>
-                                <Text className="text-xl font-bold text-text-primary dark:text-white mb-2 text-center">
-                                    Email đã được gửi!
-                                </Text>
-                                <Text className="text-base text-center text-text-secondary dark:text-gray-400 max-w-xs mb-6">
-                                    Vui lòng kiểm tra hộp thư của bạn và làm theo hướng dẫn để đặt lại mật khẩu.
-                                </Text>
-                                <TouchableOpacity
-                                    onPress={() => router.back()}
-                                    className="bg-primary rounded-2xl px-6 py-3"
-                                >
-                                    <Text className="text-white font-semibold">Quay lại đăng nhập</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <View className="gap-5">
-                                {/* Email Input */}
-                                <View>
-                                    <Text className="text-sm font-semibold text-text-primary dark:text-white mb-2">
-                                        Email <Text className="text-red-500">*</Text>
-                                    </Text>
-                                    <TextInput
-                                        className={`border rounded-2xl px-4 py-4 text-base bg-white dark:bg-slate-800 text-text-primary dark:text-white ${
-                                            error
-                                                ? "border-red-500"
-                                                : "border-gray-300 dark:border-gray-600"
-                                        }`}
-                                        placeholder="example@email.com"
-                                        placeholderTextColor="#9CA3AF"
-                                        keyboardType="email-address"
-                                        autoCapitalize="none"
-                                        value={email}
-                                        onChangeText={(value) => {
-                                            setEmail(value);
-                                            if (error) setError("");
-                                        }}
-                                        editable={!loading}
-                                    />
-                                    {error && (
-                                        <Text className="text-red-500 text-xs mt-1">{error}</Text>
-                                    )}
-                                </View>
-
-                                {/* Submit Button */}
-                                <TouchableOpacity
-                                    onPress={handleSubmit}
-                                    disabled={loading}
-                                    className={`mt-4 py-4 rounded-2xl ${
-                                        loading ? "bg-gray-400" : "bg-primary"
-                                    } shadow-lg`}
-                                >
-                                    {loading ? (
-                                        <ActivityIndicator color="#FFFFFF" />
-                                    ) : (
-                                        <Text className="text-white text-center text-lg font-bold">
-                                            Gửi link đặt lại mật khẩu
-                                        </Text>
-                                    )}
-                                </TouchableOpacity>
-
-                                {/* Back to Login */}
-                                <View className="flex-row justify-center items-center gap-2 mt-4">
-                                    <Text className="text-text-secondary dark:text-gray-400">
-                                        Nhớ mật khẩu?
-                                    </Text>
-                                    <TouchableOpacity onPress={() => router.back()}>
-                                        <Text className="text-primary font-semibold">Đăng nhập</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        )}
-                    </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
-    );
+            <TouchableOpacity
+              style={styles.backLink}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.backLinkText}>Quay lại đăng nhập</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
 }
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 24,
+  },
+  content: {
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
+  },
+  backButton: {
+    marginBottom: 16,
+    padding: 4,
+    alignSelf: "flex-start",
+  },
+  header: {
+    marginBottom: 32,
+    alignItems: "center",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  form: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  inputGroup: {
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 12,
+    backgroundColor: "#F9FAFB",
+  },
+  inputIcon: {
+    marginLeft: 12,
+  },
+  input: {
+    flex: 1,
+    padding: 14,
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  submitButton: {
+    backgroundColor: "#3B82F6",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  backLink: {
+    padding: 16,
+    alignItems: "center",
+  },
+  backLinkText: {
+    fontSize: 14,
+    color: "#3B82F6",
+    fontWeight: "500",
+  },
+});

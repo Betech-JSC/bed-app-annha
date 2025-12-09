@@ -1,420 +1,450 @@
-// Register Screen - Professional UI/UX
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  SafeAreaView,
   ActivityIndicator,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { MaterialIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useDispatch } from "react-redux";
 import api from "@/api/api";
-import { useDispatch, useSelector } from "react-redux";
-import { setUser } from "@/reducers/userSlice";
-import { RootState } from "@/store";
+import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
-import Constants from "expo-constants";
-import { getDatabase, ref, set } from "firebase/database";
-import { app } from "@/firebaseConfig";
+import { setUser } from "@/reducers/userSlice";
 
 export default function RegisterScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  const user = useSelector((state: RootState) => state.user);
-  const { role } = useLocalSearchParams<{ role?: string }>();
-
-  // Tất cả hooks phải được gọi trước conditional return
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
     password: "",
     confirmPassword: "",
+    role: "customer" as "sender" | "customer",
   });
-
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Redirect nếu đã đăng nhập
-  useEffect(() => {
-    if (user?.token && user?.role) {
-      if (user.role === "sender") {
-        router.replace("/(tabs)/(sender)/home");
-      } else if (user.role === "customer") {
-        router.replace("/(tabs)/(customer)/home_customer");
-      }
-    }
-  }, [user, router]);
-
-  // Nếu đang check auth, hiển thị loading
-  if (user?.token && user?.role) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background-light dark:bg-background-dark">
-        <ActivityIndicator size="large" color="#2563EB" />
-      </View>
-    );
-  }
-
-  const validateForm = () => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = "Vui lòng nhập họ tên";
-    } else if (formData.name.trim().length < 2) {
-      newErrors.name = "Họ tên phải có ít nhất 2 ký tự";
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = "Vui lòng nhập email";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Email không hợp lệ";
-    }
-
-    if (formData.phone.trim() && !/^[0-9]{10,11}$/.test(formData.phone.replace(/\s/g, ""))) {
-      newErrors.phone = "Số điện thoại không hợp lệ";
-    }
-
-    if (!formData.password) {
-      newErrors.password = "Vui lòng nhập mật khẩu";
-    } else if (formData.password.length < 8) {
-      newErrors.password = "Mật khẩu phải có ít nhất 8 ký tự";
-    }
-
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = "Vui lòng xác nhận mật khẩu";
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Mật khẩu xác nhận không khớp";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleRegister = async () => {
-    if (!validateForm()) {
+    // Validation
+    if (!formData.name || !formData.email || !formData.password) {
+      Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin bắt buộc");
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      Alert.alert("Lỗi", "Mật khẩu phải có ít nhất 8 ký tự");
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp");
       return;
     }
 
     setLoading(true);
 
     try {
-      // Lấy Expo Push Token trước khi register
-      let expoPushToken = "";
+      // Get FCM token if available
+      let fcmToken = null;
       try {
-        if (Constants.isDevice) {
-          const { status } = await Notifications.requestPermissionsAsync();
-          if (status === "granted") {
-            const tokenData = await Notifications.getExpoPushTokenAsync();
-            expoPushToken = tokenData.data;
-            console.log("Expo Push Token:", expoPushToken);
-          }
-        }
+        const tokenData = await Notifications.getExpoPushTokenAsync();
+        fcmToken = tokenData.data;
       } catch (error) {
-        console.warn("Không lấy được push token:", error);
+        console.log("Could not get FCM token:", error);
       }
 
-      // Gửi FCM token trong request register
-      const registerPayload: any = {
-        name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim() || null,
+      const response = await api.post("/register", {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone || undefined,
         password: formData.password,
-        role: role || 'customer', // Send role to backend
-      };
+        role: formData.role,
+        fcm_token: fcmToken,
+      });
 
-      // Chỉ gửi fcm_token nếu có giá trị
-      if (expoPushToken && expoPushToken.trim() !== "") {
-        registerPayload.fcm_token = expoPushToken;
-        console.log("Sending FCM token to backend:", expoPushToken);
-      }
+      if (response.data.success && response.data.data?.user) {
+        const userData = response.data.data.user;
 
-      const response = await api.post("/register", registerPayload);
+        // Save user to Redux
+        dispatch(
+          setUser({
+            id: userData.id?.toString() || null,
+            name: userData.name || null,
+            email: userData.email || null,
+            role: userData.role || null,
+            phone: userData.phone || null,
+            token: userData.token || null,
+            password: null,
+          })
+        );
 
-      if (response.data?.success || response.status === 200) {
-        const userData = response.data?.data?.user || response.data?.data;
-        const token = userData?.token;
-
-        if (!token) {
-          throw new Error("Không nhận được token từ server");
-        }
-
-        const user = { ...userData };
-        delete user.token;
-
-        // Gán role từ param
-        const userWithRole = {
-          ...user,
-          role: role === "sender" ? "sender" : "customer",
-          token: token,
-        };
-
-        // Lưu token lên Firebase (backup)
-        if (expoPushToken && user.id) {
-          try {
-            const db = getDatabase(app);
-            await set(ref(db, `users/${user.id}/expo_push_token`), expoPushToken);
-          } catch (error) {
-            console.warn("Không thể lưu push token vào Firebase:", error);
-          }
-        }
-
-        // Lưu user vào Redux
-        dispatch(setUser(userWithRole));
-
-        // Redirect theo role
         Alert.alert("Thành công", "Đăng ký thành công!", [
           {
             text: "OK",
-            onPress: () => {
-              if (userWithRole.role === "sender") {
-                router.replace("/(tabs)/(sender)/home");
-              } else {
-                router.replace("/(tabs)/(customer)/home_customer");
-              }
-            },
+            onPress: () => router.replace("/projects"),
           },
         ]);
       } else {
-        throw new Error(response.data?.message || "Đăng ký thất bại");
+        Alert.alert("Lỗi", response.data.message || "Đăng ký thất bại");
       }
     } catch (error: any) {
-      console.error("Register error:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        error.message ||
-        "Đăng ký thất bại. Vui lòng thử lại.";
-
-      // Xử lý validation errors từ backend
-      if (error.response?.data?.errors) {
-        const backendErrors = error.response.data.errors;
-        const newErrors: { [key: string]: string } = {};
-        Object.keys(backendErrors).forEach((key) => {
-          newErrors[key] = Array.isArray(backendErrors[key])
-            ? backendErrors[key][0]
-            : backendErrors[key];
-        });
-        setErrors(newErrors);
-      } else {
-        Alert.alert("Lỗi", errorMessage);
-      }
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Đăng ký thất bại. Vui lòng thử lại."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const selectedRole = role === "sender" ? "Người gửi hàng" : "Hành khách";
-
   return (
-    <SafeAreaView className="flex-1 bg-background-light dark:bg-background-dark">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
-          <View className="px-6 pt-6 pb-4">
-            <TouchableOpacity onPress={() => router.back()} className="mb-4">
-              <MaterialIcons name="arrow-back" size={28} color="#1F2937" className="dark:text-white" />
-            </TouchableOpacity>
-            <Text className="text-3xl font-bold text-text-primary dark:text-white mb-2">
-              Tạo tài khoản
-            </Text>
-            <Text className="text-base text-text-secondary dark:text-gray-400">
-              Vai trò: <Text className="font-semibold text-primary">{selectedRole}</Text>
-            </Text>
+        <View style={styles.content}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          </TouchableOpacity>
+
+          <View style={styles.header}>
+            <Text style={styles.title}>Đăng Ký</Text>
+            <Text style={styles.subtitle}>Tạo tài khoản mới</Text>
           </View>
 
-          {/* Form */}
-          <View className="flex-1 px-6 py-4">
-            <View className="gap-5">
-              {/* Name */}
-              <View>
-                <Text className="text-sm font-semibold text-text-primary dark:text-white mb-2">
-                  Họ và tên <Text className="text-red-500">*</Text>
-                </Text>
-                <TextInput
-                  className={`border rounded-2xl px-4 py-4 text-base bg-white dark:bg-slate-800 text-text-primary dark:text-white ${errors.name ? "border-red-500" : "border-gray-300 dark:border-gray-600"
-                    }`}
-                  placeholder="Nhập họ và tên của bạn"
-                  placeholderTextColor="#9CA3AF"
-                  value={formData.name}
-                  onChangeText={(value) => {
-                    setFormData({ ...formData, name: value });
-                    if (errors.name) setErrors({ ...errors, name: "" });
-                  }}
-                  editable={!loading}
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Họ và tên *</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="person-outline"
+                  size={20}
+                  color="#6B7280"
+                  style={styles.inputIcon}
                 />
-                {errors.name && (
-                  <Text className="text-red-500 text-xs mt-1">{errors.name}</Text>
-                )}
-              </View>
-
-              {/* Email */}
-              <View>
-                <Text className="text-sm font-semibold text-text-primary dark:text-white mb-2">
-                  Email <Text className="text-red-500">*</Text>
-                </Text>
                 <TextInput
-                  className={`border rounded-2xl px-4 py-4 text-base bg-white dark:bg-slate-800 text-text-primary dark:text-white ${errors.email ? "border-red-500" : "border-gray-300 dark:border-gray-600"
-                    }`}
-                  placeholder="example@email.com"
-                  placeholderTextColor="#9CA3AF"
+                  style={styles.input}
+                  placeholder="Nhập họ và tên"
+                  value={formData.name}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, name: text })
+                  }
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email *</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color="#6B7280"
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập email"
+                  value={formData.email}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, email: text })
+                  }
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  value={formData.email}
-                  onChangeText={(value) => {
-                    setFormData({ ...formData, email: value });
-                    if (errors.email) setErrors({ ...errors, email: "" });
-                  }}
-                  editable={!loading}
+                  autoComplete="email"
                 />
-                {errors.email && (
-                  <Text className="text-red-500 text-xs mt-1">{errors.email}</Text>
-                )}
               </View>
+            </View>
 
-              {/* Phone */}
-              <View>
-                <Text className="text-sm font-semibold text-text-primary dark:text-white mb-2">
-                  Số điện thoại <Text className="text-gray-400">(Tùy chọn)</Text>
-                </Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Số điện thoại</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="call-outline"
+                  size={20}
+                  color="#6B7280"
+                  style={styles.inputIcon}
+                />
                 <TextInput
-                  className={`border rounded-2xl px-4 py-4 text-base bg-white dark:bg-slate-800 text-text-primary dark:text-white ${errors.phone ? "border-red-500" : "border-gray-300 dark:border-gray-600"
-                    }`}
-                  placeholder="0901234567"
-                  placeholderTextColor="#9CA3AF"
-                  keyboardType="phone-pad"
+                  style={styles.input}
+                  placeholder="Nhập số điện thoại"
                   value={formData.phone}
-                  onChangeText={(value) => {
-                    setFormData({ ...formData, phone: value.replace(/\D/g, "") });
-                    if (errors.phone) setErrors({ ...errors, phone: "" });
-                  }}
-                  editable={!loading}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, phone: text })
+                  }
+                  keyboardType="phone-pad"
                 />
-                {errors.phone && (
-                  <Text className="text-red-500 text-xs mt-1">{errors.phone}</Text>
-                )}
               </View>
+            </View>
 
-              {/* Password */}
-              <View>
-                <Text className="text-sm font-semibold text-text-primary dark:text-white mb-2">
-                  Mật khẩu <Text className="text-red-500">*</Text>
-                </Text>
-                <View className="relative">
-                  <TextInput
-                    className={`border rounded-2xl px-4 py-4 pr-12 text-base bg-white dark:bg-slate-800 text-text-primary dark:text-white ${errors.password
-                      ? "border-red-500"
-                      : "border-gray-300 dark:border-gray-600"
-                      }`}
-                    placeholder="Ít nhất 8 ký tự"
-                    placeholderTextColor="#9CA3AF"
-                    secureTextEntry={!showPassword}
-                    value={formData.password}
-                    onChangeText={(value) => {
-                      setFormData({ ...formData, password: value });
-                      if (errors.password) setErrors({ ...errors, password: "" });
-                    }}
-                    editable={!loading}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Mật khẩu *</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color="#6B7280"
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập mật khẩu (tối thiểu 8 ký tự)"
+                  value={formData.password}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, password: text })
+                  }
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeIcon}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-outline" : "eye-off-outline"}
+                    size={20}
+                    color="#6B7280"
                   />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-4"
-                  >
-                    <MaterialIcons
-                      name={showPassword ? "visibility" : "visibility-off"}
-                      size={24}
-                      color="#6B7280"
-                    />
-                  </TouchableOpacity>
-                </View>
-                {errors.password && (
-                  <Text className="text-red-500 text-xs mt-1">{errors.password}</Text>
-                )}
-              </View>
-
-              {/* Confirm Password */}
-              <View>
-                <Text className="text-sm font-semibold text-text-primary dark:text-white mb-2">
-                  Xác nhận mật khẩu <Text className="text-red-500">*</Text>
-                </Text>
-                <View className="relative">
-                  <TextInput
-                    className={`border rounded-2xl px-4 py-4 pr-12 text-base bg-white dark:bg-slate-800 text-text-primary dark:text-white ${errors.confirmPassword
-                      ? "border-red-500"
-                      : "border-gray-300 dark:border-gray-600"
-                      }`}
-                    placeholder="Nhập lại mật khẩu"
-                    placeholderTextColor="#9CA3AF"
-                    secureTextEntry={!showConfirmPassword}
-                    value={formData.confirmPassword}
-                    onChangeText={(value) => {
-                      setFormData({ ...formData, confirmPassword: value });
-                      if (errors.confirmPassword)
-                        setErrors({ ...errors, confirmPassword: "" });
-                    }}
-                    editable={!loading}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-4 top-4"
-                  >
-                    <MaterialIcons
-                      name={showConfirmPassword ? "visibility" : "visibility-off"}
-                      size={24}
-                      color="#6B7280"
-                    />
-                  </TouchableOpacity>
-                </View>
-                {errors.confirmPassword && (
-                  <Text className="text-red-500 text-xs mt-1">
-                    {errors.confirmPassword}
-                  </Text>
-                )}
-              </View>
-
-              {/* Submit Button */}
-              <TouchableOpacity
-                onPress={handleRegister}
-                disabled={loading}
-                className={`mt-4 py-4 rounded-2xl ${loading ? "bg-gray-400" : "bg-primary"
-                  } shadow-lg`}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text className="text-white text-center text-lg font-bold">
-                    Đăng ký
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Login Link */}
-              <View className="flex-row justify-center items-center gap-2 mt-4">
-                <Text className="text-text-secondary dark:text-gray-400">
-                  Đã có tài khoản?
-                </Text>
-                <TouchableOpacity onPress={() => router.push("/login")}>
-                  <Text className="text-primary font-semibold">Đăng nhập</Text>
                 </TouchableOpacity>
               </View>
             </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Xác nhận mật khẩu *</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color="#6B7280"
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập lại mật khẩu"
+                  value={formData.confirmPassword}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, confirmPassword: text })
+                  }
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={styles.eyeIcon}
+                >
+                  <Ionicons
+                    name={
+                      showConfirmPassword ? "eye-outline" : "eye-off-outline"
+                    }
+                    size={20}
+                    color="#6B7280"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Vai trò</Text>
+              <View style={styles.roleButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton,
+                    formData.role === "customer" && styles.roleButtonActive,
+                  ]}
+                  onPress={() => setFormData({ ...formData, role: "customer" })}
+                >
+                  <Text
+                    style={[
+                      styles.roleButtonText,
+                      formData.role === "customer" &&
+                      styles.roleButtonTextActive,
+                    ]}
+                  >
+                    Khách hàng
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton,
+                    formData.role === "sender" && styles.roleButtonActive,
+                  ]}
+                  onPress={() => setFormData({ ...formData, role: "sender" })}
+                >
+                  <Text
+                    style={[
+                      styles.roleButtonText,
+                      formData.role === "sender" && styles.roleButtonTextActive,
+                    ]}
+                  >
+                    Người gửi
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.registerButton, loading && styles.registerButtonDisabled]}
+              onPress={handleRegister}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.registerButtonText}>Đăng Ký</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.loginLink}
+              onPress={() => router.push("/login")}
+            >
+              <Text style={styles.loginLinkText}>
+                Đã có tài khoản? Đăng nhập
+              </Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 24,
+  },
+  content: {
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
+  },
+  backButton: {
+    marginBottom: 16,
+    padding: 4,
+    alignSelf: "flex-start",
+  },
+  header: {
+    marginBottom: 32,
+    alignItems: "center",
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#6B7280",
+  },
+  form: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 12,
+    backgroundColor: "#F9FAFB",
+  },
+  inputIcon: {
+    marginLeft: 12,
+  },
+  input: {
+    flex: 1,
+    padding: 14,
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  eyeIcon: {
+    padding: 12,
+  },
+  roleButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  roleButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+  },
+  roleButtonActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  roleButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  roleButtonTextActive: {
+    color: "#FFFFFF",
+  },
+  registerButton: {
+    backgroundColor: "#3B82F6",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  registerButtonDisabled: {
+    opacity: 0.6,
+  },
+  registerButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  loginLink: {
+    padding: 16,
+    alignItems: "center",
+  },
+  loginLinkText: {
+    fontSize: 14,
+    color: "#3B82F6",
+    fontWeight: "500",
+  },
+});

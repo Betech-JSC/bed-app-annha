@@ -19,6 +19,22 @@ use App\Http\Controllers\Api\AdminFlightController;
 use App\Http\Controllers\Api\AdminOrderController;
 use App\Http\Controllers\Api\AdminAirlineController;
 use App\Http\Controllers\Api\AdminAirportController;
+use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\ContractController;
+use App\Http\Controllers\Api\ProjectPaymentController;
+use App\Http\Controllers\Api\AdditionalCostController;
+use App\Http\Controllers\Api\ProjectPersonnelController;
+use App\Http\Controllers\Api\SubcontractorController;
+use App\Http\Controllers\Api\ConstructionLogController;
+use App\Http\Controllers\Api\AcceptanceStageController;
+use App\Http\Controllers\Api\DefectController;
+use App\Http\Controllers\Api\ProjectProgressController;
+use App\Http\Controllers\Api\ProjectDocumentController;
+use App\Http\Controllers\Api\TimeTrackingController;
+use App\Http\Controllers\Api\PayrollController;
+use App\Http\Controllers\Api\BonusController;
+use App\Http\Controllers\Api\EmployeeSalaryConfigController;
+use App\Http\Controllers\Api\WorkScheduleController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -119,6 +135,117 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Sender: danh sách khách hàng có sẵn để gửi request
     Route::get('/sender/available-customers', [FlightController::class, 'availableCustomers']);
+
+    // ===================================================================
+    // PROJECT MANAGEMENT ROUTES
+    // ===================================================================
+    Route::prefix('projects')->group(function () {
+        // Projects CRUD
+        Route::get('/', [ProjectController::class, 'index']);
+        Route::post('/', [ProjectController::class, 'store']);
+        Route::get('/{id}', [ProjectController::class, 'show']);
+        Route::put('/{id}', [ProjectController::class, 'update']);
+        Route::delete('/{id}', [ProjectController::class, 'destroy']);
+
+        // Contracts
+        Route::get('/{projectId}/contract', [ContractController::class, 'show']);
+        Route::post('/{projectId}/contract', [ContractController::class, 'store']);
+        Route::put('/{projectId}/contract', [ContractController::class, 'update']);
+        Route::post('/{projectId}/contract/approve', [ContractController::class, 'approve']);
+
+        // Payments
+        Route::get('/{projectId}/payments', [ProjectPaymentController::class, 'index']);
+        Route::post('/{projectId}/payments', [ProjectPaymentController::class, 'store']);
+        Route::put('/{projectId}/payments/{id}', [ProjectPaymentController::class, 'update']);
+        Route::post('/{projectId}/payments/{id}/confirm', [ProjectPaymentController::class, 'confirm']);
+
+        // Additional Costs
+        Route::get('/{projectId}/additional-costs', [AdditionalCostController::class, 'index']);
+        Route::post('/{projectId}/additional-costs', [AdditionalCostController::class, 'store']);
+        Route::post('/{projectId}/additional-costs/{id}/approve', [AdditionalCostController::class, 'approve']);
+        Route::post('/{projectId}/additional-costs/{id}/reject', [AdditionalCostController::class, 'reject']);
+
+        // Personnel
+        Route::get('/{projectId}/personnel', [ProjectPersonnelController::class, 'index']);
+        Route::post('/{projectId}/personnel', [ProjectPersonnelController::class, 'store']);
+        Route::delete('/{projectId}/personnel/{id}', [ProjectPersonnelController::class, 'destroy']);
+
+        // Subcontractors
+        Route::get('/{projectId}/subcontractors', [SubcontractorController::class, 'index']);
+        Route::post('/{projectId}/subcontractors', [SubcontractorController::class, 'store']);
+        Route::put('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'update']);
+
+        // Documents
+        Route::get('/{projectId}/documents', [ProjectDocumentController::class, 'index']);
+        Route::post('/{projectId}/documents', [ProjectDocumentController::class, 'store']);
+
+        // Construction Logs
+        Route::get('/{projectId}/logs', [ConstructionLogController::class, 'index']);
+        Route::post('/{projectId}/logs', [ConstructionLogController::class, 'store']);
+
+        // Acceptance Stages
+        Route::get('/{projectId}/acceptance', [AcceptanceStageController::class, 'index']);
+        Route::post('/{projectId}/acceptance/{id}/approve', [AcceptanceStageController::class, 'approve']);
+
+        // Defects
+        Route::get('/{projectId}/defects', [DefectController::class, 'index']);
+        Route::post('/{projectId}/defects', [DefectController::class, 'store']);
+        Route::put('/{projectId}/defects/{id}', [DefectController::class, 'update']);
+
+        // Progress
+        Route::get('/{projectId}/progress', [ProjectProgressController::class, 'show']);
+    });
+
+    // ===================================================================
+    // HR MANAGEMENT ROUTES
+    // ===================================================================
+    Route::middleware(['auth:sanctum', 'hr'])->prefix('hr')->group(function () {
+        // Time Tracking
+        Route::get('/time-tracking', [TimeTrackingController::class, 'index']);
+        Route::post('/time-tracking', [TimeTrackingController::class, 'store']);
+        Route::put('/time-tracking/{id}', [TimeTrackingController::class, 'update']);
+        Route::post('/time-tracking/{id}/approve', [TimeTrackingController::class, 'approve']);
+        Route::post('/time-tracking/{id}/reject', [TimeTrackingController::class, 'reject']);
+
+        // Payroll
+        Route::get('/payroll', [PayrollController::class, 'index']);
+        Route::post('/payroll/calculate', [PayrollController::class, 'calculate']);
+        Route::post('/payroll/calculate-all', [PayrollController::class, 'calculateAll']);
+        Route::get('/payroll/{id}', [PayrollController::class, 'show']);
+        Route::post('/payroll/{id}/approve', [PayrollController::class, 'approve']);
+        Route::post('/payroll/{id}/pay', [PayrollController::class, 'markAsPaid']);
+        Route::get('/payroll/export', [PayrollController::class, 'export']);
+
+        // Bonuses
+        Route::get('/bonuses', [BonusController::class, 'index']);
+        Route::post('/bonuses', [BonusController::class, 'store']);
+        Route::put('/bonuses/{id}', [BonusController::class, 'update']);
+        Route::post('/bonuses/calculate-project/{projectId}', [BonusController::class, 'calculateFromProject']);
+        Route::post('/bonuses/{id}/approve', [BonusController::class, 'approve']);
+        Route::post('/bonuses/{id}/pay', [BonusController::class, 'markAsPaid']);
+
+        // Salary Config
+        Route::get('/salary-config', [EmployeeSalaryConfigController::class, 'index']);
+        Route::post('/salary-config', [EmployeeSalaryConfigController::class, 'store']);
+        Route::put('/salary-config/{id}', [EmployeeSalaryConfigController::class, 'update']);
+        Route::get('/salary-config/user/{userId}', [EmployeeSalaryConfigController::class, 'getCurrentConfig']);
+
+        // Work Schedule
+        Route::get('/work-schedule', [WorkScheduleController::class, 'index']);
+        Route::post('/work-schedule', [WorkScheduleController::class, 'store']);
+        Route::put('/work-schedule/{id}', [WorkScheduleController::class, 'update']);
+        Route::delete('/work-schedule/{id}', [WorkScheduleController::class, 'destroy']);
+        Route::get('/work-schedule/calendar', [WorkScheduleController::class, 'calendar']);
+    });
+
+    // User routes (không cần HR role)
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/my-time-tracking', [TimeTrackingController::class, 'myTimeTracking']);
+        Route::post('/time-tracking/check-in', [TimeTrackingController::class, 'checkIn']);
+        Route::put('/time-tracking/check-out/{id}', [TimeTrackingController::class, 'checkOut']);
+        Route::get('/my-payroll', [PayrollController::class, 'myPayroll']);
+        Route::get('/my-bonuses', [BonusController::class, 'myBonuses']);
+    });
 });
 
 // Social Login Routes (Google & Facebook)

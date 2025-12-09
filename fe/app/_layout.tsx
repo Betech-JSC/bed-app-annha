@@ -5,7 +5,6 @@ import { store, persistor } from "@/store"; // import persistor
 import { PersistGate } from "redux-persist/integration/react";
 import { usePushNotifications } from "@/notifications/usePushNotifications";
 import { useHeadsUpNotification } from "@/hooks/useHeadsUpNotification";
-import HeadsUpNotification from "./components/HeadsUpNotification";
 import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { View } from "react-native";
@@ -17,7 +16,7 @@ function AppContent() {
     <>
       <Stack
         screenOptions={{
-          headerShown: false,
+          headerShown: true,
           headerStyle: {
             backgroundColor: '#FFFFFF',
           },
@@ -31,13 +30,6 @@ function AppContent() {
           animation: 'slide_from_right',
         }}
       />
-      {isVisible && notification && (
-        <HeadsUpNotification
-          notification={notification}
-          onDismiss={onDismiss}
-          onPress={onPress}
-        />
-      )}
     </>
   );
 }
