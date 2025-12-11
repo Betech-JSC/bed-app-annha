@@ -18,7 +18,6 @@ const api = axios.create({
 //     },
 // });
 
-// Interceptor để gắn token vào header
 api.interceptors.request.use(
     (config) => {
         const state = store.getState();

@@ -10,7 +10,11 @@ import {
   Alert,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { contractApi, Contract } from "@/api/contractApi";
+import {
+  contractApi,
+  Contract,
+  CreateContractData,
+} from "@/api/contractApi";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ContractScreen() {
@@ -32,25 +36,48 @@ export default function ContractScreen() {
     try {
       setLoading(true);
       const response = await contractApi.getContract(id!);
-      if (response.success) {
+      if (response.success && response.data) {
         setContract(response.data);
-        if (response.data) {
-          setFormData({
-            contract_value: response.data.contract_value?.toString() || "",
-            signed_date: response.data.signed_date || "",
-          });
-        }
+        setFormData({
+          contract_value: response.data.contract_value?.toString() || "",
+          signed_date: response.data.signed_date || "",
+        });
+      } else {
+        // Không có contract - hiển thị form tạo mới
+        setContract(null);
+        setFormData({
+          contract_value: "",
+          signed_date: "",
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading contract:", error);
+      // Xử lý 404 - không có contract
+      if (error.response?.status === 404) {
+        setContract(null);
+        setFormData({
+          contract_value: "",
+          signed_date: "",
+        });
+      } else {
+        Alert.alert(
+          "Lỗi",
+          error.response?.data?.message || "Không thể tải thông tin hợp đồng"
+        );
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
+    if (!formData.contract_value || isNaN(parseFloat(formData.contract_value))) {
+      Alert.alert("Lỗi", "Vui lòng nhập giá trị hợp đồng hợp lệ");
+      return;
+    }
+
     try {
-      const data = {
+      const data: CreateContractData = {
         contract_value: parseFloat(formData.contract_value),
         signed_date: formData.signed_date || undefined,
         status: "draft",
@@ -64,21 +91,36 @@ export default function ContractScreen() {
         Alert.alert("Thành công", "Hợp đồng đã được lưu.");
         setEditing(false);
         loadContract();
+      } else {
+        Alert.alert("Lỗi", response.message || "Không thể lưu hợp đồng");
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Có lỗi xảy ra khi lưu hợp đồng"
+      );
     }
   };
 
   const handleApprove = async () => {
+    if (!contract) {
+      Alert.alert("Lỗi", "Hợp đồng chưa được tạo");
+      return;
+    }
+
     try {
       const response = await contractApi.approveContract(id!);
       if (response.success) {
         Alert.alert("Thành công", "Hợp đồng đã được duyệt.");
         loadContract();
+      } else {
+        Alert.alert("Lỗi", response.message || "Không thể duyệt hợp đồng");
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Có lỗi xảy ra khi duyệt hợp đồng"
+      );
     }
   };
 
@@ -156,6 +198,16 @@ export default function ContractScreen() {
               {getStatusText(contract.status)}
             </Text>
           </View>
+        </View>
+      )}
+
+      {!contract && !loading && (
+        <View style={styles.emptyCard}>
+          <Ionicons name="document-outline" size={48} color="#9CA3AF" />
+          <Text style={styles.emptyTitle}>Chưa có hợp đồng</Text>
+          <Text style={styles.emptyText}>
+            Hãy tạo hợp đồng mới bằng cách điền thông tin bên dưới
+          </Text>
         </View>
       )}
 
@@ -379,5 +431,30 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  emptyCard: {
+    backgroundColor: "#FFFFFF",
+    padding: 32,
+    margin: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
   },
 });

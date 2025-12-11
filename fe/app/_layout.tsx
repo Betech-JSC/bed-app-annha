@@ -16,20 +16,94 @@ function AppContent() {
     <>
       <Stack
         screenOptions={{
-          headerShown: true,
-          headerStyle: {
-            backgroundColor: '#FFFFFF',
-          },
-          headerTintColor: '#1F2937',
-          headerTitleStyle: {
-            fontWeight: '600',
-            fontSize: 18,
-          },
-          headerBackTitleVisible: false,
-          headerShadowVisible: true,
+          headerShown: true, // Hide header for tabs, show for nested screens
           animation: 'slide_from_right',
         }}
-      />
+      >
+        {/* Auth screens - no tabs */}
+        <Stack.Screen
+          name="login"
+          options={{
+            headerShown: true,
+            presentation: "fullScreenModal",
+          }}
+        />
+        <Stack.Screen
+          name="register"
+          options={{
+            headerShown: true,
+            presentation: "fullScreenModal",
+          }}
+        />
+        <Stack.Screen
+          name="forgot-password"
+          options={{
+            headerShown: true,
+            presentation: "modal",
+          }}
+        />
+        <Stack.Screen
+          name="reset-password"
+          options={{
+            headerShown: true,
+            presentation: "modal",
+          }}
+        />
+
+        {/* Tabs layout - main app */}
+        <Stack.Screen
+          name="(tabs)"
+          options={{
+            headerShown: true,
+          }}
+        />
+
+        {/* Nested screens - projects and hr modules */}
+        <Stack.Screen
+          name="projects"
+          options={{
+            headerShown: true,
+            presentation: "card",
+          }}
+        />
+        <Stack.Screen
+          name="hr"
+          options={{
+            headerShown: true,
+            presentation: "card",
+          }}
+        />
+        <Stack.Screen
+          name="settings"
+          options={{
+            headerShown: true,
+            presentation: "card",
+          }}
+        />
+        <Stack.Screen
+          name="time-tracking"
+          options={{
+            headerShown: true,
+            presentation: "card",
+          }}
+        />
+        <Stack.Screen
+          name="my-payroll"
+          options={{
+            headerShown: true,
+            title: "Bảng Lương Của Tôi",
+            presentation: "card",
+          }}
+        />
+        <Stack.Screen
+          name="my-bonuses"
+          options={{
+            headerShown: true,
+            title: "Thưởng Của Tôi",
+            presentation: "card",
+          }}
+        />
+      </Stack>
     </>
   );
 }

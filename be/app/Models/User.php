@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -127,6 +129,93 @@ class User extends Authenticatable
     public function transactions()
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    /**
+     * Roles của user (thông qua role_user pivot table)
+     */
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class, 'role_user');
+    }
+
+    /**
+     * Project personnel records của user
+     */
+    public function personnel(): HasMany
+    {
+        return $this->hasMany(ProjectPersonnel::class, 'user_id');
+    }
+
+    /**
+     * Permissions trực tiếp của user (qua permission_user table)
+     */
+    public function directPermissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class, 'permission_user');
+    }
+
+    /**
+     * Permissions của user (thông qua roles + trực tiếp)
+     */
+    public function permissions()
+    {
+        $rolePermissions = $this->roles()->with('permissions')->get()->pluck('permissions')->flatten();
+        $directPermissions = $this->directPermissions()->get();
+        return $rolePermissions->merge($directPermissions)->unique('id');
+    }
+
+    /**
+     * Kiểm tra user có permission không
+     */
+    public function hasPermission(string $permission): bool
+    {
+        // Super admin có toàn quyền
+        if ($this->role === 'admin' && $this->owner === true) {
+            return true;
+        }
+
+        // Check permissions từ roles
+        $hasFromRoles = $this->roles()
+            ->whereHas('permissions', function ($query) use ($permission) {
+                $query->where('permissions.name', $permission);
+            })
+            ->exists();
+
+        if ($hasFromRoles) {
+            return true;
+        }
+
+        // Check permissions trực tiếp
+        return $this->directPermissions()
+            ->where('permissions.name', $permission)
+            ->exists();
+    }
+
+    /**
+     * Kiểm tra user có bất kỳ permission nào trong danh sách
+     */
+    public function hasAnyPermission(array $permissions): bool
+    {
+        foreach ($permissions as $permission) {
+            if ($this->hasPermission($permission)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Kiểm tra user có tất cả permissions trong danh sách
+     */
+    public function hasAllPermissions(array $permissions): bool
+    {
+        foreach ($permissions as $permission) {
+            if (!$this->hasPermission($permission)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public function getAvatarUrlAttribute()

@@ -1,30 +1,85 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/src/reducers/index";
+import { permissionApi } from "@/api/permissionApi";
+
+/**
+ * Xác định đường dẫn redirect dựa trên permissions và role của user
+ */
+function determineRedirectPath(user: any, permissions: string[]): string {
+  const userRole = user?.role?.toLowerCase();
+  const isOwner = user?.owner === true;
+
+  // Super Admin (owner = true) có toàn quyền, mặc định vào projects
+  if (isOwner && userRole === "admin") {
+    return "/projects";
+  }
+
+  // Kiểm tra permissions để quyết định module
+  const hasHRPermissions = permissions.some((perm) =>
+    perm.startsWith("hr.")
+  );
+  const hasProjectPermissions = permissions.some((perm) =>
+    perm.startsWith("projects.")
+  );
+
+  // Nếu có quyền HR và không có quyền projects -> vào HR
+  if (hasHRPermissions && !hasProjectPermissions) {
+    return "/hr";
+  }
+
+  // Nếu có quyền projects (hoặc cả hai) -> vào Projects
+  if (hasProjectPermissions) {
+    return "/projects";
+  }
+
+  // Nếu có quyền HR -> vào HR
+  if (hasHRPermissions) {
+    return "/hr";
+  }
+
+  // Mặc định vào projects
+  return "/projects";
+}
 
 export default function IndexScreen() {
   const router = useRouter();
   const user = useSelector((state: RootState) => state.user);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in
-    if (user?.token) {
-      // User is logged in, redirect based on role
-      const userRole = user?.role?.toLowerCase();
-      if (userRole === "admin") {
-        // Super Admin hoặc Admin -> vào HR module
-        router.replace("/hr");
+    const checkAndRedirect = async () => {
+      // Check if user is logged in
+      if (user?.token) {
+        try {
+          // Get user permissions to determine redirect
+          const permissionsResponse = await permissionApi.getMyPermissions();
+          const permissions: string[] = permissionsResponse.success
+            ? permissionsResponse.data || []
+            : [];
+
+          // Redirect to tabs layout (main app)
+          router.replace("/(tabs)");
+        } catch (error) {
+          console.error("Error getting permissions:", error);
+          // Fallback to role-based redirect if permissions API fails
+          const userRole = user?.role?.toLowerCase();
+          const isOwner = user?.owner === true;
+
+          // Redirect to tabs layout
+          router.replace("/(tabs)/projects");
+        }
       } else {
-        // User thường -> vào projects
-        router.replace("/projects");
+        // User is not logged in, redirect to login
+        router.replace("/login");
       }
-    } else {
-      // User is not logged in, redirect to login
-      router.replace("/login");
-    }
-  }, [user?.token, user?.role]);
+      setChecking(false);
+    };
+
+    checkAndRedirect();
+  }, [user?.token, user?.role, user?.owner]);
 
   return (
     <View style={styles.container}>

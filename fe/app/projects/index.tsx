@@ -11,7 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import LogoutButton from "@/components/LogoutButton";
+import { PermissionGuard } from "@/components/PermissionGuard";
 
 export default function ProjectsListScreen() {
   const router = useRouter();
@@ -134,13 +134,14 @@ export default function ProjectsListScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Danh Sách Dự Án</Text>
         <View style={styles.headerActions}>
-          <LogoutButton variant="icon" />
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => router.push("/projects/create")}
-          >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <PermissionGuard permission="projects.create">
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => router.push("/projects/create")}
+            >
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </PermissionGuard>
         </View>
       </View>
 

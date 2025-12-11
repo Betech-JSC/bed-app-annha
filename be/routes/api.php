@@ -37,6 +37,9 @@ use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\BonusController;
 use App\Http\Controllers\Api\EmployeeSalaryConfigController;
 use App\Http\Controllers\Api\WorkScheduleController;
+use App\Http\Controllers\Api\PersonnelRoleController;
+use App\Http\Controllers\Api\PermissionController;
+use App\Http\Controllers\Api\UserPermissionController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -84,6 +87,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('projects')->group(function () {
         // Projects CRUD
         Route::get('/', [ProjectController::class, 'index']);
+        Route::get('/customers', [ProjectController::class, 'getCustomers']);
+        Route::get('/project-managers', [ProjectController::class, 'getProjectManagers']);
         Route::post('/', [ProjectController::class, 'store']);
         Route::get('/{id}', [ProjectController::class, 'show']);
         Route::put('/{id}', [ProjectController::class, 'update']);
@@ -199,6 +204,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/employees/{id}', [AdminUserController::class, 'show']);
         Route::get('/employees/stats', [AdminUserController::class, 'stats']);
         Route::get('/employees/{id}/stats', [AdminUserController::class, 'employeeStats']);
+
+        // Personnel Roles Management
+        Route::get('/personnel-roles', [PersonnelRoleController::class, 'index']);
+        Route::get('/personnel-roles/with-usage', [PersonnelRoleController::class, 'withUsage']);
+        Route::get('/personnel-roles/{id}', [PersonnelRoleController::class, 'show']);
+        Route::post('/personnel-roles', [PersonnelRoleController::class, 'store']);
+        Route::put('/personnel-roles/{id}', [PersonnelRoleController::class, 'update']);
+        Route::delete('/personnel-roles/{id}', [PersonnelRoleController::class, 'destroy']);
+        Route::get('/personnel-roles/permissions/{roleName}', [PersonnelRoleController::class, 'getDefaultPermissions']);
+        Route::get('/personnel-roles/{id}/permissions', [PersonnelRoleController::class, 'getRolePermissions']);
+        Route::post('/personnel-roles/{id}/permissions', [PersonnelRoleController::class, 'syncPermissions']);
+        Route::get('/permissions/all', [PersonnelRoleController::class, 'getAllPermissions']);
+
+        // User Permissions Management
+        Route::get('/users/{id}/permissions', [UserPermissionController::class, 'getUserPermissions']);
+        Route::post('/users/{id}/permissions', [UserPermissionController::class, 'syncUserPermissions']);
     });
 
     // User routes (không cần HR role)
@@ -208,6 +229,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/time-tracking/check-out/{id}', [TimeTrackingController::class, 'checkOut']);
         Route::get('/my-payroll', [PayrollController::class, 'myPayroll']);
         Route::get('/my-bonuses', [BonusController::class, 'myBonuses']);
+
+        // Permission checking routes
+        Route::get('/permissions/my-permissions', [PermissionController::class, 'myPermissions']);
+        Route::get('/permissions/check/{permission}', [PermissionController::class, 'checkPermission']);
+        Route::get('/permissions/project/{projectId}/check/{permission}', [PermissionController::class, 'checkProjectPermission']);
+        Route::get('/permissions/project/{projectId}/all', [PermissionController::class, 'projectPermissions']);
     });
 });
 

@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "skysend",
-    "scheme": "skysend",
-    "slug": "react-native-boilerplate",
+    "name": "Annha",
+    "scheme": "Annha",
+    "slug": "annha",
     "version": "1.0.0",
     "projectId": "363ab25f-f7bc-4a57-869d-c054d3e254f7",
     "updates": {
@@ -18,18 +18,18 @@
     },
     "plugins": [
       "expo-router",
-        [
-          "expo-notifications",
-          {
-            "icon": "./assets/icon.png",
-            "color": "#ffffff",
-            "defaultChannel": "default",
-            "enableBackgroundRemoteNotifications": true,
-            "sounds": [
-              "./assets/noti.wav"
-            ]
-          }
-        ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff",
+          "defaultChannel": "default",
+          "enableBackgroundRemoteNotifications": true,
+          "sounds": [
+            "./assets/noti.wav"
+          ]
+        }
+      ],
       [
         "@sentry/react-native/expo",
         {
@@ -76,8 +76,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "363ab25f-f7bc-4a57-869d-c054d3e254f7"
+        "projectId": "ca200ae2-7bff-40bc-8e90-34ebe47bbbd5"
       }
-    }
+    },
+    "owner": "toannguyen112"
   }
 }

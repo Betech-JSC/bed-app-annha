@@ -4,7 +4,18 @@ export interface ProjectPersonnel {
   id: number;
   project_id: number;
   user_id: number;
-  role: "project_manager" | "supervisor" | "accountant" | "viewer" | "editor";
+  role:
+  | "project_manager"
+  | "supervisor"
+  | "accountant"
+  | "viewer"
+  | "editor"
+  | "management"
+  | "team_leader"
+  | "worker"
+  | "guest"
+  | "supervisor_guest"
+  | "designer";
   permissions?: string[];
   assigned_by: number;
   assigned_at: string;
@@ -14,7 +25,18 @@ export interface ProjectPersonnel {
 
 export interface CreatePersonnelData {
   user_id: number;
-  role: "project_manager" | "supervisor" | "accountant" | "viewer" | "editor";
+  role:
+  | "project_manager"
+  | "supervisor"
+  | "accountant"
+  | "viewer"
+  | "editor"
+  | "management"
+  | "team_leader"
+  | "worker"
+  | "guest"
+  | "supervisor_guest"
+  | "designer";
   permissions?: string[];
 }
 

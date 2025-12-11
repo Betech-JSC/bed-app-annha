@@ -14,15 +14,55 @@ import {
 import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
 import api from "@/api/api";
+import { permissionApi } from "@/api/permissionApi";
 import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import { setUser } from "@/reducers/userSlice";
 
+/**
+ * Xác định đường dẫn redirect dựa trên permissions và role của user
+ */
+function determineRedirectPath(userData: any, permissions: string[]): string {
+  const userRole = userData.role?.toLowerCase();
+  const isOwner = userData.owner === true;
+
+  // Super Admin (owner = true) có toàn quyền, mặc định vào projects
+  if (isOwner && userRole === "admin") {
+    return "/projects";
+  }
+
+  // Kiểm tra permissions để quyết định module
+  const hasHRPermissions = permissions.some((perm) =>
+    perm.startsWith("hr.")
+  );
+  const hasProjectPermissions = permissions.some((perm) =>
+    perm.startsWith("projects.")
+  );
+
+  // Nếu có quyền HR và không có quyền projects -> vào HR
+  if (hasHRPermissions && !hasProjectPermissions) {
+    return "/hr";
+  }
+
+  // Nếu có quyền projects (hoặc cả hai) -> vào Projects
+  if (hasProjectPermissions) {
+    return "/projects";
+  }
+
+  // Nếu có quyền HR -> vào HR
+  if (hasHRPermissions) {
+    return "/hr";
+  }
+
+  // Mặc định vào projects
+  return "/projects";
+}
+
 export default function LoginScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("superadmin@skysend.com");
+  const [password, setPassword] = useState("superadmin123");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -50,7 +90,7 @@ export default function LoginScreen() {
         fcm_token: fcmToken,
       });
 
-      if (response.data.success) {
+      if (response.data.status === "success") {
         const userData = response.data.data.user;
 
         // Save user to Redux
@@ -63,17 +103,27 @@ export default function LoginScreen() {
             phone: userData.phone || null,
             token: userData.token || null,
             password: null,
+            owner: userData.owner || false,
           })
         );
 
-        // Redirect based on role
-        const userRole = userData.role?.toLowerCase();
-        if (userRole === "admin") {
-          // Super Admin hoặc Admin -> vào HR module
-          router.replace("/hr");
-        } else {
-          // User thường -> vào projects
-          router.replace("/projects");
+        // Get user permissions to determine redirect
+        try {
+          const permissionsResponse = await permissionApi.getMyPermissions();
+          const permissions: string[] = permissionsResponse.success
+            ? permissionsResponse.data || []
+            : [];
+
+          // Redirect to tabs layout (main app)
+          router.replace("/(tabs)");
+        } catch (error) {
+          console.error("Error getting permissions:", error);
+          // Fallback to role-based redirect if permissions API fails
+          const userRole = userData.role?.toLowerCase();
+          const isOwner = userData.owner === true;
+
+          // Redirect to tabs layout
+          router.replace("/(tabs)/projects");
         }
       } else {
         Alert.alert("Lỗi", response.data.message || "Đăng nhập thất bại");

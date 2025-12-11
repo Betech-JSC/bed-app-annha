@@ -56,17 +56,59 @@ class ProjectPersonnel extends Model
 
     public function canView(): bool
     {
-        return in_array($this->role, ['project_manager', 'supervisor', 'accountant', 'viewer', 'editor']);
+        return in_array($this->role, [
+            'project_manager',
+            'supervisor',
+            'accountant',
+            'viewer',
+            'editor',
+            'management',
+            'team_leader',
+            'worker',
+            'guest',
+            'supervisor_guest',
+            'designer',
+        ]);
     }
 
     public function canEdit(): bool
     {
-        return in_array($this->role, ['project_manager', 'supervisor', 'editor']);
+        return in_array($this->role, [
+            'project_manager',
+            'supervisor',
+            'editor',
+            'management',
+            'team_leader',
+            'designer',
+        ]);
     }
 
     public function canApprove(): bool
     {
-        return in_array($this->role, ['project_manager', 'supervisor']);
+        return in_array($this->role, [
+            'project_manager',
+            'supervisor',
+            'management',
+            'supervisor_guest',
+        ]);
+    }
+
+    public function canViewFinancial(): bool
+    {
+        return in_array($this->role, [
+            'project_manager',
+            'accountant',
+            'management',
+        ]);
+    }
+
+    public function canApproveFinancial(): bool
+    {
+        return in_array($this->role, [
+            'project_manager',
+            'accountant',
+            'management',
+        ]);
     }
 
     // ==================================================================

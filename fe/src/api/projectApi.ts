@@ -67,4 +67,16 @@ export const projectApi = {
     const response = await api.delete(`/projects/${id}`);
     return response.data;
   },
+
+  // Get customers list
+  getCustomers: async (params?: { search?: string }) => {
+    const response = await api.get("/projects/customers", { params });
+    return response.data;
+  },
+
+  // Get project managers list
+  getProjectManagers: async (params?: { search?: string }) => {
+    const response = await api.get("/projects/project-managers", { params });
+    return response.data;
+  },
 };

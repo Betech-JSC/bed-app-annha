@@ -33,6 +33,15 @@ class ProjectPaymentController extends Controller
     public function store(Request $request, string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$user->hasPermission('payments.create')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo đợt thanh toán.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'payment_number' => 'required|integer|min:1',
@@ -111,6 +120,21 @@ class ProjectPaymentController extends Controller
             ->findOrFail($id);
 
         $user = auth()->user();
+
+        // Check permission
+        if (!$user->hasPermission('payments.confirm')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xác nhận thanh toán.'
+            ], 403);
+        }
+
+        if ($payment->status === 'paid') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Đợt thanh toán này đã được xác nhận.'
+            ], 400);
+        }
 
         $validated = $request->validate([
             'paid_date' => 'required|date',

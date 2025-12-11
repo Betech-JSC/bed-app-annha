@@ -91,6 +91,18 @@ class RolePermissionSeeder extends Seeder
                 'permissions' => [
                     'users.view',
                     'users.edit',
+
+                    'projects.view',
+                    'projects.create',
+                    'projects.edit',
+                    'projects.delete',
+                    'projects.assign',
+                    'projects.remove',
+                    'projects.approve',
+                    'projects.reject',
+                    'projects.cancel',
+                    'projects.update_status',
+
                     'flights.view',
                     'flights.verify',
                     'orders.view',

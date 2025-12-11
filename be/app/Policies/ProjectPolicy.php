@@ -22,6 +22,11 @@ class ProjectPolicy
      */
     public function view(User $user, Project $project): bool
     {
+        // Super admin can view all
+        if ($user->role === 'admin' && $user->owner === true) {
+            return true;
+        }
+
         // Customer (owner) can always view
         if ($project->customer_id === $user->id) {
             return true;
@@ -45,6 +50,11 @@ class ProjectPolicy
      */
     public function create(User $user): bool
     {
+        // Super admin can always create
+        if ($user->role === 'admin' && $user->owner === true) {
+            return true;
+        }
+
         // Any authenticated user can create a project
         return true;
     }
@@ -54,6 +64,11 @@ class ProjectPolicy
      */
     public function update(User $user, Project $project): bool
     {
+        // Super admin can always update
+        if ($user->role === 'admin' && $user->owner === true) {
+            return true;
+        }
+
         // Customer (owner) can always update
         if ($project->customer_id === $user->id) {
             return true;
@@ -77,6 +92,11 @@ class ProjectPolicy
      */
     public function delete(User $user, Project $project): bool
     {
+        // Super admin can always delete
+        if ($user->role === 'admin' && $user->owner === true) {
+            return true;
+        }
+
         // Only customer (owner) can delete
         return $project->customer_id === $user->id;
     }
@@ -86,6 +106,11 @@ class ProjectPolicy
      */
     public function approve(User $user, Project $project): bool
     {
+        // Super admin can always approve
+        if ($user->role === 'admin' && $user->owner === true) {
+            return true;
+        }
+
         // Customer (owner) can always approve
         if ($project->customer_id === $user->id) {
             return true;

@@ -55,6 +55,14 @@ class CostController extends Controller
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
+        // Check permission
+        if (!$user->hasPermission('costs.create')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo chi phí.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'category' => [
                 'required',
@@ -176,6 +184,14 @@ class CostController extends Controller
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
         $user = auth()->user();
 
+        // Check permission
+        if (!$user->hasPermission('costs.approve_management')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền duyệt chi phí (Ban điều hành).'
+            ], 403);
+        }
+
         if ($cost->status !== 'pending_management_approval') {
             return response()->json([
                 'success' => false,
@@ -200,6 +216,14 @@ class CostController extends Controller
         $project = Project::findOrFail($projectId);
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
         $user = auth()->user();
+
+        // Check permission
+        if (!$user->hasPermission('costs.approve_accountant')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xác nhận chi phí (Kế toán).'
+            ], 403);
+        }
 
         if ($cost->status !== 'pending_accountant_approval') {
             return response()->json([

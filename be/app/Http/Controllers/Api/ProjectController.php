@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Project;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -16,6 +17,7 @@ class ProjectController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
 
         $query = Project::with([
             'customer',
@@ -24,22 +26,25 @@ class ProjectController extends Controller
             'progress',
         ]);
 
-        // Filter: Customer sees their projects, personnel sees assigned projects
-        if ($request->has('my_projects') && $request->my_projects) {
-            $query->where(function ($q) use ($user) {
-                $q->where('customer_id', $user->id)
+        // Super admin có thể xem tất cả projects
+        if (!$isSuperAdmin) {
+            // Filter: Customer sees their projects, personnel sees assigned projects
+            if ($request->has('my_projects') && $request->my_projects) {
+                $query->where(function ($q) use ($user) {
+                    $q->where('customer_id', $user->id)
+                        ->orWhere('project_manager_id', $user->id)
+                        ->orWhereHas('personnel', function ($q) use ($user) {
+                            $q->where('user_id', $user->id);
+                        });
+                });
+            } else {
+                // Admin or project manager can see all
+                $query->where('customer_id', $user->id)
                     ->orWhere('project_manager_id', $user->id)
                     ->orWhereHas('personnel', function ($q) use ($user) {
                         $q->where('user_id', $user->id);
                     });
-            });
-        } else {
-            // Admin or project manager can see all
-            $query->where('customer_id', $user->id)
-                ->orWhere('project_manager_id', $user->id)
-                ->orWhereHas('personnel', function ($q) use ($user) {
-                    $q->where('user_id', $user->id);
-                });
+            }
         }
 
         // Filter by status
@@ -65,11 +70,86 @@ class ProjectController extends Controller
     }
 
     /**
+     * Lấy danh sách customers (users có thể là khách hàng)
+     */
+    public function getCustomers(Request $request)
+    {
+        $query = User::whereNull('deleted_at');
+
+        // Search
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+
+        $customers = $query->orderBy('name')->limit(100)->get([
+            'id',
+            'name',
+            'email',
+            'phone',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $customers,
+        ]);
+    }
+
+    /**
+     * Lấy danh sách project managers (users có thể quản lý dự án)
+     */
+    public function getProjectManagers(Request $request)
+    {
+        $query = User::whereNull('deleted_at')
+            ->where(function ($q) {
+                // Admin users hoặc users đã từng là project manager
+                $q->where('role', 'admin')
+                    ->orWhereHas('personnel', function ($q) {
+                        $q->where('role', 'project_manager');
+                    });
+            });
+
+        // Search
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+
+        $managers = $query->orderBy('name')->limit(100)->get([
+            'id',
+            'name',
+            'email',
+            'phone',
+            'role',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $managers,
+        ]);
+    }
+
+    /**
      * Tạo dự án mới
      */
     public function store(Request $request)
     {
         $user = auth()->user();
+
+        // Check permission (super admin bypass)
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && !$user->hasPermission('projects.create')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo dự án mới.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -163,6 +243,16 @@ class ProjectController extends Controller
     public function update(Request $request, string $id)
     {
         $project = Project::findOrFail($id);
+        $user = auth()->user();
+
+        // Check permission (super admin bypass)
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && !$user->hasPermission('projects.update')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -192,9 +282,19 @@ class ProjectController extends Controller
     public function destroy(string $id)
     {
         $project = Project::findOrFail($id);
+        $user = auth()->user();
 
-        // Only customer can delete
-        if ($project->customer_id !== auth()->id()) {
+        // Check permission (super admin bypass)
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && !$user->hasPermission('projects.delete')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa dự án này.'
+            ], 403);
+        }
+
+        // Only customer can delete (super admin bypass)
+        if (!$isSuperAdmin && $project->customer_id !== auth()->id()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ chủ dự án mới có quyền xóa.'

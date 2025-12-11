@@ -75,11 +75,11 @@ export default function EmployeesScreen() {
   };
 
   const renderItem = ({ item }: { item: Employee }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => router.push(`/hr/employees/${item.id}`)}
-    >
-      <View style={styles.cardContent}>
+    <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.cardContent}
+        onPress={() => router.push(`/hr/employees/${item.id}`)}
+      >
         <View style={styles.avatarContainer}>
           <Ionicons name="person-circle" size={48} color="#3B82F6" />
         </View>
@@ -96,8 +96,17 @@ export default function EmployeesScreen() {
           )}
         </View>
         <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+      </TouchableOpacity>
+      <View style={styles.cardActions}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => router.push(`/hr/user-permissions?id=${item.id}`)}
+        >
+          <Ionicons name="shield-checkmark" size={18} color="#10B981" />
+          <Text style={styles.actionButtonText}>Quản lý quyền</Text>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   if (loading) {
@@ -199,6 +208,23 @@ const styles = StyleSheet.create({
   cardContent: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  cardActions: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    color: "#10B981",
+    fontWeight: "600",
   },
   avatarContainer: {
     marginRight: 12,

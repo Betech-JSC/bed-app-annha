@@ -48,7 +48,10 @@ class ProjectPersonnelController extends Controller
 
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'role' => ['required', 'in:project_manager,supervisor,accountant,viewer,editor'],
+            'role' => [
+                'required',
+                'in:project_manager,supervisor,accountant,viewer,editor,management,team_leader,worker,guest,supervisor_guest,designer'
+            ],
             'permissions' => 'nullable|array',
         ]);
 

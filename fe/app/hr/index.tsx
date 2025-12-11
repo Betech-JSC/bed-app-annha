@@ -13,7 +13,6 @@ import { payrollApi } from "@/api/payrollApi";
 import { bonusApi } from "@/api/bonusApi";
 import { employeesApi } from "@/api/employeesApi";
 import { Ionicons } from "@expo/vector-icons";
-import LogoutButton from "@/components/LogoutButton";
 
 export default function HRDashboardScreen() {
   const router = useRouter();
@@ -65,7 +64,6 @@ export default function HRDashboardScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Quản Lý Nhân Sự</Text>
-        <LogoutButton variant="icon" />
       </View>
 
       <View style={styles.statsContainer}>
@@ -97,10 +95,19 @@ export default function HRDashboardScreen() {
       <View style={styles.menuContainer}>
         <TouchableOpacity
           style={styles.menuItem}
-          onPress={() => router.push("/hr/time-tracking")}
+          onPress={() => router.push("/hr/check-in-out")}
         >
           <Ionicons name="time" size={24} color="#3B82F6" />
           <Text style={styles.menuText}>Chấm Công</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push("/hr/time-tracking")}
+        >
+          <Ionicons name="list" size={24} color="#6366F1" />
+          <Text style={styles.menuText}>Lịch Sử Chấm Công</Text>
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
         </TouchableOpacity>
 
@@ -137,6 +144,15 @@ export default function HRDashboardScreen() {
         >
           <Ionicons name="calendar" size={24} color="#EF4444" />
           <Text style={styles.menuText}>Lịch Làm Việc</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push("/hr/personnel-roles")}
+        >
+          <Ionicons name="people-circle" size={24} color="#6366F1" />
+          <Text style={styles.menuText}>Cấu Hình Vai Trò</Text>
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
         </TouchableOpacity>
       </View>

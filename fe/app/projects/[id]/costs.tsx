@@ -16,10 +16,13 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { costApi, Cost, revenueApi } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { PermissionGuard } from "@/components/PermissionGuard";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 export default function CostsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { hasPermission } = useProjectPermissions(id);
   const [costs, setCosts] = useState<Cost[]>([]);
   const [summary, setSummary] = useState<{
     grouped?: Array<{
@@ -310,12 +313,14 @@ export default function CostsScreen() {
           <Ionicons name="arrow-back" size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi Phí Dự Án</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowCreateModal(true)}
-        >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <PermissionGuard permission="costs.create" projectId={id}>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <Ionicons name="add" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </PermissionGuard>
       </View>
 
       {/* Summary by Category */}

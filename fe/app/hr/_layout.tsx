@@ -9,11 +9,15 @@ export default function HRLayout() {
       }}
     >
       <Stack.Screen name="index" />
+      <Stack.Screen name="check-in-out" />
       <Stack.Screen name="time-tracking" />
       <Stack.Screen name="payroll" />
       <Stack.Screen name="bonuses" />
       <Stack.Screen name="employees" />
       <Stack.Screen name="calendar" />
+      <Stack.Screen name="personnel-roles" />
+      <Stack.Screen name="role-permissions" />
+      <Stack.Screen name="user-permissions" />
     </Stack>
   );
 }
