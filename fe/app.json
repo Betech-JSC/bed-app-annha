@@ -4,7 +4,7 @@
     "scheme": "Annha",
     "slug": "annha",
     "version": "1.0.0",
-    "projectId": "363ab25f-f7bc-4a57-869d-c054d3e254f7",
+    "projectId": "ca200ae2-7bff-40bc-8e90-34ebe47bbbd5",
     "updates": {
       "enabled": true,
       "fallbackToCacheTimeout": 0
@@ -52,7 +52,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.toannguyen112.reactnativeboilerplate",
+      "bundleIdentifier": "com.toannguyen112.annha",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -70,13 +70,13 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.toannguyen112.reactnativeboilerplate",
+      "package": "com.toannguyen112.annha",
       "googleServicesFile": "./google-services.json"
     },
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ca200ae2-7bff-40bc-8e90-34ebe47bbbd5"
+       "projectId": "ca200ae2-7bff-40bc-8e90-34ebe47bbbd5"
       }
     },
     "owner": "toannguyen112"
