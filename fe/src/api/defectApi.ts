@@ -21,6 +21,7 @@ export interface CreateDefectData {
   acceptance_stage_id?: number;
   description: string;
   severity: "low" | "medium" | "high" | "critical";
+  before_image_ids?: number[];
 }
 
 export const defectApi = {
@@ -43,7 +44,7 @@ export const defectApi = {
   updateDefect: async (
     projectId: string | number,
     defectId: string | number,
-    data: Partial<CreateDefectData & { status?: string }>
+    data: Partial<CreateDefectData & { status?: string; after_image_ids?: number[] }>
   ) => {
     const response = await api.put(`/projects/${projectId}/defects/${defectId}`, data);
     return response.data;

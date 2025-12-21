@@ -113,6 +113,15 @@ export default function HRDashboardScreen() {
 
         <TouchableOpacity
           style={styles.menuItem}
+          onPress={() => router.push("/hr/payroll-costs")}
+        >
+          <Ionicons name="calculator" size={24} color="#10B981" />
+          <Text style={styles.menuText}>Tiền Lương & Chi Phí Nhân Công</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
           onPress={() => router.push("/hr/payroll")}
         >
           <Ionicons name="cash" size={24} color="#10B981" />
@@ -144,6 +153,15 @@ export default function HRDashboardScreen() {
         >
           <Ionicons name="calendar" size={24} color="#EF4444" />
           <Text style={styles.menuText}>Lịch Làm Việc</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push("/hr/salary-config")}
+        >
+          <Ionicons name="cash" size={24} color="#10B981" />
+          <Text style={styles.menuText}>Cấu Hình Lương</Text>
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
         </TouchableOpacity>
 

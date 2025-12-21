@@ -122,35 +122,38 @@ class PayrollCalculationService
 
     /**
      * Tính overtime
+     * Overtime is calculated based on time windows:
+     * - Hours before 7:30 AM = overtime
+     * - Hours after 5:30 PM (17:30) = overtime
      */
     protected function calculateOvertime(EmployeeSalaryConfig $config, $timeTrackings): array
     {
         $overtimeHours = 0;
         $overtimeRate = 0;
 
-        // Overtime is hours > 8 per day
+        // Calculate overtime hours based on time windows for each tracking
         foreach ($timeTrackings as $tracking) {
-            $hours = $tracking->total_hours ?? 0;
-            if ($hours > 8) {
-                $overtimeHours += ($hours - 8);
-            }
+            $overtimeData = $tracking->calculateOvertimeHours();
+            $overtimeHours += $overtimeData['overtime_hours'];
         }
 
-        // Overtime rate is 1.5x hourly rate
-        if ($config->salary_type === 'hourly' && $config->hourly_rate) {
-            $overtimeRate = $config->hourly_rate * 1.5;
+        // Determine overtime rate
+        // Priority: 1. Use overtime_rate from config if set, 2. Fallback to hourly_rate or daily_rate/8
+        if ($config->overtime_rate) {
+            $overtimeRate = $config->overtime_rate;
+        } elseif ($config->salary_type === 'hourly' && $config->hourly_rate) {
+            $overtimeRate = $config->hourly_rate;
         } elseif ($config->salary_type === 'daily' && $config->daily_rate) {
             // For daily rate, calculate hourly equivalent
-            $hourlyRate = $config->daily_rate / 8;
-            $overtimeRate = $hourlyRate * 1.5;
+            $overtimeRate = $config->daily_rate / 8;
         }
 
         $overtimeAmount = $overtimeHours * $overtimeRate;
 
         return [
-            'overtime_hours' => $overtimeHours,
+            'overtime_hours' => round($overtimeHours, 2),
             'overtime_rate' => $overtimeRate,
-            'overtime_amount' => $overtimeAmount,
+            'overtime_amount' => round($overtimeAmount, 2),
         ];
     }
 

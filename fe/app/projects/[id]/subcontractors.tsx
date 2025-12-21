@@ -52,13 +52,60 @@ export default function SubcontractorsScreen() {
     }).format(amount);
   };
 
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  const getProgressStatusText = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "Hoàn thành";
+      case "in_progress":
+        return "Đang thi công";
+      case "delayed":
+        return "Chậm tiến độ";
+      case "not_started":
+      default:
+        return "Chưa bắt đầu";
+    }
+  };
+
+  const getPaymentStatusText = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "Đã thanh toán";
+      case "partial":
+        return "Thanh toán một phần";
+      case "pending":
+      default:
+        return "Chưa thanh toán";
+    }
+  };
+
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "#10B981";
+      case "partial":
+        return "#F59E0B";
+      case "pending":
+      default:
+        return "#EF4444";
+    }
+  };
+
   const renderSubcontractorItem = ({ item }: { item: Subcontractor }) => (
     <View style={styles.subcontractorCard}>
       <View style={styles.subcontractorHeader}>
         <View style={styles.subcontractorInfo}>
           <Text style={styles.subcontractorName}>{item.name}</Text>
           {item.category && (
-            <Text style={styles.subcontractorCategory}>{item.category}</Text>
+            <Text style={styles.subcontractorCategory}>Hạng mục: {item.category}</Text>
           )}
         </View>
         <View
@@ -70,7 +117,9 @@ export default function SubcontractorsScreen() {
                   ? "#10B98120"
                   : item.progress_status === "in_progress"
                     ? "#3B82F620"
-                    : "#6B728020",
+                    : item.progress_status === "delayed"
+                      ? "#EF444420"
+                      : "#6B728020",
             },
           ]}
         >
@@ -83,44 +132,109 @@ export default function SubcontractorsScreen() {
                     ? "#10B981"
                     : item.progress_status === "in_progress"
                       ? "#3B82F6"
-                      : "#6B7280",
+                      : item.progress_status === "delayed"
+                        ? "#EF4444"
+                        : "#6B7280",
               },
             ]}
           >
-            {item.progress_status === "completed"
-              ? "Hoàn thành"
-              : item.progress_status === "in_progress"
-                ? "Đang thi công"
-                : "Chưa bắt đầu"}
+            {getProgressStatusText(item.progress_status)}
           </Text>
         </View>
       </View>
 
-      <View style={styles.amountRow}>
-        <View style={styles.amountItem}>
-          <Text style={styles.amountLabel}>Tổng báo giá</Text>
-          <Text style={styles.amountValue}>
-            {formatCurrency(item.total_quote)}
-          </Text>
+      {/* Financial Information */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Thông tin tài chính</Text>
+        <View style={styles.amountRow}>
+          <View style={styles.amountItem}>
+            <Text style={styles.amountLabel}>Tổng báo giá</Text>
+            <Text style={styles.amountValue}>
+              {formatCurrency(item.total_quote)}
+            </Text>
+          </View>
+          <View style={styles.amountItem}>
+            <Text style={styles.amountLabel}>Tạm ứng</Text>
+            <Text style={styles.amountValue}>
+              {formatCurrency(item.advance_payment || 0)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.amountItem}>
-          <Text style={styles.amountLabel}>Đã thanh toán</Text>
-          <Text style={styles.amountValue}>
-            {formatCurrency(item.total_paid)}
-          </Text>
+        <View style={styles.amountRow}>
+          <View style={styles.amountItem}>
+            <Text style={styles.amountLabel}>Tổng thanh toán</Text>
+            <Text style={styles.amountValue}>
+              {formatCurrency(item.total_paid)}
+            </Text>
+          </View>
+          <View style={styles.amountItem}>
+            <Text style={styles.amountLabel}>Trạng thái thanh toán</Text>
+            <View
+              style={[
+                styles.paymentStatusBadge,
+                {
+                  backgroundColor: getPaymentStatusColor(item.payment_status) + "20",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.paymentStatusText,
+                  { color: getPaymentStatusColor(item.payment_status) },
+                ]}
+              >
+                {getPaymentStatusText(item.payment_status)}
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.progressBar}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${item.total_quote > 0 ? (item.total_paid / item.total_quote) * 100 : 0}%`,
+              },
+            ]}
+          />
         </View>
       </View>
 
-      <View style={styles.progressBar}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${item.total_quote > 0 ? (item.total_paid / item.total_quote) * 100 : 0}%`,
-            },
-          ]}
-        />
-      </View>
+      {/* Construction Progress */}
+      {(item.progress_start_date || item.progress_end_date) && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tiến độ thi công</Text>
+          <View style={styles.dateRow}>
+            <View style={styles.dateItem}>
+              <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+              <Text style={styles.dateLabel}>Từ ngày:</Text>
+              <Text style={styles.dateValue}>
+                {formatDate(item.progress_start_date)}
+              </Text>
+            </View>
+            <View style={styles.dateItem}>
+              <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+              <Text style={styles.dateLabel}>Đến ngày:</Text>
+              <Text style={styles.dateValue}>
+                {formatDate(item.progress_end_date)}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Attachments */}
+      {item.attachments && item.attachments.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Chứng từ lưu trữ</Text>
+          <View style={styles.attachmentsRow}>
+            <Ionicons name="document-outline" size={16} color="#3B82F6" />
+            <Text style={styles.attachmentsText}>
+              {item.attachments.length} chứng từ đã tải lên
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 
@@ -162,6 +276,123 @@ export default function SubcontractorsScreen() {
           </View>
         }
       />
+
+      {/* Add/Edit Modal */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Thêm nhà thầu phụ</Text>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Tên nhà thầu *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập tên nhà thầu phụ"
+                  value={formData.name}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, name: text })
+                  }
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Hạng mục</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập hạng mục"
+                  value={formData.category}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, category: text })
+                  }
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Tổng báo giá *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập tổng báo giá"
+                  value={formData.total_quote}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, total_quote: text })
+                  }
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Tạm ứng</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập số tiền tạm ứng"
+                  value={formData.advance_payment}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, advance_payment: text })
+                  }
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.submitButton]}
+                  onPress={async () => {
+                    if (!formData.name || !formData.total_quote) {
+                      Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin bắt buộc");
+                      return;
+                    }
+                    try {
+                      await subcontractorApi.createSubcontractor(id!, {
+                        name: formData.name,
+                        category: formData.category || undefined,
+                        total_quote: parseFloat(formData.total_quote),
+                        advance_payment: formData.advance_payment
+                          ? parseFloat(formData.advance_payment)
+                          : undefined,
+                      });
+                      setModalVisible(false);
+                      setFormData({
+                        name: "",
+                        category: "",
+                        total_quote: "",
+                        advance_payment: "",
+                      });
+                      loadSubcontractors();
+                    } catch (error: any) {
+                      Alert.alert(
+                        "Lỗi",
+                        error.response?.data?.message || "Không thể thêm nhà thầu phụ"
+                      );
+                    }
+                  }}
+                >
+                  <Text style={styles.submitButtonText}>Thêm</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -240,10 +471,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  section: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
   amountRow: {
     flexDirection: "row",
     gap: 16,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   amountItem: {
     flex: 1,
@@ -258,16 +501,57 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1F2937",
   },
+  paymentStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  paymentStatusText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
   progressBar: {
     height: 8,
     backgroundColor: "#E5E7EB",
     borderRadius: 4,
     overflow: "hidden",
+    marginTop: 8,
   },
   progressFill: {
     height: "100%",
     backgroundColor: "#3B82F6",
     borderRadius: 4,
+  },
+  dateRow: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  dateItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  dateLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  dateValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  attachmentsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  attachmentsText: {
+    fontSize: 14,
+    color: "#3B82F6",
+    fontWeight: "500",
   },
   emptyContainer: {
     flex: 1,
@@ -279,5 +563,77 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#6B7280",
     marginTop: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "90%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 16,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#E5E7EB",
+  },
+  cancelButtonText: {
+    color: "#1F2937",
+    fontWeight: "600",
+  },
+  submitButton: {
+    backgroundColor: "#3B82F6",
+  },
+  submitButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 });

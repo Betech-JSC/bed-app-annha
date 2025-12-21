@@ -14,7 +14,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "SENTRY_AUTH_TOKEN": "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"
+        "API_URL": "https://annha.betech-digital.com/api"
       }
     }
   },

@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Payroll } from "@/api/payrollApi";
 import { Ionicons } from "@expo/vector-icons";
+import { formatVNDWithoutSymbol } from "@/utils/format";
 
 interface PayrollCardProps {
   payroll: Payroll;
@@ -70,7 +71,7 @@ export default function PayrollCard({
         <View style={styles.breakdownRow}>
           <Text style={styles.breakdownLabel}>Lương cơ bản:</Text>
           <Text style={styles.breakdownValue}>
-            {payroll.base_salary.toLocaleString()} VND
+            {formatVNDWithoutSymbol(payroll.base_salary)}
           </Text>
         </View>
         {payroll.overtime_hours > 0 && (
@@ -85,7 +86,7 @@ export default function PayrollCard({
           <View style={styles.breakdownRow}>
             <Text style={styles.breakdownLabel}>Thưởng:</Text>
             <Text style={styles.breakdownValue}>
-              {payroll.bonus_amount.toLocaleString()} VND
+              {formatVNDWithoutSymbol(payroll.bonus_amount)}
             </Text>
           </View>
         )}
@@ -93,7 +94,7 @@ export default function PayrollCard({
           <View style={styles.breakdownRow}>
             <Text style={styles.breakdownLabel}>Thuế:</Text>
             <Text style={styles.breakdownValue}>
-              -{payroll.tax.toLocaleString()} VND
+              -{formatVNDWithoutSymbol(payroll.tax)}
             </Text>
           </View>
         )}
@@ -102,7 +103,7 @@ export default function PayrollCard({
       <View style={styles.amountRow}>
         <Text style={styles.amountLabel}>Lương thực nhận:</Text>
         <Text style={styles.amount}>
-          {payroll.net_salary.toLocaleString()} VND
+          {formatVNDWithoutSymbol(payroll.net_salary)}
         </Text>
       </View>
 

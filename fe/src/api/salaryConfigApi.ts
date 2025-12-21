@@ -8,6 +8,7 @@ export interface EmployeeSalaryConfig {
   daily_rate?: number;
   monthly_salary?: number;
   project_rate?: number;
+  overtime_rate?: number;
   effective_from: string;
   effective_to?: string;
   created_at: string;
@@ -22,6 +23,7 @@ export interface CreateSalaryConfigData {
   daily_rate?: number;
   monthly_salary?: number;
   project_rate?: number;
+  overtime_rate?: number;
   effective_from: string;
   effective_to?: string;
 }

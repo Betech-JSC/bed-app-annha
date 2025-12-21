@@ -11,6 +11,7 @@ export default function ProjectsLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="create" />
       <Stack.Screen name="[id]" />
+      <Stack.Screen name="[id]/edit" />
       <Stack.Screen name="[id]/contract" />
       <Stack.Screen name="[id]/payments" />
       <Stack.Screen name="[id]/additional-costs" />

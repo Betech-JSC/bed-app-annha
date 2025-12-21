@@ -72,6 +72,10 @@ export default function AcceptanceScreen() {
         stages={stages}
         onApprove={handleApprove}
         canApprove={true}
+        projectId={id}
+        isProjectManager={true}
+        onRefresh={loadStages}
+        onNavigateToDefects={() => router.push(`/projects/${id}/defects`)}
       />
     </View>
   );

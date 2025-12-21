@@ -53,4 +53,43 @@ export const employeesApi = {
     const response = await api.get("/hr/employees/stats");
     return response.data;
   },
+
+  // Create new employee/user
+  createEmployee: async (data: {
+    first_name: string;
+    last_name?: string;
+    email: string;
+    phone?: string;
+    password: string;
+    role_ids?: number[];
+  }) => {
+    const response = await api.post("/hr/employees", data);
+    return response.data;
+  },
+
+  // Update employee
+  updateEmployee: async (id: number, data: Partial<{
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    password: string;
+  }>) => {
+    const response = await api.put(`/hr/employees/${id}`, data);
+    return response.data;
+  },
+
+  // Get user roles
+  getUserRoles: async (id: number) => {
+    const response = await api.get(`/hr/employees/${id}/roles`);
+    return response.data;
+  },
+
+  // Sync user roles
+  syncUserRoles: async (id: number, roleIds: number[]) => {
+    const response = await api.post(`/hr/employees/${id}/roles`, {
+      role_ids: roleIds,
+    });
+    return response.data;
+  },
 };

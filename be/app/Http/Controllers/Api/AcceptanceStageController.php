@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AcceptanceStage;
 use App\Models\Project;
+use App\Models\Attachment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -43,7 +44,7 @@ class AcceptanceStageController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
-        $user = auth()->user();
+        $user = $request->user();
 
         $validated = $request->validate([
             'approval_type' => ['required', 'in:internal,customer,design,owner'],
@@ -97,5 +98,253 @@ class AcceptanceStageController extends Controller
             'message' => 'Giai đoạn nghiệm thu đã được duyệt.',
             'data' => $stage->fresh()
         ]);
+    }
+
+    /**
+     * Attach files to acceptance stage (upload hình ảnh nghiệm thu)
+     */
+    public function attachFiles(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'attachment_ids' => 'required|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $attached = [];
+            foreach ($validated['attachment_ids'] as $attachmentId) {
+                $attachment = Attachment::find($attachmentId);
+                if ($attachment && ($attachment->uploaded_by === $user->id || $user->id === $project->project_manager_id)) {
+                    $attachment->update([
+                        'attachable_type' => AcceptanceStage::class,
+                        'attachable_id' => $stage->id,
+                    ]);
+                    $attached[] = $attachment;
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã đính kèm ' . count($attached) . ' file.',
+                'data' => $stage->fresh(['attachments'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi đính kèm file.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Chi tiết giai đoạn nghiệm thu
+     */
+    public function show(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $stage = AcceptanceStage::where('project_id', $project->id)
+            ->with([
+                'internalApprover',
+                'customerApprover',
+                'designApprover',
+                'ownerApprover',
+                'defects',
+                'attachments'
+            ])
+            ->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $stage
+        ]);
+    }
+
+    /**
+     * Tạo giai đoạn nghiệm thu mới
+     */
+    public function store(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        // Check permission
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && !$user->hasPermission('acceptance.create')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo giai đoạn nghiệm thu.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'order' => 'nullable|integer|min:0',
+        ]);
+
+        try {
+            // Auto-calculate order if not provided
+            if (!isset($validated['order'])) {
+                $maxOrder = $project->acceptanceStages()->max('order') ?? 0;
+                $validated['order'] = $maxOrder + 1;
+            }
+
+            $stage = AcceptanceStage::create([
+                'project_id' => $project->id,
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'order' => $validated['order'],
+                'is_custom' => true,
+                'status' => 'pending',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã tạo giai đoạn nghiệm thu mới.',
+                'data' => $stage->load(['attachments'])
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi tạo giai đoạn nghiệm thu.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Cập nhật giai đoạn nghiệm thu
+     */
+    public function update(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check permission
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && !$user->hasPermission('acceptance.update')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật giai đoạn nghiệm thu này.'
+            ], 403);
+        }
+
+        // Không cho phép chỉnh sửa nếu đã được duyệt hoàn toàn
+        if ($stage->status === 'owner_approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể chỉnh sửa giai đoạn đã được duyệt hoàn toàn.'
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'description' => 'nullable|string',
+            'order' => 'sometimes|integer|min:0',
+        ]);
+
+        $stage->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cập nhật giai đoạn nghiệm thu.',
+            'data' => $stage->fresh(['attachments'])
+        ]);
+    }
+
+    /**
+     * Xóa giai đoạn nghiệm thu
+     */
+    public function destroy(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check permission
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && !$user->hasPermission('acceptance.delete')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa giai đoạn nghiệm thu này.'
+            ], 403);
+        }
+
+        // Không cho phép xóa nếu đã được duyệt hoàn toàn
+        if ($stage->status === 'owner_approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể xóa giai đoạn đã được duyệt hoàn toàn.'
+            ], 400);
+        }
+
+        // Không cho phép xóa nếu có lỗi chưa được khắc phục
+        if ($stage->has_open_defects) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể xóa giai đoạn còn lỗi chưa được khắc phục.'
+            ], 400);
+        }
+
+        $stage->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã xóa giai đoạn nghiệm thu.'
+        ]);
+    }
+
+    /**
+     * Tạo các giai đoạn nghiệm thu mặc định cho project
+     */
+    public function createDefaultStages(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        // Check permission - admin hoặc project manager
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && $project->project_manager_id !== $user->id && !$user->hasPermission('acceptance.create')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo giai đoạn nghiệm thu.'
+            ], 403);
+        }
+
+        // Check if stages already exist
+        if ($project->acceptanceStages()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dự án đã có giai đoạn nghiệm thu.'
+            ], 400);
+        }
+
+        try {
+            $service = new \App\Services\AcceptanceWorkflowService();
+            $stages = $service->createDefaultStages($project);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã tạo ' . count($stages) . ' giai đoạn nghiệm thu mặc định.',
+                'data' => $stages
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

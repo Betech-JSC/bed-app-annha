@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { payrollApi, Payroll } from "@/api/payrollApi";
 import { Ionicons } from "@expo/vector-icons";
 import ExportButtons from "@/components/ExportButtons";
+import { formatVNDWithoutSymbol } from "@/utils/format";
 
 export default function PayrollScreen() {
   const router = useRouter();
@@ -70,12 +71,9 @@ export default function PayrollScreen() {
   };
 
   const renderItem = ({ item }: { item: Payroll }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => router.push(`/hr/payroll/${item.id}`)}
-    >
+    <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <View>
+        <View style={styles.employeeInfo}>
           <Text style={styles.employeeName}>{item.user?.name || "N/A"}</Text>
           <Text style={styles.period}>
             {new Date(item.period_start).toLocaleDateString("vi-VN")} -{" "}
@@ -102,9 +100,81 @@ export default function PayrollScreen() {
         </View>
       </View>
 
+      {/* Chi tiết bảng lương */}
+      <View style={styles.breakdown}>
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>Lương cơ bản:</Text>
+          <Text style={styles.breakdownValue}>
+            {formatVNDWithoutSymbol(item.base_salary)}
+          </Text>
+        </View>
+
+        {item.total_hours > 0 && (
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>Tổng giờ làm việc:</Text>
+            {/* <Text style={styles.breakdownValue}>
+              {(item.total_hours || 0).toFixed(1)} giờ
+            </Text> */}
+          </View>
+        )}
+
+        {item.overtime_hours > 0 && (
+          <>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Giờ tăng ca:</Text>
+              {/* <Text style={styles.breakdownValue}>
+                {(item.overtime_hours || 0).toFixed(1)} giờ
+              </Text> */}
+            </View>
+            {item.overtime_rate > 0 && (
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Lương tăng ca:</Text>
+                <Text style={styles.breakdownValue}>
+                  {formatVNDWithoutSymbol((item.overtime_hours || 0) * (item.overtime_rate || 0))}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+
+        {item.bonus_amount > 0 && (
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>Thưởng:</Text>
+            <Text style={[styles.breakdownValue, styles.positiveValue]}>
+              +{formatVNDWithoutSymbol(item.bonus_amount)}
+            </Text>
+          </View>
+        )}
+
+        {item.deductions > 0 && (
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>Khấu trừ:</Text>
+            <Text style={[styles.breakdownValue, styles.negativeValue]}>
+              -{formatVNDWithoutSymbol(item.deductions)}
+            </Text>
+          </View>
+        )}
+
+        {item.tax > 0 && (
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>Thuế:</Text>
+            <Text style={[styles.breakdownValue, styles.negativeValue]}>
+              -{formatVNDWithoutSymbol(item.tax)}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.grossRow}>
+          <Text style={styles.grossLabel}>Tổng lương (Gross):</Text>
+          <Text style={styles.grossValue}>
+            {formatVNDWithoutSymbol(item.gross_salary)}
+          </Text>
+        </View>
+      </View>
+
       <View style={styles.amountRow}>
-        <Text style={styles.amountLabel}>Lương thực nhận:</Text>
-        <Text style={styles.amount}>{item.net_salary.toLocaleString()} VND</Text>
+        <Text style={styles.amountLabel}>Lương thực nhận (Net):</Text>
+        <Text style={styles.amount}>{formatVNDWithoutSymbol(item.net_salary)}</Text>
       </View>
 
       {item.status === "calculated" && (
@@ -115,7 +185,14 @@ export default function PayrollScreen() {
           <Text style={styles.approveButtonText}>Duyệt</Text>
         </TouchableOpacity>
       )}
-    </TouchableOpacity>
+
+      {item.notes && (
+        <View style={styles.notesContainer}>
+          <Text style={styles.notesLabel}>Ghi chú:</Text>
+          <Text style={styles.notesText}>{item.notes}</Text>
+        </View>
+      )}
+    </View>
   );
 
   if (loading) {
@@ -189,41 +266,121 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 12,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  employeeInfo: {
+    flex: 1,
   },
   employeeName: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 18,
+    fontWeight: "700",
     color: "#1F2937",
+    marginBottom: 4,
   },
   period: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#6B7280",
-    marginTop: 4,
   },
   statusBadge: {
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 12,
   },
   statusText: {
     fontSize: 12,
     fontWeight: "600",
   },
-  amountRow: {
+  breakdown: {
+    marginTop: 12,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+    paddingVertical: 4,
+  },
+  breakdownLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    flex: 1,
+  },
+  breakdownValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    textAlign: "right",
+  },
+  positiveValue: {
+    color: "#10B981",
+  },
+  negativeValue: {
+    color: "#EF4444",
+  },
+  grossRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 8,
+    marginBottom: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  grossLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  grossValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#3B82F6",
+  },
+  amountRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 12,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderTopWidth: 2,
+    borderTopColor: "#E5E7EB",
+    backgroundColor: "#F0FDF4",
+    borderRadius: 8,
+    paddingHorizontal: 12,
   },
   amountLabel: {
-    fontSize: 14,
-    color: "#6B7280",
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
   },
   amount: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
     color: "#10B981",
+  },
+  notesContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#3B82F6",
+  },
+  notesLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  notesText: {
+    fontSize: 13,
+    color: "#1F2937",
+    lineHeight: 18,
   },
   approveButton: {
     backgroundColor: "#3B82F6",

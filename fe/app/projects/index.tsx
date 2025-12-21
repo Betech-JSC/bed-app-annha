@@ -7,6 +7,7 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
@@ -69,6 +70,41 @@ export default function ProjectsListScreen() {
     }
   };
 
+  const handleEdit = (project: Project, e: any) => {
+    e?.stopPropagation?.();
+    router.push(`/projects/${project.id}/edit`);
+  };
+
+  const handleDelete = async (project: Project, e: any) => {
+    e?.stopPropagation?.();
+    Alert.alert(
+      "Xác nhận xóa",
+      `Bạn có chắc chắn muốn xóa dự án "${project.name}"? Hành động này không thể hoàn tác.`,
+      [
+        {
+          text: "Hủy",
+          style: "cancel",
+        },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await projectApi.deleteProject(project.id);
+              Alert.alert("Thành công", "Dự án đã được xóa.");
+              loadProjects();
+            } catch (error: any) {
+              Alert.alert(
+                "Lỗi",
+                error.response?.data?.message || "Không thể xóa dự án."
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderProjectItem = ({ item }: { item: Project }) => (
     <TouchableOpacity
       style={styles.projectCard}
@@ -79,20 +115,40 @@ export default function ProjectsListScreen() {
           <Text style={styles.projectName}>{item.name}</Text>
           <Text style={styles.projectCode}>{item.code}</Text>
         </View>
-        <View
-          style={[
-            styles.statusBadge,
-            { backgroundColor: getStatusColor(item.status) + "20" },
-          ]}
-        >
-          <Text
+        <View style={styles.headerRight}>
+          <View
             style={[
-              styles.statusText,
-              { color: getStatusColor(item.status) },
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(item.status) + "20" },
             ]}
           >
-            {getStatusText(item.status)}
-          </Text>
+            <Text
+              style={[
+                styles.statusText,
+                { color: getStatusColor(item.status) },
+              ]}
+            >
+              {getStatusText(item.status)}
+            </Text>
+          </View>
+          <View style={styles.actionButtons}>
+            <PermissionGuard permission="projects.update">
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={(e) => handleEdit(item, e)}
+              >
+                <Ionicons name="create-outline" size={18} color="#3B82F6" />
+              </TouchableOpacity>
+            </PermissionGuard>
+            <PermissionGuard permission="projects.delete">
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={(e) => handleDelete(item, e)}
+              >
+                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              </TouchableOpacity>
+            </PermissionGuard>
+          </View>
         </View>
       </View>
       {item.description && (
@@ -231,6 +287,18 @@ const styles = StyleSheet.create({
   projectInfo: {
     flex: 1,
     marginRight: 12,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  actionButton: {
+    padding: 6,
   },
   projectName: {
     fontSize: 18,

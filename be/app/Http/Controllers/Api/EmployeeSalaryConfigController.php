@@ -48,6 +48,7 @@ class EmployeeSalaryConfigController extends Controller
             'daily_rate' => 'nullable|numeric|min:0|required_if:salary_type,daily',
             'monthly_salary' => 'nullable|numeric|min:0|required_if:salary_type,monthly',
             'project_rate' => 'nullable|numeric|min:0|required_if:salary_type,project_based',
+            'overtime_rate' => 'nullable|numeric|min:0',
             'effective_from' => 'required|date',
             'effective_to' => 'nullable|date|after:effective_from',
         ]);
@@ -99,6 +100,7 @@ class EmployeeSalaryConfigController extends Controller
             'daily_rate' => 'nullable|numeric|min:0',
             'monthly_salary' => 'nullable|numeric|min:0',
             'project_rate' => 'nullable|numeric|min:0',
+            'overtime_rate' => 'nullable|numeric|min:0',
             'effective_from' => 'sometimes|date',
             'effective_to' => 'nullable|date|after:effective_from',
         ]);

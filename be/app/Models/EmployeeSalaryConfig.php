@@ -17,6 +17,7 @@ class EmployeeSalaryConfig extends Model
         'daily_rate',
         'monthly_salary',
         'project_rate',
+        'overtime_rate',
         'effective_from',
         'effective_to',
     ];
@@ -26,6 +27,7 @@ class EmployeeSalaryConfig extends Model
         'daily_rate' => 'decimal:2',
         'monthly_salary' => 'decimal:2',
         'project_rate' => 'decimal:2',
+        'overtime_rate' => 'decimal:2',
         'effective_from' => 'date',
         'effective_to' => 'date',
     ];

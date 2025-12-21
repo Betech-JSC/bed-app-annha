@@ -11,11 +11,55 @@ use Illuminate\Validation\Rule;
 class AdminUserController extends Controller
 {
     /**
+     * Tạo người dùng mới
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'nullable|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email',
+            'phone' => 'nullable|string|max:20',
+            'password' => 'required|string|min:6',
+            'role_ids' => 'nullable|array',
+            'role_ids.*' => 'exists:roles,id',
+        ]);
+
+        try {
+            $user = User::create([
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'] ?? '',
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'password' => Hash::make($validated['password']),
+                'name' => trim(($validated['first_name'] ?? '') . ' ' . ($validated['last_name'] ?? '')),
+            ]);
+
+            // Gán roles nếu có
+            if (!empty($validated['role_ids'])) {
+                $user->roles()->sync($validated['role_ids']);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã tạo tài khoản thành công',
+                'data' => $user->load(['roles']),
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi tạo tài khoản',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Danh sách người dùng với filter và pagination
      */
     public function index(Request $request)
     {
-        $query = User::with(['wallet']);
+        $query = User::with(['wallet', 'roles']);
 
         // Filter theo role (chỉ admin)
         if ($request->has('role') && $request->role === 'admin') {
@@ -60,6 +104,7 @@ class AdminUserController extends Controller
                 'role' => $user->role,
                 'avatar' => $user->avatar,
                 'wallet_balance' => $user->wallet ? $user->wallet->balance : 0,
+                'roles' => $user->roles,
                 'created_at' => $user->created_at,
                 'deleted_at' => $user->deleted_at,
                 'is_banned' => $user->deleted_at !== null,
@@ -83,38 +128,61 @@ class AdminUserController extends Controller
      */
     public function show($id)
     {
-        $user = User::with(['wallet', 'transactions' => function ($q) {
-            $q->latest()->limit(10);
-        }])->withTrashed()->findOrFail($id);
+        try {
+            $user = User::with(['wallet', 'roles', 'employeeProfile', 'transactions' => function ($q) {
+                $q->latest()->limit(10);
+            }])->withTrashed()->findOrFail($id);
 
-        // Thống kê đơn hàng
-        $ordersAsSender = \App\Models\Order::where('sender_id', $user->id)->count();
-        $ordersAsCustomer = \App\Models\Order::where('customer_id', $user->id)->count();
-        $flightsCount = \App\Models\Flight::where('customer_id', $user->id)->count();
+            // Thống kê liên quan đến dự án (nếu có)
+            $projectsCount = 0;
+            $timeTrackingsCount = 0;
+            $payrollsCount = 0;
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'role' => $user->role,
-                'avatar' => $user->avatar,
-                'fcm_token' => $user->fcm_token,
-                'wallet' => $user->wallet,
-                'recent_transactions' => $user->transactions,
-                'statistics' => [
-                    'orders_as_sender' => $ordersAsSender,
-                    'orders_as_customer' => $ordersAsCustomer,
-                    'flights_count' => $flightsCount,
-                    'total_orders' => $ordersAsSender + $ordersAsCustomer,
+            try {
+                if (class_exists(\App\Models\ProjectPersonnel::class)) {
+                    $projectsCount = \App\Models\ProjectPersonnel::where('user_id', $user->id)->distinct('project_id')->count();
+                }
+                if (class_exists(\App\Models\TimeTracking::class)) {
+                    $timeTrackingsCount = \App\Models\TimeTracking::where('user_id', $user->id)->count();
+                }
+                if (class_exists(\App\Models\Payroll::class)) {
+                    $payrollsCount = \App\Models\Payroll::where('user_id', $user->id)->count();
+                }
+            } catch (\Exception $e) {
+                // Ignore errors from statistics
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'role' => $user->role,
+                    'avatar' => $user->avatar,
+                    'fcm_token' => $user->fcm_token,
+                    'wallet' => $user->wallet,
+                    'roles' => $user->roles,
+                    'employee_profile' => $user->employeeProfile,
+                    'recent_transactions' => $user->transactions ?? [],
+                    'statistics' => [
+                        'projects_count' => $projectsCount,
+                        'time_trackings_count' => $timeTrackingsCount,
+                        'payrolls_count' => $payrollsCount,
+                    ],
+                    'created_at' => $user->created_at,
+                    'deleted_at' => $user->deleted_at,
+                    'is_banned' => $user->deleted_at !== null,
                 ],
-                'created_at' => $user->created_at,
-                'deleted_at' => $user->deleted_at,
-                'is_banned' => $user->deleted_at !== null,
-            ],
-        ]);
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể tải thông tin người dùng',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -294,6 +362,48 @@ class AdminUserController extends Controller
                     'count' => $bonuses->count(),
                 ],
             ],
+        ]);
+    }
+
+    /**
+     * Lấy roles của user
+     */
+    public function getUserRoles($id)
+    {
+        $user = User::with('roles')->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ],
+                'roles' => $user->roles,
+                'role_ids' => $user->roles->pluck('id')->toArray(),
+            ],
+        ]);
+    }
+
+    /**
+     * Gán roles cho user
+     */
+    public function syncUserRoles(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        $validated = $request->validate([
+            'role_ids' => 'required|array',
+            'role_ids.*' => 'exists:roles,id',
+        ]);
+
+        $user->roles()->sync($validated['role_ids']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cập nhật vai trò cho tài khoản thành công',
+            'data' => $user->load('roles'),
         ]);
     }
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from "react-native";
 import { Defect } from "@/api/defectApi";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -117,30 +117,64 @@ export default function DefectItem({
       <Text style={styles.description}>{defect.description}</Text>
 
       {defect.acceptance_stage_id && (
-        <View style={styles.stageInfo}>
-          <Ionicons name="checkmark-circle-outline" size={16} color="#6B7280" />
+        <TouchableOpacity
+          style={styles.stageInfo}
+          onPress={() => {
+            // Navigate to acceptance stage if onPress is provided
+            if (onPress) {
+              onPress();
+            }
+          }}
+        >
+          <Ionicons name="checkmark-circle-outline" size={16} color="#3B82F6" />
           <Text style={styles.stageText}>
             Giai đoạn nghiệm thu #{defect.acceptance_stage_id}
           </Text>
+          <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+        </TouchableOpacity>
+      )}
+
+      {/* Before Images */}
+      {defect.attachments && defect.attachments.filter((a: any) => a.description === 'before').length > 0 && (
+        <View style={styles.imageSection}>
+          <Text style={styles.imageSectionTitle}>Hình ảnh lỗi (Trước khi khắc phục)</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.imagesRow}
+          >
+            {defect.attachments
+              .filter((a: any) => a.description === 'before')
+              .map((attachment: any, index: number) => (
+                <Image
+                  key={attachment.id || index}
+                  source={{ uri: attachment.file_url }}
+                  style={styles.image}
+                />
+              ))}
+          </ScrollView>
         </View>
       )}
 
-      {defect.attachments && defect.attachments.length > 0 && (
-        <View style={styles.imagesRow}>
-          {defect.attachments.slice(0, 3).map((attachment: any, index: number) => (
-            <Image
-              key={index}
-              source={{ uri: attachment.file_url }}
-              style={styles.image}
-            />
-          ))}
-          {defect.attachments.length > 3 && (
-            <View style={styles.moreImages}>
-              <Text style={styles.moreImagesText}>
-                +{defect.attachments.length - 3}
-              </Text>
-            </View>
-          )}
+      {/* After Images */}
+      {defect.attachments && defect.attachments.filter((a: any) => a.description === 'after').length > 0 && (
+        <View style={styles.imageSection}>
+          <Text style={styles.imageSectionTitle}>Hình ảnh sau khi khắc phục</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.imagesRow}
+          >
+            {defect.attachments
+              .filter((a: any) => a.description === 'after')
+              .map((attachment: any, index: number) => (
+                <Image
+                  key={attachment.id || index}
+                  source={{ uri: attachment.file_url }}
+                  style={styles.image}
+                />
+              ))}
+          </ScrollView>
         </View>
       )}
 
@@ -154,12 +188,17 @@ export default function DefectItem({
       )}
 
       {canEdit && defect.status === "in_progress" && (
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => onUpdate?.(defect.id, "fixed")}
-        >
-          <Text style={styles.actionButtonText}>Đánh dấu đã sửa</Text>
-        </TouchableOpacity>
+        <View>
+          <Text style={styles.helperText}>
+            Vui lòng upload hình ảnh sau khi khắc phục trước khi đánh dấu đã sửa
+          </Text>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => onUpdate?.(defect.id, "fixed")}
+          >
+            <Text style={styles.actionButtonText}>Đánh dấu đã sửa</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {canEdit && defect.status === "fixed" && (
@@ -226,15 +265,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     marginBottom: 12,
+    padding: 8,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 8,
   },
   stageText: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#3B82F6",
+    fontWeight: "500",
+    flex: 1,
+  },
+  imageSection: {
+    marginBottom: 12,
+  },
+  imageSectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
   },
   imagesRow: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 12,
+  },
+  helperText: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontStyle: "italic",
+    marginBottom: 8,
   },
   image: {
     width: 80,

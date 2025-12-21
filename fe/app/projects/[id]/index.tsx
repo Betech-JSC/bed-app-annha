@@ -6,10 +6,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
+import { PermissionGuard } from "@/components/PermissionGuard";
 
 export default function ProjectDetailScreen() {
   const router = useRouter();
@@ -33,6 +35,44 @@ export default function ProjectDetailScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEdit = () => {
+    router.push(`/projects/${id}/edit`);
+  };
+
+  const handleDelete = () => {
+    if (!project) return;
+    Alert.alert(
+      "Xác nhận xóa",
+      `Bạn có chắc chắn muốn xóa dự án "${project.name}"? Hành động này không thể hoàn tác.`,
+      [
+        {
+          text: "Hủy",
+          style: "cancel",
+        },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await projectApi.deleteProject(project.id);
+              Alert.alert("Thành công", "Dự án đã được xóa.", [
+                {
+                  text: "OK",
+                  onPress: () => router.back(),
+                },
+              ]);
+            } catch (error: any) {
+              Alert.alert(
+                "Lỗi",
+                error.response?.data?.message || "Không thể xóa dự án."
+              );
+            }
+          },
+        },
+      ]
+    );
   };
 
   const menuItems = [
@@ -136,7 +176,24 @@ export default function ProjectDetailScreen() {
           <Ionicons name="arrow-back" size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi Tiết Dự Án</Text>
-        <View style={styles.placeholder} />
+        <View style={styles.headerActions}>
+          <PermissionGuard permission="projects.update">
+            <TouchableOpacity
+              style={styles.headerActionButton}
+              onPress={handleEdit}
+            >
+              <Ionicons name="create-outline" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          </PermissionGuard>
+          <PermissionGuard permission="projects.delete">
+            <TouchableOpacity
+              style={styles.headerActionButton}
+              onPress={handleDelete}
+            >
+              <Ionicons name="trash-outline" size={24} color="#EF4444" />
+            </TouchableOpacity>
+          </PermissionGuard>
+        </View>
       </View>
 
       <View style={styles.projectInfo}>
@@ -273,6 +330,14 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 32,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerActionButton: {
+    padding: 4,
   },
   projectInfo: {
     backgroundColor: "#FFFFFF",

@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { userPermissionApi, Permission } from "@/api/userPermissionApi";
+import { employeesApi } from "@/api/employeesApi";
+import { roleApi, Role } from "@/api/roleApi";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function UserPermissionsScreen() {
@@ -22,6 +24,7 @@ export default function UserPermissionsScreen() {
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [directPermissionIds, setDirectPermissionIds] = useState<number[]>([]);
   const [rolePermissionIds, setRolePermissionIds] = useState<number[]>([]);
+  const [userRoles, setUserRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -35,9 +38,10 @@ export default function UserPermissionsScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [userPermissionsRes, allPermissionsRes] = await Promise.all([
+      const [userPermissionsRes, allPermissionsRes, userRolesRes] = await Promise.all([
         userPermissionApi.getUserPermissions(userId),
         userPermissionApi.getAllPermissions(),
+        employeesApi.getUserRoles(parseInt(userId)),
       ]);
 
       if (userPermissionsRes.success) {
@@ -48,6 +52,10 @@ export default function UserPermissionsScreen() {
 
       if (allPermissionsRes.success) {
         setAllPermissions(allPermissionsRes.data || []);
+      }
+
+      if (userRolesRes.success) {
+        setUserRoles(userRolesRes.data.roles || []);
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -201,8 +209,32 @@ export default function UserPermissionsScreen() {
           </Text>
         </View>
 
+        {/* User Roles */}
+        {userRoles.length > 0 && (
+          <View style={styles.rolesCard}>
+            <Text style={styles.rolesCardTitle}>Vai trò của người dùng</Text>
+            <View style={styles.rolesContainer}>
+              {userRoles.map((role) => (
+                <View key={role.id} style={styles.roleBadge}>
+                  <Ionicons name="people" size={16} color="#3B82F6" />
+                  <Text style={styles.roleBadgeText}>{role.name}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.rolesCardNote}>
+              Quyền từ vai trò (màu xám) không thể chỉnh sửa trực tiếp
+            </Text>
+          </View>
+        )}
+
         {/* Summary */}
         <View style={styles.summaryCard}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Vai trò:</Text>
+            <Text style={styles.summaryValue}>
+              {userRoles.length} vai trò
+            </Text>
+          </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Từ vai trò:</Text>
             <Text style={styles.summaryValue}>
@@ -433,6 +465,50 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#1E40AF",
     lineHeight: 18,
+  },
+  rolesCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  rolesCardTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 12,
+  },
+  rolesContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  roleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+  },
+  roleBadgeText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
+  rolesCardNote: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontStyle: "italic",
   },
   summaryCard: {
     backgroundColor: "#FFFFFF",

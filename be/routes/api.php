@@ -40,6 +40,16 @@ use App\Http\Controllers\Api\WorkScheduleController;
 use App\Http\Controllers\Api\PersonnelRoleController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\UserPermissionController;
+use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\EmployeeProfileController;
+use App\Http\Controllers\Api\TeamCheckInController;
+use App\Http\Controllers\Api\OvertimeRuleController;
+use App\Http\Controllers\Api\OvertimeCategoryController;
+use App\Http\Controllers\Api\TeamController;
+use App\Http\Controllers\Api\TeamContractController;
+use App\Http\Controllers\Api\LaborStandardController;
+use App\Http\Controllers\Api\WorkVolumeController;
+use App\Http\Controllers\Api\SubcontractorPaymentController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -147,7 +157,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Acceptance Stages
         Route::get('/{projectId}/acceptance', [AcceptanceStageController::class, 'index']);
-        Route::post('/{projectId}/acceptance/{id}/approve', [AcceptanceStageController::class, 'approve']);
+        Route::post('/{projectId}/acceptance', [AcceptanceStageController::class, 'store']);
+        Route::get('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'show'])->where('id', '[0-9]+');
+        Route::put('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'update'])->where('id', '[0-9]+');
+        Route::delete('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'destroy'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/default-stages', [AcceptanceStageController::class, 'createDefaultStages']);
+        Route::post('/{projectId}/acceptance/{id}/approve', [AcceptanceStageController::class, 'approve'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{id}/attach-files', [AcceptanceStageController::class, 'attachFiles'])->where('id', '[0-9]+');
 
         // Defects
         Route::get('/{projectId}/defects', [DefectController::class, 'index']);
@@ -156,6 +172,47 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Progress
         Route::get('/{projectId}/progress', [ProjectProgressController::class, 'show']);
+
+        // Teams Management
+        Route::get('/{projectId}/teams', [TeamController::class, 'index']);
+        Route::post('/{projectId}/teams', [TeamController::class, 'store']);
+        Route::get('/{projectId}/teams/{id}', [TeamController::class, 'show']);
+        Route::put('/{projectId}/teams/{id}', [TeamController::class, 'update']);
+        Route::delete('/{projectId}/teams/{id}', [TeamController::class, 'destroy']);
+        Route::post('/{projectId}/teams/{id}/members', [TeamController::class, 'addMember']);
+        Route::delete('/{projectId}/teams/{id}/members', [TeamController::class, 'removeMember']);
+
+        // Team Contracts
+        Route::get('/{projectId}/team-contracts', [TeamContractController::class, 'index']);
+        Route::post('/{projectId}/team-contracts', [TeamContractController::class, 'store']);
+        Route::get('/{projectId}/team-contracts/{id}', [TeamContractController::class, 'show']);
+        Route::put('/{projectId}/team-contracts/{id}', [TeamContractController::class, 'update']);
+        Route::delete('/{projectId}/team-contracts/{id}', [TeamContractController::class, 'destroy']);
+        Route::post('/{projectId}/team-contracts/{id}/approve', [TeamContractController::class, 'approve']);
+
+        // Labor Standards
+        Route::get('/{projectId}/labor-standards', [LaborStandardController::class, 'index']);
+        Route::post('/{projectId}/labor-standards', [LaborStandardController::class, 'store']);
+        Route::get('/{projectId}/labor-standards/{id}', [LaborStandardController::class, 'show']);
+        Route::put('/{projectId}/labor-standards/{id}', [LaborStandardController::class, 'update']);
+        Route::delete('/{projectId}/labor-standards/{id}', [LaborStandardController::class, 'destroy']);
+
+        // Work Volumes
+        Route::get('/{projectId}/work-volumes', [WorkVolumeController::class, 'index']);
+        Route::post('/{projectId}/work-volumes', [WorkVolumeController::class, 'store']);
+        Route::get('/{projectId}/work-volumes/{id}', [WorkVolumeController::class, 'show']);
+        Route::put('/{projectId}/work-volumes/{id}', [WorkVolumeController::class, 'update']);
+        Route::delete('/{projectId}/work-volumes/{id}', [WorkVolumeController::class, 'destroy']);
+        Route::post('/{projectId}/work-volumes/{id}/verify', [WorkVolumeController::class, 'verify']);
+
+        // Subcontractor Payments
+        Route::get('/{projectId}/subcontractor-payments', [SubcontractorPaymentController::class, 'index']);
+        Route::post('/{projectId}/subcontractor-payments', [SubcontractorPaymentController::class, 'store']);
+        Route::get('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'show']);
+        Route::put('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'update']);
+        Route::delete('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'destroy']);
+        Route::post('/{projectId}/subcontractor-payments/{id}/approve', [SubcontractorPaymentController::class, 'approve']);
+        Route::post('/{projectId}/subcontractor-payments/{id}/mark-paid', [SubcontractorPaymentController::class, 'markAsPaid']);
     });
 
     // ===================================================================
@@ -165,9 +222,31 @@ Route::middleware('auth:sanctum')->group(function () {
         // Time Tracking
         Route::get('/time-tracking', [TimeTrackingController::class, 'index']);
         Route::post('/time-tracking', [TimeTrackingController::class, 'store']);
+        Route::post('/time-tracking/check-in/qr', [TimeTrackingController::class, 'checkInByQR']);
+        Route::post('/time-tracking/check-in/gps', [TimeTrackingController::class, 'checkInByGPS']);
+        Route::post('/time-tracking/check-in/faceid', [TimeTrackingController::class, 'checkInByFaceID']);
         Route::put('/time-tracking/{id}', [TimeTrackingController::class, 'update']);
         Route::post('/time-tracking/{id}/approve', [TimeTrackingController::class, 'approve']);
         Route::post('/time-tracking/{id}/reject', [TimeTrackingController::class, 'reject']);
+
+        // Team Check-ins (Chấm công tập thể)
+        Route::get('/team-check-ins', [TeamCheckInController::class, 'index']);
+        Route::post('/team-check-ins', [TeamCheckInController::class, 'store']);
+        Route::get('/team-check-ins/{id}', [TeamCheckInController::class, 'show']);
+        Route::post('/team-check-ins/{id}/approve', [TeamCheckInController::class, 'approve']);
+        Route::post('/team-check-ins/{id}/sync', [TeamCheckInController::class, 'sync']);
+
+        // Overtime Rules (Quy định OT)
+        Route::get('/overtime-rules', [OvertimeRuleController::class, 'index']);
+        Route::post('/overtime-rules', [OvertimeRuleController::class, 'store']);
+        Route::put('/overtime-rules/{id}', [OvertimeRuleController::class, 'update']);
+        Route::delete('/overtime-rules/{id}', [OvertimeRuleController::class, 'destroy']);
+
+        // Overtime Categories (Hạng mục OT)
+        Route::get('/overtime-categories', [OvertimeCategoryController::class, 'index']);
+        Route::post('/overtime-categories', [OvertimeCategoryController::class, 'store']);
+        Route::put('/overtime-categories/{id}', [OvertimeCategoryController::class, 'update']);
+        Route::delete('/overtime-categories/{id}', [OvertimeCategoryController::class, 'destroy']);
 
         // Payroll
         Route::get('/payroll', [PayrollController::class, 'index']);
@@ -198,12 +277,34 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/work-schedule/{id}', [WorkScheduleController::class, 'update']);
         Route::delete('/work-schedule/{id}', [WorkScheduleController::class, 'destroy']);
         Route::get('/work-schedule/calendar', [WorkScheduleController::class, 'calendar']);
+        Route::get('/work-schedule/statistics', [WorkScheduleController::class, 'statistics']);
+        Route::post('/work-schedule/bulk-create', [WorkScheduleController::class, 'bulkCreate']);
 
         // Employees (using AdminUserController)
         Route::get('/employees', [AdminUserController::class, 'index']);
+        Route::post('/employees', [AdminUserController::class, 'store']); // Tạo user mới
         Route::get('/employees/{id}', [AdminUserController::class, 'show']);
+        Route::put('/employees/{id}', [AdminUserController::class, 'update']);
         Route::get('/employees/stats', [AdminUserController::class, 'stats']);
         Route::get('/employees/{id}/stats', [AdminUserController::class, 'employeeStats']);
+        Route::get('/employees/{id}/roles', [AdminUserController::class, 'getUserRoles']); // Lấy roles của user
+        Route::post('/employees/{id}/roles', [AdminUserController::class, 'syncUserRoles']); // Gán roles cho user
+
+        // Employee Profiles (Hồ sơ nhân sự)
+        Route::get('/employee-profiles', [EmployeeProfileController::class, 'index']);
+        Route::get('/employee-profiles/statistics', [EmployeeProfileController::class, 'statistics']);
+        Route::get('/employee-profiles/user/{userId}', [EmployeeProfileController::class, 'getByUserId']);
+        Route::get('/employee-profiles/{id}', [EmployeeProfileController::class, 'show']);
+        Route::post('/employee-profiles', [EmployeeProfileController::class, 'store']);
+        Route::put('/employee-profiles/{id}', [EmployeeProfileController::class, 'update']);
+        Route::delete('/employee-profiles/{id}', [EmployeeProfileController::class, 'destroy']);
+
+        // Roles Management
+        Route::get('/roles', [RoleController::class, 'index']); // Danh sách roles
+        Route::get('/roles/{id}', [RoleController::class, 'show']); // Chi tiết role
+        Route::post('/roles', [RoleController::class, 'store']); // Tạo role mới
+        Route::put('/roles/{id}', [RoleController::class, 'update']); // Cập nhật role
+        Route::delete('/roles/{id}', [RoleController::class, 'destroy']); // Xóa role
 
         // Personnel Roles Management
         Route::get('/personnel-roles', [PersonnelRoleController::class, 'index']);

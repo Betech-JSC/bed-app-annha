@@ -30,10 +30,47 @@ export interface AcceptanceStage {
   attachments?: any[];
 }
 
+export interface CreateAcceptanceStageData {
+  name: string;
+  description?: string;
+  order?: number;
+}
+
 export const acceptanceApi = {
   // Get acceptance stages for project
   getStages: async (projectId: string | number) => {
     const response = await api.get(`/projects/${projectId}/acceptance`);
+    return response.data;
+  },
+
+  // Get single acceptance stage
+  getStage: async (projectId: string | number, stageId: string | number) => {
+    const response = await api.get(`/projects/${projectId}/acceptance/${stageId}`);
+    return response.data;
+  },
+
+  // Create acceptance stage
+  createStage: async (
+    projectId: string | number,
+    data: CreateAcceptanceStageData
+  ) => {
+    const response = await api.post(`/projects/${projectId}/acceptance`, data);
+    return response.data;
+  },
+
+  // Update acceptance stage
+  updateStage: async (
+    projectId: string | number,
+    stageId: string | number,
+    data: Partial<CreateAcceptanceStageData>
+  ) => {
+    const response = await api.put(`/projects/${projectId}/acceptance/${stageId}`, data);
+    return response.data;
+  },
+
+  // Delete acceptance stage
+  deleteStage: async (projectId: string | number, stageId: string | number) => {
+    const response = await api.delete(`/projects/${projectId}/acceptance/${stageId}`);
     return response.data;
   },
 
@@ -46,6 +83,24 @@ export const acceptanceApi = {
     const response = await api.post(`/projects/${projectId}/acceptance/${stageId}/approve`, {
       approval_type: approvalType,
     });
+    return response.data;
+  },
+
+  // Attach files to acceptance stage
+  attachFiles: async (
+    projectId: string | number,
+    stageId: string | number,
+    attachmentIds: number[]
+  ) => {
+    const response = await api.post(`/projects/${projectId}/acceptance/${stageId}/attach-files`, {
+      attachment_ids: attachmentIds,
+    });
+    return response.data;
+  },
+
+  // Create default stages for project
+  createDefaultStages: async (projectId: string | number) => {
+    const response = await api.post(`/projects/${projectId}/acceptance/default-stages`);
     return response.data;
   },
 };

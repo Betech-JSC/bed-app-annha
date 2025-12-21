@@ -8,7 +8,24 @@ export interface TimeTracking {
   check_out_at?: string;
   check_in_location?: string;
   check_out_location?: string;
+  check_in_method?: "card" | "qr" | "gps" | "faceid" | "manual";
+  shift?: string;
+  work_date?: string;
+  check_in_latitude?: number;
+  check_in_longitude?: number;
+  check_out_latitude?: number;
+  check_out_longitude?: number;
+  qr_code?: string;
+  face_id_photo?: string;
   total_hours?: number;
+  is_overtime?: boolean;
+  overtime_type?: "weekday" | "weekend" | "holiday";
+  overtime_hours?: number;
+  overtime_multiplier?: number;
+  overtime_category_id?: number;
+  team_check_in_id?: number;
+  is_offline?: boolean;
+  synced_at?: string;
   notes?: string;
   status: "pending" | "approved" | "rejected";
   approved_by?: number;
@@ -18,16 +35,30 @@ export interface TimeTracking {
   user?: any;
   project?: any;
   approver?: any;
+  overtime_category?: any;
+  team_check_in?: any;
 }
 
 export interface CheckInData {
   project_id?: number;
   check_in_location?: string;
+  check_in_method?: "card" | "qr" | "gps" | "faceid" | "manual";
+  shift?: string;
+  work_date?: string;
+  check_in_latitude?: number;
+  check_in_longitude?: number;
+  qr_code?: string;
+  face_id_photo?: string;
+  is_overtime?: boolean;
+  overtime_type?: "weekday" | "weekend" | "holiday";
+  overtime_category_id?: number;
   notes?: string;
 }
 
 export interface CheckOutData {
   check_out_location?: string;
+  check_out_latitude?: number;
+  check_out_longitude?: number;
   notes?: string;
 }
 
@@ -76,6 +107,31 @@ export const timeTrackingApi = {
   // Reject time tracking (HR only)
   reject: async (id: number) => {
     const response = await api.post(`/hr/time-tracking/${id}/reject`);
+    return response.data;
+  },
+
+  // Check-in by QR code
+  checkInByQR: async (data: { qr_code: string; project_id?: number }) => {
+    const response = await api.post("/hr/time-tracking/check-in/qr", data);
+    return response.data;
+  },
+
+  // Check-in by GPS
+  checkInByGPS: async (data: {
+    latitude: number;
+    longitude: number;
+    project_id?: number;
+  }) => {
+    const response = await api.post("/hr/time-tracking/check-in/gps", data);
+    return response.data;
+  },
+
+  // Check-in by FaceID
+  checkInByFaceID: async (data: {
+    face_id_photo: string;
+    project_id?: number;
+  }) => {
+    const response = await api.post("/hr/time-tracking/check-in/faceid", data);
     return response.data;
   },
 };

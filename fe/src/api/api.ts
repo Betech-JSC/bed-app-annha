@@ -18,6 +18,13 @@ const api = axios.create({
 //     },
 // });
 
+// const api = axios.create({
+//     baseURL: "https://annha.betech-digital.com/api",
+//     headers: {
+//         "Content-Type": "application/json",
+//     },
+// });
+
 api.interceptors.request.use(
     (config) => {
         const state = store.getState();

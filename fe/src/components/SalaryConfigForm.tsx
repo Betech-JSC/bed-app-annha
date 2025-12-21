@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,8 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Modal,
+  FlatList,
+  Alert,
 } from "react-native";
 import { CreateSalaryConfigData } from "@/api/salaryConfigApi";
+import { employeesApi } from "@/api/employeesApi";
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 interface SalaryConfigFormProps {
   onSubmit: (data: CreateSalaryConfigData) => void;
@@ -27,20 +33,140 @@ export default function SalaryConfigForm({
     daily_rate: initialData?.daily_rate,
     monthly_salary: initialData?.monthly_salary,
     project_rate: initialData?.project_rate,
+    overtime_rate: initialData?.overtime_rate,
     effective_from: initialData?.effective_from || new Date().toISOString().split("T")[0],
     effective_to: initialData?.effective_to,
   });
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showFromDatePicker, setShowFromDatePicker] = useState(false);
+  const [showToDatePicker, setShowToDatePicker] = useState(false);
+  const [fromDate, setFromDate] = useState<Date>(
+    initialData?.effective_from
+      ? new Date(initialData.effective_from)
+      : new Date()
+  );
+  const [toDate, setToDate] = useState<Date | null>(
+    initialData?.effective_to ? new Date(initialData.effective_to) : null
+  );
+
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+
+  const loadEmployees = async () => {
+    try {
+      const response = await employeesApi.getEmployees({ page: 1 });
+      if (response.success) {
+        setEmployees(response.data.data || []);
+      }
+    } catch (error) {
+      console.error("Error loading employees:", error);
+    }
+  };
+
+  const selectedEmployee = employees.find((e) => e.id === formData.user_id);
 
   const handleSubmit = () => {
-    if (!formData.user_id || !formData.effective_from) {
+    // Validation
+    if (!formData.user_id) {
+      Alert.alert("Lỗi", "Vui lòng chọn nhân viên");
       return;
     }
+
+    if (!formData.effective_from) {
+      Alert.alert("Lỗi", "Vui lòng chọn ngày có hiệu lực");
+      return;
+    }
+
+    // Validate salary amount based on type
+    if (formData.salary_type === "hourly" && !formData.hourly_rate) {
+      Alert.alert("Lỗi", "Vui lòng nhập lương theo giờ");
+      return;
+    }
+    if (formData.salary_type === "daily" && !formData.daily_rate) {
+      Alert.alert("Lỗi", "Vui lòng nhập lương theo ngày");
+      return;
+    }
+    if (formData.salary_type === "monthly" && !formData.monthly_salary) {
+      Alert.alert("Lỗi", "Vui lòng nhập lương theo tháng");
+      return;
+    }
+    if (formData.salary_type === "project_based" && !formData.project_rate) {
+      Alert.alert("Lỗi", "Vui lòng nhập lương theo dự án");
+      return;
+    }
+
+    // Validate date range
+    if (formData.effective_to && formData.effective_from > formData.effective_to) {
+      Alert.alert("Lỗi", "Ngày kết thúc phải sau ngày bắt đầu");
+      return;
+    }
+
     onSubmit(formData);
   };
 
+  const handleFromDateChange = (event: any, selectedDate?: Date) => {
+    setShowFromDatePicker(false);
+    if (selectedDate) {
+      setFromDate(selectedDate);
+      setFormData({
+        ...formData,
+        effective_from: selectedDate.toISOString().split("T")[0],
+      });
+    }
+  };
+
+  const handleToDateChange = (event: any, selectedDate?: Date) => {
+    setShowToDatePicker(false);
+    if (selectedDate) {
+      setToDate(selectedDate);
+      setFormData({
+        ...formData,
+        effective_to: selectedDate.toISOString().split("T")[0],
+      });
+    } else {
+      setToDate(null);
+      setFormData({
+        ...formData,
+        effective_to: undefined,
+      });
+    }
+  };
+
+  const filteredEmployees = employees.filter((emp) =>
+    emp.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={true}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.form}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Nhân viên *</Text>
+          <TouchableOpacity
+            style={styles.selectButton}
+            onPress={() => setShowEmployeeModal(true)}
+          >
+            <Text
+              style={[
+                styles.selectButtonText,
+                !formData.user_id && styles.selectButtonPlaceholder,
+              ]}
+            >
+              {selectedEmployee
+                ? selectedEmployee.name
+                : "Chọn nhân viên"}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Loại lương</Text>
           <View style={styles.radioGroup}>
@@ -147,27 +273,93 @@ export default function SalaryConfigForm({
         )}
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Có hiệu lực từ *</Text>
+          <Text style={styles.label}>Lương tăng ca (tùy chọn)</Text>
           <TextInput
             style={styles.input}
-            placeholder="YYYY-MM-DD"
-            value={formData.effective_from}
+            placeholder="Nhập lương tăng ca theo giờ"
+            value={formData.overtime_rate?.toString()}
             onChangeText={(text) =>
-              setFormData({ ...formData, effective_from: text })
+              setFormData({
+                ...formData,
+                overtime_rate: parseFloat(text) || undefined,
+              })
             }
+            keyboardType="numeric"
           />
+          <Text style={styles.helperText}>
+            Nếu không nhập, hệ thống sẽ dùng lương theo giờ hoặc lương theo ngày/8
+          </Text>
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Có hiệu lực đến</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="YYYY-MM-DD (tùy chọn)"
-            value={formData.effective_to}
-            onChangeText={(text) =>
-              setFormData({ ...formData, effective_to: text || undefined })
-            }
-          />
+          <Text style={styles.label}>
+            Có hiệu lực từ <Text style={styles.required}>*</Text>
+          </Text>
+          <TouchableOpacity
+            style={styles.dateButton}
+            onPress={() => setShowFromDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+            <Text
+              style={[
+                styles.dateButtonText,
+                !formData.effective_from && styles.dateButtonPlaceholder,
+              ]}
+            >
+              {formData.effective_from
+                ? new Date(formData.effective_from).toLocaleDateString("vi-VN")
+                : "Chọn ngày"}
+            </Text>
+          </TouchableOpacity>
+          {showFromDatePicker && (
+            <DateTimePicker
+              value={fromDate}
+              mode="date"
+              display="default"
+              onChange={handleFromDateChange}
+              maximumDate={toDate || undefined}
+            />
+          )}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Có hiệu lực đến (tùy chọn)</Text>
+          <TouchableOpacity
+            style={styles.dateButton}
+            onPress={() => setShowToDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+            <Text
+              style={[
+                styles.dateButtonText,
+                !formData.effective_to && styles.dateButtonPlaceholder,
+              ]}
+            >
+              {formData.effective_to
+                ? new Date(formData.effective_to).toLocaleDateString("vi-VN")
+                : "Chọn ngày (tùy chọn)"}
+            </Text>
+            {formData.effective_to && (
+              <TouchableOpacity
+                onPress={() => {
+                  setToDate(null);
+                  setFormData({ ...formData, effective_to: undefined });
+                }}
+                style={styles.clearDateButton}
+              >
+                <Ionicons name="close-circle" size={20} color="#6B7280" />
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
+          {showToDatePicker && (
+            <DateTimePicker
+              value={toDate || new Date()}
+              mode="date"
+              display="default"
+              onChange={handleToDateChange}
+              minimumDate={fromDate}
+            />
+          )}
         </View>
 
         <View style={styles.actions}>
@@ -185,6 +377,56 @@ export default function SalaryConfigForm({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Employee Selection Modal */}
+      <Modal
+        visible={showEmployeeModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowEmployeeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn nhân viên</Text>
+              <TouchableOpacity
+                onPress={() => setShowEmployeeModal(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm kiếm nhân viên..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <FlatList
+              data={filteredEmployees}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.employeeItem}
+                  onPress={() => {
+                    setFormData({ ...formData, user_id: item.id });
+                    setShowEmployeeModal(false);
+                    setSearchQuery("");
+                  }}
+                >
+                  <Text style={styles.employeeName}>{item.name}</Text>
+                  <Text style={styles.employeeEmail}>{item.email}</Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>Không tìm thấy nhân viên</Text>
+                </View>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -194,8 +436,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F9FAFB",
   },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 40,
+  },
   form: {
-    padding: 16,
+    padding: 20,
+    paddingBottom: 32,
   },
   inputGroup: {
     marginBottom: 20,
@@ -205,6 +452,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1F2937",
     marginBottom: 8,
+  },
+  required: {
+    color: "#EF4444",
   },
   input: {
     borderWidth: 1,
@@ -239,6 +489,12 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
   },
+  helperText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 4,
+    fontStyle: "italic",
+  },
   actions: {
     flexDirection: "row",
     gap: 12,
@@ -263,5 +519,102 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  selectButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  selectButtonText: {
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  selectButtonPlaceholder: {
+    color: "#9CA3AF",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  closeButton: {
+    padding: 4,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    margin: 16,
+    fontSize: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  employeeItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  employeeName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  employeeEmail: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  emptyContainer: {
+    padding: 32,
+    alignItems: "center",
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    gap: 8,
+  },
+  dateButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  dateButtonPlaceholder: {
+    color: "#9CA3AF",
+  },
+  clearDateButton: {
+    padding: 4,
   },
 });

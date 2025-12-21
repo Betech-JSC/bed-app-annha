@@ -23,6 +23,8 @@ class DatabaseSeeder extends Seeder
             PermissionSeeder::class, // Tạo các permissions và gán cho roles
             ProjectSeeder::class, // Tạo dữ liệu mẫu cho module quản lý dự án
             SampleDataSeeder::class, // Tạo dữ liệu mẫu cho tất cả các module (contracts, payments, costs, etc.)
+            PayrollSeeder::class, // Tạo dữ liệu mẫu cho module bảng lương
+            WorkScheduleSeeder::class, // Tạo dữ liệu mẫu cho module lịch làm việc
         ]);
     }
 }

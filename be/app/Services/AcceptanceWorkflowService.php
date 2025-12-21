@@ -45,9 +45,9 @@ class AcceptanceWorkflowService
     public function createDefaultStages(Project $project): array
     {
         $defaultStages = [
-            ['name' => 'Nghiệm thu cốt thép móng', 'order' => 1],
-            ['name' => 'Nghiệm thu đổ bê tông móng', 'order' => 2],
-            ['name' => 'Nghiệm thu hệ điện nước', 'order' => 3],
+            ['name' => 'Nghiệm thu phần cốt thép móng', 'order' => 1],
+            ['name' => 'Nghiệm thu hệ điện, nước ngầm', 'order' => 2],
+            ['name' => 'Nghiệm thu phần thô', 'order' => 3],
             ['name' => 'Nghiệm thu hoàn thiện', 'order' => 4],
         ];
 

@@ -148,6 +148,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Employee profile của user
+     */
+    public function employeeProfile()
+    {
+        return $this->hasOne(EmployeeProfile::class);
+    }
+
+    /**
      * Permissions trực tiếp của user (qua permission_user table)
      */
     public function directPermissions(): BelongsToMany

@@ -68,4 +68,31 @@ export const workScheduleApi = {
     const response = await api.delete(`/hr/work-schedule/${id}`);
     return response.data;
   },
+
+  // Get statistics
+  getStatistics: async (params?: {
+    user_id?: number;
+    project_id?: number;
+    start_date?: string;
+    end_date?: string;
+  }) => {
+    const response = await api.get("/hr/work-schedule/statistics", { params });
+    return response.data;
+  },
+
+  // Bulk create schedules
+  bulkCreateSchedule: async (data: {
+    user_ids: number[];
+    start_date: string;
+    end_date: string;
+    start_time: string;
+    end_time: string;
+    type: "work" | "leave" | "holiday" | "overtime";
+    project_id?: number;
+    notes?: string;
+    skip_weekends?: boolean;
+  }) => {
+    const response = await api.post("/hr/work-schedule/bulk-create", data);
+    return response.data;
+  },
 };

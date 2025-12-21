@@ -9,11 +9,13 @@ import {
   Alert,
   Modal,
   TextInput,
+  ScrollView,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { defectApi, Defect } from "@/api/defectApi";
-import { DefectItem } from "@/components";
+import { DefectItem, FileUploader } from "@/components";
 import { Ionicons } from "@expo/vector-icons";
+import { acceptanceApi } from "@/api/acceptanceApi";
 
 export default function DefectsScreen() {
   const router = useRouter();
@@ -25,11 +27,28 @@ export default function DefectsScreen() {
     description: "",
     severity: "medium" as "low" | "medium" | "high" | "critical",
     acceptance_stage_id: "",
+    before_image_ids: [] as number[],
   });
+  const [stages, setStages] = useState<any[]>([]);
+  const [fixModalVisible, setFixModalVisible] = useState(false);
+  const [selectedDefectId, setSelectedDefectId] = useState<number | null>(null);
+  const [afterImageIds, setAfterImageIds] = useState<number[]>([]);
 
   useEffect(() => {
     loadDefects();
+    loadStages();
   }, [id]);
+
+  const loadStages = async () => {
+    try {
+      const response = await acceptanceApi.getStages(id!);
+      if (response.success) {
+        setStages(response.data || []);
+      }
+    } catch (error) {
+      console.error("Error loading stages:", error);
+    }
+  };
 
   const loadDefects = async () => {
     try {
@@ -58,6 +77,7 @@ export default function DefectsScreen() {
         acceptance_stage_id: formData.acceptance_stage_id
           ? parseInt(formData.acceptance_stage_id)
           : undefined,
+        before_image_ids: formData.before_image_ids.length > 0 ? formData.before_image_ids : undefined,
       });
 
       if (response.success) {
@@ -67,6 +87,7 @@ export default function DefectsScreen() {
           description: "",
           severity: "medium",
           acceptance_stage_id: "",
+          before_image_ids: [],
         });
         loadDefects();
       }
@@ -75,7 +96,49 @@ export default function DefectsScreen() {
     }
   };
 
+  const handleBeforeImagesUpload = (files: any[]) => {
+    const attachmentIds = files
+      .map((f) => f.attachment_id || f.id)
+      .filter((id) => id) as number[];
+    setFormData({ ...formData, before_image_ids: attachmentIds });
+  };
+
+  const handleAfterImagesUpload = (files: any[]) => {
+    const attachmentIds = files
+      .map((f) => f.attachment_id || f.id)
+      .filter((id) => id) as number[];
+    setAfterImageIds(attachmentIds);
+  };
+
+  const handleFixDefect = async () => {
+    if (!selectedDefectId) return;
+
+    try {
+      const response = await defectApi.updateDefect(id!, selectedDefectId, {
+        status: "fixed",
+        after_image_ids: afterImageIds.length > 0 ? afterImageIds : undefined,
+      });
+
+      if (response.success) {
+        Alert.alert("Thành công", "Lỗi đã được đánh dấu là đã sửa.");
+        setFixModalVisible(false);
+        setSelectedDefectId(null);
+        setAfterImageIds([]);
+        loadDefects();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
+    }
+  };
+
   const handleUpdate = async (defectId: number, status: string) => {
+    if (status === "fixed") {
+      // Open modal to upload after images
+      setSelectedDefectId(defectId);
+      setFixModalVisible(true);
+      return;
+    }
+
     try {
       const response = await defectApi.updateDefect(id!, defectId, { status });
       if (response.success) {
@@ -118,6 +181,11 @@ export default function DefectsScreen() {
         renderItem={({ item }) => (
           <DefectItem
             defect={item}
+            onPress={() => {
+              if (item.acceptance_stage_id) {
+                router.push(`/projects/${id}/acceptance`);
+              }
+            }}
             onUpdate={handleUpdate}
             canEdit={true}
           />
@@ -157,6 +225,41 @@ export default function DefectsScreen() {
             </View>
 
             <View style={styles.formGroup}>
+              <Text style={styles.label}>Giai đoạn nghiệm thu (tùy chọn)</Text>
+              <ScrollView style={styles.stageSelect} nestedScrollEnabled>
+                {stages.map((stage) => (
+                  <TouchableOpacity
+                    key={stage.id}
+                    style={[
+                      styles.stageOption,
+                      formData.acceptance_stage_id === stage.id.toString() &&
+                        styles.stageOptionActive,
+                    ]}
+                    onPress={() =>
+                      setFormData({
+                        ...formData,
+                        acceptance_stage_id:
+                          formData.acceptance_stage_id === stage.id.toString()
+                            ? ""
+                            : stage.id.toString(),
+                      })
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.stageOptionText,
+                        formData.acceptance_stage_id === stage.id.toString() &&
+                          styles.stageOptionTextActive,
+                      ]}
+                    >
+                      {stage.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.formGroup}>
               <Text style={styles.label}>Mức độ nghiêm trọng</Text>
               <View style={styles.severityButtons}>
                 {(["low", "medium", "high", "critical"] as const).map((severity) => (
@@ -190,6 +293,16 @@ export default function DefectsScreen() {
               </View>
             </View>
 
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Hình ảnh lỗi (Trước khi khắc phục)</Text>
+              <FileUploader
+                onUploadComplete={handleBeforeImagesUpload}
+                multiple={true}
+                accept="image"
+                maxFiles={10}
+              />
+            </View>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -204,6 +317,67 @@ export default function DefectsScreen() {
                 <Text style={styles.submitButtonText}>Gửi</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Fix Defect Modal - Upload After Images */}
+      <Modal
+        visible={fixModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setFixModalVisible(false);
+          setSelectedDefectId(null);
+          setAfterImageIds([]);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Upload hình ảnh sau khi khắc phục</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setFixModalVisible(false);
+                  setSelectedDefectId(null);
+                  setAfterImageIds([]);
+                }}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Vui lòng upload hình ảnh sau khi đã khắc phục lỗi
+                </Text>
+                <FileUploader
+                  onUploadComplete={handleAfterImagesUpload}
+                  multiple={true}
+                  accept="image"
+                  maxFiles={10}
+                />
+              </View>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setFixModalVisible(false);
+                    setSelectedDefectId(null);
+                    setAfterImageIds([]);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.submitButton]}
+                  onPress={handleFixDefect}
+                >
+                  <Text style={styles.submitButtonText}>Đánh dấu đã sửa</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -265,14 +439,54 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    maxHeight: "90%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 24,
-    maxHeight: "80%",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#1F2937",
-    marginBottom: 24,
+    flex: 1,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 24,
+  },
+  stageSelect: {
+    maxHeight: 150,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 8,
+  },
+  stageOption: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  stageOptionActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#3B82F6",
+  },
+  stageOptionText: {
+    fontSize: 14,
+    color: "#1F2937",
+  },
+  stageOptionTextActive: {
+    color: "#3B82F6",
+    fontWeight: "600",
   },
   formGroup: {
     marginBottom: 16,
