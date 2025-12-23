@@ -21,6 +21,7 @@ export default function ProjectDetailLayout() {
       <Stack.Screen name="acceptance" />
       <Stack.Screen name="defects" />
       <Stack.Screen name="progress" />
+      <Stack.Screen name="construction-plan" />
     </Stack>
   );
 }

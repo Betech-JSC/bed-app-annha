@@ -44,3 +44,4 @@ export const formatNumber = (value: number | null | undefined, decimals: number 
   }).format(value);
 };
 
+

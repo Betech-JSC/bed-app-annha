@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
@@ -23,6 +24,8 @@ class Subcontractor extends Model
         'payment_status',
         'approved_by',
         'approved_at',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -56,6 +59,16 @@ class Subcontractor extends Model
     public function attachments(): MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(SubcontractorItem::class)->orderBy('order');
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(SubcontractorPayment::class)->orderByDesc('created_at');
     }
 
     // ==================================================================

@@ -117,6 +117,16 @@ class Project extends Model
         return $this->morphMany(Attachment::class, 'attachable');
     }
 
+    public function phases(): HasMany
+    {
+        return $this->hasMany(ProjectPhase::class)->orderBy('order');
+    }
+
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(ProjectTask::class)->orderBy('order');
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================
@@ -128,7 +138,16 @@ class Project extends Model
 
     public function getIsCompletedAttribute(): bool
     {
-        return $this->status === 'completed';
+        // Dự án hoàn thành khi toàn bộ tiến độ nghiệm thu hoàn thành
+        $stages = $this->acceptanceStages;
+        if ($stages->isEmpty()) {
+            return $this->status === 'completed';
+        }
+        
+        // Kiểm tra tất cả stages đã hoàn thành (tất cả items đạt nghiệm thu)
+        return $stages->every(function ($stage) {
+            return $stage->is_completed;
+        });
     }
 
     // ==================================================================

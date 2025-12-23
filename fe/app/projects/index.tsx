@@ -28,9 +28,19 @@ export default function ProjectsListScreen() {
     try {
       setLoading(true);
       const response = await projectApi.getProjects({ my_projects: true });
-      setProjects(response.data.data || []);
-    } catch (error) {
+      if (response.success) {
+        setProjects(response.data?.data || response.data || []);
+      }
+    } catch (error: any) {
       console.error("Error loading projects:", error);
+      // 401 errors are handled by interceptor, but we can show a message if needed
+      if (error.response?.status === 401) {
+        // Token expired or invalid - interceptor will redirect to login
+        // Don't show alert as user will be redirected
+      } else {
+        // Other errors - could show a message if needed
+        // Alert.alert("Lỗi", "Không thể tải danh sách dự án");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

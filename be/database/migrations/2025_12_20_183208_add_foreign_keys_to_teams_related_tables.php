@@ -31,15 +31,6 @@ return new class extends Migration
                 ->onDelete('cascade');
         });
 
-        // Add foreign key for team_members.team_id
-        if (Schema::hasTable('team_members')) {
-            Schema::table('team_members', function (Blueprint $table) {
-                $table->foreign('team_id')
-                    ->references('id')
-                    ->on('teams')
-                    ->onDelete('cascade');
-            });
-        }
 
         // Add foreign key for team_contracts.team_id
         if (Schema::hasTable('team_contracts')) {

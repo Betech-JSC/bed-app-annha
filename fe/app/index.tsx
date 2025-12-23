@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSelector } from "react-redux";
-import type { RootState } from "@/src/reducers/index";
+import type { RootState } from "@/store";
 import { permissionApi } from "@/api/permissionApi";
 
 /**
@@ -62,9 +62,16 @@ export default function IndexScreen() {
 
           // Redirect to tabs layout (main app)
           router.replace("/(tabs)");
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error getting permissions:", error);
-          // Fallback to role-based redirect if permissions API fails
+
+          // If 401, token is invalid/expired - redirect to login
+          if (error.response?.status === 401) {
+            router.replace("/login");
+            return;
+          }
+
+          // Fallback to role-based redirect if permissions API fails for other reasons
           const userRole = user?.role?.toLowerCase();
           const isOwner = user?.owner === true;
 

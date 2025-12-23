@@ -26,7 +26,10 @@ class AcceptanceStageController extends Controller
                 'defects' => function ($q) {
                     $q->whereIn('status', ['open', 'in_progress']);
                 },
-                'attachments'
+                'attachments',
+                'items' => function ($q) {
+                    $q->orderBy('order');
+                }
             ])
             ->orderBy('order')
             ->get();
@@ -305,46 +308,4 @@ class AcceptanceStageController extends Controller
         ]);
     }
 
-    /**
-     * Tạo các giai đoạn nghiệm thu mặc định cho project
-     */
-    public function createDefaultStages(Request $request, string $projectId)
-    {
-        $project = Project::findOrFail($projectId);
-        $user = $request->user();
-
-        // Check permission - admin hoặc project manager
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && $project->project_manager_id !== $user->id && !$user->hasPermission('acceptance.create')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn không có quyền tạo giai đoạn nghiệm thu.'
-            ], 403);
-        }
-
-        // Check if stages already exist
-        if ($project->acceptanceStages()->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Dự án đã có giai đoạn nghiệm thu.'
-            ], 400);
-        }
-
-        try {
-            $service = new \App\Services\AcceptanceWorkflowService();
-            $stages = $service->createDefaultStages($project);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Đã tạo ' . count($stages) . ' giai đoạn nghiệm thu mặc định.',
-                'data' => $stages
-            ], 201);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
 }

@@ -29,10 +29,12 @@ export default function DefectsScreen() {
     acceptance_stage_id: "",
     before_image_ids: [] as number[],
   });
+  const [beforeImages, setBeforeImages] = useState<any[]>([]); // Files đã upload để preview
   const [stages, setStages] = useState<any[]>([]);
   const [fixModalVisible, setFixModalVisible] = useState(false);
   const [selectedDefectId, setSelectedDefectId] = useState<number | null>(null);
   const [afterImageIds, setAfterImageIds] = useState<number[]>([]);
+  const [afterImages, setAfterImages] = useState<any[]>([]); // Files đã upload để preview
 
   useEffect(() => {
     loadDefects();
@@ -89,6 +91,7 @@ export default function DefectsScreen() {
           acceptance_stage_id: "",
           before_image_ids: [],
         });
+        setBeforeImages([]);
         loadDefects();
       }
     } catch (error: any) {
@@ -97,6 +100,8 @@ export default function DefectsScreen() {
   };
 
   const handleBeforeImagesUpload = (files: any[]) => {
+    // Lưu cả files để preview và attachment IDs
+    setBeforeImages(files);
     const attachmentIds = files
       .map((f) => f.attachment_id || f.id)
       .filter((id) => id) as number[];
@@ -104,6 +109,8 @@ export default function DefectsScreen() {
   };
 
   const handleAfterImagesUpload = (files: any[]) => {
+    // Lưu cả files để preview và attachment IDs
+    setAfterImages(files);
     const attachmentIds = files
       .map((f) => f.attachment_id || f.id)
       .filter((id) => id) as number[];
@@ -124,6 +131,7 @@ export default function DefectsScreen() {
         setFixModalVisible(false);
         setSelectedDefectId(null);
         setAfterImageIds([]);
+        setAfterImages([]);
         loadDefects();
       }
     } catch (error: any) {
@@ -208,113 +216,212 @@ export default function DefectsScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Ghi Nhận Lỗi</Text>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Mô tả lỗi</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={formData.description}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, description: text })
-                }
-                placeholder="Nhập mô tả chi tiết về lỗi..."
-                multiline
-                numberOfLines={4}
-              />
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ghi Nhận Lỗi</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setModalVisible(false);
+                  setFormData({
+                    description: "",
+                    severity: "medium",
+                    acceptance_stage_id: "",
+                    before_image_ids: [],
+                  });
+                }}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Giai đoạn nghiệm thu (tùy chọn)</Text>
-              <ScrollView style={styles.stageSelect} nestedScrollEnabled>
-                {stages.map((stage) => (
-                  <TouchableOpacity
-                    key={stage.id}
-                    style={[
-                      styles.stageOption,
-                      formData.acceptance_stage_id === stage.id.toString() &&
-                        styles.stageOptionActive,
-                    ]}
-                    onPress={() =>
-                      setFormData({
-                        ...formData,
-                        acceptance_stage_id:
-                          formData.acceptance_stage_id === stage.id.toString()
-                            ? ""
-                            : stage.id.toString(),
-                      })
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.stageOptionText,
-                        formData.acceptance_stage_id === stage.id.toString() &&
-                          styles.stageOptionTextActive,
-                      ]}
-                    >
-                      {stage.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Mức độ nghiêm trọng</Text>
-              <View style={styles.severityButtons}>
-                {(["low", "medium", "high", "critical"] as const).map((severity) => (
-                  <TouchableOpacity
-                    key={severity}
-                    style={[
-                      styles.severityButton,
-                      formData.severity === severity && styles.severityButtonActive,
-                    ]}
-                    onPress={() =>
-                      setFormData({ ...formData, severity })
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.severityButtonText,
-                        formData.severity === severity &&
-                        styles.severityButtonTextActive,
-                      ]}
-                    >
-                      {severity === "low"
-                        ? "Thấp"
-                        : severity === "medium"
-                          ? "Trung bình"
-                          : severity === "high"
-                            ? "Cao"
-                            : "Nghiêm trọng"}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Mô tả lỗi */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Mô tả lỗi <Text style={styles.required}>*</Text>
+                </Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.description}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, description: text })
+                  }
+                  placeholder="Nhập mô tả chi tiết về lỗi..."
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={4}
+                />
+                {!formData.description && (
+                  <Text style={styles.errorText}>
+                    Vui lòng nhập mô tả lỗi
+                  </Text>
+                )}
               </View>
-            </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Hình ảnh lỗi (Trước khi khắc phục)</Text>
-              <FileUploader
-                onUploadComplete={handleBeforeImagesUpload}
-                multiple={true}
-                accept="image"
-                maxFiles={10}
-              />
-            </View>
+              {/* Mức độ nghiêm trọng */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Mức độ nghiêm trọng</Text>
+                <View style={styles.severityButtons}>
+                  {(["low", "medium", "high", "critical"] as const).map((severity) => {
+                    const severityConfig = {
+                      low: { label: "Thấp", color: "#10B981", bg: "#10B98120" },
+                      medium: { label: "Trung bình", color: "#F59E0B", bg: "#F59E0B20" },
+                      high: { label: "Cao", color: "#F97316", bg: "#F9731620" },
+                      critical: { label: "Nghiêm trọng", color: "#EF4444", bg: "#EF444420" },
+                    };
+                    const config = severityConfig[severity];
+                    const isActive = formData.severity === severity;
 
-            <View style={styles.modalButtons}>
+                    return (
+                      <TouchableOpacity
+                        key={severity}
+                        style={[
+                          styles.severityButton,
+                          isActive && {
+                            backgroundColor: config.bg,
+                            borderColor: config.color,
+                            borderWidth: 2,
+                          },
+                        ]}
+                        onPress={() =>
+                          setFormData({ ...formData, severity })
+                        }
+                      >
+                        <View
+                          style={[
+                            styles.severityDot,
+                            { backgroundColor: config.color },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.severityButtonText,
+                            isActive && { color: config.color, fontWeight: "700" },
+                          ]}
+                        >
+                          {config.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Giai đoạn nghiệm thu */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Giai đoạn nghiệm thu <Text style={styles.optional}>(tùy chọn)</Text>
+                </Text>
+                {stages.length === 0 ? (
+                  <View style={styles.emptyStages}>
+                    <Ionicons name="information-circle-outline" size={20} color="#6B7280" />
+                    <Text style={styles.emptyStagesText}>
+                      Chưa có giai đoạn nghiệm thu
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.stageSelect}>
+                    <ScrollView
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator={false}
+                      style={styles.stageSelectScroll}
+                    >
+                      {stages.map((stage) => {
+                        const isSelected =
+                          formData.acceptance_stage_id === stage.id.toString();
+                        return (
+                          <TouchableOpacity
+                            key={stage.id}
+                            style={[
+                              styles.stageOption,
+                              isSelected && styles.stageOptionActive,
+                            ]}
+                            onPress={() =>
+                              setFormData({
+                                ...formData,
+                                acceptance_stage_id: isSelected
+                                  ? ""
+                                  : stage.id.toString(),
+                              })
+                            }
+                          >
+                            <View style={styles.stageOptionContent}>
+                              <Ionicons
+                                name={
+                                  isSelected
+                                    ? "checkmark-circle"
+                                    : "ellipse-outline"
+                                }
+                                size={20}
+                                color={isSelected ? "#3B82F6" : "#9CA3AF"}
+                              />
+                              <Text
+                                style={[
+                                  styles.stageOptionText,
+                                  isSelected && styles.stageOptionTextActive,
+                                ]}
+                              >
+                                {stage.name}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              {/* Hình ảnh lỗi */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Hình ảnh lỗi (Trước khi khắc phục)
+                  <Text style={styles.optional}> (tùy chọn)</Text>
+                </Text>
+                <Text style={styles.helperText}>
+                  Bạn có thể chụp ảnh trực tiếp hoặc chọn từ thư viện
+                </Text>
+                <FileUploader
+                  onUploadComplete={handleBeforeImagesUpload}
+                  multiple={true}
+                  accept="image"
+                  maxFiles={10}
+                  initialFiles={beforeImages}
+                />
+              </View>
+            </ScrollView>
+
+            {/* Footer buttons - sticky */}
+            <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
+                onPress={() => {
+                  setModalVisible(false);
+                  setFormData({
+                    description: "",
+                    severity: "medium",
+                    acceptance_stage_id: "",
+                    before_image_ids: [],
+                  });
+                }}
               >
                 <Text style={styles.cancelButtonText}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
+                style={[
+                  styles.modalButton,
+                  styles.submitButton,
+                  !formData.description && styles.submitButtonDisabled,
+                ]}
                 onPress={handleSubmit}
+                disabled={!formData.description}
               >
-                <Text style={styles.submitButtonText}>Gửi</Text>
+                <Text style={styles.submitButtonText}>Ghi nhận lỗi</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -330,54 +437,66 @@ export default function DefectsScreen() {
           setFixModalVisible(false);
           setSelectedDefectId(null);
           setAfterImageIds([]);
+          setAfterImages([]);
         }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Upload hình ảnh sau khi khắc phục</Text>
+              <Text style={styles.modalTitle}>Khắc phục lỗi</Text>
               <TouchableOpacity
                 onPress={() => {
                   setFixModalVisible(false);
                   setSelectedDefectId(null);
                   setAfterImageIds([]);
+                  setAfterImages([]);
                 }}
                 style={styles.closeButton}
               >
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
-                  Vui lòng upload hình ảnh sau khi đã khắc phục lỗi
+                  Hình ảnh sau khi khắc phục
+                  <Text style={styles.optional}> (tùy chọn)</Text>
+                </Text>
+                <Text style={styles.helperText}>
+                  Vui lòng upload hình ảnh sau khi đã khắc phục lỗi để làm bằng chứng. Bạn có thể chụp ảnh trực tiếp hoặc chọn từ thư viện.
                 </Text>
                 <FileUploader
                   onUploadComplete={handleAfterImagesUpload}
                   multiple={true}
                   accept="image"
                   maxFiles={10}
+                  initialFiles={afterImages}
                 />
               </View>
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => {
-                    setFixModalVisible(false);
-                    setSelectedDefectId(null);
-                    setAfterImageIds([]);
-                  }}
-                >
-                  <Text style={styles.cancelButtonText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.submitButton]}
-                  onPress={handleFixDefect}
-                >
-                  <Text style={styles.submitButtonText}>Đánh dấu đã sửa</Text>
-                </TouchableOpacity>
-              </View>
             </ScrollView>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setFixModalVisible(false);
+                  setSelectedDefectId(null);
+                  setAfterImageIds([]);
+                  setAfterImages([]);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.submitButton]}
+                onPress={handleFixDefect}
+              >
+                <Text style={styles.submitButtonText}>Đánh dấu đã sửa</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -440,12 +559,13 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "90%",
+    flex: 1,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 24,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
@@ -457,36 +577,66 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 4,
+    marginLeft: 12,
   },
   modalBody: {
-    padding: 24,
+    flex: 1,
+    padding: 20,
+  },
+  modalFooter: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
   },
   stageSelect: {
     maxHeight: 150,
     borderWidth: 1,
     borderColor: "#D1D5DB",
-    borderRadius: 8,
-    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "#F9FAFB",
+    overflow: "hidden",
+  },
+  stageSelectScroll: {
+    maxHeight: 150,
   },
   stageOption: {
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
   stageOptionActive: {
     backgroundColor: "#EFF6FF",
-    borderColor: "#3B82F6",
+  },
+  stageOptionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   stageOptionText: {
     fontSize: 14,
     color: "#1F2937",
+    flex: 1,
   },
   stageOptionTextActive: {
     color: "#3B82F6",
     fontWeight: "600",
+  },
+  emptyStages: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 16,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  emptyStagesText: {
+    fontSize: 14,
+    color: "#6B7280",
   },
   formGroup: {
     marginBottom: 16,
@@ -496,6 +646,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1F2937",
     marginBottom: 8,
+  },
+  helperText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 8,
+    lineHeight: 18,
   },
   input: {
     borderWidth: 1,
@@ -515,35 +671,46 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   severityButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#D1D5DB",
     backgroundColor: "#FFFFFF",
+    minWidth: 100,
   },
-  severityButtonActive: {
-    backgroundColor: "#3B82F6",
-    borderColor: "#3B82F6",
+  severityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   severityButtonText: {
     fontSize: 14,
     fontWeight: "600",
     color: "#6B7280",
   },
-  severityButtonTextActive: {
-    color: "#FFFFFF",
+  required: {
+    color: "#EF4444",
   },
-  modalButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 24,
+  optional: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: "#6B7280",
+  },
+  errorText: {
+    fontSize: 12,
+    color: "#EF4444",
+    marginTop: 4,
   },
   modalButton: {
     flex: 1,
-    padding: 16,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
   },
   cancelButton: {
     backgroundColor: "#F3F4F6",
@@ -555,6 +722,10 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: "#3B82F6",
+  },
+  submitButtonDisabled: {
+    backgroundColor: "#D1D5DB",
+    opacity: 0.6,
   },
   submitButtonText: {
     color: "#FFFFFF",

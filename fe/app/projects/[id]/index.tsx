@@ -148,6 +148,18 @@ export default function ProjectDetailScreen() {
       route: `/projects/${id}/progress`,
       color: "#F97316",
     },
+    {
+      title: "Kế hoạch thi công",
+      icon: "calendar-outline",
+      route: `/projects/${id}/construction-plan`,
+      color: "#8B5CF6",
+    },
+    {
+      title: "Nhà Thầu Phụ",
+      icon: "business-outline",
+      route: `/projects/${id}/subcontractors`,
+      color: "#06B6D4",
+    },
   ];
 
   if (loading) {

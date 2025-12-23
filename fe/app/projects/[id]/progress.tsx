@@ -9,19 +9,30 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { progressApi } from "@/api/progressApi";
-import { ProgressChart } from "@/components";
+import { ProgressChart, GanttChart } from "@/components";
+import { ganttApi } from "@/api/ganttApi";
+import { ProjectPhase, ProjectTask } from "@/types/ganttTypes";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ProgressScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [progressData, setProgressData] = useState<any>(null);
+  const [phases, setPhases] = useState<ProjectPhase[]>([]);
+  const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [chartType, setChartType] = useState<"progress" | "line" | "bar">("progress");
+  const [loadingGantt, setLoadingGantt] = useState(false);
+  const [chartType, setChartType] = useState<"progress" | "line" | "bar" | "gantt">("progress");
 
   useEffect(() => {
     loadProgress();
   }, [id]);
+
+  useEffect(() => {
+    if (chartType === "gantt") {
+      loadGanttData();
+    }
+  }, [chartType, id]);
 
   const loadProgress = async () => {
     try {
@@ -34,6 +45,27 @@ export default function ProgressScreen() {
       console.error("Error loading progress:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadGanttData = async () => {
+    try {
+      setLoadingGantt(true);
+      const [phasesResponse, tasksResponse] = await Promise.all([
+        ganttApi.getPhases(id!),
+        ganttApi.getTasks(id!),
+      ]);
+
+      if (phasesResponse.success) {
+        setPhases(phasesResponse.data || []);
+      }
+      if (tasksResponse.success) {
+        setTasks(tasksResponse.data || []);
+      }
+    } catch (error) {
+      console.error("Error loading Gantt data:", error);
+    } finally {
+      setLoadingGantt(false);
     }
   };
 
@@ -114,13 +146,49 @@ export default function ProgressScreen() {
             Biểu đồ cột
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.chartTypeButton,
+            chartType === "gantt" && styles.chartTypeButtonActive,
+          ]}
+          onPress={() => setChartType("gantt")}
+        >
+          <Text
+            style={[
+              styles.chartTypeText,
+              chartType === "gantt" && styles.chartTypeTextActive,
+            ]}
+          >
+            Gantt Chart
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <ProgressChart
-        progress={progressData.progress}
-        logs={progressData.logs}
-        type={chartType}
-      />
+      {chartType === "gantt" ? (
+        loadingGantt ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+          </View>
+        ) : (
+          <GanttChart
+            phases={phases}
+            tasks={tasks}
+            onTaskPress={(task) => {
+              // Navigate to construction plan or show task details
+              router.push(`/projects/${id}/construction-plan`);
+            }}
+            onPhasePress={(phase) => {
+              router.push(`/projects/${id}/construction-plan`);
+            }}
+          />
+        )
+      ) : (
+        <ProgressChart
+          progress={progressData.progress}
+          logs={progressData.logs}
+          type={chartType}
+        />
+      )}
 
       {progressData.subcontractors && progressData.subcontractors.length > 0 && (
         <View style={styles.subcontractorsSection}>

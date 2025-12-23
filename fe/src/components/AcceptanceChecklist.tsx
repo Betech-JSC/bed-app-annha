@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { FileUploader } from "@/components";
 import { acceptanceApi } from "@/api/acceptanceApi";
 import { PermissionGuard } from "@/components/PermissionGuard";
+import AcceptanceItemList from "@/components/AcceptanceItemList";
 import api from "@/api/api";
 
 interface AcceptanceChecklistProps {
@@ -228,26 +229,6 @@ export default function AcceptanceChecklist({
                 <Text style={styles.addButtonText}>Thêm giai đoạn</Text>
               </TouchableOpacity>
             </PermissionGuard>
-            {stages.length === 0 && (
-              <PermissionGuard permission="acceptance.create">
-                <TouchableOpacity
-                  style={styles.createDefaultButton}
-                  onPress={async () => {
-                    try {
-                      await acceptanceApi.createDefaultStages(projectId);
-                      Alert.alert("Thành công", "Đã tạo danh sách nghiệm thu mặc định");
-                      onRefresh?.();
-                    } catch (error: any) {
-                      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
-                    }
-                  }}
-                >
-                  <Text style={styles.createDefaultButtonText}>
-                    Tạo danh sách mặc định
-                  </Text>
-                </TouchableOpacity>
-              </PermissionGuard>
-            )}
           </View>
         )}
 
@@ -400,6 +381,24 @@ export default function AcceptanceChecklist({
                       </Text>
                     </View>
                   </TouchableOpacity>
+                )}
+
+                {/* Acceptance Items Section */}
+                {projectId && (
+                  <AcceptanceItemList
+                    stage={stage}
+                    projectId={projectId}
+                    items={stage.items || []}
+                    onRefresh={onRefresh || (() => { })}
+                    onItemApprove={async (itemId: number) => {
+                      const item = stage.items?.find((i) => i.id === itemId);
+                      if (!item) return;
+                      await acceptanceApi.approveItem(projectId, stage.id, itemId);
+                    }}
+                    onItemReject={async (itemId: number, reason: string) => {
+                      await acceptanceApi.rejectItem(projectId, stage.id, itemId, reason);
+                    }}
+                  />
                 )}
 
                 {nextApproval && canApprove && !hasOpenDefects && (
@@ -1107,18 +1106,6 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 16,
     textAlign: "center",
-  },
-  createDefaultButton: {
-    marginTop: 24,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: "#3B82F6",
-    borderRadius: 8,
-  },
-  createDefaultButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
   },
   modalOverlay: {
     flex: 1,

@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import CalendarView from "@/components/CalendarView";
 import WeekView from "@/components/WeekView";
 import BulkScheduleForm from "@/components/BulkScheduleForm";
+import WorkScheduleForm from "@/components/WorkScheduleForm";
 
 type ViewMode = "month" | "week";
 
@@ -64,8 +65,10 @@ export default function CalendarScreen() {
   const [loadingStats, setLoadingStats] = useState(false);
   const [showStats, setShowStats] = useState(true);
 
-  // Bulk create
+  // Forms
   const [showBulkForm, setShowBulkForm] = useState(false);
+  const [showSingleForm, setShowSingleForm] = useState(false);
+  const [formInitialDate, setFormInitialDate] = useState<Date | undefined>();
 
   useEffect(() => {
     loadUsers();
@@ -279,6 +282,22 @@ export default function CalendarScreen() {
     }
   };
 
+  const handleSingleCreate = async (data: any) => {
+    try {
+      const response = await workScheduleApi.createSchedule(data);
+      if (response.success) {
+        Alert.alert("Thành công", response.message || "Đã tạo lịch làm việc");
+        setShowSingleForm(false);
+        loadCalendar();
+        loadDateDetails();
+        loadStatistics();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
+      throw error;
+    }
+  };
+
   const filteredUsers = users.filter(
     (user) =>
       !userSearch ||
@@ -304,12 +323,25 @@ export default function CalendarScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Lịch Làm Việc</Text>
-        <TouchableOpacity
-          style={styles.bulkButton}
-          onPress={() => setShowBulkForm(true)}
-        >
-          <Ionicons name="add-circle" size={24} color="#3B82F6" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => {
+              setFormInitialDate(new Date(selectedDate));
+              setShowSingleForm(true);
+            }}
+          >
+            <Ionicons name="add" size={20} color="#3B82F6" />
+            <Text style={styles.headerButtonText}>Tạo mới</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => setShowBulkForm(true)}
+          >
+            <Ionicons name="layers" size={20} color="#10B981" />
+            <Text style={styles.headerButtonText}>Tạo hàng loạt</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* View Toggle */}
@@ -700,6 +732,17 @@ export default function CalendarScreen() {
         </View>
       </Modal>
 
+      {/* Single Create Modal */}
+      <WorkScheduleForm
+        visible={showSingleForm}
+        initialDate={formInitialDate}
+        onSubmit={handleSingleCreate}
+        onCancel={() => {
+          setShowSingleForm(false);
+          setFormInitialDate(undefined);
+        }}
+      />
+
       {/* Bulk Create Modal */}
       <Modal
         visible={showBulkForm}
@@ -744,8 +787,23 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1F2937",
   },
-  bulkButton: {
-    padding: 4,
+  headerActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  headerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#F3F4F6",
+  },
+  headerButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
   },
   viewToggle: {
     flexDirection: "row",

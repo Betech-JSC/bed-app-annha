@@ -44,6 +44,8 @@ class AcceptanceStage extends Model
     protected $appends = [
         'is_fully_approved',
         'has_open_defects',
+        'is_completed',
+        'completion_percentage',
     ];
 
     // ==================================================================
@@ -90,6 +92,11 @@ class AcceptanceStage extends Model
         return $this->morphMany(Attachment::class, 'attachable');
     }
 
+    public function items(): HasMany
+    {
+        return $this->hasMany(AcceptanceItem::class)->orderBy('order');
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================
@@ -102,6 +109,28 @@ class AcceptanceStage extends Model
     public function getHasOpenDefectsAttribute(): bool
     {
         return $this->defects()->whereIn('status', ['open', 'in_progress'])->exists();
+    }
+
+    public function getIsCompletedAttribute(): bool
+    {
+        $items = $this->items;
+        if ($items->isEmpty()) {
+            return false;
+        }
+        // Tiến độ hoàn thành khi tất cả hạng mục đạt nghiệm thu
+        return $items->every(function ($item) {
+            return $item->acceptance_status === 'approved';
+        });
+    }
+
+    public function getCompletionPercentageAttribute(): float
+    {
+        $items = $this->items;
+        if ($items->isEmpty()) {
+            return 0;
+        }
+        $approvedCount = $items->where('acceptance_status', 'approved')->count();
+        return ($approvedCount / $items->count()) * 100;
     }
 
     // ==================================================================
@@ -170,6 +199,21 @@ class AcceptanceStage extends Model
         }
         $this->rejected_at = now();
         return $this->save();
+    }
+
+    /**
+     * Kiểm tra và cập nhật trạng thái hoàn thành của tiến độ
+     */
+    public function checkCompletion(): void
+    {
+        if ($this->is_completed && $this->status !== 'owner_approved') {
+            // Auto update stage status if all items are approved
+            // Có thể tự động chuyển sang internal_approved nếu tất cả items đã approved
+            if ($this->status === 'pending') {
+                $this->status = 'internal_approved';
+                $this->save();
+            }
+        }
     }
 
     // ==================================================================

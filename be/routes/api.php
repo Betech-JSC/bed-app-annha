@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\ProjectPaymentController;
 use App\Http\Controllers\Api\AdditionalCostController;
 use App\Http\Controllers\Api\ProjectPersonnelController;
 use App\Http\Controllers\Api\SubcontractorController;
+use App\Http\Controllers\Api\SubcontractorItemController;
 use App\Http\Controllers\Api\ConstructionLogController;
 use App\Http\Controllers\Api\AcceptanceStageController;
 use App\Http\Controllers\Api\DefectController;
@@ -50,6 +51,10 @@ use App\Http\Controllers\Api\TeamContractController;
 use App\Http\Controllers\Api\LaborStandardController;
 use App\Http\Controllers\Api\WorkVolumeController;
 use App\Http\Controllers\Api\SubcontractorPaymentController;
+use App\Http\Controllers\Api\ProjectPhaseController;
+use App\Http\Controllers\Api\ProjectTaskController;
+use App\Http\Controllers\Api\ProjectTaskDependencyController;
+use App\Http\Controllers\Api\AcceptanceItemController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -145,7 +150,17 @@ Route::middleware('auth:sanctum')->group(function () {
         // Subcontractors
         Route::get('/{projectId}/subcontractors', [SubcontractorController::class, 'index']);
         Route::post('/{projectId}/subcontractors', [SubcontractorController::class, 'store']);
-        Route::put('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'update']);
+        Route::get('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'show'])->where('id', '[0-9]+');
+        Route::put('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'update'])->where('id', '[0-9]+');
+        Route::delete('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'destroy'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/subcontractors/{id}/approve', [SubcontractorController::class, 'approve'])->where('id', '[0-9]+');
+
+        // Subcontractor Items
+        Route::get('/{projectId}/subcontractors/{subcontractorId}/items', [SubcontractorItemController::class, 'index'])->where(['subcontractorId' => '[0-9]+']);
+        Route::post('/{projectId}/subcontractors/{subcontractorId}/items', [SubcontractorItemController::class, 'store'])->where(['subcontractorId' => '[0-9]+']);
+        Route::put('/{projectId}/subcontractors/{subcontractorId}/items/{id}', [SubcontractorItemController::class, 'update'])->where(['subcontractorId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::delete('/{projectId}/subcontractors/{subcontractorId}/items/{id}', [SubcontractorItemController::class, 'destroy'])->where(['subcontractorId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/subcontractors/{subcontractorId}/items/reorder', [SubcontractorItemController::class, 'reorder'])->where('subcontractorId', '[0-9]+');
 
         // Documents
         Route::get('/{projectId}/documents', [ProjectDocumentController::class, 'index']);
@@ -161,9 +176,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'show'])->where('id', '[0-9]+');
         Route::put('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'update'])->where('id', '[0-9]+');
         Route::delete('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'destroy'])->where('id', '[0-9]+');
-        Route::post('/{projectId}/acceptance/default-stages', [AcceptanceStageController::class, 'createDefaultStages']);
         Route::post('/{projectId}/acceptance/{id}/approve', [AcceptanceStageController::class, 'approve'])->where('id', '[0-9]+');
         Route::post('/{projectId}/acceptance/{id}/attach-files', [AcceptanceStageController::class, 'attachFiles'])->where('id', '[0-9]+');
+
+        // Acceptance Items
+        Route::get('/{projectId}/acceptance/{stageId}/items', [AcceptanceItemController::class, 'index'])->where('stageId', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{stageId}/items', [AcceptanceItemController::class, 'store'])->where('stageId', '[0-9]+');
+        Route::get('/{projectId}/acceptance/{stageId}/items/{id}', [AcceptanceItemController::class, 'show'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::put('/{projectId}/acceptance/{stageId}/items/{id}', [AcceptanceItemController::class, 'update'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::delete('/{projectId}/acceptance/{stageId}/items/{id}', [AcceptanceItemController::class, 'destroy'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/approve', [AcceptanceItemController::class, 'approve'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/reject', [AcceptanceItemController::class, 'reject'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/reset', [AcceptanceItemController::class, 'reset'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/reorder', [AcceptanceItemController::class, 'reorder'])->where('stageId', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/attach-files', [AcceptanceItemController::class, 'attachFiles'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
 
         // Defects
         Route::get('/{projectId}/defects', [DefectController::class, 'index']);
@@ -172,6 +198,28 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Progress
         Route::get('/{projectId}/progress', [ProjectProgressController::class, 'show']);
+
+        // Gantt Chart - Phases
+        Route::get('/{projectId}/phases', [ProjectPhaseController::class, 'index']);
+        Route::post('/{projectId}/phases', [ProjectPhaseController::class, 'store']);
+        Route::get('/{projectId}/phases/{id}', [ProjectPhaseController::class, 'show']);
+        Route::put('/{projectId}/phases/{id}', [ProjectPhaseController::class, 'update']);
+        Route::delete('/{projectId}/phases/{id}', [ProjectPhaseController::class, 'destroy']);
+        Route::post('/{projectId}/phases/reorder', [ProjectPhaseController::class, 'reorder']);
+
+        // Gantt Chart - Tasks
+        Route::get('/{projectId}/tasks', [ProjectTaskController::class, 'index']);
+        Route::post('/{projectId}/tasks', [ProjectTaskController::class, 'store']);
+        Route::get('/{projectId}/tasks/{id}', [ProjectTaskController::class, 'show']);
+        Route::put('/{projectId}/tasks/{id}', [ProjectTaskController::class, 'update']);
+        Route::delete('/{projectId}/tasks/{id}', [ProjectTaskController::class, 'destroy']);
+        Route::post('/{projectId}/tasks/reorder', [ProjectTaskController::class, 'reorder']);
+        Route::post('/{projectId}/tasks/{id}/progress', [ProjectTaskController::class, 'updateProgress']);
+
+        // Gantt Chart - Task Dependencies
+        Route::post('/{projectId}/tasks/{taskId}/dependencies', [ProjectTaskDependencyController::class, 'store']);
+        Route::delete('/{projectId}/tasks/{taskId}/dependencies/{id}', [ProjectTaskDependencyController::class, 'destroy']);
+        Route::post('/{projectId}/tasks/{taskId}/dependencies/validate', [ProjectTaskDependencyController::class, 'validateCircular']);
 
         // Teams Management
         Route::get('/{projectId}/teams', [TeamController::class, 'index']);

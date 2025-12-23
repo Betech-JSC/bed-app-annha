@@ -17,13 +17,61 @@ class SubcontractorController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $subcontractors = $project->subcontractors()
-            ->with(['approver', 'attachments'])
+            ->with(['approver', 'attachments', 'items', 'payments' => function ($q) {
+                $q->orderByDesc('created_at');
+            }])
             ->orderByDesc('created_at')
             ->get();
 
         return response()->json([
             'success' => true,
             'data' => $subcontractors
+        ]);
+    }
+
+    /**
+     * Chi tiết nhà thầu phụ
+     */
+    public function show(string $projectId, string $id)
+    {
+        $subcontractor = Subcontractor::where('project_id', $projectId)
+            ->with(['approver', 'attachments', 'items', 'payments', 'project'])
+            ->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $subcontractor
+        ]);
+    }
+
+    /**
+     * Xóa nhà thầu phụ
+     */
+    public function destroy(string $projectId, string $id)
+    {
+        $subcontractor = Subcontractor::where('project_id', $projectId)->findOrFail($id);
+        $subcontractor->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Nhà thầu phụ đã được xóa.'
+        ]);
+    }
+
+    /**
+     * Duyệt nhà thầu phụ
+     */
+    public function approve(Request $request, string $projectId, string $id)
+    {
+        $subcontractor = Subcontractor::where('project_id', $projectId)->findOrFail($id);
+        $user = $request->user();
+
+        $subcontractor->approve($user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Nhà thầu phụ đã được duyệt.',
+            'data' => $subcontractor->fresh(['approver'])
         ]);
     }
 
@@ -52,6 +100,7 @@ class SubcontractorController extends Controller
                 ...$validated,
                 'progress_status' => $validated['progress_status'] ?? 'not_started',
                 'payment_status' => 'pending',
+                'created_by' => $request->user()->id,
             ]);
 
             DB::commit();
@@ -88,12 +137,15 @@ class SubcontractorController extends Controller
             'progress_status' => ['sometimes', 'in:not_started,in_progress,completed,delayed'],
         ]);
 
-        $subcontractor->update($validated);
+        $subcontractor->update([
+            ...$validated,
+            'updated_by' => $request->user()->id,
+        ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Nhà thầu phụ đã được cập nhật.',
-            'data' => $subcontractor->fresh()
+            'data' => $subcontractor->fresh(['items', 'payments'])
         ]);
     }
 }
