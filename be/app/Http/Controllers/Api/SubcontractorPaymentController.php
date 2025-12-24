@@ -19,7 +19,7 @@ class SubcontractorPaymentController extends Controller
         $project = Project::findOrFail($projectId);
         
         $query = SubcontractorPayment::where('project_id', $project->id)
-            ->with(['subcontractor', 'creator', 'approver', 'payer', 'workVolume']);
+            ->with(['subcontractor', 'creator', 'managementApprover', 'accountantApprover', 'payer', 'workVolume']);
 
         // Filter by subcontractor
         if ($request->has('subcontractor_id')) {
@@ -45,7 +45,7 @@ class SubcontractorPaymentController extends Controller
     public function show(string $projectId, string $id)
     {
         $payment = SubcontractorPayment::where('project_id', $projectId)
-            ->with(['subcontractor', 'project', 'creator', 'approver', 'payer', 'workVolume'])
+            ->with(['subcontractor', 'project', 'creator', 'managementApprover', 'accountantApprover', 'payer', 'workVolume'])
             ->findOrFail($id);
 
         return response()->json([
@@ -94,7 +94,7 @@ class SubcontractorPaymentController extends Controller
                 'subcontractor_id' => $subcontractor->id,
                 'project_id' => $project->id,
                 ...$validated,
-                'status' => 'pending',
+                'status' => 'draft', // Bắt đầu từ draft
                 'created_by' => $user->id,
             ]);
 
@@ -192,32 +192,126 @@ class SubcontractorPaymentController extends Controller
     }
 
     /**
-     * Duyệt thanh toán
+     * Submit để Ban điều hành duyệt
      */
-    public function approve(Request $request, string $projectId, string $id)
+    public function submit(Request $request, string $projectId, string $id)
     {
         $payment = SubcontractorPayment::where('project_id', $projectId)
             ->findOrFail($id);
         $user = $request->user();
 
-        if ($payment->status !== 'pending') {
+        // Check permission
+        if (!$user->hasPermission('subcontractor_payments.create')) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt phiếu thanh toán ở trạng thái chờ duyệt.'
+                'message' => 'Bạn không có quyền submit phiếu thanh toán.'
+            ], 403);
+        }
+
+        if ($payment->status !== 'draft') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể submit phiếu thanh toán ở trạng thái nháp.'
             ], 400);
         }
 
-        $payment->approve($user);
+        $payment->status = 'pending_management_approval';
+        $payment->save();
 
         return response()->json([
             'success' => true,
-            'message' => 'Phiếu thanh toán đã được duyệt.',
-            'data' => $payment->fresh(['approver'])
+            'message' => 'Phiếu thanh toán đã được gửi để Ban điều hành duyệt.',
+            'data' => $payment->fresh()
         ]);
     }
 
     /**
-     * Đánh dấu đã thanh toán
+     * Ban điều hành duyệt
+     */
+    public function approveByManagement(Request $request, string $projectId, string $id)
+    {
+        $payment = SubcontractorPayment::where('project_id', $projectId)
+            ->findOrFail($id);
+        $user = $request->user();
+
+        // Check permission
+        if (!$user->hasPermission('subcontractor_payments.approve_management')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền duyệt phiếu thanh toán (Ban điều hành).'
+            ], 403);
+        }
+
+        if ($payment->status !== 'pending_management_approval') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phiếu thanh toán không ở trạng thái chờ Ban điều hành duyệt.'
+            ], 400);
+        }
+
+        $payment->management_approved_by = $user->id;
+        $payment->management_approved_at = now();
+        $payment->status = 'pending_accountant_approval';
+        $payment->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Phiếu thanh toán đã được Ban điều hành duyệt.',
+            'data' => $payment->fresh(['managementApprover'])
+        ]);
+    }
+
+    /**
+     * Kế toán xác nhận (final approval)
+     */
+    public function approveByAccountant(Request $request, string $projectId, string $id)
+    {
+        $payment = SubcontractorPayment::where('project_id', $projectId)
+            ->findOrFail($id);
+        $user = $request->user();
+
+        // Check permission
+        if (!$user->hasPermission('subcontractor_payments.approve_accountant')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xác nhận phiếu thanh toán (Kế toán).'
+            ], 403);
+        }
+
+        if ($payment->status !== 'pending_accountant_approval') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phiếu thanh toán không ở trạng thái chờ Kế toán xác nhận.'
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'payment_date' => 'required|date',
+            'payment_method' => 'sometimes|in:cash,bank_transfer,check,other',
+            'reference_number' => 'nullable|string|max:255',
+        ]);
+
+        $payment->accountant_approved_by = $user->id;
+        $payment->accountant_approved_at = now();
+        $payment->status = 'approved';
+        $payment->payment_date = $validated['payment_date'];
+        if (isset($validated['payment_method'])) {
+            $payment->payment_method = $validated['payment_method'];
+        }
+        if (isset($validated['reference_number'])) {
+            $payment->reference_number = $validated['reference_number'];
+        }
+        $payment->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Phiếu thanh toán đã được Kế toán xác nhận.',
+            'data' => $payment->fresh(['accountantApprover'])
+        ]);
+    }
+
+    /**
+     * Đánh dấu đã thanh toán (Kế toán)
      */
     public function markAsPaid(Request $request, string $projectId, string $id)
     {
@@ -225,10 +319,18 @@ class SubcontractorPaymentController extends Controller
             ->findOrFail($id);
         $user = $request->user();
 
+        // Check permission
+        if (!$user->hasPermission('subcontractor_payments.mark_paid')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền đánh dấu đã thanh toán.'
+            ], 403);
+        }
+
         if ($payment->status !== 'approved') {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể thanh toán phiếu đã được duyệt.'
+                'message' => 'Chỉ có thể thanh toán phiếu đã được Kế toán xác nhận.'
             ], 400);
         }
 
@@ -238,6 +340,37 @@ class SubcontractorPaymentController extends Controller
             'success' => true,
             'message' => 'Phiếu thanh toán đã được đánh dấu là đã thanh toán.',
             'data' => $payment->fresh(['payer', 'subcontractor'])
+        ]);
+    }
+
+    /**
+     * Từ chối phiếu thanh toán
+     */
+    public function reject(Request $request, string $projectId, string $id)
+    {
+        $payment = SubcontractorPayment::where('project_id', $projectId)
+            ->findOrFail($id);
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'rejected_reason' => 'required|string|max:500',
+        ]);
+
+        if (!in_array($payment->status, ['pending_management_approval', 'pending_accountant_approval'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể từ chối phiếu thanh toán đang chờ duyệt.'
+            ], 400);
+        }
+
+        $payment->status = 'rejected';
+        $payment->rejected_reason = $validated['rejected_reason'];
+        $payment->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Phiếu thanh toán đã bị từ chối.',
+            'data' => $payment->fresh()
         ]);
     }
 }

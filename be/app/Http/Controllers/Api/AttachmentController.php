@@ -15,11 +15,14 @@ class AttachmentController extends Controller
         $request->validate([
             'files'   => 'required|array',
             'files.*' => 'required|file|mimes:jpeg,png,jpg,gif,webp,mp4,mov,avi,webm,mpg,mpeg,pdf,doc,docx,xls,xlsx,txt,zip,rar|max:51200',
+            'descriptions' => 'nullable|array', // Mảng descriptions tương ứng với files
+            'descriptions.*' => 'nullable|string|max:1000',
         ]);
 
         $uploaded = [];
+        $descriptions = $request->input('descriptions', []);
 
-        foreach ($request->file('files') as $file) {
+        foreach ($request->file('files') as $index => $file) {
 
             $mime = $file->getMimeType();
             $isImage = str_starts_with($mime, 'image/');
@@ -54,6 +57,7 @@ class AttachmentController extends Controller
             // Save to DB
             $attachment = Attachment::create([
                 'original_name' => $file->getClientOriginalName(),
+                'description' => $descriptions[$index] ?? null,
                 'type'         => $isImage ? 'image' : ($isVideo ? 'video' : 'document'),
                 'file_name'    => $fileName,
                 'file_path'    => $path,

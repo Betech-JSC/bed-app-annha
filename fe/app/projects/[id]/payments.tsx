@@ -16,6 +16,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { paymentApi, ProjectPayment, CreatePaymentData } from "@/api/paymentApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
+import BackButton from "@/components/BackButton";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
@@ -38,6 +39,7 @@ export default function PaymentsScreen() {
   const [formData, setFormData] = useState<CreatePaymentData>({
     payment_number: 1,
     amount: 0,
+    notes: "",
     due_date: new Date().toISOString().split("T")[0],
     contract_id: undefined,
   });
@@ -92,7 +94,11 @@ export default function PaymentsScreen() {
   };
 
   const handleCreatePayment = async () => {
-    if (!formData.amount || formData.amount <= 0) {
+    const amount = typeof formData.amount === "string" 
+      ? parseCurrency(formData.amount.toString()) 
+      : formData.amount;
+    
+    if (!amount || amount <= 0) {
       Alert.alert("Lỗi", "Vui lòng nhập số tiền hợp lệ");
       return;
     }
@@ -103,7 +109,10 @@ export default function PaymentsScreen() {
     }
 
     try {
-      const response = await paymentApi.createPayment(id!, formData);
+      const response = await paymentApi.createPayment(id!, {
+        ...formData,
+        amount,
+      });
       if (response.success) {
         Alert.alert("Thành công", "Đã tạo đợt thanh toán mới");
         setShowCreateModal(false);
@@ -125,15 +134,31 @@ export default function PaymentsScreen() {
     setFormData({
       payment_number: maxPaymentNumber + 1,
       amount: 0,
+      notes: "",
       due_date: new Date().toISOString().split("T")[0],
       contract_id: project?.contract?.id,
     });
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (value: string | number): string => {
+    const numValue = typeof value === "string" ? parseFloat(value) || 0 : value;
+    return new Intl.NumberFormat("vi-VN", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(numValue);
+  };
+
+  const parseCurrency = (value: string): number => {
+    const numericValue = value.replace(/\D/g, "");
+    return numericValue ? parseInt(numericValue, 10) : 0;
+  };
+
+  const formatCurrencyDisplay = (amount: number) => {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
       currency: "VND",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
@@ -171,7 +196,7 @@ export default function PaymentsScreen() {
             Đợt {item.payment_number}
           </Text>
           <Text style={styles.paymentAmount}>
-            {formatCurrency(item.amount)}
+            {formatCurrencyDisplay(item.amount)}
           </Text>
         </View>
         <View
@@ -195,6 +220,12 @@ export default function PaymentsScreen() {
       </View>
 
       <View style={styles.paymentDetails}>
+        {item.notes && (
+          <View style={styles.notesRow}>
+            <Ionicons name="document-text-outline" size={16} color="#6B7280" />
+            <Text style={styles.notesText}>{item.notes}</Text>
+          </View>
+        )}
         <View style={styles.detailRow}>
           <Ionicons name="calendar-outline" size={16} color="#6B7280" />
           <Text style={styles.detailLabel}>Hạn thanh toán:</Text>
@@ -273,12 +304,7 @@ export default function PaymentsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={styles.headerTitle}>Đã Thanh Toán</Text>
         <PermissionGuard permission="payments.create" projectId={id}>
           <TouchableOpacity
@@ -387,20 +413,43 @@ export default function PaymentsScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Nhập số tiền (VND)"
-                value={formData.amount > 0 ? formData.amount.toString() : ""}
-                onChangeText={(text) =>
+                value={typeof formData.amount === "string" 
+                  ? formData.amount 
+                  : formData.amount > 0 
+                    ? formatCurrency(formData.amount) 
+                    : ""}
+                onChangeText={(text) => {
+                  const formatted = formatCurrency(text);
                   setFormData({
                     ...formData,
-                    amount: parseFloat(text) || 0,
-                  })
-                }
+                    amount: formatted,
+                  });
+                }}
                 keyboardType="numeric"
               />
-              {formData.amount > 0 && (
+              {formData.amount && (
                 <Text style={styles.helperText}>
-                  {formatCurrency(formData.amount)}
+                  {typeof formData.amount === "string" 
+                    ? formData.amount 
+                    : formatCurrencyDisplay(formData.amount)} VNĐ
                 </Text>
               )}
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>
+                Ghi chú nội dung thanh toán
+              </Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Nhập ghi chú để khách hàng hiểu rõ khoản thanh toán này (ví dụ: Thanh toán đợt 1 - Tạm ứng 30%)"
+                value={formData.notes || ""}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, notes: text })
+                }
+                multiline
+                numberOfLines={3}
+              />
             </View>
 
             <View style={styles.formGroup}>
@@ -408,15 +457,25 @@ export default function PaymentsScreen() {
                 Ngày đến hạn <Text style={styles.required}>*</Text>
               </Text>
               <TouchableOpacity
-                style={styles.dateButton}
+                style={styles.dateInput}
                 onPress={() => setShowDatePicker(true)}
+                activeOpacity={0.7}
               >
-                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                <Text style={styles.dateButtonText}>
+                <Text
+                  style={[
+                    styles.dateInputText,
+                    !formData.due_date && styles.dateInputPlaceholder,
+                  ]}
+                >
                   {formData.due_date
-                    ? new Date(formData.due_date).toLocaleDateString("vi-VN")
+                    ? new Date(formData.due_date).toLocaleDateString("vi-VN", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })
                     : "Chọn ngày đến hạn"}
                 </Text>
+                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
               </TouchableOpacity>
               {showDatePicker && (
                 <DateTimePicker
@@ -426,7 +485,7 @@ export default function PaymentsScreen() {
                   minimumDate={new Date()}
                   onChange={(event, date) => {
                     setShowDatePicker(false);
-                    if (date) {
+                    if (date && event.type !== "dismissed") {
                       setFormData({
                         ...formData,
                         due_date: date.toISOString().split("T")[0],
@@ -769,19 +828,41 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 4,
   },
-  dateButton: {
+  dateInput: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    justifyContent: "space-between",
     borderWidth: 1,
     borderColor: "#D1D5DB",
     borderRadius: 8,
     padding: 12,
     backgroundColor: "#FFFFFF",
   },
-  dateButtonText: {
+  dateInputText: {
     fontSize: 16,
     color: "#1F2937",
+  },
+  dateInputPlaceholder: {
+    color: "#9CA3AF",
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: "top",
+  },
+  notesRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  notesText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#6B7280",
+    lineHeight: 20,
   },
   modalActions: {
     flexDirection: "row",

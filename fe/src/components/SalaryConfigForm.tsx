@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Modal,
   FlatList,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { CreateSalaryConfigData } from "@/api/salaryConfigApi";
 import { employeesApi } from "@/api/employeesApi";
@@ -57,12 +59,22 @@ export default function SalaryConfigForm({
 
   const loadEmployees = async () => {
     try {
-      const response = await employeesApi.getEmployees({ page: 1 });
+      // Load tất cả nhân viên (không paginate để có đầy đủ danh sách)
+      const response = await employeesApi.getEmployees({ page: 1, per_page: 1000 });
       if (response.success) {
-        setEmployees(response.data.data || []);
+        // Lấy data từ response (có thể là array hoặc paginated)
+        let data = [];
+        if (Array.isArray(response.data)) {
+          data = response.data;
+        } else if (response.data?.data && Array.isArray(response.data.data)) {
+          data = response.data.data;
+        }
+        setEmployees(data);
+        console.log("Loaded employees:", data.length);
       }
     } catch (error) {
       console.error("Error loading employees:", error);
+      Alert.alert("Lỗi", "Không thể tải danh sách nhân viên");
     }
   };
 
@@ -139,295 +151,333 @@ export default function SalaryConfigForm({
     emp.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const handleInputFocus = (y: number = 0) => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y, animated: true });
+    }, 100);
+  };
+
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={true}
-      keyboardShouldPersistTaps="handled"
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Nhân viên *</Text>
-          <TouchableOpacity
-            style={styles.selectButton}
-            onPress={() => setShowEmployeeModal(true)}
-          >
-            <Text
-              style={[
-                styles.selectButtonText,
-                !formData.user_id && styles.selectButtonPlaceholder,
-              ]}
-            >
-              {selectedEmployee
-                ? selectedEmployee.name
-                : "Chọn nhân viên"}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color="#6B7280" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Loại lương</Text>
-          <View style={styles.radioGroup}>
-            {["hourly", "daily", "monthly", "project_based"].map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.radioButton,
-                  formData.salary_type === type && styles.radioButtonActive,
-                ]}
-                onPress={() =>
-                  setFormData({ ...formData, salary_type: type as any })
-                }
-              >
-                <Text
-                  style={[
-                    styles.radioText,
-                    formData.salary_type === type && styles.radioTextActive,
-                  ]}
-                >
-                  {type === "hourly"
-                    ? "Theo giờ"
-                    : type === "daily"
-                      ? "Theo ngày"
-                      : type === "monthly"
-                        ? "Theo tháng"
-                        : "Theo dự án"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {formData.salary_type === "hourly" && (
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Lương theo giờ *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nhập lương theo giờ"
-              value={formData.hourly_rate?.toString()}
-              onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  hourly_rate: parseFloat(text) || undefined,
-                })
-              }
-              keyboardType="numeric"
-            />
-          </View>
-        )}
-
-        {formData.salary_type === "daily" && (
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Lương theo ngày *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nhập lương theo ngày"
-              value={formData.daily_rate?.toString()}
-              onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  daily_rate: parseFloat(text) || undefined,
-                })
-              }
-              keyboardType="numeric"
-            />
-          </View>
-        )}
-
-        {formData.salary_type === "monthly" && (
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Lương theo tháng *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nhập lương theo tháng"
-              value={formData.monthly_salary?.toString()}
-              onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  monthly_salary: parseFloat(text) || undefined,
-                })
-              }
-              keyboardType="numeric"
-            />
-          </View>
-        )}
-
-        {formData.salary_type === "project_based" && (
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Lương theo dự án *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nhập lương theo dự án"
-              value={formData.project_rate?.toString()}
-              onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  project_rate: parseFloat(text) || undefined,
-                })
-              }
-              keyboardType="numeric"
-            />
-          </View>
-        )}
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Lương tăng ca (tùy chọn)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nhập lương tăng ca theo giờ"
-            value={formData.overtime_rate?.toString()}
-            onChangeText={(text) =>
-              setFormData({
-                ...formData,
-                overtime_rate: parseFloat(text) || undefined,
-              })
-            }
-            keyboardType="numeric"
-          />
-          <Text style={styles.helperText}>
-            Nếu không nhập, hệ thống sẽ dùng lương theo giờ hoặc lương theo ngày/8
-          </Text>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Có hiệu lực từ <Text style={styles.required}>*</Text>
-          </Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowFromDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-            <Text
-              style={[
-                styles.dateButtonText,
-                !formData.effective_from && styles.dateButtonPlaceholder,
-              ]}
-            >
-              {formData.effective_from
-                ? new Date(formData.effective_from).toLocaleDateString("vi-VN")
-                : "Chọn ngày"}
-            </Text>
-          </TouchableOpacity>
-          {showFromDatePicker && (
-            <DateTimePicker
-              value={fromDate}
-              mode="date"
-              display="default"
-              onChange={handleFromDateChange}
-              maximumDate={toDate || undefined}
-            />
-          )}
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Có hiệu lực đến (tùy chọn)</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowToDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-            <Text
-              style={[
-                styles.dateButtonText,
-                !formData.effective_to && styles.dateButtonPlaceholder,
-              ]}
-            >
-              {formData.effective_to
-                ? new Date(formData.effective_to).toLocaleDateString("vi-VN")
-                : "Chọn ngày (tùy chọn)"}
-            </Text>
-            {formData.effective_to && (
-              <TouchableOpacity
-                onPress={() => {
-                  setToDate(null);
-                  setFormData({ ...formData, effective_to: undefined });
-                }}
-                style={styles.clearDateButton}
-              >
-                <Ionicons name="close-circle" size={20} color="#6B7280" />
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
-          {showToDatePicker && (
-            <DateTimePicker
-              value={toDate || new Date()}
-              mode="date"
-              display="default"
-              onChange={handleToDateChange}
-              minimumDate={fromDate}
-            />
-          )}
-        </View>
-
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.button, styles.cancelButton]}
-            onPress={onCancel}
-          >
-            <Text style={styles.cancelButtonText}>Hủy</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.submitButton]}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.submitButtonText}>Lưu</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Employee Selection Modal */}
-      <Modal
-        visible={showEmployeeModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowEmployeeModal(false)}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chọn nhân viên</Text>
-              <TouchableOpacity
-                onPress={() => setShowEmployeeModal(false)}
-                style={styles.closeButton}
+        <View style={styles.form}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Nhân viên *</Text>
+            <TouchableOpacity
+              style={[
+                styles.selectButton,
+                initialData?.user_id && styles.selectButtonDisabled
+              ]}
+              onPress={() => {
+                // Load lại danh sách khi mở modal
+                loadEmployees();
+                setShowEmployeeModal(true);
+              }}
+              disabled={!!initialData?.user_id}
+            >
+              <Text
+                style={[
+                  styles.selectButtonText,
+                  !formData.user_id && styles.selectButtonPlaceholder,
+                ]}
               >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Tìm kiếm nhân viên..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            <FlatList
-              data={filteredEmployees}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
+                {selectedEmployee
+                  ? selectedEmployee.name
+                  : "Chọn nhân viên"}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Loại lương</Text>
+            <View style={styles.radioGroup}>
+              {["hourly", "daily", "monthly", "project_based"].map((type) => (
                 <TouchableOpacity
-                  style={styles.employeeItem}
-                  onPress={() => {
-                    setFormData({ ...formData, user_id: item.id });
-                    setShowEmployeeModal(false);
-                    setSearchQuery("");
-                  }}
+                  key={type}
+                  style={[
+                    styles.radioButton,
+                    formData.salary_type === type && styles.radioButtonActive,
+                  ]}
+                  onPress={() =>
+                    setFormData({ ...formData, salary_type: type as any })
+                  }
                 >
-                  <Text style={styles.employeeName}>{item.name}</Text>
-                  <Text style={styles.employeeEmail}>{item.email}</Text>
+                  <Text
+                    style={[
+                      styles.radioText,
+                      formData.salary_type === type && styles.radioTextActive,
+                    ]}
+                  >
+                    {type === "hourly"
+                      ? "Theo giờ"
+                      : type === "daily"
+                        ? "Theo ngày"
+                        : type === "monthly"
+                          ? "Theo tháng"
+                          : "Theo dự án"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {formData.salary_type === "hourly" && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Lương theo giờ *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập lương theo giờ"
+                placeholderTextColor="#9CA3AF"
+                value={formData.hourly_rate?.toString()}
+                onChangeText={(text) =>
+                  setFormData({
+                    ...formData,
+                    hourly_rate: parseFloat(text) || undefined,
+                  })
+                }
+                keyboardType="numeric"
+                onFocus={() => handleInputFocus(200)}
+                returnKeyType="next"
+              />
+            </View>
+          )}
+
+          {formData.salary_type === "daily" && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Lương theo ngày *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập lương theo ngày"
+                placeholderTextColor="#9CA3AF"
+                value={formData.daily_rate?.toString()}
+                onChangeText={(text) =>
+                  setFormData({
+                    ...formData,
+                    daily_rate: parseFloat(text) || undefined,
+                  })
+                }
+                keyboardType="numeric"
+                onFocus={() => handleInputFocus(250)}
+                returnKeyType="next"
+              />
+            </View>
+          )}
+
+          {formData.salary_type === "monthly" && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Lương theo tháng *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập lương theo tháng"
+                placeholderTextColor="#9CA3AF"
+                value={formData.monthly_salary?.toString()}
+                onChangeText={(text) =>
+                  setFormData({
+                    ...formData,
+                    monthly_salary: parseFloat(text) || undefined,
+                  })
+                }
+                keyboardType="numeric"
+                onFocus={() => handleInputFocus(300)}
+                returnKeyType="next"
+              />
+            </View>
+          )}
+
+          {formData.salary_type === "project_based" && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Lương theo dự án *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập lương theo dự án"
+                placeholderTextColor="#9CA3AF"
+                value={formData.project_rate?.toString()}
+                onChangeText={(text) =>
+                  setFormData({
+                    ...formData,
+                    project_rate: parseFloat(text) || undefined,
+                  })
+                }
+                keyboardType="numeric"
+                onFocus={() => handleInputFocus(350)}
+                returnKeyType="next"
+              />
+            </View>
+          )}
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Lương tăng ca (tùy chọn)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nhập lương tăng ca theo giờ"
+              placeholderTextColor="#9CA3AF"
+              value={formData.overtime_rate?.toString()}
+              onChangeText={(text) =>
+                setFormData({
+                  ...formData,
+                  overtime_rate: parseFloat(text) || undefined,
+                })
+              }
+              keyboardType="numeric"
+              onFocus={() => handleInputFocus(400)}
+              returnKeyType="next"
+            />
+            <Text style={styles.helperText}>
+              Nếu không nhập, hệ thống sẽ dùng lương theo giờ hoặc lương theo ngày/8
+            </Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Có hiệu lực từ <Text style={styles.required}>*</Text>
+            </Text>
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => setShowFromDatePicker(true)}
+            >
+              <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+              <Text
+                style={[
+                  styles.dateButtonText,
+                  !formData.effective_from && styles.dateButtonPlaceholder,
+                ]}
+              >
+                {formData.effective_from
+                  ? new Date(formData.effective_from).toLocaleDateString("vi-VN")
+                  : "Chọn ngày"}
+              </Text>
+            </TouchableOpacity>
+            {showFromDatePicker && (
+              <DateTimePicker
+                value={fromDate}
+                mode="date"
+                display="default"
+                onChange={handleFromDateChange}
+                maximumDate={toDate || undefined}
+              />
+            )}
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Có hiệu lực đến (tùy chọn)</Text>
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => setShowToDatePicker(true)}
+            >
+              <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+              <Text
+                style={[
+                  styles.dateButtonText,
+                  !formData.effective_to && styles.dateButtonPlaceholder,
+                ]}
+              >
+                {formData.effective_to
+                  ? new Date(formData.effective_to).toLocaleDateString("vi-VN")
+                  : "Chọn ngày (tùy chọn)"}
+              </Text>
+              {formData.effective_to && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setToDate(null);
+                    setFormData({ ...formData, effective_to: undefined });
+                  }}
+                  style={styles.clearDateButton}
+                >
+                  <Ionicons name="close-circle" size={20} color="#6B7280" />
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>Không tìm thấy nhân viên</Text>
-                </View>
-              }
-            />
+            </TouchableOpacity>
+            {showToDatePicker && (
+              <DateTimePicker
+                value={toDate || new Date()}
+                mode="date"
+                display="default"
+                onChange={handleToDateChange}
+                minimumDate={fromDate}
+              />
+            )}
+          </View>
+
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton]}
+              onPress={onCancel}
+            >
+              <Text style={styles.cancelButtonText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, styles.submitButton]}
+              onPress={handleSubmit}
+            >
+              <Text style={styles.submitButtonText}>Lưu</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
-    </ScrollView>
+
+        {/* Employee Selection Modal */}
+        <Modal
+          visible={showEmployeeModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowEmployeeModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Chọn nhân viên</Text>
+                <TouchableOpacity
+                  onPress={() => setShowEmployeeModal(false)}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color="#1F2937" />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm kiếm nhân viên..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              <FlatList
+                data={filteredEmployees}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.employeeItem}
+                    onPress={() => {
+                      setFormData({ ...formData, user_id: item.id });
+                      setShowEmployeeModal(false);
+                      setSearchQuery("");
+                    }}
+                  >
+                    <Text style={styles.employeeName}>{item.name}</Text>
+                    <Text style={styles.employeeEmail}>{item.email}</Text>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>Không tìm thấy nhân viên</Text>
+                  </View>
+                }
+              />
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -457,12 +507,16 @@ const styles = StyleSheet.create({
     color: "#EF4444",
   },
   input: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "#D1D5DB",
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
+    color: "#1F2937",
     backgroundColor: "#FFFFFF",
+    minHeight: 48,
+    lineHeight: 22,
   },
   radioGroup: {
     flexDirection: "row",
@@ -536,6 +590,9 @@ const styles = StyleSheet.create({
   },
   selectButtonPlaceholder: {
     color: "#9CA3AF",
+  },
+  selectButtonDisabled: {
+    opacity: 0.5,
   },
   modalOverlay: {
     flex: 1,

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdditionalCost;
+use App\Models\Attachment;
 use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +39,8 @@ class AdditionalCostController extends Controller
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0',
             'description' => 'required|string|max:1000',
+            'attachments' => 'nullable|array',
+            'attachments.*' => 'required|integer|exists:attachments,id',
         ]);
 
         try {
@@ -46,9 +49,23 @@ class AdditionalCostController extends Controller
             $cost = AdditionalCost::create([
                 'project_id' => $project->id,
                 'proposed_by' => $user->id,
-                ...$validated,
+                'amount' => $validated['amount'],
+                'description' => $validated['description'],
                 'status' => 'pending_approval',
             ]);
+
+            // Attach files if provided
+            if ($request->has('attachments') && is_array($request->attachments)) {
+                foreach ($request->attachments as $attachmentId) {
+                    $attachment = Attachment::find($attachmentId);
+                    if ($attachment && $attachment->uploaded_by === $user->id) {
+                        $attachment->update([
+                            'attachable_type' => AdditionalCost::class,
+                            'attachable_id' => $cost->id,
+                        ]);
+                    }
+                }
+            }
 
             DB::commit();
 

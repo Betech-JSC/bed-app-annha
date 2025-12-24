@@ -49,7 +49,14 @@ export default function SettingsScreen() {
     loadRoles();
   };
 
-  const hasPermission = (permission: string): boolean => {
+  const hasPermission = (permission: string | null): boolean => {
+    // Nếu không có permission requirement, luôn cho phép
+    if (!permission) return true;
+    
+    // Admin và owner luôn có quyền
+    if (user?.owner === true || user?.role === "admin") return true;
+    
+    // Kiểm tra permission
     if (permissions.includes("*")) return true;
     return permissions.includes(permission);
   };
@@ -68,6 +75,20 @@ export default function SettingsScreen() {
       route: "/settings/permissions",
       permission: "permissions.view",
       description: "Xem và quản lý permissions của các roles",
+    },
+    {
+      title: "Nhóm Chi Phí Dự Án",
+      icon: "folder-outline",
+      route: "/settings/cost-groups",
+      permission: null, // Admin/Owner luôn có quyền
+      description: "Quản lý nhóm chi phí áp dụng cho tất cả dự án",
+    },
+    {
+      title: "Nhà Thầu Phụ",
+      icon: "business-outline",
+      route: "/settings/subcontractors",
+      permission: null, // Admin/Owner luôn có quyền
+      description: "Quản lý danh sách nhà thầu phụ trong hệ thống",
     },
     {
       title: "Thông Tin Tài Khoản",
@@ -140,7 +161,17 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>Cấu Hình</Text>
         {menuItems.map((item, index) => {
           // Check permission if required
-          if (item.permission && !hasPermission(item.permission)) {
+          // Admin và owner luôn có quyền truy cập tất cả menu
+          let canAccess = true;
+          
+          if (item.permission) {
+            // Nếu có permission requirement, kiểm tra
+            canAccess = user?.owner === true || 
+                       user?.role === "admin" || 
+                       hasPermission(item.permission);
+          }
+          
+          if (!canAccess) {
             return null;
           }
 

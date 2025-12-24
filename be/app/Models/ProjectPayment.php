@@ -15,6 +15,7 @@ class ProjectPayment extends Model
         'contract_id',
         'payment_number',
         'amount',
+        'notes',
         'due_date',
         'paid_date',
         'status',

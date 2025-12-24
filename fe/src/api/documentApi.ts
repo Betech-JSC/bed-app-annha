@@ -3,6 +3,7 @@ import api from "./api";
 export interface ProjectDocument {
   id: number;
   original_name: string;
+  description?: string;
   type: "image" | "video" | "document";
   file_name: string;
   file_path: string;
@@ -21,9 +22,10 @@ export const documentApi = {
   },
 
   // Attach document to project
-  attachDocument: async (projectId: string | number, attachmentId: number) => {
+  attachDocument: async (projectId: string | number, attachmentId: number, description?: string) => {
     const response = await api.post(`/projects/${projectId}/documents`, {
       attachment_id: attachmentId,
+      description: description,
     });
     return response.data;
   },

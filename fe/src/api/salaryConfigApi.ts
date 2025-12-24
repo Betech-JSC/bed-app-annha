@@ -51,6 +51,12 @@ export const salaryConfigApi = {
     return response.data;
   },
 
+  // Delete salary config (HR only)
+  deleteSalaryConfig: async (id: number) => {
+    const response = await api.delete(`/hr/salary-config/${id}`);
+    return response.data;
+  },
+
   // Get current config for user
   getCurrentConfig: async (userId: number) => {
     const response = await api.get(`/hr/salary-config/user/${userId}`);

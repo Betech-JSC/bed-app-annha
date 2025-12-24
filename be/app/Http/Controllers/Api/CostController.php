@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Cost;
+use App\Models\CostGroup;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -66,14 +67,15 @@ class CostController extends Controller
         $validated = $request->validate([
             'category' => [
                 'required',
-                Rule::in([
-                    'construction_materials',
-                    'concrete',
-                    'labor',
-                    'equipment',
-                    'transportation',
-                    'other'
-                ]),
+                function ($attribute, $value, $fail) {
+                    // Kiểm tra xem category có tồn tại trong cost_groups không
+                    $exists = CostGroup::where('code', $value)
+                        ->where('is_active', true)
+                        ->exists();
+                    if (!$exists) {
+                        $fail('Nhóm chi phí không tồn tại hoặc đã bị vô hiệu hóa.');
+                    }
+                },
             ],
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -127,14 +129,15 @@ class CostController extends Controller
         $validated = $request->validate([
             'category' => [
                 'sometimes',
-                Rule::in([
-                    'construction_materials',
-                    'concrete',
-                    'labor',
-                    'equipment',
-                    'transportation',
-                    'other'
-                ]),
+                function ($attribute, $value, $fail) {
+                    // Kiểm tra xem category có tồn tại trong cost_groups không
+                    $exists = CostGroup::where('code', $value)
+                        ->where('is_active', true)
+                        ->exists();
+                    if (!$exists) {
+                        $fail('Nhóm chi phí không tồn tại hoặc đã bị vô hiệu hóa.');
+                    }
+                },
             ],
             'name' => 'sometimes|string|max:255',
             'amount' => 'sometimes|numeric|min:0',

@@ -66,7 +66,8 @@ export interface Subcontractor {
 }
 
 export interface CreateSubcontractorData {
-  name: string;
+  global_subcontractor_id?: number;
+  name?: string; // Deprecated - use global_subcontractor_id instead
   category?: string;
   total_quote: number;
   advance_payment?: number;

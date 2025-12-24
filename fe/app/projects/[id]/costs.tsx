@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { costApi, Cost, revenueApi } from "@/api/revenueApi";
+import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -24,6 +25,7 @@ export default function CostsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { hasPermission } = useProjectPermissions(id);
   const [costs, setCosts] = useState<Cost[]>([]);
+  const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
   const [summary, setSummary] = useState<{
     grouped?: Array<{
       category: string;
@@ -39,6 +41,7 @@ export default function CostsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<
     Cost["category"] | null
   >(null);
@@ -56,9 +59,25 @@ export default function CostsScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
+    loadCostGroups();
     loadCosts();
     loadSummary();
   }, [id, filterStatus, filterCategory]);
+
+  const loadCostGroups = async () => {
+    try {
+      const response = await costGroupApi.getCostGroups();
+      if (response.success) {
+        setCostGroups(response.data || []);
+        // Set default category if available
+        if (response.data && response.data.length > 0 && !formData.category) {
+          setFormData({ ...formData, category: response.data[0].code as Cost["category"] });
+        }
+      }
+    } catch (error) {
+      console.error("Error loading cost groups:", error);
+    }
+  };
 
   const loadCosts = async () => {
     try {
@@ -212,7 +231,13 @@ export default function CostsScreen() {
   };
 
   const getCategoryLabel = (category: Cost["category"]) => {
-    const labels: Record<Cost["category"], string> = {
+    // Tìm trong cost groups trước
+    const costGroup = costGroups.find((g) => g.code === category);
+    if (costGroup) {
+      return costGroup.name;
+    }
+    // Fallback về hardcoded
+    const labels: Record<string, string> = {
       construction_materials: "Vật liệu xây dựng",
       concrete: "Bê tông",
       labor: "Nhân công",
@@ -435,38 +460,70 @@ export default function CostsScreen() {
           <ScrollView style={styles.modalContent}>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Nhóm chi phí *</Text>
-              <View style={styles.categoryGrid}>
-                {[
-                  "construction_materials",
-                  "concrete",
-                  "labor",
-                  "equipment",
-                  "transportation",
-                  "other",
-                ].map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[
-                      styles.categoryButton,
-                      formData.category === cat && styles.categoryButtonActive,
-                    ]}
-                    onPress={() =>
-                      setFormData({ ...formData, category: cat as Cost["category"] })
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.categoryButtonText,
-                        formData.category === cat &&
-                        styles.categoryButtonTextActive,
-                      ]}
-                    >
-                      {getCategoryLabel(cat as Cost["category"])}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => setShowCategoryModal(true)}
+              >
+                <Text
+                  style={[
+                    styles.selectButtonText,
+                    !formData.category && styles.selectButtonPlaceholder,
+                  ]}
+                >
+                  {formData.category
+                    ? getCategoryLabel(formData.category)
+                    : "Chọn nhóm chi phí"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              </TouchableOpacity>
             </View>
+
+            {/* Category Selection Modal */}
+            <Modal
+              visible={showCategoryModal}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setShowCategoryModal(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.categoryModalContainer}>
+                  <View style={styles.categoryModalHeader}>
+                    <Text style={styles.categoryModalTitle}>Chọn Nhóm Chi Phí</Text>
+                    <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                      <Ionicons name="close" size={24} color="#1F2937" />
+                    </TouchableOpacity>
+                  </View>
+                  <FlatList
+                    data={costGroups.filter((g) => g.is_active)}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.categoryOption,
+                          formData.category === item.code && styles.categoryOptionActive,
+                        ]}
+                        onPress={() => {
+                          setFormData({ ...formData, category: item.code as Cost["category"] });
+                          setShowCategoryModal(false);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryOptionText,
+                            formData.category === item.code && styles.categoryOptionTextActive,
+                          ]}
+                        >
+                          {item.name}
+                        </Text>
+                        {formData.category === item.code && (
+                          <Ionicons name="checkmark" size={20} color="#3B82F6" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              </View>
+            </Modal>
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>Tên chi phí *</Text>
@@ -849,6 +906,66 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 16,
     color: "#1F2937",
+  },
+  selectButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  selectButtonText: {
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  selectButtonPlaceholder: {
+    color: "#9CA3AF",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  categoryModalContainer: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "70%",
+  },
+  categoryModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  categoryModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  categoryOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  categoryOptionActive: {
+    backgroundColor: "#EFF6FF",
+  },
+  categoryOptionText: {
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  categoryOptionTextActive: {
+    color: "#3B82F6",
+    fontWeight: "600",
   },
   modalActions: {
     flexDirection: "row",

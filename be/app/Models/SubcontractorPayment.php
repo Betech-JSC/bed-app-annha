@@ -26,17 +26,21 @@ class SubcontractorPayment extends Model
         'description',
         'status',
         'created_by',
-        'approved_by',
-        'approved_at',
+        'management_approved_by',
+        'management_approved_at',
+        'accountant_approved_by',
+        'accountant_approved_at',
         'paid_by',
         'paid_at',
+        'rejected_reason',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'accepted_volume' => 'decimal:2',
         'payment_date' => 'date',
-        'approved_at' => 'datetime',
+        'management_approved_at' => 'datetime',
+        'accountant_approved_at' => 'datetime',
         'paid_at' => 'datetime',
     ];
 
@@ -69,9 +73,14 @@ class SubcontractorPayment extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    public function approver(): BelongsTo
+    public function managementApprover(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(User::class, 'management_approved_by');
+    }
+
+    public function accountantApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'accountant_approved_by');
     }
 
     public function payer(): BelongsTo
@@ -86,9 +95,12 @@ class SubcontractorPayment extends Model
     public function getStatusLabelAttribute(): string
     {
         return match ($this->status) {
-            'pending' => 'Chờ duyệt',
-            'approved' => 'Đã duyệt',
+            'draft' => 'Nháp',
+            'pending_management_approval' => 'Chờ Ban điều hành duyệt',
+            'pending_accountant_approval' => 'Chờ Kế toán xác nhận',
+            'approved' => 'Đã xác nhận',
             'paid' => 'Đã thanh toán',
+            'rejected' => 'Đã từ chối',
             'cancelled' => 'Đã hủy',
             default => ucfirst($this->status),
         };
@@ -109,13 +121,14 @@ class SubcontractorPayment extends Model
     // METHODS
     // ==================================================================
 
+    // Deprecated - use approveByManagement or approveByAccountant instead
     public function approve(?User $user = null): bool
     {
         if ($user) {
-            $this->approved_by = $user->id;
+            $this->management_approved_by = $user->id;
         }
-        $this->approved_at = now();
-        $this->status = 'approved';
+        $this->management_approved_at = now();
+        $this->status = 'pending_accountant_approval';
         return $this->save();
     }
 
@@ -149,7 +162,22 @@ class SubcontractorPayment extends Model
 
     public function scopePending($query)
     {
-        return $query->where('status', 'pending');
+        return $query->whereIn('status', ['draft', 'pending_management_approval', 'pending_accountant_approval']);
+    }
+
+    public function scopeDraft($query)
+    {
+        return $query->where('status', 'draft');
+    }
+
+    public function scopePendingManagementApproval($query)
+    {
+        return $query->where('status', 'pending_management_approval');
+    }
+
+    public function scopePendingAccountantApproval($query)
+    {
+        return $query->where('status', 'pending_accountant_approval');
     }
 
     public function scopeApproved($query)

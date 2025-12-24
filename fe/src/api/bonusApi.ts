@@ -78,6 +78,12 @@ export const bonusApi = {
     return response.data;
   },
 
+  // Delete bonus (HR only)
+  deleteBonus: async (id: number) => {
+    const response = await api.delete(`/hr/bonuses/${id}`);
+    return response.data;
+  },
+
   // Get my bonuses
   getMyBonuses: async (params?: {
     status?: string;

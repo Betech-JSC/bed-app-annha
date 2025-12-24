@@ -215,6 +215,37 @@ class BonusController extends Controller
     }
 
     /**
+     * Xóa thưởng (HR/admin only)
+     */
+    public function destroy($id)
+    {
+        $bonus = Bonus::findOrFail($id);
+
+        // Chỉ cho phép xóa nếu chưa thanh toán
+        if ($bonus->status === 'paid') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể xóa thưởng đã thanh toán.'
+            ], 400);
+        }
+
+        try {
+            $bonus->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Thưởng đã được xóa.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Thưởng của user hiện tại
      */
     public function myBonuses(Request $request)

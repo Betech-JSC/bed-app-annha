@@ -55,6 +55,9 @@ use App\Http\Controllers\Api\ProjectPhaseController;
 use App\Http\Controllers\Api\ProjectTaskController;
 use App\Http\Controllers\Api\ProjectTaskDependencyController;
 use App\Http\Controllers\Api\AcceptanceItemController;
+use App\Http\Controllers\Api\SummaryReportController;
+use App\Http\Controllers\Api\CostGroupController;
+use App\Http\Controllers\Api\GlobalSubcontractorController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -259,8 +262,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'show']);
         Route::put('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'update']);
         Route::delete('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'destroy']);
-        Route::post('/{projectId}/subcontractor-payments/{id}/approve', [SubcontractorPaymentController::class, 'approve']);
+        Route::post('/{projectId}/subcontractor-payments/{id}/submit', [SubcontractorPaymentController::class, 'submit']);
+        Route::post('/{projectId}/subcontractor-payments/{id}/approve-management', [SubcontractorPaymentController::class, 'approveByManagement']);
+        Route::post('/{projectId}/subcontractor-payments/{id}/approve-accountant', [SubcontractorPaymentController::class, 'approveByAccountant']);
         Route::post('/{projectId}/subcontractor-payments/{id}/mark-paid', [SubcontractorPaymentController::class, 'markAsPaid']);
+        Route::post('/{projectId}/subcontractor-payments/{id}/reject', [SubcontractorPaymentController::class, 'reject']);
     });
 
     // ===================================================================
@@ -309,6 +315,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/bonuses', [BonusController::class, 'index']);
         Route::post('/bonuses', [BonusController::class, 'store']);
         Route::put('/bonuses/{id}', [BonusController::class, 'update']);
+        Route::delete('/bonuses/{id}', [BonusController::class, 'destroy']);
         Route::post('/bonuses/calculate-project/{projectId}', [BonusController::class, 'calculateFromProject']);
         Route::post('/bonuses/{id}/approve', [BonusController::class, 'approve']);
         Route::post('/bonuses/{id}/pay', [BonusController::class, 'markAsPaid']);
@@ -317,6 +324,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/salary-config', [EmployeeSalaryConfigController::class, 'index']);
         Route::post('/salary-config', [EmployeeSalaryConfigController::class, 'store']);
         Route::put('/salary-config/{id}', [EmployeeSalaryConfigController::class, 'update']);
+        Route::delete('/salary-config/{id}', [EmployeeSalaryConfigController::class, 'destroy']);
         Route::get('/salary-config/user/{userId}', [EmployeeSalaryConfigController::class, 'getCurrentConfig']);
 
         // Work Schedule
@@ -384,6 +392,29 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/permissions/check/{permission}', [PermissionController::class, 'checkPermission']);
         Route::get('/permissions/project/{projectId}/check/{permission}', [PermissionController::class, 'checkProjectPermission']);
         Route::get('/permissions/project/{projectId}/all', [PermissionController::class, 'projectPermissions']);
+
+        // Summary Report (Ban Điều Hành only)
+        Route::prefix('summary-report')->group(function () {
+            Route::get('/', [SummaryReportController::class, 'index']);
+            Route::put('/company-capital', [SummaryReportController::class, 'updateCompanyCapital']);
+            Route::put('/fixed-costs', [SummaryReportController::class, 'updateFixedCosts']);
+        });
+
+        // Settings - Cost Groups (Quản lý nhóm chi phí)
+        Route::prefix('settings')->group(function () {
+            Route::get('/cost-groups', [CostGroupController::class, 'index']);
+            Route::post('/cost-groups', [CostGroupController::class, 'store']);
+            Route::get('/cost-groups/{id}', [CostGroupController::class, 'show']);
+            Route::put('/cost-groups/{id}', [CostGroupController::class, 'update']);
+            Route::delete('/cost-groups/{id}', [CostGroupController::class, 'destroy']);
+
+            // Global Subcontractors (Nhà thầu phụ global)
+            Route::get('/subcontractors', [GlobalSubcontractorController::class, 'index']);
+            Route::post('/subcontractors', [GlobalSubcontractorController::class, 'store']);
+            Route::get('/subcontractors/{id}', [GlobalSubcontractorController::class, 'show']);
+            Route::put('/subcontractors/{id}', [GlobalSubcontractorController::class, 'update']);
+            Route::delete('/subcontractors/{id}', [GlobalSubcontractorController::class, 'destroy']);
+        });
     });
 });
 

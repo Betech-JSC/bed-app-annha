@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\User;
+use App\Models\EmployeeProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -100,10 +101,12 @@ class ProjectController extends Controller
 
     /**
      * Lấy danh sách project managers (users có thể quản lý dự án)
+     * Chỉ lấy nhân sự nội bộ công ty (có EmployeeProfile)
      */
     public function getProjectManagers(Request $request)
     {
         $query = User::whereNull('deleted_at')
+            ->whereHas('employeeProfile') // Chỉ lấy nhân sự nội bộ
             ->where(function ($q) {
                 // Admin users hoặc users đã từng là project manager
                 $q->where('role', 'admin')
@@ -256,8 +259,9 @@ class ProjectController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'code' => ['sometimes', 'string', 'max:50', Rule::unique('projects', 'code')->ignore($project->id)],
+            'code' => 'prohibited', // Không cho phép thay đổi mã dự án
             'description' => 'nullable|string',
+            'customer_id' => 'sometimes|exists:users,id',
             'project_manager_id' => 'nullable|exists:users,id',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',

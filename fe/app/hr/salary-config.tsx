@@ -23,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import SalaryConfigForm from "@/components/SalaryConfigForm";
 import { formatVNDWithoutSymbol } from "@/utils/format";
 import { PermissionGuard } from "@/components/PermissionGuard";
+import BackButton from "@/components/BackButton";
 
 export default function SalaryConfigScreen() {
   const router = useRouter();
@@ -59,11 +60,24 @@ export default function SalaryConfigScreen() {
         params.user_id = filterUserId;
       }
       const response = await salaryConfigApi.getSalaryConfig(params);
+      console.log("Salary config response:", response);
       if (response.success) {
-        setConfigs(response.data.data || []);
+        // Backend trả về paginated data
+        let data = [];
+        if (Array.isArray(response.data)) {
+          data = response.data;
+        } else if (response.data?.data && Array.isArray(response.data.data)) {
+          data = response.data.data;
+        }
+        console.log("Loaded configs:", data.length, data);
+        setConfigs(data);
+      } else {
+        console.error("Response not successful:", response);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading salary configs:", error);
+      console.error("Error details:", error.response?.data);
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách cấu hình lương");
     }
   };
 
@@ -71,7 +85,15 @@ export default function SalaryConfigScreen() {
     try {
       const response = await employeesApi.getEmployees({ page: 1, per_page: 100 });
       if (response.success) {
-        setEmployees(response.data.data || []);
+        // Backend trả về paginated data
+        let data = [];
+        if (Array.isArray(response.data)) {
+          data = response.data;
+        } else if (response.data?.data && Array.isArray(response.data.data)) {
+          data = response.data.data;
+        }
+        setEmployees(data);
+        console.log("Loaded employees:", data.length);
       }
     } catch (error) {
       console.error("Error loading employees:", error);
@@ -130,6 +152,36 @@ export default function SalaryConfigScreen() {
     setShowEditModal(true);
   };
 
+  const handleDelete = (config: EmployeeSalaryConfig) => {
+    Alert.alert(
+      "Xác nhận",
+      `Bạn có chắc chắn muốn xóa cấu hình lương này?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await salaryConfigApi.deleteSalaryConfig(config.id);
+              if (response.success) {
+                Alert.alert("Thành công", "Đã xóa cấu hình lương");
+                loadConfigs();
+              } else {
+                Alert.alert("Lỗi", response.message || "Không thể xóa cấu hình lương");
+              }
+            } catch (error: any) {
+              Alert.alert(
+                "Lỗi",
+                error.response?.data?.message || "Không thể xóa cấu hình lương"
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getSalaryTypeLabel = (type: string) => {
     switch (type) {
       case "hourly":
@@ -171,14 +223,23 @@ export default function SalaryConfigScreen() {
   };
 
   const filteredConfigs = configs.filter((config) => {
-    if (searchQuery.trim() === "") return true;
-    const employee = employees.find((e) => e.id === config.user_id);
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      employee?.name?.toLowerCase().includes(searchLower) ||
-      employee?.email?.toLowerCase().includes(searchLower) ||
-      getSalaryTypeLabel(config.salary_type).toLowerCase().includes(searchLower)
-    );
+    // Nếu có filterUserId, chỉ hiển thị config của user đó
+    if (filterUserId && config.user_id !== filterUserId) {
+      return false;
+    }
+    
+    // Nếu có search query, filter theo tên, email hoặc loại lương
+    if (searchQuery.trim() !== "") {
+      const employee = employees.find((e) => e.id === config.user_id);
+      const searchLower = searchQuery.toLowerCase();
+      return (
+        employee?.name?.toLowerCase().includes(searchLower) ||
+        employee?.email?.toLowerCase().includes(searchLower) ||
+        getSalaryTypeLabel(config.salary_type).toLowerCase().includes(searchLower)
+      );
+    }
+    
+    return true;
   });
 
   const renderItem = ({ item }: { item: EmployeeSalaryConfig }) => {
@@ -226,14 +287,24 @@ export default function SalaryConfigScreen() {
               </View>
             </View>
           </View>
-          <PermissionGuard permission="hr.salary_config.update">
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => openEditModal(item)}
-            >
-              <Ionicons name="create-outline" size={20} color="#3B82F6" />
-            </TouchableOpacity>
-          </PermissionGuard>
+          <View style={styles.itemActions}>
+            <PermissionGuard permission="hr.salary_config.update">
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => openEditModal(item)}
+              >
+                <Ionicons name="create-outline" size={20} color="#3B82F6" />
+              </TouchableOpacity>
+            </PermissionGuard>
+            <PermissionGuard permission="hr.salary_config.delete">
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => handleDelete(item)}
+              >
+                <Ionicons name="trash-outline" size={20} color="#EF4444" />
+              </TouchableOpacity>
+            </PermissionGuard>
+          </View>
         </View>
 
         <View style={styles.itemBody}>
@@ -294,6 +365,7 @@ export default function SalaryConfigScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <BackButton />
         <Text style={styles.headerTitle}>Cấu Hình Lương</Text>
         <PermissionGuard permission="hr.salary_config.create">
           <TouchableOpacity
@@ -490,9 +562,11 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E5E7EB",
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "700",
     color: "#1F2937",
+    flex: 1,
+    marginLeft: 8,
   },
   addButton: {
     backgroundColor: "#3B82F6",
@@ -637,7 +711,14 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#3B82F6",
   },
+  itemActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
   editButton: {
+    padding: 4,
+  },
+  deleteButton: {
     padding: 4,
   },
   itemBody: {

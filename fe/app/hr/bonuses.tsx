@@ -15,6 +15,7 @@ import { bonusApi, Bonus, CreateBonusData } from "@/api/bonusApi";
 import { employeesApi } from "@/api/employeesApi";
 import { Ionicons } from "@expo/vector-icons";
 import BonusForm from "@/components/BonusForm";
+import BackButton from "@/components/BackButton";
 
 export default function BonusesScreen() {
   const router = useRouter();
@@ -88,6 +89,36 @@ export default function BonusesScreen() {
     }
   };
 
+  const handleDelete = (bonus: Bonus) => {
+    Alert.alert(
+      "Xác nhận",
+      `Bạn có chắc chắn muốn xóa thưởng này?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await bonusApi.deleteBonus(bonus.id);
+              if (response.success) {
+                Alert.alert("Thành công", "Đã xóa thưởng");
+                loadBonuses();
+              } else {
+                Alert.alert("Lỗi", response.message || "Không thể xóa thưởng");
+              }
+            } catch (error: any) {
+              Alert.alert(
+                "Lỗi",
+                error.response?.data?.message || "Không thể xóa thưởng"
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "paid":
@@ -151,14 +182,24 @@ export default function BonusesScreen() {
       {item.description && (
         <Text style={styles.description}>{item.description}</Text>
       )}
-      {item.status === "pending" && (
-        <TouchableOpacity
-          style={styles.approveButton}
-          onPress={() => handleApprove(item.id)}
-        >
-          <Text style={styles.approveButtonText}>Duyệt</Text>
-        </TouchableOpacity>
-      )}
+      <View style={styles.cardActions}>
+        {item.status === "pending" && (
+          <TouchableOpacity
+            style={styles.approveButton}
+            onPress={() => handleApprove(item.id)}
+          >
+            <Text style={styles.approveButtonText}>Duyệt</Text>
+          </TouchableOpacity>
+        )}
+        {item.status !== "paid" && (
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDelete(item)}
+          >
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
@@ -173,6 +214,7 @@ export default function BonusesScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <BackButton />
         <Text style={styles.title}>Quản Lý Thưởng</Text>
         <TouchableOpacity
           style={styles.addButton}
@@ -247,6 +289,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     color: "#1F2937",
+    flex: 1,
+    marginLeft: 8,
   },
   addButton: {
     backgroundColor: "#3B82F6",
@@ -339,6 +383,16 @@ const styles = StyleSheet.create({
   approveButtonText: {
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  cardActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 8,
   },
   emptyContainer: {
     padding: 40,

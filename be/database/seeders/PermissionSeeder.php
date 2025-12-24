@@ -271,6 +271,22 @@ class PermissionSeeder extends Seeder
             ['name' => 'subcontractor_payments.delete', 'description' => 'Xóa thanh toán thầu phụ'],
             ['name' => 'subcontractor_payments.approve', 'description' => 'Duyệt thanh toán thầu phụ'],
             ['name' => 'subcontractor_payments.mark_paid', 'description' => 'Xác nhận đã thanh toán'],
+            ['name' => 'subcontractor_payments.submit', 'description' => 'Gửi thanh toán để duyệt'],
+            ['name' => 'subcontractor_payments.approve_management', 'description' => 'Duyệt thanh toán (Ban điều hành)'],
+            ['name' => 'subcontractor_payments.approve_accountant', 'description' => 'Xác nhận thanh toán (Kế toán)'],
+            ['name' => 'subcontractor_payments.reject', 'description' => 'Từ chối thanh toán'],
+
+            // ===================================================================
+            // SETTINGS MODULE
+            // ===================================================================
+            ['name' => 'settings.manage', 'description' => 'Quản lý cấu hình hệ thống'],
+            ['name' => 'settings.view', 'description' => 'Xem cấu hình hệ thống'],
+
+            // ===================================================================
+            // FINANCIAL & MANAGEMENT MODULE
+            // ===================================================================
+            ['name' => 'financial.view', 'description' => 'Xem báo cáo tài chính'],
+            ['name' => 'management.view', 'description' => 'Xem báo cáo quản lý'],
         ];
 
         $this->command->info('Đang tạo các permissions...');
@@ -312,10 +328,11 @@ class PermissionSeeder extends Seeder
         $adminRole->permissions()->sync($allPermissions);
         $this->command->info("✅ Đã gán toàn quyền cho Admin role (" . $allPermissions->count() . " permissions)");
 
-        // Gán Admin role cho tất cả users có role = 'admin' và owner = true
-        $adminUsers = User::where('role', 'admin')
-            ->where('owner', true)
-            ->get();
+        // Gán Admin role cho tất cả users có role = 'admin' HOẶC owner = true
+        $adminUsers = User::where(function($query) {
+            $query->where('role', 'admin')
+                  ->orWhere('owner', true);
+        })->get();
         
         foreach ($adminUsers as $user) {
             $user->roles()->syncWithoutDetaching([$adminRole->id]);
