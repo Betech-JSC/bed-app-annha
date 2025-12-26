@@ -13,19 +13,15 @@ return new class extends Migration
     {
         Schema::create('global_subcontractors', function (Blueprint $table) {
             $table->id();
-            $table->uuid('uuid')->unique();
-            $table->string('name'); // Tên nhà thầu phụ
-            $table->string('code')->unique()->nullable(); // Mã nhà thầu (nếu có)
-            $table->string('contact_person')->nullable(); // Người liên hệ
-            $table->string('phone')->nullable(); // Số điện thoại
-            $table->string('email')->nullable(); // Email
-            $table->text('address')->nullable(); // Địa chỉ
-            $table->string('tax_code')->nullable(); // Mã số thuế
-            $table->text('notes')->nullable(); // Ghi chú
-            $table->boolean('is_active')->default(true); // Có đang hoạt động không
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->string('name');
+            $table->string('category')->nullable();
+            $table->string('contact_person')->nullable();
+            $table->string('phone')->nullable();
+            $table->string('email')->nullable();
+            $table->text('address')->nullable();
+            $table->text('description')->nullable();
+            $table->string('tax_code')->nullable();
             $table->timestamps();
-            $table->softDeletes();
         });
     }
 

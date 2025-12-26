@@ -87,13 +87,6 @@ class Cost extends Model
 
     public function getCategoryLabelAttribute(): string
     {
-        // Lấy từ CostGroup nếu có
-        $costGroup = \App\Models\CostGroup::where('code', $this->category)->first();
-        if ($costGroup) {
-            return $costGroup->name;
-        }
-        
-        // Fallback về hardcoded nếu không tìm thấy
         return match ($this->category) {
             'construction_materials' => 'Vật liệu xây dựng',
             'concrete' => 'Bê tông',

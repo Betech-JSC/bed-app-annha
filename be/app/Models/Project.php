@@ -191,30 +191,18 @@ class Project extends Model
 
     public static function generateCode(): string
     {
-        $today = now();
-        $dateStr = $today->format('dmy'); // DDMMYYYY format
-        
-        // Tìm số thứ tự tiếp theo trong ngày
-        $lastProject = static::where('code', 'like', "annha-{$dateStr}-%")
-            ->orderBy('code', 'desc')
-            ->first();
-        
-        $sequence = 1;
-        if ($lastProject && preg_match('/annha-\d{6}-(\d+)/', $lastProject->code, $matches)) {
-            $sequence = (int)$matches[1] + 1;
-        }
-        
-        $code = sprintf('annha-%s-%02d', $dateStr, $sequence);
-        
-        // Kiểm tra xem code đã tồn tại chưa (trường hợp hiếm)
-        $maxAttempts = 100;
+        $maxAttempts = 10;
         $attempt = 0;
-        while (static::where('code', $code)->exists() && $attempt < $maxAttempts) {
-            $sequence++;
-            $code = sprintf('annha-%s-%02d', $dateStr, $sequence);
+
+        do {
+            $code = 'PRJ-' . strtoupper(Str::random(6));
             $attempt++;
-        }
-        
-        return $code;
+            $exists = static::where('code', $code)->exists();
+            if (!$exists) {
+                return $code;
+            }
+        } while ($attempt < $maxAttempts);
+
+        return 'PRJ-' . time() . strtoupper(Str::random(3));
     }
 }

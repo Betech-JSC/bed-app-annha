@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,14 +10,11 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { projectApi, CreateProjectData, Project } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import BackButton from "@/components/BackButton";
 
 interface User {
   id: number;
@@ -145,6 +142,27 @@ export default function EditProjectScreen() {
     setManagerSearch("");
   };
 
+  const handleStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      setStartDate(selectedDate);
+      setFormData({
+        ...formData,
+        start_date: selectedDate.toISOString().split("T")[0],
+      });
+    }
+  };
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setEndDate(selectedDate);
+      setFormData({
+        ...formData,
+        end_date: selectedDate.toISOString().split("T")[0],
+      });
+    }
+  };
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
@@ -159,11 +177,7 @@ export default function EditProjectScreen() {
 
     try {
       setSaving(true);
-      // Không gửi code lên backend (không cho phép thay đổi mã dự án)
-      const updateData = { ...formData };
-      delete updateData.code;
-
-      const response = await projectApi.updateProject(id!, updateData);
+      const response = await projectApi.updateProject(id!, formData);
       if (response.success) {
         Alert.alert("Thành công", "Dự án đã được cập nhật.", [
           {
@@ -202,474 +216,320 @@ export default function EditProjectScreen() {
     );
   }
 
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  const handleInputFocus = (y: number = 0) => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollTo({ y, animated: true });
-    }, 100);
-  };
-
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-    >
+    <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <BackButton />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Chỉnh Sửa Dự Án</Text>
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={true}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Tên dự án <Text style={styles.required}>*</Text>
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nhập tên dự án"
-              placeholderTextColor="#9CA3AF"
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-              onFocus={() => handleInputFocus(0)}
-              returnKeyType="next"
-              blurOnSubmit={false}
-            />
-          </View>
+      <View style={styles.form}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>
+            Tên dự án <Text style={styles.required}>*</Text>
+          </Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Nhập tên dự án"
+            value={formData.name}
+            onChangeText={(text) => setFormData({ ...formData, name: text })}
+          />
+        </View>
 
-          <View style={styles.inputGroup}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Mã dự án</Text>
-              <Text style={styles.autoLabel}>(Không thể thay đổi)</Text>
-            </View>
-            <View style={styles.codeContainer}>
-              <TextInput
-                style={[styles.input, styles.inputDisabled]}
-                value={formData.code}
-                editable={false}
-                placeholder="Mã dự án"
-                placeholderTextColor="#9CA3AF"
-              />
-              <Ionicons
-                name="lock-closed-outline"
-                size={20}
-                color="#9CA3AF"
-                style={styles.lockIcon}
-              />
-            </View>
-            <Text style={styles.helperText}>
-              Mã dự án được tự động sinh và không thể thay đổi
-            </Text>
-          </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Mã dự án</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Nhập mã dự án (tùy chọn)"
+            value={formData.code}
+            onChangeText={(text) => setFormData({ ...formData, code: text })}
+          />
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Mô tả</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Nhập mô tả dự án"
-              value={formData.description}
-              onChangeText={(text) =>
-                setFormData({ ...formData, description: text })
-              }
-              multiline
-              numberOfLines={4}
-            />
-          </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Mô tả</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Nhập mô tả dự án"
+            value={formData.description}
+            onChangeText={(text) =>
+              setFormData({ ...formData, description: text })
+            }
+            multiline
+            numberOfLines={4}
+          />
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Khách hàng <Text style={styles.required}>*</Text>
-            </Text>
-            <TouchableOpacity
-              style={styles.selectButton}
-              onPress={() => setShowCustomerModal(true)}
-              activeOpacity={0.7}
-            >
-              {selectedCustomer ? (
-                <View style={styles.selectedItem}>
-                  <View style={styles.selectedItemInfo}>
-                    <Text style={styles.selectedItemName}>
-                      {selectedCustomer.name}
-                    </Text>
-                    <Text style={styles.selectedItemEmail}>
-                      {selectedCustomer.email}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                </View>
-              ) : (
-                <View style={styles.selectPlaceholder}>
-                  <Ionicons name="person-outline" size={20} color="#9CA3AF" />
-                  <Text style={styles.selectPlaceholderText}>
-                    Chọn khách hàng
-                  </Text>
-                  <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Quản lý dự án</Text>
-            <TouchableOpacity
-              style={styles.selectButton}
-              onPress={() => setShowManagerModal(true)}
-              activeOpacity={0.7}
-            >
-              {selectedManager ? (
-                <View style={styles.selectedItem}>
-                  <View style={styles.selectedItemInfo}>
-                    <Text style={styles.selectedItemName}>
-                      {selectedManager.name}
-                    </Text>
-                    <Text style={styles.selectedItemEmail}>
-                      {selectedManager.email}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.clearButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setSelectedManager(null);
-                      setFormData({ ...formData, project_manager_id: undefined });
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.selectPlaceholder}>
-                  <Ionicons name="person-outline" size={20} color="#9CA3AF" />
-                  <Text style={styles.selectPlaceholderText}>
-                    Chọn quản lý dự án (tùy chọn)
-                  </Text>
-                  <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
-                </View>
-              )}
-            </TouchableOpacity>
-            <Text style={styles.helperText}>
-              Chỉ hiển thị nhân sự nội bộ công ty
-            </Text>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Ngày bắt đầu</Text>
-            <TouchableOpacity
-              style={styles.dateInput}
-              onPress={() => setShowStartDatePicker(true)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.dateInputText,
-                  !formData.start_date && styles.dateInputPlaceholder,
-                ]}
-              >
-                {formData.start_date
-                  ? new Date(formData.start_date).toLocaleDateString("vi-VN", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })
-                  : "Chọn ngày bắt đầu"}
-              </Text>
-              <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-            </TouchableOpacity>
-            {showStartDatePicker && (
-              <DateTimePicker
-                value={startDate}
-                mode="date"
-                display="default"
-                onChange={(event, date) => {
-                  setShowStartDatePicker(false);
-                  if (date && event.type !== "dismissed") {
-                    setStartDate(date);
-                    setFormData({
-                      ...formData,
-                      start_date: date.toISOString().split("T")[0],
-                    });
-                  }
-                }}
-              />
-            )}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Ngày kết thúc</Text>
-            <TouchableOpacity
-              style={styles.dateInput}
-              onPress={() => setShowEndDatePicker(true)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.dateInputText,
-                  !formData.end_date && styles.dateInputPlaceholder,
-                ]}
-              >
-                {formData.end_date
-                  ? new Date(formData.end_date).toLocaleDateString("vi-VN", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })
-                  : "Chọn ngày kết thúc"}
-              </Text>
-              <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-            </TouchableOpacity>
-            {showEndDatePicker && (
-              <DateTimePicker
-                value={endDate}
-                mode="date"
-                display="default"
-                minimumDate={formData.start_date ? new Date(formData.start_date) : undefined}
-                onChange={(event, date) => {
-                  setShowEndDatePicker(false);
-                  if (date && event.type !== "dismissed") {
-                    setEndDate(date);
-                    setFormData({
-                      ...formData,
-                      end_date: date.toISOString().split("T")[0],
-                    });
-                  }
-                }}
-              />
-            )}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Trạng thái</Text>
-            <View style={styles.statusButtons}>
-              {[
-                { value: "planning", label: "Lập kế hoạch" },
-                { value: "in_progress", label: "Đang thi công" },
-                { value: "completed", label: "Hoàn thành" },
-                { value: "cancelled", label: "Đã hủy" },
-              ].map((status) => (
-                <TouchableOpacity
-                  key={status.value}
-                  style={[
-                    styles.statusButton,
-                    formData.status === status.value && styles.statusButtonActive,
-                  ]}
-                  onPress={() =>
-                    setFormData({
-                      ...formData,
-                      status: status.value as any,
-                    })
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.statusButtonText,
-                      formData.status === status.value &&
-                      styles.statusButtonTextActive,
-                    ]}
-                  >
-                    {status.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>
+            Khách hàng <Text style={styles.required}>*</Text>
+          </Text>
           <TouchableOpacity
-            style={[styles.submitButton, saving && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={saving}
+            style={styles.selectButton}
+            onPress={() => setShowCustomerModal(true)}
           >
-            {saving ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.submitButtonText}>Cập nhật dự án</Text>
-            )}
+            <Text
+              style={[
+                styles.selectButtonText,
+                !selectedCustomer && styles.placeholderText,
+              ]}
+            >
+              {selectedCustomer
+                ? `${selectedCustomer.name} (${selectedCustomer.email})`
+                : "Chọn khách hàng"}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color="#6B7280" />
           </TouchableOpacity>
         </View>
 
-        {/* Customer Modal */}
-        <Modal
-          visible={showCustomerModal}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => {
-            setShowCustomerModal(false);
-            setCustomerSearch("");
-          }}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chọn Khách Hàng</Text>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Quản lý dự án</Text>
+          <TouchableOpacity
+            style={styles.selectButton}
+            onPress={() => setShowManagerModal(true)}
+          >
+            <Text
+              style={[
+                styles.selectButtonText,
+                !selectedManager && styles.placeholderText,
+              ]}
+            >
+              {selectedManager
+                ? `${selectedManager.name} (${selectedManager.email})`
+                : "Chọn quản lý dự án (tùy chọn)"}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Ngày bắt đầu</Text>
+          <TouchableOpacity
+            style={styles.selectButton}
+            onPress={() => setShowStartDatePicker(true)}
+          >
+            <Text
+              style={[
+                styles.selectButtonText,
+                !formData.start_date && styles.placeholderText,
+              ]}
+            >
+              {formData.start_date
+                ? new Date(formData.start_date).toLocaleDateString("vi-VN")
+                : "Chọn ngày bắt đầu"}
+            </Text>
+            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+          </TouchableOpacity>
+          {showStartDatePicker && (
+            <DateTimePicker
+              value={startDate}
+              mode="date"
+              display="default"
+              onChange={handleStartDateChange}
+            />
+          )}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Ngày kết thúc</Text>
+          <TouchableOpacity
+            style={styles.selectButton}
+            onPress={() => setShowEndDatePicker(true)}
+          >
+            <Text
+              style={[
+                styles.selectButtonText,
+                !formData.end_date && styles.placeholderText,
+              ]}
+            >
+              {formData.end_date
+                ? new Date(formData.end_date).toLocaleDateString("vi-VN")
+                : "Chọn ngày kết thúc"}
+            </Text>
+            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+          </TouchableOpacity>
+          {showEndDatePicker && (
+            <DateTimePicker
+              value={endDate}
+              mode="date"
+              display="default"
+              onChange={handleEndDateChange}
+              minimumDate={formData.start_date ? new Date(formData.start_date) : undefined}
+            />
+          )}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Trạng thái</Text>
+          <View style={styles.statusButtons}>
+            {[
+              { value: "planning", label: "Lập kế hoạch" },
+              { value: "in_progress", label: "Đang thi công" },
+              { value: "completed", label: "Hoàn thành" },
+              { value: "cancelled", label: "Đã hủy" },
+            ].map((status) => (
               <TouchableOpacity
-                onPress={() => {
-                  setShowCustomerModal(false);
-                  setCustomerSearch("");
-                }}
+                key={status.value}
+                style={[
+                  styles.statusButton,
+                  formData.status === status.value && styles.statusButtonActive,
+                ]}
+                onPress={() =>
+                  setFormData({
+                    ...formData,
+                    status: status.value as any,
+                  })
+                }
+              >
+                <Text
+                  style={[
+                    styles.statusButtonText,
+                    formData.status === status.value &&
+                      styles.statusButtonTextActive,
+                  ]}
+                >
+                  {status.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.submitButton, saving && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.submitButtonText}>Cập nhật dự án</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Customer Modal */}
+      <Modal
+        visible={showCustomerModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCustomerModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn khách hàng</Text>
+              <TouchableOpacity
+                onPress={() => setShowCustomerModal(false)}
+                style={styles.modalCloseButton}
               >
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color="#6B7280" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Tìm kiếm khách hàng..."
-                value={customerSearch}
-                onChangeText={setCustomerSearch}
-                placeholderTextColor="#9CA3AF"
-              />
-              {customerSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setCustomerSearch("")}>
-                  <Ionicons name="close-circle" size={20} color="#6B7280" />
-                </TouchableOpacity>
-              )}
-            </View>
-
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm kiếm khách hàng..."
+              value={customerSearch}
+              onChangeText={setCustomerSearch}
+            />
             {loadingCustomers ? (
-              <View style={styles.modalLoadingContainer}>
-                <ActivityIndicator size="large" color="#3B82F6" />
-              </View>
+              <ActivityIndicator style={styles.modalLoading} />
             ) : (
               <FlatList
                 data={filteredCustomers}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={[
-                      styles.userItem,
-                      selectedCustomer?.id === item.id && styles.userItemSelected,
-                    ]}
+                    style={styles.modalItem}
                     onPress={() => handleSelectCustomer(item)}
                   >
-                    <View style={styles.userItemContent}>
-                      <View style={styles.userAvatar}>
-                        <Ionicons name="person" size={24} color="#3B82F6" />
-                      </View>
-                      <View style={styles.userInfo}>
-                        <Text style={styles.userName}>{item.name}</Text>
-                        <Text style={styles.userEmail}>{item.email}</Text>
-                        {item.phone && (
-                          <Text style={styles.userPhone}>{item.phone}</Text>
-                        )}
-                      </View>
-                      {selectedCustomer?.id === item.id && (
-                        <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                    <View style={styles.modalItemInfo}>
+                      <Text style={styles.modalItemName}>{item.name}</Text>
+                      <Text style={styles.modalItemEmail}>{item.email}</Text>
+                      {item.phone && (
+                        <Text style={styles.modalItemPhone}>{item.phone}</Text>
                       )}
                     </View>
+                    {selectedCustomer?.id === item.id && (
+                      <Ionicons name="checkmark" size={24} color="#3B82F6" />
+                    )}
                   </TouchableOpacity>
                 )}
                 ListEmptyComponent={
-                  <View style={styles.modalEmptyContainer}>
-                    <Ionicons name="people-outline" size={48} color="#9CA3AF" />
-                    <Text style={styles.modalEmptyText}>
-                      {customerSearch
-                        ? "Không tìm thấy khách hàng"
-                        : "Không có khách hàng nào"}
-                    </Text>
-                  </View>
+                  <Text style={styles.modalEmptyText}>
+                    Không tìm thấy khách hàng
+                  </Text>
                 }
               />
             )}
           </View>
-        </Modal>
+        </View>
+      </Modal>
 
-        {/* Manager Modal */}
-        <Modal
-          visible={showManagerModal}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => {
-            setShowManagerModal(false);
-            setManagerSearch("");
-          }}
-        >
-          <View style={styles.modalContainer}>
+      {/* Manager Modal */}
+      <Modal
+        visible={showManagerModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowManagerModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chọn Quản Lý Dự Án</Text>
+              <Text style={styles.modalTitle}>Chọn quản lý dự án</Text>
               <TouchableOpacity
-                onPress={() => {
-                  setShowManagerModal(false);
-                  setManagerSearch("");
-                }}
+                onPress={() => setShowManagerModal(false)}
+                style={styles.modalCloseButton}
               >
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color="#6B7280" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Tìm kiếm quản lý dự án..."
-                value={managerSearch}
-                onChangeText={setManagerSearch}
-                placeholderTextColor="#9CA3AF"
-              />
-              {managerSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setManagerSearch("")}>
-                  <Ionicons name="close-circle" size={20} color="#6B7280" />
-                </TouchableOpacity>
-              )}
-            </View>
-
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm kiếm quản lý dự án..."
+              value={managerSearch}
+              onChangeText={setManagerSearch}
+            />
             {loadingManagers ? (
-              <View style={styles.modalLoadingContainer}>
-                <ActivityIndicator size="large" color="#3B82F6" />
-              </View>
+              <ActivityIndicator style={styles.modalLoading} />
             ) : (
               <FlatList
                 data={filteredManagers}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={[
-                      styles.userItem,
-                      selectedManager?.id === item.id && styles.userItemSelected,
-                    ]}
+                    style={styles.modalItem}
                     onPress={() => handleSelectManager(item)}
                   >
-                    <View style={styles.userItemContent}>
-                      <View style={styles.userAvatar}>
-                        <Ionicons name="person" size={24} color="#3B82F6" />
-                      </View>
-                      <View style={styles.userInfo}>
-                        <Text style={styles.userName}>{item.name}</Text>
-                        <Text style={styles.userEmail}>{item.email}</Text>
-                        {item.phone && (
-                          <Text style={styles.userPhone}>{item.phone}</Text>
-                        )}
-                      </View>
-                      {selectedManager?.id === item.id && (
-                        <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                    <View style={styles.modalItemInfo}>
+                      <Text style={styles.modalItemName}>{item.name}</Text>
+                      <Text style={styles.modalItemEmail}>{item.email}</Text>
+                      {item.phone && (
+                        <Text style={styles.modalItemPhone}>{item.phone}</Text>
                       )}
                     </View>
+                    {selectedManager?.id === item.id && (
+                      <Ionicons name="checkmark" size={24} color="#3B82F6" />
+                    )}
                   </TouchableOpacity>
                 )}
                 ListEmptyComponent={
-                  <View style={styles.modalEmptyContainer}>
-                    <Ionicons name="people-outline" size={48} color="#9CA3AF" />
-                    <Text style={styles.modalEmptyText}>
-                      {managerSearch
-                        ? "Không tìm thấy quản lý dự án"
-                        : "Không có quản lý dự án nào"}
-                    </Text>
-                  </View>
+                  <Text style={styles.modalEmptyText}>
+                    Không tìm thấy quản lý dự án
+                  </Text>
                 }
               />
             )}
           </View>
-        </Modal>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </View>
+      </Modal>
+    </ScrollView>
   );
 }
 
@@ -677,12 +537,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F9FAFB",
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 100,
   },
   centerContainer: {
     flex: 1,
@@ -716,32 +570,14 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 20,
   },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
   label: {
     fontSize: 14,
     fontWeight: "600",
     color: "#1F2937",
     marginBottom: 8,
   },
-  autoLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-    fontWeight: "400",
-    fontStyle: "italic",
-  },
   required: {
     color: "#EF4444",
-  },
-  helperText: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 4,
-    fontWeight: "400",
   },
   input: {
     backgroundColor: "#FFFFFF",
@@ -753,82 +589,25 @@ const styles = StyleSheet.create({
     color: "#1F2937",
   },
   textArea: {
-    height: 120,
+    height: 100,
     textAlignVertical: "top",
-    lineHeight: 22,
   },
   selectButton: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: "#E5E7EB",
     borderRadius: 8,
     padding: 12,
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  selectPlaceholder: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  selectPlaceholderText: {
-    flex: 1,
-    fontSize: 16,
-    color: "#9CA3AF",
-  },
-  selectedItem: {
-    flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-  },
-  selectedItemInfo: {
-    flex: 1,
-  },
-  selectedItemName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginBottom: 2,
-  },
-  selectedItemEmail: {
-    fontSize: 14,
-    color: "#6B7280",
-  },
-  clearButton: {
-    padding: 4,
-  },
-  dateInput: {
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: "#FFFFFF",
-    minHeight: 48,
   },
-  dateInputText: {
+  selectButtonText: {
     fontSize: 16,
     color: "#1F2937",
-    flex: 1,
   },
-  dateInputPlaceholder: {
+  placeholderText: {
     color: "#9CA3AF",
-  },
-  codeContainer: {
-    position: "relative",
-  },
-  inputDisabled: {
-    backgroundColor: "#F9FAFB",
-    color: "#6B7280",
-    paddingRight: 40,
-  },
-  lockIcon: {
-    position: "absolute",
-    right: 12,
-    top: "50%",
-    transform: [{ translateY: -10 }],
   },
   statusButtons: {
     flexDirection: "row",
@@ -870,97 +649,76 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+    paddingBottom: 32,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     padding: 16,
-    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "600",
     color: "#1F2937",
   },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    margin: 16,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 8,
+  modalCloseButton: {
+    padding: 4,
   },
   searchInput: {
-    flex: 1,
-    paddingVertical: 12,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    padding: 12,
+    margin: 16,
     fontSize: 16,
-    color: "#1F2937",
   },
-  modalLoadingContainer: {
-    flex: 1,
-    justifyContent: "center",
+  modalLoading: {
+    padding: 32,
+  },
+  modalItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-  },
-  userItem: {
-    backgroundColor: "#FFFFFF",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: "#F3F4F6",
   },
-  userItemSelected: {
-    backgroundColor: "#EFF6FF",
-  },
-  userItemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  userAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  userInfo: {
+  modalItemInfo: {
     flex: 1,
   },
-  userName: {
+  modalItemName: {
     fontSize: 16,
     fontWeight: "600",
     color: "#1F2937",
     marginBottom: 4,
   },
-  userEmail: {
+  modalItemEmail: {
     fontSize: 14,
     color: "#6B7280",
     marginBottom: 2,
   },
-  userPhone: {
-    fontSize: 12,
-    color: "#9CA3AF",
-  },
-  modalEmptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 64,
+  modalItemPhone: {
+    fontSize: 14,
+    color: "#6B7280",
   },
   modalEmptyText: {
-    fontSize: 16,
+    textAlign: "center",
+    padding: 32,
     color: "#6B7280",
-    marginTop: 16,
   },
 });
 

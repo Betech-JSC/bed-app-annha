@@ -54,6 +54,12 @@ export const employeesApi = {
     return response.data;
   },
 
+  // Get HR dashboard data with charts
+  getHRDashboard: async (params?: { months?: number }) => {
+    const response = await api.get("/hr/employees/dashboard", { params });
+    return response.data;
+  },
+
   // Create new employee/user
   createEmployee: async (data: {
     first_name: string;

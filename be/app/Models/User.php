@@ -234,4 +234,24 @@ class User extends Authenticatable
 
         return asset('storage/' . $this->avatar);
     }
+
+    /**
+     * Get the user's full name
+     * This accessor ensures name is always available, combining first_name and last_name if needed
+     */
+    public function getNameAttribute($value)
+    {
+        // If name column has a value, use it
+        if (!empty($value) && trim($value) !== '') {
+            return $value;
+        }
+
+        // Otherwise, combine first_name and last_name
+        $firstName = $this->attributes['first_name'] ?? '';
+        $lastName = $this->attributes['last_name'] ?? '';
+        $fullName = trim($firstName . ' ' . $lastName);
+
+        // Return combined name or fallback to email
+        return !empty($fullName) ? $fullName : ($this->attributes['email'] ?? 'N/A');
+    }
 }

@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\ProjectPersonnelController;
 use App\Http\Controllers\Api\SubcontractorController;
 use App\Http\Controllers\Api\SubcontractorItemController;
 use App\Http\Controllers\Api\ConstructionLogController;
+use App\Http\Controllers\Api\GlobalSubcontractorController;
 use App\Http\Controllers\Api\AcceptanceStageController;
 use App\Http\Controllers\Api\DefectController;
 use App\Http\Controllers\Api\ProjectProgressController;
@@ -55,9 +56,6 @@ use App\Http\Controllers\Api\ProjectPhaseController;
 use App\Http\Controllers\Api\ProjectTaskController;
 use App\Http\Controllers\Api\ProjectTaskDependencyController;
 use App\Http\Controllers\Api\AcceptanceItemController;
-use App\Http\Controllers\Api\SummaryReportController;
-use App\Http\Controllers\Api\CostGroupController;
-use App\Http\Controllers\Api\GlobalSubcontractorController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -88,6 +86,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('user/profile', [UserController::class, 'update']);
     Route::post('user/change-password', [UserController::class, 'changePassword']);
     Route::post('user/upload-avatar', [UserController::class, 'uploadAvatar']);
+    Route::delete('user/account', [UserController::class, 'deleteAccount']); // Xóa tài khoản (yêu cầu Apple)
 
     // Public user profile (lấy thông tin user khác)
     Route::get('users/{id}', [UserController::class, 'showById']);
@@ -172,6 +171,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // Construction Logs
         Route::get('/{projectId}/logs', [ConstructionLogController::class, 'index']);
         Route::post('/{projectId}/logs', [ConstructionLogController::class, 'store']);
+        Route::put('/{projectId}/logs/{id}', [ConstructionLogController::class, 'update']);
+        Route::delete('/{projectId}/logs/{id}', [ConstructionLogController::class, 'destroy']);
 
         // Acceptance Stages
         Route::get('/{projectId}/acceptance', [AcceptanceStageController::class, 'index']);
@@ -262,11 +263,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'show']);
         Route::put('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'update']);
         Route::delete('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'destroy']);
-        Route::post('/{projectId}/subcontractor-payments/{id}/submit', [SubcontractorPaymentController::class, 'submit']);
-        Route::post('/{projectId}/subcontractor-payments/{id}/approve-management', [SubcontractorPaymentController::class, 'approveByManagement']);
-        Route::post('/{projectId}/subcontractor-payments/{id}/approve-accountant', [SubcontractorPaymentController::class, 'approveByAccountant']);
+        Route::post('/{projectId}/subcontractor-payments/{id}/approve', [SubcontractorPaymentController::class, 'approve']);
         Route::post('/{projectId}/subcontractor-payments/{id}/mark-paid', [SubcontractorPaymentController::class, 'markAsPaid']);
-        Route::post('/{projectId}/subcontractor-payments/{id}/reject', [SubcontractorPaymentController::class, 'reject']);
     });
 
     // ===================================================================
@@ -306,10 +304,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/payroll', [PayrollController::class, 'index']);
         Route::post('/payroll/calculate', [PayrollController::class, 'calculate']);
         Route::post('/payroll/calculate-all', [PayrollController::class, 'calculateAll']);
+        // Route cụ thể phải đặt trước route có parameter {id}
+        Route::get('/payroll/export', [PayrollController::class, 'export']);
+        // Routes có parameter {id} đặt sau
         Route::get('/payroll/{id}', [PayrollController::class, 'show']);
         Route::post('/payroll/{id}/approve', [PayrollController::class, 'approve']);
         Route::post('/payroll/{id}/pay', [PayrollController::class, 'markAsPaid']);
-        Route::get('/payroll/export', [PayrollController::class, 'export']);
 
         // Bonuses
         Route::get('/bonuses', [BonusController::class, 'index']);
@@ -339,9 +339,12 @@ Route::middleware('auth:sanctum')->group(function () {
         // Employees (using AdminUserController)
         Route::get('/employees', [AdminUserController::class, 'index']);
         Route::post('/employees', [AdminUserController::class, 'store']); // Tạo user mới
+        // Routes cụ thể phải đặt trước routes có parameter {id}
+        Route::get('/employees/stats', [AdminUserController::class, 'stats']);
+        Route::get('/employees/dashboard', [AdminUserController::class, 'dashboard']);
+        // Routes có parameter {id} đặt sau
         Route::get('/employees/{id}', [AdminUserController::class, 'show']);
         Route::put('/employees/{id}', [AdminUserController::class, 'update']);
-        Route::get('/employees/stats', [AdminUserController::class, 'stats']);
         Route::get('/employees/{id}/stats', [AdminUserController::class, 'employeeStats']);
         Route::get('/employees/{id}/roles', [AdminUserController::class, 'getUserRoles']); // Lấy roles của user
         Route::post('/employees/{id}/roles', [AdminUserController::class, 'syncUserRoles']); // Gán roles cho user
@@ -392,29 +395,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/permissions/check/{permission}', [PermissionController::class, 'checkPermission']);
         Route::get('/permissions/project/{projectId}/check/{permission}', [PermissionController::class, 'checkProjectPermission']);
         Route::get('/permissions/project/{projectId}/all', [PermissionController::class, 'projectPermissions']);
-
-        // Summary Report (Ban Điều Hành only)
-        Route::prefix('summary-report')->group(function () {
-            Route::get('/', [SummaryReportController::class, 'index']);
-            Route::put('/company-capital', [SummaryReportController::class, 'updateCompanyCapital']);
-            Route::put('/fixed-costs', [SummaryReportController::class, 'updateFixedCosts']);
-        });
-
-        // Settings - Cost Groups (Quản lý nhóm chi phí)
-        Route::prefix('settings')->group(function () {
-            Route::get('/cost-groups', [CostGroupController::class, 'index']);
-            Route::post('/cost-groups', [CostGroupController::class, 'store']);
-            Route::get('/cost-groups/{id}', [CostGroupController::class, 'show']);
-            Route::put('/cost-groups/{id}', [CostGroupController::class, 'update']);
-            Route::delete('/cost-groups/{id}', [CostGroupController::class, 'destroy']);
-
-            // Global Subcontractors (Nhà thầu phụ global)
-            Route::get('/subcontractors', [GlobalSubcontractorController::class, 'index']);
-            Route::post('/subcontractors', [GlobalSubcontractorController::class, 'store']);
-            Route::get('/subcontractors/{id}', [GlobalSubcontractorController::class, 'show']);
-            Route::put('/subcontractors/{id}', [GlobalSubcontractorController::class, 'update']);
-            Route::delete('/subcontractors/{id}', [GlobalSubcontractorController::class, 'destroy']);
-        });
     });
 });
 

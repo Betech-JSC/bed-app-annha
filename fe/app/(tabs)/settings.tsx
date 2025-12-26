@@ -7,23 +7,30 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
+  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import type { RootState } from "@/src/reducers/index";
 import { permissionApi } from "@/api/permissionApi";
 import { personnelRoleApi } from "@/api/personnelRoleApi";
+import { userApi } from "@/api/userApi";
 import { Ionicons } from "@expo/vector-icons";
 import LogoutButton from "@/components/LogoutButton";
 import { usePermissions } from "@/hooks/usePermissions";
+import { setUser } from "@/reducers/userSlice";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.user);
   const { permissions, loading: permissionsLoading } = usePermissions();
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadRoles();
@@ -49,16 +56,34 @@ export default function SettingsScreen() {
     loadRoles();
   };
 
-  const hasPermission = (permission: string | null): boolean => {
-    // Nếu không có permission requirement, luôn cho phép
-    if (!permission) return true;
-    
-    // Admin và owner luôn có quyền
-    if (user?.owner === true || user?.role === "admin") return true;
-    
-    // Kiểm tra permission
+  const hasPermission = (permission: string): boolean => {
     if (permissions.includes("*")) return true;
     return permissions.includes(permission);
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const response = await userApi.deleteAccount();
+      if (response.success) {
+        // Clear user data from Redux
+        dispatch(setUser(null));
+        // Redirect to login
+        router.replace("/login");
+        Alert.alert("Thành công", "Tài khoản đã được xóa thành công.");
+      } else {
+        Alert.alert("Lỗi", response.message || "Không thể xóa tài khoản");
+        setShowDeleteModal(false);
+      }
+    } catch (error: any) {
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Không thể xóa tài khoản. Vui lòng thử lại."
+      );
+      setShowDeleteModal(false);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const menuItems = [
@@ -75,20 +100,6 @@ export default function SettingsScreen() {
       route: "/settings/permissions",
       permission: "permissions.view",
       description: "Xem và quản lý permissions của các roles",
-    },
-    {
-      title: "Nhóm Chi Phí Dự Án",
-      icon: "folder-outline",
-      route: "/settings/cost-groups",
-      permission: null, // Admin/Owner luôn có quyền
-      description: "Quản lý nhóm chi phí áp dụng cho tất cả dự án",
-    },
-    {
-      title: "Nhà Thầu Phụ",
-      icon: "business-outline",
-      route: "/settings/subcontractors",
-      permission: null, // Admin/Owner luôn có quyền
-      description: "Quản lý danh sách nhà thầu phụ trong hệ thống",
     },
     {
       title: "Thông Tin Tài Khoản",
@@ -161,17 +172,7 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>Cấu Hình</Text>
         {menuItems.map((item, index) => {
           // Check permission if required
-          // Admin và owner luôn có quyền truy cập tất cả menu
-          let canAccess = true;
-          
-          if (item.permission) {
-            // Nếu có permission requirement, kiểm tra
-            canAccess = user?.owner === true || 
-                       user?.role === "admin" || 
-                       hasPermission(item.permission);
-          }
-          
-          if (!canAccess) {
+          if (item.permission && !hasPermission(item.permission)) {
             return null;
           }
 
@@ -232,10 +233,63 @@ export default function SettingsScreen() {
         </View>
       )}
 
+      {/* Delete Account */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={() => setShowDeleteModal(true)}
+        >
+          <Ionicons name="trash-outline" size={20} color="#EF4444" />
+          <Text style={styles.deleteAccountText}>Xóa Tài Khoản</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Logout */}
       <View style={styles.section}>
         <LogoutButton variant="button" />
       </View>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="warning" size={48} color="#EF4444" />
+              <Text style={styles.modalTitle}>Xóa Tài Khoản</Text>
+              <Text style={styles.modalDescription}>
+                Bạn có chắc chắn muốn xóa tài khoản của mình? Hành động này không thể hoàn tác.
+                Tất cả dữ liệu của bạn sẽ bị xóa vĩnh viễn.
+              </Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowDeleteModal(false)}
+                disabled={deleting}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteButton]}
+                onPress={handleDeleteAccount}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.deleteButtonText}>Xóa Tài Khoản</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -413,5 +467,84 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#3B82F6",
+  },
+  deleteAccountButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+    gap: 8,
+  },
+  deleteAccountText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#EF4444",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#F3F4F6",
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  deleteButton: {
+    backgroundColor: "#EF4444",
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });

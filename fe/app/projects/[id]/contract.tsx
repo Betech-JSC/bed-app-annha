@@ -16,8 +16,6 @@ import {
   CreateContractData,
 } from "@/api/contractApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
-import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ContractScreen() {
   const router = useRouter();
@@ -29,7 +27,6 @@ export default function ContractScreen() {
     contract_value: "",
     signed_date: "",
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     loadContract();
@@ -73,29 +70,15 @@ export default function ContractScreen() {
     }
   };
 
-  const formatCurrency = (value: string): string => {
-    // Remove all non-numeric characters
-    const numericValue = value.replace(/\D/g, "");
-    if (!numericValue) return "";
-    // Format with commas
-    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  };
-
-  const parseCurrency = (value: string): number => {
-    const numericValue = value.replace(/\D/g, "");
-    return numericValue ? parseInt(numericValue, 10) : 0;
-  };
-
   const handleSave = async () => {
-    const contractValue = parseCurrency(formData.contract_value);
-    if (!contractValue || contractValue <= 0) {
+    if (!formData.contract_value || isNaN(parseFloat(formData.contract_value))) {
       Alert.alert("Lỗi", "Vui lòng nhập giá trị hợp đồng hợp lệ");
       return;
     }
 
     try {
       const data: CreateContractData = {
-        contract_value: contractValue,
+        contract_value: parseFloat(formData.contract_value),
         signed_date: formData.signed_date || undefined,
         status: "draft",
       };
@@ -180,7 +163,12 @@ export default function ContractScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <BackButton />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Giá Trị Hợp Đồng</Text>
         {contract && !editing && (
           <TouchableOpacity
@@ -229,66 +217,26 @@ export default function ContractScreen() {
           <TextInput
             style={styles.input}
             value={formData.contract_value}
-            onChangeText={(text) => {
-              const formatted = formatCurrency(text);
-              setFormData({ ...formData, contract_value: formatted });
-            }}
+            onChangeText={(text) =>
+              setFormData({ ...formData, contract_value: text })
+            }
             placeholder="Nhập giá trị hợp đồng"
             keyboardType="numeric"
             editable={editing || !contract}
           />
-          {formData.contract_value && (
-            <Text style={styles.helperText}>
-              {formData.contract_value} VNĐ
-            </Text>
-          )}
         </View>
 
         <View style={styles.formGroup}>
           <Text style={styles.label}>Ngày ký hợp đồng</Text>
-          <TouchableOpacity
-            style={styles.dateInput}
-            onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.7}
-            disabled={!editing && !!contract}
-          >
-            <Text
-              style={[
-                styles.dateInputText,
-                !formData.signed_date && styles.dateInputPlaceholder,
-              ]}
-            >
-              {formData.signed_date
-                ? new Date(formData.signed_date).toLocaleDateString("vi-VN", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })
-                : "Chọn ngày ký hợp đồng"}
-            </Text>
-            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-          </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={
-                formData.signed_date
-                  ? new Date(formData.signed_date)
-                  : new Date()
-              }
-              mode="date"
-              display="default"
-              maximumDate={new Date()}
-              onChange={(event, date) => {
-                setShowDatePicker(false);
-                if (date && event.type !== "dismissed") {
-                  setFormData({
-                    ...formData,
-                    signed_date: date.toISOString().split("T")[0],
-                  });
-                }
-              }}
-            />
-          )}
+          <TextInput
+            style={styles.input}
+            value={formData.signed_date}
+            onChangeText={(text) =>
+              setFormData({ ...formData, signed_date: text })
+            }
+            placeholder="YYYY-MM-DD"
+            editable={editing || !contract}
+          />
         </View>
 
         {contract && contract.attachments && contract.attachments.length > 0 && (
@@ -421,28 +369,6 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: "#FFFFFF",
-  },
-  helperText: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 4,
-  },
-  dateInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: "#FFFFFF",
-  },
-  dateInputText: {
-    fontSize: 16,
-    color: "#1F2937",
-  },
-  dateInputPlaceholder: {
-    color: "#9CA3AF",
   },
   attachmentsSection: {
     marginTop: 16,

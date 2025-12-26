@@ -7,7 +7,6 @@ export interface ProjectPayment {
   contract_id?: number;
   payment_number: number;
   amount: number;
-  notes?: string;
   due_date: string;
   paid_date?: string;
   status: "pending" | "paid" | "overdue";
@@ -21,7 +20,6 @@ export interface ProjectPayment {
 export interface CreatePaymentData {
   payment_number: number;
   amount: number;
-  notes?: string;
   due_date: string;
   contract_id?: number;
 }

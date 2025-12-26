@@ -20,9 +20,7 @@ class DatabaseSeeder extends Seeder
             SuperAdminSeeder::class, // Tạo Super Admin user với toàn quyền truy cập app
             UserRoleSeeder::class, // Tạo các users với các roles khác nhau
             PersonnelRoleSeeder::class, // Tạo các vai trò mặc định cho nhân sự
-            PermissionSeeder::class, // Tạo các permissions và gán cho roles (phải chạy sau để có đủ permissions)
-            CostGroupSeeder::class, // Tạo các nhóm chi phí mặc định
-            GlobalSubcontractorSeeder::class, // Tạo các nhà thầu phụ mẫu
+            PermissionSeeder::class, // Tạo các permissions và gán cho roles
             ProjectSeeder::class, // Tạo dữ liệu mẫu cho module quản lý dự án
             SampleDataSeeder::class, // Tạo dữ liệu mẫu cho tất cả các module (contracts, payments, costs, etc.)
             PayrollSeeder::class, // Tạo dữ liệu mẫu cho module bảng lương

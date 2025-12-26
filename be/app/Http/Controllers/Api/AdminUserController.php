@@ -307,6 +307,119 @@ class AdminUserController extends Controller
     }
 
     /**
+     * Dashboard HR với dữ liệu cho biểu đồ
+     */
+    public function dashboard(Request $request)
+    {
+        $months = $request->get('months', 6); // Số tháng để hiển thị, mặc định 6 tháng
+        $endDate = now();
+        $startDate = now()->subMonths($months - 1)->startOfMonth();
+
+        // 1. Biểu đồ số giờ làm việc theo tháng
+        $monthlyHours = [];
+        $currentDate = $startDate->copy();
+        while ($currentDate <= $endDate) {
+            $monthKey = $currentDate->format('Y-m');
+            $hours = \App\Models\TimeTracking::whereYear('check_in_at', $currentDate->year)
+                ->whereMonth('check_in_at', $currentDate->month)
+                ->where('status', 'approved')
+                ->sum('total_hours') ?? 0;
+
+            $monthlyHours[] = [
+                'month' => $currentDate->format('M/Y'),
+                'hours' => round($hours, 2),
+            ];
+
+            $currentDate->addMonth();
+        }
+
+        // 2. Biểu đồ phân bố nhân viên theo vai trò
+        $roleDistribution = [];
+        $roles = \App\Models\Role::withCount('users')->get();
+        foreach ($roles as $role) {
+            if ($role->users_count > 0) {
+                $roleDistribution[] = [
+                    'role' => $role->name,
+                    'count' => $role->users_count,
+                ];
+            }
+        }
+
+        // 3. Biểu đồ lương theo tháng
+        $monthlyPayroll = [];
+        $currentDate = $startDate->copy();
+        while ($currentDate <= $endDate) {
+            $monthKey = $currentDate->format('Y-m');
+            $totalSalary = \App\Models\Payroll::whereYear('period_start', $currentDate->year)
+                ->whereMonth('period_start', $currentDate->month)
+                ->where('status', 'approved')
+                ->sum('net_salary') ?? 0;
+
+            $monthlyPayroll[] = [
+                'month' => $currentDate->format('M/Y'),
+                'amount' => round($totalSalary, 0),
+            ];
+
+            $currentDate->addMonth();
+        }
+
+        // 4. Biểu đồ thưởng theo tháng
+        $monthlyBonuses = [];
+        $currentDate = $startDate->copy();
+        while ($currentDate <= $endDate) {
+            $totalBonus = \App\Models\Bonus::whereYear('created_at', $currentDate->year)
+                ->whereMonth('created_at', $currentDate->month)
+                ->where('status', 'approved')
+                ->sum('amount') ?? 0;
+
+            $monthlyBonuses[] = [
+                'month' => $currentDate->format('M/Y'),
+                'amount' => round($totalBonus, 0),
+            ];
+
+            $currentDate->addMonth();
+        }
+
+        // 5. Biểu đồ trạng thái chấm công
+        $timeTrackingStatus = [
+            [
+                'status' => 'Đã duyệt',
+                'count' => \App\Models\TimeTracking::where('status', 'approved')->count(),
+            ],
+            [
+                'status' => 'Chờ duyệt',
+                'count' => \App\Models\TimeTracking::where('status', 'pending')->count(),
+            ],
+            [
+                'status' => 'Từ chối',
+                'count' => \App\Models\TimeTracking::where('status', 'rejected')->count(),
+            ],
+        ];
+
+        // Stats tổng quan
+        $stats = [
+            'pending_time_tracking' => \App\Models\TimeTracking::where('status', 'pending')->count(),
+            'pending_payroll' => \App\Models\Payroll::where('status', 'calculated')->count(),
+            'pending_bonuses' => \App\Models\Bonus::where('status', 'pending')->count(),
+            'total_employees' => User::whereNull('deleted_at')->count(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'stats' => $stats,
+                'charts' => [
+                    'monthly_hours' => $monthlyHours,
+                    'role_distribution' => $roleDistribution,
+                    'monthly_payroll' => $monthlyPayroll,
+                    'monthly_bonuses' => $monthlyBonuses,
+                    'time_tracking_status' => $timeTrackingStatus,
+                ],
+            ],
+        ]);
+    }
+
+    /**
      * Thống kê chi tiết nhân viên
      */
     public function employeeStats(Request $request, $id)

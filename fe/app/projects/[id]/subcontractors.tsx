@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -19,14 +19,14 @@ export default function SubcontractorsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
-  const [globalSubcontractors, setGlobalSubcontractors] = useState<GlobalSubcontractor[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
-  const [showSubcontractorPicker, setShowSubcontractorPicker] = useState(false);
-  const [selectedGlobalSubcontractor, setSelectedGlobalSubcontractor] = useState<GlobalSubcontractor | null>(null);
-  const [subcontractorSearch, setSubcontractorSearch] = useState("");
+  const [globalSubcontractors, setGlobalSubcontractors] = useState<GlobalSubcontractor[]>([]);
+  const [loadingGlobal, setLoadingGlobal] = useState(false);
+  const [showGlobalList, setShowGlobalList] = useState(false);
   const [formData, setFormData] = useState({
-    global_subcontractor_id: "",
+    global_subcontractor_id: null as number | null,
+    name: "",
     category: "",
     total_quote: "",
     advance_payment: "",
@@ -34,88 +34,31 @@ export default function SubcontractorsScreen() {
 
   useEffect(() => {
     loadSubcontractors();
-    loadGlobalSubcontractors();
   }, [id]);
 
   const loadGlobalSubcontractors = async () => {
     try {
-      console.log("Loading global subcontractors...");
-      const response = await globalSubcontractorApi.getGlobalSubcontractors({ active_only: true });
-      console.log("Full API Response:", JSON.stringify(response, null, 2));
-
-      if (!response) {
-        console.error("Response is null or undefined");
-        Alert.alert("Lỗi", "Không nhận được phản hồi từ server");
-        return;
+      setLoadingGlobal(true);
+      const response = await globalSubcontractorApi.getGlobalSubcontractors();
+      if (response.success) {
+        setGlobalSubcontractors(response.data.data || response.data || []);
       }
-
-      if (response.success === false) {
-        console.error("Response not successful:", response);
-        Alert.alert("Lỗi", response.message || "Không thể tải danh sách nhà thầu phụ");
-        return;
-      }
-
-      // Backend trả về array trực tiếp khi có active_only và không có search
-      // Hoặc paginated data khi có search
-      let data = [];
-
-      if (Array.isArray(response.data)) {
-        // Trường hợp 1: response.data là array trực tiếp
-        data = response.data;
-        console.log("Case 1: Direct array, count:", data.length);
-      } else if (response.data && typeof response.data === 'object') {
-        // Trường hợp 2: response.data là object (có thể là paginated hoặc có nested data)
-        if (Array.isArray(response.data.data)) {
-          // Paginated response
-          data = response.data.data;
-          console.log("Case 2: Paginated data, count:", data.length);
-        } else if (Array.isArray(response.data)) {
-          // Nested array
-          data = response.data;
-          console.log("Case 3: Nested array, count:", data.length);
-        } else {
-          console.warn("Case 4: Unexpected data structure:", response.data);
-        }
-      }
-
-      console.log("Final loaded global subcontractors:", data.length, data);
-
-      if (data.length === 0) {
-        console.warn("No subcontractors found. Check if any are created in settings.");
-      }
-
-      setGlobalSubcontractors(data);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error loading global subcontractors:", error);
-      console.error("Error message:", error.message);
-      console.error("Error response:", error.response?.data);
-      console.error("Error stack:", error.stack);
-      Alert.alert(
-        "Lỗi",
-        error.response?.data?.message || error.message || "Không thể tải danh sách nhà thầu phụ"
-      );
+    } finally {
+      setLoadingGlobal(false);
     }
   };
 
-  const filteredGlobalSubcontractors = useMemo(() => {
-    console.log("Filtering subcontractors. Total:", globalSubcontractors.length, "Search:", subcontractorSearch);
-    if (!subcontractorSearch.trim()) {
-      console.log("No search, returning all:", globalSubcontractors.length);
-      return globalSubcontractors;
-    }
-    const searchLower = subcontractorSearch.toLowerCase();
-    const filtered = globalSubcontractors.filter((sub) => {
-      return (
-        sub.name?.toLowerCase().includes(searchLower) ||
-        sub.code?.toLowerCase().includes(searchLower) ||
-        sub.contact_person?.toLowerCase().includes(searchLower) ||
-        sub.phone?.toLowerCase().includes(searchLower) ||
-        sub.email?.toLowerCase().includes(searchLower)
-      );
+  const handleSelectGlobalSubcontractor = (globalSub: GlobalSubcontractor) => {
+    setFormData({
+      ...formData,
+      global_subcontractor_id: globalSub.id,
+      name: globalSub.name,
+      category: globalSub.category || "",
     });
-    console.log("Filtered result:", filtered.length);
-    return filtered;
-  }, [globalSubcontractors, subcontractorSearch]);
+    setShowGlobalList(false);
+  };
 
   const loadSubcontractors = async () => {
     try {
@@ -384,61 +327,53 @@ export default function SubcontractorsScreen() {
 
             <View style={styles.modalBody}>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Chọn nhà thầu phụ *</Text>
+                <Text style={styles.inputLabel}>Chọn nhà thầu phụ</Text>
                 <TouchableOpacity
                   style={styles.selectButton}
-                  onPress={async () => {
-                    // Load lại danh sách khi mở picker
-                    console.log("Opening subcontractor picker, current count:", globalSubcontractors.length);
-                    try {
-                      await loadGlobalSubcontractors();
-                      setShowSubcontractorPicker(true);
-                    } catch (error) {
-                      console.error("Error loading before opening picker:", error);
-                      // Vẫn mở picker để user thấy được thông báo lỗi hoặc dữ liệu cũ
-                      setShowSubcontractorPicker(true);
-                    }
+                  onPress={() => {
+                    loadGlobalSubcontractors();
+                    setShowGlobalList(true);
                   }}
                 >
-                  <View style={styles.selectButtonContent}>
-                    {selectedGlobalSubcontractor ? (
-                      <View style={styles.selectedSubcontractorPreview}>
-                        <Text style={styles.selectButtonText}>
-                          {selectedGlobalSubcontractor.name}
-                        </Text>
-                        {selectedGlobalSubcontractor.code && (
-                          <Text style={styles.selectedSubcontractorCode}>
-                            Mã: {selectedGlobalSubcontractor.code}
-                          </Text>
-                        )}
-                      </View>
-                    ) : (
-                      <Text
-                        style={[
-                          styles.selectButtonText,
-                          styles.selectButtonPlaceholder,
-                        ]}
-                      >
-                        Chọn nhà thầu phụ
-                      </Text>
-                    )}
-                  </View>
+                  <Text style={[
+                    styles.selectButtonText,
+                    !formData.global_subcontractor_id && styles.selectButtonTextPlaceholder
+                  ]}>
+                    {formData.global_subcontractor_id
+                      ? formData.name
+                      : "Chọn từ danh sách nhà thầu phụ"}
+                  </Text>
                   <Ionicons name="chevron-down" size={20} color="#6B7280" />
                 </TouchableOpacity>
-                {selectedGlobalSubcontractor && (
-                  <View style={styles.selectedSubcontractorInfo}>
-                    {selectedGlobalSubcontractor.phone && (
-                      <Text style={styles.infoText}>
-                        <Ionicons name="call-outline" size={14} color="#6B7280" /> {selectedGlobalSubcontractor.phone}
-                      </Text>
-                    )}
-                    {selectedGlobalSubcontractor.contact_person && (
-                      <Text style={styles.infoText}>
-                        <Ionicons name="person-outline" size={14} color="#6B7280" /> {selectedGlobalSubcontractor.contact_person}
-                      </Text>
-                    )}
-                  </View>
+                {formData.global_subcontractor_id && (
+                  <TouchableOpacity
+                    style={styles.clearButton}
+                    onPress={() => {
+                      setFormData({
+                        ...formData,
+                        global_subcontractor_id: null,
+                        name: "",
+                        category: "",
+                      });
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#EF4444" />
+                    <Text style={styles.clearButtonText}>Xóa lựa chọn</Text>
+                  </TouchableOpacity>
                 )}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Tên nhà thầu *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập tên nhà thầu phụ"
+                  value={formData.name}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, name: text, global_subcontractor_id: null })
+                  }
+                  editable={!formData.global_subcontractor_id}
+                />
               </View>
 
               <View style={styles.inputGroup}>
@@ -489,13 +424,14 @@ export default function SubcontractorsScreen() {
                 <TouchableOpacity
                   style={[styles.modalButton, styles.submitButton]}
                   onPress={async () => {
-                    if (!selectedGlobalSubcontractor || !formData.total_quote) {
-                      Alert.alert("Lỗi", "Vui lòng chọn nhà thầu phụ và nhập tổng báo giá");
+                    if (!formData.name || !formData.total_quote) {
+                      Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin bắt buộc");
                       return;
                     }
                     try {
                       await subcontractorApi.createSubcontractor(id!, {
-                        global_subcontractor_id: selectedGlobalSubcontractor.id,
+                        global_subcontractor_id: formData.global_subcontractor_id || undefined,
+                        name: formData.name,
                         category: formData.category || undefined,
                         total_quote: parseFloat(formData.total_quote),
                         advance_payment: formData.advance_payment
@@ -504,13 +440,12 @@ export default function SubcontractorsScreen() {
                       });
                       setModalVisible(false);
                       setFormData({
-                        global_subcontractor_id: "",
+                        global_subcontractor_id: null,
+                        name: "",
                         category: "",
                         total_quote: "",
                         advance_payment: "",
                       });
-                      setSelectedGlobalSubcontractor(null);
-                      setModalVisible(false);
                       loadSubcontractors();
                     } catch (error: any) {
                       Alert.alert(
@@ -528,115 +463,63 @@ export default function SubcontractorsScreen() {
         </View>
       </Modal>
 
-      {/* Global Subcontractor Picker Modal */}
+      {/* Global Subcontractors List Modal */}
       <Modal
-        visible={showSubcontractorPicker}
-        transparent={true}
+        visible={showGlobalList}
         animationType="slide"
-        onRequestClose={() => setShowSubcontractorPicker(false)}
+        transparent={true}
+        onRequestClose={() => setShowGlobalList(false)}
       >
-        <View style={styles.pickerModalOverlay}>
-          <View style={styles.pickerModalContainer}>
-            <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Chọn Nhà Thầu Phụ</Text>
-              <TouchableOpacity onPress={() => {
-                setShowSubcontractorPicker(false);
-                setSubcontractorSearch("");
-              }}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn nhà thầu phụ</Text>
+              <TouchableOpacity
+                onPress={() => setShowGlobalList(false)}
+                style={styles.closeButton}
+              >
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-            {/* Debug Info */}
-            {__DEV__ && (
-              <View style={{ padding: 8, backgroundColor: "#FEF3C7", marginHorizontal: 16, marginTop: 8, borderRadius: 8 }}>
-                <Text style={{ fontSize: 10, color: "#92400E" }}>
-                  Debug: Total={globalSubcontractors.length}, Filtered={filteredGlobalSubcontractors.length}
-                </Text>
-              </View>
-            )}
-            <View style={styles.pickerSearchContainer}>
-              <Ionicons name="search" size={20} color="#6B7280" />
-              <TextInput
-                style={styles.pickerSearchInput}
-                placeholder="Tìm kiếm nhà thầu phụ..."
-                placeholderTextColor="#9CA3AF"
-                value={subcontractorSearch}
-                onChangeText={setSubcontractorSearch}
-              />
-              {subcontractorSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setSubcontractorSearch("")}>
-                  <Ionicons name="close-circle" size={20} color="#6B7280" />
-                </TouchableOpacity>
+
+            <View style={styles.modalBody}>
+              {loadingGlobal ? (
+                <View style={styles.centerContainer}>
+                  <ActivityIndicator size="large" color="#3B82F6" />
+                </View>
+              ) : globalSubcontractors.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="business-outline" size={64} color="#D1D5DB" />
+                  <Text style={styles.emptyText}>Chưa có nhà thầu phụ</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={globalSubcontractors}
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.globalSubcontractorItem}
+                      onPress={() => handleSelectGlobalSubcontractor(item)}
+                    >
+                      <View style={styles.globalSubcontractorInfo}>
+                        <Text style={styles.globalSubcontractorName}>{item.name}</Text>
+                        {item.category && (
+                          <Text style={styles.globalSubcontractorCategory}>
+                            {item.category}
+                          </Text>
+                        )}
+                        {item.phone && (
+                          <Text style={styles.globalSubcontractorDetail}>
+                            📞 {item.phone}
+                          </Text>
+                        )}
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  )}
+                />
               )}
             </View>
-            <FlatList
-              data={filteredGlobalSubcontractors}
-              keyExtractor={(item) => item.id.toString()}
-              extraData={filteredGlobalSubcontractors.length}
-              ListHeaderComponent={
-                <View style={{ padding: 16, backgroundColor: "#F9FAFB" }}>
-                  <Text style={{ fontSize: 12, color: "#6B7280" }}>
-                    {filteredGlobalSubcontractors.length > 0
-                      ? subcontractorSearch
-                        ? `Tìm thấy ${filteredGlobalSubcontractors.length} nhà thầu phụ`
-                        : `Tổng cộng ${filteredGlobalSubcontractors.length} nhà thầu phụ`
-                      : subcontractorSearch
-                        ? "Không tìm thấy nhà thầu phụ nào"
-                        : "Chưa có nhà thầu phụ nào"}
-                  </Text>
-                  {globalSubcontractors.length === 0 && (
-                    <Text style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>
-                      Vui lòng tạo nhà thầu phụ trong phần Cấu hình
-                    </Text>
-                  )}
-                </View>
-              }
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.subcontractorOption,
-                    selectedGlobalSubcontractor?.id === item.id && styles.subcontractorOptionActive,
-                  ]}
-                  onPress={() => {
-                    setSelectedGlobalSubcontractor(item);
-                    setFormData({ ...formData, global_subcontractor_id: item.id.toString() });
-                    setShowSubcontractorPicker(false);
-                    setSubcontractorSearch("");
-                  }}
-                >
-                  <View style={styles.subcontractorOptionContent}>
-                    <Text
-                      style={[
-                        styles.subcontractorOptionName,
-                        selectedGlobalSubcontractor?.id === item.id && styles.subcontractorOptionNameActive,
-                      ]}
-                    >
-                      {item.name}
-                    </Text>
-                    {item.code && (
-                      <Text style={styles.subcontractorOptionCode}>Mã: {item.code}</Text>
-                    )}
-                    {item.phone && (
-                      <Text style={styles.subcontractorOptionInfo}>
-                        <Ionicons name="call-outline" size={14} color="#6B7280" /> {item.phone}
-                      </Text>
-                    )}
-                  </View>
-                  {selectedGlobalSubcontractor?.id === item.id && (
-                    <Ionicons name="checkmark" size={20} color="#3B82F6" />
-                  )}
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={styles.pickerEmptyContainer}>
-                  <Ionicons name="business-outline" size={48} color="#D1D5DB" />
-                  <Text style={styles.pickerEmptyText}>Chưa có nhà thầu phụ nào</Text>
-                  <Text style={styles.pickerEmptySubtext}>
-                    Vui lòng tạo nhà thầu phụ trong phần Cấu hình
-                  </Text>
-                </View>
-              }
-            />
           </View>
         </View>
       </Modal>
@@ -887,137 +770,56 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: "#D1D5DB",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 8,
+    padding: 12,
     backgroundColor: "#FFFFFF",
-    minHeight: 48,
-    gap: 12,
-  },
-  selectButtonContent: {
-    flex: 1,
-  },
-  selectedSubcontractorPreview: {
-    flex: 1,
-  },
-  selectedSubcontractorCode: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 2,
   },
   selectButtonText: {
     fontSize: 16,
     color: "#1F2937",
-    fontWeight: "500",
+    flex: 1,
   },
-  selectButtonPlaceholder: {
-    color: "#9CA3AF",
-    fontWeight: "400",
-  },
-  selectedSubcontractorInfo: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    gap: 4,
-  },
-  infoText: {
-    fontSize: 12,
+  selectButtonTextPlaceholder: {
     color: "#6B7280",
   },
-  pickerModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  pickerModalContainer: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
-  },
-  pickerModalHeader: {
+  clearButton: {
     flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  clearButtonText: {
+    fontSize: 12,
+    color: "#EF4444",
+  },
+  globalSubcontractorItem: {
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  pickerModalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1F2937",
-  },
-  pickerSearchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    marginHorizontal: 16,
-    marginTop: 12,
     marginBottom: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 12,
-    minHeight: 48,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
   },
-  pickerSearchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: "#1F2937",
-    lineHeight: 20,
-  },
-  subcontractorOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-  subcontractorOptionActive: {
-    backgroundColor: "#EFF6FF",
-  },
-  subcontractorOptionContent: {
+  globalSubcontractorInfo: {
     flex: 1,
   },
-  subcontractorOptionName: {
+  globalSubcontractorName: {
     fontSize: 16,
     fontWeight: "600",
     color: "#1F2937",
     marginBottom: 4,
   },
-  subcontractorOptionNameActive: {
-    color: "#3B82F6",
-  },
-  subcontractorOptionCode: {
-    fontSize: 12,
+  globalSubcontractorCategory: {
+    fontSize: 14,
     color: "#6B7280",
     marginBottom: 4,
   },
-  subcontractorOptionInfo: {
+  globalSubcontractorDetail: {
     fontSize: 12,
-    color: "#6B7280",
-  },
-  pickerEmptyContainer: {
-    padding: 32,
-    alignItems: "center",
-  },
-  pickerEmptyText: {
-    fontSize: 16,
-    color: "#6B7280",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  pickerEmptySubtext: {
-    fontSize: 14,
     color: "#9CA3AF",
-    textAlign: "center",
   },
 });

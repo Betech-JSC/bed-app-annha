@@ -42,7 +42,6 @@ class ProjectDocumentController extends Controller
 
         $validated = $request->validate([
             'attachment_id' => 'required|exists:attachments,id',
-            'description' => 'nullable|string|max:1000',
         ]);
 
         $attachment = Attachment::findOrFail($validated['attachment_id']);
@@ -51,7 +50,6 @@ class ProjectDocumentController extends Controller
         $attachment->update([
             'attachable_type' => Project::class,
             'attachable_id' => $project->id,
-            'description' => $validated['description'] ?? null,
         ]);
 
         return response()->json([

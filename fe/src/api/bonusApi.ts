@@ -60,6 +60,12 @@ export const bonusApi = {
     return response.data;
   },
 
+  // Delete bonus (HR only)
+  deleteBonus: async (id: number) => {
+    const response = await api.delete(`/hr/bonuses/${id}`);
+    return response.data;
+  },
+
   // Calculate bonuses from project (HR only)
   calculateFromProject: async (projectId: number) => {
     const response = await api.post(`/hr/bonuses/calculate-project/${projectId}`);
@@ -75,12 +81,6 @@ export const bonusApi = {
   // Mark as paid (HR only)
   markAsPaid: async (id: number) => {
     const response = await api.post(`/hr/bonuses/${id}/pay`);
-    return response.data;
-  },
-
-  // Delete bonus (HR only)
-  deleteBonus: async (id: number) => {
-    const response = await api.delete(`/hr/bonuses/${id}`);
     return response.data;
   },
 

@@ -9,12 +9,10 @@ import {
   Alert,
   TextInput,
   Modal,
-  ScrollView,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { additionalCostApi, AdditionalCost } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
-import FileUploader from "@/components/FileUploader";
 
 export default function AdditionalCostsScreen() {
   const router = useRouter();
@@ -23,7 +21,6 @@ export default function AdditionalCostsScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({ amount: "", description: "" });
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
 
   useEffect(() => {
     loadCosts();
@@ -50,21 +47,15 @@ export default function AdditionalCostsScreen() {
     }
 
     try {
-      const attachmentIds = uploadedFiles
-        .filter((f) => f.attachment_id)
-        .map((f) => f.attachment_id);
-
       const response = await additionalCostApi.createAdditionalCost(id!, {
         amount: parseFloat(formData.amount),
         description: formData.description,
-        attachments: attachmentIds.length > 0 ? attachmentIds : undefined,
       });
 
       if (response.success) {
         Alert.alert("Thành công", "Chi phí phát sinh đã được đề xuất.");
         setModalVisible(false);
         setFormData({ amount: "", description: "" });
-        setUploadedFiles([]);
         loadCosts();
       }
     } catch (error: any) {
@@ -129,14 +120,6 @@ export default function AdditionalCostsScreen() {
         </View>
       </View>
       <Text style={styles.costDescription}>{item.description}</Text>
-      {item.attachments && item.attachments.length > 0 && (
-        <View style={styles.attachmentsRow}>
-          <Ionicons name="document-outline" size={16} color="#3B82F6" />
-          <Text style={styles.attachmentsText}>
-            {item.attachments.length} file đính kèm
-          </Text>
-        </View>
-      )}
       {item.status === "pending_approval" && (
         <TouchableOpacity
           style={styles.approveButton}
@@ -190,28 +173,13 @@ export default function AdditionalCostsScreen() {
       <Modal
         visible={modalVisible}
         animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => {
-          setModalVisible(false);
-          setFormData({ amount: "", description: "" });
-          setUploadedFiles([]);
-        }}
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Thêm Chi Phí Phát Sinh</Text>
-            <TouchableOpacity
-              onPress={() => {
-                setModalVisible(false);
-                setFormData({ amount: "", description: "" });
-                setUploadedFiles([]);
-              }}
-            >
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-          </View>
 
-          <ScrollView style={styles.modalContent}>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Số tiền (VND)</Text>
               <TextInput
@@ -239,24 +207,12 @@ export default function AdditionalCostsScreen() {
               />
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>File đính kèm (để khách xem & duyệt)</Text>
-              <FileUploader
-                onUploadComplete={(files) => setUploadedFiles(files)}
-                multiple={true}
-                accept="all"
-                maxFiles={10}
-                initialFiles={uploadedFiles}
-              />
-            </View>
-
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
                   setModalVisible(false);
                   setFormData({ amount: "", description: "" });
-                  setUploadedFiles([]);
                 }}
               >
                 <Text style={styles.cancelButtonText}>Hủy</Text>
@@ -268,7 +224,7 @@ export default function AdditionalCostsScreen() {
                 <Text style={styles.submitButtonText}>Gửi</Text>
               </TouchableOpacity>
             </View>
-          </ScrollView>
+          </View>
         </View>
       </Modal>
     </View>
@@ -368,32 +324,17 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 16,
   },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    padding: 16,
-  },
-  attachmentsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  attachmentsText: {
-    fontSize: 14,
-    color: "#3B82F6",
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    maxHeight: "80%",
   },
   modalTitle: {
     fontSize: 20,

@@ -13,11 +13,6 @@ return new class extends Migration
     {
         Schema::create('cost_groups', function (Blueprint $table) {
             $table->id();
-            $table->string('code')->unique(); // Mã nhóm (ví dụ: construction_materials)
-            $table->string('name'); // Tên nhóm (ví dụ: Vật liệu xây dựng)
-            $table->text('description')->nullable(); // Mô tả
-            $table->integer('sort_order')->default(0); // Thứ tự hiển thị
-            $table->boolean('is_active')->default(true); // Có đang sử dụng không
             $table->timestamps();
         });
     }

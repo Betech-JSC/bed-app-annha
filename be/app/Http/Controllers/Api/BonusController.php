@@ -221,11 +221,11 @@ class BonusController extends Controller
     {
         $bonus = Bonus::findOrFail($id);
 
-        // Chỉ cho phép xóa nếu chưa thanh toán
+        // Chỉ cho phép xóa nếu chưa được thanh toán
         if ($bonus->status === 'paid') {
             return response()->json([
                 'success' => false,
-                'message' => 'Không thể xóa thưởng đã thanh toán.'
+                'message' => 'Không thể xóa thưởng đã được thanh toán.'
             ], 400);
         }
 
@@ -239,7 +239,7 @@ class BonusController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
+                'message' => 'Có lỗi xảy ra khi xóa thưởng.',
                 'error' => $e->getMessage()
             ], 500);
         }

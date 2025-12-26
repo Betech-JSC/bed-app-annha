@@ -11,12 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Kiểm tra xem column đã tồn tại chưa
-        if (!Schema::hasColumn('attachments', 'description')) {
-            Schema::table('attachments', function (Blueprint $table) {
-                $table->text('description')->nullable()->after('original_name');
-            });
-        }
+        Schema::table('attachments', function (Blueprint $table) {
+            //
+        });
     }
 
     /**
@@ -25,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('attachments', function (Blueprint $table) {
-            $table->dropColumn('description');
+            //
         });
     }
 };

@@ -123,29 +123,6 @@ class EmployeeSalaryConfigController extends Controller
     }
 
     /**
-     * Xóa config (HR/admin only)
-     */
-    public function destroy($id)
-    {
-        $config = EmployeeSalaryConfig::findOrFail($id);
-
-        try {
-            $config->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Cấu hình lương đã được xóa.'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
      * Lấy config hiện tại của user
      */
     public function getCurrentConfig($userId)

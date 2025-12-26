@@ -11,7 +11,6 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
 import { PermissionGuard } from "@/components/PermissionGuard";
 
 export default function ProjectDetailScreen() {
@@ -155,12 +154,6 @@ export default function ProjectDetailScreen() {
       route: `/projects/${id}/construction-plan`,
       color: "#8B5CF6",
     },
-    {
-      title: "Nhà Thầu Phụ",
-      icon: "business-outline",
-      route: `/projects/${id}/subcontractors`,
-      color: "#06B6D4",
-    },
   ];
 
   if (loading) {
@@ -182,7 +175,12 @@ export default function ProjectDetailScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <BackButton />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi Tiết Dự Án</Text>
         <View style={styles.headerActions}>
           <PermissionGuard permission="projects.update">

@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
@@ -149,6 +150,11 @@ export default function LoginScreen() {
       >
         <View style={styles.content}>
           <View style={styles.header}>
+            <Image
+              source={require("../assets/splash.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={styles.title}>Đăng Nhập</Text>
             <Text style={styles.subtitle}>
               Chào mừng bạn trở lại!
@@ -225,21 +231,6 @@ export default function LoginScreen() {
                 <Text style={styles.loginButtonText}>Đăng Nhập</Text>
               )}
             </TouchableOpacity>
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Hoặc</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity
-              style={styles.registerButton}
-              onPress={() => router.push("/register")}
-            >
-              <Text style={styles.registerButtonText}>
-                Chưa có tài khoản? Đăng ký ngay
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -265,6 +256,11 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 32,
     alignItems: "center",
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    marginBottom: 24,
   },
   title: {
     fontSize: 32,
@@ -338,29 +334,5 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E5E7EB",
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    fontSize: 14,
-    color: "#6B7280",
-  },
-  registerButton: {
-    padding: 16,
-    alignItems: "center",
-  },
-  registerButtonText: {
-    fontSize: 14,
-    color: "#3B82F6",
-    fontWeight: "500",
   },
 });

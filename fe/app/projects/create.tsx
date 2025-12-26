@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,13 +10,10 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { projectApi, CreateProjectData } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 interface User {
@@ -28,7 +25,6 @@ interface User {
 
 export default function CreateProjectScreen() {
   const router = useRouter();
-  const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
@@ -54,25 +50,6 @@ export default function CreateProjectScreen() {
 
   const [selectedCustomer, setSelectedCustomer] = useState<User | null>(null);
   const [selectedManager, setSelectedManager] = useState<User | null>(null);
-  const [generatedCode, setGeneratedCode] = useState("");
-
-  // Tự động sinh mã dự án khi component mount
-  useEffect(() => {
-    generateProjectCode();
-  }, []);
-
-  const generateProjectCode = () => {
-    const today = new Date();
-    const day = String(today.getDate()).padStart(2, "0");
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const year = today.getFullYear();
-    const dateStr = `${day}${month}${year}`;
-
-    // Format: annha-DDMMYYYY-01
-    // Số thứ tự sẽ được backend xử lý, frontend chỉ hiển thị format mẫu
-    const code = `annha-${dateStr}-01`;
-    setGeneratedCode(code);
-  };
 
   useEffect(() => {
     loadCustomers();
@@ -162,10 +139,9 @@ export default function CreateProjectScreen() {
 
     try {
       setLoading(true);
-      // Không gửi code, để backend tự động sinh
       const response = await projectApi.createProject({
         ...formData,
-        code: undefined, // Backend sẽ tự động sinh
+        code: formData.code || undefined,
         description: formData.description || undefined,
         start_date: formData.start_date || undefined,
         end_date: formData.end_date || undefined,
@@ -192,31 +168,20 @@ export default function CreateProjectScreen() {
     }
   };
 
-  const handleInputFocus = (y: number = 0) => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollTo({ y, animated: true });
-    }, 100);
-  };
-
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-    >
+    <View style={styles.container}>
       <View style={styles.header}>
-        <BackButton />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Tạo Dự Án Mới</Text>
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={true}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView style={styles.content}>
         <View style={styles.form}>
           <View style={styles.formGroup}>
             <Text style={styles.label}>
@@ -225,38 +190,19 @@ export default function CreateProjectScreen() {
             <TextInput
               style={styles.input}
               placeholder="Nhập tên dự án"
-              placeholderTextColor="#9CA3AF"
               value={formData.name}
               onChangeText={(text) => setFormData({ ...formData, name: text })}
-              onFocus={() => handleInputFocus(0)}
-              returnKeyType="next"
-              blurOnSubmit={false}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Mã dự án</Text>
-              <Text style={styles.autoLabel}>(Tự động sinh)</Text>
-            </View>
-            <View style={styles.codeContainer}>
-              <TextInput
-                style={[styles.input, styles.inputDisabled]}
-                value={generatedCode}
-                editable={false}
-                placeholder="Mã sẽ được tự động sinh khi tạo dự án"
-                placeholderTextColor="#9CA3AF"
-              />
-              <Ionicons
-                name="refresh-outline"
-                size={20}
-                color="#6B7280"
-                style={styles.refreshIcon}
-              />
-            </View>
-            <Text style={styles.helperText}>
-              Định dạng: annha-DDMMYYYY-XX (tự động tăng số thứ tự)
-            </Text>
+            <Text style={styles.label}>Mã dự án</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nhập mã dự án (tùy chọn)"
+              value={formData.code}
+              onChangeText={(text) => setFormData({ ...formData, code: text })}
+            />
           </View>
 
           <View style={styles.formGroup}>
@@ -340,25 +286,15 @@ export default function CreateProjectScreen() {
           <View style={styles.formGroup}>
             <Text style={styles.label}>Ngày bắt đầu</Text>
             <TouchableOpacity
-              style={styles.dateInput}
+              style={styles.dateButton}
               onPress={() => setShowStartDatePicker(true)}
-              activeOpacity={0.7}
             >
-              <Text
-                style={[
-                  styles.dateInputText,
-                  !formData.start_date && styles.dateInputPlaceholder,
-                ]}
-              >
+              <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+              <Text style={styles.dateButtonText}>
                 {formData.start_date
-                  ? new Date(formData.start_date).toLocaleDateString("vi-VN", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })
+                  ? new Date(formData.start_date).toLocaleDateString("vi-VN")
                   : "Chọn ngày bắt đầu"}
               </Text>
-              <Ionicons name="calendar-outline" size={20} color="#6B7280" />
             </TouchableOpacity>
             {showStartDatePicker && (
               <DateTimePicker
@@ -367,7 +303,7 @@ export default function CreateProjectScreen() {
                 display="default"
                 onChange={(event, date) => {
                   setShowStartDatePicker(false);
-                  if (date && event.type !== "dismissed") {
+                  if (date) {
                     setFormData({
                       ...formData,
                       start_date: date.toISOString().split("T")[0],
@@ -381,43 +317,24 @@ export default function CreateProjectScreen() {
           <View style={styles.formGroup}>
             <Text style={styles.label}>Ngày kết thúc</Text>
             <TouchableOpacity
-              style={styles.dateInput}
+              style={styles.dateButton}
               onPress={() => setShowEndDatePicker(true)}
-              activeOpacity={0.7}
             >
-              <Text
-                style={[
-                  styles.dateInputText,
-                  !formData.end_date && styles.dateInputPlaceholder,
-                ]}
-              >
+              <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+              <Text style={styles.dateButtonText}>
                 {formData.end_date
-                  ? new Date(formData.end_date).toLocaleDateString("vi-VN", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })
+                  ? new Date(formData.end_date).toLocaleDateString("vi-VN")
                   : "Chọn ngày kết thúc"}
               </Text>
-              <Ionicons name="calendar-outline" size={20} color="#6B7280" />
             </TouchableOpacity>
             {showEndDatePicker && (
               <DateTimePicker
-                value={
-                  formData.end_date
-                    ? new Date(formData.end_date)
-                    : formData.start_date
-                      ? new Date(formData.start_date)
-                      : new Date()
-                }
+                value={formData.end_date ? new Date(formData.end_date) : new Date()}
                 mode="date"
                 display="default"
-                minimumDate={
-                  formData.start_date ? new Date(formData.start_date) : undefined
-                }
                 onChange={(event, date) => {
                   setShowEndDatePicker(false);
-                  if (date && event.type !== "dismissed") {
+                  if (date) {
                     setFormData({
                       ...formData,
                       end_date: date.toISOString().split("T")[0],
@@ -433,16 +350,12 @@ export default function CreateProjectScreen() {
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Nhập mô tả dự án (tùy chọn)"
-              placeholderTextColor="#9CA3AF"
               value={formData.description}
               onChangeText={(text) =>
                 setFormData({ ...formData, description: text })
               }
               multiline
               numberOfLines={4}
-              onFocus={() => handleInputFocus(400)}
-              returnKeyType="done"
-              textAlignVertical="top"
             />
           </View>
 
@@ -679,7 +592,7 @@ export default function CreateProjectScreen() {
           )}
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -692,41 +605,30 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 16,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
-    minHeight: 56,
+  },
+  backButton: {
+    padding: 4,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
     color: "#1F2937",
-    flex: 1,
-    textAlign: "center",
-    marginHorizontal: 8,
   },
   placeholder: {
-    width: 40,
+    width: 32,
   },
   content: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 100,
-  },
   form: {
-    padding: 20,
+    padding: 16,
   },
   formGroup: {
-    marginBottom: 24,
-  },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
+    marginBottom: 20,
   },
   label: {
     fontSize: 14,
@@ -734,89 +636,52 @@ const styles = StyleSheet.create({
     color: "#1F2937",
     marginBottom: 8,
   },
-  autoLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-    fontWeight: "400",
-    fontStyle: "italic",
-  },
   required: {
     color: "#EF4444",
   },
   input: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: "#D1D5DB",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 8,
+    padding: 12,
     fontSize: 16,
-    color: "#1F2937",
     backgroundColor: "#FFFFFF",
-    minHeight: 48,
-    lineHeight: 22,
   },
   textArea: {
-    height: 120,
+    height: 100,
     textAlignVertical: "top",
-    paddingTop: 14,
-    lineHeight: 22,
   },
   helperText: {
     fontSize: 12,
     color: "#6B7280",
     marginTop: 4,
-    fontWeight: "400",
   },
-  dateInput: {
+  dateButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 8,
     borderWidth: 1,
     borderColor: "#D1D5DB",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 8,
+    padding: 12,
     backgroundColor: "#FFFFFF",
-    minHeight: 48,
-    gap: 12,
   },
-  dateInputText: {
+  dateButtonText: {
     fontSize: 16,
     color: "#1F2937",
-    flex: 1,
-    lineHeight: 20,
-  },
-  dateInputPlaceholder: {
-    color: "#9CA3AF",
-  },
-  codeContainer: {
-    position: "relative",
-  },
-  inputDisabled: {
-    backgroundColor: "#F9FAFB",
-    color: "#6B7280",
-    paddingRight: 48,
-  },
-  refreshIcon: {
-    position: "absolute",
-    right: 16,
-    top: "50%",
-    transform: [{ translateY: -10 }],
-    zIndex: 1,
   },
   statusContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 8,
   },
   statusButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
     borderColor: "#D1D5DB",
     backgroundColor: "#FFFFFF",
-    minWidth: 100,
   },
   statusButtonActive: {
     backgroundColor: "#3B82F6",
@@ -833,51 +698,37 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 32,
-    marginBottom: 40,
-    paddingHorizontal: 0,
+    marginTop: 24,
+    marginBottom: 32,
   },
   button: {
     flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    padding: 16,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 52,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   cancelButton: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1.5,
-    borderColor: "#D1D5DB",
+    backgroundColor: "#E5E7EB",
   },
   cancelButtonText: {
-    color: "#374151",
+    color: "#1F2937",
     fontWeight: "600",
     fontSize: 16,
-    letterSpacing: 0.3,
   },
   createButton: {
     backgroundColor: "#3B82F6",
-    borderWidth: 0,
   },
   createButtonText: {
     color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 16,
-    letterSpacing: 0.3,
   },
   selectButton: {
     borderWidth: 1,
     borderColor: "#D1D5DB",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 8,
+    padding: 12,
     backgroundColor: "#FFFFFF",
     minHeight: 48,
     justifyContent: "center",
@@ -885,7 +736,7 @@ const styles = StyleSheet.create({
   selectPlaceholder: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 8,
   },
   selectPlaceholderText: {
     flex: 1,
@@ -896,7 +747,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    width: "100%",
   },
   selectedItemInfo: {
     flex: 1,
@@ -936,23 +786,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    margin: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    gap: 12,
-    minHeight: 48,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
     color: "#1F2937",
-    lineHeight: 20,
   },
   modalLoadingContainer: {
     flex: 1,
@@ -961,8 +807,7 @@ const styles = StyleSheet.create({
   },
   userItem: {
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
@@ -972,8 +817,7 @@ const styles = StyleSheet.create({
   userItemContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    width: "100%",
+    gap: 12,
   },
   userAvatar: {
     width: 48,

@@ -17,61 +17,16 @@ class SubcontractorController extends Controller
     public function index(string $projectId)
     {
         $project = Project::findOrFail($projectId);
-        
-        // Lấy từ project_subcontractors (pivot table) nếu có
-        $projectSubcontractors = DB::table('project_subcontractors')
-            ->where('project_id', $project->id)
-            ->get();
-        
-        $subcontractors = [];
-        foreach ($projectSubcontractors as $ps) {
-            $globalSubcontractor = GlobalSubcontractor::with(['creator'])
-                ->find($ps->global_subcontractor_id);
-            
-            if ($globalSubcontractor) {
-                // Lấy payments từ SubcontractorPayment
-                $payments = \App\Models\SubcontractorPayment::where('project_id', $project->id)
-                    ->where('subcontractor_id', $ps->id) // Note: cần cập nhật migration để có global_subcontractor_id
-                    ->orderByDesc('created_at')
-                    ->get();
-                
-                $subcontractors[] = [
-                    'id' => $ps->id,
-                    'global_subcontractor_id' => $globalSubcontractor->id,
-                    'name' => $globalSubcontractor->name,
-                    'code' => $globalSubcontractor->code,
-                    'contact_person' => $globalSubcontractor->contact_person,
-                    'phone' => $globalSubcontractor->phone,
-                    'email' => $globalSubcontractor->email,
-                    'category' => $ps->category,
-                    'total_quote' => $ps->total_quote,
-                    'advance_payment' => $ps->advance_payment,
-                    'total_paid' => $ps->total_paid,
-                    'progress_start_date' => $ps->progress_start_date,
-                    'progress_end_date' => $ps->progress_end_date,
-                    'progress_status' => $ps->progress_status,
-                    'payment_status' => $ps->payment_status,
-                    'approved_by' => $ps->approved_by,
-                    'approved_at' => $ps->approved_at,
-                    'payments' => $payments,
-                ];
-            }
-        }
-        
-        // Fallback: Lấy từ bảng subcontractors cũ (backward compatible)
-        $oldSubcontractors = $project->subcontractors()
+        $subcontractors = $project->subcontractors()
             ->with(['approver', 'attachments', 'items', 'payments' => function ($q) {
                 $q->orderByDesc('created_at');
             }])
             ->orderByDesc('created_at')
             ->get();
-        
-        // Merge cả hai
-        $allSubcontractors = array_merge($subcontractors, $oldSubcontractors->toArray());
 
         return response()->json([
             'success' => true,
-            'data' => $allSubcontractors
+            'data' => $subcontractors
         ]);
     }
 
@@ -122,14 +77,15 @@ class SubcontractorController extends Controller
     }
 
     /**
-     * Tạo nhà thầu phụ (chọn từ Global Subcontractors)
+     * Tạo nhà thầu phụ
      */
     public function store(Request $request, string $projectId)
     {
         $project = Project::findOrFail($projectId);
 
         $validated = $request->validate([
-            'global_subcontractor_id' => 'required|exists:global_subcontractors,id',
+            'global_subcontractor_id' => 'nullable|exists:global_subcontractors,id',
+            'name' => 'required_without:global_subcontractor_id|string|max:255',
             'category' => 'nullable|string|max:255',
             'total_quote' => 'required|numeric|min:0',
             'advance_payment' => 'nullable|numeric|min:0',
@@ -141,52 +97,32 @@ class SubcontractorController extends Controller
         try {
             DB::beginTransaction();
 
-            // Kiểm tra xem đã có trong dự án này chưa
-            $exists = DB::table('project_subcontractors')
-                ->where('project_id', $project->id)
-                ->where('global_subcontractor_id', $validated['global_subcontractor_id'])
-                ->exists();
-
-            if ($exists) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Nhà thầu phụ này đã được thêm vào dự án.'
-                ], 400);
+            // Nếu có global_subcontractor_id, lấy thông tin từ global subcontractor
+            if (isset($validated['global_subcontractor_id'])) {
+                $globalSubcontractor = GlobalSubcontractor::findOrFail($validated['global_subcontractor_id']);
+                $validated['name'] = $globalSubcontractor->name;
+                $validated['category'] = $globalSubcontractor->category ?? $validated['category'] ?? null;
             }
 
-            // Tạo record trong project_subcontractors
-            $projectSubcontractorId = DB::table('project_subcontractors')->insertGetId([
+            $subcontractor = Subcontractor::create([
                 'project_id' => $project->id,
-                'global_subcontractor_id' => $validated['global_subcontractor_id'],
+                'name' => $validated['name'],
                 'category' => $validated['category'] ?? null,
                 'total_quote' => $validated['total_quote'],
                 'advance_payment' => $validated['advance_payment'] ?? 0,
-                'total_paid' => 0,
                 'progress_start_date' => $validated['progress_start_date'] ?? null,
                 'progress_end_date' => $validated['progress_end_date'] ?? null,
                 'progress_status' => $validated['progress_status'] ?? 'not_started',
                 'payment_status' => 'pending',
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_by' => $request->user()->id,
             ]);
-
-            $globalSubcontractor = GlobalSubcontractor::find($validated['global_subcontractor_id']);
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Nhà thầu phụ đã được thêm vào dự án.',
-                'data' => [
-                    'id' => $projectSubcontractorId,
-                    'global_subcontractor' => $globalSubcontractor,
-                    'category' => $validated['category'],
-                    'total_quote' => $validated['total_quote'],
-                    'advance_payment' => $validated['advance_payment'] ?? 0,
-                    'total_paid' => 0,
-                    'progress_status' => $validated['progress_status'] ?? 'not_started',
-                    'payment_status' => 'pending',
-                ]
+                'message' => 'Nhà thầu phụ đã được thêm.',
+                'data' => $subcontractor
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();

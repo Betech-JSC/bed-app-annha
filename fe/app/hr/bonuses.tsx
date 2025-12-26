@@ -15,7 +15,6 @@ import { bonusApi, Bonus, CreateBonusData } from "@/api/bonusApi";
 import { employeesApi } from "@/api/employeesApi";
 import { Ionicons } from "@expo/vector-icons";
 import BonusForm from "@/components/BonusForm";
-import BackButton from "@/components/BackButton";
 
 export default function BonusesScreen() {
   const router = useRouter();
@@ -23,6 +22,8 @@ export default function BonusesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingBonus, setEditingBonus] = useState<Bonus | null>(null);
   const [employees, setEmployees] = useState<any[]>([]);
 
   useEffect(() => {
@@ -77,24 +78,40 @@ export default function BonusesScreen() {
     }
   };
 
-  const handleApprove = async (id: number) => {
+  const handleUpdateBonus = async (data: Partial<CreateBonusData>) => {
+    if (!editingBonus) return;
+
     try {
-      const response = await bonusApi.approveBonus(id);
+      const response = await bonusApi.updateBonus(editingBonus.id, data);
       if (response.success) {
-        Alert.alert("Thành công", "Đã duyệt thưởng");
+        Alert.alert("Thành công", "Đã cập nhật thưởng thành công");
+        setShowEditModal(false);
+        setEditingBonus(null);
         loadBonuses();
       }
-    } catch (error) {
-      Alert.alert("Lỗi", "Không thể duyệt thưởng");
+    } catch (error: any) {
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Không thể cập nhật thưởng"
+      );
     }
   };
 
-  const handleDelete = (bonus: Bonus) => {
+  const handleDeleteBonus = async (bonus: Bonus) => {
+    // Không cho phép xóa thưởng đã thanh toán
+    if (bonus.status === "paid") {
+      Alert.alert("Lỗi", "Không thể xóa thưởng đã được thanh toán");
+      return;
+    }
+
     Alert.alert(
-      "Xác nhận",
+      "Xác nhận xóa",
       `Bạn có chắc chắn muốn xóa thưởng này?`,
       [
-        { text: "Hủy", style: "cancel" },
+        {
+          text: "Hủy",
+          style: "cancel",
+        },
         {
           text: "Xóa",
           style: "destructive",
@@ -117,6 +134,23 @@ export default function BonusesScreen() {
         },
       ]
     );
+  };
+
+  const openEditModal = (bonus: Bonus) => {
+    setEditingBonus(bonus);
+    setShowEditModal(true);
+  };
+
+  const handleApprove = async (id: number) => {
+    try {
+      const response = await bonusApi.approveBonus(id);
+      if (response.success) {
+        Alert.alert("Thành công", "Đã duyệt thưởng");
+        loadBonuses();
+      }
+    } catch (error) {
+      Alert.alert("Lỗi", "Không thể duyệt thưởng");
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -185,18 +219,57 @@ export default function BonusesScreen() {
       <View style={styles.cardActions}>
         {item.status === "pending" && (
           <TouchableOpacity
-            style={styles.approveButton}
+            style={[styles.actionButton, styles.approveButton]}
             onPress={() => handleApprove(item.id)}
           >
-            <Text style={styles.approveButtonText}>Duyệt</Text>
+            <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+            <Text style={styles.actionButtonText}>Duyệt</Text>
           </TouchableOpacity>
         )}
         {item.status !== "paid" && (
+          <>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.editButton]}
+              onPress={() => openEditModal(item)}
+            >
+              <Ionicons name="create-outline" size={18} color="#3B82F6" />
+              <Text style={[styles.actionButtonText, styles.editButtonText]}>
+                Sửa
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={() => handleDeleteBonus(item)}
+            >
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
+                Xóa
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+        {item.status === "approved" && (
           <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => handleDelete(item)}
+            style={[styles.actionButton, styles.payButton]}
+            onPress={async () => {
+              try {
+                const response = await bonusApi.markAsPaid(item.id);
+                if (response.success) {
+                  Alert.alert("Thành công", "Đã đánh dấu thanh toán");
+                  loadBonuses();
+                }
+              } catch (error: any) {
+                Alert.alert(
+                  "Lỗi",
+                  error.response?.data?.message || "Không thể đánh dấu thanh toán"
+                );
+              }
+            }}
           >
-            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            <Ionicons name="cash-outline" size={18} color="#10B981" />
+            <Text style={[styles.actionButtonText, styles.payButtonText]}>
+              Đánh dấu đã trả
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -214,7 +287,6 @@ export default function BonusesScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <BackButton />
         <Text style={styles.title}>Quản Lý Thưởng</Text>
         <TouchableOpacity
           style={styles.addButton}
@@ -240,6 +312,7 @@ export default function BonusesScreen() {
         }
       />
 
+      {/* Create Modal */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
@@ -260,6 +333,51 @@ export default function BonusesScreen() {
             onSubmit={handleCreateBonus}
             onCancel={() => setShowCreateModal(false)}
           />
+        </View>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowEditModal(false);
+          setEditingBonus(null);
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Chỉnh Sửa Thưởng</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setShowEditModal(false);
+                setEditingBonus(null);
+              }}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+          </View>
+          {editingBonus && (
+            <BonusForm
+              onSubmit={handleUpdateBonus}
+              onCancel={() => {
+                setShowEditModal(false);
+                setEditingBonus(null);
+              }}
+              initialData={{
+                user_id: editingBonus.user_id,
+                project_id: editingBonus.project_id,
+                bonus_type: editingBonus.bonus_type,
+                amount: editingBonus.amount,
+                calculation_method: editingBonus.calculation_method,
+                period_start: editingBonus.period_start,
+                period_end: editingBonus.period_end,
+                description: editingBonus.description,
+              }}
+            />
+          )}
         </View>
       </Modal>
     </View>
@@ -289,8 +407,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     color: "#1F2937",
-    flex: 1,
-    marginLeft: 8,
   },
   addButton: {
     backgroundColor: "#3B82F6",
@@ -373,26 +489,53 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 8,
   },
+  cardActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
   approveButton: {
     backgroundColor: "#3B82F6",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 12,
+  },
+  editButton: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+  },
+  deleteButton: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#EF4444",
+  },
+  payButton: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#10B981",
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
   approveButtonText: {
     color: "#FFFFFF",
-    fontWeight: "600",
   },
-  cardActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 12,
-    gap: 8,
+  editButtonText: {
+    color: "#3B82F6",
   },
-  deleteButton: {
-    padding: 8,
+  deleteButtonText: {
+    color: "#EF4444",
+  },
+  payButtonText: {
+    color: "#10B981",
   },
   emptyContainer: {
     padding: 40,

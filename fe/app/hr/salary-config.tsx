@@ -23,7 +23,6 @@ import { Ionicons } from "@expo/vector-icons";
 import SalaryConfigForm from "@/components/SalaryConfigForm";
 import { formatVNDWithoutSymbol } from "@/utils/format";
 import { PermissionGuard } from "@/components/PermissionGuard";
-import BackButton from "@/components/BackButton";
 
 export default function SalaryConfigScreen() {
   const router = useRouter();
@@ -60,24 +59,11 @@ export default function SalaryConfigScreen() {
         params.user_id = filterUserId;
       }
       const response = await salaryConfigApi.getSalaryConfig(params);
-      console.log("Salary config response:", response);
       if (response.success) {
-        // Backend trả về paginated data
-        let data = [];
-        if (Array.isArray(response.data)) {
-          data = response.data;
-        } else if (response.data?.data && Array.isArray(response.data.data)) {
-          data = response.data.data;
-        }
-        console.log("Loaded configs:", data.length, data);
-        setConfigs(data);
-      } else {
-        console.error("Response not successful:", response);
+        setConfigs(response.data.data || []);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error loading salary configs:", error);
-      console.error("Error details:", error.response?.data);
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách cấu hình lương");
     }
   };
 
@@ -85,15 +71,7 @@ export default function SalaryConfigScreen() {
     try {
       const response = await employeesApi.getEmployees({ page: 1, per_page: 100 });
       if (response.success) {
-        // Backend trả về paginated data
-        let data = [];
-        if (Array.isArray(response.data)) {
-          data = response.data;
-        } else if (response.data?.data && Array.isArray(response.data.data)) {
-          data = response.data.data;
-        }
-        setEmployees(data);
-        console.log("Loaded employees:", data.length);
+        setEmployees(response.data.data || []);
       }
     } catch (error) {
       console.error("Error loading employees:", error);
@@ -147,17 +125,15 @@ export default function SalaryConfigScreen() {
     }
   };
 
-  const openEditModal = (config: EmployeeSalaryConfig) => {
-    setEditingConfig(config);
-    setShowEditModal(true);
-  };
-
-  const handleDelete = (config: EmployeeSalaryConfig) => {
+  const handleDelete = async (config: EmployeeSalaryConfig) => {
     Alert.alert(
-      "Xác nhận",
+      "Xác nhận xóa",
       `Bạn có chắc chắn muốn xóa cấu hình lương này?`,
       [
-        { text: "Hủy", style: "cancel" },
+        {
+          text: "Hủy",
+          style: "cancel",
+        },
         {
           text: "Xóa",
           style: "destructive",
@@ -180,6 +156,11 @@ export default function SalaryConfigScreen() {
         },
       ]
     );
+  };
+
+  const openEditModal = (config: EmployeeSalaryConfig) => {
+    setEditingConfig(config);
+    setShowEditModal(true);
   };
 
   const getSalaryTypeLabel = (type: string) => {
@@ -223,28 +204,26 @@ export default function SalaryConfigScreen() {
   };
 
   const filteredConfigs = configs.filter((config) => {
-    // Nếu có filterUserId, chỉ hiển thị config của user đó
-    if (filterUserId && config.user_id !== filterUserId) {
-      return false;
-    }
-    
-    // Nếu có search query, filter theo tên, email hoặc loại lương
-    if (searchQuery.trim() !== "") {
-      const employee = employees.find((e) => e.id === config.user_id);
-      const searchLower = searchQuery.toLowerCase();
-      return (
-        employee?.name?.toLowerCase().includes(searchLower) ||
-        employee?.email?.toLowerCase().includes(searchLower) ||
-        getSalaryTypeLabel(config.salary_type).toLowerCase().includes(searchLower)
-      );
-    }
-    
-    return true;
+    if (searchQuery.trim() === "") return true;
+    const employee = employees.find((e) => e.id === config.user_id);
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      employee?.name?.toLowerCase().includes(searchLower) ||
+      employee?.email?.toLowerCase().includes(searchLower) ||
+      getSalaryTypeLabel(config.salary_type).toLowerCase().includes(searchLower)
+    );
   });
 
   const renderItem = ({ item }: { item: EmployeeSalaryConfig }) => {
     const current = isCurrent(item);
-    const employee = employees.find((e) => e.id === item.user_id);
+    // Try to get employee from the relationship first, then fallback to employees list
+    const employee = item.user || employees.find((e) => e.id === item.user_id);
+    
+    // Get employee name - prioritize user relationship, then employees list, then fallback
+    const employeeName = employee?.name || 
+                         (employee?.first_name && employee?.last_name 
+                           ? `${employee.first_name} ${employee.last_name}`.trim()
+                           : employee?.first_name || employee?.email || `User #${item.user_id}`);
 
     return (
       <View style={[styles.itemCard, current && styles.itemCardCurrent]}>
@@ -253,7 +232,7 @@ export default function SalaryConfigScreen() {
             <View style={styles.itemTitleRow}>
               <View style={styles.employeeInfo}>
                 <Text style={styles.itemTitle}>
-                  {employee?.name || `User #${item.user_id}`}
+                  {employeeName}
                 </Text>
                 {employee?.email && (
                   <Text style={styles.itemEmail}>{employee.email}</Text>
@@ -287,7 +266,7 @@ export default function SalaryConfigScreen() {
               </View>
             </View>
           </View>
-          <View style={styles.itemActions}>
+          <View style={styles.actionButtons}>
             <PermissionGuard permission="hr.salary_config.update">
               <TouchableOpacity
                 style={styles.editButton}
@@ -365,7 +344,6 @@ export default function SalaryConfigScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <BackButton />
         <Text style={styles.headerTitle}>Cấu Hình Lương</Text>
         <PermissionGuard permission="hr.salary_config.create">
           <TouchableOpacity
@@ -562,11 +540,9 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E5E7EB",
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "700",
     color: "#1F2937",
-    flex: 1,
-    marginLeft: 8,
   },
   addButton: {
     backgroundColor: "#3B82F6",
@@ -711,7 +687,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#3B82F6",
   },
-  itemActions: {
+  actionButtons: {
     flexDirection: "row",
     gap: 8,
   },

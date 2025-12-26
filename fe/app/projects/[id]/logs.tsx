@@ -9,9 +9,14 @@ import {
   Alert,
   Modal,
   TextInput,
+  ScrollView,
+  Image,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { constructionLogApi, ConstructionLog } from "@/api/constructionLogApi";
+import { attachmentApi, Attachment } from "@/api/attachmentApi";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ConstructionLogsScreen() {
@@ -20,6 +25,7 @@ export default function ConstructionLogsScreen() {
   const [logs, setLogs] = useState<ConstructionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingLog, setEditingLog] = useState<ConstructionLog | null>(null);
   const [formData, setFormData] = useState({
     log_date: new Date().toISOString().split("T")[0],
     weather: "",
@@ -27,6 +33,8 @@ export default function ConstructionLogsScreen() {
     completion_percentage: "",
     notes: "",
   });
+  const [uploadedAttachments, setUploadedAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     loadLogs();
@@ -46,6 +54,124 @@ export default function ConstructionLogsScreen() {
     }
   };
 
+  const handlePickImages = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Lỗi", "Cần quyền truy cập thư viện ảnh");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets) {
+        await handleUploadFiles(result.assets.map((asset) => asset.uri));
+      }
+    } catch (error) {
+      console.error("Error picking images:", error);
+      Alert.alert("Lỗi", "Không thể chọn hình ảnh");
+    }
+  };
+
+  const handlePickDocuments = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets) {
+        await handleUploadFiles(result.assets.map((asset) => asset.uri));
+      }
+    } catch (error) {
+      console.error("Error picking documents:", error);
+      Alert.alert("Lỗi", "Không thể chọn tài liệu");
+    }
+  };
+
+  const handleUploadFiles = async (fileUris: string[]) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      
+      for (let i = 0; i < fileUris.length; i++) {
+        const uri = fileUris[i];
+        const fileName = uri.split("/").pop() || `file_${i}.jpg`;
+        const fileType = fileName.split(".").pop() || "jpg";
+        
+        formData.append("files[]", {
+          uri,
+          name: fileName,
+          type: `image/${fileType}`,
+        } as any);
+      }
+
+      const response = await attachmentApi.upload(formData);
+      if (response.success && response.data) {
+        const newAttachments = response.data.map((item: any) => ({
+          id: item.attachment_id,
+          file_url: item.file_url,
+          original_name: item.file_url.split("/").pop() || "",
+          type: "image" as const,
+        }));
+        setUploadedAttachments([...uploadedAttachments, ...newAttachments]);
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể upload files");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    const newAttachments = [...uploadedAttachments];
+    newAttachments.splice(index, 1);
+    setUploadedAttachments(newAttachments);
+  };
+
+  const openEditModal = (log: ConstructionLog) => {
+    setEditingLog(log);
+    setFormData({
+      log_date: log.log_date,
+      weather: log.weather || "",
+      personnel_count: log.personnel_count?.toString() || "",
+      completion_percentage: log.completion_percentage?.toString() || "",
+      notes: log.notes || "",
+    });
+    setUploadedAttachments(log.attachments || []);
+    setModalVisible(true);
+  };
+
+  const handleDelete = async (log: ConstructionLog) => {
+    Alert.alert(
+      "Xác nhận xóa",
+      "Bạn có chắc chắn muốn xóa nhật ký này?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await constructionLogApi.deleteLog(id!, log.id);
+              if (response.success) {
+                Alert.alert("Thành công", "Đã xóa nhật ký");
+                loadLogs();
+              }
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa nhật ký");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSubmit = async () => {
     if (!formData.log_date) {
       Alert.alert("Lỗi", "Vui lòng chọn ngày");
@@ -53,7 +179,8 @@ export default function ConstructionLogsScreen() {
     }
 
     try {
-      const response = await constructionLogApi.createLog(id!, {
+      const attachmentIds = uploadedAttachments.map((att) => att.id);
+      const data = {
         log_date: formData.log_date,
         weather: formData.weather || undefined,
         personnel_count: formData.personnel_count
@@ -63,18 +190,19 @@ export default function ConstructionLogsScreen() {
           ? parseFloat(formData.completion_percentage)
           : undefined,
         notes: formData.notes || undefined,
-      });
+        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
+      };
+
+      let response;
+      if (editingLog) {
+        response = await constructionLogApi.updateLog(id!, editingLog.id, data);
+      } else {
+        response = await constructionLogApi.createLog(id!, data);
+      }
 
       if (response.success) {
-        Alert.alert("Thành công", "Nhật ký đã được tạo.");
-        setModalVisible(false);
-        setFormData({
-          log_date: new Date().toISOString().split("T")[0],
-          weather: "",
-          personnel_count: "",
-          completion_percentage: "",
-          notes: "",
-        });
+        Alert.alert("Thành công", editingLog ? "Nhật ký đã được cập nhật." : "Nhật ký đã được tạo.");
+        handleCloseModal();
         loadLogs();
       }
     } catch (error: any) {
@@ -82,24 +210,53 @@ export default function ConstructionLogsScreen() {
     }
   };
 
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setEditingLog(null);
+    setFormData({
+      log_date: new Date().toISOString().split("T")[0],
+      weather: "",
+      personnel_count: "",
+      completion_percentage: "",
+      notes: "",
+    });
+    setUploadedAttachments([]);
+  };
+
   const renderLogItem = ({ item }: { item: ConstructionLog }) => (
     <View style={styles.logCard}>
       <View style={styles.logHeader}>
-        <Text style={styles.logDate}>
-          {new Date(item.log_date).toLocaleDateString("vi-VN", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </Text>
-        {item.completion_percentage > 0 && (
-          <View style={styles.progressBadge}>
-            <Text style={styles.progressText}>
-              {item.completion_percentage}%
-            </Text>
-          </View>
-        )}
+        <View style={styles.logHeaderLeft}>
+          <Text style={styles.logDate}>
+            {new Date(item.log_date).toLocaleDateString("vi-VN", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </Text>
+          {item.completion_percentage > 0 && (
+            <View style={styles.progressBadge}>
+              <Text style={styles.progressText}>
+                {item.completion_percentage}%
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.logActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => openEditModal(item)}
+          >
+            <Ionicons name="create-outline" size={20} color="#3B82F6" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleDelete(item)}
+          >
+            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.logDetails}>
@@ -124,11 +281,30 @@ export default function ConstructionLogsScreen() {
       )}
 
       {item.attachments && item.attachments.length > 0 && (
-        <View style={styles.attachmentsRow}>
-          <Ionicons name="images-outline" size={16} color="#3B82F6" />
-          <Text style={styles.attachmentsText}>
-            {item.attachments.length} hình ảnh
+        <View style={styles.attachmentsContainer}>
+          <Text style={styles.attachmentsLabel}>
+            {item.attachments.length} file đính kèm
           </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentsScroll}>
+            {item.attachments.map((attachment: any, index: number) => (
+              <View key={attachment.id || index} style={styles.attachmentItem}>
+                {attachment.type === "image" ? (
+                  <Image
+                    source={{ uri: attachment.file_url }}
+                    style={styles.attachmentImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.attachmentFile}>
+                    <Ionicons name="document-outline" size={24} color="#3B82F6" />
+                    <Text style={styles.attachmentFileName} numberOfLines={1}>
+                      {attachment.original_name || "File"}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>
@@ -154,7 +330,10 @@ export default function ConstructionLogsScreen() {
         <Text style={styles.headerTitle}>Nhật Ký Công Trình</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setModalVisible(true)}
+          onPress={() => {
+            handleCloseModal();
+            setModalVisible(true);
+          }}
         >
           <Ionicons name="add" size={24} color="#3B82F6" />
         </TouchableOpacity>
@@ -177,11 +356,20 @@ export default function ConstructionLogsScreen() {
         visible={modalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Thêm Nhật Ký</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingLog ? "Chỉnh Sửa Nhật Ký" : "Thêm Nhật Ký"}
+              </Text>
+              <TouchableOpacity onPress={handleCloseModal}>
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={true}>
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>Ngày</Text>
@@ -248,20 +436,82 @@ export default function ConstructionLogsScreen() {
               />
             </View>
 
+            {/* Upload Files Section */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Hình ảnh & Tài liệu</Text>
+              <View style={styles.uploadButtons}>
+                <TouchableOpacity
+                  style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
+                  onPress={handlePickImages}
+                  disabled={uploading}
+                >
+                  <Ionicons name="images-outline" size={20} color="#3B82F6" />
+                  <Text style={styles.uploadButtonText}>Chọn ảnh</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
+                  onPress={handlePickDocuments}
+                  disabled={uploading}
+                >
+                  <Ionicons name="document-outline" size={20} color="#3B82F6" />
+                  <Text style={styles.uploadButtonText}>Chọn file</Text>
+                </TouchableOpacity>
+              </View>
+
+              {uploading && (
+                <View style={styles.uploadingContainer}>
+                  <ActivityIndicator size="small" color="#3B82F6" />
+                  <Text style={styles.uploadingText}>Đang upload...</Text>
+                </View>
+              )}
+
+              {uploadedAttachments.length > 0 && (
+                <View style={styles.uploadedFilesContainer}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {uploadedAttachments.map((attachment, index) => (
+                      <View key={attachment.id || index} style={styles.uploadedFileItem}>
+                        {attachment.type === "image" ? (
+                          <Image
+                            source={{ uri: attachment.file_url }}
+                            style={styles.uploadedImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.uploadedFile}>
+                            <Ionicons name="document-outline" size={24} color="#3B82F6" />
+                          </View>
+                        )}
+                        <TouchableOpacity
+                          style={styles.removeFileButton}
+                          onPress={() => handleRemoveAttachment(index)}
+                        >
+                          <Ionicons name="close-circle" size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
+                onPress={handleCloseModal}
               >
                 <Text style={styles.cancelButtonText}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.submitButton]}
                 onPress={handleSubmit}
+                disabled={uploading}
               >
-                <Text style={styles.submitButtonText}>Lưu</Text>
+                <Text style={styles.submitButtonText}>
+                  {editingLog ? "Cập nhật" : "Tạo"}
+                </Text>
               </TouchableOpacity>
             </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -320,6 +570,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  logHeaderLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  logActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionButton: {
+    padding: 4,
+  },
   logDate: {
     fontSize: 16,
     fontWeight: "600",
@@ -358,15 +621,117 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
   },
-  attachmentsRow: {
+  attachmentsContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  attachmentsLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  attachmentsScroll: {
+    marginTop: 8,
+  },
+  attachmentItem: {
+    marginRight: 8,
+    position: "relative",
+  },
+  attachmentImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+  },
+  attachmentFile: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 8,
+  },
+  attachmentFileName: {
+    fontSize: 10,
+    color: "#6B7280",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  modalScroll: {
+    maxHeight: "70%",
+  },
+  uploadButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 12,
+  },
+  uploadButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
+    justifyContent: "center",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+    backgroundColor: "#EFF6FF",
     gap: 8,
   },
-  attachmentsText: {
+  uploadButtonDisabled: {
+    opacity: 0.5,
+  },
+  uploadButtonText: {
     fontSize: 14,
+    fontWeight: "600",
     color: "#3B82F6",
+  },
+  uploadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  uploadingText: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  uploadedFilesContainer: {
+    marginTop: 12,
+  },
+  uploadedFileItem: {
+    marginRight: 8,
+    position: "relative",
+  },
+  uploadedImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+  },
+  uploadedFile: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  removeFileButton: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
   },
   emptyContainer: {
     flex: 1,

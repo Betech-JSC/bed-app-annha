@@ -5,8 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectPayment;
-use App\Models\User;
-use App\Services\ExpoPushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -48,7 +46,6 @@ class ProjectPaymentController extends Controller
         $validated = $request->validate([
             'payment_number' => 'required|integer|min:1',
             'amount' => 'required|numeric|min:0',
-            'notes' => 'nullable|string|max:1000',
             'due_date' => 'required|date',
             'contract_id' => 'nullable|exists:contracts,id',
         ]);
@@ -73,34 +70,6 @@ class ProjectPaymentController extends Controller
                 ...$validated,
                 'status' => 'pending',
             ]);
-
-            // Gửi thông báo cho khách hàng
-            $customer = $project->customer;
-            if ($customer) {
-                try {
-                    $amountFormatted = number_format($validated['amount'], 0, ',', '.');
-                    $title = 'Đợt thanh toán mới';
-                    $body = "Dự án {$project->name} có đợt thanh toán mới: Đợt {$validated['payment_number']} - {$amountFormatted} VNĐ";
-                    
-                    if ($customer->fcm_token) {
-                        ExpoPushService::sendNotification(
-                            $customer->fcm_token,
-                            $title,
-                            $body,
-                            [
-                                'type' => 'payment_created',
-                                'project_id' => $project->id,
-                                'payment_id' => $payment->id,
-                                'payment_number' => $validated['payment_number'],
-                                'amount' => $validated['amount'],
-                            ]
-                        );
-                    }
-                } catch (\Exception $e) {
-                    // Log error but don't fail the request
-                    \Log::error('Error sending payment notification: ' . $e->getMessage());
-                }
-            }
 
             DB::commit();
 
@@ -129,7 +98,6 @@ class ProjectPaymentController extends Controller
 
         $validated = $request->validate([
             'amount' => 'sometimes|numeric|min:0',
-            'notes' => 'nullable|string|max:1000',
             'due_date' => 'sometimes|date',
             'paid_date' => 'nullable|date',
         ]);

@@ -172,4 +172,44 @@ class UserController extends Controller
             'avatar_url' => asset('storage/' . $path),
         ]);
     }
+
+    /**
+     * Xóa tài khoản của user hiện tại (yêu cầu của Apple App Store)
+     */
+    public function deleteAccount(Request $request)
+    {
+        $user = $request->user();
+
+        // Không cho phép xóa tài khoản super admin
+        if ($user->owner === true) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể xóa tài khoản Super Admin.'
+            ], 403);
+        }
+
+        try {
+            // Xóa avatar nếu có
+            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+
+            // Xóa tài khoản (soft delete)
+            $user->delete();
+
+            // Revoke all tokens
+            $user->tokens()->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tài khoản đã được xóa thành công.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi xóa tài khoản.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

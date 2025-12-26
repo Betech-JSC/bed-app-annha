@@ -6,30 +6,5 @@ use Illuminate\Database\Eloquent\Model;
 
 class CostGroup extends Model
 {
-    protected $fillable = [
-        'code',
-        'name',
-        'description',
-        'sort_order',
-        'is_active',
-    ];
-
-    protected $casts = [
-        'sort_order' => 'integer',
-        'is_active' => 'boolean',
-    ];
-
-    // ==================================================================
-    // SCOPE
-    // ==================================================================
-
-    public function scopeActive($query)
-    {
-        return $query->where('is_active', true);
-    }
-
-    public function scopeOrdered($query)
-    {
-        return $query->orderBy('sort_order')->orderBy('name');
-    }
+    //
 }

@@ -17,7 +17,6 @@ export interface AdditionalCost {
 export interface CreateAdditionalCostData {
   amount: number;
   description: string;
-  attachments?: number[];
 }
 
 export const additionalCostApi = {
