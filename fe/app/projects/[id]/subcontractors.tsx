@@ -24,12 +24,25 @@ export default function SubcontractorsScreen() {
   const [globalSubcontractors, setGlobalSubcontractors] = useState<GlobalSubcontractor[]>([]);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
   const [showGlobalList, setShowGlobalList] = useState(false);
+  const [selectedSubcontractor, setSelectedSubcontractor] = useState<Subcontractor | null>(null);
+  const [showPaymentsModal, setShowPaymentsModal] = useState(false);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
   const [formData, setFormData] = useState({
     global_subcontractor_id: null as number | null,
     name: "",
     category: "",
     total_quote: "",
     advance_payment: "",
+  });
+  const [paymentFormData, setPaymentFormData] = useState({
+    payment_stage: "",
+    amount: "",
+    payment_date: new Date().toISOString().split("T")[0],
+    payment_method: "bank_transfer" as "cash" | "bank_transfer" | "check" | "other",
+    reference_number: "",
+    description: "",
   });
 
   useEffect(() => {
@@ -65,12 +78,46 @@ export default function SubcontractorsScreen() {
       setLoading(true);
       const response = await subcontractorApi.getSubcontractors(id!);
       if (response.success) {
-        setSubcontractors(response.data || []);
+        const data = response.data || [];
+        // Load payments for each subcontractor
+        const subcontractorsWithPayments = await Promise.all(
+          data.map(async (sub: Subcontractor) => {
+            try {
+              const paymentsResponse = await subcontractorApi.getPayments(id!, {
+                subcontractor_id: sub.id,
+              });
+              if (paymentsResponse.success) {
+                sub.payments = paymentsResponse.data || [];
+              }
+            } catch (error) {
+              console.error("Error loading payments for subcontractor:", error);
+            }
+            return sub;
+          })
+        );
+        setSubcontractors(subcontractorsWithPayments);
       }
     } catch (error) {
       console.error("Error loading subcontractors:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPayments = async (subcontractorId: number) => {
+    try {
+      setLoadingPayments(true);
+      const response = await subcontractorApi.getPayments(id!, {
+        subcontractor_id: subcontractorId,
+      });
+      if (response.success) {
+        setPayments(response.data || []);
+      }
+    } catch (error) {
+      console.error("Error loading payments:", error);
+      Alert.alert("Lỗi", "Không thể tải danh sách thanh toán");
+    } finally {
+      setLoadingPayments(false);
     }
   };
 
@@ -518,6 +565,413 @@ export default function SubcontractorsScreen() {
                     </TouchableOpacity>
                   )}
                 />
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Payments Management Modal */}
+      <Modal
+        visible={showPaymentsModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowPaymentsModal(false);
+          setSelectedSubcontractor(null);
+          setPayments([]);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <Text style={styles.modalTitle}>
+                  Chi phí: {selectedSubcontractor?.name}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  Tổng: {formatCurrency(selectedSubcontractor?.total_quote || 0)} | Đã trả:{" "}
+                  {formatCurrency(selectedSubcontractor?.total_paid || 0)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowPaymentsModal(false);
+                  setSelectedSubcontractor(null);
+                  setPayments([]);
+                }}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              {showPaymentForm ? (
+                <ScrollView>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Đợt thanh toán</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="VD: Đợt 1, Nghiệm thu lần 1..."
+                      value={paymentFormData.payment_stage}
+                      onChangeText={(text) =>
+                        setPaymentFormData({ ...paymentFormData, payment_stage: text })
+                      }
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>
+                      Số tiền <Text style={styles.required}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Nhập số tiền"
+                      value={paymentFormData.amount}
+                      onChangeText={(text) =>
+                        setPaymentFormData({ ...paymentFormData, amount: text })
+                      }
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Ngày thanh toán</Text>
+                    <TouchableOpacity
+                      style={styles.selectButton}
+                      onPress={() => {
+                        // TODO: Add date picker
+                      }}
+                    >
+                      <Text style={styles.selectButtonText}>
+                        {paymentFormData.payment_date
+                          ? new Date(paymentFormData.payment_date).toLocaleDateString("vi-VN")
+                          : "Chọn ngày"}
+                      </Text>
+                      <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Phương thức thanh toán</Text>
+                    <View style={styles.paymentMethodRow}>
+                      {[
+                        { value: "bank_transfer", label: "Chuyển khoản" },
+                        { value: "cash", label: "Tiền mặt" },
+                        { value: "check", label: "Séc" },
+                        { value: "other", label: "Khác" },
+                      ].map((method) => (
+                        <TouchableOpacity
+                          key={method.value}
+                          style={[
+                            styles.paymentMethodButton,
+                            paymentFormData.payment_method === method.value &&
+                              styles.paymentMethodButtonActive,
+                          ]}
+                          onPress={() =>
+                            setPaymentFormData({
+                              ...paymentFormData,
+                              payment_method: method.value as any,
+                            })
+                          }
+                        >
+                          <Text
+                            style={[
+                              styles.paymentMethodText,
+                              paymentFormData.payment_method === method.value &&
+                                styles.paymentMethodTextActive,
+                            ]}
+                          >
+                            {method.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Số tham chiếu</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Số chứng từ, số phiếu..."
+                      value={paymentFormData.reference_number}
+                      onChangeText={(text) =>
+                        setPaymentFormData({ ...paymentFormData, reference_number: text })
+                      }
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Ghi chú</Text>
+                    <TextInput
+                      style={[styles.input, styles.textArea]}
+                      placeholder="Nhập ghi chú..."
+                      value={paymentFormData.description}
+                      onChangeText={(text) =>
+                        setPaymentFormData({ ...paymentFormData, description: text })
+                      }
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.cancelButton]}
+                      onPress={() => {
+                        setShowPaymentForm(false);
+                        setPaymentFormData({
+                          payment_stage: "",
+                          amount: "",
+                          payment_date: new Date().toISOString().split("T")[0],
+                          payment_method: "bank_transfer",
+                          reference_number: "",
+                          description: "",
+                        });
+                      }}
+                    >
+                      <Text style={styles.cancelButtonText}>Hủy</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.submitButton]}
+                      onPress={async () => {
+                        if (!paymentFormData.amount || !selectedSubcontractor) {
+                          Alert.alert("Lỗi", "Vui lòng nhập số tiền");
+                          return;
+                        }
+                        try {
+                          await subcontractorApi.createPayment(id!, {
+                            subcontractor_id: selectedSubcontractor.id,
+                            payment_stage: paymentFormData.payment_stage || undefined,
+                            amount: parseFloat(paymentFormData.amount),
+                            payment_date: paymentFormData.payment_date || undefined,
+                            payment_method: paymentFormData.payment_method,
+                            reference_number: paymentFormData.reference_number || undefined,
+                            description: paymentFormData.description || undefined,
+                          });
+                          Alert.alert("Thành công", "Đã tạo phiếu chi");
+                          setShowPaymentForm(false);
+                          setPaymentFormData({
+                            payment_stage: "",
+                            amount: "",
+                            payment_date: new Date().toISOString().split("T")[0],
+                            payment_method: "bank_transfer",
+                            reference_number: "",
+                            description: "",
+                          });
+                          loadPayments(selectedSubcontractor.id);
+                          loadSubcontractors();
+                        } catch (error: any) {
+                          Alert.alert(
+                            "Lỗi",
+                            error.response?.data?.message || "Không thể tạo phiếu chi"
+                          );
+                        }
+                      }}
+                    >
+                      <Text style={styles.submitButtonText}>Tạo phiếu chi</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              ) : (
+                <>
+                  <View style={styles.paymentsHeader}>
+                    <Text style={styles.paymentsTitle}>
+                      Danh sách thanh toán ({payments.length})
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.addPaymentButton}
+                      onPress={() => setShowPaymentForm(true)}
+                    >
+                      <Ionicons name="add-circle" size={20} color="#3B82F6" />
+                      <Text style={styles.addPaymentButtonText}>Tạo phiếu chi</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {loadingPayments ? (
+                    <View style={styles.centerContainer}>
+                      <ActivityIndicator size="large" color="#3B82F6" />
+                    </View>
+                  ) : payments.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                      <Ionicons name="receipt-outline" size={48} color="#D1D5DB" />
+                      <Text style={styles.emptyText}>Chưa có phiếu chi nào</Text>
+                    </View>
+                  ) : (
+                    <FlatList
+                      data={payments}
+                      keyExtractor={(item) => item.id.toString()}
+                      renderItem={({ item }) => (
+                        <View style={styles.paymentItem}>
+                          <View style={styles.paymentItemHeader}>
+                            <View style={styles.paymentItemLeft}>
+                              <Text style={styles.paymentNumber}>
+                                {item.payment_number || `#${item.id}`}
+                              </Text>
+                              {item.payment_stage && (
+                                <Text style={styles.paymentStage}>{item.payment_stage}</Text>
+                              )}
+                            </View>
+                            <View
+                              style={[
+                                styles.paymentStatusBadge,
+                                {
+                                  backgroundColor:
+                                    item.status === "paid"
+                                      ? "#10B98120"
+                                      : item.status === "pending_accountant_confirmation"
+                                        ? "#3B82F620"
+                                        : item.status === "pending_management_approval"
+                                          ? "#F59E0B20"
+                                          : item.status === "rejected"
+                                            ? "#EF444420"
+                                            : "#9CA3AF20",
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.paymentStatusText,
+                                  {
+                                    color:
+                                      item.status === "paid"
+                                        ? "#10B981"
+                                        : item.status === "pending_accountant_confirmation"
+                                          ? "#3B82F6"
+                                          : item.status === "pending_management_approval"
+                                            ? "#F59E0B"
+                                            : item.status === "rejected"
+                                              ? "#EF4444"
+                                              : "#6B7280",
+                                  },
+                                ]}
+                              >
+                                {item.status_label || item.status}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.paymentItemBody}>
+                            <Text style={styles.paymentAmount}>
+                              {formatCurrency(item.amount)}
+                            </Text>
+                            {item.description && (
+                              <Text style={styles.paymentDescription} numberOfLines={2}>
+                                {item.description}
+                              </Text>
+                            )}
+                            <View style={styles.paymentInfoRow}>
+                              <Text style={styles.paymentInfo}>
+                                {item.payment_method_label || item.payment_method}
+                              </Text>
+                              {item.payment_date && (
+                                <Text style={styles.paymentInfo}>
+                                  {formatDate(item.payment_date)}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                          <View style={styles.paymentActions}>
+                            {item.status === "draft" && (
+                              <TouchableOpacity
+                                style={[styles.actionButton, styles.submitButton]}
+                                onPress={async () => {
+                                  try {
+                                    await subcontractorApi.submitPayment(id!, item.id);
+                                    Alert.alert("Thành công", "Đã gửi phiếu chi để duyệt");
+                                    loadPayments(selectedSubcontractor!.id);
+                                    loadSubcontractors();
+                                  } catch (error: any) {
+                                    Alert.alert(
+                                      "Lỗi",
+                                      error.response?.data?.message || "Không thể gửi phiếu chi"
+                                    );
+                                  }
+                                }}
+                              >
+                                <Text style={styles.actionButtonText}>Gửi duyệt</Text>
+                              </TouchableOpacity>
+                            )}
+                            {item.status === "pending_management_approval" && (
+                              <>
+                                <TouchableOpacity
+                                  style={[styles.actionButton, styles.approveButton]}
+                                  onPress={async () => {
+                                    try {
+                                      await subcontractorApi.approvePayment(id!, item.id);
+                                      Alert.alert("Thành công", "Đã duyệt phiếu chi");
+                                      loadPayments(selectedSubcontractor!.id);
+                                      loadSubcontractors();
+                                    } catch (error: any) {
+                                      Alert.alert(
+                                        "Lỗi",
+                                        error.response?.data?.message || "Không thể duyệt phiếu chi"
+                                      );
+                                    }
+                                  }}
+                                >
+                                  <Text style={styles.actionButtonText}>Duyệt</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.actionButton, styles.rejectButton]}
+                                  onPress={() => {
+                                    Alert.prompt(
+                                      "Từ chối phiếu chi",
+                                      "Nhập lý do từ chối (tùy chọn):",
+                                      async (reason) => {
+                                        try {
+                                          await subcontractorApi.rejectPayment(
+                                            id!,
+                                            item.id,
+                                            reason || undefined
+                                          );
+                                          Alert.alert("Thành công", "Đã từ chối phiếu chi");
+                                          loadPayments(selectedSubcontractor!.id);
+                                          loadSubcontractors();
+                                        } catch (error: any) {
+                                          Alert.alert(
+                                            "Lỗi",
+                                            error.response?.data?.message ||
+                                              "Không thể từ chối phiếu chi"
+                                          );
+                                        }
+                                      }
+                                    );
+                                  }}
+                                >
+                                  <Text style={[styles.actionButtonText, { color: "#EF4444" }]}>
+                                    Từ chối
+                                  </Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+                            {item.status === "pending_accountant_confirmation" && (
+                              <TouchableOpacity
+                                style={[styles.actionButton, styles.paidButton]}
+                                onPress={async () => {
+                                  try {
+                                    await subcontractorApi.markPaymentAsPaid(id!, item.id);
+                                    Alert.alert("Thành công", "Đã xác nhận thanh toán");
+                                    loadPayments(selectedSubcontractor!.id);
+                                    loadSubcontractors();
+                                  } catch (error: any) {
+                                    Alert.alert(
+                                      "Lỗi",
+                                      error.response?.data?.message ||
+                                        "Không thể xác nhận thanh toán"
+                                    );
+                                  }
+                                }}
+                              >
+                                <Text style={styles.actionButtonText}>Xác nhận đã trả</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+                      )}
+                    />
+                  )}
+                </>
               )}
             </View>
           </View>

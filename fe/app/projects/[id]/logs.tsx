@@ -98,12 +98,12 @@ export default function ConstructionLogsScreen() {
     setUploading(true);
     try {
       const formData = new FormData();
-      
+
       for (let i = 0; i < fileUris.length; i++) {
         const uri = fileUris[i];
         const fileName = uri.split("/").pop() || `file_${i}.jpg`;
         const fileType = fileName.split(".").pop() || "jpg";
-        
+
         formData.append("files[]", {
           uri,
           name: fileName,
@@ -371,146 +371,146 @@ export default function ConstructionLogsScreen() {
 
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={true}>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Ngày</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.log_date}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, log_date: text })
-                }
-                placeholder="YYYY-MM-DD"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Thời tiết</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.weather}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, weather: text })
-                }
-                placeholder="Ví dụ: Nắng, Mưa..."
-              />
-            </View>
-
-            <View style={styles.formRow}>
-              <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.label}>Số nhân sự</Text>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Ngày</Text>
                 <TextInput
                   style={styles.input}
-                  value={formData.personnel_count}
+                  value={formData.log_date}
                   onChangeText={(text) =>
-                    setFormData({ ...formData, personnel_count: text })
+                    setFormData({ ...formData, log_date: text })
                   }
-                  placeholder="0"
-                  keyboardType="numeric"
+                  placeholder="YYYY-MM-DD"
                 />
               </View>
-              <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.label}>% Hoàn thành</Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Thời tiết</Text>
                 <TextInput
                   style={styles.input}
-                  value={formData.completion_percentage}
+                  value={formData.weather}
                   onChangeText={(text) =>
-                    setFormData({ ...formData, completion_percentage: text })
+                    setFormData({ ...formData, weather: text })
                   }
-                  placeholder="0"
-                  keyboardType="numeric"
+                  placeholder="Ví dụ: Nắng, Mưa..."
                 />
               </View>
-            </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Ghi chú</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={formData.notes}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, notes: text })
-                }
-                placeholder="Nhập ghi chú..."
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-
-            {/* Upload Files Section */}
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Hình ảnh & Tài liệu</Text>
-              <View style={styles.uploadButtons}>
-                <TouchableOpacity
-                  style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
-                  onPress={handlePickImages}
-                  disabled={uploading}
-                >
-                  <Ionicons name="images-outline" size={20} color="#3B82F6" />
-                  <Text style={styles.uploadButtonText}>Chọn ảnh</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
-                  onPress={handlePickDocuments}
-                  disabled={uploading}
-                >
-                  <Ionicons name="document-outline" size={20} color="#3B82F6" />
-                  <Text style={styles.uploadButtonText}>Chọn file</Text>
-                </TouchableOpacity>
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.label}>Số nhân sự</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.personnel_count}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, personnel_count: text })
+                    }
+                    placeholder="0"
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+                  <Text style={styles.label}>% Hoàn thành</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.completion_percentage}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, completion_percentage: text })
+                    }
+                    placeholder="0"
+                    keyboardType="numeric"
+                  />
+                </View>
               </View>
 
-              {uploading && (
-                <View style={styles.uploadingContainer}>
-                  <ActivityIndicator size="small" color="#3B82F6" />
-                  <Text style={styles.uploadingText}>Đang upload...</Text>
-                </View>
-              )}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Ghi chú</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.notes}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, notes: text })
+                  }
+                  placeholder="Nhập ghi chú..."
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
 
-              {uploadedAttachments.length > 0 && (
-                <View style={styles.uploadedFilesContainer}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {uploadedAttachments.map((attachment, index) => (
-                      <View key={attachment.id || index} style={styles.uploadedFileItem}>
-                        {attachment.type === "image" ? (
-                          <Image
-                            source={{ uri: attachment.file_url }}
-                            style={styles.uploadedImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={styles.uploadedFile}>
-                            <Ionicons name="document-outline" size={24} color="#3B82F6" />
-                          </View>
-                        )}
-                        <TouchableOpacity
-                          style={styles.removeFileButton}
-                          onPress={() => handleRemoveAttachment(index)}
-                        >
-                          <Ionicons name="close-circle" size={20} color="#EF4444" />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </ScrollView>
+              {/* Upload Files Section */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Hình ảnh & Tài liệu</Text>
+                <View style={styles.uploadButtons}>
+                  <TouchableOpacity
+                    style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
+                    onPress={handlePickImages}
+                    disabled={uploading}
+                  >
+                    <Ionicons name="images-outline" size={20} color="#3B82F6" />
+                    <Text style={styles.uploadButtonText}>Chọn ảnh</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
+                    onPress={handlePickDocuments}
+                    disabled={uploading}
+                  >
+                    <Ionicons name="document-outline" size={20} color="#3B82F6" />
+                    <Text style={styles.uploadButtonText}>Chọn file</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
-            </View>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={handleCloseModal}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={handleSubmit}
-                disabled={uploading}
-              >
-                <Text style={styles.submitButtonText}>
-                  {editingLog ? "Cập nhật" : "Tạo"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+                {uploading && (
+                  <View style={styles.uploadingContainer}>
+                    <ActivityIndicator size="small" color="#3B82F6" />
+                    <Text style={styles.uploadingText}>Đang upload...</Text>
+                  </View>
+                )}
+
+                {uploadedAttachments.length > 0 && (
+                  <View style={styles.uploadedFilesContainer}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {uploadedAttachments.map((attachment, index) => (
+                        <View key={attachment.id || index} style={styles.uploadedFileItem}>
+                          {attachment.type === "image" ? (
+                            <Image
+                              source={{ uri: attachment.file_url }}
+                              style={styles.uploadedImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={styles.uploadedFile}>
+                              <Ionicons name="document-outline" size={24} color="#3B82F6" />
+                            </View>
+                          )}
+                          <TouchableOpacity
+                            style={styles.removeFileButton}
+                            onPress={() => handleRemoveAttachment(index)}
+                          >
+                            <Ionicons name="close-circle" size={20} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={handleCloseModal}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.submitButton]}
+                  onPress={handleSubmit}
+                  disabled={uploading}
+                >
+                  <Text style={styles.submitButtonText}>
+                    {editingLog ? "Cập nhật" : "Tạo"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
         </View>

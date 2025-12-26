@@ -29,7 +29,10 @@ export interface SubcontractorPayment {
   payment_method: "cash" | "bank_transfer" | "check" | "other";
   reference_number?: string;
   description?: string;
-  status: "pending" | "approved" | "paid" | "cancelled";
+  status: "draft" | "pending_management_approval" | "pending_accountant_confirmation" | "approved" | "paid" | "rejected" | "cancelled";
+  rejected_by?: number;
+  rejected_at?: string;
+  rejection_reason?: string;
   created_by: number;
   approved_by?: number;
   approved_at?: string;
@@ -244,13 +247,27 @@ export const subcontractorApi = {
     return response.data;
   },
 
-  // Approve payment
+  // Submit payment for approval (draft -> pending_management_approval)
+  submitPayment: async (projectId: string | number, paymentId: string | number) => {
+    const response = await api.post(`/projects/${projectId}/subcontractor-payments/${paymentId}/submit`);
+    return response.data;
+  },
+
+  // Approve payment (pending_management_approval -> pending_accountant_confirmation)
   approvePayment: async (projectId: string | number, paymentId: string | number) => {
     const response = await api.post(`/projects/${projectId}/subcontractor-payments/${paymentId}/approve`);
     return response.data;
   },
 
-  // Mark as paid
+  // Reject payment
+  rejectPayment: async (projectId: string | number, paymentId: string | number, rejectionReason?: string) => {
+    const response = await api.post(`/projects/${projectId}/subcontractor-payments/${paymentId}/reject`, {
+      rejection_reason: rejectionReason,
+    });
+    return response.data;
+  },
+
+  // Mark as paid (pending_accountant_confirmation -> paid)
   markPaymentAsPaid: async (projectId: string | number, paymentId: string | number) => {
     const response = await api.post(`/projects/${projectId}/subcontractor-payments/${paymentId}/mark-paid`);
     return response.data;

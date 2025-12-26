@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
-import type { RootState } from "@/src/reducers/index";
+import type { RootState } from "@/reducers/index";
 import { permissionApi } from "@/api/permissionApi";
 import { personnelRoleApi } from "@/api/personnelRoleApi";
 import { userApi } from "@/api/userApi";
@@ -57,6 +57,8 @@ export default function SettingsScreen() {
   };
 
   const hasPermission = (permission: string): boolean => {
+    // Admin và owner luôn có toàn quyền
+    if (user?.owner || user?.role === "admin") return true;
     if (permissions.includes("*")) return true;
     return permissions.includes(permission);
   };
@@ -87,6 +89,20 @@ export default function SettingsScreen() {
   };
 
   const menuItems = [
+    {
+      title: "Nhóm Chi Phí Dự Án",
+      icon: "folder-outline",
+      route: "/settings/cost-groups",
+      permission: "settings.manage",
+      description: "Quản lý các nhóm chi phí áp dụng cho toàn bộ dự án",
+    },
+    {
+      title: "Nhà Thầu Phụ",
+      icon: "business-outline",
+      route: "/settings/subcontractors",
+      permission: "settings.manage",
+      description: "Quản lý danh sách nhà thầu phụ tập trung",
+    },
     {
       title: "Cấu Hình Vai Trò",
       icon: "people-circle-outline",
@@ -171,8 +187,14 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Cấu Hình</Text>
         {menuItems.map((item, index) => {
-          // Check permission if required
-          if (item.permission && !hasPermission(item.permission)) {
+          // Admin và owner luôn thấy tất cả menu items
+          // Kiểm tra cả owner flag và role admin
+          const isAdminOrOwner =
+            (user && (user as any).owner === true) ||
+            (user && (user as any).role === "admin");
+
+          // Check permission if required (skip check for admin/owner)
+          if (item.permission && !isAdminOrOwner && !hasPermission(item.permission)) {
             return null;
           }
 

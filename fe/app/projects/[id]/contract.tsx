@@ -16,6 +16,7 @@ import {
   CreateContractData,
 } from "@/api/contractApi";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ContractScreen() {
   const router = useRouter();
@@ -23,6 +24,8 @@ export default function ContractScreen() {
   const [contract, setContract] = useState<Contract | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [signedDate, setSignedDate] = useState(new Date());
   const [formData, setFormData] = useState({
     contract_value: "",
     signed_date: "",
@@ -42,6 +45,9 @@ export default function ContractScreen() {
           contract_value: response.data.contract_value?.toString() || "",
           signed_date: response.data.signed_date || "",
         });
+        if (response.data.signed_date) {
+          setSignedDate(new Date(response.data.signed_date));
+        }
       } else {
         // Không có contract - hiển thị form tạo mới
         setContract(null);
@@ -70,16 +76,37 @@ export default function ContractScreen() {
     }
   };
 
+  const formatCurrency = (value: string): string => {
+    // Remove all non-numeric characters
+    const numericValue = value.replace(/[^0-9]/g, "");
+    if (!numericValue) return "";
+    
+    // Format with commas
+    return new Intl.NumberFormat("vi-VN").format(parseInt(numericValue));
+  };
+
+  const parseCurrency = (value: string): number => {
+    // Remove all non-numeric characters
+    const numericValue = value.replace(/[^0-9]/g, "");
+    return numericValue ? parseInt(numericValue) : 0;
+  };
+
   const handleSave = async () => {
-    if (!formData.contract_value || isNaN(parseFloat(formData.contract_value))) {
+    const contractValue = parseCurrency(formData.contract_value);
+    if (!contractValue || contractValue <= 0) {
       Alert.alert("Lỗi", "Vui lòng nhập giá trị hợp đồng hợp lệ");
+      return;
+    }
+
+    if (!formData.signed_date) {
+      Alert.alert("Lỗi", "Vui lòng chọn ngày ký hợp đồng");
       return;
     }
 
     try {
       const data: CreateContractData = {
-        contract_value: parseFloat(formData.contract_value),
-        signed_date: formData.signed_date || undefined,
+        contract_value: contractValue,
+        signed_date: formData.signed_date,
         status: "draft",
       };
 
@@ -213,13 +240,15 @@ export default function ContractScreen() {
 
       <View style={styles.form}>
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Giá trị hợp đồng (VND)</Text>
+          <Text style={styles.label}>Giá trị hợp đồng (VNĐ)</Text>
           <TextInput
             style={styles.input}
-            value={formData.contract_value}
-            onChangeText={(text) =>
-              setFormData({ ...formData, contract_value: text })
-            }
+            value={formData.contract_value ? formatCurrency(formData.contract_value) + " VNĐ" : ""}
+            onChangeText={(text) => {
+              // Remove " VNĐ" suffix and format
+              const cleaned = text.replace(/[^0-9]/g, "");
+              setFormData({ ...formData, contract_value: cleaned });
+            }}
             placeholder="Nhập giá trị hợp đồng"
             keyboardType="numeric"
             editable={editing || !contract}
@@ -228,15 +257,39 @@ export default function ContractScreen() {
 
         <View style={styles.formGroup}>
           <Text style={styles.label}>Ngày ký hợp đồng</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.signed_date}
-            onChangeText={(text) =>
-              setFormData({ ...formData, signed_date: text })
-            }
-            placeholder="YYYY-MM-DD"
-            editable={editing || !contract}
-          />
+          <TouchableOpacity
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker(true)}
+            disabled={!editing && !!contract}
+          >
+            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+            <Text style={styles.dateButtonText}>
+              {formData.signed_date
+                ? new Date(formData.signed_date).toLocaleDateString("vi-VN", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  })
+                : "Chọn ngày ký hợp đồng"}
+            </Text>
+          </TouchableOpacity>
+          {showDatePicker && (
+            <DateTimePicker
+              value={signedDate}
+              mode="date"
+              display="default"
+              onChange={(event, date) => {
+                setShowDatePicker(false);
+                if (date && event.type !== "dismissed") {
+                  setSignedDate(date);
+                  setFormData({
+                    ...formData,
+                    signed_date: date.toISOString().split("T")[0],
+                  });
+                }
+              }}
+            />
+          )}
         </View>
 
         {contract && contract.attachments && contract.attachments.length > 0 && (
@@ -369,6 +422,21 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: "#FFFFFF",
+  },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    gap: 8,
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: "#1F2937",
+    flex: 1,
   },
   attachmentsSection: {
     marginTop: 16,

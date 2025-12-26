@@ -33,13 +33,7 @@ export interface Cost {
   id: number;
   uuid: string;
   project_id: number;
-  category:
-  | "construction_materials"
-  | "concrete"
-  | "labor"
-  | "equipment"
-  | "transportation"
-  | "other";
+  cost_group_id: number; // Bắt buộc - liên kết với CostGroup từ Settings
   name: string;
   amount: number;
   description?: string;
@@ -61,11 +55,17 @@ export interface Cost {
   creator?: any;
   management_approver?: any;
   accountant_approver?: any;
-  category_label?: string;
+  category_label?: string; // Deprecated - dùng cost_group.name thay thế
+  cost_group: {
+    id: number;
+    name: string;
+    code: string;
+    description?: string;
+  };
 }
 
 export interface CreateCostData {
-  category: Cost["category"];
+  cost_group_id: number; // Bắt buộc - phải chọn từ CostGroups đã thiết lập ở Settings
   name: string;
   amount: number;
   description?: string;

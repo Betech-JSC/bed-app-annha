@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { costApi, Cost, revenueApi } from "@/api/revenueApi";
+import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -39,25 +40,27 @@ export default function CostsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<
-    Cost["category"] | null
-  >(null);
+  const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
+  const [loadingCostGroups, setLoadingCostGroups] = useState(false);
+  const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
-    category: "other" as Cost["category"],
+    cost_group_id: null as number | null,
     name: "",
     amount: "",
     description: "",
     cost_date: new Date(),
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
 
   useEffect(() => {
     loadCosts();
     loadSummary();
+    loadCostGroups();
   }, [id, filterStatus, filterCategory]);
 
   const loadCosts = async () => {
@@ -89,6 +92,21 @@ export default function CostsScreen() {
     }
   };
 
+  const loadCostGroups = async () => {
+    try {
+      setLoadingCostGroups(true);
+      const response = await costGroupApi.getCostGroups({ active_only: true });
+      if (response.success) {
+        const data = response.data?.data || response.data || [];
+        setCostGroups(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error("Error loading cost groups:", error);
+    } finally {
+      setLoadingCostGroups(false);
+    }
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     loadCosts();
@@ -101,9 +119,14 @@ export default function CostsScreen() {
       return;
     }
 
+    if (!formData.cost_group_id) {
+      Alert.alert("Lỗi", "Vui lòng chọn nhóm chi phí từ danh sách đã thiết lập");
+      return;
+    }
+
     try {
       const response = await costApi.createCost(id!, {
-        category: formData.category,
+        cost_group_id: formData.cost_group_id,
         name: formData.name,
         amount: parseFloat(formData.amount),
         description: formData.description || undefined,
@@ -164,12 +187,13 @@ export default function CostsScreen() {
 
   const resetForm = () => {
     setFormData({
-      category: "other",
+      cost_group_id: null,
       name: "",
       amount: "",
       description: "",
       cost_date: new Date(),
     });
+    setSelectedCostGroup(null);
   };
 
   const formatCurrency = (amount: number) => {
@@ -211,16 +235,9 @@ export default function CostsScreen() {
     }
   };
 
-  const getCategoryLabel = (category: Cost["category"]) => {
-    const labels: Record<Cost["category"], string> = {
-      construction_materials: "Vật liệu xây dựng",
-      concrete: "Bê tông",
-      labor: "Nhân công",
-      equipment: "Thiết bị",
-      transportation: "Vận chuyển",
-      other: "Chi phí khác",
-    };
-    return labels[category] || category;
+  const getCategoryLabel = (cost: Cost) => {
+    // Sử dụng cost_group.name nếu có, fallback về category_label
+    return cost.cost_group?.name || cost.category_label || "Chưa phân loại";
   };
 
   const renderCostItem = ({ item }: { item: Cost }) => (
@@ -229,7 +246,7 @@ export default function CostsScreen() {
         <View style={styles.costHeaderLeft}>
           <Text style={styles.costName}>{item.name}</Text>
           <Text style={styles.costCategory}>
-            {item.category_label || getCategoryLabel(item.category)}
+            {getCategoryLabel(item)}
           </Text>
         </View>
         <View
@@ -435,37 +452,65 @@ export default function CostsScreen() {
           <ScrollView style={styles.modalContent}>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Nhóm chi phí *</Text>
-              <View style={styles.categoryGrid}>
-                {[
-                  "construction_materials",
-                  "concrete",
-                  "labor",
-                  "equipment",
-                  "transportation",
-                  "other",
-                ].map((cat) => (
+              {costGroups.length > 0 ? (
+                <>
                   <TouchableOpacity
-                    key={cat}
-                    style={[
-                      styles.categoryButton,
-                      formData.category === cat && styles.categoryButtonActive,
-                    ]}
-                    onPress={() =>
-                      setFormData({ ...formData, category: cat as Cost["category"] })
-                    }
+                    style={styles.selectButton}
+                    onPress={() => {
+                      loadCostGroups();
+                      setShowCostGroupPicker(true);
+                    }}
                   >
                     <Text
                       style={[
-                        styles.categoryButtonText,
-                        formData.category === cat &&
-                        styles.categoryButtonTextActive,
+                        styles.selectButtonText,
+                        !selectedCostGroup && styles.selectButtonPlaceholder,
                       ]}
                     >
-                      {getCategoryLabel(cat as Cost["category"])}
+                      {selectedCostGroup
+                        ? selectedCostGroup.name
+                        : "Chọn nhóm chi phí"}
+                    </Text>
+                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                  </TouchableOpacity>
+                  {selectedCostGroup && (
+                    <TouchableOpacity
+                      style={styles.clearSelectionButton}
+                      onPress={() => {
+                        setSelectedCostGroup(null);
+                        setFormData({ ...formData, cost_group_id: null });
+                      }}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#EF4444" />
+                      <Text style={styles.clearSelectionText}>Xóa lựa chọn</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : (
+                <View style={styles.fallbackCategoryGrid}>
+                  <Ionicons name="alert-circle-outline" size={48} color="#F59E0B" style={{ marginBottom: 12, alignSelf: "center" }} />
+                  <Text style={styles.helperText}>
+                    Chưa có nhóm chi phí được thiết lập
+                  </Text>
+                  <Text style={styles.helperTextSmall}>
+                    Vui lòng vào{" "}
+                    <Text style={styles.linkText}>Cấu hình → Nhóm Chi Phí Dự Án</Text>
+                    {" "}để tạo nhóm chi phí trước khi thêm chi phí cho dự án.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.goToSettingsButton}
+                    onPress={() => {
+                      setShowCreateModal(false);
+                      router.push("/settings/cost-groups");
+                    }}
+                  >
+                    <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.goToSettingsButtonText}>
+                      Đi đến Cấu hình
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </View>
+                </View>
+              )}
             </View>
 
             <View style={styles.formGroup}>
@@ -551,6 +596,79 @@ export default function CostsScreen() {
               </TouchableOpacity>
             </View>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Cost Group Picker Modal */}
+      <Modal
+        visible={showCostGroupPicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCostGroupPicker(false)}
+      >
+        <View style={styles.pickerModalOverlay}>
+          <View style={styles.pickerModalContainer}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Chọn Nhóm Chi Phí</Text>
+              <TouchableOpacity onPress={() => setShowCostGroupPicker(false)}>
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+            {loadingCostGroups ? (
+              <View style={styles.pickerLoadingContainer}>
+                <ActivityIndicator size="large" color="#3B82F6" />
+              </View>
+            ) : (
+              <FlatList
+                data={costGroups}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.costGroupItem,
+                      selectedCostGroup?.id === item.id && styles.costGroupItemActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedCostGroup(item);
+                      setFormData({ ...formData, cost_group_id: item.id });
+                      setShowCostGroupPicker(false);
+                    }}
+                  >
+                    <View style={styles.costGroupItemContent}>
+                      <Text
+                        style={[
+                          styles.costGroupItemName,
+                          selectedCostGroup?.id === item.id && styles.costGroupItemNameActive,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                      {item.code && (
+                        <Text style={styles.costGroupItemCode}>Mã: {item.code}</Text>
+                      )}
+                      {item.description && (
+                        <Text style={styles.costGroupItemDescription} numberOfLines={2}>
+                          {item.description}
+                        </Text>
+                      )}
+                    </View>
+                    {selectedCostGroup?.id === item.id && (
+                      <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                    )}
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.pickerEmptyContainer}>
+                    <Ionicons name="folder-outline" size={48} color="#D1D5DB" />
+                    <Text style={styles.pickerEmptyText}>Chưa có nhóm chi phí nào</Text>
+                    <Text style={styles.pickerEmptySubtext}>
+                      Vui lòng tạo nhóm chi phí trong phần Cấu hình
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
         </View>
       </Modal>
     </View>
@@ -875,5 +993,147 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  selectButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    minHeight: 48,
+  },
+  selectButtonText: {
+    fontSize: 16,
+    color: "#1F2937",
+    fontWeight: "500",
+  },
+  selectButtonPlaceholder: {
+    color: "#9CA3AF",
+  },
+  clearSelectionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  clearSelectionText: {
+    fontSize: 14,
+    color: "#EF4444",
+    fontWeight: "500",
+  },
+  helperText: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginBottom: 8,
+  },
+  helperTextSmall: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginBottom: 12,
+  },
+  fallbackCategoryGrid: {
+    marginTop: 8,
+    padding: 16,
+    alignItems: "center",
+  },
+  linkText: {
+    color: "#3B82F6",
+    fontWeight: "600",
+  },
+  goToSettingsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#3B82F6",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 16,
+    gap: 8,
+  },
+  goToSettingsButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  pickerModalContainer: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+  },
+  pickerModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  pickerModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  pickerLoadingContainer: {
+    padding: 32,
+    alignItems: "center",
+  },
+  costGroupItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  costGroupItemActive: {
+    backgroundColor: "#EFF6FF",
+  },
+  costGroupItemContent: {
+    flex: 1,
+  },
+  costGroupItemName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  costGroupItemNameActive: {
+    color: "#3B82F6",
+  },
+  costGroupItemCode: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  costGroupItemDescription: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    marginTop: 4,
+  },
+  pickerEmptyContainer: {
+    padding: 32,
+    alignItems: "center",
+  },
+  pickerEmptyText: {
+    fontSize: 16,
+    color: "#6B7280",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  pickerEmptySubtext: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
   },
 });

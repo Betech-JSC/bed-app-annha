@@ -42,19 +42,47 @@ class ProjectDocumentController extends Controller
 
         $validated = $request->validate([
             'attachment_id' => 'required|exists:attachments,id',
+            'description' => 'nullable|string|max:1000',
         ]);
 
         $attachment = Attachment::findOrFail($validated['attachment_id']);
 
-        // Attach to project
+        // Attach to project with description
         $attachment->update([
             'attachable_type' => Project::class,
             'attachable_id' => $project->id,
+            'description' => $validated['description'] ?? null,
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Tài liệu đã được thêm vào dự án.',
+            'data' => $attachment
+        ]);
+    }
+
+    /**
+     * Cập nhật mô tả tài liệu
+     */
+    public function update(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        
+        $attachment = Attachment::where('attachable_type', Project::class)
+            ->where('attachable_id', $project->id)
+            ->findOrFail($id);
+
+        $validated = $request->validate([
+            'description' => 'nullable|string|max:1000',
+        ]);
+
+        $attachment->update([
+            'description' => $validated['description'] ?? null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cập nhật mô tả tài liệu.',
             'data' => $attachment
         ]);
     }

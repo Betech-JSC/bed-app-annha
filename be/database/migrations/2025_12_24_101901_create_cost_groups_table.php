@@ -13,7 +13,17 @@ return new class extends Migration
     {
         Schema::create('cost_groups', function (Blueprint $table) {
             $table->id();
+            $table->string('name');
+            $table->string('code')->unique()->nullable();
+            $table->text('description')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->integer('sort_order')->default(0);
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
+            $table->softDeletes();
+            
+            $table->index('is_active');
+            $table->index('sort_order');
         });
     }
 

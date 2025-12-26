@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\SubcontractorController;
 use App\Http\Controllers\Api\SubcontractorItemController;
 use App\Http\Controllers\Api\ConstructionLogController;
 use App\Http\Controllers\Api\GlobalSubcontractorController;
+use App\Http\Controllers\Api\CostGroupController;
 use App\Http\Controllers\Api\AcceptanceStageController;
 use App\Http\Controllers\Api\DefectController;
 use App\Http\Controllers\Api\ProjectProgressController;
@@ -167,6 +168,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Documents
         Route::get('/{projectId}/documents', [ProjectDocumentController::class, 'index']);
         Route::post('/{projectId}/documents', [ProjectDocumentController::class, 'store']);
+        Route::put('/{projectId}/documents/{id}', [ProjectDocumentController::class, 'update']);
 
         // Construction Logs
         Route::get('/{projectId}/logs', [ConstructionLogController::class, 'index']);
@@ -263,7 +265,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'show']);
         Route::put('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'update']);
         Route::delete('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'destroy']);
+        Route::post('/{projectId}/subcontractor-payments/{id}/submit', [SubcontractorPaymentController::class, 'submit']);
         Route::post('/{projectId}/subcontractor-payments/{id}/approve', [SubcontractorPaymentController::class, 'approve']);
+        Route::post('/{projectId}/subcontractor-payments/{id}/reject', [SubcontractorPaymentController::class, 'reject']);
         Route::post('/{projectId}/subcontractor-payments/{id}/mark-paid', [SubcontractorPaymentController::class, 'markAsPaid']);
     });
 
@@ -395,6 +399,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/permissions/check/{permission}', [PermissionController::class, 'checkPermission']);
         Route::get('/permissions/project/{projectId}/check/{permission}', [PermissionController::class, 'checkProjectPermission']);
         Route::get('/permissions/project/{projectId}/all', [PermissionController::class, 'projectPermissions']);
+    });
+
+    // ===================================================================
+    // SETTINGS ROUTES - Quản lý cấu hình hệ thống
+    // ===================================================================
+    Route::middleware(['auth:sanctum', 'check.permission:settings.manage'])->prefix('settings')->group(function () {
+        // Cost Groups (Nhóm chi phí dự án)
+        Route::get('/cost-groups', [CostGroupController::class, 'index']);
+        Route::post('/cost-groups', [CostGroupController::class, 'store']);
+        Route::get('/cost-groups/{id}', [CostGroupController::class, 'show']);
+        Route::put('/cost-groups/{id}', [CostGroupController::class, 'update']);
+        Route::delete('/cost-groups/{id}', [CostGroupController::class, 'destroy']);
+
+        // Global Subcontractors (Nhà thầu phụ hệ thống)
+        Route::get('/subcontractors', [GlobalSubcontractorController::class, 'index']);
+        Route::post('/subcontractors', [GlobalSubcontractorController::class, 'store']);
+        Route::get('/subcontractors/{id}', [GlobalSubcontractorController::class, 'show']);
+        Route::put('/subcontractors/{id}', [GlobalSubcontractorController::class, 'update']);
+        Route::delete('/subcontractors/{id}', [GlobalSubcontractorController::class, 'destroy']);
     });
 });
 

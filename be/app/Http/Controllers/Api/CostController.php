@@ -19,7 +19,7 @@ class CostController extends Controller
         $project = Project::findOrFail($projectId);
 
         $query = Cost::where('project_id', $project->id)
-            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments']);
+            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup']);
 
         // Filter theo category
         if ($category = $request->query('category')) {
@@ -64,22 +64,21 @@ class CostController extends Controller
         }
 
         $validated = $request->validate([
-            'category' => [
-                'required',
-                Rule::in([
-                    'construction_materials',
-                    'concrete',
-                    'labor',
-                    'equipment',
-                    'transportation',
-                    'other'
-                ]),
-            ],
+            'cost_group_id' => 'required|exists:cost_groups,id',
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
             'description' => 'nullable|string|max:2000',
             'cost_date' => 'required|date',
         ]);
+
+        // Kiểm tra cost_group có active không
+        $costGroup = \App\Models\CostGroup::find($validated['cost_group_id']);
+        if (!$costGroup || !$costGroup->is_active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Nhóm chi phí không tồn tại hoặc đã bị vô hiệu hóa.'
+            ], 422);
+        }
 
         try {
             DB::beginTransaction();
@@ -125,22 +124,23 @@ class CostController extends Controller
         }
 
         $validated = $request->validate([
-            'category' => [
-                'sometimes',
-                Rule::in([
-                    'construction_materials',
-                    'concrete',
-                    'labor',
-                    'equipment',
-                    'transportation',
-                    'other'
-                ]),
-            ],
+            'cost_group_id' => 'sometimes|required|exists:cost_groups,id',
             'name' => 'sometimes|string|max:255',
             'amount' => 'sometimes|numeric|min:0',
             'description' => 'nullable|string|max:2000',
             'cost_date' => 'sometimes|date',
         ]);
+
+        // Kiểm tra cost_group có active không (nếu được cập nhật)
+        if (isset($validated['cost_group_id'])) {
+            $costGroup = \App\Models\CostGroup::find($validated['cost_group_id']);
+            if (!$costGroup || !$costGroup->is_active) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Nhóm chi phí không tồn tại hoặc đã bị vô hiệu hóa.'
+                ], 422);
+            }
+        }
 
         $cost->update($validated);
 

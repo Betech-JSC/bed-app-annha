@@ -137,14 +137,30 @@ export default function CreateProjectScreen() {
       return;
     }
 
+    // Validate required dates
+    if (!formData.start_date) {
+      Alert.alert("Lỗi", "Vui lòng chọn ngày bắt đầu dự án");
+      return;
+    }
+
+    if (!formData.end_date) {
+      Alert.alert("Lỗi", "Vui lòng chọn ngày kết thúc dự án");
+      return;
+    }
+
+    if (new Date(formData.end_date) < new Date(formData.start_date)) {
+      Alert.alert("Lỗi", "Ngày kết thúc phải sau ngày bắt đầu");
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await projectApi.createProject({
         ...formData,
-        code: formData.code || undefined,
+        code: undefined, // Không gửi code, để backend tự động sinh
         description: formData.description || undefined,
-        start_date: formData.start_date || undefined,
-        end_date: formData.end_date || undefined,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
       });
 
       if (response.success) {
@@ -195,15 +211,7 @@ export default function CreateProjectScreen() {
             />
           </View>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Mã dự án</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nhập mã dự án (tùy chọn)"
-              value={formData.code}
-              onChangeText={(text) => setFormData({ ...formData, code: text })}
-            />
-          </View>
+          {/* Mã dự án sẽ được tự động sinh, không hiển thị field này */}
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>

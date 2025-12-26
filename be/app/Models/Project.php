@@ -127,6 +127,21 @@ class Project extends Model
         return $this->hasMany(ProjectTask::class)->orderBy('order');
     }
 
+    public function timeTrackings(): HasMany
+    {
+        return $this->hasMany(TimeTracking::class);
+    }
+
+    public function payrolls(): HasMany
+    {
+        return $this->hasMany(Payroll::class);
+    }
+
+    public function bonuses(): HasMany
+    {
+        return $this->hasMany(Bonus::class);
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================
@@ -191,18 +206,35 @@ class Project extends Model
 
     public static function generateCode(): string
     {
+        $date = now()->format('dmy'); // DDMMYYYY format
+        $prefix = 'ANNHA-' . $date . '-';
+        
+        // Tìm số thứ tự cao nhất trong ngày
+        $todayStart = now()->startOfDay();
+        $todayEnd = now()->endOfDay();
+        
+        $lastProject = static::whereBetween('created_at', [$todayStart, $todayEnd])
+            ->where('code', 'like', $prefix . '%')
+            ->orderByDesc('code')
+            ->first();
+        
+        $sequence = 1;
+        if ($lastProject && preg_match('/-(\d+)$/', $lastProject->code, $matches)) {
+            $sequence = (int)$matches[1] + 1;
+        }
+        
+        // Format sequence với 2 chữ số (01, 02, ...)
+        $code = $prefix . str_pad($sequence, 2, '0', STR_PAD_LEFT);
+        
+        // Đảm bảo không trùng (trường hợp hiếm)
         $maxAttempts = 10;
         $attempt = 0;
-
-        do {
-            $code = 'PRJ-' . strtoupper(Str::random(6));
+        while (static::where('code', $code)->exists() && $attempt < $maxAttempts) {
+            $sequence++;
+            $code = $prefix . str_pad($sequence, 2, '0', STR_PAD_LEFT);
             $attempt++;
-            $exists = static::where('code', $code)->exists();
-            if (!$exists) {
-                return $code;
-            }
-        } while ($attempt < $maxAttempts);
-
-        return 'PRJ-' . time() . strtoupper(Str::random(3));
+        }
+        
+        return $code;
     }
 }

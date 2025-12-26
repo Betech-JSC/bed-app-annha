@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'project.access' => \App\Http\Middleware\CheckProjectAccess::class,
             'hr' => \App\Http\Middleware\CheckHRAccess::class,
             'permission' => \App\Http\Middleware\CheckPermission::class,
+            'check.permission' => \App\Http\Middleware\CheckPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

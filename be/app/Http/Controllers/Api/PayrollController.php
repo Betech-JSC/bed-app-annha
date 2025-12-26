@@ -23,7 +23,12 @@ class PayrollController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Payroll::with(['user', 'approver']);
+        $query = Payroll::with(['user', 'approver', 'project']);
+
+        // Filter by project
+        if ($request->has('project_id')) {
+            $query->where('project_id', $request->project_id);
+        }
 
         // Filter by user
         if ($request->has('user_id')) {
@@ -77,13 +82,14 @@ class PayrollController extends Controller
                 $user,
                 $periodStart,
                 $periodEnd,
-                $validated['period_type']
+                $validated['period_type'],
+                $validated['project_id'] ?? null
             );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Tính lương thành công.',
-                'data' => $payroll->load(['user'])
+                'data' => $payroll->load(['user', 'project'])
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -115,12 +121,13 @@ class PayrollController extends Controller
 
             foreach ($users as $user) {
                 try {
-                    $payroll = $this->payrollService->calculatePayroll(
-                        $user,
-                        $periodStart,
-                        $periodEnd,
-                        $validated['period_type']
-                    );
+            $payroll = $this->payrollService->calculatePayroll(
+                $user,
+                $periodStart,
+                $periodEnd,
+                $validated['period_type'],
+                $validated['project_id'] ?? null
+            );
                     $calculated[] = $payroll;
                 } catch (\Exception $e) {
                     // Log error but continue
@@ -150,7 +157,7 @@ class PayrollController extends Controller
      */
     public function show($id)
     {
-        $payroll = Payroll::with(['user', 'approver'])->findOrFail($id);
+        $payroll = Payroll::with(['user', 'approver', 'project'])->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -172,7 +179,7 @@ class PayrollController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Bảng lương đã được duyệt.',
-                'data' => $payroll->load(['user', 'approver'])
+                'data' => $payroll->load(['user', 'approver', 'project'])
             ]);
         } catch (\Exception $e) {
             return response()->json([

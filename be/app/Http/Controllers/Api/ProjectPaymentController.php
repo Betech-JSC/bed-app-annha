@@ -46,6 +46,7 @@ class ProjectPaymentController extends Controller
         $validated = $request->validate([
             'payment_number' => 'required|integer|min:1',
             'amount' => 'required|numeric|min:0',
+            'notes' => 'nullable|string|max:2000',
             'due_date' => 'required|date',
             'contract_id' => 'nullable|exists:contracts,id',
         ]);
@@ -98,6 +99,7 @@ class ProjectPaymentController extends Controller
 
         $validated = $request->validate([
             'amount' => 'sometimes|numeric|min:0',
+            'notes' => 'nullable|string|max:2000',
             'due_date' => 'sometimes|date',
             'paid_date' => 'nullable|date',
         ]);

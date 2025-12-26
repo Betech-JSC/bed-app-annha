@@ -94,7 +94,7 @@ class SubcontractorPaymentController extends Controller
                 'subcontractor_id' => $subcontractor->id,
                 'project_id' => $project->id,
                 ...$validated,
-                'status' => 'pending',
+                'status' => 'draft', // Bắt đầu từ draft
                 'created_by' => $user->id,
             ]);
 
@@ -192,7 +192,32 @@ class SubcontractorPaymentController extends Controller
     }
 
     /**
-     * Duyệt thanh toán
+     * Gửi phiếu chi để duyệt (từ draft -> pending_management_approval)
+     */
+    public function submit(Request $request, string $projectId, string $id)
+    {
+        $payment = SubcontractorPayment::where('project_id', $projectId)
+            ->findOrFail($id);
+        $user = $request->user();
+
+        if ($payment->status !== 'draft') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể gửi phiếu chi ở trạng thái nháp.'
+            ], 400);
+        }
+
+        $payment->submitForApproval();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Phiếu chi đã được gửi để duyệt.',
+            'data' => $payment->fresh()
+        ]);
+    }
+
+    /**
+     * Ban điều hành duyệt (từ pending_management_approval -> pending_accountant_confirmation)
      */
     public function approve(Request $request, string $projectId, string $id)
     {
@@ -200,10 +225,10 @@ class SubcontractorPaymentController extends Controller
             ->findOrFail($id);
         $user = $request->user();
 
-        if ($payment->status !== 'pending') {
+        if ($payment->status !== 'pending_management_approval') {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt phiếu thanh toán ở trạng thái chờ duyệt.'
+                'message' => 'Chỉ có thể duyệt phiếu thanh toán ở trạng thái chờ ban điều hành duyệt.'
             ], 400);
         }
 
@@ -211,13 +236,42 @@ class SubcontractorPaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Phiếu thanh toán đã được duyệt.',
+            'message' => 'Phiếu thanh toán đã được ban điều hành duyệt.',
             'data' => $payment->fresh(['approver'])
         ]);
     }
 
     /**
-     * Đánh dấu đã thanh toán
+     * Từ chối phiếu chi
+     */
+    public function reject(Request $request, string $projectId, string $id)
+    {
+        $payment = SubcontractorPayment::where('project_id', $projectId)
+            ->findOrFail($id);
+        $user = $request->user();
+
+        if (!in_array($payment->status, ['pending_management_approval', 'pending_accountant_confirmation'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể từ chối phiếu chi đang chờ duyệt.'
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'rejection_reason' => 'nullable|string|max:1000',
+        ]);
+
+        $payment->reject($user, $validated['rejection_reason'] ?? null);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Phiếu chi đã bị từ chối.',
+            'data' => $payment->fresh(['rejector'])
+        ]);
+    }
+
+    /**
+     * Kế toán xác nhận đã thanh toán (từ pending_accountant_confirmation -> paid)
      */
     public function markAsPaid(Request $request, string $projectId, string $id)
     {
@@ -225,10 +279,10 @@ class SubcontractorPaymentController extends Controller
             ->findOrFail($id);
         $user = $request->user();
 
-        if ($payment->status !== 'approved') {
+        if ($payment->status !== 'pending_accountant_confirmation') {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể thanh toán phiếu đã được duyệt.'
+                'message' => 'Chỉ có thể xác nhận thanh toán phiếu đã được ban điều hành duyệt.'
             ], 400);
         }
 
@@ -236,7 +290,7 @@ class SubcontractorPaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Phiếu thanh toán đã được đánh dấu là đã thanh toán.',
+            'message' => 'Phiếu thanh toán đã được xác nhận là đã thanh toán.',
             'data' => $payment->fresh(['payer', 'subcontractor'])
         ]);
     }

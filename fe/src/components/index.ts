@@ -23,3 +23,5 @@ export { default as AcceptanceItemList } from "./AcceptanceItemList";
 export { default as ImagePicker } from "./ImagePicker";
 export { default as ImagePickerField } from "./ImagePickerField";
 export type { ImageItem } from "./ImagePicker";
+export { default as MultiMediaUploader } from "./MultiMediaUploader";
+export type { MediaItem } from "./MultiMediaUploader";

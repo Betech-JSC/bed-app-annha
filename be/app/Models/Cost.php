@@ -13,6 +13,9 @@ class Cost extends Model
         'uuid',
         'project_id',
         'category',
+        'cost_group_id',
+        'time_tracking_id',
+        'payroll_id',
         'name',
         'amount',
         'description',
@@ -68,6 +71,21 @@ class Cost extends Model
         return $this->morphMany(Attachment::class, 'attachable');
     }
 
+    public function costGroup(): BelongsTo
+    {
+        return $this->belongsTo(CostGroup::class, 'cost_group_id');
+    }
+
+    public function timeTracking(): BelongsTo
+    {
+        return $this->belongsTo(TimeTracking::class, 'time_tracking_id');
+    }
+
+    public function payroll(): BelongsTo
+    {
+        return $this->belongsTo(Payroll::class, 'payroll_id');
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================
@@ -87,6 +105,12 @@ class Cost extends Model
 
     public function getCategoryLabelAttribute(): string
     {
+        // Ưu tiên lấy từ CostGroup nếu có
+        if ($this->costGroup) {
+            return $this->costGroup->name;
+        }
+        
+        // Fallback về category enum cũ (backward compatible)
         return match ($this->category) {
             'construction_materials' => 'Vật liệu xây dựng',
             'concrete' => 'Bê tông',

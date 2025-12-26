@@ -4,6 +4,7 @@ export interface Payroll {
   id: number;
   uuid: string;
   user_id: number;
+  project_id?: number;
   period_type: "daily" | "weekly" | "monthly";
   period_start: string;
   period_end: string;
@@ -26,10 +27,16 @@ export interface Payroll {
   updated_at: string;
   user?: any;
   approver?: any;
+  project?: {
+    id: number;
+    name: string;
+    code: string;
+  };
 }
 
 export interface CalculatePayrollData {
   user_id: number;
+  project_id?: number;
   period_type: "daily" | "weekly" | "monthly";
   period_start: string;
   period_end: string;
@@ -39,6 +46,7 @@ export const payrollApi = {
   // Get all payroll (HR only)
   getPayroll: async (params?: {
     user_id?: number;
+    project_id?: number;
     period_type?: string;
     status?: string;
     start_date?: string;

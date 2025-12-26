@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('project_payments', function (Blueprint $table) {
-            //
+            $table->text('notes')->nullable()->after('amount')->comment('Nội dung thanh toán');
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('project_payments', function (Blueprint $table) {
-            //
+            $table->dropColumn('notes');
         });
     }
 };

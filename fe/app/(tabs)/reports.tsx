@@ -7,6 +7,9 @@ import {
     RefreshControl,
     ActivityIndicator,
     TouchableOpacity,
+    Modal,
+    TextInput,
+    Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
@@ -14,6 +17,7 @@ import { revenueApi } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
 import { LineChart, BarChart, PieChart } from "react-native-chart-kit";
 import { Dimensions } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -34,10 +38,47 @@ export default function ReportsScreen() {
     const [totalRevenue, setTotalRevenue] = useState(0);
     const [totalCosts, setTotalCosts] = useState(0);
     const [totalProfit, setTotalProfit] = useState(0);
+    const [companyCapital, setCompanyCapital] = useState<number>(0);
+    const [showCapitalModal, setShowCapitalModal] = useState(false);
+    const [capitalInput, setCapitalInput] = useState("");
 
     useEffect(() => {
         loadData();
+        loadCompanyCapital();
     }, []);
+
+    const loadCompanyCapital = async () => {
+        try {
+            const saved = await AsyncStorage.getItem("company_capital");
+            if (saved) {
+                setCompanyCapital(parseFloat(saved) || 0);
+            }
+        } catch (error) {
+            console.error("Error loading company capital:", error);
+        }
+    };
+
+    const saveCompanyCapital = async (value: number) => {
+        try {
+            await AsyncStorage.setItem("company_capital", value.toString());
+            setCompanyCapital(value);
+            setShowCapitalModal(false);
+            setCapitalInput("");
+            Alert.alert("Thành công", "Đã cập nhật vốn công ty");
+        } catch (error) {
+            console.error("Error saving company capital:", error);
+            Alert.alert("Lỗi", "Không thể lưu vốn công ty");
+        }
+    };
+
+    const handleUpdateCapital = () => {
+        const value = parseFloat(capitalInput.replace(/[^0-9.]/g, ""));
+        if (isNaN(value) || value < 0) {
+            Alert.alert("Lỗi", "Vui lòng nhập số tiền hợp lệ");
+            return;
+        }
+        saveCompanyCapital(value);
+    };
 
     const loadData = async () => {
         try {
@@ -160,6 +201,7 @@ export default function ReportsScreen() {
     }
 
     const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    const averageProfitPerProject = summaries.length > 0 ? totalProfit / summaries.length : 0;
 
     // Prepare chart data
     const projectNames = summaries.slice(0, 5).map((s) => s.project.name);
@@ -212,22 +254,26 @@ export default function ReportsScreen() {
             >
                 {/* Summary Cards */}
                 <View style={styles.summarySection}>
-                    <View style={styles.summaryCard}>
+                    {/* Vốn Công Ty */}
+                    <TouchableOpacity
+                        style={styles.summaryCard}
+                        onPress={() => {
+                            setCapitalInput(companyCapital.toString());
+                            setShowCapitalModal(true);
+                        }}
+                    >
                         <View style={styles.summaryIconContainer}>
-                            <Ionicons name="trending-up" size={24} color="#10B981" />
+                            <Ionicons name="wallet" size={24} color="#8B5CF6" />
                         </View>
-                        <Text style={styles.summaryLabel}>Tổng Doanh Thu</Text>
-                        <Text style={styles.summaryValue}>{formatCurrency(totalRevenue)}</Text>
-                    </View>
-
-                    <View style={styles.summaryCard}>
-                        <View style={styles.summaryIconContainer}>
-                            <Ionicons name="trending-down" size={24} color="#EF4444" />
+                        <View style={styles.summaryCardHeader}>
+                            <Text style={styles.summaryLabel}>Vốn Công Ty</Text>
+                            <Ionicons name="create-outline" size={16} color="#6B7280" />
                         </View>
-                        <Text style={styles.summaryLabel}>Tổng Chi Phí</Text>
-                        <Text style={styles.summaryValue}>{formatCurrency(totalCosts)}</Text>
-                    </View>
+                        <Text style={styles.summaryValue}>{formatCurrency(companyCapital)}</Text>
+                        <Text style={styles.summaryHint}>Nhấn để cập nhật</Text>
+                    </TouchableOpacity>
 
+                    {/* Tổng Lợi Nhuận */}
                     <View style={styles.summaryCard}>
                         <View
                             style={[
@@ -252,6 +298,44 @@ export default function ReportsScreen() {
                         </Text>
                     </View>
 
+                    {/* Trung Bình Lợi Nhuận / Công Trình */}
+                    <View style={styles.summaryCard}>
+                        <View style={styles.summaryIconContainer}>
+                            <Ionicons name="analytics" size={24} color="#3B82F6" />
+                        </View>
+                        <Text style={styles.summaryLabel}>Trung Bình Lợi Nhuận / Công Trình</Text>
+                        <Text
+                            style={[
+                                styles.summaryValue,
+                                { color: averageProfitPerProject >= 0 ? "#10B981" : "#EF4444" },
+                            ]}
+                        >
+                            {formatCurrency(averageProfitPerProject)}
+                        </Text>
+                        <Text style={styles.summarySubtext}>
+                            {summaries.length} công trình
+                        </Text>
+                    </View>
+
+                    {/* Tổng Doanh Thu */}
+                    <View style={styles.summaryCard}>
+                        <View style={styles.summaryIconContainer}>
+                            <Ionicons name="trending-up" size={24} color="#10B981" />
+                        </View>
+                        <Text style={styles.summaryLabel}>Tổng Doanh Thu</Text>
+                        <Text style={styles.summaryValue}>{formatCurrency(totalRevenue)}</Text>
+                    </View>
+
+                    {/* Tổng Chi Phí */}
+                    <View style={styles.summaryCard}>
+                        <View style={styles.summaryIconContainer}>
+                            <Ionicons name="trending-down" size={24} color="#EF4444" />
+                        </View>
+                        <Text style={styles.summaryLabel}>Tổng Chi Phí</Text>
+                        <Text style={styles.summaryValue}>{formatCurrency(totalCosts)}</Text>
+                    </View>
+
+                    {/* Tỷ Suất Lợi Nhuận */}
                     <View style={styles.summaryCard}>
                         <View style={styles.summaryIconContainer}>
                             <Ionicons name="pie-chart" size={24} color="#3B82F6" />
@@ -410,6 +494,60 @@ export default function ReportsScreen() {
                     )}
                 </View>
             </ScrollView>
+
+            {/* Company Capital Modal */}
+            <Modal
+                visible={showCapitalModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowCapitalModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Cập Nhật Vốn Công Ty</Text>
+                            <TouchableOpacity onPress={() => setShowCapitalModal(false)}>
+                                <Ionicons name="close" size={24} color="#1F2937" />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.modalBody}>
+                            <Text style={styles.modalLabel}>Vốn công ty (VNĐ)</Text>
+                            <TextInput
+                                style={styles.modalInput}
+                                placeholder="Nhập số tiền vốn công ty"
+                                value={capitalInput}
+                                onChangeText={(text) => {
+                                    // Chỉ cho phép số và dấu chấm
+                                    const cleaned = text.replace(/[^0-9.]/g, "");
+                                    setCapitalInput(cleaned);
+                                }}
+                                keyboardType="numeric"
+                                autoFocus={true}
+                            />
+                            <Text style={styles.modalHint}>
+                                Vốn ban đầu của doanh nghiệp để so sánh với dòng tiền & lợi nhuận
+                            </Text>
+                        </View>
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={() => {
+                                    setShowCapitalModal(false);
+                                    setCapitalInput("");
+                                }}
+                            >
+                                <Text style={styles.cancelButtonText}>Hủy</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.saveButton]}
+                                onPress={handleUpdateCapital}
+                            >
+                                <Text style={styles.saveButtonText}>Lưu</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -471,10 +609,111 @@ const styles = StyleSheet.create({
         color: "#6B7280",
         marginBottom: 4,
     },
+    summaryCardHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 4,
+    },
     summaryValue: {
         fontSize: 18,
         fontWeight: "700",
         color: "#1F2937",
+    },
+    summaryHint: {
+        fontSize: 10,
+        color: "#9CA3AF",
+        marginTop: 4,
+        fontStyle: "italic",
+    },
+    summarySubtext: {
+        fontSize: 11,
+        color: "#6B7280",
+        marginTop: 4,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    modalContent: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        width: "90%",
+        maxWidth: 400,
+        padding: 0,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    modalHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E5E7EB",
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: "700",
+        color: "#1F2937",
+    },
+    modalBody: {
+        padding: 20,
+    },
+    modalLabel: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#1F2937",
+        marginBottom: 8,
+    },
+    modalInput: {
+        borderWidth: 1,
+        borderColor: "#D1D5DB",
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        color: "#1F2937",
+        backgroundColor: "#FFFFFF",
+    },
+    modalHint: {
+        fontSize: 12,
+        color: "#6B7280",
+        marginTop: 8,
+        lineHeight: 18,
+    },
+    modalActions: {
+        flexDirection: "row",
+        gap: 12,
+        padding: 20,
+        borderTopWidth: 1,
+        borderTopColor: "#E5E7EB",
+    },
+    modalButton: {
+        flex: 1,
+        padding: 12,
+        borderRadius: 8,
+        alignItems: "center",
+    },
+    cancelButton: {
+        backgroundColor: "#F3F4F6",
+    },
+    cancelButtonText: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#1F2937",
+    },
+    saveButton: {
+        backgroundColor: "#3B82F6",
+    },
+    saveButtonText: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#FFFFFF",
     },
     chartSection: {
         backgroundColor: "#FFFFFF",

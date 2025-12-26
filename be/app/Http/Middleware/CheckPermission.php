@@ -42,14 +42,8 @@ class CheckPermission
             }
         }
 
-        // Check permission thông qua roles
-        $hasPermission = $user->roles()
-            ->whereHas('permissions', function ($query) use ($permission) {
-                $query->where('permissions.name', $permission);
-            })
-            ->exists();
-
-        if (!$hasPermission) {
+        // Check permission thông qua User model method
+        if (!$user->hasPermission($permission)) {
             return response()->json([
                 'success' => false,
                 'message' => "Bạn không có quyền thực hiện hành động này. Cần quyền: {$permission}"

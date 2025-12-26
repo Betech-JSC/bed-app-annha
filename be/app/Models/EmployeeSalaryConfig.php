@@ -12,6 +12,7 @@ class EmployeeSalaryConfig extends Model
 
     protected $fillable = [
         'user_id',
+        'project_id',
         'salary_type',
         'hourly_rate',
         'daily_rate',
@@ -39,6 +40,11 @@ class EmployeeSalaryConfig extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     // ==================================================================
@@ -105,5 +111,10 @@ class EmployeeSalaryConfig extends Model
     public function scopeForUser($query, $userId)
     {
         return $query->where('user_id', $userId);
+    }
+
+    public function scopeForProject($query, $projectId)
+    {
+        return $query->where('project_id', $projectId);
     }
 }

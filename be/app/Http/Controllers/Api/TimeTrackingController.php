@@ -89,6 +89,20 @@ class TimeTrackingController extends Controller
                 ], 400);
             }
 
+            // Validate ProjectPersonnel if project_id is provided
+            if (isset($validated['project_id'])) {
+                $personnel = \App\Models\ProjectPersonnel::where('project_id', $validated['project_id'])
+                    ->where('user_id', $user->id)
+                    ->first();
+
+                if (!$personnel) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bạn chưa được phân công vào dự án này. Vui lòng liên hệ quản lý dự án.'
+                    ], 403);
+                }
+            }
+
             $workDate = $validated['work_date'] ?? now()->toDateString();
 
             $timeTracking = TimeTracking::create([

@@ -70,11 +70,12 @@ class ProjectController extends Controller
     }
 
     /**
-     * Lấy danh sách customers (users có thể là khách hàng)
+     * Lấy danh sách customers (chỉ users có role = 'customer')
      */
     public function getCustomers(Request $request)
     {
-        $query = User::whereNull('deleted_at');
+        $query = User::whereNull('deleted_at')
+            ->where('role', 'customer'); // Chỉ lấy users có role = 'customer'
 
         // Search
         if ($search = $request->query('search')) {
@@ -99,18 +100,14 @@ class ProjectController extends Controller
     }
 
     /**
-     * Lấy danh sách project managers (users có thể quản lý dự án)
+     * Lấy danh sách project managers (chỉ users nội bộ - có employeeProfile, không phải customer)
      */
     public function getProjectManagers(Request $request)
     {
         $query = User::whereNull('deleted_at')
-            ->where(function ($q) {
-                // Admin users hoặc users đã từng là project manager
-                $q->where('role', 'admin')
-                    ->orWhereHas('personnel', function ($q) {
-                        $q->where('role', 'project_manager');
-                    });
-            });
+            ->where('role', '!=', 'customer') // Không phải khách hàng
+            ->where('role', '!=', 'subcontractor') // Không phải nhà thầu phụ
+            ->whereHas('employeeProfile'); // Chỉ lấy users có employeeProfile (nhân sự nội bộ)
 
         // Search
         if ($search = $request->query('search')) {

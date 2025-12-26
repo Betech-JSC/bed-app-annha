@@ -38,6 +38,7 @@ export default function PaymentsScreen() {
   const [formData, setFormData] = useState<CreatePaymentData>({
     payment_number: 1,
     amount: 0,
+    notes: "",
     due_date: new Date().toISOString().split("T")[0],
     contract_id: undefined,
   });
@@ -125,6 +126,7 @@ export default function PaymentsScreen() {
     setFormData({
       payment_number: maxPaymentNumber + 1,
       amount: 0,
+      notes: "",
       due_date: new Date().toISOString().split("T")[0],
       contract_id: project?.contract?.id,
     });
@@ -195,6 +197,15 @@ export default function PaymentsScreen() {
       </View>
 
       <View style={styles.paymentDetails}>
+        {item.notes && (
+          <View style={styles.detailRow}>
+            <Ionicons name="document-text-outline" size={16} color="#6B7280" />
+            <View style={styles.notesContainer}>
+              <Text style={styles.detailLabel}>Nội dung:</Text>
+              <Text style={styles.notesText}>{item.notes}</Text>
+            </View>
+          </View>
+        )}
         <View style={styles.detailRow}>
           <Ionicons name="calendar-outline" size={16} color="#6B7280" />
           <Text style={styles.detailLabel}>Hạn thanh toán:</Text>
@@ -401,6 +412,27 @@ export default function PaymentsScreen() {
                   {formatCurrency(formData.amount)}
                 </Text>
               )}
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Nội dung thanh toán</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Nhập nội dung thanh toán (ví dụ: Thanh toán đợt 1 - 30% giá trị hợp đồng)"
+                value={formData.notes || ""}
+                onChangeText={(text) =>
+                  setFormData({
+                    ...formData,
+                    notes: text,
+                  })
+                }
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+              <Text style={styles.helperText}>
+                Mô tả nội dung của đợt thanh toán này
+              </Text>
             </View>
 
             <View style={styles.formGroup}>
@@ -808,6 +840,20 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  textArea: {
+    minHeight: 80,
+    paddingTop: 12,
+  },
+  notesContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  notesText: {
+    fontSize: 14,
+    color: "#374151",
+    marginTop: 4,
+    lineHeight: 20,
   },
   modalOverlay: {
     flex: 1,

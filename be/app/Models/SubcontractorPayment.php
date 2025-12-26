@@ -30,6 +30,9 @@ class SubcontractorPayment extends Model
         'approved_at',
         'paid_by',
         'paid_at',
+        'rejected_by',
+        'rejected_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
@@ -38,6 +41,7 @@ class SubcontractorPayment extends Model
         'payment_date' => 'date',
         'approved_at' => 'datetime',
         'paid_at' => 'datetime',
+        'rejected_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -79,6 +83,11 @@ class SubcontractorPayment extends Model
         return $this->belongsTo(User::class, 'paid_by');
     }
 
+    public function rejector(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
+    }
+
     // ==================================================================
     // ACCESSORS
     // ==================================================================
@@ -86,9 +95,12 @@ class SubcontractorPayment extends Model
     public function getStatusLabelAttribute(): string
     {
         return match ($this->status) {
-            'pending' => 'Chờ duyệt',
+            'draft' => 'Nháp',
+            'pending_management_approval' => 'Chờ ban điều hành duyệt',
+            'pending_accountant_confirmation' => 'Chờ kế toán xác nhận',
             'approved' => 'Đã duyệt',
             'paid' => 'Đã thanh toán',
+            'rejected' => 'Đã từ chối',
             'cancelled' => 'Đã hủy',
             default => ucfirst($this->status),
         };
@@ -109,13 +121,19 @@ class SubcontractorPayment extends Model
     // METHODS
     // ==================================================================
 
+    public function submitForApproval(): bool
+    {
+        $this->status = 'pending_management_approval';
+        return $this->save();
+    }
+
     public function approve(?User $user = null): bool
     {
         if ($user) {
             $this->approved_by = $user->id;
         }
         $this->approved_at = now();
-        $this->status = 'approved';
+        $this->status = 'pending_accountant_confirmation';
         return $this->save();
     }
 
@@ -130,6 +148,17 @@ class SubcontractorPayment extends Model
         // Cập nhật tổng thanh toán cho subcontractor
         $this->subcontractor->recordPayment($this->amount);
         
+        return $this->save();
+    }
+
+    public function reject(?User $user = null, ?string $reason = null): bool
+    {
+        if ($user) {
+            $this->rejected_by = $user->id;
+        }
+        $this->rejected_at = now();
+        $this->rejection_reason = $reason;
+        $this->status = 'rejected';
         return $this->save();
     }
 

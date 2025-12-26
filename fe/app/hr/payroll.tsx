@@ -75,6 +75,9 @@ export default function PayrollScreen() {
       <View style={styles.cardHeader}>
         <View style={styles.employeeInfo}>
           <Text style={styles.employeeName}>{item.user?.name || "N/A"}</Text>
+          {item.project && (
+            <Text style={styles.projectName}>{item.project.name}</Text>
+          )}
           <Text style={styles.period}>
             {new Date(item.period_start).toLocaleDateString("vi-VN")} -{" "}
             {new Date(item.period_end).toLocaleDateString("vi-VN")}
@@ -279,6 +282,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1F2937",
     marginBottom: 4,
+  },
+  projectName: {
+    fontSize: 13,
+    color: "#3B82F6",
+    marginTop: 2,
+    fontWeight: "500",
   },
   period: {
     fontSize: 13,

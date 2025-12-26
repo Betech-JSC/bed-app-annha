@@ -15,7 +15,7 @@ class PayrollCalculationService
     /**
      * Tính lương cho user trong kỳ
      */
-    public function calculatePayroll(User $user, Carbon $periodStart, Carbon $periodEnd, string $periodType): Payroll
+    public function calculatePayroll(User $user, Carbon $periodStart, Carbon $periodEnd, string $periodType, ?int $projectId = null): Payroll
     {
         // Get current salary config
         $config = EmployeeSalaryConfig::forUser($user->id)
@@ -59,6 +59,13 @@ class PayrollCalculationService
         // Calculate net salary
         $netSalary = $grossSalary - $tax;
 
+        // Determine project_id
+        // Priority: 1. Use provided project_id, 2. Use from time trackings if all same project, 3. null
+        if ($projectId === null) {
+            $projectIds = $timeTrackings->pluck('project_id')->filter()->unique();
+            $projectId = $projectIds->count() === 1 ? $projectIds->first() : null;
+        }
+
         // Create or update payroll
         $payroll = Payroll::updateOrCreate(
             [
@@ -68,6 +75,7 @@ class PayrollCalculationService
                 'period_end' => $periodEnd->toDateString(),
             ],
             [
+                'project_id' => $projectId,
                 'base_salary' => $baseSalary,
                 'total_hours' => $timeTrackings->sum('total_hours'),
                 'overtime_hours' => $overtimeData['overtime_hours'],

@@ -206,6 +206,90 @@ class TimeTracking extends Model
         return $this->save();
     }
 
+    /**
+     * Tự động tạo Cost record từ TimeTracking
+     */
+    protected function createCostFromTimeTracking(): void
+    {
+        try {
+            // Chỉ tạo nếu chưa có Cost record cho time tracking này
+            $existingCost = \App\Models\Cost::where('time_tracking_id', $this->id)->first();
+            if ($existingCost) {
+                return;
+            }
+
+            // Tìm CostGroup cho "Nhân công"
+            $costGroup = \App\Models\CostGroup::where('code', 'labor')
+                ->orWhere('name', 'LIKE', '%Nhân công%')
+                ->orWhere('name', 'LIKE', '%Nhân sự%')
+                ->first();
+
+            if (!$costGroup) {
+                $costGroup = \App\Models\CostGroup::first();
+            }
+
+            if (!$costGroup) {
+                \Log::warning("Không tìm thấy CostGroup để tạo Cost từ TimeTracking", [
+                    'time_tracking_id' => $this->id,
+                    'project_id' => $this->project_id
+                ]);
+                return;
+            }
+
+            // Tính chi phí nhân công dựa trên giờ làm việc và cấu hình lương
+            $salaryConfig = \App\Models\EmployeeSalaryConfig::forUser($this->user_id)
+                ->current()
+                ->first();
+
+            if (!$salaryConfig) {
+                \Log::warning("Không tìm thấy cấu hình lương cho user", [
+                    'user_id' => $this->user_id,
+                    'time_tracking_id' => $this->id
+                ]);
+                return;
+            }
+
+            // Tính amount dựa trên total_hours và hourly_rate
+            $hourlyRate = $salaryConfig->hourly_rate ?? ($salaryConfig->daily_rate / 8 ?? 0);
+            $amount = ($this->total_hours ?? 0) * $hourlyRate;
+
+            // Thêm overtime nếu có
+            if ($this->overtime_hours > 0) {
+                $overtimeRate = $salaryConfig->overtime_rate ?? $hourlyRate;
+                $amount += $this->overtime_hours * $overtimeRate;
+            }
+
+            if ($amount <= 0) {
+                return; // Không tạo cost nếu amount = 0
+            }
+
+            // Tạo Cost record
+            \App\Models\Cost::create([
+                'project_id' => $this->project_id,
+                'cost_group_id' => $costGroup->id,
+                'time_tracking_id' => $this->id,
+                'name' => "Chấm công {$this->user->name} - " . 
+                    \Carbon\Carbon::parse($this->work_date)->format('d/m/Y'),
+                'amount' => $amount,
+                'description' => "Chấm công: {$this->total_hours}h" . 
+                    ($this->overtime_hours > 0 ? ", OT: {$this->overtime_hours}h" : ""),
+                'cost_date' => $this->work_date ?? $this->check_in_at->toDateString(),
+                'status' => 'approved', // Tự động approved vì TimeTracking đã được approve
+                'created_by' => $this->approved_by ?? $this->user_id,
+                'management_approved_by' => $this->approved_by,
+                'management_approved_at' => $this->approved_at,
+                'accountant_approved_by' => $this->approved_by,
+                'accountant_approved_at' => $this->approved_at,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Lỗi khi tạo Cost từ TimeTracking: ' . $e->getMessage(), [
+                'time_tracking_id' => $this->id,
+                'project_id' => $this->project_id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
     // ==================================================================
     // SCOPE
     // ==================================================================
@@ -252,6 +336,9 @@ class TimeTracking extends Model
                     try {
                         $service = new ProjectCostAllocationService();
                         $service->allocatePersonnelCost($timeTracking);
+                        
+                        // Tự động tạo Cost record từ TimeTracking
+                        $timeTracking->createCostFromTimeTracking();
                     } catch (\Exception $e) {
                         // Log error but don't fail the approval
                         \Log::error('Failed to allocate personnel cost: ' . $e->getMessage(), [
