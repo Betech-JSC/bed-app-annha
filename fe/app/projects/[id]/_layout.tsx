@@ -13,6 +13,8 @@ export default function ProjectDetailLayout() {
       <Stack.Screen name="payments" />
       <Stack.Screen name="additional-costs" />
       <Stack.Screen name="costs" />
+      <Stack.Screen name="budget" />
+      <Stack.Screen name="invoices" />
       <Stack.Screen name="revenue" />
       <Stack.Screen name="personnel" />
       <Stack.Screen name="subcontractors" />

@@ -15,16 +15,40 @@ class DatabaseSeeder extends Seeder
     {
         // Chạy các seeders theo thứ tự
         $this->call([
+            // 1. Cấu hình hệ thống
             RolePermissionSeeder::class, // Chạy trước để tạo roles và permissions
+            PermissionSeeder::class, // Tạo các permissions và gán cho roles
+            PersonnelRoleSeeder::class, // Tạo các vai trò mặc định cho nhân sự
+
+            // 2. Users và Admin
             AdminSeeder::class, // Sau đó mới tạo admins và gán roles
             SuperAdminSeeder::class, // Tạo Super Admin user với toàn quyền truy cập app
             UserRoleSeeder::class, // Tạo các users với các roles khác nhau
-            PersonnelRoleSeeder::class, // Tạo các vai trò mặc định cho nhân sự
-            PermissionSeeder::class, // Tạo các permissions và gán cho roles
+
+            // 3. Cấu hình dự án
+            DepartmentSeeder::class, // Tạo phòng ban
+            CostGroupSeeder::class, // Tạo nhóm chi phí (cần trước BudgetSeeder)
+            MaterialSupplierSeeder::class, // Tạo nhà cung cấp vật liệu
+            MaterialSeeder::class, // Tạo vật liệu
+            EquipmentSeeder::class, // Tạo thiết bị
+
+            // 4. Dự án và dữ liệu liên quan
             ProjectSeeder::class, // Tạo dữ liệu mẫu cho module quản lý dự án
             SampleDataSeeder::class, // Tạo dữ liệu mẫu cho tất cả các module (contracts, payments, costs, etc.)
+            BudgetSeeder::class, // Tạo ngân sách dự án
+            InvoiceSeeder::class, // Tạo hóa đơn
+            ReceiptSeeder::class, // Tạo chứng từ
+
+            // 5. Nhân sự
             PayrollSeeder::class, // Tạo dữ liệu mẫu cho module bảng lương
             WorkScheduleSeeder::class, // Tạo dữ liệu mẫu cho module lịch làm việc
+            LeaveSeeder::class, // Tạo đơn nghỉ phép và leave balance
+            EmploymentContractSeeder::class, // Tạo hợp đồng lao động
+            InsuranceSeeder::class, // Tạo bảo hiểm và phúc lợi
+            PerformanceSeeder::class, // Tạo đánh giá hiệu suất
+
+            // 6. Nhắc nhở
+            ReminderSeeder::class, // Tạo nhắc nhở
         ]);
     }
 }

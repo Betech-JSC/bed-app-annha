@@ -107,6 +107,18 @@ export default function ProjectDetailScreen() {
       color: "#8B5CF6",
     },
     {
+      title: "Ngân Sách Dự Án",
+      icon: "wallet-outline",
+      route: `/projects/${id}/budget`,
+      color: "#10B981",
+    },
+    {
+      title: "Hóa Đơn",
+      icon: "receipt-outline",
+      route: `/projects/${id}/invoices`,
+      color: "#3B82F6",
+    },
+    {
       title: "Nhân Sự Tham Gia",
       icon: "people-outline",
       route: `/projects/${id}/personnel`,

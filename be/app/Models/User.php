@@ -156,6 +156,78 @@ class User extends Authenticatable
     }
 
     /**
+     * Department của user
+     */
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    /**
+     * Leave requests của user
+     */
+    public function leaveRequests(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class);
+    }
+
+    /**
+     * Leave balances của user
+     */
+    public function leaveBalances(): HasMany
+    {
+        return $this->hasMany(LeaveBalance::class);
+    }
+
+    /**
+     * Employment contracts của user
+     */
+    public function employmentContracts(): HasMany
+    {
+        return $this->hasMany(EmploymentContract::class);
+    }
+
+    /**
+     * Employee insurance của user
+     */
+    public function employeeInsurance(): HasMany
+    {
+        return $this->hasMany(EmployeeInsurance::class);
+    }
+
+    /**
+     * Employee benefits của user
+     */
+    public function employeeBenefits(): HasMany
+    {
+        return $this->hasMany(EmployeeBenefit::class);
+    }
+
+    /**
+     * Performance evaluations của user (as employee)
+     */
+    public function performanceEvaluations(): HasMany
+    {
+        return $this->hasMany(PerformanceEvaluation::class);
+    }
+
+    /**
+     * Performance evaluations của user (as evaluator)
+     */
+    public function evaluationsAsEvaluator(): HasMany
+    {
+        return $this->hasMany(PerformanceEvaluation::class, 'evaluator_id');
+    }
+
+    /**
+     * Reminders của user
+     */
+    public function reminders(): HasMany
+    {
+        return $this->hasMany(Reminder::class);
+    }
+
+    /**
      * Permissions trực tiếp của user (qua permission_user table)
      */
     public function directPermissions(): BelongsToMany

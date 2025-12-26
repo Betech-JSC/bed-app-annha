@@ -142,6 +142,41 @@ class Project extends Model
         return $this->hasMany(Bonus::class);
     }
 
+    public function budgets(): HasMany
+    {
+        return $this->hasMany(ProjectBudget::class);
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(Receipt::class);
+    }
+
+    public function materialTransactions(): HasMany
+    {
+        return $this->hasMany(MaterialTransaction::class);
+    }
+
+    public function equipmentAllocations(): HasMany
+    {
+        return $this->hasMany(EquipmentAllocation::class);
+    }
+
+    public function leaveRequests(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class);
+    }
+
+    public function performanceEvaluations(): HasMany
+    {
+        return $this->hasMany(PerformanceEvaluation::class);
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================

@@ -104,6 +104,27 @@ export default function SettingsScreen() {
       description: "Quản lý danh sách nhà thầu phụ tập trung",
     },
     {
+      title: "Phòng Ban",
+      icon: "business-outline",
+      route: "/settings/departments",
+      permission: "departments.view",
+      description: "Quản lý phòng ban và tổ chức",
+    },
+    {
+      title: "Vật Liệu",
+      icon: "cube-outline",
+      route: "/materials",
+      permission: "materials.view",
+      description: "Quản lý vật liệu và tồn kho",
+    },
+    {
+      title: "Thiết Bị",
+      icon: "construct-outline",
+      route: "/equipment",
+      permission: "equipment.view",
+      description: "Quản lý thiết bị và bảo trì",
+    },
+    {
       title: "Cấu Hình Vai Trò",
       icon: "people-circle-outline",
       route: "/hr/personnel-roles",

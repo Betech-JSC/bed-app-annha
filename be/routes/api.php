@@ -57,6 +57,17 @@ use App\Http\Controllers\Api\ProjectPhaseController;
 use App\Http\Controllers\Api\ProjectTaskController;
 use App\Http\Controllers\Api\ProjectTaskDependencyController;
 use App\Http\Controllers\Api\AcceptanceItemController;
+use App\Http\Controllers\Api\DepartmentController;
+use App\Http\Controllers\Api\MaterialController;
+use App\Http\Controllers\Api\EquipmentController;
+use App\Http\Controllers\Api\BudgetController;
+use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\ReceiptController;
+use App\Http\Controllers\Api\LeaveController;
+use App\Http\Controllers\Api\EmploymentContractController;
+use App\Http\Controllers\Api\InsuranceController;
+use App\Http\Controllers\Api\PerformanceController;
+use App\Http\Controllers\Api\ReminderController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -175,6 +186,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/logs', [ConstructionLogController::class, 'store']);
         Route::put('/{projectId}/logs/{id}', [ConstructionLogController::class, 'update']);
         Route::delete('/{projectId}/logs/{id}', [ConstructionLogController::class, 'destroy']);
+
+        // Budgets
+        Route::get('/{projectId}/budgets', [BudgetController::class, 'index']);
+        Route::post('/{projectId}/budgets', [BudgetController::class, 'store']);
+        Route::get('/{projectId}/budgets/{id}', [BudgetController::class, 'show']);
+        Route::get('/{projectId}/budgets/{id}/compare', [BudgetController::class, 'compareWithActual']);
+        Route::put('/{projectId}/budgets/{id}', [BudgetController::class, 'update']);
+        Route::delete('/{projectId}/budgets/{id}', [BudgetController::class, 'destroy']);
+
+        // Invoices
+        Route::get('/{projectId}/invoices', [InvoiceController::class, 'index']);
+        Route::post('/{projectId}/invoices', [InvoiceController::class, 'store']);
+        Route::get('/{projectId}/invoices/{id}', [InvoiceController::class, 'show']);
+        Route::post('/{projectId}/invoices/{id}/send', [InvoiceController::class, 'send']);
+        Route::post('/{projectId}/invoices/{id}/mark-paid', [InvoiceController::class, 'markPaid']);
+        Route::put('/{projectId}/invoices/{id}', [InvoiceController::class, 'update']);
+        Route::delete('/{projectId}/invoices/{id}', [InvoiceController::class, 'destroy']);
 
         // Acceptance Stages
         Route::get('/{projectId}/acceptance', [AcceptanceStageController::class, 'index']);
@@ -490,5 +518,98 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/{id}', [AdminAirportController::class, 'show']); // Chi tiết airport
         Route::put('/{id}', [AdminAirportController::class, 'update']); // Cập nhật airport
         Route::delete('/{id}', [AdminAirportController::class, 'destroy']); // Xóa airport
+    });
+
+    // ========== NEW MODULES ROUTES ==========
+
+    // Departments
+    Route::prefix('departments')->group(function () {
+        Route::get('/', [DepartmentController::class, 'index']);
+        Route::post('/', [DepartmentController::class, 'store']);
+        Route::get('/{id}', [DepartmentController::class, 'show']);
+        Route::put('/{id}', [DepartmentController::class, 'update']);
+        Route::delete('/{id}', [DepartmentController::class, 'destroy']);
+    });
+
+    // Materials
+    Route::prefix('materials')->group(function () {
+        Route::get('/', [MaterialController::class, 'index']);
+        Route::post('/', [MaterialController::class, 'store']);
+        Route::get('/{id}', [MaterialController::class, 'show']);
+        Route::get('/{id}/stock', [MaterialController::class, 'getStock']);
+        Route::get('/{id}/transactions', [MaterialController::class, 'getTransactions']);
+        Route::put('/{id}', [MaterialController::class, 'update']);
+        Route::delete('/{id}', [MaterialController::class, 'destroy']);
+    });
+
+    // Equipment
+    Route::prefix('equipment')->group(function () {
+        Route::get('/', [EquipmentController::class, 'index']);
+        Route::post('/', [EquipmentController::class, 'store']);
+        Route::get('/{id}', [EquipmentController::class, 'show']);
+        Route::get('/{id}/allocations', [EquipmentController::class, 'getAllocations']);
+        Route::get('/{id}/maintenance', [EquipmentController::class, 'getMaintenance']);
+        Route::put('/{id}', [EquipmentController::class, 'update']);
+        Route::delete('/{id}', [EquipmentController::class, 'destroy']);
+    });
+
+
+    // Receipts
+    Route::prefix('receipts')->group(function () {
+        Route::get('/', [ReceiptController::class, 'index']);
+        Route::post('/', [ReceiptController::class, 'store']);
+        Route::get('/{id}', [ReceiptController::class, 'show']);
+        Route::post('/{id}/verify', [ReceiptController::class, 'verify']);
+        Route::put('/{id}', [ReceiptController::class, 'update']);
+        Route::delete('/{id}', [ReceiptController::class, 'destroy']);
+    });
+
+    // Leave Management
+    Route::prefix('leave')->group(function () {
+        Route::get('/requests', [LeaveController::class, 'getRequests']);
+        Route::post('/requests', [LeaveController::class, 'createRequest']);
+        Route::post('/requests/{id}/approve', [LeaveController::class, 'approve']);
+        Route::post('/requests/{id}/reject', [LeaveController::class, 'reject']);
+        Route::get('/balance', [LeaveController::class, 'getBalance']);
+    });
+
+    // Employment Contracts
+    Route::prefix('employment-contracts')->group(function () {
+        Route::get('/', [EmploymentContractController::class, 'index']);
+        Route::post('/', [EmploymentContractController::class, 'store']);
+        Route::get('/{id}', [EmploymentContractController::class, 'show']);
+        Route::put('/{id}', [EmploymentContractController::class, 'update']);
+        Route::post('/{id}/renew', [EmploymentContractController::class, 'renew']);
+        Route::post('/{id}/terminate', [EmploymentContractController::class, 'terminate']);
+        Route::delete('/{id}', [EmploymentContractController::class, 'destroy']);
+    });
+
+    // Insurance & Benefits
+    Route::prefix('insurance')->group(function () {
+        Route::get('/', [InsuranceController::class, 'getInsurance']);
+        Route::put('/', [InsuranceController::class, 'updateInsurance']);
+        Route::get('/benefits', [InsuranceController::class, 'getBenefits']);
+        Route::post('/benefits', [InsuranceController::class, 'createBenefit']);
+        Route::put('/benefits/{id}', [InsuranceController::class, 'updateBenefit']);
+        Route::delete('/benefits/{id}', [InsuranceController::class, 'deleteBenefit']);
+    });
+
+    // Performance Evaluations
+    Route::prefix('performance')->group(function () {
+        Route::get('/evaluations', [PerformanceController::class, 'getEvaluations']);
+        Route::post('/evaluations', [PerformanceController::class, 'createEvaluation']);
+        Route::get('/evaluations/{id}', [PerformanceController::class, 'showEvaluation']);
+        Route::put('/evaluations/{id}', [PerformanceController::class, 'updateEvaluation']);
+    });
+
+    // Reminders
+    Route::prefix('reminders')->group(function () {
+        Route::get('/', [ReminderController::class, 'index']);
+        Route::post('/', [ReminderController::class, 'store']);
+        Route::get('/{id}', [ReminderController::class, 'show']);
+        Route::put('/{id}', [ReminderController::class, 'update']);
+        Route::delete('/{id}', [ReminderController::class, 'destroy']);
+        Route::post('/send-pending', [ReminderController::class, 'sendPendingReminders']);
+        Route::post('/{id}/mark-sent', [ReminderController::class, 'markAsSent']);
     });
 });

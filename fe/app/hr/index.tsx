@@ -220,6 +220,42 @@ export default function HRDashboardScreen() {
           <Text style={styles.menuText}>Cấu Hình Vai Trò</Text>
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push("/hr/leave-requests")}
+        >
+          <Ionicons name="calendar-outline" size={24} color="#F59E0B" />
+          <Text style={styles.menuText}>Nghỉ Phép</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push("/hr/employment-contracts")}
+        >
+          <Ionicons name="document-text-outline" size={24} color="#8B5CF6" />
+          <Text style={styles.menuText}>Hợp Đồng Lao Động</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push("/hr/insurance")}
+        >
+          <Ionicons name="shield-outline" size={24} color="#10B981" />
+          <Text style={styles.menuText}>Bảo Hiểm & Phúc Lợi</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => router.push("/hr/performance")}
+        >
+          <Ionicons name="star-outline" size={24} color="#F59E0B" />
+          <Text style={styles.menuText}>Đánh Giá Hiệu Suất</Text>
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );

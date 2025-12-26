@@ -26,6 +26,9 @@ class Kernel extends ConsoleKernel
 
         // Tính thưởng từ dự án mỗi ngày lúc 22:00
         $schedule->command('hr:calculate-project-bonuses')->dailyAt('22:00');
+
+        // Gửi reminders mỗi giờ
+        $schedule->command('reminders:send')->hourly();
     }
 
     /**
