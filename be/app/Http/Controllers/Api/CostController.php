@@ -19,7 +19,7 @@ class CostController extends Controller
         $project = Project::findOrFail($projectId);
 
         $query = Cost::where('project_id', $project->id)
-            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup']);
+            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor']);
 
         // Filter theo category
         if ($category = $request->query('category')) {
@@ -53,7 +53,7 @@ class CostController extends Controller
     public function store(Request $request, string $projectId)
     {
         $project = Project::findOrFail($projectId);
-        $user = auth()->user();
+        $user = $request->user();
 
         // Check permission
         if (!$user->hasPermission('costs.create')) {
@@ -69,6 +69,9 @@ class CostController extends Controller
             'amount' => 'required|numeric|min:0',
             'description' => 'nullable|string|max:2000',
             'cost_date' => 'required|date',
+            'subcontractor_id' => 'nullable|exists:subcontractors,id',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
 
         // Kiểm tra cost_group có active không
@@ -80,8 +83,35 @@ class CostController extends Controller
             ], 422);
         }
 
+        // Kiểm tra nếu cost group liên quan đến nhà thầu phụ thì bắt buộc phải chọn subcontractor
+        $isSubcontractorCostGroup = $costGroup->code === 'subcontractor'
+            || stripos($costGroup->name, 'nhà thầu phụ') !== false
+            || stripos($costGroup->name, 'thầu phụ') !== false;
+
+        if ($isSubcontractorCostGroup && empty($validated['subcontractor_id'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Vui lòng chọn nhà thầu phụ liên quan cho loại chi phí này.'
+            ], 422);
+        }
+
+        // Kiểm tra subcontractor thuộc về project này
+        if (!empty($validated['subcontractor_id'])) {
+            $subcontractor = \App\Models\Subcontractor::where('project_id', $project->id)
+                ->find($validated['subcontractor_id']);
+            if (!$subcontractor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Nhà thầu phụ không thuộc về dự án này.'
+                ], 422);
+            }
+        }
+
         try {
             DB::beginTransaction();
+
+            $attachmentIds = $validated['attachment_ids'] ?? [];
+            unset($validated['attachment_ids']);
 
             $cost = Cost::create([
                 'project_id' => $project->id,
@@ -90,12 +120,25 @@ class CostController extends Controller
                 'status' => 'draft', // Mặc định là draft
             ]);
 
+            // Đính kèm files nếu có
+            if (!empty($attachmentIds)) {
+                foreach ($attachmentIds as $attachmentId) {
+                    $attachment = \App\Models\Attachment::find($attachmentId);
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                        $attachment->update([
+                            'attachable_type' => Cost::class,
+                            'attachable_id' => $cost->id,
+                        ]);
+                    }
+                }
+            }
+
             DB::commit();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Chi phí đã được tạo.',
-                'data' => $cost->load(['creator']),
+                'data' => $cost->load(['creator', 'attachments', 'subcontractor', 'costGroup']),
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -105,6 +148,22 @@ class CostController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Xem chi tiết chi phí
+     */
+    public function show(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $cost = Cost::where('project_id', $project->id)
+            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor'])
+            ->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $cost,
+        ]);
     }
 
     /**
@@ -182,7 +241,7 @@ class CostController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
-        $user = auth()->user();
+        $user = $request->user();
 
         // Check permission
         if (!$user->hasPermission('costs.approve_management')) {
@@ -215,7 +274,7 @@ class CostController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
-        $user = auth()->user();
+        $user = $request->user();
 
         // Check permission
         if (!$user->hasPermission('costs.approve_accountant')) {
@@ -248,7 +307,7 @@ class CostController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
-        $user = auth()->user();
+        $user = $request->user();
 
         $validated = $request->validate([
             'rejected_reason' => 'required|string|max:500',

@@ -52,11 +52,16 @@ class SubcontractorController extends Controller
     public function destroy(string $projectId, string $id)
     {
         $subcontractor = Subcontractor::where('project_id', $projectId)->findOrFail($id);
+        
+        // Xử lý chi phí liên quan: Set subcontractor_id = null để giữ lại dữ liệu chi phí
+        \App\Models\Cost::where('subcontractor_id', $subcontractor->id)
+            ->update(['subcontractor_id' => null]);
+        
         $subcontractor->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Nhà thầu phụ đã được xóa.'
+            'message' => 'Nhà thầu phụ đã được xóa. Các chi phí liên quan đã được tách khỏi nhà thầu phụ này.'
         ]);
     }
 
@@ -93,6 +98,8 @@ class SubcontractorController extends Controller
             'progress_start_date' => 'nullable|date',
             'progress_end_date' => 'nullable|date|after_or_equal:progress_start_date',
             'progress_status' => ['nullable', 'in:not_started,in_progress,completed,delayed'],
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'exists:attachments,id',
             'create_cost' => 'nullable|boolean',
             'cost_group_id' => 'nullable|exists:cost_groups,id',
             'cost_date' => 'nullable|date',
@@ -120,6 +127,15 @@ class SubcontractorController extends Controller
                 'payment_status' => 'pending',
                 'created_by' => $request->user()->id,
             ]);
+
+            // Attach files if provided
+            if (!empty($validated['attachment_ids'])) {
+                \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
+                    ->update([
+                        'attachable_type' => Subcontractor::class,
+                        'attachable_id' => $subcontractor->id,
+                    ]);
+            }
 
             // Tạo Cost record nếu được yêu cầu
             if (!empty($validated['create_cost']) && $validated['create_cost']) {

@@ -4,6 +4,7 @@ export interface ConstructionLog {
   id: number;
   uuid: string;
   project_id: number;
+  task_id?: number;
   log_date: string;
   weather?: string;
   personnel_count?: number;
@@ -12,10 +13,16 @@ export interface ConstructionLog {
   created_by: number;
   created_at: string;
   attachments?: any[];
+  task?: {
+    id: number;
+    name: string;
+    progress_percentage: number;
+  };
 }
 
 export interface CreateConstructionLogData {
   log_date: string;
+  task_id?: number;
   weather?: string;
   personnel_count?: number;
   completion_percentage?: number;

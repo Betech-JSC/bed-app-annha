@@ -8,7 +8,9 @@ export interface RevenueSummary {
   };
   revenue: {
     contract_value: number;
+    additional_costs: number; // Giá trị phát sinh
     paid_payments: number;
+    remaining_payment: number; // Số tiền còn lại cần thanh toán
     total_revenue: number;
   };
   costs: {
@@ -38,6 +40,7 @@ export interface Cost {
   uuid: string;
   project_id: number;
   cost_group_id: number; // Bắt buộc - liên kết với CostGroup từ Settings
+  subcontractor_id?: number;
   name: string;
   amount: number;
   description?: string;
@@ -66,6 +69,18 @@ export interface Cost {
     code: string;
     description?: string;
   };
+  subcontractor?: {
+    id: number;
+    name: string;
+    category?: string;
+  };
+  attachments?: Array<{
+    id: number;
+    attachment_id: number;
+    file_url: string;
+    original_name: string;
+    type: string;
+  }>;
 }
 
 export interface CreateCostData {
@@ -74,6 +89,8 @@ export interface CreateCostData {
   amount: number;
   description?: string;
   cost_date: string;
+  subcontractor_id?: number; // Bắt buộc nếu cost_group liên quan đến nhà thầu phụ
+  attachment_ids?: number[]; // IDs của các file đã upload
 }
 
 export interface RevenueDashboard {
@@ -154,6 +171,12 @@ export const costApi = {
     }
   ) => {
     const response = await api.get(`/projects/${projectId}/costs`, { params });
+    return response.data;
+  },
+
+  // Lấy chi tiết chi phí
+  getCost: async (projectId: string | number, costId: string | number) => {
+    const response = await api.get(`/projects/${projectId}/costs/${costId}`);
     return response.data;
   },
 

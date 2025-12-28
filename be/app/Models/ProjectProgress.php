@@ -96,7 +96,8 @@ class ProjectProgress extends Model
 
     /**
      * Tính tiến độ dựa trên nghiệm thu
-     * Dự án chỉ đạt 100% khi tất cả hạng mục nghiệm thu đã được approved
+     * Tiến độ được tính dựa trên tỷ lệ hạng mục nghiệm thu đã được approved
+     * Mỗi giai đoạn (stage) có trọng số bằng nhau, và trong mỗi giai đoạn, tiến độ được tính theo tỷ lệ items đã approved
      * 
      * @return float|null Trả về null nếu không có nghiệm thu để tính
      */
@@ -110,45 +111,53 @@ class ProjectProgress extends Model
             return null;
         }
 
-        $totalItems = 0;
-        $approvedItems = 0;
-        $totalStages = $stages->count();
-        $fullyApprovedStages = 0;
+        // Lọc các stage có items (bỏ qua stage không có items)
+        $stagesWithItems = $stages->filter(function ($stage) {
+            return $stage->items->isNotEmpty();
+        });
 
-        foreach ($stages as $stage) {
-            $items = $stage->items;
-            if ($items->isEmpty()) {
-                continue;
-            }
-
-            $totalItems += $items->count();
-            $approvedItems += $items->where('acceptance_status', 'approved')->count();
-
-            // Kiểm tra stage đã fully approved chưa (owner_approved)
-            if ($stage->status === 'owner_approved') {
-                $fullyApprovedStages++;
-            }
-        }
-
-        if ($totalItems === 0) {
-            // Nếu không có hạng mục nghiệm thu, trả về null
+        if ($stagesWithItems->isEmpty()) {
+            // Nếu không có stage nào có items, trả về null
             return null;
         }
 
-        // Tính tiến độ dựa trên tỷ lệ hạng mục đã nghiệm thu
-        // Chỉ đạt 100% khi TẤT CẢ hạng mục đã được approved
-        $itemProgress = ($approvedItems / $totalItems) * 100;
+        $totalStages = $stagesWithItems->count();
+        $stageProgresses = [];
 
-        // Cũng tính theo tỷ lệ stage đã fully approved
-        $stageProgress = $totalStages > 0 ? ($fullyApprovedStages / $totalStages) * 100 : 0;
+        // Tính tiến độ cho từng stage dựa trên tỷ lệ items đã approved
+        foreach ($stagesWithItems as $stage) {
+            $items = $stage->items;
+            $totalItems = $items->count();
+            $approvedItems = $items->where('acceptance_status', 'approved')->count();
+            
+            if ($totalItems > 0) {
+                // Tiến độ của stage = tỷ lệ items đã approved
+                $stageProgress = ($approvedItems / $totalItems) * 100;
+                $stageProgresses[] = $stageProgress;
+            }
+        }
 
-        // Lấy giá trị nhỏ hơn để đảm bảo chặt chẽ
-        // Chỉ khi cả items và stages đều 100% thì mới đạt 100%
-        $finalProgress = min($itemProgress, $stageProgress);
+        if (empty($stageProgresses)) {
+            return null;
+        }
 
-        // Đảm bảo chỉ đạt 100% khi TẤT CẢ đã approved
-        if ($approvedItems < $totalItems || $fullyApprovedStages < $totalStages) {
-            $finalProgress = min($finalProgress, 99.99); // Không cho phép 100% nếu chưa hoàn thành hết
+        // Tiến độ tổng hợp = trung bình tiến độ của tất cả các stage
+        // Mỗi stage có trọng số bằng nhau
+        $finalProgress = array_sum($stageProgresses) / count($stageProgresses);
+
+        // Đảm bảo chỉ đạt 100% khi TẤT CẢ items trong TẤT CẢ stages đã được approved
+        $allItemsApproved = $stagesWithItems->every(function ($stage) {
+            return $stage->items->every(function ($item) {
+                return $item->acceptance_status === 'approved';
+            });
+        });
+
+        if (!$allItemsApproved) {
+            // Nếu chưa tất cả items được approved, đảm bảo không vượt quá 99.99%
+            $finalProgress = min($finalProgress, 99.99);
+        } else {
+            // Nếu tất cả items đã được approved, đảm bảo đạt 100%
+            $finalProgress = 100;
         }
 
         $this->overall_percentage = round($finalProgress, 2);

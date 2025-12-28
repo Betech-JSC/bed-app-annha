@@ -41,7 +41,7 @@ class ContractController extends Controller
         $user = auth()->user();
 
         $validated = $request->validate([
-            'contract_value' => 'required|numeric|min:0',
+            'contract_value' => 'required|numeric|min:0|max:99999999999999999.99',
             'signed_date' => 'nullable|date',
             'status' => ['sometimes', 'in:draft,pending_customer_approval,approved,rejected'],
         ]);
@@ -90,7 +90,7 @@ class ContractController extends Controller
         }
 
         $validated = $request->validate([
-            'contract_value' => 'sometimes|numeric|min:0',
+            'contract_value' => 'sometimes|numeric|min:0|max:99999999999999999.99',
             'signed_date' => 'nullable|date',
         ]);
 

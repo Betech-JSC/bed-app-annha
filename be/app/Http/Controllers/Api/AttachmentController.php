@@ -11,6 +11,43 @@ use Illuminate\Support\Str;
 
 class AttachmentController extends Controller
 {
+    public function show($id)
+    {
+        try {
+            $attachment = Attachment::find($id);
+
+            if (!$attachment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File không tồn tại.',
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $attachment->id,
+                    'attachment_id' => $attachment->id,
+                    'file_url' => $attachment->file_url,
+                    'original_name' => $attachment->original_name,
+                    'type' => $attachment->type,
+                    'file_size' => $attachment->file_size,
+                    'mime_type' => $attachment->mime_type,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Get attachment exception', [
+                'attachment_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi hệ thống khi lấy thông tin file.',
+            ], 500);
+        }
+    }
+
     public function upload(Request $request)
     {
         try {
@@ -253,6 +290,71 @@ class AttachmentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi hệ thống khi upload file: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function destroy($id)
+    {
+        try {
+            $attachment = Attachment::find($id);
+
+            if (!$attachment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File không tồn tại.',
+                ], 404);
+            }
+
+            // Check permission: user can only delete their own files unless they have admin role
+            $user = request()->user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không có quyền truy cập.',
+                ], 401);
+            }
+
+            // Allow deletion if user is the uploader or has admin role
+            $isAdmin = ($user->role === 'admin') || ($user->owner === true);
+            if ($attachment->uploaded_by !== $user->id && !$isAdmin) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn không có quyền xóa file này.',
+                ], 403);
+            }
+
+            // Delete file from storage
+            if ($attachment->file_path && Storage::disk('public')->exists($attachment->file_path)) {
+                Storage::disk('public')->delete($attachment->file_path);
+                Log::info("File deleted from storage", [
+                    'file_path' => $attachment->file_path,
+                    'attachment_id' => $attachment->id,
+                ]);
+            }
+
+            // Delete record from database
+            $attachment->delete();
+
+            Log::info("Attachment deleted successfully", [
+                'attachment_id' => $id,
+                'deleted_by' => $user->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã xóa file thành công.',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Delete attachment exception', [
+                'attachment_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi hệ thống khi xóa file: ' . $e->getMessage(),
             ], 500);
         }
     }

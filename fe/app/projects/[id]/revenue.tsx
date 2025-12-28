@@ -86,7 +86,7 @@ export default function RevenueScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Quản Lý Doanh Thu</Text>
+        <Text style={styles.headerTitle}>Báo Cáo Tổng Hợp</Text>
       </View>
 
       {/* Tabs */}
@@ -121,9 +121,9 @@ export default function RevenueScreen() {
 
       {activeTab === "summary" && summary && (
         <View style={styles.content}>
-          {/* Doanh Thu */}
+          {/* Các Chỉ Số */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Doanh Thu</Text>
+            <Text style={styles.sectionTitle}>Các Chỉ Số</Text>
             <View style={styles.card}>
               <View style={styles.statRow}>
                 <View style={styles.statItem}>
@@ -133,43 +133,68 @@ export default function RevenueScreen() {
                   </Text>
                 </View>
                 <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Giá trị phát sinh</Text>
+                  <Text style={styles.statValue}>
+                    {formatCurrency(summary.revenue.additional_costs || 0)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.statRow}>
+                <View style={styles.statItem}>
                   <Text style={styles.statLabel}>Đã thanh toán</Text>
                   <Text style={styles.statValue}>
                     {formatCurrency(summary.revenue.paid_payments)}
                   </Text>
                 </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Số tiền còn lại</Text>
+                  <Text
+                    style={[
+                      styles.statValue,
+                      (summary.revenue.remaining_payment || 0) === 0
+                        ? styles.completedValue
+                        : styles.remainingValue,
+                    ]}
+                  >
+                    {formatCurrency(summary.revenue.remaining_payment || 0)}
+                  </Text>
+                  {(summary.revenue.remaining_payment || 0) === 0 && (
+                    <Text style={styles.completedBadge}>Dự án hoàn thành</Text>
+                  )}
               </View>
-              <View style={styles.divider} />
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Tổng doanh thu</Text>
-                <Text style={styles.totalValue}>
-                  {formatCurrency(summary.revenue.total_revenue)}
-                </Text>
               </View>
             </View>
           </View>
 
-          {/* Chi Phí */}
+          {/* Tổng Hợp Từ Hệ Thống */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Chi Phí Theo Nhóm</Text>
+            <Text style={styles.sectionTitle}>Tổng Hợp Từ Hệ Thống</Text>
             <View style={styles.card}>
-              {summary.costs.by_group && summary.costs.by_group.length > 0 ? (
-                summary.costs.by_group.map((group, index) => (
-                  <View key={group.id !== null && group.id !== undefined ? `group-${group.id}` : `other-${index}-${group.name}`} style={styles.costRow}>
-                    <Text style={styles.costLabel}>{group.name}</Text>
-                    <Text style={styles.costValue}>
-                      {formatCurrency(group.amount)}
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Tổng doanh thu</Text>
+                <Text style={[styles.summaryValue, styles.revenueValue]}>
+                  {formatCurrency(summary.revenue.total_revenue)}
                     </Text>
                   </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>Chưa có chi phí</Text>
-              )}
-              <View style={styles.divider} />
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Tổng chi phí</Text>
-                <Text style={[styles.totalValue, styles.costTotal]}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Tổng chi phí</Text>
+                <Text style={[styles.summaryValue, styles.costTotal]}>
                   {formatCurrency(summary.costs.total_costs)}
+                </Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Lợi nhuận</Text>
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    summary.profit.amount >= 0
+                      ? styles.profitPositive
+                      : styles.profitNegative,
+                  ]}
+                >
+                  {formatCurrency(summary.profit.amount)}
                 </Text>
               </View>
             </View>
@@ -551,5 +576,35 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     textAlign: "center",
     padding: 16,
+  },
+  completedValue: {
+    color: "#10B981",
+  },
+  remainingValue: {
+    color: "#F59E0B",
+  },
+  completedBadge: {
+    fontSize: 12,
+    color: "#10B981",
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  summaryLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  revenueValue: {
+    color: "#3B82F6",
   },
 });

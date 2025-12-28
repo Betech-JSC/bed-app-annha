@@ -176,7 +176,63 @@ class Cost extends Model
             $this->accountant_approved_by = $user->id;
             $this->accountant_approved_at = now();
         }
-        return $this->save();
+        $saved = $this->save();
+        
+        // Cập nhật trạng thái và tiến độ của nhà thầu phụ nếu có
+        if ($saved && $this->subcontractor_id) {
+            $this->updateSubcontractorStatus();
+        }
+        
+        return $saved;
+    }
+
+    /**
+     * Cập nhật trạng thái và tiến độ của nhà thầu phụ khi chi phí được duyệt
+     */
+    protected function updateSubcontractorStatus(): void
+    {
+        if (!$this->subcontractor_id) {
+            return;
+        }
+
+        $subcontractor = $this->subcontractor;
+        if (!$subcontractor) {
+            return;
+        }
+
+        // Tính tổng số tiền đã thanh toán từ các chi phí đã được duyệt
+        $totalPaidFromCosts = Cost::where('subcontractor_id', $subcontractor->id)
+            ->where('status', 'approved')
+            ->sum('amount');
+
+        // Cập nhật total_paid
+        $subcontractor->total_paid = $totalPaidFromCosts;
+
+        // Cập nhật payment_status dựa trên total_paid
+        if ($subcontractor->total_paid >= $subcontractor->total_quote) {
+            $subcontractor->payment_status = 'completed';
+        } elseif ($subcontractor->total_paid > 0) {
+            $subcontractor->payment_status = 'partial';
+        } else {
+            $subcontractor->payment_status = 'pending';
+        }
+
+        // Cập nhật progress_status
+        // Nếu chưa có progress_status hoặc đang ở not_started, chuyển sang in_progress khi có chi phí được duyệt
+        if ($subcontractor->progress_status === 'not_started' || !$subcontractor->progress_status) {
+            $subcontractor->progress_status = 'in_progress';
+        }
+
+        // Nếu đã thanh toán đủ (>= 100%), có thể đánh dấu là completed
+        // Nhưng cần kiểm tra thêm progress_end_date để chắc chắn
+        if ($subcontractor->payment_status === 'completed' && 
+            $subcontractor->progress_status !== 'completed' &&
+            $subcontractor->progress_end_date && 
+            now()->toDateString() >= $subcontractor->progress_end_date->toDateString()) {
+            $subcontractor->progress_status = 'completed';
+        }
+
+        $subcontractor->save();
     }
 
     /**
@@ -184,6 +240,8 @@ class Cost extends Model
      */
     public function reject(string $reason, ?User $user = null): bool
     {
+        $wasApproved = $this->status === 'approved';
+        
         $this->status = 'rejected';
         $this->rejected_reason = $reason;
 
@@ -200,7 +258,14 @@ class Cost extends Model
             }
         }
 
-        return $this->save();
+        $saved = $this->save();
+        
+        // Nếu chi phí trước đó đã được approved và có subcontractor_id, cần tính lại total_paid
+        if ($saved && $wasApproved && $this->subcontractor_id) {
+            $this->updateSubcontractorStatus();
+        }
+        
+        return $saved;
     }
 
     // ==================================================================

@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { AcceptanceStage, CreateAcceptanceStageData } from "@/api/acceptanceApi";
 import { Ionicons } from "@expo/vector-icons";
-import { FileUploader } from "@/components";
+import { UniversalFileUploader } from "@/components";
 import { acceptanceApi } from "@/api/acceptanceApi";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import AcceptanceItemList from "@/components/AcceptanceItemList";
@@ -50,6 +50,7 @@ export default function AcceptanceChecklist({
     description: "",
     order: undefined,
   });
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const handleUploadComplete = async (files: any[]) => {
     if (!selectedStageId || !projectId || files.length === 0) return;
@@ -236,6 +237,7 @@ export default function AcceptanceChecklist({
           <View style={styles.emptyContainer}>
             <Ionicons name="checkmark-circle-outline" size={64} color="#D1D5DB" />
             <Text style={styles.emptyText}>Chưa có giai đoạn nghiệm thu</Text>
+            <Text style={styles.emptySubtext}>Nhấn nút "Thêm giai đoạn" để bắt đầu</Text>
           </View>
         ) : (
           stages.map((stage) => {
@@ -245,16 +247,31 @@ export default function AcceptanceChecklist({
               (d: any) => d.status === "open" || d.status === "in_progress"
             );
 
+            const completionPercentage = stage.completion_percentage || 0;
+            const totalItems = stage.items?.length || 0;
+            const approvedItems = stage.items?.filter((i: any) => i.acceptance_status === 'approved').length || 0;
+
             return (
               <View key={stage.id} style={styles.stageCard}>
                 <View style={styles.stageHeader}>
                   <View style={styles.stageInfo}>
-                    <Ionicons name={icon.name as any} size={24} color={icon.color} />
+                    <View style={[styles.statusIconContainer, { backgroundColor: icon.color + '20' }]}>
+                      <Ionicons name={icon.name as any} size={20} color={icon.color} />
+                    </View>
                     <View style={styles.stageText}>
                       <Text style={styles.stageName}>{stage.name}</Text>
-                      <Text style={styles.stageStatus}>
-                        {getStatusText(stage.status)}
-                      </Text>
+                      <View style={styles.stageMeta}>
+                        <View style={[styles.statusBadge, { backgroundColor: icon.color + '15' }]}>
+                          <Text style={[styles.statusBadgeText, { color: icon.color }]}>
+                            {getStatusText(stage.status)}
+                          </Text>
+                        </View>
+                        {totalItems > 0 && (
+                          <Text style={styles.itemsCount}>
+                            {approvedItems}/{totalItems} hạng mục
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   </View>
                   {/* Action buttons - chỉ hiện khi chưa được duyệt hoàn toàn */}
@@ -279,6 +296,27 @@ export default function AcceptanceChecklist({
                     </View>
                   )}
                 </View>
+
+                {/* Progress Bar */}
+                {totalItems > 0 && (
+                  <View style={styles.progressSection}>
+                    <View style={styles.progressHeader}>
+                      <Text style={styles.progressLabel}>Tiến độ nghiệm thu</Text>
+                      <Text style={styles.progressPercentage}>{completionPercentage.toFixed(0)}%</Text>
+                    </View>
+                    <View style={styles.progressBarContainer}>
+                      <View 
+                        style={[
+                          styles.progressBar, 
+                          { 
+                            width: `${completionPercentage}%`,
+                            backgroundColor: completionPercentage === 100 ? '#10B981' : completionPercentage > 0 ? '#3B82F6' : '#E5E7EB'
+                          }
+                        ]} 
+                      />
+                    </View>
+                  </View>
+                )}
 
                 {stage.description && (
                   <Text style={styles.stageDescription}>{stage.description}</Text>
@@ -390,6 +428,8 @@ export default function AcceptanceChecklist({
                     projectId={projectId}
                     items={stage.items || []}
                     onRefresh={onRefresh || (() => { })}
+                    isProjectManager={isProjectManager}
+                    isCustomer={false}
                     onItemApprove={async (itemId: number) => {
                       const item = stage.items?.find((i) => i.id === itemId);
                       if (!item) return;
@@ -425,165 +465,64 @@ export default function AcceptanceChecklist({
                     <Text style={styles.attachmentsTitle}>
                       Hình ảnh nghiệm thu ({stage.attachments?.length || 0})
                     </Text>
+                    {isProjectManager && stage.status === "pending" && (
+                      <TouchableOpacity
+                        style={styles.uploadButtonInline}
+                        onPress={() => openUploadModal(stage.id)}
+                      >
+                        <Ionicons name="add-circle-outline" size={18} color="#3B82F6" />
+                        <Text style={styles.uploadButtonText}>Thêm</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
-                  {isProjectManager && stage.status === "pending" && (
-                    <TouchableOpacity
-                      style={styles.uploadButton}
-                      onPress={() => openUploadModal(stage.id)}
-                    >
-                      <Ionicons name="add-circle-outline" size={20} color="#3B82F6" />
-                      <Text style={styles.uploadButtonText}>Thêm hình ảnh</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {stage.attachments && stage.attachments.length > 0 && (
+                  {stage.attachments && stage.attachments.length > 0 ? (
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
                       style={styles.imagesContainer}
+                      contentContainerStyle={styles.imagesScrollContent}
                     >
-                      {stage.attachments.map((attachment: any, index: number) => (
-                        <View key={index} style={styles.imageWrapper}>
-                          <Image
-                            source={{ uri: attachment.file_url }}
-                            style={styles.attachmentImage}
-                          />
-                        </View>
-                      ))}
+                      {stage.attachments.map((attachment: any, index: number) => {
+                        const imageUrl = attachment.file_url || attachment.file_path || attachment.url || attachment.location;
+                        if (!imageUrl) return null;
+
+                        return (
+                          <TouchableOpacity
+                            key={attachment.id || index}
+                            style={styles.imageWrapper}
+                            onPress={() => setPreviewImage(imageUrl)}
+                            activeOpacity={0.8}
+                          >
+                            <Image
+                              source={{ uri: imageUrl }}
+                              style={styles.attachmentImage}
+                              resizeMode="cover"
+                            />
+                            <View style={styles.imageOverlay}>
+                              <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </ScrollView>
+                  ) : (
+                    <View style={styles.noImagesContainer}>
+                      <Ionicons name="image-outline" size={32} color="#D1D5DB" />
+                      <Text style={styles.noImagesText}>Chưa có hình ảnh nghiệm thu</Text>
+                      {isProjectManager && stage.status === "pending" && (
+                        <TouchableOpacity
+                          style={styles.uploadButton}
+                          onPress={() => openUploadModal(stage.id)}
+                        >
+                          <Ionicons name="add-circle-outline" size={20} color="#3B82F6" />
+                          <Text style={styles.uploadButtonText}>Thêm hình ảnh</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   )}
                 </View>
 
-                {/* Workflow Steps */}
-                <View style={styles.workflowSection}>
-                  <Text style={styles.workflowTitle}>Quy trình duyệt:</Text>
-                  <View style={styles.workflowSteps}>
-                    <View
-                      style={[
-                        styles.workflowStep,
-                        stage.status !== "pending" && styles.workflowStepCompleted,
-                      ]}
-                    >
-                      <Ionicons
-                        name={
-                          stage.status !== "pending"
-                            ? "checkmark-circle"
-                            : "ellipse-outline"
-                        }
-                        size={16}
-                        color={stage.status !== "pending" ? "#10B981" : "#9CA3AF"}
-                      />
-                      <Text
-                        style={[
-                          styles.workflowStepText,
-                          stage.status !== "pending" && styles.workflowStepTextCompleted,
-                        ]}
-                      >
-                        Quản lý dự án
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.workflowStep,
-                        ["internal_approved", "customer_approved", "design_approved", "owner_approved"].includes(
-                          stage.status
-                        ) && styles.workflowStepCompleted,
-                      ]}
-                    >
-                      <Ionicons
-                        name={
-                          ["internal_approved", "customer_approved", "design_approved", "owner_approved"].includes(
-                            stage.status
-                          )
-                            ? "checkmark-circle"
-                            : "ellipse-outline"
-                        }
-                        size={16}
-                        color={
-                          ["internal_approved", "customer_approved", "design_approved", "owner_approved"].includes(
-                            stage.status
-                          )
-                            ? "#10B981"
-                            : "#9CA3AF"
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.workflowStepText,
-                          ["internal_approved", "customer_approved", "design_approved", "owner_approved"].includes(
-                            stage.status
-                          ) && styles.workflowStepTextCompleted,
-                        ]}
-                      >
-                        Giám sát nội bộ
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.workflowStep,
-                        ["customer_approved", "design_approved", "owner_approved"].includes(
-                          stage.status
-                        ) && styles.workflowStepCompleted,
-                      ]}
-                    >
-                      <Ionicons
-                        name={
-                          ["customer_approved", "design_approved", "owner_approved"].includes(
-                            stage.status
-                          )
-                            ? "checkmark-circle"
-                            : "ellipse-outline"
-                        }
-                        size={16}
-                        color={
-                          ["customer_approved", "design_approved", "owner_approved"].includes(
-                            stage.status
-                          )
-                            ? "#10B981"
-                            : "#9CA3AF"
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.workflowStepText,
-                          ["customer_approved", "design_approved", "owner_approved"].includes(
-                            stage.status
-                          ) && styles.workflowStepTextCompleted,
-                        ]}
-                      >
-                        Giám sát chủ nhà/thiết kế
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.workflowStep,
-                        stage.status === "owner_approved" && styles.workflowStepCompleted,
-                      ]}
-                    >
-                      <Ionicons
-                        name={
-                          stage.status === "owner_approved"
-                            ? "checkmark-circle"
-                            : "ellipse-outline"
-                        }
-                        size={16}
-                        color={
-                          stage.status === "owner_approved" ? "#10B981" : "#9CA3AF"
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.workflowStepText,
-                          stage.status === "owner_approved" &&
-                          styles.workflowStepTextCompleted,
-                        ]}
-                      >
-                        Chủ nhà xác nhận
-                      </Text>
-                    </View>
-                  </View>
-                </View>
               </View>
             );
           })
@@ -609,7 +548,7 @@ export default function AcceptanceChecklist({
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
-              <FileUploader
+              <UniversalFileUploader
                 onUploadComplete={handleUploadComplete}
                 multiple={true}
                 accept="image"
@@ -784,6 +723,30 @@ export default function AcceptanceChecklist({
           </View>
         </View>
       </Modal>
+
+      {/* Image Preview Modal */}
+      <Modal
+        visible={!!previewImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
+        <View style={styles.imagePreviewOverlay}>
+          <TouchableOpacity
+            style={styles.imagePreviewCloseButton}
+            onPress={() => setPreviewImage(null)}
+          >
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+          {previewImage && (
+            <Image
+              source={{ uri: previewImage }}
+              style={styles.imagePreview}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </>
   );
 }
@@ -899,6 +862,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
+  statusIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   stageText: {
     marginLeft: 12,
     flex: 1,
@@ -907,11 +877,59 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#1F2937",
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  stageStatus: {
-    fontSize: 14,
+  stageMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  itemsCount: {
+    fontSize: 12,
     color: "#6B7280",
+  },
+  progressSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  progressLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+  progressPercentage: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  progressBarContainer: {
+    height: 8,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    borderRadius: 4,
+    transition: "width 0.3s ease",
   },
   stageDescription: {
     fontSize: 14,
@@ -1046,22 +1064,78 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     alignSelf: "flex-start",
   },
+  uploadButtonInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    padding: 6,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 6,
+    marginLeft: "auto",
+  },
   uploadButtonText: {
     fontSize: 14,
     color: "#3B82F6",
     fontWeight: "500",
   },
+  noImagesContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+    marginTop: 8,
+  },
+  noImagesText: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    marginTop: 8,
+  },
   imagesContainer: {
     marginTop: 8,
   },
+  imagesScrollContent: {
+    paddingRight: 12,
+  },
   imageWrapper: {
     marginRight: 12,
+    position: "relative",
+    borderRadius: 8,
+    overflow: "hidden",
   },
   attachmentImage: {
     width: 100,
     height: 100,
     borderRadius: 8,
     backgroundColor: "#F3F4F6",
+  },
+  imageOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  imagePreviewOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imagePreviewCloseButton: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 1,
+    padding: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 20,
+  },
+  imagePreview: {
+    width: "100%",
+    height: "100%",
   },
   workflowSection: {
     marginTop: 12,
@@ -1102,9 +1176,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyText: {
-    fontSize: 16,
-    color: "#6B7280",
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
     marginTop: 16,
+    textAlign: "center",
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 8,
     textAlign: "center",
   },
   modalOverlay: {

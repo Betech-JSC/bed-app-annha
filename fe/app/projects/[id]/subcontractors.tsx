@@ -19,6 +19,7 @@ import { globalSubcontractorApi, GlobalSubcontractor } from "@/api/globalSubcont
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 
 export default function SubcontractorsScreen() {
   const router = useRouter();
@@ -40,15 +41,20 @@ export default function SubcontractorsScreen() {
     category: "",
     total_quote: "",
     advance_payment: "",
+    progress_start_date: null as Date | null,
+    progress_end_date: null as Date | null,
+    progress_status: "not_started" as "not_started" | "in_progress" | "completed" | "delayed",
     cost_group_id: null as number | null,
     cost_date: new Date(),
     create_cost: false,
   });
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedSubcontractorDetail, setSelectedSubcontractorDetail] = useState<Subcontractor | null>(null);
   const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
   const [loadingCostGroups, setLoadingCostGroups] = useState(false);
-  const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
   const [paymentFormData, setPaymentFormData] = useState({
     payment_stage: "",
     amount: "",
@@ -88,6 +94,30 @@ export default function SubcontractorsScreen() {
       console.error("Error loading global subcontractors:", error);
     } finally {
       setLoadingGlobal(false);
+    }
+  };
+
+  const calculateProgressStatus = (startDate: Date | null, endDate: Date | null) => {
+    if (!endDate) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+
+    // Nếu đã hoàn thành, giữ nguyên
+    if (formData.progress_status === "completed") return;
+
+    // Nếu quá ngày kết thúc và chưa hoàn thành → trễ tiến độ
+    if (today > end) {
+      setFormData(prev => ({ ...prev, progress_status: "delayed" }));
+    } else if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      // Nếu đã qua ngày bắt đầu → đang thực hiện
+      if (today >= start) {
+        setFormData(prev => ({ ...prev, progress_status: "in_progress" }));
+      }
     }
   };
 
@@ -204,7 +234,13 @@ export default function SubcontractorsScreen() {
   };
 
   const renderSubcontractorItem = ({ item }: { item: Subcontractor }) => (
-    <View style={styles.subcontractorCard}>
+    <TouchableOpacity
+      style={styles.subcontractorCard}
+      onPress={() => {
+        setSelectedSubcontractorDetail(item);
+        setShowDetailModal(true);
+      }}
+    >
       <View style={styles.subcontractorHeader}>
         <View style={styles.subcontractorInfo}>
           <Text style={styles.subcontractorName}>{item.name}</Text>
@@ -339,7 +375,7 @@ export default function SubcontractorsScreen() {
           </View>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -494,73 +530,115 @@ export default function SubcontractorsScreen() {
                 />
               </View>
 
-              {/* Cost Integration Section */}
+              {/* Progress Information Section */}
               <View style={styles.sectionDivider} />
-              <Text style={styles.sectionTitle}>Liên kết với Chi phí Dự án</Text>
+              <Text style={styles.sectionTitle}>Thông tin & Tiến độ</Text>
 
               <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Ngày bắt đầu</Text>
                 <TouchableOpacity
-                  style={styles.checkboxContainer}
-                  onPress={() => setFormData({ ...formData, create_cost: !formData.create_cost })}
+                  style={styles.selectButton}
+                  onPress={() => setShowStartDatePicker(true)}
                 >
-                  <View style={[styles.checkbox, formData.create_cost && styles.checkboxChecked]}>
-                    {formData.create_cost && (
-                      <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                    )}
-                  </View>
-                  <Text style={styles.checkboxLabel}>
-                    Tạo chi phí dự án từ nhà thầu phụ này
+                  <Text style={styles.selectButtonText}>
+                    {formData.progress_start_date
+                      ? formData.progress_start_date.toLocaleDateString("vi-VN")
+                      : "Chọn ngày bắt đầu"}
                   </Text>
+                  <Ionicons name="calendar-outline" size={20} color="#6B7280" />
                 </TouchableOpacity>
+                {showStartDatePicker && (
+                  <DateTimePicker
+                    value={formData.progress_start_date || new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                      setShowStartDatePicker(false);
+                      if (date) {
+                        setFormData({ ...formData, progress_start_date: date });
+                        // Tự động tính toán trạng thái
+                        calculateProgressStatus(date, formData.progress_end_date);
+                      }
+                    }}
+                  />
+                )}
               </View>
 
-              {formData.create_cost && (
-                <>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Nhóm chi phí</Text>
-                    <TouchableOpacity
-                      style={styles.selectButton}
-                      onPress={() => setShowCostGroupPicker(true)}
-                    >
-                      <Text style={[
-                        styles.selectButtonText,
-                        !formData.cost_group_id && styles.selectButtonTextPlaceholder
-                      ]}>
-                        {selectedCostGroup
-                          ? selectedCostGroup.name
-                          : "Chọn nhóm chi phí"}
-                      </Text>
-                      <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                    </TouchableOpacity>
-                  </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Ngày kết thúc</Text>
+                <TouchableOpacity
+                  style={styles.selectButton}
+                  onPress={() => setShowEndDatePicker(true)}
+                >
+                  <Text style={styles.selectButtonText}>
+                    {formData.progress_end_date
+                      ? formData.progress_end_date.toLocaleDateString("vi-VN")
+                      : "Chọn ngày kết thúc"}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                </TouchableOpacity>
+                {showEndDatePicker && (
+                  <DateTimePicker
+                    value={formData.progress_end_date || new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                      setShowEndDatePicker(false);
+                      if (date) {
+                        setFormData({ ...formData, progress_end_date: date });
+                        // Tự động tính toán trạng thái
+                        calculateProgressStatus(formData.progress_start_date, date);
+                      }
+                    }}
+                  />
+                )}
+              </View>
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Ngày phát sinh chi phí</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Trạng thái</Text>
+                <View style={styles.statusButtons}>
+                  {[
+                    { value: "not_started", label: "Chưa bắt đầu" },
+                    { value: "in_progress", label: "Đang thực hiện" },
+                    { value: "completed", label: "Đã hoàn thành" },
+                    { value: "delayed", label: "Trễ tiến độ" },
+                  ].map((status) => (
                     <TouchableOpacity
-                      style={styles.selectButton}
-                      onPress={() => setShowDatePicker(true)}
+                      key={status.value}
+                      style={[
+                        styles.statusButton,
+                        formData.progress_status === status.value && styles.statusButtonActive,
+                      ]}
+                      onPress={() => setFormData({ ...formData, progress_status: status.value as any })}
                     >
-                      <Text style={styles.selectButtonText}>
-                        {formData.cost_date.toLocaleDateString("vi-VN")}
+                      <Text
+                        style={[
+                          styles.statusButtonText,
+                          formData.progress_status === status.value && styles.statusButtonTextActive,
+                        ]}
+                      >
+                        {status.label}
                       </Text>
-                      <Ionicons name="calendar-outline" size={20} color="#6B7280" />
                     </TouchableOpacity>
-                    {showDatePicker && (
-                      <DateTimePicker
-                        value={formData.cost_date}
-                        mode="date"
-                        display="default"
-                        onChange={(event, date) => {
-                          setShowDatePicker(false);
-                          if (date) {
-                            setFormData({ ...formData, cost_date: date });
-                          }
-                        }}
-                      />
-                    )}
-                  </View>
-                </>
-              )}
+                  ))}
+                </View>
+              </View>
+
+              {/* File Upload Section */}
+              <View style={styles.sectionDivider} />
+              <Text style={styles.sectionTitle}>Đính kèm & Báo cáo</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Báo giá, Hồ sơ liên quan</Text>
+                <UniversalFileUploader
+                  onUploadComplete={(files) => setUploadedFiles(files)}
+                  multiple={true}
+                  accept="all"
+                  maxFiles={10}
+                  initialFiles={uploadedFiles}
+                  label="Chọn file (báo giá, hồ sơ...)"
+                />
+              </View>
+
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
@@ -577,6 +655,21 @@ export default function SubcontractorsScreen() {
                       return;
                     }
                     try {
+                      const attachmentIds = uploadedFiles
+                        .filter(f => f.attachment_id || f.id)
+                        .map(f => f.attachment_id || f.id!);
+
+                      // Tự động tìm cost group mặc định cho nhà thầu phụ
+                      let defaultCostGroupId = formData.cost_group_id;
+                      if (!defaultCostGroupId) {
+                        const subcontractorCostGroup = costGroups.find(
+                          g => g.code === 'subcontractor' ||
+                            g.name.toLowerCase().includes('nhà thầu phụ') ||
+                            g.name.toLowerCase().includes('thầu phụ')
+                        );
+                        defaultCostGroupId = subcontractorCostGroup?.id || null;
+                      }
+
                       const response = await subcontractorApi.createSubcontractor(id!, {
                         global_subcontractor_id: formData.global_subcontractor_id || undefined,
                         name: formData.name,
@@ -585,9 +678,20 @@ export default function SubcontractorsScreen() {
                         advance_payment: formData.advance_payment
                           ? parseFloat(formData.advance_payment)
                           : undefined,
-                        cost_group_id: formData.create_cost ? formData.cost_group_id || undefined : undefined,
-                        cost_date: formData.create_cost ? formData.cost_date.toISOString().split("T")[0] : undefined,
-                        create_cost: formData.create_cost,
+                        progress_start_date: formData.progress_start_date
+                          ? formData.progress_start_date.toISOString().split("T")[0]
+                          : undefined,
+                        progress_end_date: formData.progress_end_date
+                          ? formData.progress_end_date.toISOString().split("T")[0]
+                          : undefined,
+                        progress_status: formData.progress_status,
+                        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
+                        // Mặc định luôn tạo chi phí dự án
+                        cost_group_id: defaultCostGroupId || undefined,
+                        cost_date: formData.progress_start_date
+                          ? formData.progress_start_date.toISOString().split("T")[0]
+                          : new Date().toISOString().split("T")[0],
+                        create_cost: true,
                       });
                       setModalVisible(false);
                       setFormData({
@@ -596,15 +700,16 @@ export default function SubcontractorsScreen() {
                         category: "",
                         total_quote: "",
                         advance_payment: "",
+                        progress_start_date: null,
+                        progress_end_date: null,
+                        progress_status: "not_started",
                         cost_group_id: null,
                         cost_date: new Date(),
                         create_cost: false,
                       });
-                      setSelectedCostGroup(null);
+                      setUploadedFiles([]);
                       loadSubcontractors();
-                      if (formData.create_cost) {
-                        Alert.alert("Thành công", "Đã thêm nhà thầu phụ và tạo chi phí dự án");
-                      }
+                      Alert.alert("Thành công", "Đã thêm nhà thầu phụ");
                     } catch (error: any) {
                       const errorMessage = error.userMessage || error.response?.data?.message || "Không thể thêm nhà thầu phụ";
                       Alert.alert("Lỗi", errorMessage);
@@ -616,130 +721,200 @@ export default function SubcontractorsScreen() {
               </View>
             </View>
           </ScrollView>
+
+          {/* Global Subcontractors List Picker - Đặt bên trong modal tạo */}
+          {showGlobalList && (
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContainer}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Chọn nhà thầu phụ</Text>
+                  <TouchableOpacity onPress={() => setShowGlobalList(false)}>
+                    <Ionicons name="close" size={24} color="#1F2937" />
+                  </TouchableOpacity>
+                </View>
+                {loadingGlobal ? (
+                  <View style={styles.pickerLoadingContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                  </View>
+                ) : globalSubcontractors.length === 0 ? (
+                  <View style={styles.pickerEmptyContainer}>
+                    <Ionicons name="business-outline" size={48} color="#D1D5DB" />
+                    <Text style={styles.pickerEmptyText}>Chưa có nhà thầu phụ</Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={globalSubcontractors}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.costGroupItem}
+                        onPress={() => {
+                          handleSelectGlobalSubcontractor(item);
+                          setShowGlobalList(false);
+                        }}
+                      >
+                        <View style={styles.costGroupItemContent}>
+                          <Text style={styles.costGroupItemName}>{item.name}</Text>
+                          {item.category && (
+                            <Text style={styles.costGroupItemCode}>Loại: {item.category}</Text>
+                          )}
+                          {item.phone && (
+                            <Text style={styles.costGroupItemDescription}>📞 {item.phone}</Text>
+                          )}
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+              </View>
+            </View>
+          )}
+
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Global Subcontractors List Modal */}
+      {/* Detail Modal */}
       <Modal
-        visible={showGlobalList}
+        visible={showDetailModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowGlobalList(false)}
+        onRequestClose={() => {
+          setShowDetailModal(false);
+          setSelectedSubcontractorDetail(null);
+        }}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity
-              onPress={() => setShowGlobalList(false)}
+              onPress={() => {
+                setShowDetailModal(false);
+                setSelectedSubcontractorDetail(null);
+              }}
               style={styles.closeButton}
             >
               <Ionicons name="close" size={24} color="#1F2937" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Chọn nhà thầu phụ</Text>
+            <Text style={styles.modalTitle}>
+              {selectedSubcontractorDetail?.name || "Chi tiết nhà thầu phụ"}
+            </Text>
             <View style={{ width: 24 }} />
           </View>
 
-          {loadingGlobal ? (
-            <View style={[styles.modalBody, styles.centerContainer]}>
-              <ActivityIndicator size="large" color="#3B82F6" />
-            </View>
-          ) : globalSubcontractors.length === 0 ? (
-            <View style={[styles.modalBody, styles.emptyContainer]}>
-              <Ionicons name="business-outline" size={64} color="#D1D5DB" />
-              <Text style={styles.emptyText}>Chưa có nhà thầu phụ</Text>
-            </View>
-          ) : (
-            <FlatList
-              style={{ flex: 1 }}
-              contentContainerStyle={{ padding: 16 }}
-              data={globalSubcontractors}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.globalSubcontractorItem}
-                  onPress={() => {
-                    handleSelectGlobalSubcontractor(item);
-                    setShowGlobalList(false);
-                  }}
-                >
-                  <View style={styles.globalSubcontractorInfo}>
-                    <Text style={styles.globalSubcontractorName}>{item.name}</Text>
-                    {item.category && (
-                      <Text style={styles.globalSubcontractorCategory}>
-                        {item.category}
-                      </Text>
-                    )}
-                    {item.phone && (
-                      <Text style={styles.globalSubcontractorDetail}>
-                        📞 {item.phone}
-                      </Text>
-                    )}
+          <ScrollView style={styles.modalBody} nestedScrollEnabled={true}>
+            {selectedSubcontractorDetail && (
+              <>
+                {/* Financial Summary */}
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailSectionTitle}>Thông tin tài chính</Text>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Tổng giá trị hợp đồng:</Text>
+                    <Text style={styles.detailValue}>
+                      {formatCurrency(selectedSubcontractorDetail.total_quote)}
+                    </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-                </TouchableOpacity>
-              )}
-            />
-          )}
-        </View>
-      </Modal>
-
-      {/* Cost Group Picker Modal */}
-      <Modal
-        visible={showCostGroupPicker}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowCostGroupPicker(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity
-              onPress={() => setShowCostGroupPicker(false)}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Chọn nhóm chi phí</Text>
-            <View style={{ width: 24 }} />
-          </View>
-
-          {loadingCostGroups ? (
-            <View style={[styles.modalBody, styles.centerContainer]}>
-              <ActivityIndicator size="large" color="#3B82F6" />
-            </View>
-          ) : costGroups.length === 0 ? (
-            <View style={[styles.modalBody, styles.emptyContainer]}>
-              <Ionicons name="folder-outline" size={64} color="#D1D5DB" />
-              <Text style={styles.emptyText}>Chưa có nhóm chi phí</Text>
-            </View>
-          ) : (
-            <FlatList
-              style={{ flex: 1 }}
-              contentContainerStyle={{ padding: 16 }}
-              data={costGroups}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.globalSubcontractorItem}
-                  onPress={() => {
-                    setSelectedCostGroup(item);
-                    setFormData({ ...formData, cost_group_id: item.id });
-                    setShowCostGroupPicker(false);
-                  }}
-                >
-                  <View style={styles.globalSubcontractorInfo}>
-                    <Text style={styles.globalSubcontractorName}>{item.name}</Text>
-                    {item.description && (
-                      <Text style={styles.globalSubcontractorCategory}>
-                        {item.description}
-                      </Text>
-                    )}
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Tổng đã thanh toán:</Text>
+                    <Text style={styles.detailValue}>
+                      {formatCurrency(selectedSubcontractorDetail.total_paid)}
+                    </Text>
                   </View>
-                  {formData.cost_group_id === item.id && (
-                    <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Còn lại:</Text>
+                    <Text style={styles.detailValue}>
+                      {formatCurrency(
+                        selectedSubcontractorDetail.total_quote -
+                        selectedSubcontractorDetail.total_paid
+                      )}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Progress Information */}
+                {(selectedSubcontractorDetail.progress_start_date ||
+                  selectedSubcontractorDetail.progress_end_date) && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Thông tin & Tiến độ</Text>
+                      {selectedSubcontractorDetail.progress_start_date && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Ngày bắt đầu:</Text>
+                          <Text style={styles.detailValue}>
+                            {formatDate(selectedSubcontractorDetail.progress_start_date)}
+                          </Text>
+                        </View>
+                      )}
+                      {selectedSubcontractorDetail.progress_end_date && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Ngày kết thúc:</Text>
+                          <Text style={styles.detailValue}>
+                            {formatDate(selectedSubcontractorDetail.progress_end_date)}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Trạng thái:</Text>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            {
+                              backgroundColor:
+                                selectedSubcontractorDetail.progress_status === "completed"
+                                  ? "#10B98120"
+                                  : selectedSubcontractorDetail.progress_status === "in_progress"
+                                    ? "#3B82F620"
+                                    : selectedSubcontractorDetail.progress_status === "delayed"
+                                      ? "#EF444420"
+                                      : "#6B728020",
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusText,
+                              {
+                                color:
+                                  selectedSubcontractorDetail.progress_status === "completed"
+                                    ? "#10B981"
+                                    : selectedSubcontractorDetail.progress_status === "in_progress"
+                                      ? "#3B82F6"
+                                      : selectedSubcontractorDetail.progress_status === "delayed"
+                                        ? "#EF4444"
+                                        : "#6B7280",
+                              },
+                            ]}
+                          >
+                            {getProgressStatusText(selectedSubcontractorDetail.progress_status)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
                   )}
-                </TouchableOpacity>
-              )}
-            />
-          )}
+
+                {/* Attachments */}
+                {selectedSubcontractorDetail.attachments &&
+                  selectedSubcontractorDetail.attachments.length > 0 && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Đính kèm & Báo cáo</Text>
+                      <UniversalFileUploader
+                        onUploadComplete={() => { }}
+                        multiple={false}
+                        accept="all"
+                        initialFiles={selectedSubcontractorDetail.attachments.map((att: any) => ({
+                          id: att.id,
+                          attachment_id: att.id,
+                          file_name: att.file_name,
+                          file_path: att.file_path,
+                          file_size: att.file_size,
+                          mime_type: att.mime_type,
+                        }))}
+                        disabled={true}
+                        showPreview={true}
+                      />
+                    </View>
+                  )}
+              </>
+            )}
+          </ScrollView>
         </View>
       </Modal>
 
@@ -1323,6 +1498,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: "#FFFFFF",
+    position: "relative",
   },
   modalOverlay: {
     flex: 1,
@@ -1623,5 +1799,142 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+  pickerModalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+    zIndex: 9999,
+    elevation: 9999,
+  },
+  pickerModalContainer: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+    zIndex: 10000,
+    elevation: 10000,
+  },
+  pickerModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  pickerModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  pickerLoadingContainer: {
+    padding: 32,
+    alignItems: "center",
+  },
+  pickerEmptyContainer: {
+    padding: 32,
+    alignItems: "center",
+  },
+  pickerEmptyText: {
+    fontSize: 16,
+    color: "#6B7280",
+    marginTop: 16,
+  },
+  costGroupItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  costGroupItemActive: {
+    backgroundColor: "#EFF6FF",
+  },
+  costGroupItemContent: {
+    flex: 1,
+  },
+  costGroupItemName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  costGroupItemNameActive: {
+    color: "#3B82F6",
+  },
+  costGroupItemCode: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  costGroupItemDescription: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    marginTop: 4,
+  },
+  statusButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#FFFFFF",
+  },
+  statusButtonActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  statusButtonText: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  statusButtonTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  detailSection: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  detailSectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 12,
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    flex: 1,
+    textAlign: "right",
   },
 });

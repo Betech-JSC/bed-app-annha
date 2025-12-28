@@ -107,6 +107,12 @@ export default function ProjectDetailScreen() {
 
   const menuItems = [
     {
+      title: "Báo Cáo Tổng Hợp",
+      icon: "trending-up-outline",
+      route: `/projects/${id}/revenue`,
+      color: "#10B981",
+    },
+    {
       title: "Giá Trị Hợp Đồng",
       icon: "document-text-outline",
       route: `/projects/${id}/contract`,
@@ -123,12 +129,6 @@ export default function ProjectDetailScreen() {
       icon: "add-circle-outline",
       route: `/projects/${id}/additional-costs`,
       color: "#F59E0B",
-    },
-    {
-      title: "Quản Lý Doanh Thu",
-      icon: "trending-up-outline",
-      route: `/projects/${id}/revenue`,
-      color: "#10B981",
     },
     {
       title: "Chi Phí Dự Án",
@@ -179,12 +179,6 @@ export default function ProjectDetailScreen() {
       color: "#6366F1",
     },
     {
-      title: "Báo Cáo",
-      icon: "document-text-outline",
-      route: `/projects/${id}/reports`,
-      color: "#8B5CF6",
-    },
-    {
       title: "Nhật Ký Công Trình",
       icon: "calendar-outline",
       route: `/projects/${id}/logs`,
@@ -207,12 +201,6 @@ export default function ProjectDetailScreen() {
       icon: "trending-up-outline",
       route: `/projects/${id}/progress`,
       color: "#F97316",
-    },
-    {
-      title: "Kế hoạch thi công",
-      icon: "calendar-outline",
-      route: `/projects/${id}/construction-plan`,
-      color: "#8B5CF6",
     },
   ];
 

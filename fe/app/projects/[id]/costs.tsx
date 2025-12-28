@@ -16,10 +16,12 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { costApi, Cost, revenueApi } from "@/api/revenueApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
+import { subcontractorApi, Subcontractor } from "@/api/subcontractorApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
+import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 
 export default function CostsScreen() {
   const router = useRouter();
@@ -46,10 +48,15 @@ export default function CostsScreen() {
   const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const [loadingSubcontractors, setLoadingSubcontractors] = useState(false);
+  const [showSubcontractorPicker, setShowSubcontractorPicker] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
     cost_group_id: null as number | null,
+    subcontractor_id: null as number | null,
     name: "",
     amount: "",
     description: "",
@@ -57,11 +64,13 @@ export default function CostsScreen() {
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
+  const [selectedSubcontractor, setSelectedSubcontractor] = useState<Subcontractor | null>(null);
 
   useEffect(() => {
     loadCosts();
     loadSummary();
     loadCostGroups();
+    loadSubcontractors();
   }, [id, filterStatus, filterCategory]);
 
   const loadCosts = async () => {
@@ -108,6 +117,25 @@ export default function CostsScreen() {
     }
   };
 
+  const loadSubcontractors = async () => {
+    try {
+      setLoadingSubcontractors(true);
+      const response = await subcontractorApi.getSubcontractors(id!);
+      if (response.success) {
+        // Backend trả về { success: true, data: [...] }
+        const data = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+        setSubcontractors(data);
+      } else {
+        setSubcontractors([]);
+      }
+    } catch (error) {
+      console.error("Error loading subcontractors:", error);
+      setSubcontractors([]);
+    } finally {
+      setLoadingSubcontractors(false);
+    }
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     loadCosts();
@@ -125,13 +153,32 @@ export default function CostsScreen() {
       return;
     }
 
+    // Kiểm tra nếu cost group liên quan đến nhà thầu phụ
+    const selectedGroup = costGroups.find(g => g.id === formData.cost_group_id);
+    const isSubcontractorCostGroup = selectedGroup && (
+      selectedGroup.code === 'subcontractor' ||
+      selectedGroup.name.toLowerCase().includes('nhà thầu phụ') ||
+      selectedGroup.name.toLowerCase().includes('thầu phụ')
+    );
+
+    if (isSubcontractorCostGroup && !formData.subcontractor_id) {
+      Alert.alert("Lỗi", "Vui lòng chọn nhà thầu phụ liên quan cho loại chi phí này");
+      return;
+    }
+
     try {
+      const attachmentIds = uploadedFiles
+        .filter(f => f.attachment_id || f.id)
+        .map(f => f.attachment_id || f.id!);
+
       const response = await costApi.createCost(id!, {
         cost_group_id: formData.cost_group_id,
         name: formData.name,
         amount: parseFloat(formData.amount),
         description: formData.description || undefined,
         cost_date: formData.cost_date.toISOString().split("T")[0],
+        subcontractor_id: formData.subcontractor_id || undefined,
+        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
       });
 
       if (response.success) {
@@ -189,12 +236,22 @@ export default function CostsScreen() {
   const resetForm = () => {
     setFormData({
       cost_group_id: null,
+      subcontractor_id: null,
       name: "",
       amount: "",
       description: "",
       cost_date: new Date(),
     });
     setSelectedCostGroup(null);
+    setSelectedSubcontractor(null);
+    setUploadedFiles([]);
+  };
+
+  const isSubcontractorCostGroup = (costGroup: CostGroup | null): boolean => {
+    if (!costGroup) return false;
+    return costGroup.code === 'subcontractor' ||
+      costGroup.name.toLowerCase().includes('nhà thầu phụ') ||
+      costGroup.name.toLowerCase().includes('thầu phụ');
   };
 
   const formatCurrency = (amount: number) => {
@@ -242,7 +299,10 @@ export default function CostsScreen() {
   };
 
   const renderCostItem = ({ item }: { item: Cost }) => (
-    <View style={styles.costCard}>
+    <TouchableOpacity
+      style={styles.costCard}
+      onPress={() => router.push(`/projects/${id}/costs/${item.id}`)}
+    >
       <View style={styles.costHeader}>
         <View style={styles.costHeaderLeft}>
           <Text style={styles.costName}>{item.name}</Text>
@@ -310,7 +370,7 @@ export default function CostsScreen() {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading && !refreshing) {
@@ -571,6 +631,44 @@ export default function CostsScreen() {
               )}
             </View>
 
+            {/* Subcontractor Selection - chỉ hiển thị khi chọn cost group nhà thầu phụ */}
+            {selectedCostGroup && isSubcontractorCostGroup(selectedCostGroup) && (
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Nhà thầu phụ *</Text>
+                <TouchableOpacity
+                  style={styles.selectButton}
+                  onPress={() => {
+                    loadSubcontractors();
+                    setShowSubcontractorPicker(true);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.selectButtonText,
+                      !selectedSubcontractor && styles.selectButtonPlaceholder,
+                    ]}
+                  >
+                    {selectedSubcontractor
+                      ? selectedSubcontractor.name
+                      : "Chọn nhà thầu phụ"}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                </TouchableOpacity>
+                {selectedSubcontractor && (
+                  <TouchableOpacity
+                    style={styles.clearSelectionButton}
+                    onPress={() => {
+                      setSelectedSubcontractor(null);
+                      setFormData({ ...formData, subcontractor_id: null });
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#EF4444" />
+                    <Text style={styles.clearSelectionText}>Xóa lựa chọn</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             <View style={styles.formGroup}>
               <Text style={styles.label}>Mô tả</Text>
               <TextInput
@@ -582,6 +680,18 @@ export default function CostsScreen() {
                 }
                 multiline
                 numberOfLines={4}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Đính kèm tài liệu</Text>
+              <UniversalFileUploader
+                onUploadComplete={(files) => setUploadedFiles(files)}
+                multiple={true}
+                accept="all"
+                maxFiles={10}
+                initialFiles={uploadedFiles}
+                label="Chọn file (hóa đơn, báo giá...)"
               />
             </View>
 
@@ -603,79 +713,142 @@ export default function CostsScreen() {
               </TouchableOpacity>
             </View>
           </ScrollView>
-        </View>
-      </Modal>
 
-      {/* Cost Group Picker Modal */}
-      <Modal
-        visible={showCostGroupPicker}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowCostGroupPicker(false)}
-      >
-        <View style={styles.pickerModalOverlay}>
-          <View style={styles.pickerModalContainer}>
-            <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Chọn Nhóm Chi Phí</Text>
-              <TouchableOpacity onPress={() => setShowCostGroupPicker(false)}>
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            {loadingCostGroups ? (
-              <View style={styles.pickerLoadingContainer}>
-                <ActivityIndicator size="large" color="#3B82F6" />
-              </View>
-            ) : (
-              <FlatList
-                data={costGroups}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.costGroupItem,
-                      selectedCostGroup?.id === item.id && styles.costGroupItemActive,
-                    ]}
-                    onPress={() => {
-                      setSelectedCostGroup(item);
-                      setFormData({ ...formData, cost_group_id: item.id });
-                      setShowCostGroupPicker(false);
-                    }}
-                  >
-                    <View style={styles.costGroupItemContent}>
-                      <Text
-                        style={[
-                          styles.costGroupItemName,
-                          selectedCostGroup?.id === item.id && styles.costGroupItemNameActive,
-                        ]}
-                      >
-                        {item.name}
-                      </Text>
-                      {item.code && (
-                        <Text style={styles.costGroupItemCode}>Mã: {item.code}</Text>
-                      )}
-                      {item.description && (
-                        <Text style={styles.costGroupItemDescription} numberOfLines={2}>
-                          {item.description}
-                        </Text>
-                      )}
-                    </View>
-                    {selectedCostGroup?.id === item.id && (
-                      <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-                    )}
+          {/* Cost Group Picker Modal - Đặt bên trong modal tạo cost */}
+          {showCostGroupPicker && (
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContainer}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Chọn Nhóm Chi Phí</Text>
+                  <TouchableOpacity onPress={() => setShowCostGroupPicker(false)}>
+                    <Ionicons name="close" size={24} color="#1F2937" />
                   </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                  <View style={styles.pickerEmptyContainer}>
-                    <Ionicons name="folder-outline" size={48} color="#D1D5DB" />
-                    <Text style={styles.pickerEmptyText}>Chưa có nhóm chi phí nào</Text>
-                    <Text style={styles.pickerEmptySubtext}>
-                      Vui lòng tạo nhóm chi phí trong phần Cấu hình
-                    </Text>
+                </View>
+                {loadingCostGroups ? (
+                  <View style={styles.pickerLoadingContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
                   </View>
-                }
-              />
-            )}
-          </View>
+                ) : (
+                  <FlatList
+                    data={costGroups}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.costGroupItem,
+                          selectedCostGroup?.id === item.id && styles.costGroupItemActive,
+                        ]}
+                        onPress={() => {
+                          const newCostGroup = item;
+                          setSelectedCostGroup(newCostGroup);
+                          setFormData({ ...formData, cost_group_id: newCostGroup.id });
+
+                          // Nếu không phải cost group nhà thầu phụ, xóa subcontractor
+                          if (!isSubcontractorCostGroup(newCostGroup)) {
+                            setFormData(prev => ({ ...prev, subcontractor_id: null }));
+                            setSelectedSubcontractor(null);
+                          }
+
+                          setShowCostGroupPicker(false);
+                        }}
+                      >
+                        <View style={styles.costGroupItemContent}>
+                          <Text
+                            style={[
+                              styles.costGroupItemName,
+                              selectedCostGroup?.id === item.id && styles.costGroupItemNameActive,
+                            ]}
+                          >
+                            {item.name}
+                          </Text>
+                          {item.code && (
+                            <Text style={styles.costGroupItemCode}>Mã: {item.code}</Text>
+                          )}
+                          {item.description && (
+                            <Text style={styles.costGroupItemDescription} numberOfLines={2}>
+                              {item.description}
+                            </Text>
+                          )}
+                        </View>
+                        {selectedCostGroup?.id === item.id && (
+                          <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.pickerEmptyContainer}>
+                        <Ionicons name="folder-outline" size={48} color="#D1D5DB" />
+                        <Text style={styles.pickerEmptyText}>Chưa có nhóm chi phí nào</Text>
+                        <Text style={styles.pickerEmptySubtext}>
+                          Vui lòng tạo nhóm chi phí trong phần Cấu hình
+                        </Text>
+                      </View>
+                    }
+                  />
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Subcontractor Picker Modal - Đặt bên trong modal tạo cost */}
+          {showSubcontractorPicker && (
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContainer}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Chọn Nhà Thầu Phụ</Text>
+                  <TouchableOpacity onPress={() => setShowSubcontractorPicker(false)}>
+                    <Ionicons name="close" size={24} color="#1F2937" />
+                  </TouchableOpacity>
+                </View>
+                {loadingSubcontractors ? (
+                  <View style={styles.pickerLoadingContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                  </View>
+                ) : (
+                  <FlatList
+                    data={subcontractors}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.costGroupItem,
+                          selectedSubcontractor?.id === item.id && styles.costGroupItemActive,
+                        ]}
+                        onPress={() => {
+                          setSelectedSubcontractor(item);
+                          setFormData({ ...formData, subcontractor_id: item.id });
+                          setShowSubcontractorPicker(false);
+                        }}
+                      >
+                        <View style={styles.costGroupItemContent}>
+                          <Text
+                            style={[
+                              styles.costGroupItemName,
+                              selectedSubcontractor?.id === item.id && styles.costGroupItemNameActive,
+                            ]}
+                          >
+                            {item.name}
+                          </Text>
+                          {item.category && (
+                            <Text style={styles.costGroupItemCode}>Loại: {item.category}</Text>
+                          )}
+                        </View>
+                        {selectedSubcontractor?.id === item.id && (
+                          <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.pickerEmptyContainer}>
+                        <Ionicons name="business-outline" size={48} color="#D1D5DB" />
+                        <Text style={styles.pickerEmptyText}>Chưa có nhà thầu phụ nào</Text>
+                      </View>
+                    }
+                  />
+                )}
+              </View>
+            </View>
+          )}
         </View>
       </Modal>
     </View>
@@ -897,6 +1070,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: "#F9FAFB",
+    position: "relative",
   },
   modalHeader: {
     flexDirection: "row",
@@ -1072,15 +1246,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   pickerModalOverlay: {
-    flex: 1,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
+    zIndex: 9999,
+    elevation: 9999,
   },
   pickerModalContainer: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "80%",
+    zIndex: 10000,
+    elevation: 10000,
   },
   pickerModalHeader: {
     flexDirection: "row",

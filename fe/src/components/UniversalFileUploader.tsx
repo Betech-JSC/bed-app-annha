@@ -465,12 +465,13 @@ const styles = StyleSheet.create({
     },
     filesGrid: {
         flexDirection: "row",
-        gap: 12,
+        gap: 16,
         paddingHorizontal: 4,
     },
     fileWrapper: {
         position: "relative",
-        marginRight: 12,
+        marginRight: 16,
+        marginBottom: 8,
     },
     fileThumbnail: {
         width: 100,

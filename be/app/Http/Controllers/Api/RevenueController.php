@@ -111,7 +111,9 @@ class RevenueController extends Controller
                 ],
                 'revenue' => [
                     'contract_value' => (float) $revenue['contract_value'],
+                    'additional_costs' => (float) $costs['additional_costs'], // Giá trị phát sinh
                     'paid_payments' => (float) $revenue['paid_payments'],
+                    'remaining_payment' => (float) ($revenue['contract_value'] - $revenue['paid_payments']), // Số tiền còn lại
                     'total_revenue' => (float) $revenue['total_revenue'],
                 ],
                 'costs' => [

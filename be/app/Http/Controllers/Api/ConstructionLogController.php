@@ -20,7 +20,7 @@ class ConstructionLogController extends Controller
         $project = Project::findOrFail($projectId);
 
         $query = $project->constructionLogs()
-            ->with(['creator', 'attachments'])
+            ->with(['creator', 'attachments', 'task'])
             ->orderByDesc('log_date');
 
         // Filter by date range
@@ -49,6 +49,7 @@ class ConstructionLogController extends Controller
 
         $validated = $request->validate([
             'log_date' => 'required|date',
+            'task_id' => 'nullable|exists:project_tasks,id',
             'weather' => 'nullable|string|max:100',
             'personnel_count' => 'nullable|integer|min:0',
             'completion_percentage' => 'nullable|numeric|min:0|max:100',
@@ -72,8 +73,21 @@ class ConstructionLogController extends Controller
                 ], 400);
             }
 
+            // Validate task belongs to project if provided
+            if (isset($validated['task_id'])) {
+                $task = \App\Models\ProjectTask::where('project_id', $project->id)
+                    ->find($validated['task_id']);
+                if (!$task) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Công việc không thuộc dự án này.'
+                    ], 422);
+                }
+            }
+
             $log = ConstructionLog::create([
                 'project_id' => $project->id,
+                'task_id' => $validated['task_id'] ?? null,
                 'created_by' => $user->id,
                 'log_date' => $validated['log_date'],
                 'weather' => $validated['weather'] ?? null,
@@ -95,11 +109,23 @@ class ConstructionLogController extends Controller
                 }
             }
 
-            // Update project progress if percentage is provided
-            if (isset($validated['completion_percentage'])) {
-                $progress = $project->progress;
-                if ($progress) {
-                    $progress->updateManual($validated['completion_percentage']);
+            // Update task progress if task_id and completion_percentage are provided
+            if (isset($validated['task_id']) && isset($validated['completion_percentage'])) {
+                $task = \App\Models\ProjectTask::find($validated['task_id']);
+                if ($task) {
+                    $task->update([
+                        'progress_percentage' => $validated['completion_percentage'],
+                        'updated_by' => $user->id,
+                    ]);
+                    
+                    // Auto-update status based on progress
+                    if ($task->progress_percentage == 100 && $task->status !== 'completed') {
+                        $task->update(['status' => 'completed']);
+                    } elseif ($task->progress_percentage > 0 && $task->progress_percentage < 100 && $task->status === 'not_started') {
+                        $task->update(['status' => 'in_progress']);
+                    }
+                    
+                    // Task progress sẽ tự động cập nhật project progress qua event saved()
                 }
             }
 
@@ -108,7 +134,7 @@ class ConstructionLogController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Nhật ký công trình đã được tạo.',
-                'data' => $log->load(['creator', 'attachments'])
+                'data' => $log->load(['creator', 'attachments', 'task'])
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -139,6 +165,7 @@ class ConstructionLogController extends Controller
 
         $validated = $request->validate([
             'log_date' => 'sometimes|date',
+            'task_id' => 'nullable|exists:project_tasks,id',
             'weather' => 'nullable|string|max:100',
             'personnel_count' => 'nullable|integer|min:0',
             'completion_percentage' => 'nullable|numeric|min:0|max:100',
@@ -165,6 +192,18 @@ class ConstructionLogController extends Controller
                 }
             }
 
+            // Validate task belongs to project if provided
+            if (isset($validated['task_id'])) {
+                $task = \App\Models\ProjectTask::where('project_id', $project->id)
+                    ->find($validated['task_id']);
+                if (!$task) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Công việc không thuộc dự án này.'
+                    ], 422);
+                }
+            }
+
             $log->update($validated);
 
             // Update attachments if provided
@@ -187,11 +226,24 @@ class ConstructionLogController extends Controller
                 }
             }
 
-            // Update project progress if percentage is provided
-            if (isset($validated['completion_percentage'])) {
-                $progress = $project->progress;
-                if ($progress) {
-                    $progress->updateManual($validated['completion_percentage']);
+            // Update task progress if task_id and completion_percentage are provided
+            $taskId = $validated['task_id'] ?? $log->task_id;
+            if ($taskId && isset($validated['completion_percentage'])) {
+                $task = \App\Models\ProjectTask::find($taskId);
+                if ($task) {
+                    $task->update([
+                        'progress_percentage' => $validated['completion_percentage'],
+                        'updated_by' => $user->id,
+                    ]);
+                    
+                    // Auto-update status based on progress
+                    if ($task->progress_percentage == 100 && $task->status !== 'completed') {
+                        $task->update(['status' => 'completed']);
+                    } elseif ($task->progress_percentage > 0 && $task->progress_percentage < 100 && $task->status === 'not_started') {
+                        $task->update(['status' => 'in_progress']);
+                    }
+                    
+                    // Task progress đã tự động cập nhật project progress qua event saved()
                 }
             }
 
@@ -200,7 +252,7 @@ class ConstructionLogController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Nhật ký công trình đã được cập nhật.',
-                'data' => $log->load(['creator', 'attachments'])
+                'data' => $log->load(['creator', 'attachments', 'task'])
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

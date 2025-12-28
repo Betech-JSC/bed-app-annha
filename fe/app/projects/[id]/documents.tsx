@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { documentApi, ProjectDocument } from "@/api/documentApi";
-import { FileUploader } from "@/components";
+import { UniversalFileUploader } from "@/components";
 import { Ionicons } from "@expo/vector-icons";
 import BackButton from "@/components/BackButton";
 
@@ -135,7 +135,7 @@ export default function DocumentsScreen() {
       </View>
 
       <View style={styles.uploadSection}>
-        <FileUploader
+        <UniversalFileUploader
           onUploadComplete={handleUploadComplete}
           multiple={true}
           accept="all"

@@ -21,7 +21,7 @@ import {
 } from "@/api/employeeProfileApi";
 import { employeesApi } from "@/api/employeesApi";
 import { subcontractorApi } from "@/api/subcontractorApi";
-import FileUploader from "@/components/FileUploader";
+import { UniversalFileUploader } from "@/components";
 
 const EMPLOYEE_TYPE_LABELS: Record<string, string> = {
   official: "Nhân sự chính thức",
@@ -578,15 +578,21 @@ export default function EmployeeProfilesScreen() {
               {/* File Uploads */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Hồ sơ pháp lý</Text>
-                <FileUploader
-                  onUploadComplete={(attachmentIds) => {
+                <UniversalFileUploader
+                  onUploadComplete={(files) => {
+                    // Extract attachment IDs from uploaded files
+                    const attachmentIds = files
+                      .map((f) => f.attachment_id || f.id)
+                      .filter((id) => id) as number[];
                     setFormData({
                       ...formData,
                       legal_documents: attachmentIds,
                     });
                   }}
-                  initialAttachmentIds={formData.legal_documents}
+                  initialFiles={formData.legal_documents || []}
                   multiple={true}
+                  accept="all"
+                  maxFiles={10}
                 />
               </View>
             </ScrollView>

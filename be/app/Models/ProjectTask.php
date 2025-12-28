@@ -105,6 +105,29 @@ class ProjectTask extends Model
         });
     }
 
+    /**
+     * Cập nhật tiến độ dự án khi task progress thay đổi
+     */
+    public function updateProjectProgress(): void
+    {
+        if (!$this->project) {
+            return;
+        }
+
+        $project = $this->project;
+        
+        // Đảm bảo có progress record
+        if (!$project->progress) {
+            $project->progress()->create([
+                'overall_percentage' => 0,
+                'calculated_from' => 'logs',
+            ]);
+        }
+
+        // Tính lại tiến độ tổng hợp từ logs (vì logs cập nhật task progress)
+        $project->progress->calculateOverall();
+    }
+
     // ==================================================================
     // SCOPE
     // ==================================================================
@@ -147,6 +170,13 @@ class ProjectTask extends Model
             // Auto-calculate duration if dates are set
             if ($task->start_date && $task->end_date && !$task->duration) {
                 $task->duration = $task->calculateDuration();
+            }
+        });
+
+        static::saved(function ($task) {
+            // Khi task progress thay đổi, cập nhật project progress
+            if ($task->isDirty('progress_percentage')) {
+                $task->updateProjectProgress();
             }
         });
     }

@@ -12,6 +12,7 @@ class ConstructionLog extends Model
     protected $fillable = [
         'uuid',
         'project_id',
+        'task_id',
         'log_date',
         'weather',
         'personnel_count',
@@ -38,6 +39,11 @@ class ConstructionLog extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(ProjectTask::class, 'task_id');
     }
 
     public function attachments(): MorphMany

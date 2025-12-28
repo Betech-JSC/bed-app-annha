@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,13 +11,30 @@ import {
   TextInput,
   ScrollView,
   Image,
+  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { constructionLogApi, ConstructionLog } from "@/api/constructionLogApi";
-import { attachmentApi, Attachment } from "@/api/attachmentApi";
-import * as ImagePicker from "expo-image-picker";
-import * as DocumentPicker from "expo-document-picker";
+import { ganttApi, ProjectTask } from "@/api/ganttApi";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
+
+const DAYS_OF_WEEK = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+const MONTHS = [
+  "Tháng 1",
+  "Tháng 2",
+  "Tháng 3",
+  "Tháng 4",
+  "Tháng 5",
+  "Tháng 6",
+  "Tháng 7",
+  "Tháng 8",
+  "Tháng 9",
+  "Tháng 10",
+  "Tháng 11",
+  "Tháng 12",
+];
 
 export default function ConstructionLogsScreen() {
   const router = useRouter();
@@ -25,25 +42,48 @@ export default function ConstructionLogsScreen() {
   const [logs, setLogs] = useState<ConstructionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedDateLog, setSelectedDateLog] = useState<ConstructionLog | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingLog, setEditingLog] = useState<ConstructionLog | null>(null);
+  const [tasks, setTasks] = useState<ProjectTask[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [showTaskPicker, setShowTaskPicker] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [formData, setFormData] = useState({
     log_date: new Date().toISOString().split("T")[0],
+    task_id: null as number | null,
     weather: "",
     personnel_count: "",
     completion_percentage: "",
     notes: "",
   });
-  const [uploadedAttachments, setUploadedAttachments] = useState<Attachment[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     loadLogs();
+    loadTasks();
   }, [id]);
 
-  const loadLogs = async () => {
+  useEffect(() => {
+    if (currentMonth && currentYear) {
+      const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+      const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+      loadLogs(startDate, endDate);
+    }
+  }, [id, currentMonth, currentYear]);
+
+  const loadLogs = async (startDate?: string, endDate?: string) => {
     try {
       setLoading(true);
-      const response = await constructionLogApi.getLogs(id!);
+      const response = await constructionLogApi.getLogs(id!, {
+        start_date: startDate,
+        end_date: endDate,
+      });
       if (response.success) {
         setLogs(response.data.data || []);
       }
@@ -54,96 +94,42 @@ export default function ConstructionLogsScreen() {
     }
   };
 
-  const handlePickImages = async () => {
+  const loadTasks = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Lỗi", "Cần quyền truy cập thư viện ảnh");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets) {
-        await handleUploadFiles(result.assets.map((asset) => asset.uri));
+      setLoadingTasks(true);
+      const response = await ganttApi.getTasks(id!);
+      if (response.success) {
+        const allTasks = response.data.data || response.data || [];
+        setTasks(Array.isArray(allTasks) ? allTasks : []);
       }
     } catch (error) {
-      console.error("Error picking images:", error);
-      Alert.alert("Lỗi", "Không thể chọn hình ảnh");
-    }
-  };
-
-  const handlePickDocuments = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*",
-        multiple: true,
-        copyToCacheDirectory: true,
-      });
-
-      if (!result.canceled && result.assets) {
-        await handleUploadFiles(result.assets.map((asset) => asset.uri));
-      }
-    } catch (error) {
-      console.error("Error picking documents:", error);
-      Alert.alert("Lỗi", "Không thể chọn tài liệu");
-    }
-  };
-
-  const handleUploadFiles = async (fileUris: string[]) => {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-
-      for (let i = 0; i < fileUris.length; i++) {
-        const uri = fileUris[i];
-        const fileName = uri.split("/").pop() || `file_${i}.jpg`;
-        const fileType = fileName.split(".").pop() || "jpg";
-
-        formData.append("files[]", {
-          uri,
-          name: fileName,
-          type: `image/${fileType}`,
-        } as any);
-      }
-
-      const response = await attachmentApi.upload(formData);
-      if (response.success && response.data) {
-        const newAttachments = response.data.map((item: any) => ({
-          id: item.attachment_id,
-          file_url: item.file_url,
-          original_name: item.file_url.split("/").pop() || "",
-          type: "image" as const,
-        }));
-        setUploadedAttachments([...uploadedAttachments, ...newAttachments]);
-      }
-    } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể upload files");
+      console.error("Error loading tasks:", error);
     } finally {
-      setUploading(false);
+      setLoadingTasks(false);
     }
-  };
-
-  const handleRemoveAttachment = (index: number) => {
-    const newAttachments = [...uploadedAttachments];
-    newAttachments.splice(index, 1);
-    setUploadedAttachments(newAttachments);
   };
 
   const openEditModal = (log: ConstructionLog) => {
     setEditingLog(log);
     setFormData({
       log_date: log.log_date,
+      task_id: log.task_id || null,
       weather: log.weather || "",
       personnel_count: log.personnel_count?.toString() || "",
       completion_percentage: log.completion_percentage?.toString() || "",
       notes: log.notes || "",
     });
-    setUploadedAttachments(log.attachments || []);
+    setSelectedTask(log.task || null);
+    setUploadedFiles(
+      (log.attachments || []).map((att: any) => ({
+        id: att.id,
+        attachment_id: att.id,
+        file_name: att.file_name,
+        file_path: att.file_path,
+        file_size: att.file_size,
+        mime_type: att.mime_type,
+      }))
+    );
     setModalVisible(true);
   };
 
@@ -179,9 +165,13 @@ export default function ConstructionLogsScreen() {
     }
 
     try {
-      const attachmentIds = uploadedAttachments.map((att) => att.id);
+      const attachmentIds = uploadedFiles
+        .filter(f => f.attachment_id || f.id)
+        .map(f => f.attachment_id || f.id!);
+
       const data = {
         log_date: formData.log_date,
+        task_id: formData.task_id || undefined,
         weather: formData.weather || undefined,
         personnel_count: formData.personnel_count
           ? parseInt(formData.personnel_count)
@@ -204,6 +194,7 @@ export default function ConstructionLogsScreen() {
         Alert.alert("Thành công", editingLog ? "Nhật ký đã được cập nhật." : "Nhật ký đã được tạo.");
         handleCloseModal();
         loadLogs();
+        loadTasks(); // Reload tasks to get updated progress
       }
     } catch (error: any) {
       Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
@@ -213,104 +204,123 @@ export default function ConstructionLogsScreen() {
   const handleCloseModal = () => {
     setModalVisible(false);
     setEditingLog(null);
+    setSelectedTask(null);
     setFormData({
       log_date: new Date().toISOString().split("T")[0],
+      task_id: null,
       weather: "",
       personnel_count: "",
       completion_percentage: "",
       notes: "",
     });
-    setUploadedAttachments([]);
+    setUploadedFiles([]);
   };
 
-  const renderLogItem = ({ item }: { item: ConstructionLog }) => (
-    <View style={styles.logCard}>
-      <View style={styles.logHeader}>
-        <View style={styles.logHeaderLeft}>
-          <Text style={styles.logDate}>
-            {new Date(item.log_date).toLocaleDateString("vi-VN", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </Text>
-          {item.completion_percentage > 0 && (
-            <View style={styles.progressBadge}>
-              <Text style={styles.progressText}>
-                {item.completion_percentage}%
-              </Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.logActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => openEditModal(item)}
-          >
-            <Ionicons name="create-outline" size={20} color="#3B82F6" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleDelete(item)}
-          >
-            <Ionicons name="trash-outline" size={20} color="#EF4444" />
-          </TouchableOpacity>
-        </View>
-      </View>
+  const handleDateClick = (dateString: string) => {
+    // Normalize dateString và tìm log với log_date đã normalize
+    const log = logs.find(l => {
+      const normalizedLogDate = l.log_date.split('T')[0].split(' ')[0];
+      return normalizedLogDate === dateString;
+    });
+    if (log) {
+      setSelectedDateLog(log);
+      setSelectedDate(dateString);
+      setDetailModalVisible(true);
+    } else {
+      // Tạo nhật ký mới cho ngày này
+      setFormData(prev => ({ ...prev, log_date: dateString }));
+      setSelectedDate(dateString);
+      setModalVisible(true);
+    }
+  };
 
-      <View style={styles.logDetails}>
-        {item.weather && (
-          <View style={styles.detailRow}>
-            <Ionicons name="partly-sunny-outline" size={16} color="#6B7280" />
-            <Text style={styles.detailText}>{item.weather}</Text>
-          </View>
-        )}
-        {item.personnel_count && (
-          <View style={styles.detailRow}>
-            <Ionicons name="people-outline" size={16} color="#6B7280" />
-            <Text style={styles.detailText}>
-              {item.personnel_count} người
-            </Text>
-          </View>
-        )}
-      </View>
+  const goToPreviousMonth = () => {
+    if (currentMonth === 1) {
+      setCurrentMonth(12);
+      setCurrentYear(currentYear - 1);
+    } else {
+      setCurrentMonth(currentMonth - 1);
+    }
+  };
 
-      {item.notes && (
-        <Text style={styles.notes}>{item.notes}</Text>
-      )}
+  const goToNextMonth = () => {
+    if (currentMonth === 12) {
+      setCurrentMonth(1);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(currentMonth + 1);
+    }
+  };
 
-      {item.attachments && item.attachments.length > 0 && (
-        <View style={styles.attachmentsContainer}>
-          <Text style={styles.attachmentsLabel}>
-            {item.attachments.length} file đính kèm
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentsScroll}>
-            {item.attachments.map((attachment: any, index: number) => (
-              <View key={attachment.id || index} style={styles.attachmentItem}>
-                {attachment.type === "image" ? (
-                  <Image
-                    source={{ uri: attachment.file_url }}
-                    style={styles.attachmentImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.attachmentFile}>
-                    <Ionicons name="document-outline" size={24} color="#3B82F6" />
-                    <Text style={styles.attachmentFileName} numberOfLines={1}>
-                      {attachment.original_name || "File"}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </View>
-  );
+  const goToToday = () => {
+    const today = new Date();
+    setCurrentMonth(today.getMonth() + 1);
+    setCurrentYear(today.getFullYear());
+  };
 
-  if (loading) {
+  // Tạo map các ngày có log
+  const logsByDate = useMemo(() => {
+    const map: Record<string, ConstructionLog> = {};
+    logs.forEach(log => {
+      // Normalize log_date to YYYY-MM-DD format (remove time part if exists)
+      const normalizedDate = log.log_date.split('T')[0].split(' ')[0];
+      map[normalizedDate] = log;
+    });
+    return map;
+  }, [logs]);
+
+  // Tạo calendar data
+  const calendarData = useMemo(() => {
+    const firstDay = new Date(currentYear, currentMonth - 1, 1);
+    const lastDay = new Date(currentYear, currentMonth, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+
+    const days: Array<{
+      date: number;
+      dateString: string;
+      isCurrentMonth: boolean;
+      isToday: boolean;
+      hasLog: boolean;
+    }> = [];
+
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      const prevMonthDate = new Date(currentYear, currentMonth - 2, 0);
+      const date = prevMonthDate.getDate() - startingDayOfWeek + i + 1;
+      const dateString = `${currentYear}-${String(currentMonth - 1).padStart(2, "0")}-${String(date).padStart(2, "0")}`;
+      days.push({
+        date,
+        dateString,
+        isCurrentMonth: false,
+        isToday: false,
+        hasLog: false,
+      });
+    }
+
+    // Add days of the current month
+    const today = new Date();
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dateString = `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
+      const isToday =
+        i === today.getDate() &&
+        currentMonth === today.getMonth() + 1 &&
+        currentYear === today.getFullYear();
+      const hasLog = !!logsByDate[dateString];
+
+      days.push({
+        date: i,
+        dateString,
+        isCurrentMonth: true,
+        isToday,
+        hasLog,
+      });
+    }
+
+    return days;
+  }, [currentYear, currentMonth, logsByDate]);
+
+  if (loading && logs.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
@@ -339,180 +349,577 @@ export default function ConstructionLogsScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={logs}
-        renderItem={renderLogItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>Chưa có nhật ký nào</Text>
-          </View>
-        }
-      />
+      {/* View Mode Toggle */}
+      <View style={styles.viewModeContainer}>
+        <TouchableOpacity
+          style={[styles.viewModeButton, viewMode === "calendar" && styles.viewModeButtonActive]}
+          onPress={() => setViewMode("calendar")}
+        >
+          <Ionicons name="calendar-outline" size={20} color={viewMode === "calendar" ? "#FFFFFF" : "#6B7280"} />
+          <Text style={[styles.viewModeText, viewMode === "calendar" && styles.viewModeTextActive]}>
+            Lịch
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.viewModeButton, viewMode === "list" && styles.viewModeButtonActive]}
+          onPress={() => setViewMode("list")}
+        >
+          <Ionicons name="list-outline" size={20} color={viewMode === "list" ? "#FFFFFF" : "#6B7280"} />
+          <Text style={[styles.viewModeText, viewMode === "list" && styles.viewModeTextActive]}>
+            Danh sách
+          </Text>
+        </TouchableOpacity>
+      </View>
 
+      {viewMode === "calendar" ? (
+        <ScrollView style={styles.content}>
+          {/* Calendar Header */}
+          <View style={styles.calendarHeader}>
+            <TouchableOpacity onPress={goToPreviousMonth} style={styles.navButton}>
+              <Ionicons name="chevron-back" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+            <View style={styles.monthYearContainer}>
+              <Text style={styles.monthYearText}>
+                {MONTHS[currentMonth - 1]} {currentYear}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={goToNextMonth} style={styles.navButton}>
+              <Ionicons name="chevron-forward" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
+            <Text style={styles.todayButtonText}>Hôm nay</Text>
+          </TouchableOpacity>
+
+          {/* Days of week header */}
+          <View style={styles.daysOfWeekContainer}>
+            {DAYS_OF_WEEK.map((day, index) => (
+              <View key={index} style={styles.dayOfWeek}>
+                <Text style={styles.dayOfWeekText}>{day}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Calendar grid */}
+          <View style={styles.calendarGrid}>
+            {calendarData.map((day, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.dayCell,
+                  !day.isCurrentMonth && styles.dayCellDisabled,
+                  day.isToday && styles.dayCellToday,
+                  day.hasLog && styles.dayCellHasLog,
+                  !day.hasLog && day.isCurrentMonth && styles.dayCellNoLog,
+                ]}
+                onPress={() => day.isCurrentMonth && handleDateClick(day.dateString)}
+                disabled={!day.isCurrentMonth}
+              >
+                <Text
+                  style={[
+                    styles.dayText,
+                    !day.isCurrentMonth && styles.dayTextDisabled,
+                    day.isToday && styles.dayTextToday,
+                    day.hasLog && styles.dayTextHasLog,
+                    !day.hasLog && day.isCurrentMonth && styles.dayTextNoLog,
+                  ]}
+                >
+                  {day.date}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Legend */}
+          <View style={styles.legend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: "#10B981" }]} />
+              <Text style={styles.legendText}>Có báo cáo</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: "#EF4444" }]} />
+              <Text style={styles.legendText}>Không có báo cáo</Text>
+            </View>
+          </View>
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={logs}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.logCard}
+              onPress={() => {
+                setSelectedDateLog(item);
+                setSelectedDate(item.log_date);
+                setDetailModalVisible(true);
+              }}
+            >
+              <View style={styles.logHeader}>
+                <View style={styles.logHeaderLeft}>
+                  <Text style={styles.logDate}>
+                    {new Date(item.log_date).toLocaleDateString("vi-VN", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </Text>
+                  {item.completion_percentage > 0 && (
+                    <View style={styles.progressBadge}>
+                      <Text style={styles.progressText}>
+                        {item.completion_percentage}%
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.logActions}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => openEditModal(item)}
+                  >
+                    <Ionicons name="create-outline" size={20} color="#3B82F6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => handleDelete(item)}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {item.task && (
+                <View style={styles.taskInfo}>
+                  <Ionicons name="checkmark-circle-outline" size={16} color="#3B82F6" />
+                  <Text style={styles.taskName}>{item.task.name}</Text>
+                </View>
+              )}
+
+              <View style={styles.logDetails}>
+                {item.weather && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="partly-sunny-outline" size={16} color="#6B7280" />
+                    <Text style={styles.detailText}>{item.weather}</Text>
+                  </View>
+                )}
+                {item.personnel_count && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="people-outline" size={16} color="#6B7280" />
+                    <Text style={styles.detailText}>
+                      {item.personnel_count} người
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {item.notes && (
+                <Text style={styles.notes}>{item.notes}</Text>
+              )}
+
+              {item.attachments && item.attachments.length > 0 && (
+                <View style={styles.attachmentsContainer}>
+                  <Text style={styles.attachmentsLabel}>
+                    {item.attachments.length} hình ảnh
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentsScroll}>
+                    {item.attachments.map((attachment: any, index: number) => (
+                      <View key={attachment.id || index} style={styles.attachmentItem}>
+                        {attachment.mime_type?.startsWith("image/") ? (
+                          <Image
+                            source={{ uri: attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : attachment.file_url }}
+                            style={styles.attachmentImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.attachmentFile}>
+                            <Ionicons name="document-outline" size={24} color="#3B82F6" />
+                            <Text style={styles.attachmentFileName} numberOfLines={1}>
+                              {attachment.file_name || "File"}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyText}>Chưa có nhật ký nào</Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* Create/Edit Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={handleCloseModal}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingLog ? "Chỉnh Sửa Nhật Ký" : "Thêm Nhật Ký"}
-              </Text>
-              <TouchableOpacity onPress={handleCloseModal}>
-                <Ionicons name="close" size={24} color="#1F2937" />
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={handleCloseModal}>
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {editingLog ? "Chỉnh Sửa Nhật Ký" : "Thêm Nhật Ký"}
+            </Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={true}>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Ngày *</Text>
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={styles.selectButtonText}>
+                  {new Date(formData.log_date).toLocaleDateString("vi-VN")}
+                </Text>
+                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
               </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={new Date(formData.log_date)}
+                  mode="date"
+                  display="default"
+                  onChange={(event, date) => {
+                    setShowDatePicker(false);
+                    if (date) {
+                      setFormData({ ...formData, log_date: date.toISOString().split("T")[0] });
+                    }
+                  }}
+                />
+              )}
             </View>
 
-            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={true}>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Tiến độ công việc</Text>
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => {
+                  loadTasks();
+                  setShowTaskPicker(true);
+                }}
+              >
+                <Text style={[
+                  styles.selectButtonText,
+                  !selectedTask && styles.selectButtonTextPlaceholder
+                ]}>
+                  {selectedTask ? selectedTask.name : "Chọn tiến độ công việc"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              </TouchableOpacity>
+              {selectedTask && (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => {
+                    setSelectedTask(null);
+                    setFormData({ ...formData, task_id: null });
+                  }}
+                >
+                  <Ionicons name="close-circle" size={16} color="#EF4444" />
+                  <Text style={styles.clearButtonText}>Xóa lựa chọn</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Ngày</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.log_date}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, log_date: text })
-                  }
-                  placeholder="YYYY-MM-DD"
-                />
-              </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>% Hoàn thành</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.completion_percentage}
+                onChangeText={(text) => {
+                  setFormData({ ...formData, completion_percentage: text });
+                }}
+                placeholder="0"
+                keyboardType="numeric"
+              />
+              <Text style={styles.helperText}>
+                Nhập % hoàn thành sẽ tự động cập nhật sang tiến độ công việc đã chọn
+              </Text>
+            </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Thời tiết</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.weather}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, weather: text })
-                  }
-                  placeholder="Ví dụ: Nắng, Mưa..."
-                />
-              </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Thời tiết</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.weather}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, weather: text })
+                }
+                placeholder="Ví dụ: Nắng, Mưa..."
+              />
+            </View>
 
-              <View style={styles.formRow}>
-                <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.label}>Số nhân sự</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.personnel_count}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, personnel_count: text })
-                    }
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                  <Text style={styles.label}>% Hoàn thành</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.completion_percentage}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, completion_percentage: text })
-                    }
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Số nhân sự</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.personnel_count}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, personnel_count: text })
+                }
+                placeholder="0"
+                keyboardType="numeric"
+              />
+            </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Ghi chú</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  value={formData.notes}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, notes: text })
-                  }
-                  placeholder="Nhập ghi chú..."
-                  multiline
-                  numberOfLines={4}
-                />
-              </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Ghi chú</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={formData.notes}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, notes: text })
+                }
+                placeholder="Nhập ghi chú..."
+                multiline
+                numberOfLines={4}
+              />
+            </View>
 
-              {/* Upload Files Section */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Hình ảnh & Tài liệu</Text>
-                <View style={styles.uploadButtons}>
-                  <TouchableOpacity
-                    style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
-                    onPress={handlePickImages}
-                    disabled={uploading}
-                  >
-                    <Ionicons name="images-outline" size={20} color="#3B82F6" />
-                    <Text style={styles.uploadButtonText}>Chọn ảnh</Text>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Hình ảnh thực tế tại công trình</Text>
+              <UniversalFileUploader
+                onUploadComplete={(files) => setUploadedFiles(files)}
+                multiple={true}
+                accept="all"
+                maxFiles={10}
+                initialFiles={uploadedFiles}
+                label="Chọn hình ảnh, tài liệu..."
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={handleCloseModal}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.submitButton]}
+                onPress={handleSubmit}
+              >
+                <Text style={styles.submitButtonText}>
+                  {editingLog ? "Cập nhật" : "Tạo"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+
+          {/* Task Picker Modal */}
+          {showTaskPicker && (
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContainer}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Chọn Tiến Độ Công Việc</Text>
+                  <TouchableOpacity onPress={() => setShowTaskPicker(false)}>
+                    <Ionicons name="close" size={24} color="#1F2937" />
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
-                    onPress={handlePickDocuments}
-                    disabled={uploading}
-                  >
-                    <Ionicons name="document-outline" size={20} color="#3B82F6" />
-                    <Text style={styles.uploadButtonText}>Chọn file</Text>
-                  </TouchableOpacity>
                 </View>
+                {loadingTasks ? (
+                  <View style={styles.pickerLoadingContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                  </View>
+                ) : (
+                  <FlatList
+                    data={tasks}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.taskItem,
+                          selectedTask?.id === item.id && styles.taskItemActive,
+                        ]}
+                        onPress={() => {
+                          setSelectedTask(item);
+                          setFormData({ ...formData, task_id: item.id });
+                          setShowTaskPicker(false);
+                        }}
+                      >
+                        <View style={styles.taskItemContent}>
+                          <Text
+                            style={[
+                              styles.taskItemName,
+                              selectedTask?.id === item.id && styles.taskItemNameActive,
+                            ]}
+                          >
+                            {item.name}
+                          </Text>
+                          {item.progress_percentage !== undefined && (
+                            <Text style={styles.taskItemProgress}>
+                              Tiến độ: {item.progress_percentage}%
+                            </Text>
+                          )}
+                        </View>
+                        {selectedTask?.id === item.id && (
+                          <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.pickerEmptyContainer}>
+                        <Ionicons name="list-outline" size={48} color="#D1D5DB" />
+                        <Text style={styles.pickerEmptyText}>Chưa có công việc nào</Text>
+                      </View>
+                    }
+                  />
+                )}
+              </View>
+            </View>
+          )}
+        </View>
+      </Modal>
 
-                {uploading && (
-                  <View style={styles.uploadingContainer}>
-                    <ActivityIndicator size="small" color="#3B82F6" />
-                    <Text style={styles.uploadingText}>Đang upload...</Text>
+      {/* Detail Modal */}
+      <Modal
+        visible={detailModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setDetailModalVisible(false);
+          setSelectedDateLog(null);
+          setSelectedDate(null);
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              onPress={() => {
+                setDetailModalVisible(false);
+                setSelectedDateLog(null);
+                setSelectedDate(null);
+              }}
+            >
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {selectedDate ? new Date(selectedDate).toLocaleDateString("vi-VN") : "Chi tiết nhật ký"}
+            </Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalScroll}>
+            {selectedDateLog ? (
+              <>
+                {selectedDateLog.task && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Tiến độ công việc</Text>
+                    <Text style={styles.detailValue}>{selectedDateLog.task.name}</Text>
+                    {selectedDateLog.task.progress_percentage !== undefined && (
+                      <Text style={styles.detailLabel}>
+                        Tiến độ: {selectedDateLog.task.progress_percentage}%
+                      </Text>
+                    )}
                   </View>
                 )}
 
-                {uploadedAttachments.length > 0 && (
-                  <View style={styles.uploadedFilesContainer}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      {uploadedAttachments.map((attachment, index) => (
-                        <View key={attachment.id || index} style={styles.uploadedFileItem}>
-                          {attachment.type === "image" ? (
+                {selectedDateLog.completion_percentage > 0 && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>% Hoàn thành</Text>
+                    <Text style={styles.detailValue}>{selectedDateLog.completion_percentage}%</Text>
+                  </View>
+                )}
+
+                {selectedDateLog.weather && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Thời tiết</Text>
+                    <Text style={styles.detailValue}>{selectedDateLog.weather}</Text>
+                  </View>
+                )}
+
+                {selectedDateLog.personnel_count && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Số nhân sự</Text>
+                    <Text style={styles.detailValue}>{selectedDateLog.personnel_count} người</Text>
+                  </View>
+                )}
+
+                {selectedDateLog.notes && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Ghi chú</Text>
+                    <Text style={styles.detailValue}>{selectedDateLog.notes}</Text>
+                  </View>
+                )}
+
+                {selectedDateLog.attachments && selectedDateLog.attachments.length > 0 && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Hình ảnh thực tế</Text>
+                    <View style={styles.imagesGrid}>
+                      {selectedDateLog.attachments.map((attachment: any, index: number) => (
+                        <View key={attachment.id || index} style={styles.imageItem}>
+                          {attachment.mime_type?.startsWith("image/") ? (
                             <Image
-                              source={{ uri: attachment.file_url }}
-                              style={styles.uploadedImage}
+                              source={{ uri: attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : attachment.file_url }}
+                              style={styles.detailImage}
                               resizeMode="cover"
                             />
                           ) : (
-                            <View style={styles.uploadedFile}>
-                              <Ionicons name="document-outline" size={24} color="#3B82F6" />
+                            <View style={styles.detailFile}>
+                              <Ionicons name="document-outline" size={32} color="#3B82F6" />
+                              <Text style={styles.detailFileName} numberOfLines={2}>
+                                {attachment.file_name || "File"}
+                              </Text>
                             </View>
                           )}
-                          <TouchableOpacity
-                            style={styles.removeFileButton}
-                            onPress={() => handleRemoveAttachment(index)}
-                          >
-                            <Ionicons name="close-circle" size={20} color="#EF4444" />
-                          </TouchableOpacity>
                         </View>
                       ))}
-                    </ScrollView>
+                    </View>
                   </View>
                 )}
-              </View>
 
-              <View style={styles.modalButtons}>
+                <View style={styles.detailActions}>
+                  <TouchableOpacity
+                    style={[styles.detailActionButton, styles.editButton]}
+                    onPress={() => {
+                      setDetailModalVisible(false);
+                      openEditModal(selectedDateLog);
+                    }}
+                  >
+                    <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.detailActionButtonText}>Chỉnh sửa</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.detailActionButton, styles.deleteButton]}
+                    onPress={() => {
+                      setDetailModalVisible(false);
+                      handleDelete(selectedDateLog);
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.detailActionButtonText}>Xóa</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="document-outline" size={64} color="#D1D5DB" />
+                <Text style={styles.emptyText}>Chưa có nhật ký cho ngày này</Text>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={handleCloseModal}
+                  style={styles.createButton}
+                  onPress={() => {
+                    setDetailModalVisible(false);
+                    setFormData(prev => ({ ...prev, log_date: selectedDate || new Date().toISOString().split("T")[0] }));
+                    setModalVisible(true);
+                  }}
                 >
-                  <Text style={styles.cancelButtonText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.submitButton]}
-                  onPress={handleSubmit}
-                  disabled={uploading}
-                >
-                  <Text style={styles.submitButtonText}>
-                    {editingLog ? "Cập nhật" : "Tạo"}
-                  </Text>
+                  <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.createButtonText}>Tạo nhật ký</Text>
                 </TouchableOpacity>
               </View>
-            </ScrollView>
-          </View>
+            )}
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -549,6 +956,160 @@ const styles = StyleSheet.create({
   },
   addButton: {
     padding: 4,
+  },
+  viewModeContainer: {
+    flexDirection: "row",
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    gap: 8,
+  },
+  viewModeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#FFFFFF",
+  },
+  viewModeButtonActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  viewModeText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  viewModeTextActive: {
+    color: "#FFFFFF",
+  },
+  content: {
+    flex: 1,
+  },
+  calendarHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  navButton: {
+    padding: 8,
+  },
+  monthYearContainer: {
+    flex: 1,
+    alignItems: "center",
+  },
+  monthYearText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  todayButton: {
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    marginBottom: 16,
+  },
+  todayButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
+  daysOfWeekContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  dayOfWeek: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  dayOfWeekText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  calendarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  dayCell: {
+    width: "14.28%",
+    aspectRatio: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+  },
+  dayCellDisabled: {
+    backgroundColor: "#F9FAFB",
+    opacity: 0.3,
+  },
+  dayCellToday: {
+    borderColor: "#3B82F6",
+    borderWidth: 2,
+  },
+  dayCellHasLog: {
+    backgroundColor: "#10B981",
+  },
+  dayCellNoLog: {
+    backgroundColor: "#EF4444",
+  },
+  dayText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#1F2937",
+  },
+  dayTextDisabled: {
+    color: "#9CA3AF",
+  },
+  dayTextToday: {
+    fontWeight: "700",
+    color: "#3B82F6",
+  },
+  dayTextHasLog: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  dayTextNoLog: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  legend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 24,
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendText: {
+    fontSize: 12,
+    color: "#6B7280",
   },
   listContent: {
     padding: 16,
@@ -596,6 +1157,20 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
+  taskInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    padding: 8,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 8,
+  },
+  taskName: {
+    fontSize: 14,
     fontWeight: "600",
     color: "#3B82F6",
   },
@@ -661,78 +1236,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: "center",
   },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  modalScroll: {
-    maxHeight: "70%",
-  },
-  uploadButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 12,
-  },
-  uploadButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#3B82F6",
-    backgroundColor: "#EFF6FF",
-    gap: 8,
-  },
-  uploadButtonDisabled: {
-    opacity: 0.5,
-  },
-  uploadButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#3B82F6",
-  },
-  uploadingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 8,
-  },
-  uploadingText: {
-    fontSize: 14,
-    color: "#6B7280",
-  },
-  uploadedFilesContainer: {
-    marginTop: 12,
-  },
-  uploadedFileItem: {
-    marginRight: 8,
-    position: "relative",
-  },
-  uploadedImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    backgroundColor: "#F3F4F6",
-  },
-  uploadedFile: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  removeFileButton: {
-    position: "absolute",
-    top: -8,
-    right: -8,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -744,30 +1247,35 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 16,
   },
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    maxHeight: "80%",
+    position: "relative",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#1F2937",
-    marginBottom: 24,
+    flex: 1,
+    textAlign: "center",
+    marginLeft: -24,
+  },
+  modalScroll: {
+    flex: 1,
+    padding: 16,
+    paddingBottom: Platform.OS === "ios" ? 100 : 80,
   },
   formGroup: {
     marginBottom: 16,
-  },
-  formRow: {
-    flexDirection: "row",
-    gap: 12,
   },
   label: {
     fontSize: 14,
@@ -787,6 +1295,41 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: "top",
   },
+  helperText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 4,
+  },
+  selectButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    minHeight: 48,
+  },
+  selectButtonText: {
+    fontSize: 16,
+    color: "#1F2937",
+    flex: 1,
+  },
+  selectButtonTextPlaceholder: {
+    color: "#9CA3AF",
+  },
+  clearButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  clearButtonText: {
+    fontSize: 12,
+    color: "#EF4444",
+  },
   modalButtons: {
     flexDirection: "row",
     gap: 12,
@@ -799,11 +1342,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelButton: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#E5E7EB",
   },
   cancelButtonText: {
-    color: "#6B7280",
-    fontSize: 16,
+    color: "#1F2937",
     fontWeight: "600",
   },
   submitButton: {
@@ -811,7 +1353,171 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  pickerModalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+    zIndex: 9999,
+    elevation: 9999,
+  },
+  pickerModalContainer: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+    zIndex: 10000,
+    elevation: 10000,
+  },
+  pickerModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  pickerModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  pickerLoadingContainer: {
+    padding: 32,
+    alignItems: "center",
+  },
+  pickerEmptyContainer: {
+    padding: 32,
+    alignItems: "center",
+  },
+  pickerEmptyText: {
+    fontSize: 16,
+    color: "#6B7280",
+    marginTop: 16,
+  },
+  taskItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  taskItemActive: {
+    backgroundColor: "#EFF6FF",
+  },
+  taskItemContent: {
+    flex: 1,
+  },
+  taskItemName: {
     fontSize: 16,
     fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  taskItemNameActive: {
+    color: "#3B82F6",
+  },
+  taskItemProgress: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  detailSection: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  detailSectionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 8,
+  },
+  detailValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 4,
+  },
+  imagesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 12,
+  },
+  imageItem: {
+    width: "48%",
+    aspectRatio: 1,
+  },
+  detailImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+  },
+  detailFile: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  detailFileName: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  detailActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+  },
+  detailActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 16,
+    borderRadius: 8,
+  },
+  editButton: {
+    backgroundColor: "#3B82F6",
+  },
+  deleteButton: {
+    backgroundColor: "#EF4444",
+  },
+  detailActionButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  createButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 16,
+    borderRadius: 8,
+    backgroundColor: "#3B82F6",
+    marginTop: 24,
+  },
+  createButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 16,
   },
 });

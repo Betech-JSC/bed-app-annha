@@ -15,17 +15,26 @@ class AcceptanceItem extends Model
     protected $fillable = [
         'uuid',
         'acceptance_stage_id',
+        'task_id',
+        'acceptance_template_id',
         'name',
         'description',
         'start_date',
         'end_date',
         'acceptance_status',
+        'workflow_status',
         'notes',
         'approved_by',
         'approved_at',
         'rejected_by',
         'rejected_at',
         'rejection_reason',
+        'submitted_by',
+        'submitted_at',
+        'project_manager_approved_by',
+        'project_manager_approved_at',
+        'customer_approved_by',
+        'customer_approved_at',
         'order',
         'created_by',
         'updated_by',
@@ -37,6 +46,9 @@ class AcceptanceItem extends Model
         'order' => 'integer',
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
+        'submitted_at' => 'datetime',
+        'project_manager_approved_at' => 'datetime',
+        'customer_approved_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -51,6 +63,16 @@ class AcceptanceItem extends Model
     public function acceptanceStage(): BelongsTo
     {
         return $this->belongsTo(AcceptanceStage::class);
+    }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(ProjectTask::class);
+    }
+
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(AcceptanceTemplate::class, 'acceptance_template_id');
     }
 
     public function approver(): BelongsTo
@@ -71,6 +93,21 @@ class AcceptanceItem extends Model
     public function updater(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function projectManagerApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'project_manager_approved_by');
+    }
+
+    public function customerApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'customer_approved_by');
     }
 
     public function attachments(): MorphMany
@@ -116,7 +153,7 @@ class AcceptanceItem extends Model
         // Check if stage can be completed
         if ($saved) {
             $this->acceptanceStage->checkCompletion();
-            
+
             // Tự động cập nhật tiến độ dự án khi nghiệm thu thay đổi
             $this->updateProjectProgress();
         }
@@ -137,12 +174,12 @@ class AcceptanceItem extends Model
         }
         $this->rejected_at = now();
         $saved = $this->save();
-        
+
         // Cập nhật tiến độ dự án khi nghiệm thu bị reject
         if ($saved) {
             $this->updateProjectProgress();
         }
-        
+
         return $saved;
     }
 
@@ -160,19 +197,19 @@ class AcceptanceItem extends Model
         $this->rejected_at = null;
         $this->rejection_reason = null;
         $saved = $this->save();
-        
+
         // Cập nhật tiến độ dự án khi reset nghiệm thu
         if ($saved) {
             $this->updateProjectProgress();
         }
-        
+
         return $saved;
     }
 
     /**
      * Cập nhật tiến độ dự án dựa trên nghiệm thu
      */
-    protected function updateProjectProgress(): void
+    public function updateProjectProgress(): void
     {
         $project = $this->acceptanceStage->project;
         if ($project) {
@@ -183,7 +220,19 @@ class AcceptanceItem extends Model
                     'calculated_from' => 'acceptance',
                 ]);
             }
-            
+
+            // Nếu nghiệm thu được approve và có task_id, cập nhật task progress = 100%
+            if ($this->acceptance_status === 'approved' && $this->task_id) {
+                $task = $this->task;
+                if ($task) {
+                    $task->update([
+                        'progress_percentage' => 100,
+                        'status' => 'completed',
+                    ]);
+                    // Task progress sẽ tự động cập nhật project progress qua event saved()
+                }
+            }
+
             // Tính lại tiến độ tổng hợp (ưu tiên nghiệm thu)
             $project->progress->calculateOverall();
         }
@@ -248,4 +297,3 @@ class AcceptanceItem extends Model
         });
     }
 }
-

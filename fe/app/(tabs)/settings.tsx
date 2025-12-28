@@ -132,6 +132,13 @@ export default function SettingsScreen() {
       description: "Quản lý thiết bị và bảo trì",
     },
     {
+      title: "Bộ Tài Liệu Nghiệm Thu",
+      icon: "document-text-outline",
+      route: "/settings/acceptance-templates",
+      permission: "settings.manage",
+      description: "Quản lý các bộ tài liệu nghiệm thu (tên công việc, mô tả, tiêu chuẩn, hình ảnh mẫu)",
+    },
+    {
       title: "Cấu Hình Vai Trò",
       icon: "people-circle-outline",
       route: "/settings/roles",

@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\ConstructionLogController;
 use App\Http\Controllers\Api\GlobalSubcontractorController;
 use App\Http\Controllers\Api\CostGroupController;
 use App\Http\Controllers\Api\AcceptanceStageController;
+use App\Http\Controllers\Api\AcceptanceTemplateController;
 use App\Http\Controllers\Api\DefectController;
 use App\Http\Controllers\Api\ProjectProgressController;
 use App\Http\Controllers\Api\ProjectDocumentController;
@@ -155,6 +156,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Costs Management
         Route::get('/{projectId}/costs', [CostController::class, 'index']);
         Route::post('/{projectId}/costs', [CostController::class, 'store']);
+        Route::get('/{projectId}/costs/{id}', [CostController::class, 'show']);
         Route::put('/{projectId}/costs/{id}', [CostController::class, 'update']);
         Route::delete('/{projectId}/costs/{id}', [CostController::class, 'destroy']);
         Route::post('/{projectId}/costs/{id}/submit', [CostController::class, 'submit']);
@@ -238,10 +240,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/reset', [AcceptanceItemController::class, 'reset'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
         Route::post('/{projectId}/acceptance/{stageId}/items/reorder', [AcceptanceItemController::class, 'reorder'])->where('stageId', '[0-9]+');
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/attach-files', [AcceptanceItemController::class, 'attachFiles'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/submit', [AcceptanceItemController::class, 'submit'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/project-manager-approve', [AcceptanceItemController::class, 'projectManagerApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/customer-approve', [AcceptanceItemController::class, 'customerApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/workflow-reject', [AcceptanceItemController::class, 'workflowReject'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
 
         // Defects
         Route::get('/{projectId}/defects', [DefectController::class, 'index']);
         Route::post('/{projectId}/defects', [DefectController::class, 'store']);
+        Route::get('/{projectId}/defects/{id}', [DefectController::class, 'show']);
         Route::put('/{projectId}/defects/{id}', [DefectController::class, 'update']);
 
         // Progress
@@ -312,6 +319,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/subcontractor-payments/{id}/reject', [SubcontractorPaymentController::class, 'reject']);
         Route::post('/{projectId}/subcontractor-payments/{id}/mark-paid', [SubcontractorPaymentController::class, 'markAsPaid']);
     });
+
+    // Acceptance Templates (outside projects prefix)
+    Route::get('/acceptance-templates', [AcceptanceTemplateController::class, 'index']);
+    Route::post('/acceptance-templates', [AcceptanceTemplateController::class, 'store']);
+    Route::get('/acceptance-templates/{id}', [AcceptanceTemplateController::class, 'show'])->where('id', '[0-9]+');
+    Route::put('/acceptance-templates/{id}', [AcceptanceTemplateController::class, 'update'])->where('id', '[0-9]+');
+    Route::delete('/acceptance-templates/{id}', [AcceptanceTemplateController::class, 'destroy'])->where('id', '[0-9]+');
 
     // ===================================================================
     // HR MANAGEMENT ROUTES
@@ -546,6 +560,12 @@ Route::controller(AuthController::class)->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/upload', [AttachmentController::class, 'upload'])
         ->name('upload.file');
+
+    // Attachment management
+    Route::get('/attachments/{id}', [AttachmentController::class, 'show'])
+        ->name('attachments.show');
+    Route::delete('/attachments/{id}', [AttachmentController::class, 'destroy'])
+        ->name('attachments.destroy');
 });
 
 // ===================================================================
