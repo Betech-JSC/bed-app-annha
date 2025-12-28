@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { progressApi } from "@/api/progressApi";
-import { ProgressChart } from "@/components";
+import { ProgressChart, ScreenHeader } from "@/components";
 import { ganttApi } from "@/api/ganttApi";
 import { ProjectPhase, ProjectTask } from "@/types/ganttTypes";
 import { constructionLogApi } from "@/api/constructionLogApi";
@@ -255,15 +255,7 @@ export default function ProgressScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tiến Độ Thi Công</Text>
-      </View>
+      <ScreenHeader title="Tiến Độ Thi Công" showBackButton />
 
       {/* View Mode Toggle */}
       <View style={styles.viewModeContainer}>
@@ -545,23 +537,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-    marginRight: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
   },
   viewModeContainer: {
     flexDirection: "row",

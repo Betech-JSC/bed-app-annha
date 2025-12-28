@@ -10,7 +10,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supplierApi, SupplierDebtStatistics } from "@/api/supplierApi";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 export default function SupplierDebtScreen() {
   const router = useRouter();
@@ -68,10 +68,7 @@ export default function SupplierDebtScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Công Nợ Nhà Cung Cấp</Text>
-      </View>
+      <ScreenHeader title="Công Nợ Nhà Cung Cấp" showBackButton />
 
       <ScrollView
         style={styles.content}

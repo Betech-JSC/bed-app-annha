@@ -15,7 +15,7 @@ import {
 import { useRouter } from "expo-router";
 import { globalSubcontractorApi, GlobalSubcontractor } from "@/api/globalSubcontractorApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 export default function SubcontractorsScreen() {
   const router = useRouter();
@@ -212,13 +212,15 @@ export default function SubcontractorsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Nhà Thầu Phụ</Text>
-        <TouchableOpacity style={styles.addButton} onPress={handleCreate}>
-          <Ionicons name="add" size={24} color="#3B82F6" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Nhà Thầu Phụ"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity style={styles.addButton} onPress={handleCreate}>
+            <Ionicons name="add" size={24} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
 
       {/* Search */}
       <View style={styles.searchContainer}>

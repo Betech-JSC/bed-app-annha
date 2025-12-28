@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { timeTrackingApi, TimeTracking } from "@/api/timeTrackingApi";
 import { projectApi, Project } from "@/api/projectApi";
+import { ScreenHeader } from "@/components";
 
 // Try to import expo-location, fallback if not available
 let Location: any = null;
@@ -251,16 +252,7 @@ export default function CheckInOutScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chấm Công</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <ScreenHeader title="Chấm Công" showBackButton />
 
       <ScrollView style={styles.content}>
         {/* Today Stats */}
@@ -656,26 +648,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
-  },
-  placeholder: {
-    width: 32,
   },
   content: {
     flex: 1,

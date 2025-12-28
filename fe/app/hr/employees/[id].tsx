@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { employeesApi } from "@/api/employeesApi";
 import { employeeProfileApi } from "@/api/employeeProfileApi";
 import { formatVNDWithoutSymbol } from "@/utils/format";
+import { ScreenHeader } from "@/components";
 
 const EMPLOYEE_TYPE_LABELS: Record<string, string> = {
     official: "Nhân sự chính thức",
@@ -98,19 +99,10 @@ export default function EmployeeDetailScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => router.back()}
-                >
-                    <Ionicons name="arrow-back" size={24} color="#1F2937" />
-                </TouchableOpacity>
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}>Chi Tiết Nhân Viên</Text>
-                    <Text style={styles.headerSubtitle}>{employee.name || employee.email}</Text>
-                </View>
-                <View style={styles.placeholder} />
-            </View>
+            <ScreenHeader
+                title={employee.name || employee.email || "Chi Tiết Nhân Viên"}
+                showBackButton
+            />
 
             <ScrollView
                 style={styles.content}

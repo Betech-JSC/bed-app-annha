@@ -9,12 +9,10 @@ import {
   Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { LineChart, BarChart, PieChart } from "react-native-chart-kit";
-import { timeTrackingApi } from "@/api/timeTrackingApi";
-import { payrollApi } from "@/api/payrollApi";
-import { bonusApi } from "@/api/bonusApi";
+
 import { employeesApi } from "@/api/employeesApi";
 import { Ionicons } from "@expo/vector-icons";
+import { ScreenHeader } from "@/components";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -57,42 +55,6 @@ export default function HRDashboardScreen() {
     }
   };
 
-  const chartConfig = {
-    backgroundColor: "#FFFFFF",
-    backgroundGradientFrom: "#F8FAFC",
-    backgroundGradientTo: "#FFFFFF",
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-    fillShadowGradient: "#3B82F6",
-    fillShadowGradientOpacity: 0.1,
-    strokeWidth: 3,
-    barPercentage: 0.7,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: "6",
-      strokeWidth: "3",
-      stroke: "#3B82F6",
-      fill: "#FFFFFF",
-    },
-    propsForBackgroundLines: {
-      strokeDasharray: "",
-      stroke: "#E5E7EB",
-      strokeWidth: 1,
-    },
-  };
-
-  const pieChartConfig = {
-    backgroundColor: "#FFFFFF",
-    backgroundGradientFrom: "#F8FAFC",
-    backgroundGradientTo: "#FFFFFF",
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-  };
-
   const stats = dashboardData?.stats || {
     pending_time_tracking: 0,
     pending_payroll: 0,
@@ -109,147 +71,147 @@ export default function HRDashboardScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Quản Lý Nhân Sự</Text>
-      </View>
+    <View style={styles.container}>
+      <ScreenHeader title="Quản Lý Nhân Sự" />
+      <ScrollView>
 
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Ionicons name="time-outline" size={32} color="#3B82F6" />
-          <Text style={styles.statNumber}>{stats.pending_time_tracking}</Text>
-          <Text style={styles.statLabel}>Chấm công chờ duyệt</Text>
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Ionicons name="time-outline" size={32} color="#3B82F6" />
+            <Text style={styles.statNumber}>{stats.pending_time_tracking}</Text>
+            <Text style={styles.statLabel}>Chấm công chờ duyệt</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Ionicons name="cash-outline" size={32} color="#10B981" />
+            <Text style={styles.statNumber}>{stats.pending_payroll}</Text>
+            <Text style={styles.statLabel}>Bảng lương chờ duyệt</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Ionicons name="gift-outline" size={32} color="#F59E0B" />
+            <Text style={styles.statNumber}>{stats.pending_bonuses}</Text>
+            <Text style={styles.statLabel}>Thưởng chờ duyệt</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Ionicons name="people-outline" size={32} color="#8B5CF6" />
+            <Text style={styles.statNumber}>{stats.total_employees}</Text>
+            <Text style={styles.statLabel}>Tổng nhân viên</Text>
+          </View>
         </View>
+        <View style={styles.menuContainer}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/check-in-out")}
+          >
+            <Ionicons name="time" size={24} color="#3B82F6" />
+            <Text style={styles.menuText}>Chấm Công</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
 
-        <View style={styles.statCard}>
-          <Ionicons name="cash-outline" size={32} color="#10B981" />
-          <Text style={styles.statNumber}>{stats.pending_payroll}</Text>
-          <Text style={styles.statLabel}>Bảng lương chờ duyệt</Text>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/time-tracking")}
+          >
+            <Ionicons name="list" size={24} color="#6366F1" />
+            <Text style={styles.menuText}>Lịch Sử Chấm Công</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/payroll-costs")}
+          >
+            <Ionicons name="calculator" size={24} color="#10B981" />
+            <Text style={styles.menuText}>Tiền Lương & Chi Phí Nhân Công</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/payroll")}
+          >
+            <Ionicons name="cash" size={24} color="#10B981" />
+            <Text style={styles.menuText}>Bảng Lương</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/bonuses")}
+          >
+            <Ionicons name="gift" size={24} color="#F59E0B" />
+            <Text style={styles.menuText}>Thưởng</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/employees")}
+          >
+            <Ionicons name="people" size={24} color="#8B5CF6" />
+            <Text style={styles.menuText}>Nhân Viên</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/calendar")}
+          >
+            <Ionicons name="calendar" size={24} color="#EF4444" />
+            <Text style={styles.menuText}>Lịch Làm Việc</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/salary-config")}
+          >
+            <Ionicons name="cash" size={24} color="#10B981" />
+            <Text style={styles.menuText}>Cấu Hình Lương</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/leave-requests")}
+          >
+            <Ionicons name="calendar-outline" size={24} color="#F59E0B" />
+            <Text style={styles.menuText}>Nghỉ Phép</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/employment-contracts")}
+          >
+            <Ionicons name="document-text-outline" size={24} color="#8B5CF6" />
+            <Text style={styles.menuText}>Hợp Đồng Lao Động</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/insurance")}
+          >
+            <Ionicons name="shield-outline" size={24} color="#10B981" />
+            <Text style={styles.menuText}>Bảo Hiểm & Phúc Lợi</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push("/hr/performance")}
+          >
+            <Ionicons name="star-outline" size={24} color="#F59E0B" />
+            <Text style={styles.menuText}>Đánh Giá Hiệu Suất</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.statCard}>
-          <Ionicons name="gift-outline" size={32} color="#F59E0B" />
-          <Text style={styles.statNumber}>{stats.pending_bonuses}</Text>
-          <Text style={styles.statLabel}>Thưởng chờ duyệt</Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Ionicons name="people-outline" size={32} color="#8B5CF6" />
-          <Text style={styles.statNumber}>{stats.total_employees}</Text>
-          <Text style={styles.statLabel}>Tổng nhân viên</Text>
-        </View>
-      </View>
-      <View style={styles.menuContainer}>
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/check-in-out")}
-        >
-          <Ionicons name="time" size={24} color="#3B82F6" />
-          <Text style={styles.menuText}>Chấm Công</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/time-tracking")}
-        >
-          <Ionicons name="list" size={24} color="#6366F1" />
-          <Text style={styles.menuText}>Lịch Sử Chấm Công</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/payroll-costs")}
-        >
-          <Ionicons name="calculator" size={24} color="#10B981" />
-          <Text style={styles.menuText}>Tiền Lương & Chi Phí Nhân Công</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/payroll")}
-        >
-          <Ionicons name="cash" size={24} color="#10B981" />
-          <Text style={styles.menuText}>Bảng Lương</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/bonuses")}
-        >
-          <Ionicons name="gift" size={24} color="#F59E0B" />
-          <Text style={styles.menuText}>Thưởng</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/employees")}
-        >
-          <Ionicons name="people" size={24} color="#8B5CF6" />
-          <Text style={styles.menuText}>Nhân Viên</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/calendar")}
-        >
-          <Ionicons name="calendar" size={24} color="#EF4444" />
-          <Text style={styles.menuText}>Lịch Làm Việc</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/salary-config")}
-        >
-          <Ionicons name="cash" size={24} color="#10B981" />
-          <Text style={styles.menuText}>Cấu Hình Lương</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/leave-requests")}
-        >
-          <Ionicons name="calendar-outline" size={24} color="#F59E0B" />
-          <Text style={styles.menuText}>Nghỉ Phép</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/employment-contracts")}
-        >
-          <Ionicons name="document-text-outline" size={24} color="#8B5CF6" />
-          <Text style={styles.menuText}>Hợp Đồng Lao Động</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/insurance")}
-        >
-          <Ionicons name="shield-outline" size={24} color="#10B981" />
-          <Text style={styles.menuText}>Bảo Hiểm & Phúc Lợi</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/performance")}
-        >
-          <Ionicons name="star-outline" size={24} color="#F59E0B" />
-          <Text style={styles.menuText}>Đánh Giá Hiệu Suất</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -262,20 +224,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-  header: {
-    backgroundColor: "#FFFFFF",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1F2937",
   },
   statsContainer: {
     flexDirection: "row",

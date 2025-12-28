@@ -19,6 +19,7 @@ import { ganttApi, ProjectTask } from "@/api/ganttApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
+import { ScreenHeader } from "@/components";
 
 const DAYS_OF_WEEK = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const MONTHS = [
@@ -330,24 +331,21 @@ export default function ConstructionLogsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nhật Ký Công Trình</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => {
-            handleCloseModal();
-            setModalVisible(true);
-          }}
-        >
-          <Ionicons name="add" size={24} color="#3B82F6" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Nhật Ký Công Trình"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              handleCloseModal();
+              setModalVisible(true);
+            }}
+          >
+            <Ionicons name="add" size={24} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
 
       {/* View Mode Toggle */}
       <View style={styles.viewModeContainer}>
@@ -936,23 +934,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
   },
   addButton: {
     padding: 4,

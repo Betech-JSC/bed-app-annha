@@ -13,6 +13,7 @@ import { projectApi, Project } from "@/api/projectApi";
 import { contractApi, Contract } from "@/api/contractApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
+import { ScreenHeader } from "@/components";
 
 export default function ProjectDetailScreen() {
   const router = useRouter();
@@ -222,33 +223,30 @@ export default function ProjectDetailScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi Tiết Dự Án</Text>
-        <View style={styles.headerActions}>
-          <PermissionGuard permission="projects.update">
-            <TouchableOpacity
-              style={styles.headerActionButton}
-              onPress={handleEdit}
-            >
-              <Ionicons name="create-outline" size={24} color="#3B82F6" />
-            </TouchableOpacity>
-          </PermissionGuard>
-          <PermissionGuard permission="projects.delete">
-            <TouchableOpacity
-              style={styles.headerActionButton}
-              onPress={handleDelete}
-            >
-              <Ionicons name="trash-outline" size={24} color="#EF4444" />
-            </TouchableOpacity>
-          </PermissionGuard>
-        </View>
-      </View>
+      <ScreenHeader
+        title="Chi Tiết Dự Án"
+        showBackButton
+        rightComponent={
+          <View style={styles.headerActions}>
+            <PermissionGuard permission="projects.update">
+              <TouchableOpacity
+                style={styles.headerActionButton}
+                onPress={handleEdit}
+              >
+                <Ionicons name="create-outline" size={24} color="#3B82F6" />
+              </TouchableOpacity>
+            </PermissionGuard>
+            <PermissionGuard permission="projects.delete">
+              <TouchableOpacity
+                style={styles.headerActionButton}
+                onPress={handleDelete}
+              >
+                <Ionicons name="trash-outline" size={24} color="#EF4444" />
+              </TouchableOpacity>
+            </PermissionGuard>
+          </View>
+        }
+      />
 
       {/* Contract Value Card */}
       {contract && contract.contract_value && (
@@ -397,26 +395,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
-  },
-  placeholder: {
-    width: 32,
   },
   headerActions: {
     flexDirection: "row",

@@ -17,8 +17,7 @@ import {
 import { useRouter } from "expo-router";
 import { acceptanceApi, AcceptanceTemplate } from "@/api/acceptanceApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
-import { UniversalFileUploader } from "@/components";
+import { UniversalFileUploader, ScreenHeader } from "@/components";
 
 export default function AcceptanceTemplatesScreen() {
   const router = useRouter();
@@ -224,16 +223,18 @@ export default function AcceptanceTemplatesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Bộ Tài Liệu Nghiệm Thu</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => handleOpenModal()}
-        >
-          <Ionicons name="add" size={24} color="#3B82F6" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Bộ Tài Liệu Nghiệm Thu"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => handleOpenModal()}
+          >
+            <Ionicons name="add" size={24} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
 
       <FlatList
         data={templates}

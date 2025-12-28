@@ -11,31 +11,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#3B82F6",
-        tabBarInactiveTintColor: "#9CA3AF",
-        tabBarStyle: {
-          backgroundColor: "#FFFFFF",
-          borderTopWidth: 0,
-          height: Platform.OS === "ios" ? 85 : 70,
-          paddingBottom: Platform.OS === "ios" ? 25 : 10,
-          paddingTop: 10,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
-          elevation: 10,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "600",
-          marginTop: 4,
-        },
-        tabBarIconStyle: {
-          marginTop: 4,
-        },
-        tabBarItemStyle: {
-          paddingVertical: 4,
-        },
+        tabBarStyle: { display: "none" }, // Ẩn tab bar mặc định vì đã dùng CustomTabBar
       }}
     >
       <Tabs.Screen
@@ -93,7 +69,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          href: null, // Ẩn tab index khỏi bottom navigation
+          href: null,
         }}
       />
     </Tabs>

@@ -14,9 +14,8 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { documentApi, ProjectDocument } from "@/api/documentApi";
-import { UniversalFileUploader } from "@/components";
+import { UniversalFileUploader, ScreenHeader } from "@/components";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
 
 export default function DocumentsScreen() {
   const router = useRouter();
@@ -128,11 +127,7 @@ export default function DocumentsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Hồ Sơ & Tài Liệu</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <ScreenHeader title="Hồ Sơ & Tài Liệu" showBackButton />
 
       <View style={styles.uploadSection}>
         <UniversalFileUploader

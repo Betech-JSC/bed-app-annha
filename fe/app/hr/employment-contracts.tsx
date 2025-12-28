@@ -23,7 +23,7 @@ import {
 } from "@/api/employmentContractApi";
 import { employeesApi } from "@/api/employeesApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
     probation: "Thử việc",
@@ -301,19 +301,21 @@ export default function EmploymentContractsScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <BackButton />
-                <Text style={styles.headerTitle}>Hợp Đồng Lao Động</Text>
-                <TouchableOpacity
-                    style={styles.addButton}
-                    onPress={() => {
-                        resetForm();
-                        setShowCreateModal(true);
-                    }}
-                >
-                    <Ionicons name="add" size={24} color="#3B82F6" />
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader
+                title="Hợp Đồng Lao Động"
+                showBackButton
+                rightComponent={
+                    <TouchableOpacity
+                        style={styles.addButton}
+                        onPress={() => {
+                            resetForm();
+                            setShowCreateModal(true);
+                        }}
+                    >
+                        <Ionicons name="add" size={24} color="#3B82F6" />
+                    </TouchableOpacity>
+                }
+            />
 
             {loading ? (
                 <View style={styles.centerContainer}>

@@ -10,7 +10,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { departmentApi } from "@/api/departmentApi";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 interface DepartmentStatistics {
   department: {
@@ -101,10 +101,7 @@ export default function DepartmentStatisticsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Thống Kê Phòng Ban</Text>
-      </View>
+      <ScreenHeader title="Thống Kê Phòng Ban" showBackButton />
 
       <ScrollView
         style={styles.content}

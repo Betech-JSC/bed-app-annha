@@ -2,6 +2,7 @@ import axios from "axios";
 import { store } from "@/store";
 import { API_URL } from "@env";
 import { clearUser } from "@/reducers/userSlice";
+import { clearPermissions } from "@/reducers/permissionsSlice";
 import { router } from "expo-router";
 
 
@@ -60,8 +61,9 @@ api.interceptors.response.use(
         if (status === 401) {
             console.warn('401 Unauthorized - Clearing user and redirecting to login');
 
-            // Clear user từ Redux store
+            // Clear user và permissions từ Redux store
             store.dispatch(clearUser());
+            store.dispatch(clearPermissions());
 
             // Redirect về login
             setTimeout(() => {

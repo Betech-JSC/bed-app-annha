@@ -234,23 +234,45 @@ export default function AcceptanceItemForm({
 
 
               {/* Hiển thị thông tin template khi đã chọn */}
-              {templateId && (
-                <View style={styles.templateInfo}>
-                  {standard && (
-                    <View style={styles.templateSection}>
-                      <Text style={styles.templateLabel}>Tiêu chuẩn cho phép:</Text>
-                      <Text style={styles.templateValue}>{standard}</Text>
-                    </View>
-                  )}
-                  {templates.find(t => t.id.toString() === templateId)?.attachments &&
-                    templates.find(t => t.id.toString() === templateId)!.attachments!.length > 0 && (
+              {templateId && (() => {
+                const selectedTemplate = templates.find(t => t.id.toString() === templateId);
+                if (!selectedTemplate) return null;
+
+                return (
+                  <View style={styles.templateInfo}>
+                    {/* Tên công việc */}
+                    {selectedTemplate.name && (
+                      <View style={styles.templateSection}>
+                        <Text style={styles.templateLabel}>Tên công việc:</Text>
+                        <Text style={styles.templateValue}>{selectedTemplate.name}</Text>
+                      </View>
+                    )}
+
+                    {/* Mô tả */}
+                    {selectedTemplate.description && (
+                      <View style={styles.templateSection}>
+                        <Text style={styles.templateLabel}>Mô tả:</Text>
+                        <Text style={styles.templateValue}>{selectedTemplate.description}</Text>
+                      </View>
+                    )}
+
+                    {/* Tiêu chuẩn cho phép */}
+                    {selectedTemplate.standard && (
+                      <View style={styles.templateSection}>
+                        <Text style={styles.templateLabel}>Tiêu chuẩn cho phép:</Text>
+                        <Text style={styles.templateValue}>{selectedTemplate.standard}</Text>
+                      </View>
+                    )}
+
+                    {/* Hình ảnh mẫu */}
+                    {selectedTemplate.attachments && selectedTemplate.attachments.length > 0 && (
                       <View style={styles.templateSection}>
                         <Text style={styles.templateLabel}>Hình ảnh mẫu:</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sampleImagesContainer}>
-                          {templates.find(t => t.id.toString() === templateId)!.attachments!.map((img: any) => (
+                          {selectedTemplate.attachments.map((img: any) => (
                             <Image
                               key={img.id}
-                              source={{ uri: img.file_url }}
+                              source={{ uri: img.file_url || img.url || img.path }}
                               style={styles.sampleImage}
                               resizeMode="cover"
                             />
@@ -258,8 +280,9 @@ export default function AcceptanceItemForm({
                         </ScrollView>
                       </View>
                     )}
-                </View>
-              )}
+                  </View>
+                );
+              })()}
             </View>
 
             {/* Name */}

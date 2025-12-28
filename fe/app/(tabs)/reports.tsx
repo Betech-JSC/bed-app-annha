@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LineChart, BarChart, PieChart } from "react-native-chart-kit";
 import { Dimensions } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ScreenHeader } from "@/components";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -190,9 +191,7 @@ export default function ReportsScreen() {
     if (loading) {
         return (
             <View style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Báo Cáo Tổng</Text>
-                </View>
+                <ScreenHeader title="Báo Cáo Tổng" />
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#3B82F6" />
                 </View>
@@ -242,9 +241,7 @@ export default function ReportsScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Báo Cáo Tổng</Text>
-            </View>
+            <ScreenHeader title="Báo Cáo Tổng" />
 
             <ScrollView
                 style={styles.scrollView}
@@ -556,19 +553,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: "#F9FAFB",
-    },
-    header: {
-        backgroundColor: "#FFFFFF",
-        paddingTop: 50,
-        paddingBottom: 16,
-        paddingHorizontal: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontWeight: "700",
-        color: "#1F2937",
     },
     loadingContainer: {
         flex: 1,

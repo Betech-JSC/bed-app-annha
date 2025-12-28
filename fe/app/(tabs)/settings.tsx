@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import LogoutButton from "@/components/LogoutButton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { setUser } from "@/reducers/userSlice";
+import { ScreenHeader } from "@/components";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -170,12 +171,13 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
+    <View style={styles.container}>
+      <ScreenHeader title="Cấu Hình" />
+      <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
       {/* User Info Card */}
       <View style={styles.userCard}>
         <View style={styles.userAvatar}>
@@ -347,7 +349,8 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

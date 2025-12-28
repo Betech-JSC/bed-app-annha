@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
+import { ScreenHeader } from "@/components";
 
 export default function ProjectsListScreen() {
   const router = useRouter();
@@ -197,9 +198,9 @@ export default function ProjectsListScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Danh Sách Dự Án</Text>
-        <View style={styles.headerActions}>
+      <ScreenHeader
+        title="Danh Sách Dự Án"
+        rightComponent={
           <PermissionGuard permission="projects.create">
             <TouchableOpacity
               style={styles.addButton}
@@ -208,8 +209,8 @@ export default function ProjectsListScreen() {
               <Ionicons name="add" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </PermissionGuard>
-        </View>
-      </View>
+        }
+      />
 
       <FlatList
         data={projects}
@@ -246,20 +247,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1F2937",
   },
   headerActions: {
     flexDirection: "row",

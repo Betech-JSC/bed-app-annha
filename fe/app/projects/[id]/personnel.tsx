@@ -18,6 +18,7 @@ import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
+import { ScreenHeader } from "@/components";
 
 export default function PersonnelScreen() {
   const router = useRouter();
@@ -249,23 +250,20 @@ export default function PersonnelScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nhân Sự Tham Gia</Text>
-        <PermissionGuard permission="personnel.assign" projectId={id}>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleOpenAddModal}
-          >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </PermissionGuard>
-      </View>
+      <ScreenHeader
+        title="Nhân Sự Tham Gia"
+        showBackButton
+        rightComponent={
+          <PermissionGuard permission="personnel.assign" projectId={id}>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={handleOpenAddModal}
+            >
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </PermissionGuard>
+        }
+      />
 
       <FlatList
         data={personnel}
@@ -450,23 +448,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
   },
   addButton: {
     width: 40,

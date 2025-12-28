@@ -14,7 +14,7 @@ import {
 import { useRouter } from "expo-router";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 export default function CostGroupsScreen() {
   const router = useRouter();
@@ -190,16 +190,18 @@ export default function CostGroupsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Nhóm Chi Phí Dự Án</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => handleOpenModal()}
-        >
-          <Ionicons name="add" size={24} color="#3B82F6" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Nhóm Chi Phí Dự Án"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => handleOpenModal()}
+          >
+            <Ionicons name="add" size={24} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
 
       <FlatList
         data={costGroups}

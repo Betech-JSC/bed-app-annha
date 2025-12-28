@@ -10,7 +10,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { acceptanceApi, AcceptanceStage } from "@/api/acceptanceApi";
 import { Ionicons } from "@expo/vector-icons";
-import { AcceptanceChecklist } from "@/components";
+import { AcceptanceChecklist, ScreenHeader } from "@/components";
 
 export default function AcceptanceScreen() {
   const router = useRouter();
@@ -58,15 +58,7 @@ export default function AcceptanceScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nghiệm Thu</Text>
-      </View>
+      <ScreenHeader title="Nghiệm Thu" showBackButton />
 
       <AcceptanceChecklist
         stages={stages}
@@ -91,22 +83,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-    marginRight: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
   },
 });

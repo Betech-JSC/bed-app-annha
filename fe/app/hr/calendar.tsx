@@ -20,6 +20,7 @@ import CalendarView from "@/components/CalendarView";
 import WeekView from "@/components/WeekView";
 import BulkScheduleForm from "@/components/BulkScheduleForm";
 import WorkScheduleForm from "@/components/WorkScheduleForm";
+import { ScreenHeader } from "@/components";
 
 type ViewMode = "month" | "week";
 
@@ -321,28 +322,30 @@ export default function CalendarScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Lịch Làm Việc</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => {
-              setFormInitialDate(new Date(selectedDate));
-              setShowSingleForm(true);
-            }}
-          >
-            <Ionicons name="add" size={20} color="#3B82F6" />
-            <Text style={styles.headerButtonText}>Tạo mới</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => setShowBulkForm(true)}
-          >
-            <Ionicons name="layers" size={20} color="#10B981" />
-            <Text style={styles.headerButtonText}>Tạo hàng loạt</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ScreenHeader
+        title="Lịch Làm Việc"
+        rightComponent={
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => {
+                setFormInitialDate(new Date(selectedDate));
+                setShowSingleForm(true);
+              }}
+            >
+              <Ionicons name="add" size={20} color="#3B82F6" />
+              <Text style={styles.headerButtonText}>Tạo mới</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => setShowBulkForm(true)}
+            >
+              <Ionicons name="layers" size={20} color="#10B981" />
+              <Text style={styles.headerButtonText}>Tạo hàng loạt</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
       {/* View Toggle */}
       <View style={styles.viewToggle}>

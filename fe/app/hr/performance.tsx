@@ -273,19 +273,21 @@ export default function PerformanceScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Đánh Giá Hiệu Suất</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => {
-            resetForm();
-            setShowCreateModal(true);
-          }}
-        >
-          <Ionicons name="add" size={24} color="#3B82F6" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Đánh Giá Hiệu Suất"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              resetForm();
+              setShowCreateModal(true);
+            }}
+          >
+            <Ionicons name="add" size={24} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
 
       {loading ? (
         <View style={styles.centerContainer}>

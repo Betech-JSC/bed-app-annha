@@ -17,7 +17,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supplierApi, Supplier, CreateSupplierData } from "@/api/supplierApi";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 export default function SuppliersScreen() {
   const router = useRouter();
@@ -252,19 +252,21 @@ export default function SuppliersScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Nhà Cung Cấp</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => {
-            resetForm();
-            setShowCreateModal(true);
-          }}
-        >
-          <Ionicons name="add" size={24} color="#3B82F6" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Nhà Cung Cấp"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              resetForm();
+              setShowCreateModal(true);
+            }}
+          >
+            <Ionicons name="add" size={24} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
 
       {/* Search */}
       <View style={styles.searchContainer}>

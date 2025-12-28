@@ -53,31 +53,10 @@ export default function IndexScreen() {
     const checkAndRedirect = async () => {
       // Check if user is logged in
       if (user?.token) {
-        try {
-          // Get user permissions to determine redirect
-          const permissionsResponse = await permissionApi.getMyPermissions();
-          const permissions: string[] = permissionsResponse.success
-            ? permissionsResponse.data || []
-            : [];
-
-          // Redirect to tabs layout (main app)
-          router.replace("/(tabs)");
-        } catch (error: any) {
-          console.error("Error getting permissions:", error);
-
-          // If 401, token is invalid/expired - redirect to login
-          if (error.response?.status === 401) {
-            router.replace("/login");
-            return;
-          }
-
-          // Fallback to role-based redirect if permissions API fails for other reasons
-          const userRole = user?.role?.toLowerCase();
-          const isOwner = user?.owner === true;
-
-          // Redirect to tabs layout
-          router.replace("/(tabs)/projects");
-        }
+        // Permissions sẽ được load tự động bởi usePermissions hook
+        // Không cần gọi API ở đây nữa
+        // Redirect to tabs layout (main app)
+        router.replace("/(tabs)");
       } else {
         // User is not logged in, redirect to login
         router.replace("/login");
@@ -86,7 +65,7 @@ export default function IndexScreen() {
     };
 
     checkAndRedirect();
-  }, [user?.token, user?.role, user?.owner]);
+  }, [user?.token]);
 
   return (
     <View style={styles.container}>

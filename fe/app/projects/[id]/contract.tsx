@@ -16,7 +16,7 @@ import {
   CreateContractData,
 } from "@/api/contractApi";
 import { attachmentApi, Attachment } from "@/api/attachmentApi";
-import { UniversalFileUploader } from "@/components";
+import { UniversalFileUploader, ScreenHeader } from "@/components";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -257,23 +257,20 @@ export default function ContractScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Giá Trị Hợp Đồng</Text>
-        {contract && !editing && (
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => setEditing(true)}
-          >
-            <Ionicons name="create-outline" size={24} color="#3B82F6" />
-          </TouchableOpacity>
-        )}
-      </View>
+      <ScreenHeader
+        title="Giá Trị Hợp Đồng"
+        showBackButton
+        rightComponent={
+          contract && !editing ? (
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => setEditing(true)}
+            >
+              <Ionicons name="create-outline" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          ) : null
+        }
+      />
 
       {contract && (
         <View style={styles.statusCard}>
@@ -464,23 +461,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
   },
   editButton: {
     padding: 4,

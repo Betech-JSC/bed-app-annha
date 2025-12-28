@@ -17,7 +17,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { materialApi, Material } from "@/api/materialApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ProjectMaterialsScreen() {
@@ -222,13 +222,15 @@ export default function ProjectMaterialsScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <BackButton />
-                <Text style={styles.headerTitle}>Vật Liệu Dự Án</Text>
-                <TouchableOpacity onPress={handleOpenAddModal} style={styles.addButton}>
-                    <Ionicons name="add" size={24} color="#3B82F6" />
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader
+                title="Vật Liệu Dự Án"
+                showBackButton
+                rightComponent={
+                    <TouchableOpacity onPress={handleOpenAddModal} style={styles.addButton}>
+                        <Ionicons name="add" size={24} color="#3B82F6" />
+                    </TouchableOpacity>
+                }
+            />
 
             <FlatList
                 data={materials}
@@ -435,23 +437,6 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: "#F9FAFB",
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: 16,
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1F2937",
-        flex: 1,
-        textAlign: "center",
-        marginLeft: -24,
     },
     addButton: {
         padding: 4,

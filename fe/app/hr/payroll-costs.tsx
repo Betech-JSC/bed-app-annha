@@ -15,6 +15,7 @@ import { costApi, Cost } from "@/api/revenueApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
 import { formatVNDWithoutSymbol } from "@/utils/format";
+import { ScreenHeader } from "@/components";
 
 export default function PayrollCostsScreen() {
   const router = useRouter();
@@ -271,10 +272,7 @@ export default function PayrollCostsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tiền Lương & Chi Phí Nhân Công</Text>
-      </View>
+      <ScreenHeader title="Tiền Lương & Chi Phí Nhân Công" />
 
       {/* Tabs */}
       <View style={styles.tabsContainer}>

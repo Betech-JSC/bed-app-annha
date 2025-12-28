@@ -8,6 +8,8 @@ export { default as DefectItem } from "./DefectItem";
 export { default as FileUploader } from "./FileUploader";
 export { default as UniversalFileUploader } from "./UniversalFileUploader";
 export type { UploadedFile } from "./UniversalFileUploader";
+export { ScreenHeader } from "./ScreenHeader";
+export { default as CustomTabBar } from "./CustomTabBar";
 
 // Export HR management components
 export { default as CheckInOutButton } from "./CheckInOutButton";

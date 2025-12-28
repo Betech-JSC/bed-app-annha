@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { leaveApi, LeaveRequest, CreateLeaveRequestData } from "@/api/leaveApi";
 import { projectApi } from "@/api/projectApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   annual: "Phép năm",
@@ -164,16 +164,18 @@ export default function LeaveRequestsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Đơn Nghỉ Phép</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowCreateModal(true)}
-        >
-          <Ionicons name="add" size={24} color="#3B82F6" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Đơn Nghỉ Phép"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <Ionicons name="add" size={24} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
 
       {loading ? (
         <View style={styles.centerContainer}>

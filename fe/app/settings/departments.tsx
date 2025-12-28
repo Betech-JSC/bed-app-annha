@@ -17,7 +17,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { departmentApi, Department, CreateDepartmentData } from "@/api/departmentApi";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 export default function DepartmentsScreen() {
   const router = useRouter();
@@ -188,19 +188,21 @@ export default function DepartmentsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Phòng Ban</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => {
-            resetForm();
-            setShowCreateModal(true);
-          }}
-        >
-          <Ionicons name="add" size={24} color="#3B82F6" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Phòng Ban"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              resetForm();
+              setShowCreateModal(true);
+            }}
+          >
+            <Ionicons name="add" size={24} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
 
       {loading ? (
         <View style={styles.centerContainer}>

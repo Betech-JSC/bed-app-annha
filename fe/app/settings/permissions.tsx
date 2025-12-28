@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { permissionApi } from "@/api/permissionApi";
 import { personnelRoleApi } from "@/api/personnelRoleApi";
 import { Ionicons } from "@expo/vector-icons";
+import { ScreenHeader } from "@/components";
 
 export default function PermissionsScreen() {
   const router = useRouter();
@@ -99,16 +100,7 @@ export default function PermissionsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Phân Quyền Hệ Thống</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <ScreenHeader title="Phân Quyền Hệ Thống" showBackButton />
 
       {/* Tabs */}
       <View style={styles.tabs}>

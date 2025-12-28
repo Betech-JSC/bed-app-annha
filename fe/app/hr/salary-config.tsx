@@ -344,18 +344,19 @@ export default function SalaryConfigScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Cấu Hình Lương</Text>
-        <PermissionGuard permission="hr.salary_config.create">
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setShowCreateModal(true)}
-          >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </PermissionGuard>
-      </View>
+      <ScreenHeader
+        title="Cấu Hình Lương"
+        rightComponent={
+          <PermissionGuard permission="hr.salary_config.create">
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setShowCreateModal(true)}
+            >
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </PermissionGuard>
+        }
+      />
 
       {/* Search and Filter */}
       <View style={styles.searchFilterContainer}>

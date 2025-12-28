@@ -11,7 +11,8 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { revenueApi, RevenueSummary, RevenueDashboard } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
-import { LineChart, BarChart } from "react-native-chart-kit";
+import { LineChart, BarChart, PieChart, StackedBarChart } from "react-native-chart-kit";
+import { ScreenHeader } from "@/components";
 import { Dimensions } from "react-native";
 
 const screenWidth = Dimensions.get("window").width;
@@ -24,10 +25,11 @@ export default function RevenueScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"summary" | "dashboard">("summary");
+  const [period, setPeriod] = useState<"all" | "month" | "quarter" | "year">("all");
 
   useEffect(() => {
     loadData();
-  }, [id, activeTab]);
+  }, [id, activeTab, period]);
 
   const loadData = async () => {
     try {
@@ -38,7 +40,7 @@ export default function RevenueScreen() {
           setSummary(response.data);
         }
       } else {
-        const response = await revenueApi.getDashboard(id!);
+        const response = await revenueApi.getDashboard(id!, { period });
         if (response.success) {
           setDashboard(response.data);
         }
@@ -79,15 +81,7 @@ export default function RevenueScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Báo Cáo Tổng Hợp</Text>
-      </View>
+      <ScreenHeader title="Báo Cáo Tổng Hợp" showBackButton />
 
       {/* Tabs */}
       <View style={styles.tabs}>
@@ -237,6 +231,38 @@ export default function RevenueScreen() {
 
       {activeTab === "dashboard" && dashboard && (
         <View style={styles.content}>
+          {/* Period Filter */}
+          <View style={styles.filterContainer}>
+            <Text style={styles.filterLabel}>Kỳ báo cáo:</Text>
+            <View style={styles.filterButtons}>
+              {(["all", "month", "quarter", "year"] as const).map((p) => (
+                <TouchableOpacity
+                  key={p}
+                  style={[
+                    styles.filterButton,
+                    period === p && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setPeriod(p)}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      period === p && styles.filterButtonTextActive,
+                    ]}
+                  >
+                    {p === "all"
+                      ? "Tất cả"
+                      : p === "month"
+                        ? "Tháng"
+                        : p === "quarter"
+                          ? "Quý"
+                          : "Năm"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           {/* KPI Cards */}
           <View style={styles.kpiContainer}>
             <View style={styles.kpiCard}>
@@ -283,22 +309,23 @@ export default function RevenueScreen() {
             </View>
           </View>
 
-          {/* Charts */}
-          {dashboard.charts.monthly_costs.length > 0 && (
+          {/* Chart 1: Doanh thu theo tháng */}
+          {dashboard.charts.monthly_profit.length > 0 && (
             <View style={styles.chartSection}>
-              <Text style={styles.chartTitle}>Chi Phí Theo Tháng</Text>
+              <Text style={styles.chartTitle}>Doanh Thu Theo Tháng</Text>
               <LineChart
                 data={{
-                  labels: dashboard.charts.monthly_costs.map((item) =>
-                    item.period.split("-")[1]
-                  ),
+                  labels: dashboard.charts.monthly_profit.map((item) => {
+                    const [year, month] = item.period.split("-");
+                    return `${month}/${year.slice(2)}`;
+                  }),
                   datasets: [
                     {
-                      data: dashboard.charts.monthly_costs.map(
-                        (item) => item.amount
+                      data: dashboard.charts.monthly_profit.map(
+                        (item) => item.revenue
                       ),
-                      color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
-                      strokeWidth: 2,
+                      color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+                      strokeWidth: 3,
                     },
                   ],
                 }}
@@ -306,34 +333,90 @@ export default function RevenueScreen() {
                 height={220}
                 chartConfig={{
                   backgroundColor: "#FFFFFF",
-                  backgroundGradientFrom: "#FFFFFF",
+                  backgroundGradientFrom: "#F0FDF4",
                   backgroundGradientTo: "#FFFFFF",
                   decimalPlaces: 0,
-                  color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
+                  color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
                   labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-                  style: {
-                    borderRadius: 16,
+                  propsForDots: {
+                    r: "6",
+                    strokeWidth: "2",
+                    stroke: "#10B981",
                   },
                 }}
                 bezier
                 style={styles.chart}
+                withVerticalLabels={true}
+                withHorizontalLabels={true}
               />
             </View>
           )}
 
+          {/* Chart 2: Chi phí theo tháng */}
+          {dashboard.charts.monthly_costs.length > 0 && (
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>Chi Phí Theo Tháng</Text>
+              <LineChart
+                data={{
+                  labels: dashboard.charts.monthly_costs.map((item) => {
+                    const [year, month] = item.period.split("-");
+                    return `${month}/${year.slice(2)}`;
+                  }),
+                  datasets: [
+                    {
+                      data: dashboard.charts.monthly_costs.map(
+                        (item) => item.amount
+                      ),
+                      color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
+                      strokeWidth: 3,
+                    },
+                  ],
+                }}
+                width={screenWidth - 32}
+                height={220}
+                chartConfig={{
+                  backgroundColor: "#FFFFFF",
+                  backgroundGradientFrom: "#FEF2F2",
+                  backgroundGradientTo: "#FFFFFF",
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+                  propsForDots: {
+                    r: "6",
+                    strokeWidth: "2",
+                    stroke: "#EF4444",
+                  },
+                }}
+                bezier
+                style={styles.chart}
+                withVerticalLabels={true}
+                withHorizontalLabels={true}
+              />
+            </View>
+          )}
+
+          {/* Chart 3: So sánh Doanh thu vs Chi phí */}
           {dashboard.charts.monthly_profit.length > 0 && (
             <View style={styles.chartSection}>
-              <Text style={styles.chartTitle}>Lợi Nhuận Theo Tháng</Text>
+              <Text style={styles.chartTitle}>So Sánh Doanh Thu vs Chi Phí</Text>
               <BarChart
                 data={{
-                  labels: dashboard.charts.monthly_profit.map((item) =>
-                    item.period.split("-")[1]
-                  ),
+                  labels: dashboard.charts.monthly_profit.map((item) => {
+                    const [year, month] = item.period.split("-");
+                    return `${month}/${year.slice(2)}`;
+                  }),
                   datasets: [
                     {
                       data: dashboard.charts.monthly_profit.map(
-                        (item) => item.profit
+                        (item) => item.revenue
                       ),
+                      color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+                    },
+                    {
+                      data: dashboard.charts.monthly_profit.map(
+                        (item) => item.costs
+                      ),
+                      color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
                     },
                   ],
                 }}
@@ -346,9 +429,96 @@ export default function RevenueScreen() {
                   decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
                   labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+                  barPercentage: 0.7,
+                }}
+                style={styles.chart}
+                showValuesOnTopOfBars={false}
+                withInnerLines={true}
+              />
+              <View style={styles.chartLegend}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: "#10B981" }]} />
+                  <Text style={styles.legendText}>Doanh thu</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: "#EF4444" }]} />
+                  <Text style={styles.legendText}>Chi phí</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Chart 4: Lợi nhuận theo tháng */}
+          {dashboard.charts.monthly_profit.length > 0 && (
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>Lợi Nhuận Theo Tháng</Text>
+              <BarChart
+                data={{
+                  labels: dashboard.charts.monthly_profit.map((item) => {
+                    const [year, month] = item.period.split("-");
+                    return `${month}/${year.slice(2)}`;
+                  }),
+                  datasets: [
+                    {
+                      data: dashboard.charts.monthly_profit.map((item) =>
+                        Math.max(0, item.profit)
+                      ),
+                      color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+                    },
+                  ],
+                }}
+                width={screenWidth - 32}
+                height={220}
+                chartConfig={{
+                  backgroundColor: "#FFFFFF",
+                  backgroundGradientFrom: "#EFF6FF",
+                  backgroundGradientTo: "#FFFFFF",
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+                  barPercentage: 0.6,
                 }}
                 style={styles.chart}
                 showValuesOnTopOfBars
+                withInnerLines={true}
+              />
+            </View>
+          )}
+
+          {/* Chart 5: Chi phí theo nhóm (Pie Chart) */}
+          {dashboard.charts.costs_by_group && dashboard.charts.costs_by_group.length > 0 && (
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>Phân Bổ Chi Phí Theo Nhóm</Text>
+              <PieChart
+                data={dashboard.charts.costs_by_group.map((group, index) => {
+                  const colors = [
+                    "#3B82F6",
+                    "#10B981",
+                    "#F59E0B",
+                    "#EF4444",
+                    "#8B5CF6",
+                    "#EC4899",
+                    "#14B8A6",
+                    "#F97316",
+                  ];
+                  return {
+                    name: group.name || "Khác",
+                    amount: group.amount,
+                    color: colors[index % colors.length],
+                    legendFontColor: "#6B7280",
+                    legendFontSize: 12,
+                  };
+                })}
+                width={screenWidth - 32}
+                height={220}
+                chartConfig={{
+                  color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                }}
+                accessor="amount"
+                backgroundColor="transparent"
+                paddingLeft="15"
+                absolute
+                style={styles.chart}
               />
             </View>
           )}
@@ -368,23 +538,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-    marginRight: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
   },
   tabs: {
     flexDirection: "row",
@@ -607,4 +760,66 @@ const styles = StyleSheet.create({
   revenueValue: {
     color: "#3B82F6",
   },
+  filterContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 12,
+  },
+  filterButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+  },
+  filterButtonActive: {
+    backgroundColor: "#3B82F6",
+  },
+  filterButtonText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+  filterButtonTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  chartLegend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 24,
+    marginTop: 12,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendText: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
 });
+

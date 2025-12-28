@@ -22,7 +22,7 @@ import {
 } from "@/api/insuranceApi";
 import { employeesApi } from "@/api/employeesApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 const BENEFIT_TYPE_LABELS: Record<string, string> = {
   meal: "Phụ cấp ăn trưa",
@@ -259,10 +259,7 @@ export default function InsuranceScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Bảo Hiểm & Phúc Lợi</Text>
-      </View>
+      <ScreenHeader title="Bảo Hiểm & Phúc Lợi" showBackButton />
 
       <View style={styles.employeeSelector}>
         <TouchableOpacity

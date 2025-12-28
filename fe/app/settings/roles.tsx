@@ -14,6 +14,7 @@ import {
 import { useRouter } from "expo-router";
 import { personnelRoleApi, PersonnelRole } from "@/api/personnelRoleApi";
 import { Ionicons } from "@expo/vector-icons";
+import { ScreenHeader } from "@/components";
 
 export default function PersonnelRolesScreen() {
   const router = useRouter();
@@ -194,24 +195,21 @@ export default function PersonnelRolesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cấu Hình Vai Trò</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => {
-            resetForm();
-            setShowCreateModal(true);
-          }}
-        >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Cấu Hình Vai Trò"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              resetForm();
+              setShowCreateModal(true);
+            }}
+          >
+            <Ionicons name="add" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         style={styles.content}

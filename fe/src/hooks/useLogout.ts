@@ -2,6 +2,7 @@ import { useDispatch } from "react-redux";
 import { useRouter } from "expo-router";
 import { Alert } from "react-native";
 import { clearUser } from "@/reducers/userSlice";
+import { clearPermissions } from "@/reducers/permissionsSlice";
 import { authApi } from "@/api/authApi";
 
 export const useLogout = () => {
@@ -16,8 +17,9 @@ export const useLogout = () => {
       // Bỏ qua lỗi nếu API fail (có thể token đã hết hạn)
       console.log("Logout API error (ignored):", error);
     } finally {
-      // Luôn clear user và redirect về login
+      // Luôn clear user, permissions và redirect về login
       dispatch(clearUser());
+      dispatch(clearPermissions());
       router.replace("/login");
 
       if (showAlert) {

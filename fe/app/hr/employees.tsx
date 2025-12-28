@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { employeesApi, Employee } from "@/api/employeesApi";
 import { roleApi, Role } from "@/api/roleApi";
+import { ScreenHeader } from "@/components";
 
 export default function EmployeesScreen() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function EmployeesScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  
+
   // Create user modal
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createFormData, setCreateFormData] = useState({
@@ -40,11 +41,11 @@ export default function EmployeesScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   // Roles
   const [roles, setRoles] = useState<Role[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
-  
+
   // Assign roles modal
   const [showRolesModal, setShowRolesModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -275,6 +276,7 @@ export default function EmployeesScreen() {
 
   return (
     <View style={styles.container}>
+      <ScreenHeader title="Nhân Viên" />
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#6B7280" style={styles.searchIcon} />
         <TextInput
@@ -456,7 +458,7 @@ export default function EmployeesScreen() {
                         style={[
                           styles.roleChip,
                           createFormData.role_ids.includes(role.id) &&
-                            styles.roleChipActive,
+                          styles.roleChipActive,
                         ]}
                         onPress={() => {
                           const isSelected = createFormData.role_ids.includes(
@@ -466,8 +468,8 @@ export default function EmployeesScreen() {
                             ...createFormData,
                             role_ids: isSelected
                               ? createFormData.role_ids.filter(
-                                  (id) => id !== role.id
-                                )
+                                (id) => id !== role.id
+                              )
                               : [...createFormData.role_ids, role.id],
                           });
                         }}
@@ -476,7 +478,7 @@ export default function EmployeesScreen() {
                           style={[
                             styles.roleChipText,
                             createFormData.role_ids.includes(role.id) &&
-                              styles.roleChipTextActive,
+                            styles.roleChipTextActive,
                           ]}
                         >
                           {role.name}

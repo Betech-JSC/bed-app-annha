@@ -14,6 +14,7 @@ import { userPermissionApi, Permission } from "@/api/userPermissionApi";
 import { employeesApi } from "@/api/employeesApi";
 import { roleApi, Role } from "@/api/roleApi";
 import { Ionicons } from "@expo/vector-icons";
+import { ScreenHeader } from "@/components";
 
 export default function UserPermissionsScreen() {
   const router = useRouter();
@@ -176,23 +177,14 @@ export default function UserPermissionsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Quản Lý Quyền</Text>
-          {user && (
-            <Text style={styles.headerSubtitle}>
-              {user.name} ({user.email})
-            </Text>
-          )}
-        </View>
-        <View style={styles.placeholder} />
-      </View>
+      <ScreenHeader
+        title={
+          user
+            ? `Quản Lý Quyền - ${user.name}`
+            : "Quản Lý Quyền"
+        }
+        showBackButton
+      />
 
       <ScrollView
         style={styles.content}

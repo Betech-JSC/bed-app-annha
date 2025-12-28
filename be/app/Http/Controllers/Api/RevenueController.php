@@ -225,33 +225,84 @@ class RevenueController extends Controller
                 ];
             });
 
+        // Chart data - Doanh thu theo tháng (từ payments)
+        // Sử dụng paid_date nếu có, nếu không thì dùng due_date
+        $monthlyRevenue = DB::table('project_payments')
+            ->where('project_id', $project->id)
+            ->where('status', 'paid')
+            ->select(
+                DB::raw('YEAR(COALESCE(paid_date, due_date)) as year'),
+                DB::raw('MONTH(COALESCE(paid_date, due_date)) as month'),
+                DB::raw('SUM(amount) as total')
+            )
+            ->groupBy('year', 'month')
+            ->orderBy('year')
+            ->orderBy('month')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'period' => "{$item->year}-" . str_pad($item->month, 2, '0', STR_PAD_LEFT),
+                    'amount' => (float) $item->total,
+                ];
+            });
+
         // Chart data - Lợi nhuận theo tháng
-        // Sử dụng RevenueAllocationService để phân bổ doanh thu theo payment schedule
+        // Tạo map của tất cả các tháng có dữ liệu
+        $allPeriods = collect($monthlyCosts->pluck('period'))
+            ->merge($monthlyRevenue->pluck('period'))
+            ->unique()
+            ->sort()
+            ->values();
+
         $monthlyProfit = [];
-        foreach ($monthlyCosts as $cost) {
-            $periodParts = explode('-', $cost['period']);
+        foreach ($allPeriods as $period) {
+            $periodParts = explode('-', $period);
             $year = (int) $periodParts[0];
             $month = (int) $periodParts[1];
             
-            // Phân bổ doanh thu theo tháng dựa trên payment schedule
-            $monthlyRevenue = $this->revenueAllocationService->allocateByMonth($project, $year, $month);
+            // Lấy doanh thu trong tháng
+            $revenueItem = $monthlyRevenue->firstWhere('period', $period);
+            $monthlyRevenueAmount = $revenueItem ? $revenueItem['amount'] : 0;
             
             // Nếu không có payment trong tháng, phân bổ đều (fallback)
-            if ($monthlyRevenue == 0 && $revenueData['total_revenue'] > 0) {
+            if ($monthlyRevenueAmount == 0 && $revenueData['total_revenue'] > 0) {
                 // Tính số tháng từ start_date đến end_date của dự án
-                $projectStart = $project->start_date ?? now();
-                $projectEnd = $project->end_date ?? $projectStart->copy()->addMonths(12);
+                $projectStart = $project->start_date ? Carbon::parse($project->start_date) : now();
+                $projectEnd = $project->end_date ? Carbon::parse($project->end_date) : $projectStart->copy()->addMonths(12);
                 $totalMonths = max(1, $projectStart->diffInMonths($projectEnd) + 1);
-                $monthlyRevenue = $revenueData['total_revenue'] / $totalMonths;
+                $monthlyRevenueAmount = $revenueData['total_revenue'] / $totalMonths;
             }
             
+            // Lấy chi phí trong tháng
+            $costItem = $monthlyCosts->firstWhere('period', $period);
+            $monthlyCostAmount = $costItem ? $costItem['amount'] : 0;
+            
             $monthlyProfit[] = [
-                'period' => $cost['period'],
-                'revenue' => $monthlyRevenue,
-                'costs' => $cost['amount'],
-                'profit' => $monthlyRevenue - $cost['amount'],
+                'period' => $period,
+                'revenue' => $monthlyRevenueAmount,
+                'costs' => $monthlyCostAmount,
+                'profit' => $monthlyRevenueAmount - $monthlyCostAmount,
             ];
         }
+
+        // Chi phí theo nhóm cho Pie Chart
+        $costsByGroup = Cost::where('project_id', $project->id)
+            ->where('status', 'approved')
+            ->with('costGroup')
+            ->select('cost_group_id', DB::raw('SUM(amount) as total'))
+            ->groupBy('cost_group_id')
+            ->get()
+            ->map(function ($item) {
+                $groupName = $item->costGroup 
+                    ? $item->costGroup->name 
+                    : 'Chưa phân loại';
+                return [
+                    'id' => $item->cost_group_id,
+                    'name' => $groupName,
+                    'amount' => (float) $item->total,
+                ];
+            })
+            ->values();
 
         return response()->json([
             'success' => true,
@@ -263,8 +314,10 @@ class RevenueController extends Controller
                     'profit_margin' => (float) $profitData['profit_margin'],
                 ],
                 'charts' => [
-                    'monthly_costs' => $monthlyCosts,
+                    'monthly_costs' => $monthlyCosts->values(),
+                    'monthly_revenue' => $monthlyRevenue->values(),
                     'monthly_profit' => $monthlyProfit,
+                    'costs_by_group' => $costsByGroup,
                 ],
             ],
         ]);

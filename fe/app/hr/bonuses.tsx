@@ -286,16 +286,18 @@ export default function BonusesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Quản Lý Thưởng</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowCreateModal(true)}
-        >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-          <Text style={styles.addButtonText}>Thêm thưởng</Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Quản Lý Thưởng"
+        rightComponent={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <Ionicons name="add" size={24} color="#FFFFFF" />
+            <Text style={styles.addButtonText}>Thêm thưởng</Text>
+          </TouchableOpacity>
+        }
+      />
 
       <FlatList
         data={bonuses}

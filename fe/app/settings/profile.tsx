@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/src/reducers/index";
 import { Ionicons } from "@expo/vector-icons";
+import { ScreenHeader } from "@/components";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -19,16 +20,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Thông Tin Tài Khoản</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <ScreenHeader title="Thông Tin Tài Khoản" showBackButton />
 
       <ScrollView style={styles.content}>
         {/* User Info Card */}

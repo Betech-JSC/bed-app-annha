@@ -14,6 +14,7 @@ import { payrollApi, Payroll } from "@/api/payrollApi";
 import { Ionicons } from "@expo/vector-icons";
 import ExportButtons from "@/components/ExportButtons";
 import { formatVNDWithoutSymbol } from "@/utils/format";
+import { ScreenHeader } from "@/components";
 
 export default function PayrollScreen() {
   const router = useRouter();
@@ -208,10 +209,10 @@ export default function PayrollScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Bảng Lương</Text>
-        <ExportButtons />
-      </View>
+      <ScreenHeader
+        title="Bảng Lương"
+        rightComponent={<ExportButtons />}
+      />
 
       <FlatList
         data={payrolls}

@@ -12,6 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { personnelRoleApi } from "@/api/personnelRoleApi";
 import { Ionicons } from "@expo/vector-icons";
+import { ScreenHeader } from "@/components";
 
 interface Permission {
   id: number;
@@ -173,19 +174,10 @@ export default function RolePermissionsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Quản Lý Quyền</Text>
-          {role && <Text style={styles.headerSubtitle}>{role.name}</Text>}
-        </View>
-        <View style={styles.placeholder} />
-      </View>
+      <ScreenHeader
+        title={role ? `Quản Lý Quyền - ${role.name}` : "Quản Lý Quyền"}
+        showBackButton
+      />
 
       <ScrollView
         style={styles.content}

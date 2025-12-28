@@ -18,7 +18,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { invoiceApi, Invoice, CreateInvoiceData } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 export default function InvoicesScreen() {
     const router = useRouter();
@@ -227,19 +227,21 @@ export default function InvoicesScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <BackButton />
-                <Text style={styles.headerTitle}>Hóa Đơn</Text>
-                <TouchableOpacity
-                    style={styles.addButton}
-                    onPress={() => {
-                        resetForm();
-                        setShowCreateModal(true);
-                    }}
-                >
-                    <Ionicons name="add" size={24} color="#3B82F6" />
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader
+                title="Hóa Đơn"
+                showBackButton
+                rightComponent={
+                    <TouchableOpacity
+                        style={styles.addButton}
+                        onPress={() => {
+                            resetForm();
+                            setShowCreateModal(true);
+                        }}
+                    >
+                        <Ionicons name="add" size={24} color="#3B82F6" />
+                    </TouchableOpacity>
+                }
+            />
 
             {loading ? (
                 <View style={styles.centerContainer}>
@@ -423,20 +425,6 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: 16,
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1F2937",
     },
     addButton: {
         padding: 4,

@@ -102,11 +102,17 @@ export interface RevenueDashboard {
   };
   charts: {
     monthly_costs: Array<{ period: string; amount: number }>;
+    monthly_revenue: Array<{ period: string; amount: number }>;
     monthly_profit: Array<{
       period: string;
       revenue: number;
       costs: number;
       profit: number;
+    }>;
+    costs_by_group: Array<{
+      id: number | null;
+      name: string;
+      amount: number;
     }>;
   };
 }
