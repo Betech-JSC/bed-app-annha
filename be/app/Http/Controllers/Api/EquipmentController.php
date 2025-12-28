@@ -183,6 +183,68 @@ class EquipmentController extends Controller
         ]);
     }
 
+    /**
+     * Lấy danh sách equipment đã được phân bổ cho project
+     */
+    public function getByProject(string $projectId, Request $request)
+    {
+        $user = auth()->user();
+        
+        if (!$user->hasPermission('equipment.view') && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền xem thiết bị dự án.'
+            ], 403);
+        }
+
+        // Lấy các equipment đã có allocation trong project này
+        $query = Equipment::whereHas('allocations', function ($q) use ($projectId) {
+            $q->where('project_id', $projectId);
+        })->with(['allocations' => function ($q) use ($projectId) {
+            $q->where('project_id', $projectId)
+                ->with(['allocatedTo', 'creator'])
+                ->orderBy('start_date', 'desc');
+        }]);
+
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('code', 'like', "%{$search}%")
+                    ->orWhere('category', 'like', "%{$search}%");
+            });
+        }
+
+        if ($category = $request->query('category')) {
+            $query->where('category', $category);
+        }
+
+        if ($type = $request->query('type')) {
+            $query->where('type', $type);
+        }
+
+        if ($status = $request->query('status')) {
+            $query->where('status', $status);
+        }
+
+        $equipment = $query->paginate(20);
+
+        // Thêm thông tin allocation cho project
+        $equipment->getCollection()->transform(function ($item) use ($projectId) {
+            $projectAllocations = $item->allocations->where('project_id', $projectId);
+            $activeAllocation = $projectAllocations->where('status', 'active')->first();
+            
+            $item->project_allocation = $activeAllocation;
+            $item->project_allocations_count = $projectAllocations->count();
+            
+            return $item;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $equipment
+        ]);
+    }
+
     public function update(Request $request, string $id)
     {
         $user = auth()->user();
@@ -259,5 +321,79 @@ class EquipmentController extends Controller
             'success' => true,
             'message' => 'Đã xóa thiết bị thành công.'
         ]);
+    }
+
+    /**
+     * Tạo allocation cho equipment trong project
+     */
+    public function createAllocation(Request $request, string $projectId)
+    {
+        $user = auth()->user();
+        
+        if (!$user->hasPermission('equipment.create') && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền tạo phân bổ thiết bị.'
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'equipment_id' => 'required|exists:equipment,id',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'daily_rate' => 'nullable|numeric|min:0',
+            'allocated_to' => 'nullable|exists:users,id',
+            'notes' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dữ liệu không hợp lệ.',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Kiểm tra equipment có đang được sử dụng không
+        $equipment = Equipment::findOrFail($request->equipment_id);
+        $activeAllocation = $equipment->allocations()
+            ->where('status', 'active')
+            ->where(function ($q) use ($request) {
+                $q->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $request->start_date);
+            })
+            ->first();
+
+        if ($activeAllocation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Thiết bị đang được sử dụng trong khoảng thời gian này.'
+            ], 422);
+        }
+
+        $allocation = EquipmentAllocation::create([
+            'equipment_id' => $request->equipment_id,
+            'project_id' => $projectId,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'daily_rate' => $request->daily_rate,
+            'allocated_to' => $request->allocated_to,
+            'notes' => $request->notes,
+            'status' => 'active',
+            'created_by' => $user->id,
+        ]);
+
+        // Cập nhật status của equipment nếu cần
+        if ($equipment->status === 'available') {
+            $equipment->update(['status' => 'in_use']);
+        }
+
+        $allocation->load(['equipment', 'project', 'allocatedTo', 'creator']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã tạo phân bổ thiết bị thành công.',
+            'data' => $allocation
+        ], 201);
     }
 }

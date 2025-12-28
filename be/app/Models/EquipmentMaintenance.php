@@ -8,6 +8,8 @@ use Illuminate\Support\Str;
 
 class EquipmentMaintenance extends Model
 {
+    protected $table = 'equipment_maintenance';
+
     protected $fillable = [
         'uuid',
         'equipment_id',

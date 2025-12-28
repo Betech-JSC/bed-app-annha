@@ -4,6 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Department;
+use App\Models\Payroll;
+use App\Models\LeaveRequest;
+use App\Models\TimeTracking;
+use App\Models\Cost;
+use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -187,6 +192,84 @@ class DepartmentController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Đã xóa phòng ban thành công.'
+        ]);
+    }
+
+    /**
+     * Lấy thống kê của phòng ban
+     */
+    public function statistics(string $id)
+    {
+        $user = auth()->user();
+        
+        if (!$user->hasPermission('departments.view') && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền xem thống kê phòng ban.'
+            ], 403);
+        }
+
+        $department = Department::findOrFail($id);
+
+        // Đếm số lượng nhân viên
+        $employeeCount = $department->employees()->count();
+
+        // Thống kê Payroll
+        $payrollStats = [
+            'total' => Payroll::whereIn('user_id', $department->employees()->pluck('id'))->count(),
+            'approved' => Payroll::whereIn('user_id', $department->employees()->pluck('id'))
+                ->where('status', 'approved')->count(),
+            'total_amount' => Payroll::whereIn('user_id', $department->employees()->pluck('id'))
+                ->where('status', 'approved')->sum('net_salary'),
+        ];
+
+        // Thống kê Leave Requests
+        $leaveStats = [
+            'total' => LeaveRequest::whereIn('user_id', $department->employees()->pluck('id'))->count(),
+            'pending' => LeaveRequest::whereIn('user_id', $department->employees()->pluck('id'))
+                ->where('status', 'pending')->count(),
+            'approved' => LeaveRequest::whereIn('user_id', $department->employees()->pluck('id'))
+                ->where('status', 'approved')->count(),
+        ];
+
+        // Thống kê Time Tracking
+        $timeTrackingStats = [
+            'total' => TimeTracking::whereIn('user_id', $department->employees()->pluck('id'))->count(),
+            'total_hours' => TimeTracking::whereIn('user_id', $department->employees()->pluck('id'))
+                ->where('status', 'approved')->sum('total_hours'),
+        ];
+
+        // Thống kê Costs
+        $costStats = [
+            'total' => Cost::whereIn('created_by', $department->employees()->pluck('id'))->count(),
+            'total_amount' => Cost::whereIn('created_by', $department->employees()->pluck('id'))
+                ->where('status', 'approved')->sum('amount'),
+        ];
+
+        // Thống kê Projects
+        $projectStats = [
+            'total' => Project::whereIn('project_manager_id', $department->employees()->pluck('id'))->count(),
+            'active' => Project::whereIn('project_manager_id', $department->employees()->pluck('id'))
+                ->where('status', 'in_progress')->count(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'department' => [
+                    'id' => $department->id,
+                    'name' => $department->name,
+                    'code' => $department->code,
+                ],
+                'statistics' => [
+                    'employees' => $employeeCount,
+                    'payroll' => $payrollStats,
+                    'leave_requests' => $leaveStats,
+                    'time_tracking' => $timeTrackingStats,
+                    'costs' => $costStats,
+                    'projects' => $projectStats,
+                ],
+            ],
         ]);
     }
 }

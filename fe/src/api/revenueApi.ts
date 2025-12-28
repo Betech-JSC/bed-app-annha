@@ -12,15 +12,19 @@ export interface RevenueSummary {
     total_revenue: number;
   };
   costs: {
-    by_category: {
-      construction_materials: number;
-      concrete: number;
-      labor: number;
-      equipment: number;
-      transportation: number;
-      other: number;
+    by_group: Array<{
+      id: number | null;
+      name: string;
+      amount: number;
+    }>;
+    breakdown: {
+      additional_costs: number;
+      subcontractor_costs: number;
+      payroll_costs: number;
+      time_tracking_costs: number;
+      bonus_costs: number;
+      other_costs: number;
     };
-    additional_costs: number;
     total_costs: number;
   };
   profit: {

@@ -34,27 +34,33 @@ export const departmentApi = {
     parent_id?: number;
     page?: number;
   }) => {
-    const response = await api.get("/departments", { params });
+    const response = await api.get("/admin/departments", { params });
     return response.data;
   },
 
   getDepartment: async (id: number) => {
-    const response = await api.get(`/departments/${id}`);
+    const response = await api.get(`/admin/departments/${id}`);
     return response.data;
   },
 
   createDepartment: async (data: CreateDepartmentData) => {
-    const response = await api.post("/departments", data);
+    const response = await api.post("/admin/departments", data);
     return response.data;
   },
 
   updateDepartment: async (id: number, data: Partial<CreateDepartmentData>) => {
-    const response = await api.put(`/departments/${id}`, data);
+    const response = await api.put(`/admin/departments/${id}`, data);
     return response.data;
   },
 
   deleteDepartment: async (id: number) => {
-    const response = await api.delete(`/departments/${id}`);
+    const response = await api.delete(`/admin/departments/${id}`);
+    return response.data;
+  },
+
+  // Lấy thống kê của phòng ban
+  getStatistics: async (id: number) => {
+    const response = await api.get(`/admin/departments/${id}/statistics`);
     return response.data;
   },
 };

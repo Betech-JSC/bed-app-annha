@@ -9,11 +9,16 @@ import {
   Alert,
   Modal,
   TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { subcontractorApi, Subcontractor } from "@/api/subcontractorApi";
 import { globalSubcontractorApi, GlobalSubcontractor } from "@/api/globalSubcontractorApi";
+import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function SubcontractorsScreen() {
   const router = useRouter();
@@ -35,7 +40,15 @@ export default function SubcontractorsScreen() {
     category: "",
     total_quote: "",
     advance_payment: "",
+    cost_group_id: null as number | null,
+    cost_date: new Date(),
+    create_cost: false,
   });
+  const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
+  const [loadingCostGroups, setLoadingCostGroups] = useState(false);
+  const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
   const [paymentFormData, setPaymentFormData] = useState({
     payment_stage: "",
     amount: "",
@@ -47,7 +60,22 @@ export default function SubcontractorsScreen() {
 
   useEffect(() => {
     loadSubcontractors();
+    loadCostGroups();
   }, [id]);
+
+  const loadCostGroups = async () => {
+    try {
+      setLoadingCostGroups(true);
+      const response = await costGroupApi.getCostGroups({ active_only: true });
+      if (response.success) {
+        setCostGroups(response.data.data || response.data || []);
+      }
+    } catch (error) {
+      console.error("Error loading cost groups:", error);
+    } finally {
+      setLoadingCostGroups(false);
+    }
+  };
 
   const loadGlobalSubcontractors = async () => {
     try {
@@ -357,22 +385,27 @@ export default function SubcontractorsScreen() {
       <Modal
         visible={modalVisible}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Thêm nhà thầu phụ</Text>
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalContainer}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        >
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              onPress={() => setModalVisible(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Thêm nhà thầu phụ</Text>
+            <View style={{ width: 24 }} />
+          </View>
 
-            <View style={styles.modalBody}>
+          <ScrollView style={styles.modalBody} nestedScrollEnabled={true}>
+            <View>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Chọn nhà thầu phụ</Text>
                 <TouchableOpacity
@@ -461,6 +494,74 @@ export default function SubcontractorsScreen() {
                 />
               </View>
 
+              {/* Cost Integration Section */}
+              <View style={styles.sectionDivider} />
+              <Text style={styles.sectionTitle}>Liên kết với Chi phí Dự án</Text>
+
+              <View style={styles.inputGroup}>
+                <TouchableOpacity
+                  style={styles.checkboxContainer}
+                  onPress={() => setFormData({ ...formData, create_cost: !formData.create_cost })}
+                >
+                  <View style={[styles.checkbox, formData.create_cost && styles.checkboxChecked]}>
+                    {formData.create_cost && (
+                      <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxLabel}>
+                    Tạo chi phí dự án từ nhà thầu phụ này
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {formData.create_cost && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Nhóm chi phí</Text>
+                    <TouchableOpacity
+                      style={styles.selectButton}
+                      onPress={() => setShowCostGroupPicker(true)}
+                    >
+                      <Text style={[
+                        styles.selectButtonText,
+                        !formData.cost_group_id && styles.selectButtonTextPlaceholder
+                      ]}>
+                        {selectedCostGroup
+                          ? selectedCostGroup.name
+                          : "Chọn nhóm chi phí"}
+                      </Text>
+                      <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Ngày phát sinh chi phí</Text>
+                    <TouchableOpacity
+                      style={styles.selectButton}
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <Text style={styles.selectButtonText}>
+                        {formData.cost_date.toLocaleDateString("vi-VN")}
+                      </Text>
+                      <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                    </TouchableOpacity>
+                    {showDatePicker && (
+                      <DateTimePicker
+                        value={formData.cost_date}
+                        mode="date"
+                        display="default"
+                        onChange={(event, date) => {
+                          setShowDatePicker(false);
+                          if (date) {
+                            setFormData({ ...formData, cost_date: date });
+                          }
+                        }}
+                      />
+                    )}
+                  </View>
+                </>
+              )}
+
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
@@ -476,7 +577,7 @@ export default function SubcontractorsScreen() {
                       return;
                     }
                     try {
-                      await subcontractorApi.createSubcontractor(id!, {
+                      const response = await subcontractorApi.createSubcontractor(id!, {
                         global_subcontractor_id: formData.global_subcontractor_id || undefined,
                         name: formData.name,
                         category: formData.category || undefined,
@@ -484,6 +585,9 @@ export default function SubcontractorsScreen() {
                         advance_payment: formData.advance_payment
                           ? parseFloat(formData.advance_payment)
                           : undefined,
+                        cost_group_id: formData.create_cost ? formData.cost_group_id || undefined : undefined,
+                        cost_date: formData.create_cost ? formData.cost_date.toISOString().split("T")[0] : undefined,
+                        create_cost: formData.create_cost,
                       });
                       setModalVisible(false);
                       setFormData({
@@ -492,13 +596,18 @@ export default function SubcontractorsScreen() {
                         category: "",
                         total_quote: "",
                         advance_payment: "",
+                        cost_group_id: null,
+                        cost_date: new Date(),
+                        create_cost: false,
                       });
+                      setSelectedCostGroup(null);
                       loadSubcontractors();
+                      if (formData.create_cost) {
+                        Alert.alert("Thành công", "Đã thêm nhà thầu phụ và tạo chi phí dự án");
+                      }
                     } catch (error: any) {
-                      Alert.alert(
-                        "Lỗi",
-                        error.response?.data?.message || "Không thể thêm nhà thầu phụ"
-                      );
+                      const errorMessage = error.userMessage || error.response?.data?.message || "Không thể thêm nhà thầu phụ";
+                      Alert.alert("Lỗi", errorMessage);
                     }
                   }}
                 >
@@ -506,68 +615,131 @@ export default function SubcontractorsScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Global Subcontractors List Modal */}
       <Modal
         visible={showGlobalList}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowGlobalList(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chọn nhà thầu phụ</Text>
-              <TouchableOpacity
-                onPress={() => setShowGlobalList(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              {loadingGlobal ? (
-                <View style={styles.centerContainer}>
-                  <ActivityIndicator size="large" color="#3B82F6" />
-                </View>
-              ) : globalSubcontractors.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="business-outline" size={64} color="#D1D5DB" />
-                  <Text style={styles.emptyText}>Chưa có nhà thầu phụ</Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={globalSubcontractors}
-                  keyExtractor={(item) => item.id.toString()}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.globalSubcontractorItem}
-                      onPress={() => handleSelectGlobalSubcontractor(item)}
-                    >
-                      <View style={styles.globalSubcontractorInfo}>
-                        <Text style={styles.globalSubcontractorName}>{item.name}</Text>
-                        {item.category && (
-                          <Text style={styles.globalSubcontractorCategory}>
-                            {item.category}
-                          </Text>
-                        )}
-                        {item.phone && (
-                          <Text style={styles.globalSubcontractorDetail}>
-                            📞 {item.phone}
-                          </Text>
-                        )}
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  )}
-                />
-              )}
-            </View>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              onPress={() => setShowGlobalList(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Chọn nhà thầu phụ</Text>
+            <View style={{ width: 24 }} />
           </View>
+
+          {loadingGlobal ? (
+            <View style={[styles.modalBody, styles.centerContainer]}>
+              <ActivityIndicator size="large" color="#3B82F6" />
+            </View>
+          ) : globalSubcontractors.length === 0 ? (
+            <View style={[styles.modalBody, styles.emptyContainer]}>
+              <Ionicons name="business-outline" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyText}>Chưa có nhà thầu phụ</Text>
+            </View>
+          ) : (
+            <FlatList
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: 16 }}
+              data={globalSubcontractors}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.globalSubcontractorItem}
+                  onPress={() => {
+                    handleSelectGlobalSubcontractor(item);
+                    setShowGlobalList(false);
+                  }}
+                >
+                  <View style={styles.globalSubcontractorInfo}>
+                    <Text style={styles.globalSubcontractorName}>{item.name}</Text>
+                    {item.category && (
+                      <Text style={styles.globalSubcontractorCategory}>
+                        {item.category}
+                      </Text>
+                    )}
+                    {item.phone && (
+                      <Text style={styles.globalSubcontractorDetail}>
+                        📞 {item.phone}
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* Cost Group Picker Modal */}
+      <Modal
+        visible={showCostGroupPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCostGroupPicker(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              onPress={() => setShowCostGroupPicker(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Chọn nhóm chi phí</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {loadingCostGroups ? (
+            <View style={[styles.modalBody, styles.centerContainer]}>
+              <ActivityIndicator size="large" color="#3B82F6" />
+            </View>
+          ) : costGroups.length === 0 ? (
+            <View style={[styles.modalBody, styles.emptyContainer]}>
+              <Ionicons name="folder-outline" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyText}>Chưa có nhóm chi phí</Text>
+            </View>
+          ) : (
+            <FlatList
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: 16 }}
+              data={costGroups}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.globalSubcontractorItem}
+                  onPress={() => {
+                    setSelectedCostGroup(item);
+                    setFormData({ ...formData, cost_group_id: item.id });
+                    setShowCostGroupPicker(false);
+                  }}
+                >
+                  <View style={styles.globalSubcontractorInfo}>
+                    <Text style={styles.globalSubcontractorName}>{item.name}</Text>
+                    {item.description && (
+                      <Text style={styles.globalSubcontractorCategory}>
+                        {item.description}
+                      </Text>
+                    )}
+                  </View>
+                  {formData.cost_group_id === item.id && (
+                    <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          )}
         </View>
       </Modal>
 
@@ -667,7 +839,7 @@ export default function SubcontractorsScreen() {
                           style={[
                             styles.paymentMethodButton,
                             paymentFormData.payment_method === method.value &&
-                              styles.paymentMethodButtonActive,
+                            styles.paymentMethodButtonActive,
                           ]}
                           onPress={() =>
                             setPaymentFormData({
@@ -680,7 +852,7 @@ export default function SubcontractorsScreen() {
                             style={[
                               styles.paymentMethodText,
                               paymentFormData.payment_method === method.value &&
-                                styles.paymentMethodTextActive,
+                              styles.paymentMethodTextActive,
                             ]}
                           >
                             {method.label}
@@ -932,7 +1104,7 @@ export default function SubcontractorsScreen() {
                                           Alert.alert(
                                             "Lỗi",
                                             error.response?.data?.message ||
-                                              "Không thể từ chối phiếu chi"
+                                            "Không thể từ chối phiếu chi"
                                           );
                                         }
                                       }
@@ -958,7 +1130,7 @@ export default function SubcontractorsScreen() {
                                     Alert.alert(
                                       "Lỗi",
                                       error.response?.data?.message ||
-                                        "Không thể xác nhận thanh toán"
+                                      "Không thể xác nhận thanh toán"
                                     );
                                   }
                                 }}
@@ -1148,6 +1320,10 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 16,
   },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -1161,9 +1337,10 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
@@ -1171,12 +1348,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     color: "#1F2937",
+    flex: 1,
+    textAlign: "center",
+    marginLeft: -24,
   },
   closeButton: {
     padding: 4,
   },
   modalBody: {
+    flex: 1,
     padding: 16,
+    paddingBottom: Platform.OS === "ios" ? 100 : 80,
   },
   inputGroup: {
     marginBottom: 16,
@@ -1275,5 +1457,171 @@ const styles = StyleSheet.create({
   globalSubcontractorDetail: {
     fontSize: 12,
     color: "#9CA3AF",
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 24,
+  },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: "#1F2937",
+    flex: 1,
+  },
+  modalHeaderLeft: {
+    flex: 1,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 4,
+  },
+  required: {
+    color: "#EF4444",
+  },
+  paymentMethodRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  paymentMethodButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#FFFFFF",
+  },
+  paymentMethodButtonActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  paymentMethodText: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  paymentMethodTextActive: {
+    color: "#FFFFFF",
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: "top",
+  },
+  paymentsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  paymentsTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  addPaymentButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 8,
+  },
+  addPaymentButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
+  paymentItem: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+  },
+  paymentItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  paymentItemLeft: {
+    flex: 1,
+  },
+  paymentNumber: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  paymentStage: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  paymentItemBody: {
+    marginBottom: 12,
+  },
+  paymentAmount: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  paymentDescription: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 8,
+  },
+  paymentInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  paymentInfo: {
+    fontSize: 12,
+    color: "#9CA3AF",
+  },
+  paymentActions: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#3B82F6",
+  },
+  approveButton: {
+    backgroundColor: "#10B981",
+  },
+  rejectButton: {
+    backgroundColor: "#EF4444",
+  },
+  paidButton: {
+    backgroundColor: "#10B981",
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });

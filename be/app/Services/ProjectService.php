@@ -6,9 +6,16 @@ use App\Models\Project;
 use App\Models\ProjectPayment;
 use App\Models\Contract;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ProjectService
 {
+    protected $financialCalculationService;
+
+    public function __construct(FinancialCalculationService $financialCalculationService)
+    {
+        $this->financialCalculationService = $financialCalculationService;
+    }
     /**
      * Tạo payment schedule tự động từ hợp đồng
      */
@@ -60,109 +67,48 @@ class ProjectService
 
     /**
      * Tính tổng chi phí dự án
+     * Sử dụng FinancialCalculationService để đảm bảo tính nhất quán
      */
     public function calculateTotalCosts(Project $project): array
     {
-        $contractValue = $project->contract?->contract_value ?? 0;
-        $additionalCosts = $project->additionalCosts()
-            ->where('status', 'approved')
-            ->sum('amount');
-        $subcontractorCosts = $project->subcontractors()->sum('total_quote');
+        return $this->financialCalculationService->calculateTotalCosts($project);
+    }
 
-        // Chi phí nhân công từ Payroll (đã approved)
-        $payrollCosts = $project->payrolls()
-            ->where('status', 'approved')
-            ->sum('net_salary');
-
-        // Chi phí nhân công từ TimeTracking (đã tạo Cost record)
-        // Lưu ý: Cost từ TimeTracking đã được tạo tự động khi TimeTracking được approve
-        $timeTrackingCosts = $project->costs()
-            ->whereNotNull('time_tracking_id')
-            ->where('status', 'approved')
-            ->sum('amount');
-
-        // Chi phí từ Payroll đã tạo Cost record (tránh double counting)
-        // Nếu Payroll đã tạo Cost, thì chỉ tính Cost, không tính Payroll nữa
-        $payrollCostsFromCosts = $project->costs()
-            ->whereNotNull('payroll_id')
-            ->where('status', 'approved')
-            ->sum('amount');
-
-        // Nếu Payroll đã tạo Cost record, thì chỉ tính Cost
-        // Nếu chưa, thì tính Payroll trực tiếp
-        $actualPayrollCosts = $payrollCostsFromCosts > 0 
-            ? $payrollCostsFromCosts 
-            : $payrollCosts;
-
-        // Thưởng từ Bonus (đã approved)
-        $bonusCosts = $project->bonuses()
-            ->where('status', 'approved')
-            ->sum('amount');
-
-        // Chi phí khác từ Cost (không phải từ Payroll hoặc TimeTracking)
-        $otherCosts = $project->costs()
-            ->whereNull('time_tracking_id')
-            ->whereNull('payroll_id')
-            ->where('status', 'approved')
-            ->sum('amount');
-
-        return [
-            'contract_value' => $contractValue,
-            'additional_costs' => $additionalCosts,
-            'subcontractor_costs' => $subcontractorCosts,
-            'payroll_costs' => $actualPayrollCosts,
-            'time_tracking_costs' => $timeTrackingCosts,
-            'bonus_costs' => $bonusCosts,
-            'other_costs' => $otherCosts,
-            'total' => $contractValue 
-                + $additionalCosts 
-                + $subcontractorCosts 
-                + $actualPayrollCosts 
-                + $timeTrackingCosts 
-                + $bonusCosts
-                + $otherCosts,
-        ];
+    /**
+     * Kiểm tra tính nhất quán của tính toán chi phí
+     * 
+     * @param Project $project
+     * @return array
+     */
+    public function validateCostCalculation(Project $project): array
+    {
+        return $this->financialCalculationService->validateCalculation($project);
     }
 
     /**
      * Tính lợi nhuận dự án
+     * Sử dụng FinancialCalculationService để đảm bảo tính nhất quán
      */
     public function calculateProfit(Project $project): array
     {
-        $costs = $this->calculateTotalCosts($project);
-        $totalPaid = $project->payments()
-            ->where('status', 'paid')
-            ->sum('amount');
+        $result = $this->financialCalculationService->calculateProfit($project);
+        
+        // Validate calculation và log warnings
+        $validation = $this->validateCostCalculation($project);
+        if (!empty($validation['warnings'])) {
+            Log::warning("Cost calculation warnings for project {$project->id}", [
+                'project_id' => $project->id,
+                'warnings' => $validation['warnings'],
+            ]);
+        }
+        
+        if (!empty($validation['errors'])) {
+            Log::error("Cost calculation errors for project {$project->id}", [
+                'project_id' => $project->id,
+                'errors' => $validation['errors'],
+            ]);
+        }
 
-        // Tính tổng chi phí (không bao gồm contract_value vì đó là doanh thu)
-        $totalCosts = $costs['additional_costs'] 
-            + $costs['subcontractor_costs']
-            + $costs['payroll_costs']
-            + $costs['time_tracking_costs']
-            + $costs['bonus_costs']
-            + $costs['other_costs'];
-
-        // Lợi nhuận = Doanh thu - Tổng chi phí
-        $profit = $costs['contract_value'] - $totalCosts;
-        $profitMargin = $costs['contract_value'] > 0
-            ? ($profit / $costs['contract_value']) * 100
-            : 0;
-
-        return [
-            'revenue' => $costs['contract_value'],
-            'total_costs' => $totalCosts,
-            'cost_breakdown' => [
-                'additional_costs' => $costs['additional_costs'],
-                'subcontractor_costs' => $costs['subcontractor_costs'],
-                'payroll_costs' => $costs['payroll_costs'],
-                'time_tracking_costs' => $costs['time_tracking_costs'],
-                'bonus_costs' => $costs['bonus_costs'],
-                'other_costs' => $costs['other_costs'],
-            ],
-            'profit' => $profit,
-            'profit_margin' => round($profitMargin, 2),
-            'total_paid' => $totalPaid,
-            'remaining' => $costs['contract_value'] - $totalPaid,
-        ];
+        return $result;
     }
 }

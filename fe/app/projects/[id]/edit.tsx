@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { projectApi, CreateProjectData, Project } from "@/api/projectApi";
+import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -38,6 +39,8 @@ export default function EditProjectScreen() {
   const [loadingManagers, setLoadingManagers] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [managerSearch, setManagerSearch] = useState("");
+  const [projectStatuses, setProjectStatuses] = useState<Option[]>([]);
+  const [loadingStatuses, setLoadingStatuses] = useState(false);
 
   const [formData, setFormData] = useState<CreateProjectData>({
     name: "",
@@ -59,7 +62,20 @@ export default function EditProjectScreen() {
     loadProject();
     loadCustomers();
     loadProjectManagers();
+    loadProjectStatuses();
   }, [id]);
+
+  const loadProjectStatuses = async () => {
+    try {
+      setLoadingStatuses(true);
+      const statuses = await optionsApi.getProjectStatuses();
+      setProjectStatuses(statuses);
+    } catch (error) {
+      console.error("Error loading project statuses:", error);
+    } finally {
+      setLoadingStatuses(false);
+    }
+  };
 
   const loadProject = async () => {
     try {

@@ -97,6 +97,13 @@ export default function SettingsScreen() {
       description: "Quản lý các nhóm chi phí áp dụng cho toàn bộ dự án",
     },
     {
+      title: "Nhà Cung Cấp (NCC)",
+      icon: "storefront-outline",
+      route: "/settings/suppliers",
+      permission: "suppliers.view",
+      description: "Quản lý danh sách nhà cung cấp, hợp đồng và công nợ",
+    },
+    {
       title: "Nhà Thầu Phụ",
       icon: "business-outline",
       route: "/settings/subcontractors",
@@ -127,7 +134,7 @@ export default function SettingsScreen() {
     {
       title: "Cấu Hình Vai Trò",
       icon: "people-circle-outline",
-      route: "/hr/personnel-roles",
+      route: "/settings/roles",
       permission: "hr.roles.view",
       description: "Quản lý các vai trò và phân quyền trong hệ thống",
     },

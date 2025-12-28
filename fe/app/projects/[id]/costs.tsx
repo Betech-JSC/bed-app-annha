@@ -11,6 +11,7 @@ import {
   Modal,
   TextInput,
   RefreshControl,
+  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { costApi, Cost, revenueApi } from "@/api/revenueApi";
@@ -449,7 +450,13 @@ export default function CostsScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            contentContainerStyle={styles.modalBodyContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+          >
             <View style={styles.formGroup}>
               <Text style={styles.label}>Nhóm chi phí *</Text>
               {costGroups.length > 0 ? (
@@ -906,7 +913,11 @@ const styles = StyleSheet.create({
     color: "#1F2937",
   },
   modalContent: {
-    padding: 16,
+    flex: 1,
+  },
+  modalBodyContent: {
+    paddingBottom: Platform.OS === "ios" ? 100 : 80,
+    paddingHorizontal: 16,
   },
   formGroup: {
     marginBottom: 20,

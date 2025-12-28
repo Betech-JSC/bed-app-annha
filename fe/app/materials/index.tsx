@@ -11,6 +11,8 @@ import {
     Modal,
     TextInput,
     ScrollView,
+    KeyboardAvoidingView,
+    Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -36,6 +38,8 @@ export default function MaterialsScreen() {
     });
     const [submitting, setSubmitting] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [focusedField, setFocusedField] = useState<string | null>(null);
 
     useEffect(() => {
         loadMaterials();
@@ -62,7 +66,7 @@ export default function MaterialsScreen() {
 
     const loadProjects = async () => {
         try {
-            const response = await projectApi.getProjects({ page: 1, per_page: 100 });
+            const response = await projectApi.getProjects({ page: 1 });
             if (response.success) {
                 setProjects(response.data.data || []);
             }
@@ -76,9 +80,27 @@ export default function MaterialsScreen() {
         loadMaterials();
     };
 
+    const validateForm = () => {
+        const newErrors: Record<string, string> = {};
+
+        if (!formData.name || formData.name.trim() === "") {
+            newErrors.name = "Tên vật liệu là bắt buộc";
+        }
+
+        if (!formData.unit || formData.unit.trim() === "") {
+            newErrors.unit = "Đơn vị là bắt buộc";
+        }
+
+        if (formData.min_stock_level !== undefined && formData.min_stock_level < 0) {
+            newErrors.min_stock_level = "Mức tồn kho tối thiểu không được âm";
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     const handleCreate = async () => {
-        if (!formData.name || !formData.unit) {
-            Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin");
+        if (!validateForm()) {
             return;
         }
 
@@ -92,10 +114,12 @@ export default function MaterialsScreen() {
                 Alert.alert("Thành công", editingMaterial ? "Đã cập nhật vật liệu" : "Đã tạo vật liệu thành công");
                 setShowCreateModal(false);
                 resetForm();
+                setErrors({});
                 loadMaterials();
             }
         } catch (error: any) {
-            Alert.alert("Lỗi", error.response?.data?.message || "Không thể thực hiện thao tác");
+            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể thực hiện thao tác";
+            Alert.alert("Lỗi", errorMessage);
         } finally {
             setSubmitting(false);
         }
@@ -131,7 +155,8 @@ export default function MaterialsScreen() {
                                 loadMaterials();
                             }
                         } catch (error: any) {
-                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa vật liệu");
+                            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể xóa vật liệu";
+                            Alert.alert("Lỗi", errorMessage);
                         }
                     },
                 },
@@ -149,6 +174,8 @@ export default function MaterialsScreen() {
             min_stock_level: 0,
             project_id: undefined,
         });
+        setErrors({});
+        setFocusedField(null);
     };
 
     const getStockStatus = (material: Material) => {
@@ -275,11 +302,11 @@ export default function MaterialsScreen() {
             <Modal
                 visible={showCreateModal}
                 animationType="slide"
-                transparent={true}
+                presentationStyle="pageSheet"
                 onRequestClose={() => setShowCreateModal(false)}
             >
                 <KeyboardAvoidingView
-                    style={styles.modalOverlay}
+                    style={styles.modalContainer}
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
                     keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
                 >
@@ -298,75 +325,203 @@ export default function MaterialsScreen() {
                             contentContainerStyle={styles.modalBodyContent}
                             keyboardShouldPersistTaps="handled"
                             showsVerticalScrollIndicator={true}
+                            nestedScrollEnabled={true}
                         >
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Tên vật liệu *</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập tên vật liệu"
-                                    value={formData.name}
-                                    onChangeText={(text) => setFormData({ ...formData, name: text })}
-                                />
+                            {/* Thông tin cơ bản */}
+                            <View style={styles.formSection}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.label}>Tên vật liệu</Text>
+                                        <Text style={styles.required}>*</Text>
+                                    </View>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "name" && styles.inputFocused,
+                                            errors.name && styles.inputError,
+                                        ]}
+                                        placeholder="Nhập tên vật liệu"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.name}
+                                        onChangeText={(text) => {
+                                            setFormData({ ...formData, name: text });
+                                            if (errors.name) setErrors({ ...errors, name: "" });
+                                        }}
+                                        onFocus={() => setFocusedField("name")}
+                                        onBlur={() => {
+                                            setFocusedField(null);
+                                            if (!formData.name || formData.name.trim() === "") {
+                                                setErrors({ ...errors, name: "Tên vật liệu là bắt buộc" });
+                                            }
+                                        }}
+                                    />
+                                    {errors.name && (
+                                        <View style={styles.errorContainer}>
+                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                                            <Text style={styles.errorText}>{errors.name}</Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.label}>Mã vật liệu</Text>
+                                        <Text style={styles.optional}>(Tùy chọn)</Text>
+                                    </View>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "code" && styles.inputFocused,
+                                        ]}
+                                        placeholder="Nhập mã vật liệu"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.code}
+                                        onChangeText={(text) => setFormData({ ...formData, code: text })}
+                                        onFocus={() => setFocusedField("code")}
+                                        onBlur={() => setFocusedField(null)}
+                                    />
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.label}>Đơn vị</Text>
+                                        <Text style={styles.required}>*</Text>
+                                    </View>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "unit" && styles.inputFocused,
+                                            errors.unit && styles.inputError,
+                                        ]}
+                                        placeholder="kg, m, m², m³..."
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.unit}
+                                        onChangeText={(text) => {
+                                            setFormData({ ...formData, unit: text });
+                                            if (errors.unit) setErrors({ ...errors, unit: "" });
+                                        }}
+                                        onFocus={() => setFocusedField("unit")}
+                                        onBlur={() => {
+                                            setFocusedField(null);
+                                            if (!formData.unit || formData.unit.trim() === "") {
+                                                setErrors({ ...errors, unit: "Đơn vị là bắt buộc" });
+                                            }
+                                        }}
+                                    />
+                                    {errors.unit && (
+                                        <View style={styles.errorContainer}>
+                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                                            <Text style={styles.errorText}>{errors.unit}</Text>
+                                        </View>
+                                    )}
+                                </View>
                             </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Mã vật liệu</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập mã vật liệu (tùy chọn)"
-                                    value={formData.code}
-                                    onChangeText={(text) => setFormData({ ...formData, code: text })}
-                                />
+                            {/* Cài đặt tồn kho */}
+                            <View style={styles.formSection}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="cube-outline" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Cài đặt tồn kho</Text>
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.label}>Mức tồn kho tối thiểu</Text>
+                                        <Text style={styles.optional}>(Tùy chọn)</Text>
+                                    </View>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "min_stock_level" && styles.inputFocused,
+                                            errors.min_stock_level && styles.inputError,
+                                        ]}
+                                        placeholder="0"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.min_stock_level?.toString()}
+                                        onChangeText={(text) => {
+                                            const value = parseFloat(text) || 0;
+                                            setFormData({ ...formData, min_stock_level: value });
+                                            if (errors.min_stock_level) setErrors({ ...errors, min_stock_level: "" });
+                                        }}
+                                        keyboardType="numeric"
+                                        onFocus={() => setFocusedField("min_stock_level")}
+                                        onBlur={() => {
+                                            setFocusedField(null);
+                                            if (formData.min_stock_level !== undefined && formData.min_stock_level < 0) {
+                                                setErrors({ ...errors, min_stock_level: "Mức tồn kho không được âm" });
+                                            }
+                                        }}
+                                    />
+                                    {errors.min_stock_level && (
+                                        <View style={styles.errorContainer}>
+                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                                            <Text style={styles.errorText}>{errors.min_stock_level}</Text>
+                                        </View>
+                                    )}
+                                    <Text style={styles.helperText}>Cảnh báo khi tồn kho dưới mức này</Text>
+                                </View>
                             </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Đơn vị *</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="kg, m, m2, m3..."
-                                    value={formData.unit}
-                                    onChangeText={(text) => setFormData({ ...formData, unit: text })}
-                                />
+                            {/* Mô tả */}
+                            <View style={styles.formSection}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="document-text-outline" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Mô tả</Text>
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Mô tả chi tiết</Text>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            styles.textArea,
+                                            focusedField === "description" && styles.inputFocused,
+                                        ]}
+                                        placeholder="Nhập mô tả về vật liệu..."
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.description}
+                                        onChangeText={(text) => setFormData({ ...formData, description: text })}
+                                        multiline
+                                        numberOfLines={4}
+                                        textAlignVertical="top"
+                                        onFocus={() => setFocusedField("description")}
+                                        onBlur={() => setFocusedField(null)}
+                                    />
+                                </View>
                             </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Mức tồn kho tối thiểu</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    value={formData.min_stock_level?.toString()}
-                                    onChangeText={(text) =>
-                                        setFormData({ ...formData, min_stock_level: parseFloat(text) || 0 })
-                                    }
-                                    keyboardType="numeric"
-                                />
+                            {/* Submit Button */}
+                            <View style={styles.buttonContainer}>
+                                <TouchableOpacity
+                                    style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+                                    onPress={handleCreate}
+                                    disabled={submitting}
+                                    activeOpacity={0.8}
+                                >
+                                    {submitting ? (
+                                        <View style={styles.buttonContent}>
+                                            <ActivityIndicator color="#FFFFFF" size="small" />
+                                            <Text style={styles.submitButtonText}>Đang xử lý...</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={styles.buttonContent}>
+                                            <Ionicons
+                                                name={editingMaterial ? "checkmark-circle" : "add-circle"}
+                                                size={20}
+                                                color="#FFFFFF"
+                                            />
+                                            <Text style={styles.submitButtonText}>
+                                                {editingMaterial ? "Cập Nhật" : "Tạo Mới"}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
                             </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Mô tả</Text>
-                                <TextInput
-                                    style={[styles.input, styles.textArea]}
-                                    placeholder="Nhập mô tả"
-                                    value={formData.description}
-                                    onChangeText={(text) => setFormData({ ...formData, description: text })}
-                                    multiline
-                                    numberOfLines={3}
-                                />
-                            </View>
-
-                            <TouchableOpacity
-                                style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-                                onPress={handleCreate}
-                                disabled={submitting}
-                            >
-                                {submitting ? (
-                                    <ActivityIndicator color="#FFFFFF" />
-                                ) : (
-                                    <Text style={styles.submitButtonText}>
-                                        {editingMaterial ? "Cập Nhật" : "Tạo Mới"}
-                                    </Text>
-                                )}
-                            </TouchableOpacity>
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
@@ -516,23 +671,22 @@ const styles = StyleSheet.create({
         color: "#6B7280",
         marginTop: 16,
     },
-    modalOverlay: {
+    modalContainer: {
         flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "flex-end",
+        backgroundColor: "#F9FAFB",
     },
     modalContent: {
+        flex: 1,
         backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: "90%",
-        padding: 16,
     },
     modalHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 16,
+        padding: 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E5E7EB",
     },
     modalTitle: {
         fontSize: 20,
@@ -543,43 +697,124 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     modalBodyContent: {
-        paddingBottom: 20,
+        paddingBottom: Platform.OS === "ios" ? 100 : 80,
+        paddingHorizontal: 16,
+    },
+    formSection: {
+        marginBottom: 24,
+        backgroundColor: "#F9FAFB",
+        borderRadius: 12,
+        padding: 16,
+    },
+    sectionHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 16,
+        gap: 8,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#1F2937",
     },
     formGroup: {
         marginBottom: 16,
+    },
+    labelContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 8,
+        gap: 4,
     },
     label: {
         fontSize: 14,
         fontWeight: "600",
         color: "#1F2937",
-        marginBottom: 8,
+    },
+    required: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#EF4444",
+    },
+    optional: {
+        fontSize: 12,
+        color: "#9CA3AF",
+        fontStyle: "italic",
     },
     input: {
-        borderWidth: 1,
-        borderColor: "#D1D5DB",
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 14,
+        borderWidth: 1.5,
+        borderColor: "#E5E7EB",
+        borderRadius: 10,
+        padding: 14,
+        fontSize: 15,
         backgroundColor: "#FFFFFF",
+        color: "#1F2937",
+        minHeight: 48,
+    },
+    inputFocused: {
+        borderColor: "#3B82F6",
+        backgroundColor: "#F0F9FF",
+        shadowColor: "#3B82F6",
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    inputError: {
+        borderColor: "#EF4444",
+        backgroundColor: "#FEF2F2",
     },
     textArea: {
-        height: 80,
+        minHeight: 100,
         textAlignVertical: "top",
+        paddingTop: 14,
+    },
+    errorContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginTop: 6,
+        gap: 6,
+    },
+    errorText: {
+        fontSize: 12,
+        color: "#EF4444",
+        flex: 1,
+    },
+    helperText: {
+        fontSize: 12,
+        color: "#6B7280",
+        marginTop: 6,
+        fontStyle: "italic",
+    },
+    buttonContainer: {
+        marginTop: 8,
+        marginBottom: 8,
     },
     submitButton: {
         backgroundColor: "#3B82F6",
-        borderRadius: 8,
+        borderRadius: 12,
         padding: 16,
         alignItems: "center",
-        marginTop: 8,
+        justifyContent: "center",
+        shadowColor: "#3B82F6",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
     submitButtonDisabled: {
-        opacity: 0.5,
+        opacity: 0.6,
+        shadowOpacity: 0.1,
+    },
+    buttonContent: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
     },
     submitButtonText: {
         color: "#FFFFFF",
         fontSize: 16,
-        fontWeight: "600",
+        fontWeight: "700",
     },
 });
 

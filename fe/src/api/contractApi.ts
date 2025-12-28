@@ -43,4 +43,12 @@ export const contractApi = {
     const response = await api.post(`/projects/${projectId}/contract/approve`);
     return response.data;
   },
+
+  // Attach files to contract
+  attachFiles: async (projectId: string | number, attachmentIds: number[]) => {
+    const response = await api.post(`/projects/${projectId}/contract/attach-files`, {
+      attachment_ids: attachmentIds,
+    });
+    return response.data;
+  },
 };

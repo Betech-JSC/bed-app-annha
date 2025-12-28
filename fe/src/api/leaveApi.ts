@@ -51,22 +51,22 @@ export const leaveApi = {
     leave_type?: string;
     page?: number;
   }) => {
-    const response = await api.get("/leave/requests", { params });
+    const response = await api.get("/admin/leave/requests", { params });
     return response.data;
   },
 
   createRequest: async (data: CreateLeaveRequestData) => {
-    const response = await api.post("/leave/requests", data);
+    const response = await api.post("/admin/leave/requests", data);
     return response.data;
   },
 
   approveRequest: async (id: number) => {
-    const response = await api.post(`/leave/requests/${id}/approve`);
+    const response = await api.post(`/admin/leave/requests/${id}/approve`);
     return response.data;
   },
 
   rejectRequest: async (id: number, rejectionReason: string) => {
-    const response = await api.post(`/leave/requests/${id}/reject`, {
+    const response = await api.post(`/admin/leave/requests/${id}/reject`, {
       rejection_reason: rejectionReason,
     });
     return response.data;
@@ -76,7 +76,7 @@ export const leaveApi = {
     user_id?: number;
     year?: number;
   }) => {
-    const response = await api.get("/leave/balance", { params });
+    const response = await api.get("/admin/leave/balance", { params });
     return response.data;
   },
 };

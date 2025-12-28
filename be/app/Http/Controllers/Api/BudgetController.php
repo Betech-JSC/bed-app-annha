@@ -7,6 +7,8 @@ use App\Models\Project;
 use App\Models\ProjectBudget;
 use App\Models\BudgetItem;
 use App\Services\ProjectService;
+use App\Services\FinancialCalculationService;
+use App\Services\BudgetComparisonService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
@@ -14,10 +16,17 @@ use Illuminate\Support\Facades\DB;
 class BudgetController extends Controller
 {
     protected $projectService;
+    protected $financialCalculationService;
+    protected $budgetComparisonService;
 
-    public function __construct(ProjectService $projectService)
-    {
+    public function __construct(
+        ProjectService $projectService,
+        FinancialCalculationService $financialCalculationService,
+        BudgetComparisonService $budgetComparisonService
+    ) {
         $this->projectService = $projectService;
+        $this->financialCalculationService = $financialCalculationService;
+        $this->budgetComparisonService = $budgetComparisonService;
     }
 
     public function index(string $projectId)
@@ -164,50 +173,17 @@ class BudgetController extends Controller
             ->with(['items.costGroup', 'project'])
             ->findOrFail($id);
 
-        $budget->load('project');
-        $project = $budget->project;
-        $costs = $this->projectService->calculateTotalCosts($project);
-
-        // Tính actual cost cho từng budget item
-        $items = $budget->items->map(function ($item) use ($project) {
-            // Logic tính actual cost dựa trên cost_group_id
-            $actualAmount = 0;
-            if ($item->cost_group_id) {
-                // Lấy costs từ cùng cost_group
-                $actualAmount = $project->costs()
-                    ->where('cost_group_id', $item->cost_group_id)
-                    ->where('status', 'approved')
-                    ->sum('amount');
-            }
-
-            $item->actual_amount = $actualAmount;
-            $item->remaining_amount = $item->estimated_amount - $actualAmount;
-            $item->variance = $actualAmount - $item->estimated_amount;
-            $item->variance_percentage = $item->estimated_amount > 0 
-                ? (($item->variance / $item->estimated_amount) * 100) 
-                : 0;
-
-            return $item;
-        });
-
-        $totalActual = $items->sum('actual_amount');
-        $totalVariance = $totalActual - $budget->total_budget;
-        $variancePercentage = $budget->total_budget > 0 
-            ? (($totalVariance / $budget->total_budget) * 100) 
-            : 0;
+        // Sử dụng BudgetComparisonService để so sánh
+        $comparison = $this->budgetComparisonService->compareBudget($budget);
+        $categoryComparison = $this->budgetComparisonService->compareByCategory($budget);
 
         return response()->json([
             'success' => true,
             'data' => [
                 'budget' => $budget,
-                'items' => $items,
-                'summary' => [
-                    'total_budget' => $budget->total_budget,
-                    'total_actual' => $totalActual,
-                    'total_variance' => $totalVariance,
-                    'variance_percentage' => round($variancePercentage, 2),
-                    'is_over_budget' => $totalActual > $budget->total_budget,
-                ]
+                'items' => $comparison['items'],
+                'summary' => $comparison['summary'],
+                'category_comparison' => $categoryComparison,
             ]
         ]);
     }

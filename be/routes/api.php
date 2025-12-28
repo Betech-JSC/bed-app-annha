@@ -68,6 +68,8 @@ use App\Http\Controllers\Api\EmploymentContractController;
 use App\Http\Controllers\Api\InsuranceController;
 use App\Http\Controllers\Api\PerformanceController;
 use App\Http\Controllers\Api\ReminderController;
+use App\Http\Controllers\Api\OptionsController;
+use App\Http\Controllers\Api\ReportController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -103,6 +105,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Public user profile (lấy thông tin user khác)
     Route::get('users/{id}', [UserController::class, 'showById']);
 
+    // Options for dropdowns (project statuses, equipment statuses, roles, etc.)
+    Route::get('options', [OptionsController::class, 'index']);
+
     // KYC Verification
     Route::post('kyc/submit', [\App\Http\Controllers\Api\KycController::class, 'submit']);
     Route::get('kyc/status', [\App\Http\Controllers\Api\KycController::class, 'status']);
@@ -128,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/contract', [ContractController::class, 'store']);
         Route::put('/{projectId}/contract', [ContractController::class, 'update']);
         Route::post('/{projectId}/contract/approve', [ContractController::class, 'approve']);
+        Route::post('/{projectId}/contract/attach-files', [ContractController::class, 'attachFiles']);
 
         // Payments
         Route::get('/{projectId}/payments', [ProjectPaymentController::class, 'index']);
@@ -194,6 +200,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/budgets/{id}/compare', [BudgetController::class, 'compareWithActual']);
         Route::put('/{projectId}/budgets/{id}', [BudgetController::class, 'update']);
         Route::delete('/{projectId}/budgets/{id}', [BudgetController::class, 'destroy']);
+
+        // Materials
+        Route::get('/{projectId}/materials', [MaterialController::class, 'getByProject']);
+        Route::post('/{projectId}/materials/transactions', [MaterialController::class, 'createTransaction']);
+
+        // Equipment
+        Route::get('/{projectId}/equipment', [EquipmentController::class, 'getByProject']);
+        Route::post('/{projectId}/equipment/allocations', [EquipmentController::class, 'createAllocation']);
 
         // Invoices
         Route::get('/{projectId}/invoices', [InvoiceController::class, 'index']);
@@ -446,6 +460,68 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/subcontractors/{id}', [GlobalSubcontractorController::class, 'show']);
         Route::put('/subcontractors/{id}', [GlobalSubcontractorController::class, 'update']);
         Route::delete('/subcontractors/{id}', [GlobalSubcontractorController::class, 'destroy']);
+
+        // Suppliers (Nhà cung cấp - NCC)
+        Route::prefix('suppliers')->group(function () {
+            Route::get('/', [SupplierController::class, 'index']);
+            Route::post('/', [SupplierController::class, 'store']);
+            Route::get('/{id}', [SupplierController::class, 'show']);
+            Route::get('/{id}/debt-statistics', [SupplierController::class, 'debtStatistics']);
+            Route::put('/{id}', [SupplierController::class, 'update']);
+            Route::delete('/{id}', [SupplierController::class, 'destroy']);
+        });
+
+        // Subcontractor Contracts (Hợp đồng thầu phụ)
+        Route::prefix('subcontractor-contracts')->group(function () {
+            Route::get('/', [SubcontractorContractController::class, 'index']);
+            Route::post('/', [SubcontractorContractController::class, 'store']);
+            Route::get('/{id}', [SubcontractorContractController::class, 'show']);
+            Route::put('/{id}', [SubcontractorContractController::class, 'update']);
+            Route::delete('/{id}', [SubcontractorContractController::class, 'destroy']);
+            Route::post('/{id}/sign', [SubcontractorContractController::class, 'sign']);
+        });
+
+        // Supplier Contracts (Hợp đồng NCC)
+        Route::prefix('supplier-contracts')->group(function () {
+            Route::get('/', [SupplierContractController::class, 'index']);
+            Route::post('/', [SupplierContractController::class, 'store']);
+            Route::get('/{id}', [SupplierContractController::class, 'show']);
+            Route::put('/{id}', [SupplierContractController::class, 'update']);
+            Route::delete('/{id}', [SupplierContractController::class, 'destroy']);
+            Route::post('/{id}/sign', [SupplierContractController::class, 'sign']);
+        });
+
+        // Subcontractor Acceptances (Nghiệm thu thầu phụ)
+        Route::prefix('subcontractor-acceptances')->group(function () {
+            Route::get('/', [SubcontractorAcceptanceController::class, 'index']);
+            Route::post('/', [SubcontractorAcceptanceController::class, 'store']);
+            Route::get('/{id}', [SubcontractorAcceptanceController::class, 'show']);
+            Route::put('/{id}', [SubcontractorAcceptanceController::class, 'update']);
+            Route::delete('/{id}', [SubcontractorAcceptanceController::class, 'destroy']);
+            Route::post('/{id}/approve', [SubcontractorAcceptanceController::class, 'approve']);
+            Route::post('/{id}/reject', [SubcontractorAcceptanceController::class, 'reject']);
+        });
+
+        // Supplier Acceptances (Nghiệm thu NCC)
+        Route::prefix('supplier-acceptances')->group(function () {
+            Route::get('/', [SupplierAcceptanceController::class, 'index']);
+            Route::post('/', [SupplierAcceptanceController::class, 'store']);
+            Route::get('/{id}', [SupplierAcceptanceController::class, 'show']);
+            Route::put('/{id}', [SupplierAcceptanceController::class, 'update']);
+            Route::delete('/{id}', [SupplierAcceptanceController::class, 'destroy']);
+            Route::post('/{id}/approve', [SupplierAcceptanceController::class, 'approve']);
+            Route::post('/{id}/reject', [SupplierAcceptanceController::class, 'reject']);
+        });
+
+        // Subcontractor Progress (Tiến độ thi công thầu phụ)
+        Route::prefix('subcontractor-progress')->group(function () {
+            Route::get('/', [SubcontractorProgressController::class, 'index']);
+            Route::post('/', [SubcontractorProgressController::class, 'store']);
+            Route::get('/{id}', [SubcontractorProgressController::class, 'show']);
+            Route::put('/{id}', [SubcontractorProgressController::class, 'update']);
+            Route::delete('/{id}', [SubcontractorProgressController::class, 'destroy']);
+            Route::post('/{id}/verify', [SubcontractorProgressController::class, 'verify']);
+        });
     });
 });
 
@@ -464,9 +540,13 @@ Route::controller(AuthController::class)->group(function () {
 
 
 
-// routes/api.php
-Route::post('/upload', [AttachmentController::class, 'upload'])
-    ->name('upload.file');
+// ===================================================================
+// FILE UPLOAD ROUTE - Yêu cầu authentication
+// ===================================================================
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/upload', [AttachmentController::class, 'upload'])
+        ->name('upload.file');
+});
 
 // ===================================================================
 // ADMIN API ROUTES - Yêu cầu authentication và admin role
@@ -527,6 +607,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/', [DepartmentController::class, 'index']);
         Route::post('/', [DepartmentController::class, 'store']);
         Route::get('/{id}', [DepartmentController::class, 'show']);
+        Route::get('/{id}/statistics', [DepartmentController::class, 'statistics']);
         Route::put('/{id}', [DepartmentController::class, 'update']);
         Route::delete('/{id}', [DepartmentController::class, 'destroy']);
     });
@@ -611,5 +692,16 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::delete('/{id}', [ReminderController::class, 'destroy']);
         Route::post('/send-pending', [ReminderController::class, 'sendPendingReminders']);
         Route::post('/{id}/mark-sent', [ReminderController::class, 'markAsSent']);
+    });
+
+    // Reports (Báo cáo)
+    Route::prefix('reports')->group(function () {
+        Route::get('/projects/{projectId}/construction-progress', [ReportController::class, 'constructionProgress']);
+        Route::get('/projects/{projectId}/material-procurement', [ReportController::class, 'materialProcurement']);
+        Route::get('/projects/{projectId}/revenue-expense-by-work', [ReportController::class, 'revenueExpenseByWork']);
+        Route::get('/projects/{projectId}/revenue-expense', [ReportController::class, 'projectRevenueExpense']);
+        Route::get('/projects/{projectId}/material-usage', [ReportController::class, 'materialUsage']);
+        Route::get('/projects/{projectId}/construction-logs', [ReportController::class, 'constructionLogs']);
+        Route::get('/projects/{projectId}/debt-payment', [ReportController::class, 'debtAndPayment']);
     });
 });

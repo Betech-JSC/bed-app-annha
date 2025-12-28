@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 use App\Models\Project;
 
@@ -25,6 +26,13 @@ class Payroll extends Model
         'bonus_amount',
         'deductions',
         'gross_salary',
+        'social_insurance_amount',
+        'health_insurance_amount',
+        'unemployment_insurance_amount',
+        'taxable_income',
+        'personal_deduction',
+        'dependent_deduction',
+        'dependents_count',
         'tax',
         'net_salary',
         'status',
@@ -45,6 +53,13 @@ class Payroll extends Model
         'bonus_amount' => 'decimal:2',
         'deductions' => 'decimal:2',
         'gross_salary' => 'decimal:2',
+        'social_insurance_amount' => 'decimal:2',
+        'health_insurance_amount' => 'decimal:2',
+        'unemployment_insurance_amount' => 'decimal:2',
+        'taxable_income' => 'decimal:2',
+        'personal_deduction' => 'decimal:2',
+        'dependent_deduction' => 'decimal:2',
+        'dependents_count' => 'integer',
         'tax' => 'decimal:2',
         'net_salary' => 'decimal:2',
         'calculated_at' => 'datetime',
@@ -74,6 +89,11 @@ class Payroll extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function costs(): HasMany
+    {
+        return $this->hasMany(Cost::class, 'payroll_id');
     }
 
     // ==================================================================

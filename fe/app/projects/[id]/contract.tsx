@@ -15,6 +15,8 @@ import {
   Contract,
   CreateContractData,
 } from "@/api/contractApi";
+import { attachmentApi, Attachment } from "@/api/attachmentApi";
+import { UniversalFileUploader } from "@/components";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -30,6 +32,8 @@ export default function ContractScreen() {
     contract_value: "",
     signed_date: "",
   });
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   useEffect(() => {
     loadContract();
@@ -47,6 +51,10 @@ export default function ContractScreen() {
         });
         if (response.data.signed_date) {
           setSignedDate(new Date(response.data.signed_date));
+        }
+        // Set uploaded files for display
+        if (response.data.attachments) {
+          setUploadedFiles(response.data.attachments);
         }
       } else {
         // Không có contract - hiển thị form tạo mới
@@ -115,6 +123,16 @@ export default function ContractScreen() {
         : await contractApi.saveContract(id!, data);
 
       if (response.success) {
+        // If there are uploaded files waiting to be attached, attach them now
+        if (uploadedFiles.length > 0) {
+          try {
+            const attachmentIds = uploadedFiles.map((file) => file.attachment_id || file.id);
+            await contractApi.attachFiles(id!, attachmentIds);
+            setUploadedFiles([]);
+          } catch (error) {
+            console.error("Error attaching files:", error);
+          }
+        }
         Alert.alert("Thành công", "Hợp đồng đã được lưu.");
         setEditing(false);
         loadContract();
@@ -149,6 +167,56 @@ export default function ContractScreen() {
         error.response?.data?.message || "Có lỗi xảy ra khi duyệt hợp đồng"
       );
     }
+  };
+
+  const handleFileUploadComplete = async (files: any[]) => {
+    if (files.length === 0) return;
+
+    // If contract doesn't exist, save uploaded files to attach later
+    if (!contract) {
+      setUploadedFiles([...uploadedFiles, ...files]);
+      Alert.alert(
+        "Thông báo",
+        "File đã được tải lên. Vui lòng tạo hợp đồng trước để đính kèm file."
+      );
+      return;
+    }
+
+    // If contract exists, attach files immediately
+    try {
+      setUploadingFiles(true);
+      const attachmentIds = files.map((file) => file.attachment_id || file.id);
+      const response = await contractApi.attachFiles(id!, attachmentIds);
+      
+      if (response.success) {
+        Alert.alert("Thành công", "Đã đính kèm file vào hợp đồng.");
+        loadContract();
+      } else {
+        Alert.alert("Lỗi", response.message || "Không thể đính kèm file");
+      }
+    } catch (error: any) {
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Có lỗi xảy ra khi đính kèm file"
+      );
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    const newFiles = [...uploadedFiles];
+    newFiles.splice(index, 1);
+    setUploadedFiles(newFiles);
+  };
+
+  const getFileIcon = (type: string) => {
+    if (type === "image") return "image-outline";
+    if (type === "document") {
+      // Check for PDF
+      return "document-text-outline";
+    }
+    return "document-outline";
   };
 
   const getStatusColor = (status: string) => {
@@ -292,15 +360,51 @@ export default function ContractScreen() {
           )}
         </View>
 
-        {contract && contract.attachments && contract.attachments.length > 0 && (
+        {/* File Upload Section - Show when editing or when contract doesn't exist */}
+        {(editing || !contract) && (
+          <View style={styles.attachmentsSection}>
+            <Text style={styles.sectionTitle}>Đính kèm file hợp đồng</Text>
+            <Text style={styles.helperText}>
+              Hỗ trợ PDF, DOC, DOCX, ảnh. Tối đa 10 file.
+            </Text>
+            <UniversalFileUploader
+              onUploadComplete={handleFileUploadComplete}
+              multiple={true}
+              accept="all"
+              maxFiles={10}
+              initialFiles={uploadedFiles}
+              label="Đính kèm file hợp đồng (PDF, DOC, ảnh)"
+            />
+            {uploadingFiles && (
+              <View style={styles.uploadingIndicator}>
+                <ActivityIndicator size="small" color="#3B82F6" />
+                <Text style={styles.uploadingText}>Đang đính kèm file...</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Display attached files - Show when contract exists and not editing */}
+        {contract && contract.attachments && contract.attachments.length > 0 && !editing && (
           <View style={styles.attachmentsSection}>
             <Text style={styles.sectionTitle}>File đính kèm</Text>
             {contract.attachments.map((attachment: any, index: number) => (
-              <TouchableOpacity key={index} style={styles.attachmentItem}>
-                <Ionicons name="document-outline" size={24} color="#3B82F6" />
-                <Text style={styles.attachmentName} numberOfLines={1}>
-                  {attachment.original_name}
-                </Text>
+              <TouchableOpacity key={attachment.id || index} style={styles.attachmentItem}>
+                <Ionicons 
+                  name={getFileIcon(attachment.type || "document") as any} 
+                  size={24} 
+                  color="#3B82F6" 
+                />
+                <View style={styles.attachmentInfo}>
+                  <Text style={styles.attachmentName} numberOfLines={1}>
+                    {attachment.original_name || attachment.file_name}
+                  </Text>
+                  {attachment.file_size && (
+                    <Text style={styles.attachmentSize}>
+                      {(attachment.file_size / 1024).toFixed(2)} KB
+                    </Text>
+                  )}
+                </View>
               </TouchableOpacity>
             ))}
           </View>
@@ -458,11 +562,34 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 8,
   },
-  attachmentName: {
+  attachmentInfo: {
     flex: 1,
     marginLeft: 12,
+  },
+  attachmentName: {
     fontSize: 14,
     color: "#1F2937",
+    fontWeight: "500",
+  },
+  attachmentSize: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  helperText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 12,
+  },
+  uploadingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 8,
+  },
+  uploadingText: {
+    fontSize: 14,
+    color: "#6B7280",
   },
   buttonRow: {
     flexDirection: "row",

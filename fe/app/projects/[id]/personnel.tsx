@@ -14,6 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { personnelApi, ProjectPersonnel, CreatePersonnelData } from "@/api/personnelApi";
 import { employeesApi, Employee } from "@/api/employeesApi";
+import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
@@ -30,11 +31,26 @@ export default function PersonnelScreen() {
   const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const [personnelRoles, setPersonnelRoles] = useState<Option[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
   const { hasPermission } = useProjectPermissions(id!);
 
   useEffect(() => {
     loadPersonnel();
+    loadPersonnelRoles();
   }, [id]);
+
+  const loadPersonnelRoles = async () => {
+    try {
+      setLoadingRoles(true);
+      const roles = await optionsApi.getPersonnelRoles();
+      setPersonnelRoles(roles);
+    } catch (error) {
+      console.error("Error loading personnel roles:", error);
+    } finally {
+      setLoadingRoles(false);
+    }
+  };
 
   const loadPersonnel = async () => {
     try {
@@ -147,6 +163,17 @@ export default function PersonnelScreen() {
   };
 
   const getRoleText = (role: string) => {
+    const roleOption = personnelRoles.find(r => r.value === role);
+    return roleOption?.label || role;
+  };
+
+  const getRoleLabel = (role: string) => {
+    const roleOption = personnelRoles.find(r => r.value === role);
+    return roleOption?.label || role;
+  };
+
+  // Legacy function - keeping for backward compatibility
+  const getRoleTextOld = (role: string) => {
     const roleMap: Record<string, string> = {
       project_manager: "Quản lý dự án",
       supervisor: "Giám sát",
@@ -162,20 +189,6 @@ export default function PersonnelScreen() {
     };
     return roleMap[role] || role;
   };
-
-  const roleOptions = [
-    { value: "project_manager", label: "Quản lý dự án" },
-    { value: "supervisor", label: "Giám sát" },
-    { value: "accountant", label: "Kế toán" },
-    { value: "management", label: "Ban điều hành" },
-    { value: "team_leader", label: "Tổ trưởng" },
-    { value: "worker", label: "Thợ" },
-    { value: "designer", label: "Bên Thiết Kế" },
-    { value: "supervisor_guest", label: "Giám sát khách" },
-    { value: "editor", label: "Chỉnh sửa" },
-    { value: "viewer", label: "Xem" },
-    { value: "guest", label: "Khách" },
-  ];
 
   const getRoleColor = (role: string) => {
     switch (role) {
@@ -369,7 +382,7 @@ export default function PersonnelScreen() {
                 showsHorizontalScrollIndicator={false}
                 style={styles.roleScroll}
               >
-                {roleOptions.map((role) => (
+                {personnelRoles.map((role) => (
                   <TouchableOpacity
                     key={role.value}
                     style={[

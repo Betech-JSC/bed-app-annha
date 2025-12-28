@@ -47,37 +47,37 @@ export const reminderApi = {
     upcoming?: boolean;
     page?: number;
   }) => {
-    const response = await api.get("/reminders", { params });
+    const response = await api.get("/admin/reminders", { params });
     return response.data;
   },
 
   getReminder: async (id: number) => {
-    const response = await api.get(`/reminders/${id}`);
+    const response = await api.get(`/admin/reminders/${id}`);
     return response.data;
   },
 
   createReminder: async (data: CreateReminderData) => {
-    const response = await api.post("/reminders", data);
+    const response = await api.post("/admin/reminders", data);
     return response.data;
   },
 
   updateReminder: async (id: number, data: Partial<CreateReminderData>) => {
-    const response = await api.put(`/reminders/${id}`, data);
+    const response = await api.put(`/admin/reminders/${id}`, data);
     return response.data;
   },
 
   deleteReminder: async (id: number) => {
-    const response = await api.delete(`/reminders/${id}`);
+    const response = await api.delete(`/admin/reminders/${id}`);
     return response.data;
   },
 
   sendPendingReminders: async () => {
-    const response = await api.post("/reminders/send-pending");
+    const response = await api.post("/admin/reminders/send-pending");
     return response.data;
   },
 
   markAsSent: async (id: number) => {
-    const response = await api.post(`/reminders/${id}/mark-sent`);
+    const response = await api.post(`/admin/reminders/${id}/mark-sent`);
     return response.data;
   },
 };

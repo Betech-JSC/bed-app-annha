@@ -49,27 +49,71 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Interceptor xử lý response - Xử lý 401
+// Interceptor xử lý response - Xử lý các lỗi HTTP
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        const status = error.response?.status;
+        const message = error.response?.data?.message || error.message;
+
         // Xử lý lỗi 401 (Unauthorized)
-        if (error.response?.status === 401) {
+        if (status === 401) {
             console.warn('401 Unauthorized - Clearing user and redirecting to login');
 
             // Clear user từ Redux store
             store.dispatch(clearUser());
 
             // Redirect về login
-            // Sử dụng setTimeout để tránh lỗi navigation trong quá trình render
             setTimeout(() => {
                 try {
-                    // Check if we're not already on login page
                     router.replace('/login');
                 } catch (e) {
                     console.error('Error redirecting to login:', e);
                 }
             }, 100);
+        }
+        // Xử lý lỗi 429 (Too Many Requests) - Rate Limiting
+        else if (status === 429) {
+            const retryAfter = error.response?.headers['retry-after'] || 60;
+            console.warn(`429 Too Many Requests - Rate limit exceeded. Retry after ${retryAfter} seconds`);
+
+            // Có thể thêm logic retry sau một khoảng thời gian
+            error.retryAfter = retryAfter;
+            error.userMessage = `Quá nhiều yêu cầu. Vui lòng thử lại sau ${retryAfter} giây.`;
+        }
+        // Xử lý lỗi 500 (Internal Server Error)
+        else if (status === 500) {
+            console.error('500 Internal Server Error:', error.response?.data);
+            error.userMessage = message || 'Lỗi máy chủ. Vui lòng thử lại sau.';
+        }
+        // Xử lý lỗi 403 (Forbidden) - Không có quyền
+        else if (status === 403) {
+            console.warn('403 Forbidden - Insufficient permissions');
+            error.userMessage = message || 'Bạn không có quyền thực hiện thao tác này.';
+        }
+        // Xử lý lỗi 404 (Not Found)
+        else if (status === 404) {
+            console.warn('404 Not Found:', error.config?.url);
+            error.userMessage = message || 'Không tìm thấy tài nguyên.';
+        }
+        // Xử lý lỗi validation (422)
+        else if (status === 422) {
+            const errors = error.response?.data?.errors;
+            if (errors) {
+                const firstError = Object.values(errors)[0];
+                error.userMessage = Array.isArray(firstError) ? firstError[0] : firstError;
+            } else {
+                error.userMessage = message || 'Dữ liệu không hợp lệ.';
+            }
+        }
+        // Lỗi network hoặc không có response
+        else if (!error.response) {
+            console.error('Network Error:', error.message);
+            error.userMessage = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.';
+        }
+        // Các lỗi khác
+        else {
+            error.userMessage = message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
         }
 
         return Promise.reject(error);

@@ -54,7 +54,7 @@ export const insuranceApi = {
   getInsurance: async (params?: {
     user_id?: number;
   }) => {
-    const response = await api.get("/insurance", { params });
+    const response = await api.get("/admin/insurance", { params });
     return response.data;
   },
 
@@ -71,7 +71,7 @@ export const insuranceApi = {
     base_salary_for_insurance?: number;
     notes?: string;
   }) => {
-    const response = await api.put("/insurance", data);
+    const response = await api.put("/admin/insurance", data);
     return response.data;
   },
 
@@ -80,22 +80,22 @@ export const insuranceApi = {
     status?: string;
     page?: number;
   }) => {
-    const response = await api.get("/insurance/benefits", { params });
+    const response = await api.get("/admin/insurance/benefits", { params });
     return response.data;
   },
 
   createBenefit: async (data: CreateBenefitData) => {
-    const response = await api.post("/insurance/benefits", data);
+    const response = await api.post("/admin/insurance/benefits", data);
     return response.data;
   },
 
   updateBenefit: async (id: number, data: Partial<CreateBenefitData>) => {
-    const response = await api.put(`/insurance/benefits/${id}`, data);
+    const response = await api.put(`/admin/insurance/benefits/${id}`, data);
     return response.data;
   },
 
   deleteBenefit: async (id: number) => {
-    const response = await api.delete(`/insurance/benefits/${id}`);
+    const response = await api.delete(`/admin/insurance/benefits/${id}`);
     return response.data;
   },
 };

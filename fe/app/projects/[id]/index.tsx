@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
+import { contractApi, Contract } from "@/api/contractApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 
@@ -17,10 +18,13 @@ export default function ProjectDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [project, setProject] = useState<Project | null>(null);
+  const [contract, setContract] = useState<Contract | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingContract, setLoadingContract] = useState(false);
 
   useEffect(() => {
     loadProject();
+    loadContract();
   }, [id]);
 
   const loadProject = async () => {
@@ -35,6 +39,32 @@ export default function ProjectDetailScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadContract = async () => {
+    try {
+      setLoadingContract(true);
+      const response = await contractApi.getContract(id!);
+      if (response.success && response.data) {
+        setContract(response.data);
+      } else {
+        setContract(null);
+      }
+    } catch (error: any) {
+      // 404 is expected if contract doesn't exist
+      if (error.response?.status !== 404) {
+        console.error("Error loading contract:", error);
+      }
+      setContract(null);
+    } finally {
+      setLoadingContract(false);
+    }
+  };
+
+  const formatCurrency = (value: number | string): string => {
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return '0';
+    return new Intl.NumberFormat('vi-VN').format(numValue);
   };
 
   const handleEdit = () => {
@@ -131,10 +161,28 @@ export default function ProjectDetailScreen() {
       color: "#06B6D4",
     },
     {
+      title: "Vật Liệu",
+      icon: "cube-outline",
+      route: `/projects/${id}/materials`,
+      color: "#F59E0B",
+    },
+    {
+      title: "Thiết Bị",
+      icon: "build-outline",
+      route: `/projects/${id}/equipment`,
+      color: "#8B5CF6",
+    },
+    {
       title: "Hồ Sơ & Tài Liệu",
       icon: "folder-outline",
       route: `/projects/${id}/documents`,
       color: "#6366F1",
+    },
+    {
+      title: "Báo Cáo",
+      icon: "document-text-outline",
+      route: `/projects/${id}/reports`,
+      color: "#8B5CF6",
     },
     {
       title: "Nhật Ký Công Trình",
@@ -214,6 +262,30 @@ export default function ProjectDetailScreen() {
         </View>
       </View>
 
+      {/* Contract Value Card */}
+      {contract && contract.contract_value && (
+        <View style={styles.contractCard}>
+          <View style={styles.contractCardHeader}>
+            <View style={styles.contractCardIconContainer}>
+              <Ionicons name="cash-outline" size={24} color="#3B82F6" />
+            </View>
+            <View style={styles.contractCardInfo}>
+              <Text style={styles.contractCardLabel}>Giá Trị Hợp Đồng</Text>
+              <Text style={styles.contractCardValue}>
+                {formatCurrency(contract.contract_value)} VNĐ
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.contractCardButton}
+            onPress={() => router.push(`/projects/${id}/contract`)}
+          >
+            <Text style={styles.contractCardButtonText}>Xem chi tiết</Text>
+            <Ionicons name="chevron-forward" size={20} color="#3B82F6" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.projectInfo}>
         <View style={styles.projectHeader}>
           <View style={styles.projectTitleSection}>
@@ -276,6 +348,15 @@ export default function ProjectDetailScreen() {
                 : "Chưa có"}
             </Text>
           </View>
+          {contract && contract.contract_value && (
+            <View style={styles.infoItem}>
+              <Ionicons name="cash-outline" size={20} color="#6B7280" />
+              <Text style={styles.infoLabel}>Giá trị hợp đồng</Text>
+              <Text style={styles.infoValue}>
+                {formatCurrency(contract.contract_value)} VNĐ
+              </Text>
+            </View>
+          )}
         </View>
 
         {project.progress && (
@@ -397,8 +478,59 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 16,
   },
+  contractCard: {
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  contractCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  contractCardIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#3B82F620",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  contractCardInfo: {
+    flex: 1,
+  },
+  contractCardLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  contractCardValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  contractCardButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+  },
+  contractCardButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3B82F6",
+    marginRight: 4,
+  },
   infoGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
     marginBottom: 16,
   },

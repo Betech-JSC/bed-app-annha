@@ -30,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'hr' => \App\Http\Middleware\CheckHRAccess::class,
             'permission' => \App\Http\Middleware\CheckPermission::class,
             'check.permission' => \App\Http\Middleware\CheckPermission::class,
+            'admin' => \App\Http\Middleware\EnsureAdminIsAuthenticated::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

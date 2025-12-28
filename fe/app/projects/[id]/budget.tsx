@@ -239,11 +239,11 @@ export default function BudgetScreen() {
             <Modal
                 visible={showCreateModal}
                 animationType="slide"
-                transparent={true}
+                presentationStyle="pageSheet"
                 onRequestClose={() => setShowCreateModal(false)}
             >
                 <KeyboardAvoidingView
-                    style={styles.modalOverlay}
+                    style={styles.modalContainer}
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
                     keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
                 >
@@ -260,6 +260,7 @@ export default function BudgetScreen() {
                             contentContainerStyle={styles.modalBodyContent}
                             keyboardShouldPersistTaps="handled"
                             showsVerticalScrollIndicator={true}
+                            nestedScrollEnabled={true}
                         >
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Tên ngân sách *</Text>
@@ -369,10 +370,14 @@ export default function BudgetScreen() {
             <Modal
                 visible={showItemModal}
                 animationType="slide"
-                transparent={true}
+                presentationStyle="pageSheet"
                 onRequestClose={() => setShowItemModal(false)}
             >
-                <View style={styles.modalOverlay}>
+                <KeyboardAvoidingView
+                    style={styles.modalContainer}
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+                >
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>
@@ -390,7 +395,7 @@ export default function BudgetScreen() {
                             onCancel={() => setShowItemModal(false)}
                         />
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );
@@ -437,7 +442,13 @@ function BudgetItemForm({
     };
 
     return (
-        <ScrollView style={styles.modalBody}>
+        <ScrollView
+            style={styles.modalBody}
+            contentContainerStyle={styles.modalBodyContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+        >
             <View style={styles.formGroup}>
                 <Text style={styles.label}>Tên hạng mục *</Text>
                 <TextInput
@@ -650,23 +661,22 @@ const styles = StyleSheet.create({
         color: "#6B7280",
         marginTop: 16,
     },
-    modalOverlay: {
+    modalContainer: {
         flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "flex-end",
+        backgroundColor: "#F9FAFB",
     },
     modalContent: {
+        flex: 1,
         backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: "90%",
-        padding: 16,
     },
     modalHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 16,
+        padding: 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E5E7EB",
     },
     modalTitle: {
         fontSize: 20,
@@ -677,7 +687,8 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     modalBodyContent: {
-        paddingBottom: 20,
+        paddingBottom: Platform.OS === "ios" ? 100 : 80,
+        paddingHorizontal: 16,
     },
     formGroup: {
         marginBottom: 16,

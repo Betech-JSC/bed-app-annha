@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { projectApi, CreateProjectData } from "@/api/projectApi";
+import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -36,6 +37,8 @@ export default function CreateProjectScreen() {
   const [loadingManagers, setLoadingManagers] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [managerSearch, setManagerSearch] = useState("");
+  const [projectStatuses, setProjectStatuses] = useState<Option[]>([]);
+  const [loadingStatuses, setLoadingStatuses] = useState(false);
 
   const [formData, setFormData] = useState<CreateProjectData>({
     name: "",
@@ -54,7 +57,24 @@ export default function CreateProjectScreen() {
   useEffect(() => {
     loadCustomers();
     loadProjectManagers();
+    loadProjectStatuses();
   }, []);
+
+  const loadProjectStatuses = async () => {
+    try {
+      setLoadingStatuses(true);
+      const statuses = await optionsApi.getProjectStatuses();
+      setProjectStatuses(statuses);
+      // Set default status if formData.status is not in the list
+      if (statuses.length > 0 && !statuses.find(s => s.value === formData.status)) {
+        setFormData({ ...formData, status: statuses[0].value as any });
+      }
+    } catch (error) {
+      console.error("Error loading project statuses:", error);
+    } finally {
+      setLoadingStatuses(false);
+    }
+  };
 
   const loadCustomers = async () => {
     try {
@@ -369,39 +389,40 @@ export default function CreateProjectScreen() {
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Trạng thái</Text>
-            <View style={styles.statusContainer}>
-              {[
-                { value: "planning", label: "Lập kế hoạch" },
-                { value: "in_progress", label: "Đang thực hiện" },
-                { value: "completed", label: "Hoàn thành" },
-                { value: "cancelled", label: "Đã hủy" },
-              ].map((status) => (
-                <TouchableOpacity
-                  key={status.value}
-                  style={[
-                    styles.statusButton,
-                    formData.status === status.value &&
-                    styles.statusButtonActive,
-                  ]}
-                  onPress={() =>
-                    setFormData({
-                      ...formData,
-                      status: status.value as CreateProjectData["status"],
-                    })
-                  }
-                >
-                  <Text
+            {loadingStatuses ? (
+              <ActivityIndicator size="small" color="#3B82F6" />
+            ) : (
+              <View style={styles.statusContainer}>
+                {projectStatuses.map((status) => (
+                  <TouchableOpacity
+                    key={status.value}
                     style={[
-                      styles.statusButtonText,
+                      styles.statusButton,
                       formData.status === status.value &&
-                      styles.statusButtonTextActive,
+                      styles.statusButtonActive,
+                      status.color && { borderColor: status.color },
                     ]}
+                    onPress={() =>
+                      setFormData({
+                        ...formData,
+                        status: status.value as CreateProjectData["status"],
+                      })
+                    }
                   >
-                    {status.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                    <Text
+                      style={[
+                        styles.statusButtonText,
+                        formData.status === status.value &&
+                        styles.statusButtonTextActive,
+                        formData.status === status.value && status.color && { color: status.color },
+                      ]}
+                    >
+                      {status.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
           <View style={styles.actions}>

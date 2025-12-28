@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attachment;
 use App\Models\Contract;
 use App\Models\Project;
 use Illuminate\Http\Request;
@@ -139,5 +140,59 @@ class ContractController extends Controller
             'message' => 'Hợp đồng đã được duyệt.',
             'data' => $contract->fresh()
         ]);
+    }
+
+    /**
+     * Đính kèm file vào hợp đồng
+     */
+    public function attachFiles(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $contract = $project->contract;
+
+        if (!$contract) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hợp đồng chưa được tạo.'
+            ], 404);
+        }
+
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'attachment_ids' => 'required|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $attached = [];
+            foreach ($validated['attachment_ids'] as $attachmentId) {
+                $attachment = Attachment::find($attachmentId);
+                if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                    $attachment->update([
+                        'attachable_type' => Contract::class,
+                        'attachable_id' => $contract->id,
+                    ]);
+                    $attached[] = $attachment;
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã đính kèm ' . count($attached) . ' file.',
+                'data' => $contract->fresh(['attachments'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi đính kèm file.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

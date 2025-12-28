@@ -16,6 +16,7 @@ class Cost extends Model
         'cost_group_id',
         'time_tracking_id',
         'payroll_id',
+        'subcontractor_id',
         'name',
         'amount',
         'description',
@@ -84,6 +85,11 @@ class Cost extends Model
     public function payroll(): BelongsTo
     {
         return $this->belongsTo(Payroll::class, 'payroll_id');
+    }
+
+    public function subcontractor(): BelongsTo
+    {
+        return $this->belongsTo(Subcontractor::class, 'subcontractor_id');
     }
 
     // ==================================================================

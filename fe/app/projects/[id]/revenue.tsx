@@ -63,17 +63,6 @@ export default function RevenueScreen() {
     }).format(amount);
   };
 
-  const getCategoryLabel = (category: string) => {
-    const labels: Record<string, string> = {
-      construction_materials: "Vật liệu xây dựng",
-      concrete: "Bê tông",
-      labor: "Nhân công",
-      equipment: "Thiết bị",
-      transportation: "Vận chuyển",
-      other: "Chi phí khác",
-    };
-    return labels[category] || category;
-  };
 
   if (loading) {
     return (
@@ -164,25 +153,18 @@ export default function RevenueScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Chi Phí Theo Nhóm</Text>
             <View style={styles.card}>
-              {Object.entries(summary.costs.by_category).map(
-                ([category, amount]) => (
-                  <View key={category} style={styles.costRow}>
-                    <Text style={styles.costLabel}>
-                      {getCategoryLabel(category)}
-                    </Text>
+              {summary.costs.by_group && summary.costs.by_group.length > 0 ? (
+                summary.costs.by_group.map((group, index) => (
+                  <View key={group.id !== null && group.id !== undefined ? `group-${group.id}` : `other-${index}-${group.name}`} style={styles.costRow}>
+                    <Text style={styles.costLabel}>{group.name}</Text>
                     <Text style={styles.costValue}>
-                      {formatCurrency(amount)}
+                      {formatCurrency(group.amount)}
                     </Text>
                   </View>
-                )
+                ))
+              ) : (
+                <Text style={styles.emptyText}>Chưa có chi phí</Text>
               )}
-              <View style={styles.divider} />
-              <View style={styles.costRow}>
-                <Text style={styles.costLabel}>Chi phí phát sinh</Text>
-                <Text style={styles.costValue}>
-                  {formatCurrency(summary.costs.additional_costs)}
-                </Text>
-              </View>
               <View style={styles.divider} />
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Tổng chi phí</Text>
@@ -563,5 +545,11 @@ const styles = StyleSheet.create({
   },
   chart: {
     borderRadius: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    padding: 16,
   },
 });

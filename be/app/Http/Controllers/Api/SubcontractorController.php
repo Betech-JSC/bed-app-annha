@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Subcontractor;
 use App\Models\GlobalSubcontractor;
+use App\Models\Cost;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -92,6 +93,9 @@ class SubcontractorController extends Controller
             'progress_start_date' => 'nullable|date',
             'progress_end_date' => 'nullable|date|after_or_equal:progress_start_date',
             'progress_status' => ['nullable', 'in:not_started,in_progress,completed,delayed'],
+            'create_cost' => 'nullable|boolean',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
+            'cost_date' => 'nullable|date',
         ]);
 
         try {
@@ -116,6 +120,33 @@ class SubcontractorController extends Controller
                 'payment_status' => 'pending',
                 'created_by' => $request->user()->id,
             ]);
+
+            // Tạo Cost record nếu được yêu cầu
+            if (!empty($validated['create_cost']) && $validated['create_cost']) {
+                $costGroupId = $validated['cost_group_id'] ?? null;
+                $costDate = $validated['cost_date'] ?? now()->toDateString();
+
+                // Tìm CostGroup mặc định nếu không có
+                if (!$costGroupId) {
+                    $defaultCostGroup = \App\Models\CostGroup::where('code', 'subcontractor')
+                        ->orWhere('name', 'LIKE', '%Nhà thầu phụ%')
+                        ->orWhere('name', 'LIKE', '%Thầu phụ%')
+                        ->first();
+                    $costGroupId = $defaultCostGroup?->id;
+                }
+
+                Cost::create([
+                    'project_id' => $project->id,
+                    'subcontractor_id' => $subcontractor->id,
+                    'cost_group_id' => $costGroupId,
+                    'name' => "Chi phí nhà thầu phụ: {$subcontractor->name}",
+                    'amount' => $subcontractor->total_quote,
+                    'description' => "Chi phí từ nhà thầu phụ. Hạng mục: " . ($subcontractor->category ?? 'N/A'),
+                    'cost_date' => $costDate,
+                    'status' => 'draft',
+                    'created_by' => $request->user()->id,
+                ]);
+            }
 
             DB::commit();
 

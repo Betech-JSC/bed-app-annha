@@ -350,11 +350,11 @@ export default function ReceiptsScreen() {
             <Modal
                 visible={showCreateModal}
                 animationType="slide"
-                transparent={true}
+                presentationStyle="pageSheet"
                 onRequestClose={() => setShowCreateModal(false)}
             >
                 <KeyboardAvoidingView
-                    style={styles.modalOverlay}
+                    style={styles.modalContainer}
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
                     keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
                 >
@@ -371,6 +371,7 @@ export default function ReceiptsScreen() {
                             contentContainerStyle={styles.modalBodyContent}
                             keyboardShouldPersistTaps="handled"
                             showsVerticalScrollIndicator={true}
+                            nestedScrollEnabled={true}
                         >
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Ngày chứng từ *</Text>
@@ -716,7 +717,10 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 16,
+        padding: 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E5E7EB",
     },
     modalTitle: {
         fontSize: 20,

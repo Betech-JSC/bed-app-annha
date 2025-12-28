@@ -183,6 +183,62 @@ class MaterialController extends Controller
         ]);
     }
 
+    /**
+     * Lấy danh sách materials đã sử dụng trong project (thông qua transactions)
+     */
+    public function getByProject(string $projectId, Request $request)
+    {
+        $user = auth()->user();
+
+        if (!$user->hasPermission('materials.view') && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền xem vật liệu dự án.'
+            ], 403);
+        }
+
+        // Lấy các materials đã có transaction trong project này
+        $query = Material::whereHas('transactions', function ($q) use ($projectId) {
+            $q->where('project_id', $projectId);
+        })->with(['transactions' => function ($q) use ($projectId) {
+            $q->where('project_id', $projectId)
+                ->orderBy('transaction_date', 'desc');
+        }]);
+
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('code', 'like', "%{$search}%")
+                    ->orWhere('category', 'like', "%{$search}%");
+            });
+        }
+
+        if ($category = $request->query('category')) {
+            $query->where('category', $category);
+        }
+
+        $materials = $query->paginate(20);
+
+        // Tính toán số lượng đã sử dụng trong project cho mỗi material
+        $materials->getCollection()->transform(function ($material) use ($projectId) {
+            $material->current_stock = $material->current_stock;
+            
+            // Tính tổng số lượng đã sử dụng trong project
+            $projectTransactions = $material->transactions->where('project_id', $projectId);
+            $totalIn = $projectTransactions->where('type', 'in')->sum('quantity');
+            $totalOut = $projectTransactions->where('type', 'out')->sum('quantity');
+            $material->project_usage = $totalOut - $totalIn; // Số lượng đã xuất - đã nhập
+            $material->project_transactions_count = $projectTransactions->count();
+            
+            return $material;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $materials
+        ]);
+    }
+
     public function update(Request $request, string $id)
     {
         $user = auth()->user();
@@ -264,5 +320,55 @@ class MaterialController extends Controller
             'success' => true,
             'message' => 'Đã xóa vật liệu thành công.'
         ]);
+    }
+
+    /**
+     * Tạo transaction cho material trong project
+     */
+    public function createTransaction(Request $request, string $projectId)
+    {
+        $user = auth()->user();
+
+        if (!$user->hasPermission('materials.create') && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền tạo giao dịch vật liệu.'
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'material_id' => 'required|exists:materials,id',
+            'type' => 'required|in:in,out,adjustment',
+            'quantity' => 'required|numeric|min:0.01',
+            'transaction_date' => 'required|date',
+            'notes' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dữ liệu không hợp lệ.',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $transaction = MaterialTransaction::create([
+            'material_id' => $request->material_id,
+            'project_id' => $projectId,
+            'type' => $request->type,
+            'quantity' => $request->quantity,
+            'transaction_date' => $request->transaction_date,
+            'notes' => $request->notes,
+            'status' => 'approved',
+            'created_by' => $user->id,
+        ]);
+
+        $transaction->load(['material', 'project', 'creator']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã tạo giao dịch vật liệu thành công.',
+            'data' => $transaction
+        ], 201);
     }
 }

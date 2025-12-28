@@ -26,7 +26,10 @@ class EnsureAdminIsAuthenticated
         $user = $request->user('sanctum');
 
         // Kiểm tra xem có phải Admin không
-        if (!($user instanceof \App\Models\Admin)) {
+        // Admin là user có role='admin' hoặc owner=true
+        $isAdmin = ($user->role === 'admin') || ($user->owner === true);
+        
+        if (!$isAdmin) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized. Admin access required.'

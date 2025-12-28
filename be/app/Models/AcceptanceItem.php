@@ -116,6 +116,9 @@ class AcceptanceItem extends Model
         // Check if stage can be completed
         if ($saved) {
             $this->acceptanceStage->checkCompletion();
+            
+            // Tự động cập nhật tiến độ dự án khi nghiệm thu thay đổi
+            $this->updateProjectProgress();
         }
 
         return $saved;
@@ -133,7 +136,14 @@ class AcceptanceItem extends Model
             $this->rejected_by = $user->id;
         }
         $this->rejected_at = now();
-        return $this->save();
+        $saved = $this->save();
+        
+        // Cập nhật tiến độ dự án khi nghiệm thu bị reject
+        if ($saved) {
+            $this->updateProjectProgress();
+        }
+        
+        return $saved;
     }
 
     public function resetAcceptance(): bool
@@ -149,7 +159,34 @@ class AcceptanceItem extends Model
         $this->rejected_by = null;
         $this->rejected_at = null;
         $this->rejection_reason = null;
-        return $this->save();
+        $saved = $this->save();
+        
+        // Cập nhật tiến độ dự án khi reset nghiệm thu
+        if ($saved) {
+            $this->updateProjectProgress();
+        }
+        
+        return $saved;
+    }
+
+    /**
+     * Cập nhật tiến độ dự án dựa trên nghiệm thu
+     */
+    protected function updateProjectProgress(): void
+    {
+        $project = $this->acceptanceStage->project;
+        if ($project) {
+            // Đảm bảo có progress record
+            if (!$project->progress) {
+                $project->progress()->create([
+                    'overall_percentage' => 0,
+                    'calculated_from' => 'acceptance',
+                ]);
+            }
+            
+            // Tính lại tiến độ tổng hợp (ưu tiên nghiệm thu)
+            $project->progress->calculateOverall();
+        }
     }
 
     // ==================================================================

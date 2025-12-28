@@ -31,6 +31,7 @@ class User extends Authenticatable
         'first_name',
         'last_name',
         'role',
+        'department_id',
         'provider',
         'provider_id',
         'kyc_status',

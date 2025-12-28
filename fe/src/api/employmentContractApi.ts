@@ -39,22 +39,22 @@ export const employmentContractApi = {
     contract_type?: string;
     page?: number;
   }) => {
-    const response = await api.get("/employment-contracts", { params });
+    const response = await api.get("/admin/employment-contracts", { params });
     return response.data;
   },
 
   getContract: async (id: number) => {
-    const response = await api.get(`/employment-contracts/${id}`);
+    const response = await api.get(`/admin/employment-contracts/${id}`);
     return response.data;
   },
 
   createContract: async (data: CreateEmploymentContractData) => {
-    const response = await api.post("/employment-contracts", data);
+    const response = await api.post("/admin/employment-contracts", data);
     return response.data;
   },
 
   updateContract: async (id: number, data: Partial<CreateEmploymentContractData>) => {
-    const response = await api.put(`/employment-contracts/${id}`, data);
+    const response = await api.put(`/admin/employment-contracts/${id}`, data);
     return response.data;
   },
 
@@ -62,7 +62,7 @@ export const employmentContractApi = {
     end_date: string;
     base_salary?: number;
   }) => {
-    const response = await api.post(`/employment-contracts/${id}/renew`, data);
+    const response = await api.post(`/admin/employment-contracts/${id}/renew`, data);
     return response.data;
   },
 
@@ -70,12 +70,12 @@ export const employmentContractApi = {
     termination_reason: string;
     terminated_date: string;
   }) => {
-    const response = await api.post(`/employment-contracts/${id}/terminate`, data);
+    const response = await api.post(`/admin/employment-contracts/${id}/terminate`, data);
     return response.data;
   },
 
   deleteContract: async (id: number) => {
-    const response = await api.delete(`/employment-contracts/${id}`);
+    const response = await api.delete(`/admin/employment-contracts/${id}`);
     return response.data;
   },
 };

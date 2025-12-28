@@ -71,22 +71,22 @@ export const performanceApi = {
     project_id?: number;
     page?: number;
   }) => {
-    const response = await api.get("/performance/evaluations", { params });
+    const response = await api.get("/admin/performance/evaluations", { params });
     return response.data;
   },
 
   getEvaluation: async (id: number) => {
-    const response = await api.get(`/performance/evaluations/${id}`);
+    const response = await api.get(`/admin/performance/evaluations/${id}`);
     return response.data;
   },
 
   createEvaluation: async (data: CreateEvaluationData) => {
-    const response = await api.post("/performance/evaluations", data);
+    const response = await api.post("/admin/performance/evaluations", data);
     return response.data;
   },
 
   updateEvaluation: async (id: number, data: Partial<CreateEvaluationData>) => {
-    const response = await api.put(`/performance/evaluations/${id}`, data);
+    const response = await api.put(`/admin/performance/evaluations/${id}`, data);
     return response.data;
   },
 };

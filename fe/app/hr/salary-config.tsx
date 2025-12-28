@@ -11,6 +11,8 @@ import {
   Modal,
   TextInput,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -218,12 +220,12 @@ export default function SalaryConfigScreen() {
     const current = isCurrent(item);
     // Try to get employee from the relationship first, then fallback to employees list
     const employee = item.user || employees.find((e) => e.id === item.user_id);
-    
+
     // Get employee name - prioritize user relationship, then employees list, then fallback
-    const employeeName = employee?.name || 
-                         (employee?.first_name && employee?.last_name 
-                           ? `${employee.first_name} ${employee.last_name}`.trim()
-                           : employee?.first_name || employee?.email || `User #${item.user_id}`);
+    const employeeName = employee?.name ||
+      (employee?.first_name && employee?.last_name
+        ? `${employee.first_name} ${employee.last_name}`.trim()
+        : employee?.first_name || employee?.email || `User #${item.user_id}`);
 
     return (
       <View style={[styles.itemCard, current && styles.itemCardCurrent]}>
@@ -452,10 +454,14 @@ export default function SalaryConfigScreen() {
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowCreateModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Tạo Cấu Hình Lương</Text>
@@ -466,27 +472,37 @@ export default function SalaryConfigScreen() {
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-            <View style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={styles.modalBodyContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
               <SalaryConfigForm
                 onSubmit={handleCreate}
                 onCancel={() => setShowCreateModal(false)}
               />
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit Modal */}
       <Modal
         visible={showEditModal}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={() => {
           setShowEditModal(false);
           setEditingConfig(null);
         }}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Chỉnh Sửa Cấu Hình Lương</Text>
@@ -500,7 +516,13 @@ export default function SalaryConfigScreen() {
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-            <View style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={styles.modalBodyContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
               {editingConfig && (
                 <SalaryConfigForm
                   onSubmit={handleUpdate}
@@ -511,9 +533,9 @@ export default function SalaryConfigScreen() {
                   initialData={editingConfig}
                 />
               )}
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -778,23 +800,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
+    backgroundColor: "#F9FAFB",
   },
   modalContent: {
+    flex: 1,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "95%",
-    minHeight: "60%",
+  },
+  modalBodyContent: {
+    paddingBottom: Platform.OS === "ios" ? 100 : 80,
+    paddingHorizontal: 16,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
+    padding: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },

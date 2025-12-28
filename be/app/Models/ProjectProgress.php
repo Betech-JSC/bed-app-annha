@@ -93,4 +93,97 @@ class ProjectProgress extends Model
         $this->last_calculated_at = now();
         return $this->save();
     }
+
+    /**
+     * Tính tiến độ dựa trên nghiệm thu
+     * Dự án chỉ đạt 100% khi tất cả hạng mục nghiệm thu đã được approved
+     * 
+     * @return float|null Trả về null nếu không có nghiệm thu để tính
+     */
+    public function calculateFromAcceptance(): ?float
+    {
+        $project = $this->project;
+        $stages = $project->acceptanceStages()->with('items')->get();
+
+        if ($stages->isEmpty()) {
+            // Nếu không có nghiệm thu, trả về null để dùng nguồn khác
+            return null;
+        }
+
+        $totalItems = 0;
+        $approvedItems = 0;
+        $totalStages = $stages->count();
+        $fullyApprovedStages = 0;
+
+        foreach ($stages as $stage) {
+            $items = $stage->items;
+            if ($items->isEmpty()) {
+                continue;
+            }
+
+            $totalItems += $items->count();
+            $approvedItems += $items->where('acceptance_status', 'approved')->count();
+
+            // Kiểm tra stage đã fully approved chưa (owner_approved)
+            if ($stage->status === 'owner_approved') {
+                $fullyApprovedStages++;
+            }
+        }
+
+        if ($totalItems === 0) {
+            // Nếu không có hạng mục nghiệm thu, trả về null
+            return null;
+        }
+
+        // Tính tiến độ dựa trên tỷ lệ hạng mục đã nghiệm thu
+        // Chỉ đạt 100% khi TẤT CẢ hạng mục đã được approved
+        $itemProgress = ($approvedItems / $totalItems) * 100;
+
+        // Cũng tính theo tỷ lệ stage đã fully approved
+        $stageProgress = $totalStages > 0 ? ($fullyApprovedStages / $totalStages) * 100 : 0;
+
+        // Lấy giá trị nhỏ hơn để đảm bảo chặt chẽ
+        // Chỉ khi cả items và stages đều 100% thì mới đạt 100%
+        $finalProgress = min($itemProgress, $stageProgress);
+
+        // Đảm bảo chỉ đạt 100% khi TẤT CẢ đã approved
+        if ($approvedItems < $totalItems || $fullyApprovedStages < $totalStages) {
+            $finalProgress = min($finalProgress, 99.99); // Không cho phép 100% nếu chưa hoàn thành hết
+        }
+
+        $this->overall_percentage = round($finalProgress, 2);
+        $this->calculated_from = 'acceptance';
+        $this->last_calculated_at = now();
+        $this->save();
+
+        return $this->overall_percentage;
+    }
+
+    /**
+     * Tính tiến độ tổng hợp từ nhiều nguồn (ưu tiên nghiệm thu)
+     */
+    public function calculateOverall(): float
+    {
+        // Ưu tiên tính từ nghiệm thu nếu có
+        $acceptanceProgress = $this->calculateFromAcceptance();
+        
+        // Nếu có nghiệm thu, ưu tiên sử dụng tiến độ từ nghiệm thu
+        if ($acceptanceProgress !== null) {
+            return $acceptanceProgress;
+        }
+
+        // Nếu không có nghiệm thu, tính từ các nguồn khác
+        $logProgress = $this->calculateFromLogs();
+        $subcontractorProgress = $this->calculateFromSubcontractors();
+
+        // Lấy giá trị cao nhất (hoặc có thể tính trung bình có trọng số)
+        $finalProgress = max($logProgress, $subcontractorProgress);
+        
+        $this->overall_percentage = $finalProgress;
+        $this->calculated_from = 'mixed';
+        $this->last_calculated_at = now();
+        $this->save();
+
+        return $this->overall_percentage;
+    }
 }

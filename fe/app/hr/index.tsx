@@ -212,14 +212,6 @@ export default function HRDashboardScreen() {
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => router.push("/hr/personnel-roles")}
-        >
-          <Ionicons name="people-circle" size={24} color="#6366F1" />
-          <Text style={styles.menuText}>Cấu Hình Vai Trò</Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.menuItem}

@@ -74,12 +74,12 @@ export const equipmentApi = {
     status?: string;
     page?: number;
   }) => {
-    const response = await api.get("/equipment", { params });
+    const response = await api.get("/admin/equipment", { params });
     return response.data;
   },
 
   getEquipmentItem: async (id: number) => {
-    const response = await api.get(`/equipment/${id}`);
+    const response = await api.get(`/admin/equipment/${id}`);
     return response.data;
   },
 
@@ -87,7 +87,7 @@ export const equipmentApi = {
     status?: string;
     page?: number;
   }) => {
-    const response = await api.get(`/equipment/${id}/allocations`, { params });
+    const response = await api.get(`/admin/equipment/${id}/allocations`, { params });
     return response.data;
   },
 
@@ -95,22 +95,45 @@ export const equipmentApi = {
     status?: string;
     page?: number;
   }) => {
-    const response = await api.get(`/equipment/${id}/maintenance`, { params });
+    const response = await api.get(`/admin/equipment/${id}/maintenance`, { params });
     return response.data;
   },
 
   createEquipment: async (data: CreateEquipmentData) => {
-    const response = await api.post("/equipment", data);
+    const response = await api.post("/admin/equipment", data);
     return response.data;
   },
 
   updateEquipment: async (id: number, data: Partial<CreateEquipmentData>) => {
-    const response = await api.put(`/equipment/${id}`, data);
+    const response = await api.put(`/admin/equipment/${id}`, data);
     return response.data;
   },
 
   deleteEquipment: async (id: number) => {
-    const response = await api.delete(`/equipment/${id}`);
+    const response = await api.delete(`/admin/equipment/${id}`);
+    return response.data;
+  },
+
+  getEquipmentByProject: async (projectId: string | number, params?: {
+    search?: string;
+    category?: string;
+    type?: string;
+    status?: string;
+    page?: number;
+  }) => {
+    const response = await api.get(`/projects/${projectId}/equipment`, { params });
+    return response.data;
+  },
+
+  createAllocation: async (projectId: string | number, data: {
+    equipment_id: number;
+    start_date: string;
+    end_date?: string;
+    daily_rate?: number;
+    allocated_to?: number;
+    notes?: string;
+  }) => {
+    const response = await api.post(`/projects/${projectId}/equipment/allocations`, data);
     return response.data;
   },
 };

@@ -71,6 +71,26 @@ class Subcontractor extends Model
         return $this->hasMany(SubcontractorPayment::class)->orderByDesc('created_at');
     }
 
+    public function costs(): HasMany
+    {
+        return $this->hasMany(Cost::class);
+    }
+
+    public function contracts(): HasMany
+    {
+        return $this->hasMany(SubcontractorContract::class);
+    }
+
+    public function acceptances(): HasMany
+    {
+        return $this->hasMany(SubcontractorAcceptance::class);
+    }
+
+    public function progress(): HasMany
+    {
+        return $this->hasMany(SubcontractorProgress::class);
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================

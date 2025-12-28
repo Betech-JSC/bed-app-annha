@@ -77,6 +77,9 @@ export interface CreateSubcontractorData {
   progress_start_date?: string;
   progress_end_date?: string;
   progress_status?: "not_started" | "in_progress" | "completed" | "delayed";
+  create_cost?: boolean;
+  cost_group_id?: number;
+  cost_date?: string;
 }
 
 export const subcontractorApi = {

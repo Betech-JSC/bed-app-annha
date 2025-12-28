@@ -6,6 +6,8 @@ export { default as ProgressChart } from "./ProgressChart";
 export { default as AcceptanceChecklist } from "./AcceptanceChecklist";
 export { default as DefectItem } from "./DefectItem";
 export { default as FileUploader } from "./FileUploader";
+export { default as UniversalFileUploader } from "./UniversalFileUploader";
+export type { UploadedFile } from "./UniversalFileUploader";
 
 // Export HR management components
 export { default as CheckInOutButton } from "./CheckInOutButton";

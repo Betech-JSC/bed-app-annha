@@ -51,6 +51,78 @@ class Department extends Model
         return $this->hasMany(User::class, 'department_id');
     }
 
+    /**
+     * Lấy danh sách Payroll của nhân viên trong phòng ban
+     */
+    public function getPayrolls()
+    {
+        $employeeIds = $this->employees()->pluck('id');
+        return Payroll::whereIn('user_id', $employeeIds);
+    }
+
+    /**
+     * Lấy danh sách Leave Requests của nhân viên trong phòng ban
+     */
+    public function getLeaveRequests()
+    {
+        $employeeIds = $this->employees()->pluck('id');
+        return LeaveRequest::whereIn('user_id', $employeeIds);
+    }
+
+    /**
+     * Lấy danh sách Employment Contracts của nhân viên trong phòng ban
+     */
+    public function getEmploymentContracts()
+    {
+        $employeeIds = $this->employees()->pluck('id');
+        return EmploymentContract::whereIn('user_id', $employeeIds);
+    }
+
+    /**
+     * Lấy danh sách Performance Evaluations của nhân viên trong phòng ban
+     */
+    public function getPerformanceEvaluations()
+    {
+        $employeeIds = $this->employees()->pluck('id');
+        return PerformanceEvaluation::whereIn('employee_id', $employeeIds);
+    }
+
+    /**
+     * Lấy danh sách Work Schedules của nhân viên trong phòng ban
+     */
+    public function getWorkSchedules()
+    {
+        $employeeIds = $this->employees()->pluck('id');
+        return WorkSchedule::whereIn('user_id', $employeeIds);
+    }
+
+    /**
+     * Lấy danh sách Time Trackings của nhân viên trong phòng ban
+     */
+    public function getTimeTrackings()
+    {
+        $employeeIds = $this->employees()->pluck('id');
+        return TimeTracking::whereIn('user_id', $employeeIds);
+    }
+
+    /**
+     * Lấy danh sách Costs liên quan đến phòng ban (qua user)
+     */
+    public function getCosts()
+    {
+        $employeeIds = $this->employees()->pluck('id');
+        return Cost::whereIn('created_by', $employeeIds);
+    }
+
+    /**
+     * Lấy danh sách Projects được quản lý bởi phòng ban (qua project manager)
+     */
+    public function getProjects()
+    {
+        $employeeIds = $this->employees()->pluck('id');
+        return Project::whereIn('project_manager_id', $employeeIds);
+    }
+
     // ==================================================================
     // BOOT
     // ==================================================================

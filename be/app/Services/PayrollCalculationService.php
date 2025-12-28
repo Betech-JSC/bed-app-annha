@@ -7,11 +7,29 @@ use App\Models\Payroll;
 use App\Models\TimeTracking;
 use App\Models\EmployeeSalaryConfig;
 use App\Models\Bonus;
+use App\Models\EmployeeProfile;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PayrollCalculationService
 {
+    protected $taxCalculationService;
+    protected $socialInsuranceService;
+
+    // Mức lương tối thiểu vùng (có thể cấu hình)
+    const MINIMUM_SALARY_REGION_1 = 4680000; // Vùng I
+    const MINIMUM_SALARY_REGION_2 = 4160000; // Vùng II
+    const MINIMUM_SALARY_REGION_3 = 3640000; // Vùng III
+    const MINIMUM_SALARY_REGION_4 = 3250000; // Vùng IV
+
+    public function __construct(
+        TaxCalculationService $taxCalculationService,
+        SocialInsuranceService $socialInsuranceService
+    ) {
+        $this->taxCalculationService = $taxCalculationService;
+        $this->socialInsuranceService = $socialInsuranceService;
+    }
     /**
      * Tính lương cho user trong kỳ
      */
@@ -53,11 +71,36 @@ class PayrollCalculationService
         // Calculate gross salary
         $grossSalary = $baseSalary + $overtimeData['overtime_amount'] + $bonusAmount;
 
-        // Apply tax (simplified - 10% for now)
-        $tax = $this->applyTax($grossSalary);
+        // Validation: mức lương >= mức lương tối thiểu vùng
+        $minimumSalary = self::MINIMUM_SALARY_REGION_3; // Mặc định vùng III, có thể lấy từ config
+        if ($grossSalary > 0 && $grossSalary < $minimumSalary) {
+            Log::warning("Gross salary is below minimum wage", [
+                'user_id' => $user->id,
+                'gross_salary' => $grossSalary,
+                'minimum_salary' => $minimumSalary,
+            ]);
+        }
 
-        // Calculate net salary
-        $netSalary = $grossSalary - $tax;
+        // Tính bảo hiểm (BHXH, BHYT, BHTN) - người lao động đóng
+        $insuranceData = $this->socialInsuranceService->calculateSocialInsurance($grossSalary, false);
+        $employeeInsuranceTotal = $insuranceData['employee']['total'];
+
+        // Thu nhập chịu thuế = Gross - Bảo hiểm
+        $taxableIncome = max(0, $grossSalary - $employeeInsuranceTotal);
+
+        // Lấy số người phụ thuộc từ EmployeeProfile (nếu có)
+        $dependentsCount = 0;
+        $employeeProfile = EmployeeProfile::where('user_id', $user->id)->first();
+        if ($employeeProfile && isset($employeeProfile->dependents_count)) {
+            $dependentsCount = (int) $employeeProfile->dependents_count;
+        }
+
+        // Tính thuế TNCN
+        $taxData = $this->taxCalculationService->calculateTax($taxableIncome, $dependentsCount);
+        $tax = $taxData['tax'];
+
+        // Calculate net salary = Gross - Bảo hiểm (employee) - Thuế - Khấu trừ
+        $netSalary = $grossSalary - $employeeInsuranceTotal - $tax - ($deductions ?? 0);
 
         // Determine project_id
         // Priority: 1. Use provided project_id, 2. Use from time trackings if all same project, 3. null
@@ -81,14 +124,49 @@ class PayrollCalculationService
                 'overtime_hours' => $overtimeData['overtime_hours'],
                 'overtime_rate' => $overtimeData['overtime_rate'],
                 'bonus_amount' => $bonusAmount,
-                'deductions' => 0, // Can be extended
+                'deductions' => $deductions ?? 0,
                 'gross_salary' => $grossSalary,
+                'social_insurance_amount' => $insuranceData['employee']['social_insurance'],
+                'health_insurance_amount' => $insuranceData['employee']['health_insurance'],
+                'unemployment_insurance_amount' => $insuranceData['employee']['unemployment_insurance'],
+                'taxable_income' => $taxData['taxable_income'],
+                'personal_deduction' => $taxData['personal_deduction'],
+                'dependent_deduction' => $taxData['dependent_deduction'],
+                'dependents_count' => $dependentsCount,
                 'tax' => $tax,
                 'net_salary' => $netSalary,
                 'status' => 'calculated',
                 'calculated_at' => now(),
             ]
         );
+
+        Log::info("Payroll calculated for user {$user->id}", [
+            'user_id' => $user->id,
+            'payroll_id' => $payroll->id,
+            'gross_salary' => $grossSalary,
+            'insurance_total' => $employeeInsuranceTotal,
+            'tax' => $tax,
+            'net_salary' => $netSalary,
+        ]);
+
+        // Validate calculation
+        $validationService = app(\App\Services\CalculationValidationService::class);
+        $validation = $validationService->validatePayrollCalculation($payroll);
+        
+        if (!empty($validation['warnings'])) {
+            Log::warning("Payroll calculation warnings for payroll {$payroll->id}", [
+                'payroll_id' => $payroll->id,
+                'warnings' => $validation['warnings'],
+            ]);
+        }
+        
+        if (!empty($validation['errors'])) {
+            Log::error("Payroll calculation errors for payroll {$payroll->id}", [
+                'payroll_id' => $payroll->id,
+                'errors' => $validation['errors'],
+            ]);
+            throw new \Exception("Payroll calculation validation failed: " . json_encode($validation['errors']));
+        }
 
         return $payroll;
     }
@@ -165,15 +243,6 @@ class PayrollCalculationService
         ];
     }
 
-    /**
-     * Tính thuế
-     */
-    protected function applyTax(float $grossSalary): float
-    {
-        // Simplified tax calculation - 10% for now
-        // Can be extended with tax brackets
-        return round($grossSalary * 0.1, 2);
-    }
 
     /**
      * Tính lương thực nhận

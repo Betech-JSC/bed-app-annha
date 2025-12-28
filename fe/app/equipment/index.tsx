@@ -11,6 +11,8 @@ import {
     Modal,
     TextInput,
     ScrollView,
+    KeyboardAvoidingView,
+    Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -54,6 +56,8 @@ export default function EquipmentScreen() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [focusedField, setFocusedField] = useState<string | null>(null);
 
     useEffect(() => {
         loadEquipment();
@@ -82,9 +86,27 @@ export default function EquipmentScreen() {
         loadEquipment();
     };
 
+    const validateForm = () => {
+        const newErrors: Record<string, string> = {};
+
+        if (!formData.name || formData.name.trim() === "") {
+            newErrors.name = "Tên thiết bị là bắt buộc";
+        }
+
+        if (formData.purchase_price !== undefined && formData.purchase_price < 0) {
+            newErrors.purchase_price = "Giá mua không được âm";
+        }
+
+        if (formData.rental_rate_per_day !== undefined && formData.rental_rate_per_day < 0) {
+            newErrors.rental_rate_per_day = "Giá thuê không được âm";
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     const handleCreate = async () => {
-        if (!formData.name) {
-            Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin");
+        if (!validateForm()) {
             return;
         }
 
@@ -98,10 +120,12 @@ export default function EquipmentScreen() {
                 Alert.alert("Thành công", editingEquipment ? "Đã cập nhật thiết bị" : "Đã tạo thiết bị thành công");
                 setShowCreateModal(false);
                 resetForm();
+                setErrors({});
                 loadEquipment();
             }
         } catch (error: any) {
-            Alert.alert("Lỗi", error.response?.data?.message || "Không thể thực hiện thao tác");
+            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể thực hiện thao tác";
+            Alert.alert("Lỗi", errorMessage);
         } finally {
             setSubmitting(false);
         }
@@ -143,7 +167,8 @@ export default function EquipmentScreen() {
                                 loadEquipment();
                             }
                         } catch (error: any) {
-                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa thiết bị");
+                            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể xóa thiết bị";
+                            Alert.alert("Lỗi", errorMessage);
                         }
                     },
                 },
@@ -167,6 +192,8 @@ export default function EquipmentScreen() {
             maintenance_interval_days: 30,
             status: "available",
         });
+        setErrors({});
+        setFocusedField(null);
     };
 
     const getStatusColor = (status: string) => {
@@ -314,11 +341,11 @@ export default function EquipmentScreen() {
             <Modal
                 visible={showCreateModal}
                 animationType="slide"
-                transparent={true}
+                presentationStyle="pageSheet"
                 onRequestClose={() => setShowCreateModal(false)}
             >
                 <KeyboardAvoidingView
-                    style={styles.modalOverlay}
+                    style={styles.modalContainer}
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
                     keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
                 >
@@ -337,177 +364,333 @@ export default function EquipmentScreen() {
                             contentContainerStyle={styles.modalBodyContent}
                             keyboardShouldPersistTaps="handled"
                             showsVerticalScrollIndicator={true}
+                            nestedScrollEnabled={true}
                         >
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Tên thiết bị *</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập tên thiết bị"
-                                    value={formData.name}
-                                    onChangeText={(text) => setFormData({ ...formData, name: text })}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Mã thiết bị</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập mã thiết bị (tùy chọn)"
-                                    value={formData.code}
-                                    onChangeText={(text) => setFormData({ ...formData, code: text })}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Loại</Text>
-                                <View style={styles.typeContainer}>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.typeButton,
-                                            formData.type === "owned" && styles.typeButtonActive,
-                                        ]}
-                                        onPress={() => setFormData({ ...formData, type: "owned" })}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.typeButtonText,
-                                                formData.type === "owned" && styles.typeButtonTextActive,
-                                            ]}
-                                        >
-                                            Sở hữu
-                                        </Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.typeButton,
-                                            formData.type === "rented" && styles.typeButtonActive,
-                                        ]}
-                                        onPress={() => setFormData({ ...formData, type: "rented" })}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.typeButtonText,
-                                                formData.type === "rented" && styles.typeButtonTextActive,
-                                            ]}
-                                        >
-                                            Thuê
-                                        </Text>
-                                    </TouchableOpacity>
+                            {/* Thông tin cơ bản */}
+                            <View style={styles.formSection}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
                                 </View>
-                            </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Danh mục</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập danh mục"
-                                    value={formData.category}
-                                    onChangeText={(text) => setFormData({ ...formData, category: text })}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Hãng</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập hãng"
-                                    value={formData.brand}
-                                    onChangeText={(text) => setFormData({ ...formData, brand: text })}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Model</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập model"
-                                    value={formData.model}
-                                    onChangeText={(text) => setFormData({ ...formData, model: text })}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Số seri</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập số seri"
-                                    value={formData.serial_number}
-                                    onChangeText={(text) => setFormData({ ...formData, serial_number: text })}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày mua</Text>
-                                <TouchableOpacity
-                                    style={styles.dateInput}
-                                    onPress={() => setShowDatePicker(true)}
-                                >
-                                    <Text>
-                                        {formData.purchase_date
-                                            ? new Date(formData.purchase_date).toLocaleDateString("vi-VN")
-                                            : "Chọn ngày"}
-                                    </Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {showDatePicker && (
-                                    <DateTimePicker
-                                        value={formData.purchase_date ? new Date(formData.purchase_date) : new Date()}
-                                        mode="date"
-                                        display="default"
-                                        onChange={(event, date) => {
-                                            setShowDatePicker(false);
-                                            if (date) {
-                                                setFormData({
-                                                    ...formData,
-                                                    purchase_date: date.toISOString().split("T")[0],
-                                                });
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.label}>Tên thiết bị</Text>
+                                        <Text style={styles.required}>*</Text>
+                                    </View>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "name" && styles.inputFocused,
+                                            errors.name && styles.inputError,
+                                        ]}
+                                        placeholder="Nhập tên thiết bị"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.name}
+                                        onChangeText={(text) => {
+                                            setFormData({ ...formData, name: text });
+                                            if (errors.name) setErrors({ ...errors, name: "" });
+                                        }}
+                                        onFocus={() => setFocusedField("name")}
+                                        onBlur={() => {
+                                            setFocusedField(null);
+                                            if (!formData.name || formData.name.trim() === "") {
+                                                setErrors({ ...errors, name: "Tên thiết bị là bắt buộc" });
                                             }
                                         }}
                                     />
-                                )}
-                            </View>
+                                    {errors.name && (
+                                        <View style={styles.errorContainer}>
+                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                                            <Text style={styles.errorText}>{errors.name}</Text>
+                                        </View>
+                                    )}
+                                </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Giá mua</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    value={formData.purchase_price?.toString()}
-                                    onChangeText={(text) =>
-                                        setFormData({ ...formData, purchase_price: parseFloat(text) || 0 })
-                                    }
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            {formData.type === "rented" && (
                                 <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Giá thuê/ngày</Text>
+                                    <View style={styles.labelContainer}>
+                                        <Text style={styles.label}>Mã thiết bị</Text>
+                                        <Text style={styles.optional}>(Tùy chọn)</Text>
+                                    </View>
                                     <TextInput
-                                        style={styles.input}
-                                        placeholder="0"
-                                        value={formData.rental_rate_per_day?.toString()}
-                                        onChangeText={(text) =>
-                                            setFormData({ ...formData, rental_rate_per_day: parseFloat(text) || 0 })
-                                        }
-                                        keyboardType="numeric"
+                                        style={[
+                                            styles.input,
+                                            focusedField === "code" && styles.inputFocused,
+                                        ]}
+                                        placeholder="Nhập mã thiết bị"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.code}
+                                        onChangeText={(text) => setFormData({ ...formData, code: text })}
+                                        onFocus={() => setFocusedField("code")}
+                                        onBlur={() => setFocusedField(null)}
                                     />
                                 </View>
-                            )}
 
-                            <TouchableOpacity
-                                style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-                                onPress={handleCreate}
-                                disabled={submitting}
-                            >
-                                {submitting ? (
-                                    <ActivityIndicator color="#FFFFFF" />
-                                ) : (
-                                    <Text style={styles.submitButtonText}>
-                                        {editingEquipment ? "Cập Nhật" : "Tạo Mới"}
-                                    </Text>
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Loại thiết bị</Text>
+                                    <View style={styles.typeContainer}>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.typeButton,
+                                                formData.type === "owned" && styles.typeButtonActive,
+                                            ]}
+                                            onPress={() => setFormData({ ...formData, type: "owned" })}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons
+                                                name={formData.type === "owned" ? "checkmark-circle" : "ellipse-outline"}
+                                                size={18}
+                                                color={formData.type === "owned" ? "#FFFFFF" : "#6B7280"}
+                                            />
+                                            <Text
+                                                style={[
+                                                    styles.typeButtonText,
+                                                    formData.type === "owned" && styles.typeButtonTextActive,
+                                                ]}
+                                            >
+                                                Sở hữu
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.typeButton,
+                                                formData.type === "rented" && styles.typeButtonActive,
+                                            ]}
+                                            onPress={() => setFormData({ ...formData, type: "rented" })}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons
+                                                name={formData.type === "rented" ? "checkmark-circle" : "ellipse-outline"}
+                                                size={18}
+                                                color={formData.type === "rented" ? "#FFFFFF" : "#6B7280"}
+                                            />
+                                            <Text
+                                                style={[
+                                                    styles.typeButtonText,
+                                                    formData.type === "rented" && styles.typeButtonTextActive,
+                                                ]}
+                                            >
+                                                Thuê
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Danh mục</Text>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "category" && styles.inputFocused,
+                                        ]}
+                                        placeholder="Nhập danh mục"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.category}
+                                        onChangeText={(text) => setFormData({ ...formData, category: text })}
+                                        onFocus={() => setFocusedField("category")}
+                                        onBlur={() => setFocusedField(null)}
+                                    />
+                                </View>
+                            </View>
+
+                            {/* Thông tin chi tiết */}
+                            <View style={styles.formSection}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="construct-outline" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Thông tin chi tiết</Text>
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Hãng sản xuất</Text>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "brand" && styles.inputFocused,
+                                        ]}
+                                        placeholder="Nhập hãng sản xuất"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.brand}
+                                        onChangeText={(text) => setFormData({ ...formData, brand: text })}
+                                        onFocus={() => setFocusedField("brand")}
+                                        onBlur={() => setFocusedField(null)}
+                                    />
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Model</Text>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "model" && styles.inputFocused,
+                                        ]}
+                                        placeholder="Nhập model"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.model}
+                                        onChangeText={(text) => setFormData({ ...formData, model: text })}
+                                        onFocus={() => setFocusedField("model")}
+                                        onBlur={() => setFocusedField(null)}
+                                    />
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Số seri</Text>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "serial_number" && styles.inputFocused,
+                                        ]}
+                                        placeholder="Nhập số seri"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.serial_number}
+                                        onChangeText={(text) => setFormData({ ...formData, serial_number: text })}
+                                        onFocus={() => setFocusedField("serial_number")}
+                                        onBlur={() => setFocusedField(null)}
+                                    />
+                                </View>
+                            </View>
+
+                            {/* Thông tin tài chính */}
+                            <View style={styles.formSection}>
+                                <View style={styles.sectionHeader}>
+                                    <Ionicons name="cash-outline" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Thông tin tài chính</Text>
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Ngày mua</Text>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.dateInput,
+                                            focusedField === "purchase_date" && styles.inputFocused,
+                                        ]}
+                                        onPress={() => {
+                                            setShowDatePicker(true);
+                                            setFocusedField("purchase_date");
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={formData.purchase_date ? {} : styles.placeholderText}>
+                                            {formData.purchase_date
+                                                ? new Date(formData.purchase_date).toLocaleDateString("vi-VN")
+                                                : "Chọn ngày mua"}
+                                        </Text>
+                                        <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                                    </TouchableOpacity>
+                                    {showDatePicker && (
+                                        <DateTimePicker
+                                            value={formData.purchase_date ? new Date(formData.purchase_date) : new Date()}
+                                            mode="date"
+                                            display="default"
+                                            onChange={(event, date) => {
+                                                setShowDatePicker(false);
+                                                setFocusedField(null);
+                                                if (date) {
+                                                    setFormData({
+                                                        ...formData,
+                                                        purchase_date: date.toISOString().split("T")[0],
+                                                    });
+                                                }
+                                            }}
+                                        />
+                                    )}
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Giá mua (VNĐ)</Text>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "purchase_price" && styles.inputFocused,
+                                            errors.purchase_price && styles.inputError,
+                                        ]}
+                                        placeholder="0"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.purchase_price?.toString()}
+                                        onChangeText={(text) => {
+                                            const value = parseFloat(text) || 0;
+                                            setFormData({ ...formData, purchase_price: value });
+                                            if (errors.purchase_price) setErrors({ ...errors, purchase_price: "" });
+                                        }}
+                                        keyboardType="numeric"
+                                        onFocus={() => setFocusedField("purchase_price")}
+                                        onBlur={() => {
+                                            setFocusedField(null);
+                                            if (formData.purchase_price !== undefined && formData.purchase_price < 0) {
+                                                setErrors({ ...errors, purchase_price: "Giá mua không được âm" });
+                                            }
+                                        }}
+                                    />
+                                    {errors.purchase_price && (
+                                        <View style={styles.errorContainer}>
+                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                                            <Text style={styles.errorText}>{errors.purchase_price}</Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                {formData.type === "rented" && (
+                                    <View style={styles.formGroup}>
+                                        <Text style={styles.label}>Giá thuê/ngày (VNĐ)</Text>
+                                        <TextInput
+                                            style={[
+                                                styles.input,
+                                                focusedField === "rental_rate_per_day" && styles.inputFocused,
+                                                errors.rental_rate_per_day && styles.inputError,
+                                            ]}
+                                            placeholder="0"
+                                            placeholderTextColor="#9CA3AF"
+                                            value={formData.rental_rate_per_day?.toString()}
+                                            onChangeText={(text) => {
+                                                const value = parseFloat(text) || 0;
+                                                setFormData({ ...formData, rental_rate_per_day: value });
+                                                if (errors.rental_rate_per_day) setErrors({ ...errors, rental_rate_per_day: "" });
+                                            }}
+                                            keyboardType="numeric"
+                                            onFocus={() => setFocusedField("rental_rate_per_day")}
+                                            onBlur={() => {
+                                                setFocusedField(null);
+                                                if (formData.rental_rate_per_day !== undefined && formData.rental_rate_per_day < 0) {
+                                                    setErrors({ ...errors, rental_rate_per_day: "Giá thuê không được âm" });
+                                                }
+                                            }}
+                                        />
+                                        {errors.rental_rate_per_day && (
+                                            <View style={styles.errorContainer}>
+                                                <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                                                <Text style={styles.errorText}>{errors.rental_rate_per_day}</Text>
+                                            </View>
+                                        )}
+                                    </View>
                                 )}
-                            </TouchableOpacity>
+                            </View>
+
+                            {/* Submit Button */}
+                            <View style={styles.buttonContainer}>
+                                <TouchableOpacity
+                                    style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+                                    onPress={handleCreate}
+                                    disabled={submitting}
+                                    activeOpacity={0.8}
+                                >
+                                    {submitting ? (
+                                        <View style={styles.buttonContent}>
+                                            <ActivityIndicator color="#FFFFFF" size="small" />
+                                            <Text style={styles.submitButtonText}>Đang xử lý...</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={styles.buttonContent}>
+                                            <Ionicons
+                                                name={editingEquipment ? "checkmark-circle" : "add-circle"}
+                                                size={20}
+                                                color="#FFFFFF"
+                                            />
+                                            <Text style={styles.submitButtonText}>
+                                                {editingEquipment ? "Cập Nhật" : "Tạo Mới"}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
@@ -656,23 +839,22 @@ const styles = StyleSheet.create({
         color: "#6B7280",
         marginTop: 16,
     },
-    modalOverlay: {
+    modalContainer: {
         flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "flex-end",
+        backgroundColor: "#F9FAFB",
     },
     modalContent: {
+        flex: 1,
         backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: "90%",
-        padding: 16,
     },
     modalHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 16,
+        padding: 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E5E7EB",
     },
     modalTitle: {
         fontSize: 20,
@@ -683,34 +865,86 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     modalBodyContent: {
-        paddingBottom: 20,
+        paddingBottom: Platform.OS === "ios" ? 100 : 80,
+        paddingHorizontal: 16,
+    },
+    formSection: {
+        marginBottom: 24,
+        backgroundColor: "#F9FAFB",
+        borderRadius: 12,
+        padding: 16,
+    },
+    sectionHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 16,
+        gap: 8,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#1F2937",
     },
     formGroup: {
         marginBottom: 16,
+    },
+    labelContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 8,
+        gap: 4,
     },
     label: {
         fontSize: 14,
         fontWeight: "600",
         color: "#1F2937",
-        marginBottom: 8,
+    },
+    required: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#EF4444",
+    },
+    optional: {
+        fontSize: 12,
+        color: "#9CA3AF",
+        fontStyle: "italic",
     },
     input: {
-        borderWidth: 1,
-        borderColor: "#D1D5DB",
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 14,
+        borderWidth: 1.5,
+        borderColor: "#E5E7EB",
+        borderRadius: 10,
+        padding: 14,
+        fontSize: 15,
         backgroundColor: "#FFFFFF",
+        color: "#1F2937",
+        minHeight: 48,
+    },
+    inputFocused: {
+        borderColor: "#3B82F6",
+        backgroundColor: "#F0F9FF",
+        shadowColor: "#3B82F6",
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    inputError: {
+        borderColor: "#EF4444",
+        backgroundColor: "#FEF2F2",
     },
     dateInput: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        borderWidth: 1,
-        borderColor: "#D1D5DB",
-        borderRadius: 8,
-        padding: 12,
+        borderWidth: 1.5,
+        borderColor: "#E5E7EB",
+        borderRadius: 10,
+        padding: 14,
         backgroundColor: "#FFFFFF",
+        minHeight: 48,
+    },
+    placeholderText: {
+        color: "#9CA3AF",
     },
     typeContainer: {
         flexDirection: "row",
@@ -720,11 +954,14 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingVertical: 12,
         paddingHorizontal: 16,
-        borderRadius: 8,
+        borderRadius: 10,
         backgroundColor: "#F3F4F6",
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: "#E5E7EB",
         alignItems: "center",
+        flexDirection: "row",
+        justifyContent: "center",
+        gap: 6,
     },
     typeButtonActive: {
         backgroundColor: "#3B82F6",
@@ -733,25 +970,51 @@ const styles = StyleSheet.create({
     typeButtonText: {
         fontSize: 14,
         color: "#6B7280",
-        fontWeight: "500",
+        fontWeight: "600",
     },
     typeButtonTextActive: {
         color: "#FFFFFF",
     },
+    errorContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginTop: 6,
+        gap: 6,
+    },
+    errorText: {
+        fontSize: 12,
+        color: "#EF4444",
+        flex: 1,
+    },
+    buttonContainer: {
+        marginTop: 8,
+        marginBottom: 8,
+    },
     submitButton: {
         backgroundColor: "#3B82F6",
-        borderRadius: 8,
+        borderRadius: 12,
         padding: 16,
         alignItems: "center",
-        marginTop: 8,
+        justifyContent: "center",
+        shadowColor: "#3B82F6",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
     submitButtonDisabled: {
-        opacity: 0.5,
+        opacity: 0.6,
+        shadowOpacity: 0.1,
+    },
+    buttonContent: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
     },
     submitButtonText: {
         color: "#FFFFFF",
         fontSize: 16,
-        fontWeight: "600",
+        fontWeight: "700",
     },
 });
 

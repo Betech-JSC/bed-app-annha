@@ -187,7 +187,14 @@ class AcceptanceStage extends Model
             $this->owner_approved_by = $user->id;
         }
         $this->owner_approved_at = now();
-        return $this->save();
+        $saved = $this->save();
+        
+        // Cập nhật tiến độ dự án khi stage được owner approved
+        if ($saved) {
+            $this->updateProjectProgress();
+        }
+        
+        return $saved;
     }
 
     public function reject(string $reason, ?User $user = null): bool
@@ -213,6 +220,28 @@ class AcceptanceStage extends Model
                 $this->status = 'internal_approved';
                 $this->save();
             }
+        }
+        
+        // Cập nhật tiến độ dự án
+        $this->updateProjectProgress();
+    }
+
+    /**
+     * Cập nhật tiến độ dự án dựa trên nghiệm thu
+     */
+    protected function updateProjectProgress(): void
+    {
+        if ($this->project) {
+            // Đảm bảo có progress record
+            if (!$this->project->progress) {
+                $this->project->progress()->create([
+                    'overall_percentage' => 0,
+                    'calculated_from' => 'acceptance',
+                ]);
+            }
+            
+            // Tính lại tiến độ tổng hợp (ưu tiên nghiệm thu)
+            $this->project->progress->calculateOverall();
         }
     }
 

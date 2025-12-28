@@ -24,6 +24,10 @@ class ProjectProgressController extends Controller
             ]);
         }
 
+        // Tự động tính lại tiến độ từ nghiệm thu (ưu tiên)
+        // Hoặc từ các nguồn khác nếu không có nghiệm thu
+        $progress->calculateOverall();
+
         // Get additional data for charts
         $logs = $project->constructionLogs()
             ->select('log_date', 'completion_percentage')
@@ -34,12 +38,33 @@ class ProjectProgressController extends Controller
             ->select('name', 'progress_status', 'total_quote')
             ->get();
 
+        // Thông tin nghiệm thu
+        $acceptanceStages = $project->acceptanceStages()
+            ->with(['items' => function ($query) {
+                $query->orderBy('order');
+            }])
+            ->orderBy('order')
+            ->get();
+
+        $acceptanceStats = [
+            'total_stages' => $acceptanceStages->count(),
+            'fully_approved_stages' => $acceptanceStages->where('status', 'owner_approved')->count(),
+            'total_items' => $acceptanceStages->sum(function ($stage) {
+                return $stage->items->count();
+            }),
+            'approved_items' => $acceptanceStages->sum(function ($stage) {
+                return $stage->items->where('acceptance_status', 'approved')->count();
+            }),
+        ];
+
         return response()->json([
             'success' => true,
             'data' => [
-                'progress' => $progress,
+                'progress' => $progress->fresh(), // Refresh để lấy giá trị mới nhất
                 'logs' => $logs,
                 'subcontractors' => $subcontractors,
+                'acceptance_stages' => $acceptanceStages,
+                'acceptance_stats' => $acceptanceStats,
             ]
         ]);
     }

@@ -46,17 +46,17 @@ export const materialApi = {
     category?: string;
     page?: number;
   }) => {
-    const response = await api.get("/materials", { params });
+    const response = await api.get("/admin/materials", { params });
     return response.data;
   },
 
   getMaterial: async (id: number) => {
-    const response = await api.get(`/materials/${id}`);
+    const response = await api.get(`/admin/materials/${id}`);
     return response.data;
   },
 
   getStock: async (id: number) => {
-    const response = await api.get(`/materials/${id}/stock`);
+    const response = await api.get(`/admin/materials/${id}/stock`);
     return response.data;
   },
 
@@ -65,22 +65,42 @@ export const materialApi = {
     status?: string;
     page?: number;
   }) => {
-    const response = await api.get(`/materials/${id}/transactions`, { params });
+    const response = await api.get(`/admin/materials/${id}/transactions`, { params });
     return response.data;
   },
 
   createMaterial: async (data: CreateMaterialData) => {
-    const response = await api.post("/materials", data);
+    const response = await api.post("/admin/materials", data);
     return response.data;
   },
 
   updateMaterial: async (id: number, data: Partial<CreateMaterialData>) => {
-    const response = await api.put(`/materials/${id}`, data);
+    const response = await api.put(`/admin/materials/${id}`, data);
     return response.data;
   },
 
   deleteMaterial: async (id: number) => {
-    const response = await api.delete(`/materials/${id}`);
+    const response = await api.delete(`/admin/materials/${id}`);
+    return response.data;
+  },
+
+  getMaterialsByProject: async (projectId: string | number, params?: {
+    search?: string;
+    category?: string;
+    page?: number;
+  }) => {
+    const response = await api.get(`/projects/${projectId}/materials`, { params });
+    return response.data;
+  },
+
+  createTransaction: async (projectId: string | number, data: {
+    material_id: number;
+    type: "in" | "out" | "adjustment";
+    quantity: number;
+    transaction_date: string;
+    notes?: string;
+  }) => {
+    const response = await api.post(`/projects/${projectId}/materials/transactions`, data);
     return response.data;
   },
 };

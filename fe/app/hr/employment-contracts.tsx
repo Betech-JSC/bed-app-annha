@@ -11,6 +11,8 @@ import {
     Modal,
     TextInput,
     ScrollView,
+    KeyboardAvoidingView,
+    Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -110,7 +112,8 @@ export default function EmploymentContractsScreen() {
                 loadContracts();
             }
         } catch (error: any) {
-            Alert.alert("Lỗi", error.response?.data?.message || "Không thể thực hiện thao tác");
+            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể thực hiện thao tác";
+            Alert.alert("Lỗi", errorMessage);
         } finally {
             setSubmitting(false);
         }
@@ -157,7 +160,8 @@ export default function EmploymentContractsScreen() {
                                 loadContracts();
                             }
                         } catch (error: any) {
-                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể gia hạn hợp đồng");
+                            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể gia hạn hợp đồng";
+                            Alert.alert("Lỗi", errorMessage);
                         }
                     },
                 },
@@ -189,7 +193,8 @@ export default function EmploymentContractsScreen() {
                                 loadContracts();
                             }
                         } catch (error: any) {
-                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể chấm dứt hợp đồng");
+                            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể chấm dứt hợp đồng";
+                            Alert.alert("Lỗi", errorMessage);
                         }
                     },
                 },
@@ -335,11 +340,11 @@ export default function EmploymentContractsScreen() {
             <Modal
                 visible={showCreateModal}
                 animationType="slide"
-                transparent={true}
+                presentationStyle="pageSheet"
                 onRequestClose={() => setShowCreateModal(false)}
             >
                 <KeyboardAvoidingView
-                    style={styles.modalOverlay}
+                    style={styles.modalContainer}
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
                     keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
                 >
@@ -358,6 +363,7 @@ export default function EmploymentContractsScreen() {
                             contentContainerStyle={styles.modalBodyContent}
                             keyboardShouldPersistTaps="handled"
                             showsVerticalScrollIndicator={true}
+                            nestedScrollEnabled={true}
                         >
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Nhân viên *</Text>
@@ -683,23 +689,22 @@ const styles = StyleSheet.create({
         color: "#6B7280",
         marginTop: 16,
     },
-    modalOverlay: {
+    modalContainer: {
         flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "flex-end",
+        backgroundColor: "#F9FAFB",
     },
     modalContent: {
+        flex: 1,
         backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: "90%",
-        padding: 16,
     },
     modalHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 16,
+        padding: 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E5E7EB",
     },
     modalTitle: {
         fontSize: 20,
@@ -708,6 +713,10 @@ const styles = StyleSheet.create({
     },
     modalBody: {
         flex: 1,
+    },
+    modalBodyContent: {
+        paddingBottom: Platform.OS === "ios" ? 100 : 80,
+        paddingHorizontal: 16,
     },
     formGroup: {
         marginBottom: 16,
