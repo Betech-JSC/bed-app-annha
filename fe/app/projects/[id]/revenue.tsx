@@ -13,6 +13,7 @@ import { revenueApi, RevenueSummary, RevenueDashboard } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
 import { LineChart, BarChart, PieChart, StackedBarChart } from "react-native-chart-kit";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Dimensions } from "react-native";
 
 const screenWidth = Dimensions.get("window").width;
@@ -20,6 +21,7 @@ const screenWidth = Dimensions.get("window").width;
 export default function RevenueScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
   const [dashboard, setDashboard] = useState<RevenueDashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,6 +79,7 @@ export default function RevenueScreen() {
   return (
     <ScrollView
       style={styles.container}
+      contentContainerStyle={{ paddingBottom: tabBarHeight }}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }

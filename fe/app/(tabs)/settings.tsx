@@ -21,10 +21,12 @@ import LogoutButton from "@/components/LogoutButton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { setUser } from "@/reducers/userSlice";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function SettingsScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
+  const tabBarHeight = useTabBarHeight();
   const user = useSelector((state: RootState) => state.user);
   const { permissions, loading: permissionsLoading } = usePermissions();
   const [roles, setRoles] = useState<any[]>([]);
@@ -174,6 +176,7 @@ export default function SettingsScreen() {
     <View style={styles.container}>
       <ScreenHeader title="Cấu Hình" />
       <ScrollView
+        contentContainerStyle={{ paddingBottom: tabBarHeight }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }

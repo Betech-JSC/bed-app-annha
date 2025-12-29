@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { employeesApi } from "@/api/employeesApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -34,6 +35,7 @@ interface DashboardData {
 
 export default function HRDashboardScreen() {
   const router = useRouter();
+  const tabBarHeight = useTabBarHeight();
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
 
@@ -73,7 +75,7 @@ export default function HRDashboardScreen() {
   return (
     <View style={styles.container}>
       <ScreenHeader title="Quản Lý Nhân Sự" />
-      <ScrollView>
+      <ScrollView contentContainerStyle={{ paddingBottom: tabBarHeight }}>
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>

@@ -17,12 +17,14 @@ import {
 } from "@/api/contractApi";
 import { attachmentApi, Attachment } from "@/api/attachmentApi";
 import { UniversalFileUploader, ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ContractScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [contract, setContract] = useState<Contract | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -256,7 +258,7 @@ export default function ContractScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: tabBarHeight }}>
       <ScreenHeader
         title="Giá Trị Hợp Đồng"
         showBackButton

@@ -28,7 +28,15 @@ class AcceptanceStageController extends Controller
                 },
                 'attachments',
                 'items' => function ($q) {
-                    $q->orderBy('order');
+                    $q->orderBy('order')
+                      ->with([
+                          'attachments',
+                          'task',
+                          'template.attachments',
+                          'submitter',
+                          'projectManagerApprover',
+                          'customerApprover',
+                      ]);
                 }
             ])
             ->orderBy('order')

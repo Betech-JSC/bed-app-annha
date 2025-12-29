@@ -14,10 +14,12 @@ import { contractApi, Contract } from "@/api/contractApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function ProjectDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [project, setProject] = useState<Project | null>(null);
   const [contract, setContract] = useState<Contract | null>(null);
   const [loading, setLoading] = useState(true);
@@ -222,7 +224,7 @@ export default function ProjectDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: tabBarHeight }}>
       <ScreenHeader
         title="Chi Tiết Dự Án"
         showBackButton

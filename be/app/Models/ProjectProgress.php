@@ -39,10 +39,23 @@ class ProjectProgress extends Model
             ->first();
 
         if ($latestLog) {
-            $this->overall_percentage = $latestLog->completion_percentage;
+            $finalProgress = $latestLog->completion_percentage;
+            $this->overall_percentage = $finalProgress;
             $this->calculated_from = 'logs';
             $this->last_calculated_at = now();
             $this->save();
+
+            // Tự động cập nhật trạng thái dự án khi tiến độ đạt 100%
+            if ($finalProgress >= 100 && $this->project) {
+                $project = $this->project;
+                if ($project->status !== 'completed') {
+                    $project->update([
+                        'status' => 'completed',
+                        'updated_by' => auth()->id() ?? $project->updated_by,
+                    ]);
+                }
+            }
+
             return $this->overall_percentage;
         }
 
@@ -74,24 +87,51 @@ class ProjectProgress extends Model
         }
 
         if ($totalWeight > 0) {
-            $this->overall_percentage = $weightedProgress / $totalWeight;
+            $finalProgress = $weightedProgress / $totalWeight;
+            $this->overall_percentage = $finalProgress;
         } else {
             $this->overall_percentage = 0;
+            $finalProgress = 0;
         }
 
         $this->calculated_from = 'subcontractors';
         $this->last_calculated_at = now();
         $this->save();
 
+        // Tự động cập nhật trạng thái dự án khi tiến độ đạt 100%
+        if ($finalProgress >= 100 && $this->project) {
+            $project = $this->project;
+            if ($project->status !== 'completed') {
+                $project->update([
+                    'status' => 'completed',
+                    'updated_by' => auth()->id() ?? $project->updated_by,
+                ]);
+            }
+        }
+
         return $this->overall_percentage;
     }
 
     public function updateManual(float $percentage): bool
     {
-        $this->overall_percentage = max(0, min(100, $percentage));
+        $finalProgress = max(0, min(100, $percentage));
+        $this->overall_percentage = $finalProgress;
         $this->calculated_from = 'manual';
         $this->last_calculated_at = now();
-        return $this->save();
+        $saved = $this->save();
+
+        // Tự động cập nhật trạng thái dự án khi tiến độ đạt 100%
+        if ($finalProgress >= 100 && $this->project) {
+            $project = $this->project;
+            if ($project->status !== 'completed') {
+                $project->update([
+                    'status' => 'completed',
+                    'updated_by' => auth()->id() ?? $project->updated_by,
+                ]);
+            }
+        }
+
+        return $saved;
     }
 
     /**
@@ -178,20 +218,32 @@ class ProjectProgress extends Model
         
         // Nếu có nghiệm thu, ưu tiên sử dụng tiến độ từ nghiệm thu
         if ($acceptanceProgress !== null) {
-            return $acceptanceProgress;
+            $finalProgress = $acceptanceProgress;
+        } else {
+            // Nếu không có nghiệm thu, tính từ các nguồn khác
+            $logProgress = $this->calculateFromLogs();
+            $subcontractorProgress = $this->calculateFromSubcontractors();
+
+            // Lấy giá trị cao nhất (hoặc có thể tính trung bình có trọng số)
+            $finalProgress = max($logProgress, $subcontractorProgress);
+            
+            $this->overall_percentage = $finalProgress;
+            $this->calculated_from = 'mixed';
+            $this->last_calculated_at = now();
+            $this->save();
         }
 
-        // Nếu không có nghiệm thu, tính từ các nguồn khác
-        $logProgress = $this->calculateFromLogs();
-        $subcontractorProgress = $this->calculateFromSubcontractors();
-
-        // Lấy giá trị cao nhất (hoặc có thể tính trung bình có trọng số)
-        $finalProgress = max($logProgress, $subcontractorProgress);
-        
-        $this->overall_percentage = $finalProgress;
-        $this->calculated_from = 'mixed';
-        $this->last_calculated_at = now();
-        $this->save();
+        // Tự động cập nhật trạng thái dự án khi tiến độ đạt 100%
+        if ($finalProgress >= 100 && $this->project) {
+            $project = $this->project;
+            // Chỉ cập nhật nếu trạng thái hiện tại chưa phải 'completed'
+            if ($project->status !== 'completed') {
+                $project->update([
+                    'status' => 'completed',
+                    'updated_by' => auth()->id() ?? $project->updated_by,
+                ]);
+            }
+        }
 
         return $this->overall_percentage;
     }

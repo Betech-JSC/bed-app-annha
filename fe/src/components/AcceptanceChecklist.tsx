@@ -21,20 +21,18 @@ import api from "@/api/api";
 
 interface AcceptanceChecklistProps {
   stages: AcceptanceStage[];
-  onApprove?: (stageId: number, approvalType: string) => void;
-  canApprove?: boolean;
   projectId?: string | number;
   isProjectManager?: boolean;
+  isCustomer?: boolean;
   onRefresh?: () => void;
   onNavigateToDefects?: () => void;
 }
 
 export default function AcceptanceChecklist({
   stages,
-  onApprove,
-  canApprove = false,
   projectId,
   isProjectManager = false,
+  isCustomer = false,
   onRefresh,
   onNavigateToDefects,
 }: AcceptanceChecklistProps) {
@@ -181,39 +179,6 @@ export default function AcceptanceChecklist({
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "Chờ duyệt";
-      case "internal_approved":
-        return "Đã duyệt nội bộ";
-      case "customer_approved":
-        return "Đã duyệt khách hàng";
-      case "design_approved":
-        return "Đã duyệt thiết kế";
-      case "owner_approved":
-        return "Đã duyệt chủ nhà";
-      case "rejected":
-        return "Đã từ chối";
-      default:
-        return status;
-    }
-  };
-
-  const getNextApprovalType = (status: string): string | null => {
-    switch (status) {
-      case "pending":
-        return "internal";
-      case "internal_approved":
-        return "customer";
-      case "customer_approved":
-        return "design";
-      case "design_approved":
-        return "owner";
-      default:
-        return null;
-    }
-  };
 
   return (
     <>
@@ -242,17 +207,21 @@ export default function AcceptanceChecklist({
         ) : (
           stages.map((stage) => {
             const icon = getStatusIcon(stage.status);
-            const nextApproval = getNextApprovalType(stage.status);
             const hasOpenDefects = stage.defects?.some(
               (d: any) => d.status === "open" || d.status === "in_progress"
             );
 
-            const completionPercentage = stage.completion_percentage || 0;
+            // Tính completion dựa trên workflow_status: customer_approved = hoàn thành
             const totalItems = stage.items?.length || 0;
-            const approvedItems = stage.items?.filter((i: any) => i.acceptance_status === 'approved').length || 0;
+            const approvedItems = stage.items?.filter((i: any) =>
+              i.workflow_status === 'customer_approved' ||
+              (!i.workflow_status && i.acceptance_status === 'approved') // Legacy support
+            ).length || 0;
+            const completionPercentage = totalItems > 0 ? (approvedItems / totalItems) * 100 : 0;
 
             return (
               <View key={stage.id} style={styles.stageCard}>
+                {/* Stage Header - Gọn gàng hơn */}
                 <View style={styles.stageHeader}>
                   <View style={styles.stageInfo}>
                     <View style={[styles.statusIconContainer, { backgroundColor: icon.color + '20' }]}>
@@ -260,21 +229,20 @@ export default function AcceptanceChecklist({
                     </View>
                     <View style={styles.stageText}>
                       <Text style={styles.stageName}>{stage.name}</Text>
-                      <View style={styles.stageMeta}>
-                        <View style={[styles.statusBadge, { backgroundColor: icon.color + '15' }]}>
-                          <Text style={[styles.statusBadgeText, { color: icon.color }]}>
-                            {getStatusText(stage.status)}
-                          </Text>
+                      {/* Gộp progress và items count vào một dòng */}
+                      {totalItems > 0 && (
+                        <View style={styles.stageMeta}>
+                          <View style={styles.progressInfoInline}>
+                            <Text style={styles.progressLabelInline}>Tiến độ:</Text>
+                            <Text style={styles.progressValueInline}>
+                              {approvedItems}/{totalItems} hạng mục ({completionPercentage.toFixed(0)}%)
+                            </Text>
+                          </View>
                         </View>
-                        {totalItems > 0 && (
-                          <Text style={styles.itemsCount}>
-                            {approvedItems}/{totalItems} hạng mục
-                          </Text>
-                        )}
-                      </View>
+                      )}
                     </View>
                   </View>
-                  {/* Action buttons - chỉ hiện khi chưa được duyệt hoàn toàn */}
+                  {/* Action buttons */}
                   {stage.status !== "owner_approved" && (
                     <View style={styles.stageActions}>
                       <PermissionGuard permission="acceptance.update">
@@ -297,112 +265,24 @@ export default function AcceptanceChecklist({
                   )}
                 </View>
 
-                {/* Progress Bar */}
+                {/* Progress Bar - Chỉ hiện khi có items */}
                 {totalItems > 0 && (
                   <View style={styles.progressSection}>
-                    <View style={styles.progressHeader}>
-                      <Text style={styles.progressLabel}>Tiến độ nghiệm thu</Text>
-                      <Text style={styles.progressPercentage}>{completionPercentage.toFixed(0)}%</Text>
-                    </View>
                     <View style={styles.progressBarContainer}>
-                      <View 
+                      <View
                         style={[
-                          styles.progressBar, 
-                          { 
+                          styles.progressBar,
+                          {
                             width: `${completionPercentage}%`,
                             backgroundColor: completionPercentage === 100 ? '#10B981' : completionPercentage > 0 ? '#3B82F6' : '#E5E7EB'
                           }
-                        ]} 
+                        ]}
                       />
                     </View>
                   </View>
                 )}
 
-                {stage.description && (
-                  <Text style={styles.stageDescription}>{stage.description}</Text>
-                )}
-
-                {/* Defects Section */}
-                {stage.defects && stage.defects.length > 0 && (
-                  <View style={styles.defectsSection}>
-                    <View style={styles.defectsHeader}>
-                      <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
-                      <Text style={styles.defectsTitle}>
-                        Lỗi ghi nhận ({stage.defects.length})
-                      </Text>
-                    </View>
-                    {stage.defects.slice(0, 3).map((defect: any) => (
-                      <View key={defect.id} style={styles.defectItem}>
-                        <View style={styles.defectInfo}>
-                          <Text style={styles.defectDescription} numberOfLines={2}>
-                            {defect.description}
-                          </Text>
-                          <View style={styles.defectMeta}>
-                            <View
-                              style={[
-                                styles.defectSeverityBadge,
-                                {
-                                  backgroundColor:
-                                    defect.severity === "critical"
-                                      ? "#EF444420"
-                                      : defect.severity === "high"
-                                        ? "#F9731620"
-                                        : defect.severity === "medium"
-                                          ? "#F59E0B20"
-                                          : "#10B98120",
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.defectSeverityText,
-                                  {
-                                    color:
-                                      defect.severity === "critical"
-                                        ? "#EF4444"
-                                        : defect.severity === "high"
-                                          ? "#F97316"
-                                          : defect.severity === "medium"
-                                            ? "#F59E0B"
-                                            : "#10B981",
-                                  },
-                                ]}
-                              >
-                                {defect.severity === "critical"
-                                  ? "Nghiêm trọng"
-                                  : defect.severity === "high"
-                                    ? "Cao"
-                                    : defect.severity === "medium"
-                                      ? "Trung bình"
-                                      : "Thấp"}
-                              </Text>
-                            </View>
-                            <Text style={styles.defectStatus}>
-                              {defect.status === "open"
-                                ? "Mở"
-                                : defect.status === "in_progress"
-                                  ? "Đang xử lý"
-                                  : defect.status === "fixed"
-                                    ? "Đã sửa"
-                                    : "Đã xác nhận"}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    ))}
-                    {stage.defects.length > 3 && (
-                      <TouchableOpacity
-                        style={styles.viewAllDefectsButton}
-                        onPress={onNavigateToDefects}
-                      >
-                        <Text style={styles.viewAllDefectsText}>
-                          Xem tất cả {stage.defects.length} lỗi →
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-
+                {/* Warning Box - Chỉ hiện khi có lỗi chưa xử lý (ưu tiên hiển thị) */}
                 {hasOpenDefects && (
                   <TouchableOpacity
                     style={styles.warningBox}
@@ -412,116 +292,36 @@ export default function AcceptanceChecklist({
                     <Ionicons name="warning-outline" size={20} color="#EF4444" />
                     <View style={styles.warningContent}>
                       <Text style={styles.warningText}>
-                        ⚠️ Còn {stage.defects?.filter((d: any) => d.status === "open" || d.status === "in_progress").length || 0} lỗi chưa được khắc phục. Vui lòng khắc phục tất cả lỗi trước khi nghiệm thu.
+                        Còn {stage.defects?.filter((d: any) => d.status === "open" || d.status === "in_progress").length || 0} lỗi chưa được khắc phục
                       </Text>
                       <Text style={styles.warningLink}>
-                        Xem chi tiết lỗi →
+                        Xem chi tiết →
                       </Text>
                     </View>
                   </TouchableOpacity>
                 )}
 
-                {/* Acceptance Items Section */}
+                {/* Acceptance Items Section - Luôn hiển thị để người dùng thấy rõ các hạng mục */}
                 {projectId && (
-                  <AcceptanceItemList
-                    stage={stage}
-                    projectId={projectId}
-                    items={stage.items || []}
-                    onRefresh={onRefresh || (() => { })}
-                    isProjectManager={isProjectManager}
-                    isCustomer={false}
-                    onItemApprove={async (itemId: number) => {
-                      const item = stage.items?.find((i) => i.id === itemId);
-                      if (!item) return;
-                      await acceptanceApi.approveItem(projectId, stage.id, itemId);
-                    }}
-                    onItemReject={async (itemId: number, reason: string) => {
-                      await acceptanceApi.rejectItem(projectId, stage.id, itemId, reason);
-                    }}
-                  />
-                )}
-
-                {nextApproval && canApprove && !hasOpenDefects && (
-                  <TouchableOpacity
-                    style={styles.approveButton}
-                    onPress={() => onApprove?.(stage.id, nextApproval)}
-                  >
-                    <Text style={styles.approveButtonText}>
-                      Duyệt {nextApproval === "internal"
-                        ? "nội bộ"
-                        : nextApproval === "customer"
-                          ? "khách hàng"
-                          : nextApproval === "design"
-                            ? "thiết kế"
-                            : "chủ nhà"}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Attachments Section */}
-                <View style={styles.attachmentsSection}>
-                  <View style={styles.attachmentsHeader}>
-                    <Ionicons name="images-outline" size={16} color="#3B82F6" />
-                    <Text style={styles.attachmentsTitle}>
-                      Hình ảnh nghiệm thu ({stage.attachments?.length || 0})
-                    </Text>
-                    {isProjectManager && stage.status === "pending" && (
-                      <TouchableOpacity
-                        style={styles.uploadButtonInline}
-                        onPress={() => openUploadModal(stage.id)}
-                      >
-                        <Ionicons name="add-circle-outline" size={18} color="#3B82F6" />
-                        <Text style={styles.uploadButtonText}>Thêm</Text>
-                      </TouchableOpacity>
-                    )}
+                  <View style={styles.itemsSection}>
+                    <AcceptanceItemList
+                      stage={stage}
+                      projectId={projectId}
+                      items={stage.items || []}
+                      onRefresh={onRefresh || (() => { })}
+                      isProjectManager={isProjectManager}
+                      isCustomer={isCustomer}
+                      onItemApprove={async (itemId: number) => {
+                        const item = stage.items?.find((i) => i.id === itemId);
+                        if (!item) return;
+                        await acceptanceApi.approveItem(projectId, stage.id, itemId);
+                      }}
+                      onItemReject={async (itemId: number, reason: string) => {
+                        await acceptanceApi.rejectItem(projectId, stage.id, itemId, reason);
+                      }}
+                    />
                   </View>
-
-                  {stage.attachments && stage.attachments.length > 0 ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.imagesContainer}
-                      contentContainerStyle={styles.imagesScrollContent}
-                    >
-                      {stage.attachments.map((attachment: any, index: number) => {
-                        const imageUrl = attachment.file_url || attachment.file_path || attachment.url || attachment.location;
-                        if (!imageUrl) return null;
-
-                        return (
-                          <TouchableOpacity
-                            key={attachment.id || index}
-                            style={styles.imageWrapper}
-                            onPress={() => setPreviewImage(imageUrl)}
-                            activeOpacity={0.8}
-                          >
-                            <Image
-                              source={{ uri: imageUrl }}
-                              style={styles.attachmentImage}
-                              resizeMode="cover"
-                            />
-                            <View style={styles.imageOverlay}>
-                              <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  ) : (
-                    <View style={styles.noImagesContainer}>
-                      <Ionicons name="image-outline" size={32} color="#D1D5DB" />
-                      <Text style={styles.noImagesText}>Chưa có hình ảnh nghiệm thu</Text>
-                      {isProjectManager && stage.status === "pending" && (
-                        <TouchableOpacity
-                          style={styles.uploadButton}
-                          onPress={() => openUploadModal(stage.id)}
-                        >
-                          <Ionicons name="add-circle-outline" size={20} color="#3B82F6" />
-                          <Text style={styles.uploadButtonText}>Thêm hình ảnh</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  )}
-                </View>
+                )}
 
               </View>
             );
@@ -880,10 +680,21 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   stageMeta: {
+    marginTop: 4,
+  },
+  progressInfoInline: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
+    gap: 6,
+  },
+  progressLabelInline: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  progressValueInline: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1F2937",
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -894,31 +705,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
-  itemsCount: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
   progressSection: {
     marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-  },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  progressLabel: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#6B7280",
-  },
-  progressPercentage: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#1F2937",
   },
   progressBarContainer: {
     height: 8,
@@ -929,13 +717,6 @@ const styles = StyleSheet.create({
   progressBar: {
     height: "100%",
     borderRadius: 4,
-    transition: "width 0.3s ease",
-  },
-  stageDescription: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginTop: 8,
-    lineHeight: 20,
   },
   warningBox: {
     flexDirection: "row",
@@ -944,7 +725,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginTop: 12,
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
     borderColor: "#FECACA",
   },
@@ -952,90 +733,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   warningText: {
-    fontSize: 14,
-    color: "#EF4444",
+    fontSize: 13,
+    color: "#DC2626",
     fontWeight: "600",
-    marginBottom: 4,
+    lineHeight: 18,
   },
   warningLink: {
     fontSize: 12,
-    color: "#DC2626",
+    color: "#EF4444",
     fontWeight: "500",
     marginTop: 4,
   },
-  defectsSection: {
-    marginTop: 12,
-    paddingTop: 12,
+  itemsSection: {
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
-  },
-  defectsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  defectsTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1F2937",
-  },
-  defectItem: {
-    padding: 12,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: "#EF4444",
-  },
-  defectInfo: {
-    flex: 1,
-  },
-  defectDescription: {
-    fontSize: 13,
-    color: "#1F2937",
-    marginBottom: 8,
-    lineHeight: 18,
-  },
-  defectMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  defectSeverityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  defectSeverityText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  defectStatus: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-  viewAllDefectsButton: {
-    padding: 8,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  viewAllDefectsText: {
-    fontSize: 13,
-    color: "#3B82F6",
-    fontWeight: "500",
-  },
-  approveButton: {
-    backgroundColor: "#10B981",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  approveButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
   },
   attachmentsSection: {
     marginTop: 12,

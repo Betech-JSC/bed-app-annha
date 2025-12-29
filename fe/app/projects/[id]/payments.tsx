@@ -20,10 +20,12 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function PaymentsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const { hasPermission } = useProjectPermissions(id);
   const [payments, setPayments] = useState<ProjectPayment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -306,7 +308,7 @@ export default function PaymentsScreen() {
         data={payments}
         renderItem={renderPaymentItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }

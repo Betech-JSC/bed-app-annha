@@ -443,6 +443,26 @@ class AcceptanceItemController extends Controller
             ], 400);
         }
 
+        // Validate tất cả hạng mục trong giai đoạn có task_id phải đạt 100% tiến độ
+        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
+            ->whereNotNull('task_id')
+            ->with('task')
+            ->get();
+
+        $incompleteTasks = [];
+        foreach ($stageItems as $stageItem) {
+            if ($stageItem->task && $stageItem->task->progress_percentage < 100) {
+                $incompleteTasks[] = $stageItem->task->name ?? "Hạng mục #{$stageItem->id}";
+            }
+        }
+
+        if (count($incompleteTasks) > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể gửi duyệt. Các hạng mục sau chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks)
+            ], 400);
+        }
+
         $item->workflow_status = 'submitted';
         $item->submitted_by = $user->id;
         $item->submitted_at = now();
@@ -495,6 +515,26 @@ class AcceptanceItemController extends Controller
             }
         }
 
+        // Validate tất cả hạng mục trong giai đoạn có task_id phải đạt 100% tiến độ
+        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
+            ->whereNotNull('task_id')
+            ->with('task')
+            ->get();
+
+        $incompleteTasks = [];
+        foreach ($stageItems as $stageItem) {
+            if ($stageItem->task && $stageItem->task->progress_percentage < 100) {
+                $incompleteTasks[] = $stageItem->task->name ?? "Hạng mục #{$stageItem->id}";
+            }
+        }
+
+        if (count($incompleteTasks) > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể duyệt. Các hạng mục sau chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks)
+            ], 400);
+        }
+
         $item->workflow_status = 'project_manager_approved';
         $item->project_manager_approved_by = $user->id;
         $item->project_manager_approved_at = now();
@@ -524,6 +564,20 @@ class AcceptanceItemController extends Controller
             ], 400);
         }
 
+        // Check if user is customer or supervisor
+        $isCustomer = $project->customer_id === $user->id;
+        $isSupervisor = \App\Models\ProjectPersonnel::where('project_id', $project->id)
+            ->where('user_id', $user->id)
+            ->whereIn('role', ['supervisor', 'supervisor_guest'])
+            ->exists();
+
+        if (!$isCustomer && !$isSupervisor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ khách hàng hoặc giám sát mới có quyền duyệt cuối.'
+            ], 403);
+        }
+
         // Kiểm tra lỗi (defects) liên quan đến task của item
         if ($item->task_id) {
             $openDefects = \App\Models\Defect::where('project_id', $project->id)
@@ -537,6 +591,26 @@ class AcceptanceItemController extends Controller
                     'message' => "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong. Vui lòng xử lý tất cả lỗi trước khi duyệt nghiệm thu."
                 ], 400);
             }
+        }
+
+        // Validate tất cả hạng mục trong giai đoạn có task_id phải đạt 100% tiến độ
+        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
+            ->whereNotNull('task_id')
+            ->with('task')
+            ->get();
+
+        $incompleteTasks = [];
+        foreach ($stageItems as $stageItem) {
+            if ($stageItem->task && $stageItem->task->progress_percentage < 100) {
+                $incompleteTasks[] = $stageItem->task->name ?? "Hạng mục #{$stageItem->id}";
+            }
+        }
+
+        if (count($incompleteTasks) > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể duyệt. Các hạng mục sau chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks)
+            ], 400);
         }
 
         $item->workflow_status = 'customer_approved';

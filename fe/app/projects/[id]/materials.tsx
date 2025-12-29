@@ -18,11 +18,13 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { materialApi, Material } from "@/api/materialApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ProjectMaterialsScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
+    const tabBarHeight = useTabBarHeight();
     const [materials, setMaterials] = useState<Material[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -239,7 +241,7 @@ export default function ProjectMaterialsScreen() {
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                 }
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <Ionicons name="cube-outline" size={64} color="#9CA3AF" />

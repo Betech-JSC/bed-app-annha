@@ -14,10 +14,12 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { additionalCostApi, AdditionalCost } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function AdditionalCostsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [costs, setCosts] = useState<AdditionalCost[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -159,7 +161,7 @@ export default function AdditionalCostsScreen() {
         data={costs}
         renderItem={renderCostItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="add-circle-outline" size={64} color="#D1D5DB" />

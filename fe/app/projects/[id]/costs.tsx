@@ -23,10 +23,12 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function CostsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const { hasPermission } = useProjectPermissions(id);
   const [costs, setCosts] = useState<Cost[]>([]);
   const [summary, setSummary] = useState<{
@@ -473,7 +475,7 @@ export default function CostsScreen() {
         data={costs}
         renderItem={renderCostItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }

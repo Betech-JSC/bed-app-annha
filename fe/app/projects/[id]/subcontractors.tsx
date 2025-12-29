@@ -21,10 +21,12 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function SubcontractorsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -406,7 +408,7 @@ export default function SubcontractorsScreen() {
         data={subcontractors}
         renderItem={renderSubcontractorItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="business-outline" size={64} color="#D1D5DB" />

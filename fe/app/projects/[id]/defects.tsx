@@ -17,6 +17,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { defectApi, Defect } from "@/api/defectApi";
 import { DefectItem, UniversalFileUploader, ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Ionicons } from "@expo/vector-icons";
 import { ganttApi } from "@/api/ganttApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -24,6 +25,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 export default function DefectsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [defects, setDefects] = useState<Defect[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -278,7 +280,7 @@ export default function DefectsScreen() {
           />
         )}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="checkmark-circle-outline" size={64} color="#D1D5DB" />

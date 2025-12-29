@@ -8,19 +8,36 @@ import {
   Alert,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useSelector } from "react-redux";
+import type { RootState } from "@/reducers/index";
 import { acceptanceApi, AcceptanceStage } from "@/api/acceptanceApi";
+import { projectApi, Project } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
 import { AcceptanceChecklist, ScreenHeader } from "@/components";
 
 export default function AcceptanceScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const user = useSelector((state: RootState) => state.user);
   const [stages, setStages] = useState<AcceptanceStage[]>([]);
+  const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    loadProject();
     loadStages();
   }, [id]);
+
+  const loadProject = async () => {
+    try {
+      const response = await projectApi.getProject(id!);
+      if (response.success) {
+        setProject(response.data);
+      }
+    } catch (error) {
+      console.error("Error loading project:", error);
+    }
+  };
 
   const loadStages = async () => {
     try {
@@ -36,17 +53,10 @@ export default function AcceptanceScreen() {
     }
   };
 
-  const handleApprove = async (stageId: number, approvalType: string) => {
-    try {
-      const response = await acceptanceApi.approveStage(id!, stageId, approvalType as any);
-      if (response.success) {
-        Alert.alert("Thành công", "Giai đoạn nghiệm thu đã được duyệt.");
-        loadStages();
-      }
-    } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
-    }
-  };
+  // Xác định role của user
+  const isProjectManager = project?.project_manager_id?.toString() === user?.id?.toString();
+  const isCustomer = project?.customer_id?.toString() === user?.id?.toString();
+
 
   if (loading) {
     return (
@@ -62,10 +72,9 @@ export default function AcceptanceScreen() {
 
       <AcceptanceChecklist
         stages={stages}
-        onApprove={handleApprove}
-        canApprove={true}
         projectId={id}
-        isProjectManager={true}
+        isProjectManager={isProjectManager}
+        isCustomer={isCustomer}
         onRefresh={loadStages}
         onNavigateToDefects={() => router.push(`/projects/${id}/defects`)}
       />

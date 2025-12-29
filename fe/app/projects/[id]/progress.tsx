@@ -11,6 +11,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { progressApi } from "@/api/progressApi";
 import { ProgressChart, ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { ganttApi } from "@/api/ganttApi";
 import { ProjectPhase, ProjectTask } from "@/types/ganttTypes";
 import { constructionLogApi } from "@/api/constructionLogApi";
@@ -32,6 +33,7 @@ interface TaskWithAlerts extends ProjectTask {
 export default function ProgressScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [progressData, setProgressData] = useState<any>(null);
   const [phases, setPhases] = useState<PhaseWithProgress[]>([]);
   const [tasks, setTasks] = useState<TaskWithAlerts[]>([]);
@@ -254,7 +256,7 @@ export default function ProgressScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: tabBarHeight }}>
       <ScreenHeader title="Tiến Độ Thi Công" showBackButton />
 
       {/* View Mode Toggle */}

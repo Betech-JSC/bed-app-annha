@@ -12,10 +12,12 @@ import {
   FlatList,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { projectApi, CreateProjectData, Project } from "@/api/projectApi";
 import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { ScreenHeader } from "@/components";
 
 interface User {
   id: number;
@@ -27,6 +29,7 @@ interface User {
 export default function EditProjectScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -233,202 +236,242 @@ export default function EditProjectScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chỉnh Sửa Dự Án</Text>
-        <View style={styles.placeholder} />
-      </View>
+    <View style={styles.container}>
+      <ScreenHeader title="Chỉnh Sửa Dự Án" showBackButton />
 
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Tên dự án <Text style={styles.required}>*</Text>
-          </Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nhập tên dự án"
-            value={formData.name}
-            onChangeText={(text) => setFormData({ ...formData, name: text })}
-          />
-        </View>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: tabBarHeight }}>
+        <View style={styles.form}>
+          {/* Thông tin cơ bản */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
+              <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
+            </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Mã dự án</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nhập mã dự án (tùy chọn)"
-            value={formData.code}
-            onChangeText={(text) => setFormData({ ...formData, code: text })}
-          />
-        </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Tên dự án <Text style={styles.required}>*</Text>
+              </Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="folder-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập tên dự án"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.name}
+                  onChangeText={(text) => setFormData({ ...formData, name: text })}
+                />
+              </View>
+            </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Mô tả</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Nhập mô tả dự án"
-            value={formData.description}
-            onChangeText={(text) =>
-              setFormData({ ...formData, description: text })
-            }
-            multiline
-            numberOfLines={4}
-          />
-        </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Mã dự án</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="barcode-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập mã dự án (tùy chọn)"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.code}
+                  onChangeText={(text) => setFormData({ ...formData, code: text })}
+                />
+              </View>
+            </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Khách hàng <Text style={styles.required}>*</Text>
-          </Text>
-          <TouchableOpacity
-            style={styles.selectButton}
-            onPress={() => setShowCustomerModal(true)}
-          >
-            <Text
-              style={[
-                styles.selectButtonText,
-                !selectedCustomer && styles.placeholderText,
-              ]}
-            >
-              {selectedCustomer
-                ? `${selectedCustomer.name} (${selectedCustomer.email})`
-                : "Chọn khách hàng"}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color="#6B7280" />
-          </TouchableOpacity>
-        </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Mô tả</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Nhập mô tả dự án"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.description}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, description: text })
+                  }
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </View>
+          </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Quản lý dự án</Text>
-          <TouchableOpacity
-            style={styles.selectButton}
-            onPress={() => setShowManagerModal(true)}
-          >
-            <Text
-              style={[
-                styles.selectButtonText,
-                !selectedManager && styles.placeholderText,
-              ]}
-            >
-              {selectedManager
-                ? `${selectedManager.name} (${selectedManager.email})`
-                : "Chọn quản lý dự án (tùy chọn)"}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color="#6B7280" />
-          </TouchableOpacity>
-        </View>
+          {/* Thông tin liên hệ */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="people-outline" size={20} color="#3B82F6" />
+              <Text style={styles.sectionTitle}>Thông tin liên hệ</Text>
+            </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Ngày bắt đầu</Text>
-          <TouchableOpacity
-            style={styles.selectButton}
-            onPress={() => setShowStartDatePicker(true)}
-          >
-            <Text
-              style={[
-                styles.selectButtonText,
-                !formData.start_date && styles.placeholderText,
-              ]}
-            >
-              {formData.start_date
-                ? new Date(formData.start_date).toLocaleDateString("vi-VN")
-                : "Chọn ngày bắt đầu"}
-            </Text>
-            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-          </TouchableOpacity>
-          {showStartDatePicker && (
-            <DateTimePicker
-              value={startDate}
-              mode="date"
-              display="default"
-              onChange={handleStartDateChange}
-            />
-          )}
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Ngày kết thúc</Text>
-          <TouchableOpacity
-            style={styles.selectButton}
-            onPress={() => setShowEndDatePicker(true)}
-          >
-            <Text
-              style={[
-                styles.selectButtonText,
-                !formData.end_date && styles.placeholderText,
-              ]}
-            >
-              {formData.end_date
-                ? new Date(formData.end_date).toLocaleDateString("vi-VN")
-                : "Chọn ngày kết thúc"}
-            </Text>
-            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-          </TouchableOpacity>
-          {showEndDatePicker && (
-            <DateTimePicker
-              value={endDate}
-              mode="date"
-              display="default"
-              onChange={handleEndDateChange}
-              minimumDate={formData.start_date ? new Date(formData.start_date) : undefined}
-            />
-          )}
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Trạng thái</Text>
-          <View style={styles.statusButtons}>
-            {[
-              { value: "planning", label: "Lập kế hoạch" },
-              { value: "in_progress", label: "Đang thi công" },
-              { value: "completed", label: "Hoàn thành" },
-              { value: "cancelled", label: "Đã hủy" },
-            ].map((status) => (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Khách hàng <Text style={styles.required}>*</Text>
+              </Text>
               <TouchableOpacity
-                key={status.value}
-                style={[
-                  styles.statusButton,
-                  formData.status === status.value && styles.statusButtonActive,
-                ]}
-                onPress={() =>
-                  setFormData({
-                    ...formData,
-                    status: status.value as any,
-                  })
-                }
+                style={styles.selectButton}
+                onPress={() => setShowCustomerModal(true)}
               >
                 <Text
                   style={[
-                    styles.statusButtonText,
-                    formData.status === status.value &&
-                      styles.statusButtonTextActive,
+                    styles.selectButtonText,
+                    !selectedCustomer && styles.placeholderText,
                   ]}
                 >
-                  {status.label}
+                  {selectedCustomer
+                    ? `${selectedCustomer.name} (${selectedCustomer.email})`
+                    : "Chọn khách hàng"}
                 </Text>
+                <Ionicons name="chevron-down" size={20} color="#6B7280" />
               </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+            </View>
 
-        <TouchableOpacity
-          style={[styles.submitButton, saving && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.submitButtonText}>Cập nhật dự án</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Quản lý dự án</Text>
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => setShowManagerModal(true)}
+              >
+                <Text
+                  style={[
+                    styles.selectButtonText,
+                    !selectedManager && styles.placeholderText,
+                  ]}
+                >
+                  {selectedManager
+                    ? `${selectedManager.name} (${selectedManager.email})`
+                    : "Chọn quản lý dự án (tùy chọn)"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Thời gian dự án */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
+              <Text style={styles.sectionTitle}>Thời gian dự án</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Ngày bắt đầu</Text>
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => setShowStartDatePicker(true)}
+              >
+                <Text
+                  style={[
+                    styles.selectButtonText,
+                    !formData.start_date && styles.placeholderText,
+                  ]}
+                >
+                  {formData.start_date
+                    ? new Date(formData.start_date).toLocaleDateString("vi-VN")
+                    : "Chọn ngày bắt đầu"}
+                </Text>
+                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+              </TouchableOpacity>
+              {showStartDatePicker && (
+                <DateTimePicker
+                  value={startDate}
+                  mode="date"
+                  display="default"
+                  onChange={handleStartDateChange}
+                />
+              )}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Ngày kết thúc</Text>
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => setShowEndDatePicker(true)}
+              >
+                <Text
+                  style={[
+                    styles.selectButtonText,
+                    !formData.end_date && styles.placeholderText,
+                  ]}
+                >
+                  {formData.end_date
+                    ? new Date(formData.end_date).toLocaleDateString("vi-VN")
+                    : "Chọn ngày kết thúc"}
+                </Text>
+                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+              </TouchableOpacity>
+              {showEndDatePicker && (
+                <DateTimePicker
+                  value={endDate}
+                  mode="date"
+                  display="default"
+                  onChange={handleEndDateChange}
+                  minimumDate={formData.start_date ? new Date(formData.start_date) : undefined}
+                />
+              )}
+            </View>
+          </View>
+
+          {/* Trạng thái */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="flag-outline" size={20} color="#3B82F6" />
+              <Text style={styles.sectionTitle}>Trạng thái dự án</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Trạng thái</Text>
+              <View style={styles.statusButtons}>
+                {[
+                  { value: "planning", label: "Lập kế hoạch" },
+                  { value: "in_progress", label: "Đang thi công" },
+                  { value: "completed", label: "Hoàn thành" },
+                  { value: "cancelled", label: "Đã hủy" },
+                ].map((status) => (
+                  <TouchableOpacity
+                    key={status.value}
+                    style={[
+                      styles.statusButton,
+                      formData.status === status.value && styles.statusButtonActive,
+                    ]}
+                    onPress={() =>
+                      setFormData({
+                        ...formData,
+                        status: status.value as any,
+                      })
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.statusButtonText,
+                        formData.status === status.value &&
+                        styles.statusButtonTextActive,
+                      ]}
+                    >
+                      {status.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Actions */}
+          <TouchableOpacity
+            style={[styles.submitButton, saving && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.submitButtonText}>Cập nhật dự án</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
 
       {/* Customer Modal */}
       <Modal
@@ -545,7 +588,7 @@ export default function EditProjectScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -560,28 +603,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#F9FAFB",
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
-  },
-  placeholder: {
-    width: 32,
+  content: {
+    flex: 1,
   },
   form: {
     padding: 16,
+  },
+  section: {
+    marginBottom: 24,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
   },
   inputGroup: {
     marginBottom: 20,
@@ -595,11 +646,19 @@ const styles = StyleSheet.create({
   required: {
     color: "#EF4444",
   },
-  input: {
-    backgroundColor: "#FFFFFF",
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#D1D5DB",
     borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  inputIcon: {
+    marginLeft: 12,
+  },
+  input: {
+    flex: 1,
     padding: 12,
     fontSize: 16,
     color: "#1F2937",
@@ -607,20 +666,27 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: "top",
+    paddingTop: 12,
   },
   selectButton: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#D1D5DB",
     borderRadius: 8,
     padding: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   selectButtonText: {
     fontSize: 16,
     color: "#1F2937",
+    flex: 1,
   },
   placeholderText: {
     color: "#9CA3AF",
@@ -632,10 +698,10 @@ const styles = StyleSheet.create({
   },
   statusButton: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderWidth: 1.5,
+    borderColor: "#D1D5DB",
     backgroundColor: "#FFFFFF",
   },
   statusButtonActive: {
@@ -649,13 +715,23 @@ const styles = StyleSheet.create({
   },
   statusButtonTextActive: {
     color: "#FFFFFF",
+    fontWeight: "600",
   },
   submitButton: {
     backgroundColor: "#3B82F6",
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
     marginTop: 8,
+    marginBottom: 32,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   submitButtonDisabled: {
     opacity: 0.6,

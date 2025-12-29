@@ -9,6 +9,9 @@ import {
   Image,
   Modal,
   ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
@@ -47,8 +50,14 @@ export default function AcceptanceItemList({
   const [uploadingItemId, setUploadingItemId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [uploadNotes, setUploadNotes] = useState("");
   const [itemDefects, setItemDefects] = useState<Record<number, number>>({});
+  const [itemTaskProgress, setItemTaskProgress] = useState<Record<number, number>>({});
   const user = useSelector((state: RootState) => state.user);
+  const { permissions } = useSelector((state: RootState) => state.permissions);
+
+  // Kiểm tra nếu user là admin (có permission "*" hoặc role là admin)
+  const isAdmin = permissions.includes("*") || user?.role === "admin" || user?.role === "super_admin";
 
   const getStatusColor = (status: string): string => {
     switch (status) {
@@ -185,9 +194,43 @@ export default function AcceptanceItemList({
   };
 
   const handleSubmit = async (item: AcceptanceItem) => {
+    // Validate có upload hình ảnh (bắt buộc cho tất cả)
+    const attachmentsCount = item.attachments?.length || 0;
+    if (attachmentsCount === 0) {
+      Alert.alert(
+        "Không thể gửi duyệt",
+        "Vui lòng upload hình ảnh thực tế nghiệm thu trước khi gửi duyệt."
+      );
+      return;
+    }
+
+    // Admin có thể bypass một số validation
+    if (!isAdmin) {
+      // Validate chỉ kiểm tra task của item hiện tại (cho phép gửi duyệt từng hạng mục riêng lẻ)
+      if (item.task_id) {
+        const progress = item.task?.progress_percentage ?? itemTaskProgress[item.id] ?? 0;
+        if (progress < 100) {
+          Alert.alert(
+            "Không thể gửi duyệt",
+            `Hạng mục thi công "${item.task?.name || 'chưa có tên'}" chưa hoàn thành 100%. Vui lòng hoàn thành hạng mục trước khi gửi duyệt nghiệm thu.`
+          );
+          return;
+        }
+      }
+
+      // Validate không có lỗi chưa xử lý
+      if (itemDefects[item.id] > 0) {
+        Alert.alert(
+          "Không thể gửi duyệt",
+          `Còn ${itemDefects[item.id]} lỗi chưa được xử lý. Vui lòng xử lý tất cả lỗi trước khi gửi duyệt nghiệm thu.`
+        );
+        return;
+      }
+    }
+
     try {
       await acceptanceApi.submitItem(projectId, stage.id, item.id);
-      Alert.alert("Thành công", "Đã gửi duyệt thành công");
+      Alert.alert("Thành công", "Đã gửi duyệt hạng mục nghiệm thu thành công");
       onRefresh();
     } catch (error: any) {
       Alert.alert("Lỗi", error.response?.data?.message || "Không thể gửi duyệt");
@@ -216,6 +259,8 @@ export default function AcceptanceItemList({
 
   const handleOpenUploadModal = (itemId: number) => {
     setUploadingItemId(itemId);
+    const item = items.find(i => i.id === itemId);
+    setUploadNotes(item?.notes || "");
     setUploadModalVisible(true);
   };
 
@@ -230,9 +275,28 @@ export default function AcceptanceItemList({
 
       if (attachmentIds.length > 0) {
         await acceptanceApi.attachFilesToItem(projectId, stage.id, uploadingItemId, attachmentIds);
-        Alert.alert("Thành công", "Đã đính kèm hình ảnh nghiệm thu");
+
+        // Cập nhật ghi chú nếu có
+        if (uploadNotes.trim()) {
+          const item = items.find(i => i.id === uploadingItemId);
+          if (item) {
+            try {
+              await acceptanceApi.updateItem(
+                projectId,
+                stage.id,
+                uploadingItemId,
+                { notes: uploadNotes.trim() }
+              );
+            } catch (error) {
+              console.error("Error updating notes:", error);
+            }
+          }
+        }
+
+        Alert.alert("Thành công", "Đã upload hình ảnh nghiệm thu thực tế");
         setUploadModalVisible(false);
         setUploadingItemId(null);
+        setUploadNotes("");
         onRefresh();
       }
     } catch (error: any) {
@@ -243,13 +307,15 @@ export default function AcceptanceItemList({
   };
 
   useEffect(() => {
-    // Load defects for items with task_id
-    const loadDefects = async () => {
+    // Load defects and task progress for items with task_id
+    const loadDefectsAndProgress = async () => {
       const defectsMap: Record<number, number> = {};
+      const progressMap: Record<number, number> = {};
 
       for (const item of items) {
         if (item.task_id) {
           try {
+            // Load defects
             const response = await defectApi.getDefects(projectId);
             if (response.success) {
               const openDefects = (response.data || []).filter(
@@ -259,17 +325,23 @@ export default function AcceptanceItemList({
               );
               defectsMap[item.id] = openDefects.length;
             }
+
+            // Get task progress from item.task if available
+            if (item.task && item.task.progress_percentage !== undefined) {
+              progressMap[item.id] = item.task.progress_percentage;
+            }
           } catch (error) {
-            console.error(`Error loading defects for item ${item.id}:`, error);
+            console.error(`Error loading data for item ${item.id}:`, error);
           }
         }
       }
 
       setItemDefects(defectsMap);
+      setItemTaskProgress(progressMap);
     };
 
     if (items.length > 0) {
-      loadDefects();
+      loadDefectsAndProgress();
     }
   }, [items, projectId]);
 
@@ -472,9 +544,13 @@ export default function AcceptanceItemList({
                   </View>
                 )}
 
-                {/* Workflow Status with Timeline */}
+                {/* Workflow Status with Timeline - Bước 3: Gửi duyệt */}
                 {item.workflow_status && (
                   <View style={styles.workflowStatusContainer}>
+                    <View style={styles.workflowHeader}>
+                      <Ionicons name="checkmark-done-outline" size={16} color="#3B82F6" />
+                      <Text style={styles.workflowTitle}>Bước 3: Luồng duyệt nghiệm thu</Text>
+                    </View>
                     <View style={styles.workflowTimeline}>
                       <View style={[
                         styles.workflowStep,
@@ -487,7 +563,7 @@ export default function AcceptanceItemList({
                         <Text style={[
                           styles.workflowStepLabel,
                           item.workflow_status !== 'draft' && styles.workflowStepLabelCompleted
-                        ]}>Đã tạo</Text>
+                        ]}>1. Người lập</Text>
                       </View>
                       <View style={[
                         styles.workflowStep,
@@ -500,7 +576,7 @@ export default function AcceptanceItemList({
                         <Text style={[
                           styles.workflowStepLabel,
                           ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepLabelCompleted
-                        ]}>QLDA duyệt</Text>
+                        ]}>2. QLDA</Text>
                       </View>
                       <View style={[
                         styles.workflowStep,
@@ -513,7 +589,7 @@ export default function AcceptanceItemList({
                         <Text style={[
                           styles.workflowStepLabel,
                           item.workflow_status === 'customer_approved' && styles.workflowStepLabelCompleted
-                        ]}>KH/Giám sát</Text>
+                        ]}>3. KH/Giám sát</Text>
                       </View>
                     </View>
                     <View
@@ -575,26 +651,34 @@ export default function AcceptanceItemList({
                   </Text>
                 )}
 
-                {/* Attachments Section */}
+                {/* Attachments Section - Bước 2: Upload nghiệm thu thực tế */}
                 <View style={styles.attachmentsSection}>
                   <View style={styles.attachmentsHeader}>
-                    <Ionicons name="images-outline" size={16} color="#3B82F6" />
-                    <Text style={styles.attachmentsTitle}>
-                      Hình ảnh nghiệm thu ({item.attachments?.length || 0})
-                    </Text>
-                    {user?.id &&
-                      item.created_by?.toString() === user.id.toString() &&
-                      item.workflow_status === "draft" && (
+                    <View style={styles.attachmentsHeaderLeft}>
+                      <Ionicons name="images-outline" size={16} color="#3B82F6" />
+                      <View>
+                        <Text style={styles.attachmentsTitle}>
+                          Bước 2: Hình ảnh nghiệm thu thực tế
+                        </Text>
+                        <Text style={styles.attachmentsSubtitle}>
+                          ({item.attachments?.length || 0} ảnh đã upload)
+                        </Text>
+                      </View>
+                    </View>
+                    {item.workflow_status === "draft" &&
+                      user?.id &&
+                      item.created_by?.toString() === user.id.toString() && (
                         <TouchableOpacity
                           style={styles.uploadButtonInline}
                           onPress={() => handleOpenUploadModal(item.id)}
                         >
                           <Ionicons name="add-circle-outline" size={16} color="#3B82F6" />
-                          <Text style={styles.uploadButtonText}>Thêm</Text>
+                          <Text style={styles.uploadButtonInlineText}>
+                            {item.attachments && item.attachments.length > 0 ? "Thêm ảnh" : "Upload ảnh"}
+                          </Text>
                         </TouchableOpacity>
                       )}
                   </View>
-
                   {item.attachments && item.attachments.length > 0 ? (
                     <ScrollView
                       horizontal
@@ -603,43 +687,37 @@ export default function AcceptanceItemList({
                       contentContainerStyle={styles.imagesScrollContent}
                     >
                       {item.attachments.map((attachment: any, index: number) => {
-                        const imageUrl = attachment.file_url || attachment.file_path || attachment.url || attachment.location;
-                        if (!imageUrl) return null;
+                        const imageUrl = attachment.file_url ||
+                          attachment.url ||
+                          attachment.path ||
+                          attachment.file_path ||
+                          (attachment.file ? attachment.file.url : null);
+
+                        if (!imageUrl) {
+                          return null;
+                        }
 
                         return (
                           <TouchableOpacity
                             key={attachment.id || index}
                             style={styles.imageWrapper}
-                            onPress={() => setPreviewImage(imageUrl)}
-                            activeOpacity={0.8}
+                            onPress={() => {
+                              setPreviewImage(imageUrl);
+                            }}
                           >
                             <Image
                               source={{ uri: imageUrl }}
                               style={styles.attachmentImage}
                               resizeMode="cover"
                             />
-                            <View style={styles.imageOverlay}>
-                              <Ionicons name="expand-outline" size={14} color="#FFFFFF" />
-                            </View>
                           </TouchableOpacity>
                         );
                       })}
                     </ScrollView>
                   ) : (
                     <View style={styles.noImagesContainer}>
-                      <Ionicons name="image-outline" size={24} color="#D1D5DB" />
-                      <Text style={styles.noImagesText}>Chưa có hình ảnh nghiệm thu</Text>
-                      {user?.id &&
-                        item.created_by?.toString() === user.id.toString() &&
-                        item.workflow_status === "draft" && (
-                          <TouchableOpacity
-                            style={styles.uploadButton}
-                            onPress={() => handleOpenUploadModal(item.id)}
-                          >
-                            <Ionicons name="add-circle-outline" size={18} color="#3B82F6" />
-                            <Text style={styles.uploadButtonText}>Thêm hình ảnh</Text>
-                          </TouchableOpacity>
-                        )}
+                      <Ionicons name="image-outline" size={32} color="#D1D5DB" />
+                      <Text style={styles.noImagesText}>Chưa có hình ảnh</Text>
                     </View>
                   )}
                 </View>
@@ -647,31 +725,85 @@ export default function AcceptanceItemList({
                 {/* Action Buttons Section */}
                 <View style={styles.itemActions}>
                   {/* Workflow Actions */}
-                  {/* Chỉ người tạo mới có thể gửi duyệt */}
+                  {/* Người tạo hoặc admin có thể gửi duyệt */}
                   {item.workflow_status === "draft" &&
                     user?.id &&
-                    item.created_by?.toString() === user.id.toString() && (
-                      <TouchableOpacity
-                        style={[
-                          styles.actionButton,
-                          styles.submitButton,
-                          itemDefects[item.id] > 0 && styles.disabledButton
-                        ]}
-                        onPress={() => {
-                          if (itemDefects[item.id] > 0) {
-                            Alert.alert(
-                              "Không thể gửi duyệt",
-                              `Còn ${itemDefects[item.id]} lỗi chưa được xử lý. Vui lòng xử lý tất cả lỗi trước khi gửi duyệt nghiệm thu.`
-                            );
-                            return;
+                    (item.created_by?.toString() === user.id.toString() || isAdmin) && (
+                      <View style={styles.actionButtonsRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.actionButton,
+                            styles.submitButton,
+                            ((!isAdmin && (
+                              itemDefects[item.id] > 0 ||
+                              (item.attachments?.length || 0) === 0 ||
+                              (() => {
+                                // Chỉ kiểm tra task của item hiện tại
+                                if (!item.task_id) return false; // Nếu không có task thì không cần kiểm tra
+                                const progress = item.task?.progress_percentage ?? itemTaskProgress[item.id] ?? 0;
+                                return progress < 100;
+                              })()
+                            )) ||
+                              (isAdmin && (item.attachments?.length || 0) === 0)) && styles.disabledButton
+                          ]}
+                          onPress={() => {
+                            // Admin có thể bypass một số validation
+                            if (!isAdmin) {
+                              if (itemDefects[item.id] > 0) {
+                                Alert.alert(
+                                  "Không thể gửi duyệt",
+                                  `Còn ${itemDefects[item.id]} lỗi chưa được xử lý. Vui lòng xử lý tất cả lỗi trước khi gửi duyệt nghiệm thu.`
+                                );
+                                return;
+                              }
+                            }
+                            const attachmentsCount = item.attachments?.length || 0;
+                            if (attachmentsCount === 0) {
+                              Alert.alert(
+                                "Không thể gửi duyệt",
+                                "Vui lòng upload hình ảnh thực tế nghiệm thu trước khi gửi duyệt."
+                              );
+                              return;
+                            }
+                            handleSubmit(item);
+                          }}
+                          disabled={
+                            // Admin có thể bypass một số validation, nhưng vẫn cần có hình ảnh
+                            !isAdmin && (
+                              itemDefects[item.id] > 0 ||
+                              (item.attachments?.length || 0) === 0 ||
+                              (() => {
+                                // Chỉ kiểm tra task của item hiện tại
+                                if (!item.task_id) return false; // Nếu không có task thì không cần kiểm tra
+                                const progress = item.task?.progress_percentage ?? itemTaskProgress[item.id] ?? 0;
+                                return progress < 100;
+                              })()
+                            ) ||
+                            // Admin vẫn cần có hình ảnh (bắt buộc)
+                            (isAdmin && (item.attachments?.length || 0) === 0)
                           }
-                          handleSubmit(item);
-                        }}
-                        disabled={itemDefects[item.id] > 0}
-                      >
-                        <Ionicons name="send-outline" size={16} color="#FFFFFF" />
-                        <Text style={styles.submitButtonText}>Gửi duyệt</Text>
-                      </TouchableOpacity>
+                        >
+                          <Ionicons name="send-outline" size={16} color="#FFFFFF" />
+                          <Text style={styles.submitButtonText}>Gửi duyệt</Text>
+                        </TouchableOpacity>
+                        <View style={styles.secondaryActionsRow}>
+                          <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={() => {
+                              setSelectedItem(item);
+                              setShowForm(true);
+                            }}
+                          >
+                            <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={() => handleDeleteItem(item.id)}
+                          >
+                            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
                     )}
 
                   {item.workflow_status === "submitted" && isProjectManager && (
@@ -742,48 +874,23 @@ export default function AcceptanceItemList({
 
                   {/* Legacy approval (for backward compatibility) */}
                   {!item.workflow_status && item.can_accept && item.acceptance_status === "pending" && (
-                    <>
+                    <View style={styles.actionButtonGroup}>
                       <TouchableOpacity
-                        style={[styles.actionButton, styles.approveButton]}
+                        style={[styles.actionButton, styles.approveButtonPrimary]}
                         onPress={() => handleApprove(item)}
                       >
-                        <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-                        <Text style={styles.approveButtonText}>Đạt</Text>
+                        <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                        <Text style={styles.approveButtonTextPrimary}>Đạt</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.actionButton, styles.rejectButton]}
+                        style={[styles.actionButton, styles.rejectButtonSecondary]}
                         onPress={() => handleReject(item)}
                       >
-                        <Ionicons name="close-circle" size={18} color="#EF4444" />
-                        <Text style={styles.rejectButtonText}>Không đạt</Text>
+                        <Ionicons name="close-circle" size={16} color="#EF4444" />
+                        <Text style={styles.rejectButtonTextSecondary}>Không đạt</Text>
                       </TouchableOpacity>
-                    </>
+                    </View>
                   )}
-
-                  <PermissionGuard permission="acceptance.update">
-                    {/* Chỉ người tạo mới có thể sửa/xóa khi ở trạng thái draft */}
-                    {item.workflow_status === "draft" &&
-                      user?.id &&
-                      item.created_by?.toString() === user.id.toString() && (
-                        <>
-                          <TouchableOpacity
-                            style={styles.editButton}
-                            onPress={() => {
-                              setSelectedItem(item);
-                              setShowForm(true);
-                            }}
-                          >
-                            <Ionicons name="create-outline" size={18} color="#3B82F6" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.deleteButton}
-                            onPress={() => handleDeleteItem(item.id)}
-                          >
-                            <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                          </TouchableOpacity>
-                        </>
-                      )}
-                  </PermissionGuard>
                 </View>
               </View>
             ))
@@ -1044,6 +1151,22 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
   },
+  actionButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  secondaryActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginLeft: "auto",
+  },
+  iconButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: "#F9FAFB",
+  },
   actionButtonGroup: {
     flexDirection: "row",
     gap: 8,
@@ -1112,6 +1235,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+  },
+  workflowHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 12,
+  },
+  workflowTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
   },
   workflowTimeline: {
     flexDirection: "row",
@@ -1238,23 +1372,39 @@ const styles = StyleSheet.create({
   },
   attachmentsHeader: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: 8,
     marginBottom: 8,
+  },
+  attachmentsHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
   },
   attachmentsTitle: {
     fontSize: 14,
     fontWeight: "600",
     color: "#1F2937",
-    flex: 1,
+  },
+  attachmentsSubtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
   },
   uploadButtonInline: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    padding: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     backgroundColor: "#EFF6FF",
     borderRadius: 6,
+  },
+  uploadButtonInlineText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#3B82F6",
   },
   uploadButton: {
     flexDirection: "row",
@@ -1386,6 +1536,23 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: "#DC2626",
+    lineHeight: 18,
+  },
+  progressWarningContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: "#FFFBEB",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  progressWarningText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#92400E",
     lineHeight: 18,
   },
   disabledButton: {

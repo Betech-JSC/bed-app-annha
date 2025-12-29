@@ -19,6 +19,7 @@ import { LineChart, BarChart, PieChart } from "react-native-chart-kit";
 import { Dimensions } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -32,6 +33,7 @@ interface ProjectSummary {
 
 export default function ReportsScreen() {
     const router = useRouter();
+    const tabBarHeight = useTabBarHeight();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [projects, setProjects] = useState<Project[]>([]);
@@ -245,6 +247,7 @@ export default function ReportsScreen() {
 
             <ScrollView
                 style={styles.scrollView}
+                contentContainerStyle={{ paddingBottom: tabBarHeight }}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                 }

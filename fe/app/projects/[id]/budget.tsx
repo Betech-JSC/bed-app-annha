@@ -20,10 +20,12 @@ import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function BudgetScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
+    const tabBarHeight = useTabBarHeight();
     const [budgets, setBudgets] = useState<ProjectBudget[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -225,6 +227,7 @@ export default function BudgetScreen() {
                     data={budgets}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={{ paddingBottom: tabBarHeight }}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                     }

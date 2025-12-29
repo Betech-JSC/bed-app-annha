@@ -15,11 +15,13 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { documentApi, ProjectDocument } from "@/api/documentApi";
 import { UniversalFileUploader, ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function DocumentsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -142,7 +144,7 @@ export default function DocumentsScreen() {
         data={documents}
         renderItem={renderDocumentItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="folder-outline" size={64} color="#D1D5DB" />

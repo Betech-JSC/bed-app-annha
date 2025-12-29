@@ -19,10 +19,12 @@ import { invoiceApi, Invoice, CreateInvoiceData } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function InvoicesScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
+    const tabBarHeight = useTabBarHeight();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -252,6 +254,7 @@ export default function InvoicesScreen() {
                     data={invoices}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={{ paddingBottom: tabBarHeight }}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                     }

@@ -19,11 +19,13 @@ import { equipmentApi, Equipment } from "@/api/equipmentApi";
 import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ProjectEquipmentScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
+    const tabBarHeight = useTabBarHeight();
     const [equipment, setEquipment] = useState<Equipment[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -297,7 +299,7 @@ export default function ProjectEquipmentScreen() {
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                 }
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <Ionicons name="build-outline" size={64} color="#9CA3AF" />

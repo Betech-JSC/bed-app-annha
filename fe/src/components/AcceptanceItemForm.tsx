@@ -157,7 +157,8 @@ export default function AcceptanceItemForm({
         start_date: startDate.toISOString().split("T")[0],
         end_date: endDate.toISOString().split("T")[0],
         notes: notes.trim() || undefined,
-        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
+        // Không gửi attachment_ids ở bước 1 - sẽ upload ở bước 2
+        attachment_ids: item && attachmentIds.length > 0 ? attachmentIds : undefined,
       };
 
       await onSubmit(data);
@@ -186,9 +187,16 @@ export default function AcceptanceItemForm({
       >
         <View style={styles.modal}>
           <View style={styles.header}>
-            <Text style={styles.title}>
-              {item ? "Sửa hạng mục" : "Tạo nghiệm thu mới"}
-            </Text>
+            <View>
+              <Text style={styles.title}>
+                {item ? "Sửa hồ sơ nghiệm thu" : "Bước 1: Tạo hồ sơ nghiệm thu"}
+              </Text>
+              {!item && (
+                <Text style={styles.subtitle}>
+                  Chọn hạng mục thi công và bộ tài liệu nghiệm thu
+                </Text>
+              )}
+            </View>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color="#1F2937" />
             </TouchableOpacity>
@@ -385,37 +393,32 @@ export default function AcceptanceItemForm({
               )}
             </View>
 
-            {/* Notes */}
+            {/* Notes - Ghi chú cho hồ sơ */}
             <View style={styles.field}>
               <View style={styles.labelRow}>
                 <Ionicons name="chatbubble-outline" size={16} color="#6B7280" />
-                <Text style={styles.label}>Ghi chú</Text>
+                <Text style={styles.label}>Ghi chú hồ sơ</Text>
               </View>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={notes}
                 onChangeText={setNotes}
-                placeholder="Nhập ghi chú (tùy chọn)"
+                placeholder="Nhập ghi chú cho hồ sơ nghiệm thu (tùy chọn)"
                 placeholderTextColor="#9CA3AF"
                 multiline
                 numberOfLines={3}
               />
             </View>
 
-            {/* Upload hình ảnh thực tế */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Hình ảnh thực tế nghiệm thu *</Text>
-              <Text style={styles.helperText}>
-                Upload hình ảnh thực tế tại công trình để đối chiếu với hình ảnh mẫu
-              </Text>
-              <UniversalFileUploader
-                onUploadComplete={handleFilesUpload}
-                multiple={true}
-                accept="image"
-                maxFiles={10}
-                initialFiles={uploadedFiles}
-              />
-            </View>
+            {/* Info Box */}
+            {!item && (
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
+                <Text style={styles.infoText}>
+                  Sau khi tạo hồ sơ, bạn sẽ upload hình ảnh thực tế nghiệm thu ở bước tiếp theo.
+                </Text>
+              </View>
+            )}
           </ScrollView>
 
           {/* Task Picker - Inside modal */}
@@ -571,6 +574,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#1F2937",
+  },
+  subtitle: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 4,
   },
   content: {
     padding: 16,
