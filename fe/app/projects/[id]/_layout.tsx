@@ -38,6 +38,15 @@ export default function ProjectDetailLayout() {
       <Stack.Screen name="reports/material-usage" />
       <Stack.Screen name="reports/construction-logs" />
       <Stack.Screen name="reports/debt-payment" />
+      <Stack.Screen name="evm" />
+      <Stack.Screen name="risks" />
+      <Stack.Screen name="risks/[riskId]" />
+      <Stack.Screen name="risks/create" />
+      <Stack.Screen name="change-requests" />
+      <Stack.Screen name="change-requests/[changeRequestId]" />
+      <Stack.Screen name="change-requests/create" />
+      <Stack.Screen name="predictions" />
+      <Stack.Screen name="monitoring" />
     </Stack>
   );
 }

@@ -177,6 +177,21 @@ class Project extends Model
         return $this->hasMany(PerformanceEvaluation::class);
     }
 
+    public function risks(): HasMany
+    {
+        return $this->hasMany(ProjectRisk::class);
+    }
+
+    public function changeRequests(): HasMany
+    {
+        return $this->hasMany(ChangeRequest::class);
+    }
+
+    public function evmMetrics(): HasMany
+    {
+        return $this->hasMany(ProjectEvmMetric::class);
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================

@@ -33,6 +33,11 @@ use App\Http\Controllers\Api\AcceptanceStageController;
 use App\Http\Controllers\Api\AcceptanceTemplateController;
 use App\Http\Controllers\Api\DefectController;
 use App\Http\Controllers\Api\ProjectProgressController;
+use App\Http\Controllers\Api\ProjectRiskController;
+use App\Http\Controllers\Api\ChangeRequestController;
+use App\Http\Controllers\Api\ProjectEvmController;
+use App\Http\Controllers\Api\PredictiveAnalyticsController;
+use App\Http\Controllers\Api\ProjectMonitoringController;
 use App\Http\Controllers\Api\ProjectDocumentController;
 use App\Http\Controllers\Api\RevenueController;
 use App\Http\Controllers\Api\CostController;
@@ -119,6 +124,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // ===================================================================
     // PROJECT MANAGEMENT ROUTES
     // ===================================================================
+    
+    // Monitoring Dashboard (tổng quan tất cả projects)
+    Route::get('monitoring/dashboard', [ProjectMonitoringController::class, 'dashboard']);
+    
     Route::prefix('projects')->group(function () {
         // Projects CRUD
         Route::get('/', [ProjectController::class, 'index']);
@@ -250,6 +259,41 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/defects', [DefectController::class, 'store']);
         Route::get('/{projectId}/defects/{id}', [DefectController::class, 'show']);
         Route::put('/{projectId}/defects/{id}', [DefectController::class, 'update']);
+
+        // Project Risks
+        Route::get('/{projectId}/risks', [ProjectRiskController::class, 'index']);
+        Route::post('/{projectId}/risks', [ProjectRiskController::class, 'store']);
+        Route::get('/{projectId}/risks/{id}', [ProjectRiskController::class, 'show']);
+        Route::put('/{projectId}/risks/{id}', [ProjectRiskController::class, 'update']);
+        Route::delete('/{projectId}/risks/{id}', [ProjectRiskController::class, 'destroy']);
+        Route::post('/{projectId}/risks/{id}/resolve', [ProjectRiskController::class, 'markAsResolved']);
+
+        // Change Requests
+        Route::get('/{projectId}/change-requests', [ChangeRequestController::class, 'index']);
+        Route::post('/{projectId}/change-requests', [ChangeRequestController::class, 'store']);
+        Route::get('/{projectId}/change-requests/{id}', [ChangeRequestController::class, 'show']);
+        Route::put('/{projectId}/change-requests/{id}', [ChangeRequestController::class, 'update']);
+        Route::delete('/{projectId}/change-requests/{id}', [ChangeRequestController::class, 'destroy']);
+        Route::post('/{projectId}/change-requests/{id}/submit', [ChangeRequestController::class, 'submit']);
+        Route::post('/{projectId}/change-requests/{id}/approve', [ChangeRequestController::class, 'approve']);
+        Route::post('/{projectId}/change-requests/{id}/reject', [ChangeRequestController::class, 'reject']);
+        Route::post('/{projectId}/change-requests/{id}/implement', [ChangeRequestController::class, 'markAsImplemented']);
+
+        // EVM Metrics
+        Route::get('/{projectId}/evm/latest', [ProjectEvmController::class, 'latest']);
+        Route::post('/{projectId}/evm/calculate', [ProjectEvmController::class, 'calculate']);
+        Route::get('/{projectId}/evm/history', [ProjectEvmController::class, 'history']);
+        Route::get('/{projectId}/evm/analyze', [ProjectEvmController::class, 'analyze']);
+
+        // Predictive Analytics
+        Route::get('/{projectId}/predictions/completion', [PredictiveAnalyticsController::class, 'predictCompletion']);
+        Route::get('/{projectId}/predictions/cost', [PredictiveAnalyticsController::class, 'predictCost']);
+        Route::get('/{projectId}/predictions/delay-risk', [PredictiveAnalyticsController::class, 'analyzeDelayRisk']);
+        Route::get('/{projectId}/predictions/cost-risk', [PredictiveAnalyticsController::class, 'analyzeCostRisk']);
+        Route::get('/{projectId}/predictions/full', [PredictiveAnalyticsController::class, 'fullAnalysis']);
+
+        // Project Monitoring
+        Route::get('/{projectId}/monitoring', [ProjectMonitoringController::class, 'projectMonitoring']);
 
         // Progress
         Route::get('/{projectId}/progress', [ProjectProgressController::class, 'show']);

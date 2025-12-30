@@ -11,6 +11,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
 import { contractApi, Contract } from "@/api/contractApi";
+import { monitoringApi, ProjectMonitoringData } from "@/api/monitoringApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { ScreenHeader } from "@/components";
@@ -22,12 +23,15 @@ export default function ProjectDetailScreen() {
   const tabBarHeight = useTabBarHeight();
   const [project, setProject] = useState<Project | null>(null);
   const [contract, setContract] = useState<Contract | null>(null);
+  const [monitoringData, setMonitoringData] = useState<ProjectMonitoringData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingContract, setLoadingContract] = useState(false);
+  const [loadingMonitoring, setLoadingMonitoring] = useState(false);
 
   useEffect(() => {
     loadProject();
     loadContract();
+    loadMonitoring();
   }, [id]);
 
   const loadProject = async () => {
@@ -61,6 +65,20 @@ export default function ProjectDetailScreen() {
       setContract(null);
     } finally {
       setLoadingContract(false);
+    }
+  };
+
+  const loadMonitoring = async () => {
+    try {
+      setLoadingMonitoring(true);
+      const response = await monitoringApi.getProjectMonitoring(id!);
+      if (response.success) {
+        setMonitoringData(response.data);
+      }
+    } catch (error) {
+      console.error("Error loading monitoring data:", error);
+    } finally {
+      setLoadingMonitoring(false);
     }
   };
 
@@ -204,6 +222,36 @@ export default function ProjectDetailScreen() {
       icon: "trending-up-outline",
       route: `/projects/${id}/progress`,
       color: "#F97316",
+    },
+    {
+      title: "Giám Sát Dự Án",
+      icon: "eye-outline",
+      route: `/projects/${id}/monitoring`,
+      color: "#8B5CF6",
+    },
+    {
+      title: "EVM Analysis",
+      icon: "analytics-outline",
+      route: `/projects/${id}/evm`,
+      color: "#06B6D4",
+    },
+    {
+      title: "Dự Đoán & Phân Tích",
+      icon: "trending-up-outline",
+      route: `/projects/${id}/predictions`,
+      color: "#F59E0B",
+    },
+    {
+      title: "Quản Lý Rủi Ro",
+      icon: "shield-outline",
+      route: `/projects/${id}/risks`,
+      color: "#EF4444",
+    },
+    {
+      title: "Yêu Cầu Thay Đổi",
+      icon: "document-text-outline",
+      route: `/projects/${id}/change-requests`,
+      color: "#6366F1",
     },
   ];
 
@@ -364,6 +412,59 @@ export default function ProjectDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* Monitoring Alerts */}
+      {monitoringData && monitoringData.alerts && monitoringData.alerts.length > 0 && (
+        <View style={styles.alertsSection}>
+          <View style={styles.alertsHeader}>
+            <Ionicons name="warning-outline" size={20} color="#F59E0B" />
+            <Text style={styles.alertsTitle}>Cảnh báo ({monitoringData.alerts.length})</Text>
+          </View>
+          {monitoringData.alerts.slice(0, 3).map((alert, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.alertCard,
+                {
+                  borderLeftColor:
+                    alert.severity === "critical"
+                      ? "#DC2626"
+                      : alert.severity === "high"
+                        ? "#EF4444"
+                        : "#F59E0B",
+                },
+              ]}
+              onPress={() => {
+                if (alert.type === "risk") {
+                  router.push(`/projects/${id}/risks`);
+                } else if (alert.type === "change_request") {
+                  router.push(`/projects/${id}/change-requests`);
+                } else if (alert.type === "delay" || alert.type === "deadline") {
+                  router.push(`/projects/${id}/monitoring`);
+                } else if (alert.type === "budget") {
+                  router.push(`/projects/${id}/budget`);
+                } else {
+                  router.push(`/projects/${id}/monitoring`);
+                }
+              }}
+            >
+              <View style={styles.alertContent}>
+                <Text style={styles.alertMessage}>{alert.message}</Text>
+                <Text style={styles.alertType}>{alert.type}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          ))}
+          {monitoringData.alerts.length > 3 && (
+            <TouchableOpacity
+              style={styles.viewAllAlerts}
+              onPress={() => router.push(`/projects/${id}/monitoring`)}
+            >
+              <Text style={styles.viewAllText}>Xem tất cả cảnh báo</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <View style={styles.menuSection}>
         <Text style={styles.sectionTitle}>Quản Lý Dự Án</Text>
@@ -583,5 +684,57 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: "#EF4444",
+  },
+  alertsSection: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  alertsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  alertsTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  alertCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  alertContent: {
+    flex: 1,
+  },
+  alertMessage: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  alertType: {
+    fontSize: 12,
+    color: "#6B7280",
+    textTransform: "capitalize",
+  },
+  viewAllAlerts: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3B82F6",
   },
 });

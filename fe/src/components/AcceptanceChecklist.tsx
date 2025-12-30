@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import { AcceptanceStage, CreateAcceptanceStageData } from "@/api/acceptanceApi";
 import { Ionicons } from "@expo/vector-icons";
-import { UniversalFileUploader } from "@/components";
 import { acceptanceApi } from "@/api/acceptanceApi";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import AcceptanceItemList from "@/components/AcceptanceItemList";
@@ -36,9 +35,6 @@ export default function AcceptanceChecklist({
   onRefresh,
   onNavigateToDefects,
 }: AcceptanceChecklistProps) {
-  const [uploadModalVisible, setUploadModalVisible] = useState(false);
-  const [selectedStageId, setSelectedStageId] = useState<number | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingStage, setEditingStage] = useState<AcceptanceStage | null>(null);
@@ -49,34 +45,6 @@ export default function AcceptanceChecklist({
     order: undefined,
   });
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-
-  const handleUploadComplete = async (files: any[]) => {
-    if (!selectedStageId || !projectId || files.length === 0) return;
-
-    try {
-      setUploading(true);
-      const attachmentIds = files
-        .map((f) => f.attachment_id || f.id)
-        .filter((id) => id);
-
-      if (attachmentIds.length > 0) {
-        await acceptanceApi.attachFiles(projectId, selectedStageId, attachmentIds);
-        Alert.alert("Thành công", "Đã đính kèm hình ảnh nghiệm thu");
-        setUploadModalVisible(false);
-        setSelectedStageId(null);
-        onRefresh?.();
-      }
-    } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể đính kèm file");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const openUploadModal = (stageId: number) => {
-    setSelectedStageId(stageId);
-    setUploadModalVisible(true);
-  };
 
   const openCreateModal = () => {
     setFormData({ name: "", description: "", order: undefined });
@@ -211,11 +179,10 @@ export default function AcceptanceChecklist({
               (d: any) => d.status === "open" || d.status === "in_progress"
             );
 
-            // Tính completion dựa trên workflow_status: customer_approved = hoàn thành
+            // Tính completion dựa trên acceptance_status thực tế: approved = hoàn thành
             const totalItems = stage.items?.length || 0;
             const approvedItems = stage.items?.filter((i: any) =>
-              i.workflow_status === 'customer_approved' ||
-              (!i.workflow_status && i.acceptance_status === 'approved') // Legacy support
+              i.acceptance_status === 'approved'
             ).length || 0;
             const completionPercentage = totalItems > 0 ? (approvedItems / totalItems) * 100 : 0;
 
@@ -328,36 +295,6 @@ export default function AcceptanceChecklist({
           })
         )}
       </ScrollView>
-
-      {/* Upload Modal */}
-      <Modal
-        visible={uploadModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setUploadModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Upload hình ảnh nghiệm thu</Text>
-              <TouchableOpacity
-                onPress={() => setUploadModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalBody}>
-              <UniversalFileUploader
-                onUploadComplete={handleUploadComplete}
-                multiple={true}
-                accept="image"
-                maxFiles={10}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Create Stage Modal */}
       <Modal

@@ -18,11 +18,13 @@ import { budgetApi, ProjectBudget, CreateBudgetData, BudgetItem } from "@/api/bu
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function BudgetDetailScreen() {
     const router = useRouter();
     const { id, budgetId } = useLocalSearchParams<{ id: string; budgetId: string }>();
+    const tabBarHeight = useTabBarHeight();
     const [budget, setBudget] = useState<ProjectBudget | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -257,11 +259,7 @@ export default function BudgetDetailScreen() {
     if (loading) {
         return (
             <View style={styles.container}>
-                <View style={styles.header}>
-                    <BackButton />
-                    <Text style={styles.headerTitle}>Chi Tiết Ngân Sách</Text>
-                    <View style={{ width: 24 }} />
-                </View>
+                <ScreenHeader title="Chi Tiết Ngân Sách" />
                 <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color="#3B82F6" />
                 </View>
@@ -272,11 +270,7 @@ export default function BudgetDetailScreen() {
     if (!budget) {
         return (
             <View style={styles.container}>
-                <View style={styles.header}>
-                    <BackButton />
-                    <Text style={styles.headerTitle}>Chi Tiết Ngân Sách</Text>
-                    <View style={{ width: 24 }} />
-                </View>
+                <ScreenHeader title="Chi Tiết Ngân Sách" />
                 <View style={styles.centerContainer}>
                     <Ionicons name="alert-circle-outline" size={64} color="#9CA3AF" />
                     <Text style={styles.emptyText}>Không tìm thấy ngân sách</Text>
@@ -287,27 +281,28 @@ export default function BudgetDetailScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <BackButton />
-                <Text style={styles.headerTitle}>Chi Tiết Ngân Sách</Text>
-                <View style={styles.headerActions}>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={() => setShowEditModal(true)}
-                    >
-                        <Ionicons name="pencil" size={20} color="#3B82F6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={handleDelete}
-                    >
-                        <Ionicons name="trash" size={20} color="#EF4444" />
-                    </TouchableOpacity>
-                </View>
-            </View>
+            <ScreenHeader
+                title="Chi Tiết Ngân Sách"
+                rightComponent={
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => setShowEditModal(true)}
+                        >
+                            <Ionicons name="pencil" size={20} color="#3B82F6" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={handleDelete}
+                        >
+                            <Ionicons name="trash" size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
+                }
+            />
 
             <ScrollView
-                style={styles.content}
+                style={[styles.content, { marginBottom: tabBarHeight }]}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                 }
@@ -844,22 +839,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: "#F9FAFB",
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: 16,
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1F2937",
-        flex: 1,
-        textAlign: "center",
     },
     headerActions: {
         flexDirection: "row",

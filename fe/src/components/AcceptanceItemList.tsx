@@ -21,6 +21,7 @@ import AcceptanceItemForm from "./AcceptanceItemForm";
 import { PermissionGuard } from "./PermissionGuard";
 import { UniversalFileUploader } from "@/components";
 import { defectApi } from "@/api/defectApi";
+import { attachmentApi } from "@/api/attachmentApi";
 
 interface AcceptanceItemListProps {
   stage: AcceptanceStage;
@@ -49,6 +50,7 @@ export default function AcceptanceItemList({
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [uploadNotes, setUploadNotes] = useState("");
   const [itemDefects, setItemDefects] = useState<Record<number, number>>({});
@@ -58,6 +60,24 @@ export default function AcceptanceItemList({
 
   // Kiểm tra nếu user là admin (có permission "*" hoặc role là admin)
   const isAdmin = permissions.includes("*") || user?.role === "admin" || user?.role === "super_admin";
+
+  // Kiểm tra quyền upload files cho item
+  const canUploadFiles = (item: AcceptanceItem): boolean => {
+    if (!user?.id) return false;
+    
+    // Admin luôn có quyền upload
+    if (isAdmin) return true;
+    
+    // Project manager có quyền upload
+    if (isProjectManager) return true;
+    
+    // Người tạo có quyền upload khi ở trạng thái draft hoặc submitted
+    if (item.created_by?.toString() === user.id.toString()) {
+      return item.workflow_status === "draft" || item.workflow_status === "submitted";
+    }
+    
+    return false;
+  };
 
   const getStatusColor = (status: string): string => {
     switch (status) {
@@ -306,6 +326,50 @@ export default function AcceptanceItemList({
     }
   };
 
+  const handleDeleteAttachment = async (itemId: number, attachmentId: number, attachmentName?: string) => {
+    Alert.alert(
+      "Xác nhận xóa",
+      `Bạn có chắc chắn muốn xóa ${attachmentName ? `file "${attachmentName}"` : "file này"}?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeletingAttachmentId(attachmentId);
+              await attachmentApi.deleteAttachment(attachmentId);
+              Alert.alert("Thành công", "Đã xóa file thành công");
+              onRefresh();
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa file");
+            } finally {
+              setDeletingAttachmentId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Kiểm tra quyền xóa file
+  const canDeleteAttachment = (attachment: any): boolean => {
+    if (!user?.id) return false;
+    
+    // Admin luôn có quyền xóa
+    if (isAdmin) return true;
+    
+    // Project manager có quyền xóa
+    if (isProjectManager) return true;
+    
+    // Người upload file có quyền xóa file của mình
+    if (attachment.uploaded_by?.toString() === user.id.toString()) {
+      return true;
+    }
+    
+    return false;
+  };
+
   useEffect(() => {
     // Load defects and task progress for items with task_id
     const loadDefectsAndProgress = async () => {
@@ -526,7 +590,14 @@ export default function AcceptanceItemList({
                   </View>
                 </TouchableOpacity>
 
-                {/* Task và Template info */}
+                {/* Description - Thông tin cơ bản */}
+                {item.description && (
+                  <View style={styles.descriptionContainer}>
+                    <Text style={styles.itemDescription}>{item.description}</Text>
+                  </View>
+                )}
+
+                {/* Task và Template info - Liên kết với công việc */}
                 {(item.task || item.template) && (
                   <View style={styles.infoRow}>
                     {item.task && (
@@ -544,86 +615,7 @@ export default function AcceptanceItemList({
                   </View>
                 )}
 
-                {/* Workflow Status with Timeline - Bước 3: Gửi duyệt */}
-                {item.workflow_status && (
-                  <View style={styles.workflowStatusContainer}>
-                    <View style={styles.workflowHeader}>
-                      <Ionicons name="checkmark-done-outline" size={16} color="#3B82F6" />
-                      <Text style={styles.workflowTitle}>Bước 3: Luồng duyệt nghiệm thu</Text>
-                    </View>
-                    <View style={styles.workflowTimeline}>
-                      <View style={[
-                        styles.workflowStep,
-                        item.workflow_status !== 'draft' && styles.workflowStepCompleted
-                      ]}>
-                        <View style={[
-                          styles.workflowStepDot,
-                          item.workflow_status !== 'draft' && styles.workflowStepDotCompleted
-                        ]} />
-                        <Text style={[
-                          styles.workflowStepLabel,
-                          item.workflow_status !== 'draft' && styles.workflowStepLabelCompleted
-                        ]}>1. Người lập</Text>
-                      </View>
-                      <View style={[
-                        styles.workflowStep,
-                        ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepCompleted
-                      ]}>
-                        <View style={[
-                          styles.workflowStepDot,
-                          ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepDotCompleted
-                        ]} />
-                        <Text style={[
-                          styles.workflowStepLabel,
-                          ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepLabelCompleted
-                        ]}>2. QLDA</Text>
-                      </View>
-                      <View style={[
-                        styles.workflowStep,
-                        item.workflow_status === 'customer_approved' && styles.workflowStepCompleted
-                      ]}>
-                        <View style={[
-                          styles.workflowStepDot,
-                          item.workflow_status === 'customer_approved' && styles.workflowStepDotCompleted
-                        ]} />
-                        <Text style={[
-                          styles.workflowStepLabel,
-                          item.workflow_status === 'customer_approved' && styles.workflowStepLabelCompleted
-                        ]}>3. KH/Giám sát</Text>
-                      </View>
-                    </View>
-                    <View
-                      style={[
-                        styles.workflowStatusBadge,
-                        { backgroundColor: getWorkflowStatusColor(item.workflow_status) + "20" },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.workflowStatusText,
-                          { color: getWorkflowStatusColor(item.workflow_status) },
-                        ]}
-                      >
-                        {getWorkflowStatusLabel(item.workflow_status)}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* Defects Warning */}
-                {item.task_id && itemDefects[item.id] > 0 && (
-                  <View style={styles.defectsWarningContainer}>
-                    <Ionicons name="warning-outline" size={16} color="#EF4444" />
-                    <Text style={styles.defectsWarningText}>
-                      Còn {itemDefects[item.id]} lỗi chưa được xử lý. Vui lòng xử lý tất cả lỗi trước khi duyệt nghiệm thu.
-                    </Text>
-                  </View>
-                )}
-
-                {item.description && (
-                  <Text style={styles.itemDescription}>{item.description}</Text>
-                )}
-
+                {/* Standard - Tiêu chuẩn nghiệm thu */}
                 {item.template?.standard && (
                   <View style={styles.standardContainer}>
                     <Text style={styles.standardLabel}>Tiêu chuẩn cho phép:</Text>
@@ -631,53 +623,52 @@ export default function AcceptanceItemList({
                   </View>
                 )}
 
-                {item.notes && (
-                  <View style={styles.notesContainer}>
-                    <Text style={styles.notesLabel}>Ghi chú:</Text>
-                    <Text style={styles.notesText}>{item.notes}</Text>
-                  </View>
-                )}
-
-                {item.rejection_reason && (
-                  <View style={styles.rejectionContainer}>
-                    <Text style={styles.rejectionLabel}>Lý do từ chối:</Text>
-                    <Text style={styles.rejectionText}>{item.rejection_reason}</Text>
-                  </View>
-                )}
-
-                {item.approved_at && (
-                  <Text style={styles.approvedText}>
-                    Đã nghiệm thu: {new Date(item.approved_at).toLocaleString("vi-VN")}
-                  </Text>
-                )}
-
-                {/* Attachments Section - Bước 2: Upload nghiệm thu thực tế */}
+                {/* Attachments Section - Hình ảnh nghiệm thu thực tế */}
                 <View style={styles.attachmentsSection}>
                   <View style={styles.attachmentsHeader}>
                     <View style={styles.attachmentsHeaderLeft}>
-                      <Ionicons name="images-outline" size={16} color="#3B82F6" />
-                      <View>
+                      <View style={[
+                        styles.attachmentsIconContainer,
+                        (item.attachments?.length || 0) > 0 && styles.attachmentsIconContainerCompleted
+                      ]}>
+                        <Ionicons 
+                          name={(item.attachments?.length || 0) > 0 ? "checkmark-circle" : "images-outline"} 
+                          size={18} 
+                          color={(item.attachments?.length || 0) > 0 ? "#10B981" : "#3B82F6"} 
+                        />
+                      </View>
+                      <View style={styles.attachmentsTitleContainer}>
                         <Text style={styles.attachmentsTitle}>
-                          Bước 2: Hình ảnh nghiệm thu thực tế
+                          Hình ảnh nghiệm thu thực tế
                         </Text>
                         <Text style={styles.attachmentsSubtitle}>
-                          ({item.attachments?.length || 0} ảnh đã upload)
+                          {item.attachments && item.attachments.length > 0 
+                            ? `${item.attachments.length} ảnh đã upload` 
+                            : "Chưa có hình ảnh - Vui lòng upload để tiếp tục"}
                         </Text>
                       </View>
                     </View>
-                    {item.workflow_status === "draft" &&
-                      user?.id &&
-                      item.created_by?.toString() === user.id.toString() && (
-                        <TouchableOpacity
-                          style={styles.uploadButtonInline}
-                          onPress={() => handleOpenUploadModal(item.id)}
-                        >
-                          <Ionicons name="add-circle-outline" size={16} color="#3B82F6" />
-                          <Text style={styles.uploadButtonInlineText}>
-                            {item.attachments && item.attachments.length > 0 ? "Thêm ảnh" : "Upload ảnh"}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
+                    {canUploadFiles(item) && (
+                      <TouchableOpacity
+                        style={[
+                          styles.uploadButtonInline,
+                          (item.attachments?.length || 0) === 0 && styles.uploadButtonInlinePrimary
+                        ]}
+                        onPress={() => handleOpenUploadModal(item.id)}
+                      >
+                        <Ionicons 
+                          name={item.attachments && item.attachments.length > 0 ? "add-circle-outline" : "cloud-upload-outline"} 
+                          size={16} 
+                          color={(item.attachments?.length || 0) === 0 ? "#FFFFFF" : "#3B82F6"} 
+                        />
+                        <Text style={[
+                          styles.uploadButtonInlineText,
+                          (item.attachments?.length || 0) === 0 && styles.uploadButtonInlineTextPrimary
+                        ]}>
+                          {item.attachments && item.attachments.length > 0 ? "Thêm ảnh" : "Upload ảnh"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   {item.attachments && item.attachments.length > 0 ? (
                     <ScrollView
@@ -698,19 +689,41 @@ export default function AcceptanceItemList({
                         }
 
                         return (
-                          <TouchableOpacity
-                            key={attachment.id || index}
-                            style={styles.imageWrapper}
-                            onPress={() => {
-                              setPreviewImage(imageUrl);
-                            }}
-                          >
-                            <Image
-                              source={{ uri: imageUrl }}
-                              style={styles.attachmentImage}
-                              resizeMode="cover"
-                            />
-                          </TouchableOpacity>
+                          <View key={attachment.id || index} style={styles.imageWrapper}>
+                            <TouchableOpacity
+                              style={styles.imageContainer}
+                              onPress={() => {
+                                setPreviewImage(imageUrl);
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.attachmentImage}
+                                resizeMode="cover"
+                              />
+                              {deletingAttachmentId === attachment.id ? (
+                                <View style={styles.deleteImageButton}>
+                                  <ActivityIndicator size="small" color="#FFFFFF" />
+                                </View>
+                              ) : canDeleteAttachment(attachment) ? (
+                                <TouchableOpacity
+                                  style={styles.deleteImageButton}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteAttachment(
+                                      item.id,
+                                      attachment.id,
+                                      attachment.original_name || attachment.file_name
+                                    );
+                                  }}
+                                  activeOpacity={0.8}
+                                >
+                                  <Ionicons name="close-circle" size={20} color="#FFFFFF" />
+                                </TouchableOpacity>
+                              ) : null}
+                            </TouchableOpacity>
+                          </View>
                         );
                       })}
                     </ScrollView>
@@ -718,9 +731,162 @@ export default function AcceptanceItemList({
                     <View style={styles.noImagesContainer}>
                       <Ionicons name="image-outline" size={32} color="#D1D5DB" />
                       <Text style={styles.noImagesText}>Chưa có hình ảnh</Text>
+                      {canUploadFiles(item) && (
+                        <TouchableOpacity
+                          style={styles.uploadButtonInEmpty}
+                          onPress={() => handleOpenUploadModal(item.id)}
+                        >
+                          <Ionicons name="cloud-upload-outline" size={20} color="#3B82F6" />
+                          <Text style={styles.uploadButtonInEmptyText}>Nhấn để upload ảnh</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   )}
                 </View>
+
+                {/* Workflow Status with Timeline - Luồng duyệt nghiệm thu */}
+                {item.workflow_status && (
+                  <View style={styles.workflowStatusContainer}>
+                    <View style={styles.workflowHeader}>
+                      <View style={[
+                        styles.workflowIconContainer,
+                        item.workflow_status === 'customer_approved' && styles.workflowIconContainerCompleted
+                      ]}>
+                        <Ionicons 
+                          name={item.workflow_status === 'customer_approved' ? "checkmark-done-circle" : "checkmark-done-outline"} 
+                          size={18} 
+                          color={item.workflow_status === 'customer_approved' ? "#10B981" : "#3B82F6"} 
+                        />
+                      </View>
+                      <Text style={styles.workflowTitle}>Luồng duyệt nghiệm thu</Text>
+                    </View>
+                    <View style={styles.workflowTimeline}>
+                      {/* Connector line background */}
+                      <View style={styles.workflowConnectorBackground} />
+                      
+                      {/* Step 1: Người lập */}
+                      <View style={styles.workflowStepContainer}>
+                        <View style={styles.workflowStepContent}>
+                          <View style={[
+                            styles.workflowStepIcon,
+                            item.workflow_status !== 'draft' && styles.workflowStepIconCompleted
+                          ]}>
+                            <Ionicons 
+                              name={item.workflow_status !== 'draft' ? "checkmark" : "person-outline"} 
+                              size={16} 
+                              color={item.workflow_status !== 'draft' ? "#FFFFFF" : "#6B7280"} 
+                            />
+                          </View>
+                          <Text style={[
+                            styles.workflowStepLabel,
+                            item.workflow_status !== 'draft' && styles.workflowStepLabelCompleted
+                          ]}>Người lập</Text>
+                        </View>
+                      </View>
+
+                      {/* Connector 1-2 */}
+                      <View style={[
+                        styles.workflowConnector,
+                        item.workflow_status !== 'draft' && styles.workflowConnectorActive
+                      ]} />
+
+                      {/* Step 2: QLDA */}
+                      <View style={styles.workflowStepContainer}>
+                        <View style={styles.workflowStepContent}>
+                          <View style={[
+                            styles.workflowStepIcon,
+                            ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepIconCompleted
+                          ]}>
+                            <Ionicons 
+                              name={['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "checkmark" : "briefcase-outline"} 
+                              size={16} 
+                              color={['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "#FFFFFF" : "#6B7280"} 
+                            />
+                          </View>
+                          <Text style={[
+                            styles.workflowStepLabel,
+                            ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepLabelCompleted
+                          ]}>QLDA</Text>
+                        </View>
+                      </View>
+
+                      {/* Connector 2-3 */}
+                      <View style={[
+                        styles.workflowConnector,
+                        ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowConnectorActive
+                      ]} />
+
+                      {/* Step 3: KH/Giám sát */}
+                      <View style={styles.workflowStepContainer}>
+                        <View style={styles.workflowStepContent}>
+                          <View style={[
+                            styles.workflowStepIcon,
+                            item.workflow_status === 'customer_approved' && styles.workflowStepIconCompleted
+                          ]}>
+                            <Ionicons 
+                              name={item.workflow_status === 'customer_approved' ? "checkmark" : "people-outline"} 
+                              size={16} 
+                              color={item.workflow_status === 'customer_approved' ? "#FFFFFF" : "#6B7280"} 
+                            />
+                          </View>
+                          <Text style={[
+                            styles.workflowStepLabel,
+                            item.workflow_status === 'customer_approved' && styles.workflowStepLabelCompleted
+                          ]}>KH/Giám sát</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View
+                      style={[
+                        styles.workflowStatusBadge,
+                        { backgroundColor: getWorkflowStatusColor(item.workflow_status) + "20" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.workflowStatusText,
+                          { color: getWorkflowStatusColor(item.workflow_status) },
+                        ]}
+                      >
+                        {getWorkflowStatusLabel(item.workflow_status)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Warnings Section - Cảnh báo */}
+                {item.task_id && itemDefects[item.id] > 0 && (
+                  <View style={styles.defectsWarningContainer}>
+                    <Ionicons name="warning-outline" size={16} color="#EF4444" />
+                    <Text style={styles.defectsWarningText}>
+                      Còn {itemDefects[item.id]} lỗi chưa được xử lý. Vui lòng xử lý tất cả lỗi trước khi duyệt nghiệm thu.
+                    </Text>
+                  </View>
+                )}
+
+                {/* Notes and Status Info */}
+                {item.notes && (
+                  <View style={styles.notesContainer}>
+                    <Text style={styles.notesLabel}>Ghi chú:</Text>
+                    <Text style={styles.notesText}>{item.notes}</Text>
+                  </View>
+                )}
+
+                {item.rejection_reason && (
+                  <View style={styles.rejectionContainer}>
+                    <Text style={styles.rejectionLabel}>Lý do từ chối:</Text>
+                    <Text style={styles.rejectionText}>{item.rejection_reason}</Text>
+                  </View>
+                )}
+
+                {item.approved_at && (
+                  <View style={styles.approvedContainer}>
+                    <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                    <Text style={styles.approvedText}>
+                      Đã nghiệm thu: {new Date(item.approved_at).toLocaleString("vi-VN")}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Action Buttons Section */}
                 <View style={styles.itemActions}>
@@ -917,32 +1083,66 @@ export default function AcceptanceItemList({
         onRequestClose={() => {
           setUploadModalVisible(false);
           setUploadingItemId(null);
+          setUploadNotes("");
         }}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Upload hình ảnh nghiệm thu</Text>
+              <View style={styles.modalTitleContainer}>
+                <Text style={styles.modalTitle}>Upload hình ảnh nghiệm thu</Text>
+                {uploadingItemId && (
+                  <Text style={styles.modalSubtitle}>
+                    {items.find(i => i.id === uploadingItemId)?.name || "Hạng mục"}
+                  </Text>
+                )}
+              </View>
               <TouchableOpacity
                 onPress={() => {
                   setUploadModalVisible(false);
                   setUploadingItemId(null);
+                  setUploadNotes("");
                 }}
                 style={styles.closeButton}
               >
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-            <View style={styles.modalBody}>
-              <UniversalFileUploader
-                onUploadComplete={handleUploadComplete}
-                multiple={true}
-                accept="image"
-                maxFiles={10}
-              />
-            </View>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.uploadNotesContainer}>
+                <Text style={styles.uploadNotesLabel}>
+                  Ghi chú (tùy chọn)
+                </Text>
+                <TextInput
+                  style={styles.uploadNotesInput}
+                  placeholder="Nhập ghi chú về hình ảnh nghiệm thu..."
+                  value={uploadNotes}
+                  onChangeText={setUploadNotes}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+              <View style={styles.uploaderContainer}>
+                <UniversalFileUploader
+                  onUploadComplete={handleUploadComplete}
+                  multiple={true}
+                  accept="image"
+                  maxFiles={10}
+                />
+              </View>
+              {uploading && (
+                <View style={styles.uploadingContainer}>
+                  <ActivityIndicator size="small" color="#3B82F6" />
+                  <Text style={styles.uploadingText}>Đang upload...</Text>
+                </View>
+              )}
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Image Preview Modal */}
@@ -1103,16 +1303,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
+  descriptionContainer: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
   itemDescription: {
     fontSize: 13,
     color: "#6B7280",
-    marginBottom: 8,
+    lineHeight: 20,
   },
   notesContainer: {
     backgroundColor: "#F9FAFB",
-    padding: 8,
-    borderRadius: 6,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   notesLabel: {
     fontSize: 12,
@@ -1126,9 +1333,12 @@ const styles = StyleSheet.create({
   },
   rejectionContainer: {
     backgroundColor: "#FEF2F2",
-    padding: 8,
-    borderRadius: 6,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
   },
   rejectionLabel: {
     fontSize: 12,
@@ -1140,16 +1350,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#DC2626",
   },
+  approvedContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: "#F0FDF4",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
   approvedText: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#10B981",
-    marginBottom: 8,
+    fontWeight: "500",
   },
   itemActions: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
+    borderTopColor: "#E5E7EB",
   },
   actionButtonsRow: {
     flexDirection: "row",
@@ -1217,7 +1438,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 12,
   },
   infoItem: {
     flexDirection: "row",
@@ -1229,8 +1451,9 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
   workflowStatusContainer: {
+    marginTop: 16,
     marginBottom: 12,
-    padding: 12,
+    padding: 14,
     backgroundColor: "#F9FAFB",
     borderRadius: 8,
     borderWidth: 1,
@@ -1239,42 +1462,89 @@ const styles = StyleSheet.create({
   workflowHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 10,
     marginBottom: 12,
+  },
+  workflowIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#DBEAFE",
+  },
+  workflowIconContainerCompleted: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
   },
   workflowTitle: {
     fontSize: 14,
     fontWeight: "600",
     color: "#1F2937",
+    flex: 1,
   },
   workflowTimeline: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 12,
+    paddingVertical: 8,
+    position: "relative",
   },
-  workflowStep: {
+  workflowConnectorBackground: {
+    position: "absolute",
+    top: "50%",
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: "#E5E7EB",
+    zIndex: 0,
+    marginTop: -1,
+  },
+  workflowConnector: {
     flex: 1,
-    alignItems: "center",
-    opacity: 0.4,
+    height: 2,
+    backgroundColor: "#E5E7EB",
+    marginHorizontal: 4,
+    zIndex: 1,
   },
-  workflowStepCompleted: {
-    opacity: 1,
-  },
-  workflowStepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#D1D5DB",
-    marginBottom: 4,
-  },
-  workflowStepDotCompleted: {
+  workflowConnectorActive: {
     backgroundColor: "#10B981",
   },
+  workflowStepContainer: {
+    alignItems: "center",
+    zIndex: 2,
+    minWidth: 60,
+  },
+  workflowStepContent: {
+    alignItems: "center",
+  },
+  workflowStepIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  workflowStepIconCompleted: {
+    backgroundColor: "#10B981",
+    borderColor: "#10B981",
+  },
   workflowStepLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#6B7280",
     textAlign: "center",
+    fontWeight: "500",
   },
   workflowStepLabelCompleted: {
     color: "#10B981",
@@ -1291,7 +1561,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   standardContainer: {
-    marginTop: 8,
+    marginTop: 12,
+    marginBottom: 8,
     padding: 12,
     backgroundColor: "#F9FAFB",
     borderRadius: 8,
@@ -1365,8 +1636,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   attachmentsSection: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
   },
@@ -1378,33 +1649,61 @@ const styles = StyleSheet.create({
   },
   attachmentsHeaderLeft: {
     flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    flex: 1,
+  },
+  attachmentsIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
     alignItems: "center",
-    gap: 6,
+    marginTop: 2,
+    borderWidth: 2,
+    borderColor: "#DBEAFE",
+  },
+  attachmentsIconContainerCompleted: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
+  },
+  attachmentsTitleContainer: {
     flex: 1,
   },
   attachmentsTitle: {
     fontSize: 14,
     fontWeight: "600",
     color: "#1F2937",
+    marginBottom: 2,
   },
   attachmentsSubtitle: {
     fontSize: 12,
     color: "#6B7280",
-    marginTop: 2,
+    lineHeight: 16,
   },
   uploadButtonInline: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: "#EFF6FF",
-    borderRadius: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+  },
+  uploadButtonInlinePrimary: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
   },
   uploadButtonInlineText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "600",
     color: "#3B82F6",
+  },
+  uploadButtonInlineTextPrimary: {
+    color: "#FFFFFF",
   },
   uploadButton: {
     flexDirection: "row",
@@ -1430,6 +1729,9 @@ const styles = StyleSheet.create({
   imageWrapper: {
     marginRight: 12,
     position: "relative",
+  },
+  imageContainer: {
+    position: "relative",
     borderRadius: 8,
     overflow: "hidden",
   },
@@ -1438,6 +1740,24 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 8,
     backgroundColor: "#F3F4F6",
+  },
+  deleteImageButton: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    backgroundColor: "rgba(239, 68, 68, 0.9)",
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
   },
   imageOverlay: {
     position: "absolute",
@@ -1461,6 +1781,24 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     marginTop: 8,
   },
+  uploadButtonInEmpty: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    borderStyle: "dashed",
+  },
+  uploadButtonInEmptyText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -1480,16 +1818,48 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
+  modalTitleContainer: {
+    flex: 1,
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: "#1F2937",
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 2,
   },
   closeButton: {
     padding: 4,
   },
   modalBody: {
     padding: 20,
+  },
+  uploadNotesContainer: {
+    marginBottom: 20,
+  },
+  uploadNotesLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  uploadNotesInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: "#1F2937",
+    backgroundColor: "#FFFFFF",
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  uploaderContainer: {
+    marginBottom: 16,
   },
   uploadingContainer: {
     flexDirection: "row",
@@ -1524,13 +1894,14 @@ const styles = StyleSheet.create({
   defectsWarningContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 12,
+    marginBottom: 8,
     padding: 12,
     backgroundColor: "#FEF2F2",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#FEE2E2",
+    borderColor: "#FECACA",
   },
   defectsWarningText: {
     flex: 1,
