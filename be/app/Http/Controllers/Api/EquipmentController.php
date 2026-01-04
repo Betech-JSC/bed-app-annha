@@ -8,6 +8,7 @@ use App\Models\EquipmentAllocation;
 use App\Models\EquipmentMaintenance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class EquipmentController extends Controller
 {
@@ -339,11 +340,21 @@ class EquipmentController extends Controller
 
         $validator = Validator::make($request->all(), [
             'equipment_id' => 'required|exists:equipment,id',
+            'allocation_type' => 'required|in:rent,buy',
+            'quantity' => 'required|integer|min:1',
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
-            'daily_rate' => 'nullable|numeric|min:0',
             'allocated_to' => 'nullable|exists:users,id',
             'notes' => 'nullable|string',
+            // Cho MUA (buy):
+            'manager_id' => 'nullable|exists:users,id|required_if:allocation_type,buy',
+            'handover_date' => 'nullable|date',
+            'return_date' => 'nullable|date|after_or_equal:handover_date',
+            // Cho THUÊ (rent):
+            'daily_rate' => 'nullable|numeric|min:0|required_if:allocation_type,rent',
+            'rental_fee' => 'nullable|numeric|min:0',
+            'billing_start_date' => 'nullable|date',
+            'billing_end_date' => 'nullable|date|after_or_equal:billing_start_date',
         ]);
 
         if ($validator->fails()) {
@@ -354,46 +365,94 @@ class EquipmentController extends Controller
             ], 422);
         }
 
-        // Kiểm tra equipment có đang được sử dụng không
+        // Kiểm tra equipment có đang được sử dụng không (chỉ cho thuê)
         $equipment = Equipment::findOrFail($request->equipment_id);
-        $activeAllocation = $equipment->allocations()
-            ->where('status', 'active')
-            ->where(function ($q) use ($request) {
-                $q->whereNull('end_date')
-                    ->orWhere('end_date', '>=', $request->start_date);
-            })
-            ->first();
+        
+        if ($request->allocation_type === 'rent') {
+            // Kiểm tra số lượng thiết bị còn lại
+            $allocatedQuantity = $equipment->allocations()
+                ->where('status', 'active')
+                ->where('allocation_type', 'rent')
+                ->where(function ($q) use ($request) {
+                    $q->whereNull('end_date')
+                        ->orWhere('end_date', '>=', $request->start_date);
+                })
+                ->sum('quantity');
 
-        if ($activeAllocation) {
+            $availableQuantity = $equipment->quantity - $allocatedQuantity;
+            if ($availableQuantity < $request->quantity) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Không đủ thiết bị. Còn lại: {$availableQuantity}, yêu cầu: {$request->quantity}."
+                ], 422);
+            }
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Tạo allocation
+            $allocationData = [
+                'equipment_id' => $request->equipment_id,
+                'project_id' => $projectId,
+                'allocation_type' => $request->allocation_type,
+                'quantity' => $request->quantity,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
+                'allocated_to' => $request->allocated_to,
+                'notes' => $request->notes,
+                'status' => 'active',
+                'created_by' => $user->id,
+            ];
+
+            // Cho MUA (buy)
+            if ($request->allocation_type === 'buy') {
+                $allocationData['manager_id'] = $request->manager_id;
+                $allocationData['handover_date'] = $request->handover_date ?? $request->start_date;
+                $allocationData['return_date'] = $request->return_date;
+                $allocationData['daily_rate'] = null;
+                $allocationData['rental_fee'] = null;
+            }
+
+            // Cho THUÊ (rent)
+            if ($request->allocation_type === 'rent') {
+                $allocationData['daily_rate'] = $request->daily_rate ?? $equipment->rental_rate_per_day;
+                $allocationData['rental_fee'] = $request->rental_fee;
+                $allocationData['billing_start_date'] = $request->billing_start_date ?? $request->start_date;
+                $allocationData['billing_end_date'] = $request->billing_end_date ?? $request->end_date;
+            }
+
+            $allocation = EquipmentAllocation::create($allocationData);
+
+            // Tự động tạo Cost nếu là thuê
+            if ($request->allocation_type === 'rent') {
+                $allocationService = app(\App\Services\EquipmentAllocationService::class);
+                $allocationService->createCostFromRental($allocation);
+            }
+
+            // Cập nhật status của equipment nếu cần
+            if ($equipment->status === 'available') {
+                $equipment->update(['status' => 'in_use']);
+            }
+
+            DB::commit();
+
+            $allocation->load(['equipment', 'project', 'allocatedTo', 'manager', 'creator', 'cost']);
+
+            return response()->json([
+                'success' => true,
+                'message' => $request->allocation_type === 'buy' 
+                    ? 'Đã phân bổ thiết bị (Mua) thành công.' 
+                    : 'Đã tạo phân bổ thiết bị (Thuê) thành công.',
+                'data' => $allocation
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Thiết bị đang được sử dụng trong khoảng thời gian này.'
-            ], 422);
+                'message' => 'Có lỗi xảy ra khi tạo phân bổ thiết bị.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $allocation = EquipmentAllocation::create([
-            'equipment_id' => $request->equipment_id,
-            'project_id' => $projectId,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
-            'daily_rate' => $request->daily_rate,
-            'allocated_to' => $request->allocated_to,
-            'notes' => $request->notes,
-            'status' => 'active',
-            'created_by' => $user->id,
-        ]);
-
-        // Cập nhật status của equipment nếu cần
-        if ($equipment->status === 'available') {
-            $equipment->update(['status' => 'in_use']);
-        }
-
-        $allocation->load(['equipment', 'project', 'allocatedTo', 'creator']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã tạo phân bổ thiết bị thành công.',
-            'data' => $allocation
-        ], 201);
     }
 }

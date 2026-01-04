@@ -30,6 +30,30 @@ class AcceptanceTemplate extends Model
         return $this->hasMany(AcceptanceTemplateImage::class);
     }
 
+    public function templateDocuments(): HasMany
+    {
+        return $this->hasMany(AcceptanceTemplateDocument::class);
+    }
+
+    // Images (minh họa)
+    public function images(): BelongsToMany
+    {
+        return $this->belongsToMany(Attachment::class, 'acceptance_template_images')
+            ->withPivot('order')
+            ->withTimestamps()
+            ->orderBy('acceptance_template_images.order');
+    }
+
+    // Documents (nội dung chính: PDF, Word, Excel)
+    public function documents(): BelongsToMany
+    {
+        return $this->belongsToMany(Attachment::class, 'acceptance_template_documents')
+            ->withPivot('order')
+            ->withTimestamps()
+            ->orderBy('acceptance_template_documents.order');
+    }
+
+    // Backward compatible: tất cả attachments (images - giữ nguyên để không break existing code)
     public function attachments(): BelongsToMany
     {
         return $this->belongsToMany(Attachment::class, 'acceptance_template_images')

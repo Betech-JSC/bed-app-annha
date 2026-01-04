@@ -5,6 +5,7 @@ export interface Equipment {
   uuid: string;
   name: string;
   code?: string;
+  quantity: number;
   category?: string;
   type: "owned" | "rented";
   brand?: string;
@@ -26,10 +27,26 @@ export interface EquipmentAllocation {
   uuid: string;
   equipment_id: number;
   project_id: number;
+  allocation_type: "rent" | "buy";
+  quantity: number;
   start_date: string;
   end_date?: string;
   notes?: string;
   status: "active" | "completed" | "cancelled";
+  // Cho MUA (buy):
+  manager_id?: number;
+  manager?: any;
+  handover_date?: string;
+  return_date?: string;
+  // Cho THUÊ (rent):
+  daily_rate?: number;
+  rental_fee?: number;
+  billing_start_date?: string;
+  billing_end_date?: string;
+  cost_id?: number;
+  cost?: any;
+  allocated_to?: number;
+  allocatedTo?: any;
   created_at: string;
   updated_at: string;
   equipment?: Equipment;
@@ -53,6 +70,7 @@ export interface EquipmentMaintenance {
 export interface CreateEquipmentData {
   name: string;
   code?: string;
+  quantity?: number;
   category?: string;
   type: "owned" | "rented";
   brand?: string;
@@ -127,11 +145,21 @@ export const equipmentApi = {
 
   createAllocation: async (projectId: string | number, data: {
     equipment_id: number;
+    allocation_type: "rent" | "buy";
+    quantity: number;
     start_date: string;
     end_date?: string;
-    daily_rate?: number;
     allocated_to?: number;
     notes?: string;
+    // Cho MUA (buy):
+    manager_id?: number;
+    handover_date?: string;
+    return_date?: string;
+    // Cho THUÊ (rent):
+    daily_rate?: number;
+    rental_fee?: number;
+    billing_start_date?: string;
+    billing_end_date?: string;
   }) => {
     const response = await api.post(`/projects/${projectId}/equipment/allocations`, data);
     return response.data;

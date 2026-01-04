@@ -17,6 +17,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { costApi, Cost, revenueApi } from "@/api/revenueApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { subcontractorApi, Subcontractor } from "@/api/subcontractorApi";
+import { materialApi, Material } from "@/api/materialApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -54,12 +55,18 @@ export default function CostsScreen() {
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
   const [loadingSubcontractors, setLoadingSubcontractors] = useState(false);
   const [showSubcontractorPicker, setShowSubcontractorPicker] = useState(false);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  const [showMaterialPicker, setShowMaterialPicker] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
     cost_group_id: null as number | null,
     subcontractor_id: null as number | null,
+    material_id: null as number | null,
+    quantity: "",
+    unit: "",
     name: "",
     amount: "",
     description: "",
@@ -68,12 +75,14 @@ export default function CostsScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
   const [selectedSubcontractor, setSelectedSubcontractor] = useState<Subcontractor | null>(null);
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
 
   useEffect(() => {
     loadCosts();
     loadSummary();
     loadCostGroups();
     loadSubcontractors();
+    loadMaterials();
   }, [id, filterStatus, filterCategory]);
 
   const loadCosts = async () => {
@@ -136,6 +145,24 @@ export default function CostsScreen() {
       setSubcontractors([]);
     } finally {
       setLoadingSubcontractors(false);
+    }
+  };
+
+  const loadMaterials = async () => {
+    try {
+      setLoadingMaterials(true);
+      const response = await materialApi.getMaterials({ active_only: true });
+      if (response.success) {
+        const data = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+        setMaterials(data);
+      } else {
+        setMaterials([]);
+      }
+    } catch (error) {
+      console.error("Error loading materials:", error);
+      setMaterials([]);
+    } finally {
+      setLoadingMaterials(false);
     }
   };
 
@@ -240,6 +267,9 @@ export default function CostsScreen() {
     setFormData({
       cost_group_id: null,
       subcontractor_id: null,
+      material_id: null,
+      quantity: "",
+      unit: "",
       name: "",
       amount: "",
       description: "",
@@ -247,6 +277,7 @@ export default function CostsScreen() {
     });
     setSelectedCostGroup(null);
     setSelectedSubcontractor(null);
+    setSelectedMaterial(null);
     setUploadedFiles([]);
   };
 
@@ -669,6 +700,83 @@ export default function CostsScreen() {
               </View>
             )}
 
+            {/* Material Selection - cho phép chọn vật liệu để liên kết với kho */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Vật liệu (tùy chọn)</Text>
+              <Text style={styles.helperText}>
+                Chọn vật liệu để tự động tạo phiếu nhập kho khi chi phí được duyệt
+              </Text>
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => {
+                  loadMaterials();
+                  setShowMaterialPicker(true);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.selectButtonText,
+                    !selectedMaterial && styles.selectButtonPlaceholder,
+                  ]}
+                >
+                  {selectedMaterial
+                    ? `${selectedMaterial.name}${selectedMaterial.code ? ` (${selectedMaterial.code})` : ''}`
+                    : "Chọn vật liệu"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              </TouchableOpacity>
+              {selectedMaterial && (
+                <>
+                  <TouchableOpacity
+                    style={styles.clearSelectionButton}
+                    onPress={() => {
+                      setSelectedMaterial(null);
+                      setFormData({ 
+                        ...formData, 
+                        material_id: null,
+                        quantity: "",
+                        unit: "",
+                      });
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#EF4444" />
+                    <Text style={styles.clearSelectionText}>Xóa lựa chọn</Text>
+                  </TouchableOpacity>
+                  <View style={styles.row}>
+                    <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+                      <Text style={styles.label}>Số lượng *</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Nhập số lượng"
+                        value={formData.quantity}
+                        onChangeText={(text) =>
+                          setFormData({ ...formData, quantity: text })
+                        }
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+                      <Text style={styles.label}>Đơn vị *</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Đơn vị"
+                        value={formData.unit || selectedMaterial.unit}
+                        onChangeText={(text) =>
+                          setFormData({ ...formData, unit: text })
+                        }
+                        editable={true}
+                      />
+                    </View>
+                  </View>
+                  {selectedMaterial.current_stock !== undefined && (
+                    <Text style={styles.stockInfo}>
+                      Tồn kho hiện tại: {selectedMaterial.current_stock} {selectedMaterial.unit}
+                    </Text>
+                  )}
+                </>
+              )}
+            </View>
+
             <View style={styles.formGroup}>
               <Text style={styles.label}>Mô tả</Text>
               <TextInput
@@ -842,6 +950,83 @@ export default function CostsScreen() {
                       <View style={styles.pickerEmptyContainer}>
                         <Ionicons name="business-outline" size={48} color="#D1D5DB" />
                         <Text style={styles.pickerEmptyText}>Chưa có nhà thầu phụ nào</Text>
+                      </View>
+                    }
+                  />
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Material Picker Modal - Đặt bên trong modal tạo cost */}
+          {showMaterialPicker && (
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContainer}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Chọn Vật Liệu</Text>
+                  <TouchableOpacity onPress={() => setShowMaterialPicker(false)}>
+                    <Ionicons name="close" size={24} color="#1F2937" />
+                  </TouchableOpacity>
+                </View>
+                {loadingMaterials ? (
+                  <View style={styles.pickerLoadingContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                  </View>
+                ) : (
+                  <FlatList
+                    data={materials}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.costGroupItem,
+                          selectedMaterial?.id === item.id && styles.costGroupItemActive,
+                        ]}
+                        onPress={() => {
+                          setSelectedMaterial(item);
+                          setFormData({ 
+                            ...formData, 
+                            material_id: item.id,
+                            unit: item.unit || formData.unit || "",
+                          });
+                          setShowMaterialPicker(false);
+                        }}
+                      >
+                        <View style={styles.costGroupItemContent}>
+                          <Text
+                            style={[
+                              styles.costGroupItemName,
+                              selectedMaterial?.id === item.id && styles.costGroupItemNameActive,
+                            ]}
+                          >
+                            {item.name}
+                          </Text>
+                          <View style={styles.materialInfoRow}>
+                            {item.code && (
+                              <Text style={styles.costGroupItemCode}>Mã: {item.code}</Text>
+                            )}
+                            <Text style={styles.costGroupItemCode}>
+                              Đơn vị: {item.unit}
+                            </Text>
+                            {item.current_stock !== undefined && (
+                              <Text style={styles.costGroupItemCode}>
+                                Tồn: {item.current_stock} {item.unit}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                        {selectedMaterial?.id === item.id && (
+                          <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.pickerEmptyContainer}>
+                        <Ionicons name="cube-outline" size={48} color="#D1D5DB" />
+                        <Text style={styles.pickerEmptyText}>Chưa có vật liệu nào</Text>
+                        <Text style={styles.pickerEmptySubtext}>
+                          Vui lòng tạo vật liệu trong phần Quản lý kho
+                        </Text>
                       </View>
                     }
                   />
@@ -1200,6 +1385,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9CA3AF",
     marginBottom: 12,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  stockInfo: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 8,
+    fontStyle: "italic",
+  },
+  materialInfoRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
   },
   fallbackCategoryGrid: {
     marginTop: 8,

@@ -88,7 +88,7 @@ class SupplierController extends Controller
             ], 422);
         }
 
-        $supplier = Supplier::create($request->all());
+        $supplier = Supplier::create($validator->validated());
 
         return response()->json([
             'success' => true,
@@ -159,7 +159,7 @@ class SupplierController extends Controller
             ], 422);
         }
 
-        $supplier->update($request->all());
+        $supplier->update($validator->validated());
 
         return response()->json([
             'success' => true,

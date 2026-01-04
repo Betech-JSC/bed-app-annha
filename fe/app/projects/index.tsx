@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
 import { monitoringApi, ProjectMonitoringData } from "@/api/monitoringApi";
 import { predictiveAnalyticsApi } from "@/api/predictiveAnalyticsApi";
+import { projectCommentApi } from "@/api/projectCommentApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { ScreenHeader } from "@/components";
@@ -22,10 +23,16 @@ export default function ProjectsListScreen() {
   const router = useRouter();
   const tabBarHeight = useTabBarHeight();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [monitoringData, setMonitoringData] = useState<Record<number, ProjectMonitoringData>>({});
   const [predictions, setPredictions] = useState<Record<number, any>>({});
+  const [latestComments, setLatestComments] = useState<Record<number, any>>({});
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [showYearFilter, setShowYearFilter] = useState(false);
+  const [showStatusFilter, setShowStatusFilter] = useState(false);
 
   useEffect(() => {
     loadProjects();
@@ -38,9 +45,11 @@ export default function ProjectsListScreen() {
       if (response.success) {
         const projectsList = response.data?.data || response.data || [];
         setProjects(projectsList);
+        applyFilters(projectsList, selectedYear, selectedStatus);
         
-        // Load monitoring data và predictions cho từng project
+        // Load monitoring data, predictions và comments cho từng project
         loadMonitoringData(projectsList);
+        loadLatestComments(projectsList);
       }
     } catch (error: any) {
       console.error("Error loading projects:", error);
@@ -91,6 +100,64 @@ export default function ProjectsListScreen() {
     setMonitoringData(monitoringMap);
     setPredictions(predictionsMap);
   };
+
+  const loadLatestComments = async (projectsList: Project[]) => {
+    const commentPromises = projectsList.map(async (project) => {
+      try {
+        const response = await projectCommentApi.getLatestComment(project.id);
+        return {
+          projectId: project.id,
+          comment: response?.success ? response.data : null,
+        };
+      } catch (error) {
+        return {
+          projectId: project.id,
+          comment: null,
+        };
+      }
+    });
+
+    const results = await Promise.all(commentPromises);
+    const commentsMap: Record<number, any> = {};
+
+    results.forEach((result) => {
+      if (result.comment) {
+        commentsMap[result.projectId] = result.comment;
+      }
+    });
+
+    setLatestComments(commentsMap);
+  };
+
+  const applyFilters = (projectsList: Project[], year: number | null, status: string | null) => {
+    let filtered = [...projectsList];
+
+    // Filter theo năm
+    if (year) {
+      filtered = filtered.filter((project) => {
+        if (project.start_date) {
+          const projectYear = new Date(project.start_date).getFullYear();
+          return projectYear === year;
+        }
+        return false;
+      });
+    }
+
+    // Filter theo trạng thái
+    if (status) {
+      if (status === "in_progress") {
+        filtered = filtered.filter((p) => p.status === "in_progress");
+      } else if (status === "completed") {
+        filtered = filtered.filter((p) => p.status === "completed");
+      }
+    }
+
+    setFilteredProjects(filtered);
+  };
+
+  useEffect(() => {
+    applyFilters(projects, selectedYear, selectedStatus);
+  }, [selectedYear, selectedStatus, projects]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -163,6 +230,7 @@ export default function ProjectsListScreen() {
   const renderProjectItem = ({ item }: { item: Project }) => {
     const monitoring = monitoringData[item.id];
     const prediction = predictions[item.id];
+    const latestComment = latestComments[item.id];
     
     // Tính toán các indicators
     const hasDelayRisk = prediction?.delay_risk?.risk_level === 'high' || prediction?.delay_risk?.risk_level === 'critical';
@@ -183,10 +251,10 @@ export default function ProjectsListScreen() {
     const showWarning = hasDelayRisk || hasCostRisk || highRisksCount > 0 || alertsCount > 0 || overdueTasks > 0;
 
     return (
-      <TouchableOpacity
-        style={styles.projectCard}
-        onPress={() => router.push(`/projects/${item.id}`)}
-      >
+    <TouchableOpacity
+      style={styles.projectCard}
+      onPress={() => router.push(`/projects/${item.id}`)}
+    >
         {/* Monitoring Indicators - Góc trên phải */}
         {showWarning && (
           <View style={styles.monitoringIndicators}>
@@ -223,47 +291,47 @@ export default function ProjectsListScreen() {
           </View>
         )}
 
-        <View style={styles.projectHeader}>
-          <View style={styles.projectInfo}>
-            <Text style={styles.projectName}>{item.name}</Text>
-            <Text style={styles.projectCode}>{item.code}</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <View
+      <View style={styles.projectHeader}>
+        <View style={styles.projectInfo}>
+          <Text style={styles.projectName}>{item.name}</Text>
+          <Text style={styles.projectCode}>{item.code}</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <View
+            style={[
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(item.status) + "20" },
+            ]}
+          >
+            <Text
               style={[
-                styles.statusBadge,
-                { backgroundColor: getStatusColor(item.status) + "20" },
+                styles.statusText,
+                { color: getStatusColor(item.status) },
               ]}
             >
-              <Text
-                style={[
-                  styles.statusText,
-                  { color: getStatusColor(item.status) },
-                ]}
+              {getStatusText(item.status)}
+            </Text>
+          </View>
+          <View style={styles.actionButtons}>
+            <PermissionGuard permission="projects.update">
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={(e) => handleEdit(item, e)}
               >
-                {getStatusText(item.status)}
-              </Text>
-            </View>
-            <View style={styles.actionButtons}>
-              <PermissionGuard permission="projects.update">
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={(e) => handleEdit(item, e)}
-                >
-                  <Ionicons name="create-outline" size={18} color="#3B82F6" />
-                </TouchableOpacity>
-              </PermissionGuard>
-              <PermissionGuard permission="projects.delete">
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={(e) => handleDelete(item, e)}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                </TouchableOpacity>
-              </PermissionGuard>
-            </View>
+                <Ionicons name="create-outline" size={18} color="#3B82F6" />
+              </TouchableOpacity>
+            </PermissionGuard>
+            <PermissionGuard permission="projects.delete">
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={(e) => handleDelete(item, e)}
+              >
+                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              </TouchableOpacity>
+            </PermissionGuard>
           </View>
         </View>
+      </View>
       {item.description && (
         <Text style={styles.description} numberOfLines={2}>
           {item.description}
@@ -279,43 +347,76 @@ export default function ProjectsListScreen() {
           </Text>
         </View>
         {item.progress && (
-          <View style={styles.footerItem}>
-            <Ionicons name="trending-up-outline" size={16} color="#6B7280" />
-            <Text style={styles.footerText}>
+          <View style={[styles.footerItem, styles.progressItem]}>
+            <Ionicons name="trending-up-outline" size={18} color="#3B82F6" />
+            <Text style={styles.progressText}>
               {item.progress.overall_percentage}%
+            </Text>
+          </View>
+        )}
+        
+        {/* Tổng thời gian thi công */}
+        {item.start_date && item.end_date && (
+          <View style={styles.footerItem}>
+            <Ionicons name="time-outline" size={16} color="#6B7280" />
+            <Text style={styles.footerText}>
+              {Math.ceil((new Date(item.end_date).getTime() - new Date(item.start_date).getTime()) / (1000 * 60 * 60 * 24))} ngày
             </Text>
           </View>
         )}
       </View>
 
-      {/* Quick Monitoring Info */}
-      {(monitoring || prediction) && (
-        <View style={styles.quickMonitoring}>
-          {delayDays > 0 && (
-            <View style={styles.quickInfoItem}>
-              <Ionicons name="time" size={12} color="#EF4444" />
-              <Text style={styles.quickInfoText}>
-                Chậm {delayDays} ngày
+      {/* Cảnh báo tiến độ trễ - Icon cảnh báo nổi bật */}
+      {showWarning && (
+        <View style={styles.warningBanner}>
+          <Ionicons name="warning" size={20} color="#F59E0B" />
+          <View style={styles.warningContent}>
+            {delayDays > 0 && (
+              <Text style={styles.warningText}>
+                ⚠️ Cảnh báo: Dự án chậm {delayDays} ngày so với kế hoạch
               </Text>
-            </View>
-          )}
-          {overrunPercentageText && (
-            <View style={styles.quickInfoItem}>
-              <Ionicons name="cash" size={12} color="#EF4444" />
-              <Text style={styles.quickInfoText}>
-                Vượt {overrunPercentageText}%
+            )}
+            {overrunPercentageText && (
+              <Text style={styles.warningText}>
+                ⚠️ Cảnh báo: Vượt ngân sách {overrunPercentageText}%
               </Text>
-            </View>
-          )}
-          {monitoring && monitoring.metrics && monitoring.metrics.overdue_tasks > 0 && (
-            <View style={styles.quickInfoItem}>
-              <Ionicons name="calendar" size={12} color="#F59E0B" />
-              <Text style={styles.quickInfoText}>
-                {monitoring.metrics.overdue_tasks} công việc quá hạn
+            )}
+            {monitoring && monitoring.metrics && monitoring.metrics.overdue_tasks > 0 && (
+              <Text style={styles.warningText}>
+                ⚠️ Cảnh báo: {monitoring.metrics.overdue_tasks} công việc quá hạn
               </Text>
-            </View>
-          )}
+            )}
+          </View>
         </View>
+      )}
+
+      {/* Comment mới nhất */}
+      {latestComment && (
+        <TouchableOpacity 
+          style={styles.commentSection}
+          onPress={() => router.push(`/projects/${item.id}`)}
+        >
+          <View style={styles.commentHeader}>
+            <Ionicons name="chatbubble-outline" size={16} color="#6B7280" />
+            <Text style={styles.commentLabel}>Bình luận mới nhất:</Text>
+          </View>
+          <View style={styles.commentContent}>
+            <Text style={styles.commentAuthor}>
+              {latestComment.user?.name || "Người dùng"}
+            </Text>
+            <Text style={styles.commentText} numberOfLines={2}>
+              {latestComment.content}
+            </Text>
+            <Text style={styles.commentTime}>
+              {new Date(latestComment.created_at).toLocaleDateString("vi-VN", {
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </Text>
+          </View>
+        </TouchableOpacity>
       )}
     </TouchableOpacity>
   );
@@ -334,19 +435,121 @@ export default function ProjectsListScreen() {
       <ScreenHeader
         title="Danh Sách Dự Án"
         rightComponent={
-          <PermissionGuard permission="projects.create">
+          <View style={styles.headerActions}>
+            {/* Filter Buttons */}
             <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => router.push("/projects/create")}
+              style={[styles.filterButton, selectedYear && styles.filterButtonActive]}
+              onPress={() => setShowYearFilter(true)}
             >
-              <Ionicons name="add" size={24} color="#FFFFFF" />
+              <Ionicons name="calendar-outline" size={20} color={selectedYear ? "#FFFFFF" : "#3B82F6"} />
+              {selectedYear && <Text style={styles.filterButtonText}>{selectedYear}</Text>}
             </TouchableOpacity>
-          </PermissionGuard>
+            <TouchableOpacity
+              style={[styles.filterButton, selectedStatus && styles.filterButtonActive]}
+              onPress={() => setShowStatusFilter(true)}
+            >
+              <Ionicons name="filter-outline" size={20} color={selectedStatus ? "#FFFFFF" : "#3B82F6"} />
+            </TouchableOpacity>
+            <PermissionGuard permission="projects.create">
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => router.push("/projects/create")}
+              >
+                <Ionicons name="add" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </PermissionGuard>
+          </View>
         }
       />
 
+      {/* Year Filter Modal */}
+      {showYearFilter && (
+        <View style={styles.filterModalOverlay}>
+          <View style={styles.filterModal}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>Chọn Năm</Text>
+              <TouchableOpacity onPress={() => setShowYearFilter(false)}>
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => {
+                setSelectedYear(null);
+                setShowYearFilter(false);
+              }}
+            >
+              <Text style={!selectedYear ? styles.filterOptionActive : styles.filterOptionText}>
+                Tất cả
+              </Text>
+            </TouchableOpacity>
+            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+              <TouchableOpacity
+                key={year}
+                style={styles.filterOption}
+                onPress={() => {
+                  setSelectedYear(year);
+                  setShowYearFilter(false);
+                }}
+              >
+                <Text style={selectedYear === year ? styles.filterOptionActive : styles.filterOptionText}>
+                  {year}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Status Filter Modal */}
+      {showStatusFilter && (
+        <View style={styles.filterModalOverlay}>
+          <View style={styles.filterModal}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>Lọc Theo Trạng Thái</Text>
+              <TouchableOpacity onPress={() => setShowStatusFilter(false)}>
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => {
+                setSelectedStatus(null);
+                setShowStatusFilter(false);
+              }}
+            >
+              <Text style={!selectedStatus ? styles.filterOptionActive : styles.filterOptionText}>
+                Tất cả
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => {
+                setSelectedStatus("in_progress");
+                setShowStatusFilter(false);
+              }}
+            >
+              <Text style={selectedStatus === "in_progress" ? styles.filterOptionActive : styles.filterOptionText}>
+                Đang thi công
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => {
+                setSelectedStatus("completed");
+                setShowStatusFilter(false);
+              }}
+            >
+              <Text style={selectedStatus === "completed" ? styles.filterOptionActive : styles.filterOptionText}>
+                Đã hoàn thành
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <FlatList
-        data={projects}
+        data={filteredProjects.length > 0 ? filteredProjects : projects}
         renderItem={renderProjectItem}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
@@ -535,6 +738,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
   },
+  progressItem: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -557,5 +766,137 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  filterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+    backgroundColor: "#FFFFFF",
+  },
+  filterButtonActive: {
+    backgroundColor: "#3B82F6",
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  filterModalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  filterModal: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    width: "80%",
+    maxHeight: "60%",
+    padding: 20,
+  },
+  filterModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  filterModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  filterOption: {
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: "#F9FAFB",
+  },
+  filterOptionText: {
+    fontSize: 16,
+    color: "#1F2937",
+  },
+  filterOptionActive: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
+  progressText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#3B82F6",
+  },
+  warningBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: "#F59E0B",
+  },
+  warningContent: {
+    flex: 1,
+  },
+  warningText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#92400E",
+    marginBottom: 4,
+  },
+  commentSection: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  commentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  commentLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6B7280",
+    textTransform: "uppercase",
+  },
+  commentContent: {
+    marginLeft: 22,
+  },
+  commentAuthor: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  commentText: {
+    fontSize: 14,
+    color: "#374151",
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+  commentTime: {
+    fontSize: 12,
+    color: "#9CA3AF",
   },
 });

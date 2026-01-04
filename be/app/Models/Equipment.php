@@ -16,6 +16,7 @@ class Equipment extends Model
         'uuid',
         'name',
         'code',
+        'quantity',
         'category',
         'type',
         'brand',
@@ -32,6 +33,7 @@ class Equipment extends Model
     ];
 
     protected $casts = [
+        'quantity' => 'integer',
         'purchase_date' => 'date',
         'purchase_price' => 'decimal:2',
         'rental_rate_per_day' => 'decimal:2',

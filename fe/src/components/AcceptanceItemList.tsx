@@ -767,21 +767,21 @@ export default function AcceptanceItemList({
                       {/* Step 1: Người lập */}
                       <View style={styles.workflowStepContainer}>
                         <View style={styles.workflowStepContent}>
-                          <View style={[
+                      <View style={[
                             styles.workflowStepIcon,
                             item.workflow_status !== 'draft' && styles.workflowStepIconCompleted
-                          ]}>
+                      ]}>
                             <Ionicons 
                               name={item.workflow_status !== 'draft' ? "checkmark" : "person-outline"} 
                               size={16} 
                               color={item.workflow_status !== 'draft' ? "#FFFFFF" : "#6B7280"} 
                             />
                           </View>
-                          <Text style={[
-                            styles.workflowStepLabel,
-                            item.workflow_status !== 'draft' && styles.workflowStepLabelCompleted
+                        <Text style={[
+                          styles.workflowStepLabel,
+                          item.workflow_status !== 'draft' && styles.workflowStepLabelCompleted
                           ]}>Người lập</Text>
-                        </View>
+                      </View>
                       </View>
 
                       {/* Connector 1-2 */}
@@ -796,18 +796,18 @@ export default function AcceptanceItemList({
                           <View style={[
                             styles.workflowStepIcon,
                             ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepIconCompleted
-                          ]}>
+                      ]}>
                             <Ionicons 
                               name={['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "checkmark" : "briefcase-outline"} 
                               size={16} 
                               color={['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "#FFFFFF" : "#6B7280"} 
                             />
                           </View>
-                          <Text style={[
-                            styles.workflowStepLabel,
-                            ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepLabelCompleted
+                        <Text style={[
+                          styles.workflowStepLabel,
+                          ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepLabelCompleted
                           ]}>QLDA</Text>
-                        </View>
+                      </View>
                       </View>
 
                       {/* Connector 2-3 */}
@@ -819,7 +819,7 @@ export default function AcceptanceItemList({
                       {/* Step 3: KH/Giám sát */}
                       <View style={styles.workflowStepContainer}>
                         <View style={styles.workflowStepContent}>
-                          <View style={[
+                        <View style={[
                             styles.workflowStepIcon,
                             item.workflow_status === 'customer_approved' && styles.workflowStepIconCompleted
                           ]}>
@@ -829,9 +829,9 @@ export default function AcceptanceItemList({
                               color={item.workflow_status === 'customer_approved' ? "#FFFFFF" : "#6B7280"} 
                             />
                           </View>
-                          <Text style={[
-                            styles.workflowStepLabel,
-                            item.workflow_status === 'customer_approved' && styles.workflowStepLabelCompleted
+                        <Text style={[
+                          styles.workflowStepLabel,
+                          item.workflow_status === 'customer_approved' && styles.workflowStepLabelCompleted
                           ]}>KH/Giám sát</Text>
                         </View>
                       </View>
@@ -882,10 +882,10 @@ export default function AcceptanceItemList({
                 {item.approved_at && (
                   <View style={styles.approvedContainer}>
                     <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                    <Text style={styles.approvedText}>
-                      Đã nghiệm thu: {new Date(item.approved_at).toLocaleString("vi-VN")}
-                    </Text>
-                  </View>
+                  <Text style={styles.approvedText}>
+                    Đã nghiệm thu: {new Date(item.approved_at).toLocaleString("vi-VN")}
+                        </Text>
+                      </View>
                 )}
 
                 {/* Action Buttons Section */}
@@ -1093,7 +1093,7 @@ export default function AcceptanceItemList({
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleContainer}>
-                <Text style={styles.modalTitle}>Upload hình ảnh nghiệm thu</Text>
+              <Text style={styles.modalTitle}>Upload hình ảnh nghiệm thu</Text>
                 {uploadingItemId && (
                   <Text style={styles.modalSubtitle}>
                     {items.find(i => i.id === uploadingItemId)?.name || "Hạng mục"}
@@ -1127,21 +1127,21 @@ export default function AcceptanceItemList({
                 />
               </View>
               <View style={styles.uploaderContainer}>
-                <UniversalFileUploader
-                  onUploadComplete={handleUploadComplete}
-                  multiple={true}
-                  accept="image"
-                  maxFiles={10}
-                />
-              </View>
+              <UniversalFileUploader
+                onUploadComplete={handleUploadComplete}
+                multiple={true}
+                accept="image"
+                maxFiles={10}
+              />
+            </View>
               {uploading && (
                 <View style={styles.uploadingContainer}>
                   <ActivityIndicator size="small" color="#3B82F6" />
                   <Text style={styles.uploadingText}>Đang upload...</Text>
-                </View>
+          </View>
               )}
             </ScrollView>
-          </View>
+        </View>
         </KeyboardAvoidingView>
       </Modal>
 

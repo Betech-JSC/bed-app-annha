@@ -19,7 +19,7 @@ class CostController extends Controller
         $project = Project::findOrFail($projectId);
 
         $query = Cost::where('project_id', $project->id)
-            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor']);
+            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialTransaction']);
 
         // Filter theo category
         if ($category = $request->query('category')) {
@@ -55,11 +55,12 @@ class CostController extends Controller
         $project = Project::findOrFail($projectId);
         $user = $request->user();
 
-        // Check permission
-        if (!$user->hasPermission('costs.create')) {
+        // Check permission - Chỉ Super Admin được sửa chi phí
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && !$user->hasPermission('costs.create')) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền tạo chi phí.'
+                'message' => 'Bạn không có quyền tạo chi phí. Chỉ Super Admin mới có quyền này.'
             ], 403);
         }
 
@@ -70,6 +71,9 @@ class CostController extends Controller
             'description' => 'nullable|string|max:2000',
             'cost_date' => 'required|date',
             'subcontractor_id' => 'nullable|exists:subcontractors,id',
+            'material_id' => 'nullable|exists:materials,id',
+            'quantity' => 'nullable|numeric|min:0.01|required_with:material_id',
+            'unit' => 'nullable|string|max:20|required_with:material_id',
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
@@ -157,7 +161,7 @@ class CostController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $cost = Cost::where('project_id', $project->id)
-            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor'])
+            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialTransaction'])
             ->findOrFail($id);
 
         return response()->json([
@@ -173,9 +177,19 @@ class CostController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
 
-        // Chỉ cho phép cập nhật khi ở trạng thái draft
-        if ($cost->status !== 'draft') {
+        // Check permission - Chỉ Super Admin được sửa chi phí
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && !$user->hasPermission('costs.update')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật chi phí. Chỉ Super Admin mới có quyền này.'
+            ], 403);
+        }
+
+        // Chỉ cho phép cập nhật khi ở trạng thái draft (trừ Super Admin)
+        if (!$isSuperAdmin && $cost->status !== 'draft') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể cập nhật chi phí ở trạng thái nháp.',
@@ -188,6 +202,9 @@ class CostController extends Controller
             'amount' => 'sometimes|numeric|min:0',
             'description' => 'nullable|string|max:2000',
             'cost_date' => 'sometimes|date',
+            'material_id' => 'nullable|exists:materials,id',
+            'quantity' => 'nullable|numeric|min:0.01|required_with:material_id',
+            'unit' => 'nullable|string|max:20|required_with:material_id',
         ]);
 
         // Kiểm tra cost_group có active không (nếu được cập nhật)
@@ -336,8 +353,19 @@ class CostController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
+        $user = request()->user();
 
-        if ($cost->status !== 'draft') {
+        // Check permission - Chỉ Super Admin được xóa chi phí
+        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        if (!$isSuperAdmin && !$user->hasPermission('costs.delete')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa chi phí. Chỉ Super Admin mới có quyền này.'
+            ], 403);
+        }
+
+        // Chỉ cho phép xóa khi ở trạng thái draft (trừ Super Admin)
+        if (!$isSuperAdmin && $cost->status !== 'draft') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể xóa chi phí ở trạng thái nháp.',

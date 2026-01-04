@@ -13,9 +13,8 @@ import {
 import { useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
 import type { RootState } from "@/reducers/index";
-import { permissionApi } from "@/api/permissionApi";
-import { personnelRoleApi } from "@/api/personnelRoleApi";
 import { userApi } from "@/api/userApi";
+import { personnelRoleApi } from "@/api/personnelRoleApi";
 import { Ionicons } from "@expo/vector-icons";
 import LogoutButton from "@/components/LogoutButton";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -142,18 +141,25 @@ export default function SettingsScreen() {
       description: "Quản lý các bộ tài liệu nghiệm thu (tên công việc, mô tả, tiêu chuẩn, hình ảnh mẫu)",
     },
     {
+      title: "Tài Khoản Hệ Thống",
+      icon: "people-outline",
+      route: "/settings/users",
+      permission: "settings.manage",
+      description: "Tạo và quản lý tài khoản hệ thống, phân quyền",
+    },
+    {
+      title: "Hóa Đơn Đầu Vào",
+      icon: "receipt-outline",
+      route: "/accounting/input-invoices",
+      permission: "accounting.manage",
+      description: "Quản lý hóa đơn đầu vào từ nhà cung cấp (chỉ theo dõi, không ảnh hưởng chi phí dự án)",
+    },
+    {
       title: "Cấu Hình Vai Trò",
       icon: "people-circle-outline",
       route: "/settings/roles",
       permission: "hr.roles.view",
       description: "Quản lý các vai trò và phân quyền trong hệ thống",
-    },
-    {
-      title: "Phân Quyền Hệ Thống",
-      icon: "shield-checkmark-outline",
-      route: "/settings/permissions",
-      permission: "permissions.view",
-      description: "Xem và quản lý permissions của các roles",
     },
     {
       title: "Thông Tin Tài Khoản",
@@ -204,25 +210,6 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Permissions Summary */}
-      {permissions.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quyền Truy Cập</Text>
-          <View style={styles.permissionsCard}>
-            <Text style={styles.permissionsCount}>
-              {permissions.includes("*")
-                ? "Toàn quyền"
-                : `${permissions.length} quyền`}
-            </Text>
-            <Text style={styles.permissionsDescription}>
-              {permissions.includes("*")
-                ? "Bạn có toàn quyền truy cập tất cả các tính năng"
-                : "Số lượng permissions bạn có trong hệ thống"}
-            </Text>
-          </View>
-        </View>
-      )}
-
       {/* Menu Items */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Cấu Hình</Text>
@@ -265,35 +252,6 @@ export default function SettingsScreen() {
           );
         })}
       </View>
-
-      {/* Roles Summary */}
-      {roles.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vai Trò Trong Hệ Thống</Text>
-          <View style={styles.rolesContainer}>
-            {roles.slice(0, 5).map((role, index) => (
-              <View key={role.id} style={styles.roleChip}>
-                <Text style={styles.roleChipText}>{role.name}</Text>
-                {role.users_count > 0 && (
-                  <Text style={styles.roleChipCount}>
-                    {role.users_count} người
-                  </Text>
-                )}
-              </View>
-            ))}
-            {roles.length > 5 && (
-              <TouchableOpacity
-                style={styles.viewAllButton}
-                onPress={() => router.push("/hr/personnel-roles" as any)}
-              >
-                <Text style={styles.viewAllText}>
-                  Xem tất cả ({roles.length})
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      )}
 
       {/* Delete Account */}
       <View style={styles.section}>

@@ -47,7 +47,7 @@ export default function CreateProjectScreen() {
     name: "",
     code: "",
     description: "",
-    customer_id: 0,
+    customer_id: 0, // 0 means not selected
     project_manager_id: undefined,
     start_date: undefined,
     end_date: undefined,
@@ -84,10 +84,18 @@ export default function CreateProjectScreen() {
       setLoadingCustomers(true);
       const response = await projectApi.getCustomers();
       if (response.success) {
-        setCustomers(response.data || []);
+        const customersList = response.data || [];
+        setCustomers(customersList);
+        if (customersList.length === 0) {
+          console.warn("Không tìm thấy khách hàng nào. Vui lòng kiểm tra lại dữ liệu.");
+        }
+      } else {
+        console.error("Error loading customers:", response.message);
+        Alert.alert("Lỗi", response.message || "Không thể tải danh sách khách hàng");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading customers:", error);
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách khách hàng");
     } finally {
       setLoadingCustomers(false);
     }
@@ -155,7 +163,7 @@ export default function CreateProjectScreen() {
       return;
     }
 
-    if (!formData.customer_id) {
+    if (!formData.customer_id || formData.customer_id === 0) {
       Alert.alert("Lỗi", "Vui lòng chọn khách hàng");
       return;
     }
@@ -178,13 +186,27 @@ export default function CreateProjectScreen() {
 
     try {
       setLoading(true);
-      const response = await projectApi.createProject({
-        ...formData,
-        code: undefined, // Không gửi code, để backend tự động sinh
-        description: formData.description || undefined,
+      // Prepare data for API
+      const createData: CreateProjectData = {
+        name: formData.name.trim(),
+        customer_id: formData.customer_id,
         start_date: formData.start_date,
         end_date: formData.end_date,
-      });
+        status: formData.status || "planning",
+      };
+
+      // Optional fields
+      if (formData.code && formData.code.trim()) {
+        createData.code = formData.code.trim();
+      }
+      if (formData.description && formData.description.trim()) {
+        createData.description = formData.description.trim();
+      }
+      if (formData.project_manager_id) {
+        createData.project_manager_id = formData.project_manager_id;
+      }
+
+      const response = await projectApi.createProject(createData);
 
       if (response.success) {
         Alert.alert("Thành công", "Đã tạo dự án mới", [

@@ -21,6 +21,9 @@ class ProjectPayment extends Model
         'status',
         'confirmed_by',
         'confirmed_at',
+        'customer_approved_by',
+        'customer_approved_at',
+        'payment_proof_uploaded_at',
         'reminder_sent_at',
         'reminder_count',
     ];
@@ -30,6 +33,8 @@ class ProjectPayment extends Model
         'due_date' => 'date',
         'paid_date' => 'date',
         'confirmed_at' => 'datetime',
+        'customer_approved_at' => 'datetime',
+        'payment_proof_uploaded_at' => 'datetime',
         'reminder_sent_at' => 'datetime',
         'reminder_count' => 'integer',
     ];
@@ -58,6 +63,11 @@ class ProjectPayment extends Model
         return $this->belongsTo(User::class, 'confirmed_by');
     }
 
+    public function customerApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'customer_approved_by');
+    }
+
     public function attachments(): MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable');
@@ -81,8 +91,33 @@ class ProjectPayment extends Model
     // METHODS
     // ==================================================================
 
+    /**
+     * Khách hàng duyệt thanh toán (sau khi upload hình xác nhận)
+     */
+    public function approveByCustomer(?User $user = null): bool
+    {
+        if ($this->status !== 'customer_pending_approval') {
+            return false;
+        }
+
+        $this->status = 'customer_approved';
+        if ($user) {
+            $this->customer_approved_by = $user->id;
+            $this->customer_approved_at = now();
+        }
+        return $this->save();
+    }
+
+    /**
+     * Kế toán xác nhận thanh toán (sau khi khách hàng đã duyệt)
+     */
     public function markAsPaid(?User $user = null): bool
     {
+        // Chỉ cho phép nếu đã được khách hàng duyệt hoặc đang ở trạng thái pending (backward compatible)
+        if (!in_array($this->status, ['customer_approved', 'pending'])) {
+            return false;
+        }
+
         $this->status = 'paid';
         $this->paid_date = now()->toDateString();
         if ($user) {
@@ -90,6 +125,19 @@ class ProjectPayment extends Model
             $this->confirmed_at = now();
         }
         return $this->save();
+    }
+
+    /**
+     * Đánh dấu đã upload hình xác nhận chuyển khoản
+     */
+    public function markPaymentProofUploaded(): bool
+    {
+        if ($this->status === 'pending') {
+            $this->status = 'customer_pending_approval';
+            $this->payment_proof_uploaded_at = now();
+            return $this->save();
+        }
+        return false;
     }
 
     public function markAsOverdue(): bool

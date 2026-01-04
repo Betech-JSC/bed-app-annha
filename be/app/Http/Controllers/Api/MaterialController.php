@@ -324,6 +324,8 @@ class MaterialController extends Controller
 
     /**
      * Tạo transaction cho material trong project
+     * LƯU Ý: Chỉ cho phép tạo transaction xuất kho (out) hoặc điều chỉnh (adjustment)
+     * Transaction nhập kho (in) chỉ được tạo tự động từ Cost khi được approved
      */
     public function createTransaction(Request $request, string $projectId)
     {
@@ -338,7 +340,7 @@ class MaterialController extends Controller
 
         $validator = Validator::make($request->all(), [
             'material_id' => 'required|exists:materials,id',
-            'type' => 'required|in:in,out,adjustment',
+            'type' => 'required|in:out,adjustment', // Chỉ cho phép out và adjustment
             'quantity' => 'required|numeric|min:0.01',
             'transaction_date' => 'required|date',
             'notes' => 'nullable|string',
@@ -352,22 +354,64 @@ class MaterialController extends Controller
             ], 422);
         }
 
+        // Nếu là transaction xuất kho (out), kiểm tra tồn kho
+        if ($request->type === 'out') {
+            $material = Material::findOrFail($request->material_id);
+            $currentStock = $material->current_stock;
+            
+            if ($currentStock < $request->quantity) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Không đủ tồn kho. Tồn kho hiện tại: {$currentStock} {$material->unit}, yêu cầu: {$request->quantity} {$material->unit}."
+                ], 422);
+            }
+        }
+
+        // Sử dụng MaterialInventoryService để tạo transaction xuất kho
+        if ($request->type === 'out') {
+            try {
+                $inventoryService = app(\App\Services\MaterialInventoryService::class);
+                $transaction = $inventoryService->createOutTransaction(
+                    $request->material_id,
+                    $projectId,
+                    $request->quantity,
+                    $request->notes ?? '',
+                    $user->id
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Đã tạo phiếu xuất kho thành công.',
+                    'data' => $transaction
+                ], 201);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage()
+                ], 422);
+            }
+        }
+
+        // Transaction điều chỉnh (adjustment) - tạo trực tiếp
         $transaction = MaterialTransaction::create([
             'material_id' => $request->material_id,
             'project_id' => $projectId,
+            'cost_id' => null, // Adjustment không liên kết với Cost
             'type' => $request->type,
             'quantity' => $request->quantity,
             'transaction_date' => $request->transaction_date,
-            'notes' => $request->notes,
+            'notes' => $request->notes ?? 'Điều chỉnh kho',
             'status' => 'approved',
             'created_by' => $user->id,
+            'approved_by' => $user->id,
+            'approved_at' => now(),
         ]);
 
         $transaction->load(['material', 'project', 'creator']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã tạo giao dịch vật liệu thành công.',
+            'message' => 'Đã tạo giao dịch điều chỉnh kho thành công.',
             'data' => $transaction
         ], 201);
     }

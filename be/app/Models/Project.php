@@ -177,6 +177,16 @@ class Project extends Model
         return $this->hasMany(PerformanceEvaluation::class);
     }
 
+    public function comments(): HasMany
+    {
+        return $this->hasMany(ProjectComment::class)->whereNull('parent_id')->orderBy('created_at', 'desc');
+    }
+
+    public function allComments(): HasMany
+    {
+        return $this->hasMany(ProjectComment::class)->orderBy('created_at', 'desc');
+    }
+
     public function risks(): HasMany
     {
         return $this->hasMany(ProjectRisk::class);

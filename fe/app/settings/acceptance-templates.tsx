@@ -32,8 +32,10 @@ export default function AcceptanceTemplatesScreen() {
     is_active: true,
     order: 0,
   });
-  const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [imageIds, setImageIds] = useState<number[]>([]);
+  const [documentIds, setDocumentIds] = useState<number[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<any[]>([]);
+  const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -65,8 +67,10 @@ export default function AcceptanceTemplatesScreen() {
         is_active: template.is_active,
         order: template.order,
       });
-      setUploadedFiles(template.attachments || []);
-      setAttachmentIds(template.attachments?.map((a: any) => a.id) || []);
+      setUploadedImages(template.images || []);
+      setUploadedDocuments(template.documents || []);
+      setImageIds(template.images?.map((a: any) => a.id || a.attachment_id) || []);
+      setDocumentIds(template.documents?.map((a: any) => a.id || a.attachment_id) || []);
     } else {
       setEditingTemplate(null);
       setFormData({
@@ -76,8 +80,10 @@ export default function AcceptanceTemplatesScreen() {
         is_active: true,
         order: 0,
       });
-      setUploadedFiles([]);
-      setAttachmentIds([]);
+      setUploadedImages([]);
+      setUploadedDocuments([]);
+      setImageIds([]);
+      setDocumentIds([]);
     }
     setModalVisible(true);
   };
@@ -92,16 +98,26 @@ export default function AcceptanceTemplatesScreen() {
       is_active: true,
       order: 0,
     });
-    setUploadedFiles([]);
-    setAttachmentIds([]);
+    setUploadedImages([]);
+    setUploadedDocuments([]);
+    setImageIds([]);
+    setDocumentIds([]);
   };
 
-  const handleFilesUpload = (files: any[]) => {
-    setUploadedFiles(files);
+  const handleImagesUpload = (files: any[]) => {
+    setUploadedImages(files);
     const ids = files
       .map((f) => f.attachment_id || f.id)
       .filter((id) => id) as number[];
-    setAttachmentIds(ids);
+    setImageIds(ids);
+  };
+
+  const handleDocumentsUpload = (files: any[]) => {
+    setUploadedDocuments(files);
+    const ids = files
+      .map((f) => f.attachment_id || f.id)
+      .filter((id) => id) as number[];
+    setDocumentIds(ids);
   };
 
   const handleSubmit = async () => {
@@ -114,7 +130,8 @@ export default function AcceptanceTemplatesScreen() {
       setSaving(true);
       const data = {
         ...formData,
-        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
+        image_ids: imageIds.length > 0 ? imageIds : undefined,
+        document_ids: documentIds.length > 0 ? documentIds : undefined,
       };
 
       if (editingTemplate) {
@@ -187,16 +204,34 @@ export default function AcceptanceTemplatesScreen() {
             Tiêu chuẩn: {item.standard}
           </Text>
         )}
-        {item.attachments && item.attachments.length > 0 && (
-          <View style={styles.imagesPreview}>
-            <Ionicons name="images-outline" size={16} color="#6B7280" />
-            <Text style={styles.imagesCount}>
-              {item.attachments.length} hình ảnh mẫu
-            </Text>
-          </View>
-        )}
+        <View style={styles.filesPreview}>
+          {item.documents && item.documents.length > 0 && (
+            <View style={styles.fileBadge}>
+              <Ionicons name="document-text" size={14} color="#3B82F6" />
+              <Text style={styles.fileCount}>
+                {item.documents.length} tài liệu
+              </Text>
+            </View>
+          )}
+          {item.images && item.images.length > 0 && (
+            <View style={styles.fileBadge}>
+              <Ionicons name="images-outline" size={14} color="#10B981" />
+              <Text style={styles.fileCount}>
+                {item.images.length} hình ảnh
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
       <View style={styles.itemActions}>
+        {(item.documents && item.documents.length > 0) || (item.images && item.images.length > 0) ? (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => router.push(`/settings/acceptance-templates/${item.id}/documents`)}
+          >
+            <Ionicons name="folder-open-outline" size={20} color="#3B82F6" />
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleOpenModal(item)}
@@ -315,16 +350,30 @@ export default function AcceptanceTemplatesScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Hình ảnh mẫu</Text>
+                <Text style={styles.label}>Tài liệu chính (PDF, Word, Excel)</Text>
                 <Text style={styles.helperText}>
-                  Upload hình ảnh mẫu để đối chiếu khi nghiệm thu
+                  Upload các tài liệu chính: PDF, Word, Excel
                 </Text>
                 <UniversalFileUploader
-                  onUploadComplete={handleFilesUpload}
+                  onUploadComplete={handleDocumentsUpload}
+                  multiple={true}
+                  accept="document"
+                  maxFiles={20}
+                  initialFiles={uploadedDocuments}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Hình ảnh minh họa</Text>
+                <Text style={styles.helperText}>
+                  Upload hình ảnh minh họa để đối chiếu khi nghiệm thu
+                </Text>
+                <UniversalFileUploader
+                  onUploadComplete={handleImagesUpload}
                   multiple={true}
                   accept="image"
-                  maxFiles={10}
-                  initialFiles={uploadedFiles}
+                  maxFiles={20}
+                  initialFiles={uploadedImages}
                 />
               </View>
 
@@ -488,15 +537,26 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginBottom: 4,
   },
-  imagesPreview: {
+  filesPreview: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 12,
     marginTop: 8,
+    flexWrap: "wrap",
   },
-  imagesCount: {
+  fileBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 6,
+  },
+  fileCount: {
     fontSize: 12,
     color: "#6B7280",
+    fontWeight: "500",
   },
   itemActions: {
     flexDirection: "row",

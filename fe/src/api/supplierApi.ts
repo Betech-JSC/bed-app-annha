@@ -62,37 +62,37 @@ export const supplierApi = {
     category?: string;
     page?: number;
   }) => {
-    const response = await api.get("/admin/suppliers", { params });
+    const response = await api.get("/settings/suppliers", { params });
     return response.data;
   },
 
   // Chi tiết nhà cung cấp
   getSupplier: async (id: number) => {
-    const response = await api.get(`/admin/suppliers/${id}`);
+    const response = await api.get(`/settings/suppliers/${id}`);
     return response.data;
   },
 
   // Tạo nhà cung cấp
   createSupplier: async (data: CreateSupplierData) => {
-    const response = await api.post("/admin/suppliers", data);
+    const response = await api.post("/settings/suppliers", data);
     return response.data;
   },
 
   // Cập nhật nhà cung cấp
   updateSupplier: async (id: number, data: Partial<CreateSupplierData>) => {
-    const response = await api.put(`/admin/suppliers/${id}`, data);
+    const response = await api.put(`/settings/suppliers/${id}`, data);
     return response.data;
   },
 
   // Xóa nhà cung cấp
   deleteSupplier: async (id: number) => {
-    const response = await api.delete(`/admin/suppliers/${id}`);
+    const response = await api.delete(`/settings/suppliers/${id}`);
     return response.data;
   },
 
   // Thống kê công nợ
   getDebtStatistics: async (id: number): Promise<{ success: boolean; data: SupplierDebtStatistics }> => {
-    const response = await api.get(`/admin/suppliers/${id}/debt-statistics`);
+    const response = await api.get(`/settings/suppliers/${id}/debt-statistics`);
     return response.data;
   },
 };

@@ -12,6 +12,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  Linking,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { subcontractorApi, Subcontractor } from "@/api/subcontractorApi";
@@ -43,7 +45,6 @@ export default function SubcontractorsScreen() {
     name: "",
     category: "",
     total_quote: "",
-    advance_payment: "",
     progress_start_date: null as Date | null,
     progress_end_date: null as Date | null,
     progress_status: "not_started" as "not_started" | "in_progress" | "completed" | "delayed",
@@ -189,13 +190,44 @@ export default function SubcontractorsScreen() {
     }).format(amount);
   };
 
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString?: string | null) => {
     if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    try {
+      const date = new Date(dateString);
+      // Kiểm tra nếu date không hợp lệ (1970 hoặc NaN)
+      if (isNaN(date.getTime()) || date.getFullYear() < 1971) {
+        return "-";
+      }
+      return date.toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (error) {
+      return "-";
+    }
+  };
+
+  const handleOpenFile = async (url: string, mimeType?: string) => {
+    try {
+      if (!url) {
+        Alert.alert("Lỗi", "Không có đường dẫn file");
+        return;
+      }
+      
+      // Kiểm tra xem URL có hợp lệ không
+      const fileUrl = url.startsWith("http") ? url : `http://localhost:8000/storage/${url}`;
+      
+      const canOpen = await Linking.canOpenURL(fileUrl);
+      if (canOpen) {
+        await Linking.openURL(fileUrl);
+      } else {
+        Alert.alert("Lỗi", "Không thể mở file này");
+      }
+    } catch (error) {
+      console.error("Error opening file:", error);
+      Alert.alert("Lỗi", "Không thể mở file");
+    }
   };
 
   const getProgressStatusText = (status: string) => {
@@ -294,12 +326,6 @@ export default function SubcontractorsScreen() {
             <Text style={styles.amountLabel}>Tổng báo giá</Text>
             <Text style={styles.amountValue}>
               {formatCurrency(item.total_quote)}
-            </Text>
-          </View>
-          <View style={styles.amountItem}>
-            <Text style={styles.amountLabel}>Tạm ứng</Text>
-            <Text style={styles.amountValue}>
-              {formatCurrency(item.advance_payment || 0)}
             </Text>
           </View>
         </View>
@@ -517,18 +543,6 @@ export default function SubcontractorsScreen() {
                 />
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Tạm ứng</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập số tiền tạm ứng"
-                  value={formData.advance_payment}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, advance_payment: text })
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
 
               {/* Progress Information Section */}
               <View style={styles.sectionDivider} />
@@ -675,9 +689,6 @@ export default function SubcontractorsScreen() {
                         name: formData.name,
                         category: formData.category || undefined,
                         total_quote: parseFloat(formData.total_quote),
-                        advance_payment: formData.advance_payment
-                          ? parseFloat(formData.advance_payment)
-                          : undefined,
                         progress_start_date: formData.progress_start_date
                           ? formData.progress_start_date.toISOString().split("T")[0]
                           : undefined,
@@ -699,7 +710,6 @@ export default function SubcontractorsScreen() {
                         name: "",
                         category: "",
                         total_quote: "",
-                        advance_payment: "",
                         progress_start_date: null,
                         progress_end_date: null,
                         progress_status: "not_started",
@@ -894,22 +904,45 @@ export default function SubcontractorsScreen() {
                 {selectedSubcontractorDetail.attachments &&
                   selectedSubcontractorDetail.attachments.length > 0 && (
                     <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Đính kèm & Báo cáo</Text>
-                      <UniversalFileUploader
-                        onUploadComplete={() => { }}
-                        multiple={false}
-                        accept="all"
-                        initialFiles={selectedSubcontractorDetail.attachments.map((att: any) => ({
-                          id: att.id,
-                          attachment_id: att.id,
-                          file_name: att.file_name,
-                          file_path: att.file_path,
-                          file_size: att.file_size,
-                          mime_type: att.mime_type,
-                        }))}
-                        disabled={true}
-                        showPreview={true}
-                      />
+                      <Text style={styles.detailSectionTitle}>Chứng từ đính kèm</Text>
+                      <View style={styles.attachmentsList}>
+                        {selectedSubcontractorDetail.attachments.map((attachment: any, index: number) => {
+                          const imageUrl = attachment.file_url || attachment.url || attachment.location || 
+                            (attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : null);
+                          const isImage = attachment.type === "image" || 
+                            attachment.mime_type?.startsWith("image/") ||
+                            (imageUrl && /\.(jpg|jpeg|png|gif|webp)$/i.test(imageUrl));
+
+                          return (
+                            <TouchableOpacity
+                              key={attachment.id || index}
+                              style={styles.attachmentItem}
+                              onPress={() => handleOpenFile(imageUrl || "", attachment.mime_type)}
+                            >
+                              {isImage && imageUrl ? (
+                                <Image
+                                  source={{ uri: imageUrl }}
+                                  style={styles.attachmentThumbnail}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View style={styles.attachmentIconContainer}>
+                                  <Ionicons name="document-outline" size={32} color="#3B82F6" />
+                                </View>
+                              )}
+                              <View style={styles.attachmentInfo}>
+                                <Text style={styles.attachmentName} numberOfLines={1}>
+                                  {attachment.original_name || attachment.file_name || "File"}
+                                </Text>
+                                <Text style={styles.attachmentType}>
+                                  {attachment.type || attachment.mime_type || "Document"}
+                                </Text>
+                              </View>
+                              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
                     </View>
                   )}
               </>
@@ -1936,5 +1969,45 @@ const styles = StyleSheet.create({
     color: "#1F2937",
     flex: 1,
     textAlign: "right",
+  },
+  attachmentsList: {
+    gap: 12,
+  },
+  attachmentItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  attachmentThumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  attachmentIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  attachmentInfo: {
+    flex: 1,
+  },
+  attachmentName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  attachmentType: {
+    fontSize: 12,
+    color: "#6B7280",
   },
 });

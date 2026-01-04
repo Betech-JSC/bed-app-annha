@@ -284,20 +284,20 @@ export default function BudgetDetailScreen() {
             <ScreenHeader
                 title="Chi Tiết Ngân Sách"
                 rightComponent={
-                    <View style={styles.headerActions}>
-                        <TouchableOpacity
-                            style={styles.headerButton}
-                            onPress={() => setShowEditModal(true)}
-                        >
-                            <Ionicons name="pencil" size={20} color="#3B82F6" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.headerButton}
-                            onPress={handleDelete}
-                        >
-                            <Ionicons name="trash" size={20} color="#EF4444" />
-                        </TouchableOpacity>
-                    </View>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity
+                        style={styles.headerButton}
+                        onPress={() => setShowEditModal(true)}
+                    >
+                        <Ionicons name="pencil" size={20} color="#3B82F6" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.headerButton}
+                        onPress={handleDelete}
+                    >
+                        <Ionicons name="trash" size={20} color="#EF4444" />
+                    </TouchableOpacity>
+                </View>
                 }
             />
 

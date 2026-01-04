@@ -17,6 +17,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { equipmentApi, Equipment } from "@/api/equipmentApi";
 import { optionsApi, Option } from "@/api/optionsApi";
+import { employeesApi } from "@/api/employeesApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
@@ -35,13 +36,31 @@ export default function ProjectEquipmentScreen() {
     const [loadingAllEquipment, setLoadingAllEquipment] = useState(false);
     const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
     const [allocationData, setAllocationData] = useState({
+        allocation_type: "rent" as "rent" | "buy",
+        quantity: "1",
         start_date: new Date(),
         end_date: undefined as Date | undefined,
-        daily_rate: "",
         notes: "",
+        // Cho MUA (buy):
+        manager_id: null as number | null,
+        handover_date: undefined as Date | undefined,
+        return_date: undefined as Date | undefined,
+        // Cho THUÊ (rent):
+        daily_rate: "",
+        rental_fee: "",
+        billing_start_date: undefined as Date | undefined,
+        billing_end_date: undefined as Date | undefined,
     });
     const [showStartDatePicker, setShowStartDatePicker] = useState(false);
     const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+    const [showHandoverDatePicker, setShowHandoverDatePicker] = useState(false);
+    const [showReturnDatePicker, setShowReturnDatePicker] = useState(false);
+    const [showBillingStartDatePicker, setShowBillingStartDatePicker] = useState(false);
+    const [showBillingEndDatePicker, setShowBillingEndDatePicker] = useState(false);
+    const [users, setUsers] = useState<any[]>([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    const [showManagerPicker, setShowManagerPicker] = useState(false);
+    const [selectedManager, setSelectedManager] = useState<any | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [equipmentStatuses, setEquipmentStatuses] = useState<Option[]>([]);
     const [equipmentTypes, setEquipmentTypes] = useState<Option[]>([]);
@@ -106,6 +125,37 @@ export default function ProjectEquipmentScreen() {
     const handleOpenAddModal = () => {
         setShowAddModal(true);
         loadAllEquipment();
+        loadUsers();
+        // Reset form
+        setAllocationData({
+            allocation_type: "rent",
+            quantity: "1",
+            start_date: new Date(),
+            end_date: undefined,
+            notes: "",
+            manager_id: null,
+            handover_date: undefined,
+            return_date: undefined,
+            daily_rate: "",
+            rental_fee: "",
+            billing_start_date: undefined,
+            billing_end_date: undefined,
+        });
+        setSelectedManager(null);
+    };
+
+    const loadUsers = async () => {
+        try {
+            setLoadingUsers(true);
+            const response = await employeesApi.getEmployees({ per_page: 100 });
+            if (response.success) {
+                setUsers(response.data || []);
+            }
+        } catch (error) {
+            console.error("Error loading users:", error);
+        } finally {
+            setLoadingUsers(false);
+        }
     };
 
     const handleSelectEquipment = (equipment: Equipment) => {
@@ -123,26 +173,93 @@ export default function ProjectEquipmentScreen() {
             return;
         }
 
+        const quantity = parseInt(allocationData.quantity) || 1;
+        if (quantity < 1) {
+            Alert.alert("Lỗi", "Số lượng phải lớn hơn 0");
+            return;
+        }
+
+        if (quantity > selectedEquipment.quantity) {
+            Alert.alert("Lỗi", `Số lượng không được vượt quá ${selectedEquipment.quantity}`);
+            return;
+        }
+
+        // Validation cho MUA
+        if (allocationData.allocation_type === "buy" && !allocationData.manager_id) {
+            Alert.alert("Lỗi", "Vui lòng chọn người quản lý thiết bị");
+            return;
+        }
+
+        // Validation cho THUÊ
+        if (allocationData.allocation_type === "rent") {
+            const dailyRate = allocationData.daily_rate 
+                ? parseFloat(allocationData.daily_rate) 
+                : selectedEquipment.rental_rate_per_day;
+            if (!dailyRate || dailyRate <= 0) {
+                Alert.alert("Lỗi", "Vui lòng nhập giá thuê/ngày");
+                return;
+            }
+        }
+
         try {
             setSubmitting(true);
-            const response = await equipmentApi.createAllocation(id!, {
+            
+            const requestData: any = {
                 equipment_id: selectedEquipment.id,
+                allocation_type: allocationData.allocation_type,
+                quantity: quantity,
                 start_date: allocationData.start_date.toISOString().split("T")[0],
                 end_date: allocationData.end_date?.toISOString().split("T")[0],
-                daily_rate: allocationData.daily_rate ? parseFloat(allocationData.daily_rate) : undefined,
                 notes: allocationData.notes || undefined,
-            });
+            };
+
+            // Cho MUA (buy)
+            if (allocationData.allocation_type === "buy") {
+                requestData.manager_id = allocationData.manager_id!;
+                requestData.handover_date = allocationData.handover_date?.toISOString().split("T")[0] 
+                    || allocationData.start_date.toISOString().split("T")[0];
+                requestData.return_date = allocationData.return_date?.toISOString().split("T")[0];
+            }
+
+            // Cho THUÊ (rent)
+            if (allocationData.allocation_type === "rent") {
+                requestData.daily_rate = allocationData.daily_rate 
+                    ? parseFloat(allocationData.daily_rate) 
+                    : selectedEquipment.rental_rate_per_day;
+                requestData.rental_fee = allocationData.rental_fee 
+                    ? parseFloat(allocationData.rental_fee) 
+                    : undefined;
+                requestData.billing_start_date = allocationData.billing_start_date?.toISOString().split("T")[0]
+                    || allocationData.start_date.toISOString().split("T")[0];
+                requestData.billing_end_date = allocationData.billing_end_date?.toISOString().split("T")[0]
+                    || allocationData.end_date?.toISOString().split("T")[0];
+            }
+
+            const response = await equipmentApi.createAllocation(id!, requestData);
 
             if (response.success) {
-                Alert.alert("Thành công", "Đã phân bổ thiết bị cho dự án");
+                Alert.alert("Thành công", 
+                    allocationData.allocation_type === "buy" 
+                        ? "Đã phân bổ thiết bị (Mua) cho dự án" 
+                        : "Đã tạo phân bổ thiết bị (Thuê) cho dự án"
+                );
                 setShowAddModal(false);
                 setSelectedEquipment(null);
                 setAllocationData({
+                    allocation_type: "rent",
+                    quantity: "1",
                     start_date: new Date(),
                     end_date: undefined,
-                    daily_rate: "",
                     notes: "",
+                    manager_id: null,
+                    handover_date: undefined,
+                    return_date: undefined,
+                    daily_rate: "",
+                    rental_fee: "",
+                    billing_start_date: undefined,
+                    billing_end_date: undefined,
                 });
+                setSelectedManager(null);
                 loadEquipment();
             }
         } catch (error: any) {
@@ -401,6 +518,71 @@ export default function ProjectEquipmentScreen() {
 
                             <Text style={styles.sectionTitle}>Thông tin phân bổ</Text>
 
+                            {/* Allocation Type: Mua/Thuê */}
+                            <View style={styles.formGroup}>
+                                <Text style={styles.label}>Loại phân bổ *</Text>
+                                <View style={styles.typeSelector}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.typeOption,
+                                            allocationData.allocation_type === "rent" && styles.typeOptionActive,
+                                        ]}
+                                        onPress={() => setAllocationData({ ...allocationData, allocation_type: "rent" })}
+                                    >
+                                        <Ionicons 
+                                            name="calendar-outline" 
+                                            size={20} 
+                                            color={allocationData.allocation_type === "rent" ? "#3B82F6" : "#6B7280"} 
+                                        />
+                                        <Text style={[
+                                            styles.typeOptionText,
+                                            allocationData.allocation_type === "rent" && styles.typeOptionTextActive,
+                                        ]}>
+                                            Thuê
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.typeOption,
+                                            allocationData.allocation_type === "buy" && styles.typeOptionActive,
+                                        ]}
+                                        onPress={() => setAllocationData({ ...allocationData, allocation_type: "buy" })}
+                                    >
+                                        <Ionicons 
+                                            name="cube-outline" 
+                                            size={20} 
+                                            color={allocationData.allocation_type === "buy" ? "#3B82F6" : "#6B7280"} 
+                                        />
+                                        <Text style={[
+                                            styles.typeOptionText,
+                                            allocationData.allocation_type === "buy" && styles.typeOptionTextActive,
+                                        ]}>
+                                            Mua
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* Quantity */}
+                            <View style={styles.formGroup}>
+                                <Text style={styles.label}>Số lượng *</Text>
+                                <Text style={styles.helperText}>
+                                    Tồn kho: {selectedEquipment.quantity} {selectedEquipment.quantity > 1 ? "thiết bị" : "thiết bị"}
+                                </Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={allocationData.quantity}
+                                    onChangeText={(text) => {
+                                        const num = parseInt(text) || 0;
+                                        if (num <= selectedEquipment.quantity) {
+                                            setAllocationData({ ...allocationData, quantity: text });
+                                        }
+                                    }}
+                                    placeholder="Nhập số lượng"
+                                    keyboardType="numeric"
+                                />
+                            </View>
+
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Ngày bắt đầu *</Text>
                                 <TouchableOpacity
@@ -464,19 +646,198 @@ export default function ProjectEquipmentScreen() {
                                 )}
                             </View>
 
-                            {selectedEquipment.type === "rented" && (
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Giá thuê/ngày (VNĐ)</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={allocationData.daily_rate}
-                                        onChangeText={(text) => setAllocationData({ ...allocationData, daily_rate: text })}
-                                        placeholder={selectedEquipment.rental_rate_per_day
-                                            ? `Mặc định: ${formatCurrency(selectedEquipment.rental_rate_per_day)}`
-                                            : "Nhập giá thuê"}
-                                        keyboardType="decimal-pad"
-                                    />
-                                </View>
+                            {/* Fields for THUÊ (rent) */}
+                            {allocationData.allocation_type === "rent" && (
+                                <>
+                                    <View style={styles.formGroup}>
+                                        <Text style={styles.label}>Giá thuê/ngày (VNĐ) *</Text>
+                                        <TextInput
+                                            style={styles.input}
+                                            value={allocationData.daily_rate}
+                                            onChangeText={(text) => setAllocationData({ ...allocationData, daily_rate: text })}
+                                            placeholder={selectedEquipment.rental_rate_per_day
+                                                ? `Mặc định: ${formatCurrency(selectedEquipment.rental_rate_per_day)}`
+                                                : "Nhập giá thuê"}
+                                            keyboardType="decimal-pad"
+                                        />
+                                    </View>
+
+                                    <View style={styles.formGroup}>
+                                        <Text style={styles.label}>Tổng phí thuê (VNĐ) - tùy chọn</Text>
+                                        <Text style={styles.helperText}>
+                                            Nếu để trống, hệ thống sẽ tự tính từ giá thuê/ngày × số ngày
+                                        </Text>
+                                        <TextInput
+                                            style={styles.input}
+                                            value={allocationData.rental_fee}
+                                            onChangeText={(text) => setAllocationData({ ...allocationData, rental_fee: text })}
+                                            placeholder="Nhập tổng phí thuê (tùy chọn)"
+                                            keyboardType="decimal-pad"
+                                        />
+                                    </View>
+
+                                    <View style={styles.formGroup}>
+                                        <Text style={styles.label}>Ngày bắt đầu tính phí</Text>
+                                        <TouchableOpacity
+                                            style={styles.dateButton}
+                                            onPress={() => setShowBillingStartDatePicker(true)}
+                                        >
+                                            <Text style={styles.dateButtonText}>
+                                                {allocationData.billing_start_date
+                                                    ? allocationData.billing_start_date.toLocaleDateString("vi-VN")
+                                                    : "Mặc định: Ngày bắt đầu"}
+                                            </Text>
+                                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                                        </TouchableOpacity>
+                                        {showBillingStartDatePicker && (
+                                            <DateTimePicker
+                                                value={allocationData.billing_start_date || allocationData.start_date}
+                                                mode="date"
+                                                display="default"
+                                                onChange={(event, date) => {
+                                                    setShowBillingStartDatePicker(false);
+                                                    if (date) {
+                                                        setAllocationData({ ...allocationData, billing_start_date: date });
+                                                    }
+                                                }}
+                                            />
+                                        )}
+                                    </View>
+
+                                    <View style={styles.formGroup}>
+                                        <Text style={styles.label}>Ngày kết thúc tính phí</Text>
+                                        <TouchableOpacity
+                                            style={styles.dateButton}
+                                            onPress={() => setShowBillingEndDatePicker(true)}
+                                        >
+                                            <Text style={styles.dateButtonText}>
+                                                {allocationData.billing_end_date
+                                                    ? allocationData.billing_end_date.toLocaleDateString("vi-VN")
+                                                    : "Mặc định: Ngày kết thúc"}
+                                            </Text>
+                                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                                        </TouchableOpacity>
+                                        {showBillingEndDatePicker && (
+                                            <DateTimePicker
+                                                value={allocationData.billing_end_date || allocationData.end_date || new Date()}
+                                                mode="date"
+                                                display="default"
+                                                minimumDate={allocationData.billing_start_date || allocationData.start_date}
+                                                onChange={(event, date) => {
+                                                    setShowBillingEndDatePicker(false);
+                                                    if (date) {
+                                                        setAllocationData({ ...allocationData, billing_end_date: date });
+                                                    }
+                                                }}
+                                            />
+                                        )}
+                                    </View>
+                                </>
+                            )}
+
+                            {/* Fields for MUA (buy) */}
+                            {allocationData.allocation_type === "buy" && (
+                                <>
+                                    <View style={styles.formGroup}>
+                                        <Text style={styles.label}>Người quản lý thiết bị *</Text>
+                                        <TouchableOpacity
+                                            style={styles.selectButton}
+                                            onPress={() => {
+                                                loadUsers();
+                                                setShowManagerPicker(true);
+                                            }}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.selectButtonText,
+                                                    !selectedManager && styles.selectButtonPlaceholder,
+                                                ]}
+                                            >
+                                                {selectedManager
+                                                    ? selectedManager.name
+                                                    : "Chọn người quản lý"}
+                                            </Text>
+                                            <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                                        </TouchableOpacity>
+                                        {selectedManager && (
+                                            <TouchableOpacity
+                                                style={styles.clearSelectionButton}
+                                                onPress={() => {
+                                                    setSelectedManager(null);
+                                                    setAllocationData({ ...allocationData, manager_id: null });
+                                                }}
+                                            >
+                                                <Ionicons name="close-circle" size={20} color="#EF4444" />
+                                                <Text style={styles.clearSelectionText}>Xóa lựa chọn</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+
+                                    <View style={styles.formGroup}>
+                                        <Text style={styles.label}>Ngày bàn giao</Text>
+                                        <TouchableOpacity
+                                            style={styles.dateButton}
+                                            onPress={() => setShowHandoverDatePicker(true)}
+                                        >
+                                            <Text style={styles.dateButtonText}>
+                                                {allocationData.handover_date
+                                                    ? allocationData.handover_date.toLocaleDateString("vi-VN")
+                                                    : "Mặc định: Ngày bắt đầu"}
+                                            </Text>
+                                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                                        </TouchableOpacity>
+                                        {showHandoverDatePicker && (
+                                            <DateTimePicker
+                                                value={allocationData.handover_date || allocationData.start_date}
+                                                mode="date"
+                                                display="default"
+                                                onChange={(event, date) => {
+                                                    setShowHandoverDatePicker(false);
+                                                    if (date) {
+                                                        setAllocationData({ ...allocationData, handover_date: date });
+                                                    }
+                                                }}
+                                            />
+                                        )}
+                                    </View>
+
+                                    <View style={styles.formGroup}>
+                                        <Text style={styles.label}>Ngày hoàn trả (dự kiến)</Text>
+                                        <TouchableOpacity
+                                            style={styles.dateButton}
+                                            onPress={() => setShowReturnDatePicker(true)}
+                                        >
+                                            <Text style={styles.dateButtonText}>
+                                                {allocationData.return_date
+                                                    ? allocationData.return_date.toLocaleDateString("vi-VN")
+                                                    : "Chọn ngày hoàn trả"}
+                                            </Text>
+                                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                                        </TouchableOpacity>
+                                        {allocationData.return_date && (
+                                            <TouchableOpacity
+                                                style={styles.clearDateButton}
+                                                onPress={() => setAllocationData({ ...allocationData, return_date: undefined })}
+                                            >
+                                                <Text style={styles.clearDateText}>Xóa ngày hoàn trả</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                        {showReturnDatePicker && (
+                                            <DateTimePicker
+                                                value={allocationData.return_date || new Date()}
+                                                mode="date"
+                                                display="default"
+                                                minimumDate={allocationData.handover_date || allocationData.start_date}
+                                                onChange={(event, date) => {
+                                                    setShowReturnDatePicker(false);
+                                                    if (date) {
+                                                        setAllocationData({ ...allocationData, return_date: date });
+                                                    }
+                                                }}
+                                            />
+                                        )}
+                                    </View>
+                                </>
                             )}
 
                             <View style={styles.formGroup}>
@@ -490,6 +851,60 @@ export default function ProjectEquipmentScreen() {
                                     numberOfLines={3}
                                 />
                             </View>
+
+                            {/* Manager Picker Modal */}
+                            {showManagerPicker && (
+                                <View style={styles.pickerModalOverlay}>
+                                    <View style={styles.pickerModalContainer}>
+                                        <View style={styles.pickerModalHeader}>
+                                            <Text style={styles.pickerModalTitle}>Chọn Người Quản Lý</Text>
+                                            <TouchableOpacity onPress={() => setShowManagerPicker(false)}>
+                                                <Ionicons name="close" size={24} color="#1F2937" />
+                                            </TouchableOpacity>
+                                        </View>
+                                        {loadingUsers ? (
+                                            <View style={styles.pickerLoadingContainer}>
+                                                <ActivityIndicator size="large" color="#3B82F6" />
+                                            </View>
+                                        ) : (
+                                            <FlatList
+                                                data={users}
+                                                keyExtractor={(item) => item.id.toString()}
+                                                renderItem={({ item }) => (
+                                                    <TouchableOpacity
+                                                        style={[
+                                                            styles.pickerItem,
+                                                            selectedManager?.id === item.id && styles.pickerItemActive,
+                                                        ]}
+                                                        onPress={() => {
+                                                            setSelectedManager(item);
+                                                            setAllocationData({ ...allocationData, manager_id: item.id });
+                                                            setShowManagerPicker(false);
+                                                        }}
+                                                    >
+                                                        <Text
+                                                            style={[
+                                                                styles.pickerItemText,
+                                                                selectedManager?.id === item.id && styles.pickerItemTextActive,
+                                                            ]}
+                                                        >
+                                                            {item.name}
+                                                        </Text>
+                                                        {selectedManager?.id === item.id && (
+                                                            <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                                                        )}
+                                                    </TouchableOpacity>
+                                                )}
+                                                ListEmptyComponent={
+                                                    <View style={styles.pickerEmptyContainer}>
+                                                        <Text style={styles.pickerEmptyText}>Không có người dùng nào</Text>
+                                                    </View>
+                                                }
+                                            />
+                                        )}
+                                    </View>
+                                </View>
+                            )}
 
                             <TouchableOpacity
                                 style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
@@ -772,6 +1187,135 @@ const styles = StyleSheet.create({
     clearDateText: {
         fontSize: 14,
         color: "#EF4444",
+    },
+    typeSelector: {
+        flexDirection: "row",
+        gap: 12,
+        marginTop: 8,
+    },
+    typeOption: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        padding: 16,
+        borderRadius: 8,
+        borderWidth: 2,
+        borderColor: "#D1D5DB",
+        backgroundColor: "#FFFFFF",
+    },
+    typeOptionActive: {
+        borderColor: "#3B82F6",
+        backgroundColor: "#EFF6FF",
+    },
+    typeOptionText: {
+        fontSize: 16,
+        fontWeight: "500",
+        color: "#6B7280",
+    },
+    typeOptionTextActive: {
+        color: "#3B82F6",
+        fontWeight: "600",
+    },
+    helperText: {
+        fontSize: 13,
+        color: "#6B7280",
+        marginBottom: 8,
+        fontStyle: "italic",
+    },
+    selectButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        borderWidth: 1,
+        borderColor: "#D1D5DB",
+        borderRadius: 8,
+        padding: 12,
+        backgroundColor: "#FFFFFF",
+        minHeight: 48,
+    },
+    selectButtonText: {
+        fontSize: 16,
+        color: "#1F2937",
+        fontWeight: "500",
+    },
+    selectButtonPlaceholder: {
+        color: "#9CA3AF",
+    },
+    clearSelectionButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        marginTop: 8,
+        alignSelf: "flex-start",
+    },
+    clearSelectionText: {
+        fontSize: 14,
+        color: "#EF4444",
+        fontWeight: "500",
+    },
+    pickerModalOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1000,
+    },
+    pickerModalContainer: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 12,
+        width: "90%",
+        maxHeight: "70%",
+        padding: 20,
+    },
+    pickerModalHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 20,
+    },
+    pickerModalTitle: {
+        fontSize: 18,
+        fontWeight: "600",
+        color: "#1F2937",
+    },
+    pickerLoadingContainer: {
+        padding: 40,
+        alignItems: "center",
+    },
+    pickerItem: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 8,
+        backgroundColor: "#F9FAFB",
+    },
+    pickerItemActive: {
+        backgroundColor: "#EFF6FF",
+    },
+    pickerItemText: {
+        fontSize: 16,
+        color: "#1F2937",
+    },
+    pickerItemTextActive: {
+        color: "#3B82F6",
+        fontWeight: "600",
+    },
+    pickerEmptyContainer: {
+        padding: 40,
+        alignItems: "center",
+    },
+    pickerEmptyText: {
+        fontSize: 14,
+        color: "#9CA3AF",
+        textAlign: "center",
     },
     submitButton: {
         backgroundColor: "#3B82F6",

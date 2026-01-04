@@ -21,6 +21,7 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 
 export default function PaymentsScreen() {
   const router = useRouter();
@@ -32,10 +33,15 @@ export default function PaymentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showUploadProofModal, setShowUploadProofModal] = useState(false);
+  const [showCustomerApprovalModal, setShowCustomerApprovalModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<ProjectPayment | null>(null);
   const [confirmPaidDate, setConfirmPaidDate] = useState(new Date().toISOString().split("T")[0]);
   const [showConfirmDatePicker, setShowConfirmDatePicker] = useState(false);
   const [project, setProject] = useState<any>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   // Form state
   const [formData, setFormData] = useState<CreatePaymentData>({
@@ -159,8 +165,12 @@ export default function PaymentsScreen() {
     switch (status) {
       case "pending":
         return "Chờ thanh toán";
+      case "customer_pending_approval":
+        return "Chờ khách hàng duyệt";
+      case "customer_approved":
+        return "Khách hàng đã duyệt";
       case "paid":
-        return "Đã thanh toán";
+        return "Thanh toán";
       case "overdue":
         return "Quá hạn";
       default:
@@ -217,8 +227,25 @@ export default function PaymentsScreen() {
         {item.paid_date && (
           <View style={styles.detailRow}>
             <Ionicons name="checkmark-circle-outline" size={16} color="#10B981" />
-            <Text style={styles.detailLabel}>Đã thanh toán:</Text>
+            <Text style={styles.detailLabel}>Thanh toán:</Text>
             <Text style={styles.detailValue}>{formatDate(item.paid_date)}</Text>
+          </View>
+        )}
+        {item.customer_approved_at && (
+          <View style={styles.detailRow}>
+            <Ionicons name="person-check-outline" size={16} color="#8B5CF6" />
+            <Text style={styles.detailLabel}>Khách hàng duyệt:</Text>
+            <Text style={styles.detailValue}>
+              {formatDate(item.customer_approved_at)}
+              {item.customer_approver && ` - ${item.customer_approver.name}`}
+            </Text>
+          </View>
+        )}
+        {item.payment_proof_uploaded_at && (
+          <View style={styles.detailRow}>
+            <Ionicons name="image-outline" size={16} color="#F59E0B" />
+            <Text style={styles.detailLabel}>Đã upload hình xác nhận:</Text>
+            <Text style={styles.detailValue}>{formatDate(item.payment_proof_uploaded_at)}</Text>
           </View>
         )}
       </View>
@@ -248,6 +275,91 @@ export default function PaymentsScreen() {
     setSelectedPayment(payment);
     setConfirmPaidDate(new Date().toISOString().split("T")[0]);
     setShowConfirmModal(true);
+  };
+
+  const handleUploadProof = (payment: ProjectPayment) => {
+    setSelectedPayment(payment);
+    setUploadedFiles(payment.attachments?.map((att) => ({
+      id: att.id,
+      file_url: att.file_url,
+      original_name: att.original_name,
+      type: att.mime_type?.startsWith("image/") ? "image" : "document",
+    })) || []);
+    setAttachmentIds(payment.attachments?.map((att) => att.id) || []);
+    setShowUploadProofModal(true);
+  };
+
+  const handleFilesUpload = (files: UploadedFile[]) => {
+    setUploadedFiles(files);
+    const ids = files
+      .map((f) => f.id || f.attachment_id)
+      .filter((id): id is number => id !== undefined);
+    setAttachmentIds(ids);
+  };
+
+  const submitUploadProof = async () => {
+    if (!selectedPayment || attachmentIds.length === 0) {
+      Alert.alert("Lỗi", "Vui lòng upload ít nhất một hình xác nhận");
+      return;
+    }
+
+    try {
+      const response = await paymentApi.uploadPaymentProof(
+        id!,
+        selectedPayment.id,
+        attachmentIds
+      );
+      if (response.success) {
+        Alert.alert("Thành công", response.message || "Đã upload hình xác nhận");
+        setShowUploadProofModal(false);
+        setUploadedFiles([]);
+        setAttachmentIds([]);
+        loadPayments();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể upload hình xác nhận");
+    }
+  };
+
+  const handleCustomerApprove = async (payment: ProjectPayment) => {
+    try {
+      const response = await paymentApi.approveByCustomer(id!, payment.id);
+      if (response.success) {
+        Alert.alert("Thành công", "Đã duyệt thanh toán. Đang chờ kế toán xác nhận.");
+        loadPayments();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể duyệt thanh toán");
+    }
+  };
+
+  const handleCustomerReject = (payment: ProjectPayment) => {
+    setSelectedPayment(payment);
+    setRejectionReason("");
+    setShowCustomerApprovalModal(true);
+  };
+
+  const submitCustomerReject = async () => {
+    if (!selectedPayment || !rejectionReason.trim()) {
+      Alert.alert("Lỗi", "Vui lòng nhập lý do từ chối");
+      return;
+    }
+
+    try {
+      const response = await paymentApi.rejectByCustomer(
+        id!,
+        selectedPayment.id,
+        rejectionReason
+      );
+      if (response.success) {
+        Alert.alert("Thành công", "Đã từ chối thanh toán");
+        setShowCustomerApprovalModal(false);
+        setRejectionReason("");
+        loadPayments();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể từ chối thanh toán");
+    }
   };
 
   const submitConfirmPayment = async () => {
@@ -287,7 +399,7 @@ export default function PaymentsScreen() {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Đã Thanh Toán"
+        title="Thanh Toán"
         showBackButton
         rightComponent={
           <PermissionGuard permission="payments.create" projectId={id}>
@@ -580,6 +692,98 @@ export default function PaymentsScreen() {
                 </View>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Upload hình xác nhận */}
+      <Modal
+        visible={showUploadProofModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowUploadProofModal(false);
+          setUploadedFiles([]);
+          setAttachmentIds([]);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Upload Hình Xác Nhận Chuyển Khoản</Text>
+            <ScrollView style={styles.modalScrollView}>
+              <UniversalFileUploader
+                onUploadComplete={handleFilesUpload}
+                multiple={true}
+                accept="image"
+                maxFiles={10}
+                initialFiles={uploadedFiles}
+                showPreview={true}
+                label="Chọn hình ảnh xác nhận chuyển khoản"
+              />
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowUploadProofModal(false);
+                  setUploadedFiles([]);
+                  setAttachmentIds([]);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={submitUploadProof}
+              >
+                <Text style={styles.saveButtonText}>Gửi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Khách hàng từ chối */}
+      <Modal
+        visible={showCustomerApprovalModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowCustomerApprovalModal(false);
+          setRejectionReason("");
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Từ Chối Thanh Toán</Text>
+            <Text style={styles.modalSubtitle}>
+              Vui lòng nhập lý do từ chối:
+            </Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={rejectionReason}
+              onChangeText={setRejectionReason}
+              placeholder="Nhập lý do từ chối..."
+              multiline
+              numberOfLines={4}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowCustomerApprovalModal(false);
+                  setRejectionReason("");
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.rejectButton]}
+                onPress={submitCustomerReject}
+              >
+                <Text style={[styles.saveButtonText, { color: "#FFFFFF" }]}>Từ Chối</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

@@ -9,12 +9,15 @@ import {
   Alert,
   TextInput,
   Modal,
+  Image,
+  ScrollView,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { additionalCostApi, AdditionalCost } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 
 export default function AdditionalCostsScreen() {
   const router = useRouter();
@@ -24,6 +27,8 @@ export default function AdditionalCostsScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({ amount: "", description: "" });
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
 
   useEffect(() => {
     loadCosts();
@@ -43,6 +48,14 @@ export default function AdditionalCostsScreen() {
     }
   };
 
+  const handleFilesUpload = (files: UploadedFile[]) => {
+    setUploadedFiles(files);
+    const ids = files
+      .map((f) => f.id || f.attachment_id)
+      .filter((id): id is number => id !== undefined);
+    setAttachmentIds(ids);
+  };
+
   const handleSubmit = async () => {
     if (!formData.amount || !formData.description) {
       Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin");
@@ -53,12 +66,15 @@ export default function AdditionalCostsScreen() {
       const response = await additionalCostApi.createAdditionalCost(id!, {
         amount: parseFloat(formData.amount),
         description: formData.description,
+        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
       });
 
       if (response.success) {
         Alert.alert("Thành công", "Chi phí phát sinh đã được đề xuất.");
         setModalVisible(false);
         setFormData({ amount: "", description: "" });
+        setUploadedFiles([]);
+        setAttachmentIds([]);
         loadCosts();
       }
     } catch (error: any) {
@@ -99,7 +115,10 @@ export default function AdditionalCostsScreen() {
   };
 
   const renderCostItem = ({ item }: { item: AdditionalCost }) => (
-    <View style={styles.costCard}>
+    <TouchableOpacity
+      style={styles.costCard}
+      onPress={() => router.push(`/projects/${id}/additional-costs/${item.id}`)}
+    >
       <View style={styles.costHeader}>
         <Text style={styles.costAmount}>{formatCurrency(item.amount)}</Text>
         <View
@@ -122,16 +141,32 @@ export default function AdditionalCostsScreen() {
           </Text>
         </View>
       </View>
-      <Text style={styles.costDescription}>{item.description}</Text>
+      <Text style={styles.costDescription} numberOfLines={2}>
+        {item.description}
+      </Text>
+      
+      {/* Hiển thị số lượng file đính kèm */}
+      {item.attachments && item.attachments.length > 0 && (
+        <View style={styles.attachmentsBadge}>
+          <Ionicons name="attach" size={14} color="#6B7280" />
+          <Text style={styles.attachmentsText}>
+            {item.attachments.length} file đính kèm
+          </Text>
+        </View>
+      )}
+
       {item.status === "pending_approval" && (
         <TouchableOpacity
           style={styles.approveButton}
-          onPress={() => handleApprove(item.id)}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleApprove(item.id);
+          }}
         >
           <Text style={styles.approveButtonText}>Duyệt</Text>
         </TouchableOpacity>
       )}
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -207,12 +242,27 @@ export default function AdditionalCostsScreen() {
               />
             </View>
 
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Đính kèm file/hình ảnh</Text>
+              <UniversalFileUploader
+                onUploadComplete={handleFilesUpload}
+                multiple={true}
+                accept="all"
+                maxFiles={10}
+                initialFiles={uploadedFiles}
+                showPreview={true}
+                label="Chọn file để đính kèm"
+              />
+            </View>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
                   setModalVisible(false);
                   setFormData({ amount: "", description: "" });
+                  setUploadedFiles([]);
+                  setAttachmentIds([]);
                 }}
               >
                 <Text style={styles.cancelButtonText}>Hủy</Text>
@@ -372,5 +422,21 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  attachmentsBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  attachmentsText: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontWeight: "500",
   },
 });

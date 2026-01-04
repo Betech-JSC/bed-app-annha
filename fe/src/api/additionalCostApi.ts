@@ -11,12 +11,32 @@ export interface AdditionalCost {
   approved_by?: number;
   approved_at?: string;
   rejected_reason?: string;
-  attachments?: any[];
+  created_at?: string;
+  updated_at?: string;
+  proposer?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  approver?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  attachments?: Array<{
+    id: number;
+    file_name: string;
+    original_name: string;
+    file_url: string;
+    mime_type: string;
+    type: "image" | "video" | "document";
+  }>;
 }
 
 export interface CreateAdditionalCostData {
   amount: number;
   description: string;
+  attachment_ids?: number[];
 }
 
 export const additionalCostApi = {
@@ -47,6 +67,25 @@ export const additionalCostApi = {
     const response = await api.post(`/projects/${projectId}/additional-costs/${costId}/reject`, {
       rejected_reason: reason,
     });
+    return response.data;
+  },
+
+  // Get additional cost detail
+  getAdditionalCost: async (projectId: string | number, costId: string | number) => {
+    const response = await api.get(`/projects/${projectId}/additional-costs/${costId}`);
+    return response.data;
+  },
+
+  // Attach files to additional cost
+  attachFiles: async (
+    projectId: string | number,
+    costId: string | number,
+    attachmentIds: number[]
+  ) => {
+    const response = await api.post(
+      `/projects/${projectId}/additional-costs/${costId}/attach-files`,
+      { attachment_ids: attachmentIds }
+    );
     return response.data;
   },
 };

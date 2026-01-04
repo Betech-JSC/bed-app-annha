@@ -124,10 +124,18 @@ export default function EditProjectScreen() {
       setLoadingCustomers(true);
       const response = await projectApi.getCustomers();
       if (response.success) {
-        setCustomers(response.data || []);
+        const customersList = response.data || [];
+        setCustomers(customersList);
+        if (customersList.length === 0) {
+          console.warn("Không tìm thấy khách hàng nào. Vui lòng kiểm tra lại dữ liệu.");
+        }
+      } else {
+        console.error("Error loading customers:", response.message);
+        Alert.alert("Lỗi", response.message || "Không thể tải danh sách khách hàng");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading customers:", error);
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách khách hàng");
     } finally {
       setLoadingCustomers(false);
     }

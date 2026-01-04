@@ -34,6 +34,7 @@ function AppContent() {
         <Stack.Screen name="projects" />
         <Stack.Screen name="hr" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="accounting" />
         <Stack.Screen name="time-tracking" />
         <Stack.Screen name="my-payroll" />
         <Stack.Screen name="my-bonuses" />

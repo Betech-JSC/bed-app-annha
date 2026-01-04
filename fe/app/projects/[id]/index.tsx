@@ -129,8 +129,8 @@ export default function ProjectDetailScreen() {
   const menuItems = [
     {
       title: "Báo Cáo Tổng Hợp",
-      icon: "trending-up-outline",
-      route: `/projects/${id}/revenue`,
+      icon: "document-text-outline",
+      route: `/projects/${id}/summary-report`,
       color: "#10B981",
     },
     {

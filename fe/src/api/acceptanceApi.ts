@@ -48,7 +48,9 @@ export interface AcceptanceTemplate {
   standard?: string;
   is_active: boolean;
   order: number;
-  attachments?: any[];
+  attachments?: any[]; // Backward compatible
+  images?: any[]; // Minh họa (hình ảnh)
+  documents?: any[]; // Nội dung chính (PDF, Word, Excel)
 }
 
 export interface AcceptanceStage {
@@ -366,7 +368,9 @@ export const acceptanceApi = {
     standard?: string;
     is_active?: boolean;
     order?: number;
-    attachment_ids?: number[];
+    image_ids?: number[]; // Minh họa (hình ảnh)
+    document_ids?: number[]; // Nội dung chính (PDF, Word, Excel)
+    attachment_ids?: number[]; // Backward compatible
   }) => {
     const response = await api.post('/acceptance-templates', data);
     return response.data;
@@ -381,7 +385,9 @@ export const acceptanceApi = {
       standard?: string;
       is_active?: boolean;
       order?: number;
-      attachment_ids?: number[];
+      image_ids?: number[]; // Minh họa (hình ảnh)
+      document_ids?: number[]; // Nội dung chính (PDF, Word, Excel)
+      attachment_ids?: number[]; // Backward compatible
     }
   ) => {
     const response = await api.put(`/acceptance-templates/${templateId}`, data);

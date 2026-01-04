@@ -1,14 +1,8 @@
 <?php
 
-use App\Http\Controllers\Api\AirlineController;
-use App\Http\Controllers\Api\AirportController;
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ChatController;
-use App\Http\Controllers\Api\FlightController;
-use App\Http\Controllers\Api\FlightSearchController;
-use App\Http\Controllers\Api\PaymentMethodController;
-use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\RegionsController;
@@ -37,6 +31,8 @@ use App\Http\Controllers\Api\ProjectRiskController;
 use App\Http\Controllers\Api\ChangeRequestController;
 use App\Http\Controllers\Api\ProjectEvmController;
 use App\Http\Controllers\Api\PredictiveAnalyticsController;
+use App\Http\Controllers\Api\ProjectCommentController;
+use App\Http\Controllers\Api\ProjectSummaryReportController;
 use App\Http\Controllers\Api\ProjectMonitoringController;
 use App\Http\Controllers\Api\ProjectDocumentController;
 use App\Http\Controllers\Api\RevenueController;
@@ -68,6 +64,7 @@ use App\Http\Controllers\Api\MaterialController;
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\InputInvoiceController;
 use App\Http\Controllers\Api\ReceiptController;
 use App\Http\Controllers\Api\LeaveController;
 use App\Http\Controllers\Api\EmploymentContractController;
@@ -76,6 +73,12 @@ use App\Http\Controllers\Api\PerformanceController;
 use App\Http\Controllers\Api\ReminderController;
 use App\Http\Controllers\Api\OptionsController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\SubcontractorAcceptanceController;
+use App\Http\Controllers\Api\SubcontractorContractController;
+use App\Http\Controllers\Api\SubcontractorProgressController;
+use App\Http\Controllers\Api\SupplierAcceptanceController;
+use App\Http\Controllers\Api\SupplierContractController;
+use App\Http\Controllers\Api\SupplierController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -124,10 +127,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // ===================================================================
     // PROJECT MANAGEMENT ROUTES
     // ===================================================================
-    
+
     // Monitoring Dashboard (tổng quan tất cả projects)
     Route::get('monitoring/dashboard', [ProjectMonitoringController::class, 'dashboard']);
-    
+
+    // Input Invoices (Global - không cần project, chỉ kế toán)
+    Route::prefix('accounting')->group(function () {
+        Route::get('/input-invoices', [InputInvoiceController::class, 'index']);
+        Route::post('/input-invoices', [InputInvoiceController::class, 'store']);
+        Route::get('/input-invoices/{id}', [InputInvoiceController::class, 'show']);
+        Route::put('/input-invoices/{id}', [InputInvoiceController::class, 'update']);
+        Route::delete('/input-invoices/{id}', [InputInvoiceController::class, 'destroy']);
+    });
+
     Route::prefix('projects')->group(function () {
         // Projects CRUD
         Route::get('/', [ProjectController::class, 'index']);
@@ -149,11 +161,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/payments', [ProjectPaymentController::class, 'index']);
         Route::post('/{projectId}/payments', [ProjectPaymentController::class, 'store']);
         Route::put('/{projectId}/payments/{id}', [ProjectPaymentController::class, 'update']);
+        Route::post('/{projectId}/payments/{id}/upload-proof', [ProjectPaymentController::class, 'uploadPaymentProof']);
+        Route::post('/{projectId}/payments/{id}/approve-by-customer', [ProjectPaymentController::class, 'approveByCustomer']);
+        Route::post('/{projectId}/payments/{id}/reject-by-customer', [ProjectPaymentController::class, 'rejectByCustomer']);
         Route::post('/{projectId}/payments/{id}/confirm', [ProjectPaymentController::class, 'confirm']);
 
         // Additional Costs
         Route::get('/{projectId}/additional-costs', [AdditionalCostController::class, 'index']);
         Route::post('/{projectId}/additional-costs', [AdditionalCostController::class, 'store']);
+        Route::get('/{projectId}/additional-costs/{id}', [AdditionalCostController::class, 'show']);
+        Route::post('/{projectId}/additional-costs/{id}/attach-files', [AdditionalCostController::class, 'attachFiles']);
         Route::post('/{projectId}/additional-costs/{id}/approve', [AdditionalCostController::class, 'approve']);
         Route::post('/{projectId}/additional-costs/{id}/reject', [AdditionalCostController::class, 'reject']);
 
@@ -220,13 +237,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/equipment', [EquipmentController::class, 'getByProject']);
         Route::post('/{projectId}/equipment/allocations', [EquipmentController::class, 'createAllocation']);
 
-        // Invoices
+        // Invoices (Output - gửi cho khách hàng)
         Route::get('/{projectId}/invoices', [InvoiceController::class, 'index']);
         Route::post('/{projectId}/invoices', [InvoiceController::class, 'store']);
         Route::get('/{projectId}/invoices/{id}', [InvoiceController::class, 'show']);
         Route::post('/{projectId}/invoices/{id}/send', [InvoiceController::class, 'send']);
         Route::post('/{projectId}/invoices/{id}/mark-paid', [InvoiceController::class, 'markPaid']);
         Route::put('/{projectId}/invoices/{id}', [InvoiceController::class, 'update']);
+
+        // Input Invoices (Đầu vào - từ nhà cung cấp, chỉ kế toán, có thể gắn với project)
+        Route::get('/{projectId}/input-invoices', [InputInvoiceController::class, 'index']);
+        Route::post('/{projectId}/input-invoices', [InputInvoiceController::class, 'store']);
+        Route::get('/{projectId}/input-invoices/{id}', [InputInvoiceController::class, 'show']);
+        Route::put('/{projectId}/input-invoices/{id}', [InputInvoiceController::class, 'update']);
+        Route::delete('/{projectId}/input-invoices/{id}', [InputInvoiceController::class, 'destroy']);
         Route::delete('/{projectId}/invoices/{id}', [InvoiceController::class, 'destroy']);
 
         // Acceptance Stages
@@ -294,6 +318,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Project Monitoring
         Route::get('/{projectId}/monitoring', [ProjectMonitoringController::class, 'projectMonitoring']);
+
+        // Comments
+        Route::get('/{projectId}/comments', [ProjectCommentController::class, 'index']);
+        Route::get('/{projectId}/comments/latest', [ProjectCommentController::class, 'getLatest']);
+        Route::post('/{projectId}/comments', [ProjectCommentController::class, 'store']);
+        Route::put('/{projectId}/comments/{id}', [ProjectCommentController::class, 'update']);
+        Route::delete('/{projectId}/comments/{id}', [ProjectCommentController::class, 'destroy']);
+
+        // Báo cáo tổng hợp dự án
+        Route::get('/{projectId}/summary-report', [ProjectSummaryReportController::class, 'getSummaryReport']);
+        Route::get('/{projectId}/summary-report/costs/{type}', [ProjectSummaryReportController::class, 'getCostDetails']);
 
         // Progress
         Route::get('/{projectId}/progress', [ProjectProgressController::class, 'show']);
@@ -620,11 +655,14 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // ========== QUẢN LÝ NGƯỜI DÙNG ==========
     Route::prefix('users')->group(function () {
         Route::get('/', [AdminUserController::class, 'index']); // Danh sách users
+        Route::post('/', [AdminUserController::class, 'store']); // Tạo user mới
         Route::get('/{id}', [AdminUserController::class, 'show']); // Chi tiết user
         Route::put('/{id}', [AdminUserController::class, 'update']); // Cập nhật user
         Route::post('/{id}/ban', [AdminUserController::class, 'ban']); // Khóa tài khoản
         Route::post('/{id}/unban', [AdminUserController::class, 'unban']); // Mở khóa tài khoản
         Route::delete('/{id}', [AdminUserController::class, 'destroy']); // Xóa vĩnh viễn
+        Route::get('/{id}/roles', [AdminUserController::class, 'getUserRoles']); // Lấy roles của user
+        Route::post('/{id}/roles', [AdminUserController::class, 'syncUserRoles']); // Gán roles cho user
     });
 
     // ========== QUẢN LÝ CHUYẾN BAY ==========

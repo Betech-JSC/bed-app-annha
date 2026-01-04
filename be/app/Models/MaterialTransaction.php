@@ -12,6 +12,7 @@ class MaterialTransaction extends Model
         'uuid',
         'material_id',
         'project_id',
+        'cost_id',
         'type',
         'quantity',
         'unit_price',
@@ -61,6 +62,11 @@ class MaterialTransaction extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function cost(): BelongsTo
+    {
+        return $this->belongsTo(Cost::class, 'cost_id');
     }
 
     // ==================================================================

@@ -41,6 +41,9 @@ export interface Cost {
   project_id: number;
   cost_group_id: number; // Bắt buộc - liên kết với CostGroup từ Settings
   subcontractor_id?: number;
+  material_id?: number;
+  quantity?: number;
+  unit?: string;
   name: string;
   amount: number;
   description?: string;
@@ -74,6 +77,14 @@ export interface Cost {
     name: string;
     category?: string;
   };
+  material?: {
+    id: number;
+    name: string;
+    code?: string;
+    unit: string;
+    current_stock: number;
+  };
+  material_transaction?: any;
   attachments?: Array<{
     id: number;
     attachment_id: number;
@@ -84,7 +95,10 @@ export interface Cost {
 }
 
 export interface CreateCostData {
-  cost_group_id: number; // Bắt buộc - phải chọn từ CostGroups đã thiết lập ở Settings
+  cost_group_id: number;
+  material_id?: number;
+  quantity?: number;
+  unit?: string; // Bắt buộc - phải chọn từ CostGroups đã thiết lập ở Settings
   name: string;
   amount: number;
   description?: string;

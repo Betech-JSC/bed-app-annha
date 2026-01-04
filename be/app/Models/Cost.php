@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
@@ -17,6 +18,10 @@ class Cost extends Model
         'time_tracking_id',
         'payroll_id',
         'subcontractor_id',
+        'material_id',
+        'equipment_allocation_id',
+        'quantity',
+        'unit',
         'name',
         'amount',
         'description',
@@ -32,6 +37,7 @@ class Cost extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'quantity' => 'decimal:2',
         'cost_date' => 'date',
         'management_approved_at' => 'datetime',
         'accountant_approved_at' => 'datetime',
@@ -90,6 +96,21 @@ class Cost extends Model
     public function subcontractor(): BelongsTo
     {
         return $this->belongsTo(Subcontractor::class, 'subcontractor_id');
+    }
+
+    public function material(): BelongsTo
+    {
+        return $this->belongsTo(Material::class, 'material_id');
+    }
+
+    public function materialTransaction(): HasOne
+    {
+        return $this->hasOne(MaterialTransaction::class, 'cost_id');
+    }
+
+    public function equipmentAllocation(): BelongsTo
+    {
+        return $this->belongsTo(EquipmentAllocation::class, 'equipment_allocation_id');
     }
 
     // ==================================================================
@@ -182,6 +203,12 @@ class Cost extends Model
         if ($saved && $this->subcontractor_id) {
             $this->updateSubcontractorStatus();
         }
+
+        // Tự động tạo MaterialTransaction nếu Cost có material_id
+        if ($saved && $this->material_id) {
+            $inventoryService = app(\App\Services\MaterialInventoryService::class);
+            $inventoryService->createTransactionFromCost($this);
+        }
         
         return $saved;
     }
@@ -263,6 +290,12 @@ class Cost extends Model
         // Nếu chi phí trước đó đã được approved và có subcontractor_id, cần tính lại total_paid
         if ($saved && $wasApproved && $this->subcontractor_id) {
             $this->updateSubcontractorStatus();
+        }
+
+        // Xóa MaterialTransaction nếu Cost bị reject và đã có transaction
+        if ($saved && $wasApproved && $this->material_id) {
+            $inventoryService = app(\App\Services\MaterialInventoryService::class);
+            $inventoryService->deleteTransactionFromCost($this);
         }
         
         return $saved;

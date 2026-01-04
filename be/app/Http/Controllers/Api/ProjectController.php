@@ -70,28 +70,88 @@ class ProjectController extends Controller
     }
 
     /**
-     * Lấy danh sách customers (chỉ users có role = 'customer')
+     * Lấy danh sách customers
+     * Ưu tiên: users có role = 'customer' hoặc có role "Khách hàng" trong bảng roles
+     * Nếu không có, lấy tất cả users (trừ admin và nhân sự nội bộ)
      */
     public function getCustomers(Request $request)
     {
-        $query = User::whereNull('deleted_at')
-            ->where('role', 'customer'); // Chỉ lấy users có role = 'customer'
-
         // Search
-        if ($search = $request->query('search')) {
-            $query->where(function ($q) use ($search) {
+        $search = $request->query('search');
+
+        // Thử lấy users có role = 'customer' hoặc có role "Khách hàng" trong bảng roles
+        $customerQuery = User::whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->where('role', 'customer')
+                    ->orWhereHas('roles', function ($roleQuery) {
+                        $roleQuery->where(function ($rq) {
+                            $rq->where('name', 'like', '%khách hàng%')
+                                ->orWhere('name', 'like', '%customer%')
+                                ->orWhere('name', 'like', '%Khách hàng%');
+                        });
+                    });
+            });
+
+        // Apply search nếu có
+        if ($search) {
+            $customerQuery->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
-        $customers = $query->orderBy('name')->limit(100)->get([
+        $customers = $customerQuery->orderBy('name')->limit(100)->get([
             'id',
             'name',
             'email',
             'phone',
         ]);
+
+        // Nếu không có customers theo điều kiện trên, lấy tất cả users (trừ admin và nhân sự nội bộ)
+        if ($customers->isEmpty()) {
+            $fallbackQuery = User::whereNull('deleted_at')
+                ->where('role', '!=', 'admin')
+                ->whereDoesntHave('employeeProfile'); // Không phải nhân sự nội bộ
+
+            // Apply search nếu có
+            if ($search) {
+                $fallbackQuery->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
+            }
+
+            $customers = $fallbackQuery->orderBy('name')->limit(100)->get([
+                'id',
+                'name',
+                'email',
+                'phone',
+            ]);
+
+            // Nếu vẫn không có, lấy tất cả users (trừ admin) - fallback cuối cùng
+            if ($customers->isEmpty()) {
+                $finalQuery = User::whereNull('deleted_at')
+                    ->where('role', '!=', 'admin');
+
+                // Apply search nếu có
+                if ($search) {
+                    $finalQuery->where(function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%");
+                    });
+                }
+
+                $customers = $finalQuery->orderBy('name')->limit(100)->get([
+                    'id',
+                    'name',
+                    'email',
+                    'phone',
+                ]);
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -100,14 +160,39 @@ class ProjectController extends Controller
     }
 
     /**
-     * Lấy danh sách project managers (chỉ users nội bộ - có employeeProfile, không phải customer)
+     * Lấy danh sách project managers
+     * Ưu tiên: admin, users có role quản lý, hoặc users nội bộ (có employeeProfile)
+     * Nếu không có, lấy tất cả users (trừ customer và subcontractor)
      */
     public function getProjectManagers(Request $request)
     {
-        $query = User::whereNull('deleted_at')
-            ->where('role', '!=', 'customer') // Không phải khách hàng
-            ->where('role', '!=', 'subcontractor') // Không phải nhà thầu phụ
-            ->whereHas('employeeProfile'); // Chỉ lấy users có employeeProfile (nhân sự nội bộ)
+        $query = User::whereNull('deleted_at');
+
+        // Ưu tiên: admin, users có role quản lý, hoặc users nội bộ
+        $managerQuery = clone $query;
+        $managerQuery->where(function ($q) {
+            $q->where('role', 'admin')
+                ->orWhereHas('roles', function ($roleQuery) {
+                    $roleQuery->where(function ($rq) {
+                        $rq->where('name', 'like', '%quản lý%')
+                            ->orWhere('name', 'like', '%manager%')
+                            ->orWhere('name', 'like', '%Quản lý%')
+                            ->orWhere('name', 'like', '%Ban điều hành%')
+                            ->orWhere('name', 'like', '%Management%');
+                    });
+                })
+                ->orWhereHas('employeeProfile');
+        });
+
+        $managers = $managerQuery->get();
+
+        // Nếu không có managers theo điều kiện trên, lấy tất cả users (trừ customer và subcontractor)
+        if ($managers->isEmpty()) {
+            $query->where('role', '!=', 'customer')
+                ->where('role', '!=', 'subcontractor');
+        } else {
+            $query = $managerQuery;
+        }
 
         // Search
         if ($search = $request->query('search')) {
@@ -152,8 +237,8 @@ class ProjectController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50|unique:projects,code',
             'description' => 'nullable|string',
-            'customer_id' => 'required|exists:users,id',
-            'project_manager_id' => 'nullable|exists:users,id',
+            'customer_id' => 'required|integer|min:1|exists:users,id',
+            'project_manager_id' => 'nullable|integer|min:1|exists:users,id',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'status' => ['nullable', Rule::in(['planning', 'in_progress', 'completed', 'cancelled'])],

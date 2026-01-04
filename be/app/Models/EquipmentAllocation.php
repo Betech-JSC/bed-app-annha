@@ -12,20 +12,35 @@ class EquipmentAllocation extends Model
         'uuid',
         'equipment_id',
         'project_id',
+        'allocation_type',
+        'quantity',
         'allocated_to',
+        'manager_id',
+        'handover_date',
+        'return_date',
         'start_date',
         'end_date',
         'daily_rate',
+        'rental_fee',
+        'billing_start_date',
+        'billing_end_date',
         'usage_hours',
         'status',
         'notes',
         'created_by',
+        'cost_id',
     ];
 
     protected $casts = [
+        'quantity' => 'integer',
         'start_date' => 'date',
         'end_date' => 'date',
+        'handover_date' => 'date',
+        'return_date' => 'date',
+        'billing_start_date' => 'date',
+        'billing_end_date' => 'date',
         'daily_rate' => 'decimal:2',
+        'rental_fee' => 'decimal:2',
         'usage_hours' => 'integer',
     ];
 
@@ -51,6 +66,16 @@ class EquipmentAllocation extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function manager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'manager_id');
+    }
+
+    public function cost(): BelongsTo
+    {
+        return $this->belongsTo(Cost::class, 'cost_id');
     }
 
     // ==================================================================

@@ -12,6 +12,7 @@ export default function ProjectDetailLayout() {
       <Stack.Screen name="contract" />
       <Stack.Screen name="payments" />
       <Stack.Screen name="additional-costs" />
+      <Stack.Screen name="additional-costs/[costId]" />
       <Stack.Screen name="costs" />
       <Stack.Screen name="budget" />
       <Stack.Screen name="budget/[budgetId]" />
@@ -47,6 +48,8 @@ export default function ProjectDetailLayout() {
       <Stack.Screen name="change-requests/create" />
       <Stack.Screen name="predictions" />
       <Stack.Screen name="monitoring" />
+      <Stack.Screen name="summary-report" />
+      <Stack.Screen name="summary-report/cost-details" />
     </Stack>
   );
 }
