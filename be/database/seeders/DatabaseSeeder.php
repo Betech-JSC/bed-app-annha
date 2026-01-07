@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             AdminSeeder::class, // Sau đó mới tạo admins và gán roles
             SuperAdminSeeder::class, // Tạo Super Admin user với toàn quyền truy cập app
             UserRoleSeeder::class, // Tạo các users với các roles khác nhau
+            CustomerSeeder::class, // Tạo các users có role khách hàng để chọn khi tạo dự án
 
             // 3. Cấu hình dự án
             DepartmentSeeder::class, // Tạo phòng ban

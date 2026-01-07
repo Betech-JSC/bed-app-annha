@@ -233,8 +233,19 @@ export default function DocumentsScreen() {
           setSelectedDocument(null);
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowDetailModal(false);
+            setSelectedDocument(null);
+          }}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Chi tiết tài liệu</Text>
               <TouchableOpacity
@@ -242,6 +253,7 @@ export default function DocumentsScreen() {
                   setShowDetailModal(false);
                   setSelectedDocument(null);
                 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
@@ -303,8 +315,8 @@ export default function DocumentsScreen() {
                 <Text style={styles.saveButtonText}>Lưu</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );

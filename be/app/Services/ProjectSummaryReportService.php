@@ -24,11 +24,11 @@ class ProjectSummaryReportService
         // Tính các loại chi phí
         $costDetails = $this->calculateCostDetails($project);
 
-        // Tổng chi phí công trình (KHÔNG bao gồm lương)
+        // Tổng chi phí công trình (KHÔNG bao gồm lương và nhân công khoán)
+        // Chỉ bao gồm: Chi phí vật liệu + Chi phí thuê thiết bị + Chi phí thầu phụ
         $totalProjectCosts = $costDetails['material_costs']
             + $costDetails['equipment_rental_costs']
-            + $costDetails['subcontractor_costs']
-            + $costDetails['labor_contract_costs']; // Nhân công khoán
+            + $costDetails['subcontractor_costs'];
 
         // Lương (chi phí công ty - KHÔNG tính vào dự án)
         $salaryCosts = $costDetails['salary_costs'];

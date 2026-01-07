@@ -29,6 +29,7 @@ export default function ProjectSummaryReportScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCostDetailsModal, setShowCostDetailsModal] = useState(false);
+  const [showCostTypeSelectorModal, setShowCostTypeSelectorModal] = useState(false);
   const [costDetailsType, setCostDetailsType] = useState<
     "material" | "equipment" | "subcontractor" | "labor"
   >("material");
@@ -152,7 +153,7 @@ export default function ProjectSummaryReportScreen() {
         {/* Tổng chi phí - Click để xem chi tiết */}
         <TouchableOpacity
           style={styles.card}
-          onPress={() => handleViewCostDetails("material")}
+          onPress={() => setShowCostTypeSelectorModal(true)}
         >
           <View style={styles.cardHeader}>
             <Ionicons name="calculator" size={24} color="#EF4444" />
@@ -163,62 +164,27 @@ export default function ProjectSummaryReportScreen() {
             {formatCurrency(report.total_project_costs)}
           </Text>
           <View style={styles.costBreakdown}>
-            <TouchableOpacity
-              style={styles.costItem}
-              onPress={() => handleViewCostDetails("material")}
-            >
+            <View style={styles.costItem}>
               <Text style={styles.costLabel}>Chi phí vật liệu</Text>
               <Text style={styles.costAmount}>
                 {formatCurrency(report.cost_details.material_costs)}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.costItem}
-              onPress={() => handleViewCostDetails("equipment")}
-            >
+            </View>
+            <View style={styles.costItem}>
               <Text style={styles.costLabel}>Chi phí thuê thiết bị</Text>
               <Text style={styles.costAmount}>
                 {formatCurrency(report.cost_details.equipment_rental_costs)}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.costItem}
-              onPress={() => handleViewCostDetails("subcontractor")}
-            >
+            </View>
+            <View style={styles.costItem}>
               <Text style={styles.costLabel}>Chi phí thầu phụ</Text>
               <Text style={styles.costAmount}>
                 {formatCurrency(report.cost_details.subcontractor_costs)}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.costItem}
-              onPress={() => handleViewCostDetails("labor")}
-            >
-              <Text style={styles.costLabel}>Nhân công khoán</Text>
-              <Text style={styles.costAmount}>
-                {formatCurrency(report.cost_details.labor_contract_costs)}
-              </Text>
-            </TouchableOpacity>
+            </View>
           </View>
         </TouchableOpacity>
 
-        {/* Lương - Chi phí công ty (KHÔNG tính vào dự án) */}
-        <View style={[styles.card, styles.salaryCard]}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="people" size={24} color="#F59E0B" />
-            <Text style={styles.cardTitle}>Lương (Chi phí công ty)</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>Không tính vào dự án</Text>
-            </View>
-          </View>
-          <Text style={styles.salaryValue}>
-            {formatCurrency(report.total_salary_costs)}
-          </Text>
-          <Text style={styles.salaryNote}>
-            Lương nhân viên là chi phí công ty, không tính vào chi phí công
-            trình
-          </Text>
-        </View>
 
         {/* Lợi nhuận */}
         <View style={[styles.card, styles.profitCard]}>
@@ -240,6 +206,90 @@ export default function ProjectSummaryReportScreen() {
         </View>
       </ScrollView>
 
+      {/* Modal chọn loại chi phí */}
+      <Modal
+        visible={showCostTypeSelectorModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCostTypeSelectorModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCostTypeSelectorModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn loại chi phí để xem chi tiết</Text>
+              <TouchableOpacity
+                onPress={() => setShowCostTypeSelectorModal(false)}
+                style={styles.closeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.costTypeSelector}>
+              <TouchableOpacity
+                style={styles.costTypeOption}
+                onPress={() => {
+                  setShowCostTypeSelectorModal(false);
+                  handleViewCostDetails("material");
+                }}
+              >
+                <Ionicons name="cube-outline" size={24} color="#3B82F6" />
+                <View style={styles.costTypeOptionContent}>
+                  <Text style={styles.costTypeOptionTitle}>Chi phí vật liệu</Text>
+                  <Text style={styles.costTypeOptionAmount}>
+                    {formatCurrency(report.cost_details.material_costs)}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.costTypeOption}
+                onPress={() => {
+                  setShowCostTypeSelectorModal(false);
+                  handleViewCostDetails("equipment");
+                }}
+              >
+                <Ionicons name="construct-outline" size={24} color="#F59E0B" />
+                <View style={styles.costTypeOptionContent}>
+                  <Text style={styles.costTypeOptionTitle}>Chi phí thuê thiết bị</Text>
+                  <Text style={styles.costTypeOptionAmount}>
+                    {formatCurrency(report.cost_details.equipment_rental_costs)}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.costTypeOption}
+                onPress={() => {
+                  setShowCostTypeSelectorModal(false);
+                  handleViewCostDetails("subcontractor");
+                }}
+              >
+                <Ionicons name="business-outline" size={24} color="#10B981" />
+                <View style={styles.costTypeOptionContent}>
+                  <Text style={styles.costTypeOptionTitle}>Chi phí thầu phụ</Text>
+                  <Text style={styles.costTypeOptionAmount}>
+                    {formatCurrency(report.cost_details.subcontractor_costs)}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Modal chi tiết chi phí */}
       <Modal
         visible={showCostDetailsModal}
@@ -247,8 +297,16 @@ export default function ProjectSummaryReportScreen() {
         transparent={true}
         onRequestClose={() => setShowCostDetailsModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCostDetailsModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {getCostTypeLabel(costDetailsType)}
@@ -256,6 +314,7 @@ export default function ProjectSummaryReportScreen() {
               <TouchableOpacity
                 onPress={() => setShowCostDetailsModal(false)}
                 style={styles.closeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
@@ -334,8 +393,8 @@ export default function ProjectSummaryReportScreen() {
                 style={styles.costDetailsList}
               />
             )}
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -544,5 +603,35 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginBottom: 4,
   },
+  costTypeSelector: {
+    padding: 16,
+  },
+  costTypeOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  costTypeOptionContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  costTypeOptionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  costTypeOptionAmount: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#EF4444",
+  },
 });
+
+
 

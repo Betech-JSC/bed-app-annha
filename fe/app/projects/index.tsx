@@ -46,7 +46,7 @@ export default function ProjectsListScreen() {
         const projectsList = response.data?.data || response.data || [];
         setProjects(projectsList);
         applyFilters(projectsList, selectedYear, selectedStatus);
-        
+
         // Load monitoring data, predictions và comments cho từng project
         loadMonitoringData(projectsList);
         loadLatestComments(projectsList);
@@ -69,7 +69,7 @@ export default function ProjectsListScreen() {
           monitoringApi.getProjectMonitoring(project.id).catch(() => null),
           predictiveAnalyticsApi.getFullAnalysis(project.id).catch(() => null),
         ]);
-        
+
         return {
           projectId: project.id,
           monitoring: monitoringResponse?.success ? monitoringResponse.data : null,
@@ -231,196 +231,168 @@ export default function ProjectsListScreen() {
     const monitoring = monitoringData[item.id];
     const prediction = predictions[item.id];
     const latestComment = latestComments[item.id];
-    
+
     // Tính toán các indicators
     const hasDelayRisk = prediction?.delay_risk?.risk_level === 'high' || prediction?.delay_risk?.risk_level === 'critical';
     const hasCostRisk = prediction?.cost_risk?.risk_level === 'high' || prediction?.cost_risk?.risk_level === 'critical';
     const highRisksCount = monitoring?.metrics?.high_risks || 0;
     const alertsCount = monitoring?.alerts?.length || 0;
     const overdueTasks = monitoring?.metrics?.overdue_tasks || 0;
-    
+
     // Tính toán giá trị hiển thị
     const delayDays = prediction?.delay_risk?.delay_days || 0;
     const overrunPercentage = prediction?.cost_risk?.overrun_percentage;
     const overrunPercentageText = overrunPercentage != null && typeof overrunPercentage === 'number' && overrunPercentage > 0
       ? overrunPercentage.toFixed(1)
       : null;
-    
+
     // Tính overall risk
     const overallRisk = prediction?.overall_risk_level || 'low';
     const showWarning = hasDelayRisk || hasCostRisk || highRisksCount > 0 || alertsCount > 0 || overdueTasks > 0;
 
     return (
-    <TouchableOpacity
-      style={styles.projectCard}
-      onPress={() => router.push(`/projects/${item.id}`)}
-    >
-        {/* Monitoring Indicators - Góc trên phải */}
-        {showWarning && (
-          <View style={styles.monitoringIndicators}>
-            {hasDelayRisk && (
-              <View style={[styles.indicatorBadge, styles.indicatorBadgeCritical]}>
-                <Ionicons name="time-outline" size={14} color="#FFFFFF" />
-                <Text style={styles.indicatorText}>Delay</Text>
-              </View>
-            )}
-            {hasCostRisk && (
-              <View style={[styles.indicatorBadge, styles.indicatorBadgeCritical]}>
-                <Ionicons name="cash-outline" size={14} color="#FFFFFF" />
-                <Text style={styles.indicatorText}>Cost</Text>
-              </View>
-            )}
-            {highRisksCount > 0 && (
-              <View style={[styles.indicatorBadge, styles.indicatorBadgeHigh]}>
-                <Ionicons name="warning-outline" size={14} color="#FFFFFF" />
-                <Text style={styles.indicatorText}>{highRisksCount}</Text>
-              </View>
-            )}
-            {alertsCount > 0 && (
-              <View style={[styles.indicatorBadge, styles.indicatorBadgeAlert]}>
-                <Ionicons name="alert-circle" size={14} color="#FFFFFF" />
-                <Text style={styles.indicatorText}>{alertsCount}</Text>
-              </View>
-            )}
-            {overdueTasks > 0 && (
-              <View style={[styles.indicatorBadge, styles.indicatorBadgeOverdue]}>
-                <Ionicons name="calendar-outline" size={14} color="#FFFFFF" />
-                <Text style={styles.indicatorText}>{overdueTasks}</Text>
-              </View>
-            )}
-          </View>
-        )}
+      <TouchableOpacity
+        style={styles.projectCard}
+        onPress={() => router.push(`/projects/${item.id}`)}
+      >
 
-      <View style={styles.projectHeader}>
-        <View style={styles.projectInfo}>
-          <Text style={styles.projectName}>{item.name}</Text>
-          <Text style={styles.projectCode}>{item.code}</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(item.status) + "20" },
-            ]}
-          >
-            <Text
+
+        <View style={styles.projectHeader}>
+          <View style={styles.projectInfo}>
+            <Text style={styles.projectName}>{item.name}</Text>
+            <Text style={styles.projectCode}>{item.code}</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <View
               style={[
-                styles.statusText,
-                { color: getStatusColor(item.status) },
+                styles.statusBadge,
+                { backgroundColor: getStatusColor(item.status) + "20" },
               ]}
             >
-              {getStatusText(item.status)}
-            </Text>
-          </View>
-          <View style={styles.actionButtons}>
-            <PermissionGuard permission="projects.update">
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={(e) => handleEdit(item, e)}
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: getStatusColor(item.status) },
+                ]}
               >
-                <Ionicons name="create-outline" size={18} color="#3B82F6" />
-              </TouchableOpacity>
-            </PermissionGuard>
-            <PermissionGuard permission="projects.delete">
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={(e) => handleDelete(item, e)}
-              >
-                <Ionicons name="trash-outline" size={18} color="#EF4444" />
-              </TouchableOpacity>
-            </PermissionGuard>
-          </View>
-        </View>
-      </View>
-      {item.description && (
-        <Text style={styles.description} numberOfLines={2}>
-          {item.description}
-        </Text>
-      )}
-      <View style={styles.projectFooter}>
-        <View style={styles.footerItem}>
-          <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-          <Text style={styles.footerText}>
-            {item.start_date
-              ? new Date(item.start_date).toLocaleDateString("vi-VN")
-              : "Chưa có"}
-          </Text>
-        </View>
-        {item.progress && (
-          <View style={[styles.footerItem, styles.progressItem]}>
-            <Ionicons name="trending-up-outline" size={18} color="#3B82F6" />
-            <Text style={styles.progressText}>
-              {item.progress.overall_percentage}%
-            </Text>
-          </View>
-        )}
-        
-        {/* Tổng thời gian thi công */}
-        {item.start_date && item.end_date && (
-          <View style={styles.footerItem}>
-            <Ionicons name="time-outline" size={16} color="#6B7280" />
-            <Text style={styles.footerText}>
-              {Math.ceil((new Date(item.end_date).getTime() - new Date(item.start_date).getTime()) / (1000 * 60 * 60 * 24))} ngày
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Cảnh báo tiến độ trễ - Icon cảnh báo nổi bật */}
-      {showWarning && (
-        <View style={styles.warningBanner}>
-          <Ionicons name="warning" size={20} color="#F59E0B" />
-          <View style={styles.warningContent}>
-            {delayDays > 0 && (
-              <Text style={styles.warningText}>
-                ⚠️ Cảnh báo: Dự án chậm {delayDays} ngày so với kế hoạch
+                {getStatusText(item.status)}
               </Text>
+            </View>
+            <View style={styles.actionButtons}>
+              <PermissionGuard permission="projects.update">
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={(e) => handleEdit(item, e)}
+                >
+                  <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                </TouchableOpacity>
+              </PermissionGuard>
+              <PermissionGuard permission="projects.delete">
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={(e) => handleDelete(item, e)}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                </TouchableOpacity>
+              </PermissionGuard>
+            </View>
+          </View>
+        </View>
+        {item.description && (
+          <Text style={styles.description} numberOfLines={2}>
+            {item.description}
+          </Text>
+        )}
+        <View style={styles.projectFooter}>
+          <View style={styles.footerItem}>
+            <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+            <Text style={styles.footerText}>
+              {item.start_date
+                ? new Date(item.start_date).toLocaleDateString("vi-VN")
+                : "Chưa có"}
+            </Text>
+          </View>
+          {item.progress && (
+            <View style={[styles.footerItem, styles.progressItem]}>
+              <Ionicons name="trending-up-outline" size={18} color="#3B82F6" />
+              <Text style={styles.progressText}>
+                {item.progress.overall_percentage}%
+              </Text>
+            </View>
+          )}
+
+          {/* Tổng thời gian thi công */}
+          {item.start_date && item.end_date && (
+            <View style={styles.footerItem}>
+              <Ionicons name="time-outline" size={16} color="#6B7280" />
+              <Text style={styles.footerText}>
+                {Math.ceil((new Date(item.end_date).getTime() - new Date(item.start_date).getTime()) / (1000 * 60 * 60 * 24))} ngày
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Cảnh báo - Hiển thị từng loại riêng biệt với icon và màu phù hợp */}
+        {(delayDays > 0 || overrunPercentageText || (monitoring?.metrics?.overdue_tasks > 0)) && (
+          <View style={styles.warningsContainer}>
+            {delayDays > 0 && (
+              <View style={[styles.warningItem, styles.warningItemDelay]}>
+                <Ionicons name="time" size={16} color="#DC2626" />
+                <Text style={[styles.warningItemText, { color: "#991B1B" }]}>
+                  Chậm {delayDays} ngày
+                </Text>
+              </View>
             )}
             {overrunPercentageText && (
-              <Text style={styles.warningText}>
-                ⚠️ Cảnh báo: Vượt ngân sách {overrunPercentageText}%
-              </Text>
+              <View style={[styles.warningItem, styles.warningItemCost]}>
+                <Ionicons name="cash" size={16} color="#D97706" />
+                <Text style={[styles.warningItemText, { color: "#92400E" }]}>
+                  Vượt {overrunPercentageText}%
+                </Text>
+              </View>
             )}
             {monitoring && monitoring.metrics && monitoring.metrics.overdue_tasks > 0 && (
-              <Text style={styles.warningText}>
-                ⚠️ Cảnh báo: {monitoring.metrics.overdue_tasks} công việc quá hạn
-              </Text>
+              <View style={[styles.warningItem, styles.warningItemOverdue]}>
+                <Ionicons name="calendar" size={16} color="#EA580C" />
+                <Text style={[styles.warningItemText, { color: "#9A3412" }]}>
+                  {monitoring.metrics.overdue_tasks} việc quá hạn
+                </Text>
+              </View>
             )}
           </View>
-        </View>
-      )}
+        )}
 
-      {/* Comment mới nhất */}
-      {latestComment && (
-        <TouchableOpacity 
-          style={styles.commentSection}
-          onPress={() => router.push(`/projects/${item.id}`)}
-        >
-          <View style={styles.commentHeader}>
-            <Ionicons name="chatbubble-outline" size={16} color="#6B7280" />
-            <Text style={styles.commentLabel}>Bình luận mới nhất:</Text>
-          </View>
-          <View style={styles.commentContent}>
-            <Text style={styles.commentAuthor}>
-              {latestComment.user?.name || "Người dùng"}
-            </Text>
-            <Text style={styles.commentText} numberOfLines={2}>
-              {latestComment.content}
-            </Text>
-            <Text style={styles.commentTime}>
-              {new Date(latestComment.created_at).toLocaleDateString("vi-VN", {
-                day: "numeric",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      )}
-    </TouchableOpacity>
-  );
-};
+        {/* Comment mới nhất */}
+        {latestComment && (
+          <TouchableOpacity
+            style={styles.commentSection}
+            onPress={() => router.push(`/projects/${item.id}`)}
+          >
+            <View style={styles.commentHeader}>
+              <Ionicons name="chatbubble-outline" size={16} color="#6B7280" />
+              <Text style={styles.commentLabel}>Bình luận mới nhất:</Text>
+            </View>
+            <View style={styles.commentContent}>
+              <Text style={styles.commentAuthor}>
+                {latestComment.user?.name || "Người dùng"}
+              </Text>
+              <Text style={styles.commentText} numberOfLines={2}>
+                {latestComment.content}
+              </Text>
+              <Text style={styles.commentTime}>
+                {new Date(latestComment.created_at).toLocaleDateString("vi-VN", {
+                  day: "numeric",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   if (loading && !refreshing) {
     return (
@@ -767,11 +739,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
   filterButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -840,25 +807,36 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#3B82F6",
   },
-  warningBanner: {
+  warningsContainer: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
+    flexWrap: "wrap",
+    gap: 8,
     marginTop: 12,
-    padding: 12,
+  },
+  warningItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  warningItemDelay: {
+    backgroundColor: "#FEE2E2",
+    borderColor: "#FCA5A5",
+  },
+  warningItemCost: {
     backgroundColor: "#FEF3C7",
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: "#F59E0B",
+    borderColor: "#FCD34D",
   },
-  warningContent: {
-    flex: 1,
+  warningItemOverdue: {
+    backgroundColor: "#FFEDD5",
+    borderColor: "#FDBA74",
   },
-  warningText: {
-    fontSize: 13,
+  warningItemText: {
+    fontSize: 12,
     fontWeight: "600",
-    color: "#92400E",
-    marginBottom: 4,
   },
   commentSection: {
     marginTop: 12,

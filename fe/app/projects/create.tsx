@@ -525,6 +525,7 @@ export default function CreateProjectScreen() {
                 setShowCustomerModal(false);
                 setCustomerSearch("");
               }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons name="close" size={24} color="#1F2937" />
             </TouchableOpacity>
@@ -612,6 +613,7 @@ export default function CreateProjectScreen() {
                 setShowManagerModal(false);
                 setManagerSearch("");
               }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons name="close" size={24} color="#1F2937" />
             </TouchableOpacity>

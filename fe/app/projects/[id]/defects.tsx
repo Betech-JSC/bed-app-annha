@@ -296,219 +296,230 @@ export default function DefectsScreen() {
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        <TouchableOpacity
           style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setModalVisible(false)}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Ghi Nhận Lỗi</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setModalVisible(false);
-                  setFormData({
-                    description: "",
-                    severity: "medium",
-                    task_id: "",
-                    before_image_ids: [],
-                  });
-                  setBeforeImages([]);
-                  setShowTaskPicker(false);
-                }}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.modalBody}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1 }}
+          >
+            <TouchableOpacity
+              style={styles.modalContent}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
             >
-              {/* Hạng mục thi công */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>
-                  Hạng mục thi công <Text style={styles.optional}>(tùy chọn)</Text>
-                </Text>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Ghi Nhận Lỗi</Text>
                 <TouchableOpacity
-                  style={styles.taskSelectButton}
-                  onPress={() => setShowTaskPicker(!showTaskPicker)}
+                  onPress={() => {
+                    setModalVisible(false);
+                    setFormData({
+                      description: "",
+                      severity: "medium",
+                      task_id: "",
+                      before_image_ids: [],
+                    });
+                    setBeforeImages([]);
+                    setShowTaskPicker(false);
+                  }}
+                  style={styles.closeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={[styles.taskSelectText, !formData.task_id && styles.placeholderText]}>
-                    {formData.task_id
-                      ? tasks.find(t => t.id.toString() === formData.task_id)?.name || "Chọn hạng mục"
-                      : "Chọn hạng mục thi công"}
-                  </Text>
-                  <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                  <Ionicons name="close" size={24} color="#1F2937" />
                 </TouchableOpacity>
               </View>
 
-              {/* Mô tả lỗi */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>
-                  Mô tả lỗi <Text style={styles.required}>*</Text>
-                </Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  value={formData.description}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, description: text })
-                  }
-                  placeholder="Nhập mô tả chi tiết về lỗi..."
-                  placeholderTextColor="#9CA3AF"
-                  multiline
-                  numberOfLines={4}
-                />
-              </View>
-
-              {/* Mức độ nghiêm trọng */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Mức độ nghiêm trọng</Text>
-                <View style={styles.severityButtons}>
-                  {(["low", "medium", "high", "critical"] as const).map((severity) => {
-                    const severityConfig = {
-                      low: { label: "Thấp", color: "#10B981", bg: "#10B98120" },
-                      medium: { label: "Trung bình", color: "#F59E0B", bg: "#F59E0B20" },
-                      high: { label: "Cao", color: "#F97316", bg: "#F9731620" },
-                      critical: { label: "Nghiêm trọng", color: "#EF4444", bg: "#EF444420" },
-                    };
-                    const config = severityConfig[severity];
-                    const isActive = formData.severity === severity;
-
-                    return (
-                      <TouchableOpacity
-                        key={severity}
-                        style={[
-                          styles.severityButton,
-                          isActive && {
-                            backgroundColor: config.bg,
-                            borderColor: config.color,
-                            borderWidth: 2,
-                          },
-                        ]}
-                        onPress={() =>
-                          setFormData({ ...formData, severity })
-                        }
-                      >
-                        <View
-                          style={[
-                            styles.severityDot,
-                            { backgroundColor: config.color },
-                          ]}
-                        />
-                        <Text
-                          style={[
-                            styles.severityButtonText,
-                            isActive && { color: config.color, fontWeight: "700" },
-                          ]}
-                        >
-                          {config.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+              <ScrollView
+                style={styles.modalBody}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Hạng mục thi công */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>
+                    Hạng mục thi công <Text style={styles.optional}>(tùy chọn)</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.taskSelectButton}
+                    onPress={() => setShowTaskPicker(!showTaskPicker)}
+                  >
+                    <Text style={[styles.taskSelectText, !formData.task_id && styles.placeholderText]}>
+                      {formData.task_id
+                        ? tasks.find(t => t.id.toString() === formData.task_id)?.name || "Chọn hạng mục"
+                        : "Chọn hạng mục thi công"}
+                    </Text>
+                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                  </TouchableOpacity>
                 </View>
-              </View>
 
-              {/* Hình ảnh lỗi */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>
-                  Hình ảnh lỗi (Trước khi khắc phục)
-                  <Text style={styles.optional}> (tùy chọn)</Text>
-                </Text>
-                <UniversalFileUploader
-                  onUploadComplete={handleBeforeImagesUpload}
-                  multiple={true}
-                  accept="image"
-                  maxFiles={10}
-                  initialFiles={beforeImages}
-                />
-              </View>
-            </ScrollView>
+                {/* Mô tả lỗi */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>
+                    Mô tả lỗi <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    value={formData.description}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, description: text })
+                    }
+                    placeholder="Nhập mô tả chi tiết về lỗi..."
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                    numberOfLines={4}
+                  />
+                </View>
 
-            {/* Task Picker - Inside Modal */}
-            {showTaskPicker && (
-              <View style={styles.pickerModalOverlay}>
-                <TouchableOpacity
-                  style={styles.pickerModalOverlayBackdrop}
-                  activeOpacity={1}
-                  onPress={() => setShowTaskPicker(false)}
-                />
-                <View style={styles.pickerModalContainer} onStartShouldSetResponder={() => true}>
-                  <View style={styles.pickerHeader}>
-                    <Text style={styles.pickerTitle}>Chọn hạng mục</Text>
-                    <TouchableOpacity onPress={() => setShowTaskPicker(false)}>
-                      <Ionicons name="close" size={24} color="#1F2937" />
-                    </TouchableOpacity>
+                {/* Mức độ nghiêm trọng */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Mức độ nghiêm trọng</Text>
+                  <View style={styles.severityButtons}>
+                    {(["low", "medium", "high", "critical"] as const).map((severity) => {
+                      const severityConfig = {
+                        low: { label: "Thấp", color: "#10B981", bg: "#10B98120" },
+                        medium: { label: "Trung bình", color: "#F59E0B", bg: "#F59E0B20" },
+                        high: { label: "Cao", color: "#F97316", bg: "#F9731620" },
+                        critical: { label: "Nghiêm trọng", color: "#EF4444", bg: "#EF444420" },
+                      };
+                      const config = severityConfig[severity];
+                      const isActive = formData.severity === severity;
+
+                      return (
+                        <TouchableOpacity
+                          key={severity}
+                          style={[
+                            styles.severityButton,
+                            isActive && {
+                              backgroundColor: config.bg,
+                              borderColor: config.color,
+                              borderWidth: 2,
+                            },
+                          ]}
+                          onPress={() =>
+                            setFormData({ ...formData, severity })
+                          }
+                        >
+                          <View
+                            style={[
+                              styles.severityDot,
+                              { backgroundColor: config.color },
+                            ]}
+                          />
+                          <Text
+                            style={[
+                              styles.severityButtonText,
+                              isActive && { color: config.color, fontWeight: "700" },
+                            ]}
+                          >
+                            {config.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
-                  <ScrollView style={styles.pickerList}>
-                    <TouchableOpacity
-                      style={styles.pickerOption}
-                      onPress={() => {
-                        setFormData({ ...formData, task_id: "" });
-                        setShowTaskPicker(false);
-                      }}
-                    >
-                      <Text style={styles.pickerOptionText}>Không chọn</Text>
-                    </TouchableOpacity>
-                    {tasks.map((task) => (
+                </View>
+
+                {/* Hình ảnh lỗi */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>
+                    Hình ảnh lỗi (Trước khi khắc phục)
+                    <Text style={styles.optional}> (tùy chọn)</Text>
+                  </Text>
+                  <UniversalFileUploader
+                    onUploadComplete={handleBeforeImagesUpload}
+                    multiple={true}
+                    accept="image"
+                    maxFiles={10}
+                    initialFiles={beforeImages}
+                  />
+                </View>
+              </ScrollView>
+
+              {/* Task Picker - Inside Modal */}
+              {showTaskPicker && (
+                <View style={styles.pickerModalOverlay}>
+                  <TouchableOpacity
+                    style={styles.pickerModalOverlayBackdrop}
+                    activeOpacity={1}
+                    onPress={() => setShowTaskPicker(false)}
+                  />
+                  <View style={styles.pickerModalContainer} onStartShouldSetResponder={() => true}>
+                    <View style={styles.pickerHeader}>
+                      <Text style={styles.pickerTitle}>Chọn hạng mục</Text>
+                      <TouchableOpacity onPress={() => setShowTaskPicker(false)}>
+                        <Ionicons name="close" size={24} color="#1F2937" />
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView style={styles.pickerList}>
                       <TouchableOpacity
-                        key={task.id}
-                        style={[
-                          styles.pickerOption,
-                          formData.task_id === task.id.toString() && styles.pickerOptionActive,
-                        ]}
+                        style={styles.pickerOption}
                         onPress={() => {
-                          setFormData({ ...formData, task_id: task.id.toString() });
+                          setFormData({ ...formData, task_id: "" });
                           setShowTaskPicker(false);
                         }}
                       >
-                        <Text
-                          style={[
-                            styles.pickerOptionText,
-                            formData.task_id === task.id.toString() && styles.pickerOptionTextActive,
-                          ]}
-                        >
-                          {task.name}
-                        </Text>
+                        <Text style={styles.pickerOptionText}>Không chọn</Text>
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                      {tasks.map((task) => (
+                        <TouchableOpacity
+                          key={task.id}
+                          style={[
+                            styles.pickerOption,
+                            formData.task_id === task.id.toString() && styles.pickerOptionActive,
+                          ]}
+                          onPress={() => {
+                            setFormData({ ...formData, task_id: task.id.toString() });
+                            setShowTaskPicker(false);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.pickerOptionText,
+                              formData.task_id === task.id.toString() && styles.pickerOptionTextActive,
+                            ]}
+                          >
+                            {task.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
                 </View>
-              </View>
-            )}
+              )}
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setModalVisible(false);
-                  setFormData({
-                    description: "",
-                    severity: "medium",
-                    task_id: "",
-                    before_image_ids: [],
-                  });
-                  setBeforeImages([]);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.submitButton,
-                  !formData.description && styles.submitButtonDisabled,
-                ]}
-                onPress={handleSubmit}
-                disabled={!formData.description}
-              >
-                <Text style={styles.submitButtonText}>Ghi nhận lỗi</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setModalVisible(false);
+                    setFormData({
+                      description: "",
+                      severity: "medium",
+                      task_id: "",
+                      before_image_ids: [],
+                    });
+                    setBeforeImages([]);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.submitButton,
+                    !formData.description && styles.submitButtonDisabled,
+                  ]}
+                  onPress={handleSubmit}
+                  disabled={!formData.description}
+                >
+                  <Text style={styles.submitButtonText}>Ghi nhận lỗi</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
 
       {/* In Progress Modal */}
@@ -518,81 +529,92 @@ export default function DefectsScreen() {
         transparent={true}
         onRequestClose={() => setInProgressModalVisible(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        <TouchableOpacity
           style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setInProgressModalVisible(false)}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Bắt đầu xử lý</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setInProgressModalVisible(false);
-                  setSelectedDefectForProgress(null);
-                  setExpectedCompletionDate(null);
-                }}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>
-                  Thời gian hoàn thành dự kiến <Text style={styles.required}>*</Text>
-                </Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1 }}
+          >
+            <TouchableOpacity
+              style={styles.modalContent}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Bắt đầu xử lý</Text>
                 <TouchableOpacity
-                  style={styles.dateInput}
-                  onPress={() => setShowDatePicker(true)}
+                  onPress={() => {
+                    setInProgressModalVisible(false);
+                    setSelectedDefectForProgress(null);
+                    setExpectedCompletionDate(null);
+                  }}
+                  style={styles.closeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={[styles.dateInputText, !expectedCompletionDate && styles.placeholderText]}>
-                    {expectedCompletionDate
-                      ? expectedCompletionDate.toLocaleDateString('vi-VN')
-                      : "Chọn ngày"}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                  <Ionicons name="close" size={24} color="#1F2937" />
                 </TouchableOpacity>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={expectedCompletionDate || new Date()}
-                    mode="date"
-                    display="default"
-                    minimumDate={new Date()}
-                    onChange={(event, date) => {
-                      setShowDatePicker(false);
-                      if (date) {
-                        setExpectedCompletionDate(date);
-                      }
-                    }}
-                  />
-                )}
               </View>
-            </ScrollView>
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setInProgressModalVisible(false);
-                  setSelectedDefectForProgress(null);
-                  setExpectedCompletionDate(null);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.submitButton,
-                  !expectedCompletionDate && styles.submitButtonDisabled,
-                ]}
-                onPress={handleStartProgress}
-                disabled={!expectedCompletionDate}
-              >
-                <Text style={styles.submitButtonText}>Bắt đầu xử lý</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+              <ScrollView style={styles.modalBody}>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>
+                    Thời gian hoàn thành dự kiến <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.dateInput}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Text style={[styles.dateInputText, !expectedCompletionDate && styles.placeholderText]}>
+                      {expectedCompletionDate
+                        ? expectedCompletionDate.toLocaleDateString('vi-VN')
+                        : "Chọn ngày"}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                  </TouchableOpacity>
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={expectedCompletionDate || new Date()}
+                      mode="date"
+                      display="default"
+                      minimumDate={new Date()}
+                      onChange={(event, date) => {
+                        setShowDatePicker(false);
+                        if (date) {
+                          setExpectedCompletionDate(date);
+                        }
+                      }}
+                    />
+                  )}
+                </View>
+              </ScrollView>
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setInProgressModalVisible(false);
+                    setSelectedDefectForProgress(null);
+                    setExpectedCompletionDate(null);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.submitButton,
+                    !expectedCompletionDate && styles.submitButtonDisabled,
+                  ]}
+                  onPress={handleStartProgress}
+                  disabled={!expectedCompletionDate}
+                >
+                  <Text style={styles.submitButtonText}>Bắt đầu xử lý</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
 
       {/* Fix Defect Modal */}
@@ -607,73 +629,89 @@ export default function DefectsScreen() {
           setAfterImages([]);
         }}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        <TouchableOpacity
           style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setFixModalVisible(false);
+            setSelectedDefectId(null);
+            setAfterImageIds([]);
+            setAfterImages([]);
+          }}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Khắc phục lỗi</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setFixModalVisible(false);
-                  setSelectedDefectId(null);
-                  setAfterImageIds([]);
-                  setAfterImages([]);
-                }}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>
-                  Hình ảnh sau khi khắc phục <Text style={styles.required}>*</Text>
-                </Text>
-                <Text style={styles.helperText}>
-                  Bắt buộc upload hình ảnh đã sửa để xác nhận hoàn thành. Bạn có thể chụp ảnh trực tiếp hoặc chọn từ thư viện.
-                </Text>
-                <UniversalFileUploader
-                  onUploadComplete={handleAfterImagesUpload}
-                  multiple={true}
-                  accept="image"
-                  maxFiles={10}
-                  initialFiles={afterImages}
-                />
-                {afterImageIds.length === 0 && (
-                  <Text style={styles.errorText}>
-                    Vui lòng upload ít nhất một hình ảnh
-                  </Text>
-                )}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1 }}
+          >
+            <TouchableOpacity
+              style={styles.modalContent}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Khắc phục lỗi</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setFixModalVisible(false);
+                    setSelectedDefectId(null);
+                    setAfterImageIds([]);
+                    setAfterImages([]);
+                  }}
+                  style={styles.closeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={24} color="#1F2937" />
+                </TouchableOpacity>
               </View>
-            </ScrollView>
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setFixModalVisible(false);
-                  setSelectedDefectId(null);
-                  setAfterImageIds([]);
-                  setAfterImages([]);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.submitButton,
-                  afterImageIds.length === 0 && styles.submitButtonDisabled,
-                ]}
-                onPress={handleFixDefect}
-                disabled={afterImageIds.length === 0}
-              >
-                <Text style={styles.submitButtonText}>Xác nhận hoàn thành</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+              <ScrollView style={styles.modalBody}>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>
+                    Hình ảnh sau khi khắc phục <Text style={styles.required}>*</Text>
+                  </Text>
+                  <Text style={styles.helperText}>
+                    Bắt buộc upload hình ảnh đã sửa để xác nhận hoàn thành. Bạn có thể chụp ảnh trực tiếp hoặc chọn từ thư viện.
+                  </Text>
+                  <UniversalFileUploader
+                    onUploadComplete={handleAfterImagesUpload}
+                    multiple={true}
+                    accept="image"
+                    maxFiles={10}
+                    initialFiles={afterImages}
+                  />
+                  {afterImageIds.length === 0 && (
+                    <Text style={styles.errorText}>
+                      Vui lòng upload ít nhất một hình ảnh
+                    </Text>
+                  )}
+                </View>
+              </ScrollView>
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setFixModalVisible(false);
+                    setSelectedDefectId(null);
+                    setAfterImageIds([]);
+                    setAfterImages([]);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.submitButton,
+                    afterImageIds.length === 0 && styles.submitButtonDisabled,
+                  ]}
+                  onPress={handleFixDefect}
+                  disabled={afterImageIds.length === 0}
+                >
+                  <Text style={styles.submitButtonText}>Xác nhận hoàn thành</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
 
       {/* Detail Modal */}
@@ -683,13 +721,22 @@ export default function DefectsScreen() {
         transparent={true}
         onRequestClose={() => setDetailModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setDetailModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Chi tiết lỗi</Text>
               <TouchableOpacity
                 onPress={() => setDetailModalVisible(false)}
                 style={styles.closeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
@@ -826,8 +873,8 @@ export default function DefectsScreen() {
                 </>
               )}
             </ScrollView>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Image Preview Modal */}
@@ -859,7 +906,7 @@ export default function DefectsScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </View >
   );
 }
 
