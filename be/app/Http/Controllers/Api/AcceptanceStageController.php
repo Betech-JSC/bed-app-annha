@@ -23,12 +23,22 @@ class AcceptanceStageController extends Controller
                 'customerApprover',
                 'designApprover',
                 'ownerApprover',
+                'task', // BUSINESS RULE: Link to parent task (A) - parent task acts as "phase"
                 'defects' => function ($q) {
                     $q->whereIn('status', ['open', 'in_progress']);
                 },
                 'attachments',
                 'items' => function ($q) {
-                    $q->orderBy('order')
+                    // BUSINESS RULE: Show ONLY Category A (parent) items, hide children A' and A''
+                    $q->where(function ($query) {
+                        // Items without task_id (Category A items)
+                        $query->whereNull('task_id')
+                              // OR items linked to parent tasks (task.parent_id is null)
+                              ->orWhereHas('task', function ($taskQuery) {
+                                  $taskQuery->whereNull('parent_id');
+                              });
+                    })
+                      ->orderBy('order')
                       ->with([
                           'attachments',
                           'task',
@@ -49,7 +59,156 @@ class AcceptanceStageController extends Controller
     }
 
     /**
-     * Duyệt giai đoạn nghiệm thu
+     * Supervisor approve (Giám sát duyệt giai đoạn)
+     * Workflow: pending → supervisor_approved
+     */
+    public function supervisorApprove(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check if user is admin (full permission)
+        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
+        
+        // Check if user is supervisor
+        $isSupervisor = \App\Models\ProjectPersonnel::where('project_id', $project->id)
+            ->where('user_id', $user->id)
+            ->whereIn('role', ['supervisor', 'supervisor_guest'])
+            ->exists();
+
+        if (!$isAdmin && !$isSupervisor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ giám sát mới có quyền duyệt.'
+            ], 403);
+        }
+
+        if ($stage->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể duyệt khi ở trạng thái pending.'
+            ], 400);
+        }
+
+        $success = $stage->approveSupervisor($user);
+
+        if (!$success) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể duyệt giai đoạn này.'
+            ], 400);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã duyệt thành công.',
+            'data' => $stage->fresh(['supervisorApprover'])
+        ]);
+    }
+
+    /**
+     * Project Manager approve (Quản lý dự án duyệt giai đoạn)
+     * Workflow: supervisor_approved → project_manager_approved
+     */
+    public function projectManagerApprove(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check if user is admin (full permission)
+        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
+        
+        // Check if user is project manager
+        $isProjectManager = $user->id === $project->project_manager_id;
+
+        if (!$isAdmin && !$isProjectManager) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ quản lý dự án mới có quyền duyệt.'
+            ], 403);
+        }
+
+        if ($stage->status !== 'supervisor_approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể duyệt sau khi giám sát đã duyệt.'
+            ], 400);
+        }
+
+        $success = $stage->approveProjectManager($user);
+
+        if (!$success) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể duyệt giai đoạn này.'
+            ], 400);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã duyệt thành công.',
+            'data' => $stage->fresh(['projectManagerApprover'])
+        ]);
+    }
+
+    /**
+     * Customer approve (Khách hàng duyệt giai đoạn)
+     * Workflow: project_manager_approved → customer_approved
+     */
+    public function customerApprove(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check if user is admin (full permission)
+        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
+        
+        // Check if user is customer
+        $isCustomer = $project->customer_id === $user->id;
+
+        if (!$isAdmin && !$isCustomer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ khách hàng mới có quyền duyệt.'
+            ], 403);
+        }
+
+        if ($stage->status !== 'project_manager_approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể duyệt sau khi quản lý dự án đã duyệt.'
+            ], 400);
+        }
+
+        // Check for open defects
+        if ($stage->has_open_defects) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể duyệt vì còn lỗi chưa được khắc phục.'
+            ], 400);
+        }
+
+        $success = $stage->approveCustomer($user);
+
+        if (!$success) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể duyệt giai đoạn này.'
+            ], 400);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã duyệt nghiệm thu thành công.',
+            'data' => $stage->fresh(['customerApprover'])
+        ]);
+    }
+
+    /**
+     * Duyệt giai đoạn nghiệm thu (Legacy method - for backward compatibility)
      */
     public function approve(Request $request, string $projectId, string $id)
     {
@@ -58,31 +217,34 @@ class AcceptanceStageController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'approval_type' => ['required', 'in:internal,customer,design,owner'],
+            'approval_type' => ['required', 'in:internal,customer,design,owner,supervisor,project_manager'],
         ]);
 
         $approvalType = $validated['approval_type'];
         $success = false;
 
         switch ($approvalType) {
-            case 'internal':
-                // Giám sát nội bộ
-                $success = $stage->approveInternal($user);
+            case 'supervisor':
+                $success = $stage->approveSupervisor($user);
+                break;
+            case 'project_manager':
+                $success = $stage->approveProjectManager($user);
                 break;
             case 'customer':
-                // Giám sát khách hàng
-                if ($project->customer_id === $user->id || $stage->status === 'internal_approved') {
-                    $success = $stage->approveCustomer($user);
-                }
+                $success = $stage->approveCustomer($user);
+                break;
+            case 'internal':
+                // Legacy: Giám sát nội bộ
+                $success = $stage->approveInternal($user);
                 break;
             case 'design':
-                // Thiết kế
+                // Legacy: Thiết kế
                 if ($stage->status === 'customer_approved') {
                     $success = $stage->approveDesign($user);
                 }
                 break;
             case 'owner':
-                // Chủ nhà
+                // Legacy: Chủ nhà
                 if ($project->customer_id === $user->id && $stage->status === 'design_approved') {
                     $success = $stage->approveOwner($user);
                 }
@@ -166,9 +328,12 @@ class AcceptanceStageController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)
             ->with([
                 'internalApprover',
+                'supervisorApprover',
+                'projectManagerApprover',
                 'customerApprover',
                 'designApprover',
                 'ownerApprover',
+                'task', // BUSINESS RULE: Link to parent task (A) - parent task acts as "phase"
                 'defects',
                 'attachments'
             ])
@@ -198,10 +363,28 @@ class AcceptanceStageController extends Controller
         }
 
         $validated = $request->validate([
+            'task_id' => 'required|exists:project_tasks,id', // BUSINESS RULE: REQUIRED - must be parent task (A)
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'order' => 'nullable|integer|min:0',
         ]);
+
+        // BUSINESS RULE: Verify task_id is a parent task (no parent_id)
+        $task = $project->tasks()->find($validated['task_id']);
+        if (!$task) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Công việc không tồn tại trong dự án này.'
+            ], 404);
+        }
+        
+        // Check if task is a parent task (no parent_id)
+        if ($task->parent_id !== null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể chọn công việc cha (Category A). Không thể chọn công việc con (A\', A\'\').'
+            ], 422);
+        }
 
         try {
             // Auto-calculate order if not provided
@@ -212,6 +395,7 @@ class AcceptanceStageController extends Controller
 
             $stage = AcceptanceStage::create([
                 'project_id' => $project->id,
+                'task_id' => $validated['task_id'], // BUSINESS RULE: Link to parent task (A)
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
                 'order' => $validated['order'],
@@ -260,10 +444,29 @@ class AcceptanceStageController extends Controller
         }
 
         $validated = $request->validate([
+            'task_id' => 'sometimes|exists:project_tasks,id', // BUSINESS RULE: Must be parent task (A)
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
             'order' => 'sometimes|integer|min:0',
         ]);
+
+        // BUSINESS RULE: If task_id is provided, verify it's a parent task
+        if (isset($validated['task_id'])) {
+            $task = $project->tasks()->find($validated['task_id']);
+            if (!$task) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Công việc không tồn tại trong dự án này.'
+                ], 404);
+            }
+            
+            if ($task->parent_id !== null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Chỉ có thể chọn công việc cha (Category A). Không thể chọn công việc con (A\', A\'\').'
+                ], 422);
+            }
+        }
 
         $stage->update($validated);
 

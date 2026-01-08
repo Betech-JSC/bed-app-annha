@@ -30,6 +30,14 @@ export const attachmentApi = {
       headers: {
         "Content-Type": "multipart/form-data",
       },
+      transformRequest: (data, headers) => {
+        // Don't set Content-Type header - let axios set it automatically with boundary
+        // React Native FormData needs this to work correctly
+        if (headers) {
+          delete headers['Content-Type'];
+        }
+        return data;
+      },
     });
     return response.data;
   },

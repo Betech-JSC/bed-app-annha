@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,46 +7,63 @@ import {
   Dimensions,
   TouchableOpacity,
 } from "react-native";
-import { ProjectPhase, ProjectTask } from "@/types/ganttTypes";
+import { ProjectTask } from "@/types/ganttTypes";
 import GanttTaskBar from "./GanttTaskBar";
 import { Ionicons } from "@expo/vector-icons";
 
 interface GanttChartProps {
-  phases: ProjectPhase[];
-  tasks: ProjectTask[];
+  tasks: ProjectTask[]; // Parent tasks act as "phases"
   onTaskPress?: (task: ProjectTask) => void;
-  onPhasePress?: (phase: ProjectPhase) => void;
 }
 
 type ViewMode = "day" | "week" | "month";
 
 const screenWidth = Dimensions.get("window").width;
-const DAY_WIDTH = 40;
-const WEEK_WIDTH = 280;
+const DAY_WIDTH = 50;
+const WEEK_WIDTH = 300;
 const MONTH_WIDTH = 1200;
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 50;
 const HEADER_HEIGHT = 60;
 
 export default function GanttChart({
-  phases,
   tasks,
   onTaskPress,
-  onPhasePress,
 }: GanttChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const horizontalScrollRef = useRef<ScrollView>(null);
+  const verticalScrollRef = useRef<ScrollView>(null);
+  const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
+
+  // Build task hierarchy - parent tasks act as "phases"
+  const taskHierarchy = useMemo(() => {
+    const taskMap = new Map<number, ProjectTask & { children: ProjectTask[] }>();
+    const rootTasks: (ProjectTask & { children: ProjectTask[] })[] = [];
+
+    // Initialize all tasks
+    tasks.forEach(task => {
+      taskMap.set(task.id, { ...task, children: [] });
+    });
+
+    // Build hierarchy
+    tasks.forEach(task => {
+      const parentId = (task as any).parent_id;
+      if (parentId && taskMap.has(parentId)) {
+        const parent = taskMap.get(parentId)!;
+        parent.children.push(taskMap.get(task.id)!);
+      } else {
+        rootTasks.push(taskMap.get(task.id)!);
+      }
+    });
+
+    return { taskMap, rootTasks };
+  }, [tasks]);
 
   // Calculate date range
   const dateRange = useMemo(() => {
     const allDates: Date[] = [];
-    
-    // Get dates from phases
-    phases.forEach((phase) => {
-      if (phase.start_date) allDates.push(new Date(phase.start_date));
-      if (phase.end_date) allDates.push(new Date(phase.end_date));
-    });
-    
-    // Get dates from tasks
+
+    // Get dates from tasks only
     tasks.forEach((task) => {
       if (task.start_date) allDates.push(new Date(task.start_date));
       if (task.end_date) allDates.push(new Date(task.end_date));
@@ -65,7 +82,7 @@ export default function GanttChart({
       start: sortedDates[0],
       end: sortedDates[sortedDates.length - 1],
     };
-  }, [phases, tasks]);
+  }, [tasks]);
 
   // Generate timeline dates
   const timelineDates = useMemo(() => {
@@ -101,7 +118,7 @@ export default function GanttChart({
     if (viewMode === "day") {
       const daysDiff = Math.floor(
         (startDate.getTime() - dateRange.start.getTime()) /
-          (1000 * 60 * 60 * 24)
+        (1000 * 60 * 60 * 24)
       );
       const duration = Math.ceil(
         (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -111,7 +128,7 @@ export default function GanttChart({
     } else if (viewMode === "week") {
       const weeksDiff = Math.floor(
         (startDate.getTime() - dateRange.start.getTime()) /
-          (1000 * 60 * 60 * 24 * 7)
+        (1000 * 60 * 60 * 24 * 7)
       );
       const duration = Math.ceil(
         (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 7)
@@ -133,24 +150,81 @@ export default function GanttChart({
     return { left, width };
   };
 
-  // Group tasks by phase
-  const tasksByPhase = useMemo(() => {
-    const grouped: { [key: number]: ProjectTask[] } = {};
-    const standalone: ProjectTask[] = [];
+  // Auto-scroll to current date
+  useEffect(() => {
+    if (horizontalScrollRef.current && timelineDates.length > 0) {
+      const today = new Date();
+      let scrollIndex = -1;
 
-    tasks.forEach((task) => {
-      if (task.phase_id) {
-        if (!grouped[task.phase_id]) {
-          grouped[task.phase_id] = [];
-        }
-        grouped[task.phase_id].push(task);
+      if (viewMode === "day") {
+        scrollIndex = timelineDates.findIndex(
+          d => d.toDateString() === today.toDateString()
+        );
+      } else if (viewMode === "week") {
+        const weekStart = new Date(today);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        scrollIndex = timelineDates.findIndex(d => {
+          const dWeekStart = new Date(d);
+          dWeekStart.setDate(dWeekStart.getDate() - dWeekStart.getDay());
+          return dWeekStart.toDateString() === weekStart.toDateString();
+        });
       } else {
-        standalone.push(task);
+        scrollIndex = timelineDates.findIndex(
+          d => d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()
+        );
       }
-    });
 
-    return { grouped, standalone };
-  }, [tasks]);
+      if (scrollIndex >= 0) {
+        setTimeout(() => {
+          const cellWidth = viewMode === "day" ? DAY_WIDTH : viewMode === "week" ? WEEK_WIDTH : MONTH_WIDTH;
+          const scrollX = Math.max(0, scrollIndex * cellWidth - screenWidth / 2);
+          horizontalScrollRef.current?.scrollTo({ x: scrollX, animated: true });
+        }, 300);
+      }
+    }
+  }, [viewMode, timelineDates.length]);
+
+  const toggleTask = (taskId: number) => {
+    const newExpanded = new Set(expandedTasks);
+    if (newExpanded.has(taskId)) {
+      newExpanded.delete(taskId);
+    } else {
+      newExpanded.add(taskId);
+    }
+    setExpandedTasks(newExpanded);
+  };
+
+  // Render task tree recursively
+  const renderTaskTree = (
+    task: ProjectTask & { children?: ProjectTask[] },
+    level: number = 0
+  ): React.ReactNode[] => {
+    const hasChildren = task.children && task.children.length > 0;
+    const isExpanded = expandedTasks.has(task.id);
+    const position = getTaskPosition(task);
+    if (!position) return [];
+
+    const nodes: React.ReactNode[] = [
+      <GanttTaskBar
+        key={task.id}
+        task={task}
+        left={position.left}
+        width={position.width}
+        top={level * ROW_HEIGHT}
+        height={ROW_HEIGHT - 4}
+        onPress={() => onTaskPress?.(task)}
+      />,
+    ];
+
+    // Render children if expanded
+    if (hasChildren && isExpanded && task.children) {
+      task.children.forEach(child => {
+        nodes.push(...renderTaskTree(child, level + 1));
+      });
+    }
+
+    return nodes;
+  };
 
   const chartWidth = useMemo(() => {
     if (viewMode === "day") {
@@ -166,9 +240,29 @@ export default function GanttChart({
     if (mode === "day") {
       return date.toLocaleDateString("vi-VN", { day: "numeric", month: "short" });
     } else if (mode === "week") {
-      return `Tuần ${Math.ceil(date.getDate() / 7)}/${date.getMonth() + 1}`;
+      const weekStart = new Date(date);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      return `${weekStart.getDate()}/${weekStart.getMonth() + 1} - ${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`;
     } else {
       return date.toLocaleDateString("vi-VN", { month: "short", year: "numeric" });
+    }
+  };
+
+  // Check if date is today
+  const isToday = (date: Date, mode: ViewMode): boolean => {
+    const today = new Date();
+    if (mode === "day") {
+      return date.toDateString() === today.toDateString();
+    } else if (mode === "week") {
+      const weekStart = new Date(date);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      return today >= weekStart && today <= weekEnd;
+    } else {
+      return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
     }
   };
 
@@ -229,112 +323,190 @@ export default function GanttChart({
       </View>
 
       {/* Gantt Chart */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={true}
-        style={styles.scrollView}
-      >
-        <View style={[styles.chartContainer, { width: Math.max(chartWidth, screenWidth) }]}>
-          {/* Timeline header */}
-          <View style={styles.timelineHeader}>
-            <View style={styles.phaseHeader} />
-            <View style={styles.datesContainer}>
-              {timelineDates.map((date, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.dateCell,
-                    {
-                      width:
-                        viewMode === "day"
-                          ? DAY_WIDTH
-                          : viewMode === "week"
-                            ? WEEK_WIDTH
-                            : MONTH_WIDTH,
-                    },
-                  ]}
-                >
-                  <Text style={styles.dateText}>{formatDate(date, viewMode)}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Phases and tasks */}
-          <ScrollView style={styles.tasksContainer}>
-            {phases.map((phase, phaseIndex) => {
-              const phaseTasks = tasksByPhase.grouped[phase.id] || [];
-              return (
-                <View key={phase.id} style={styles.phaseRow}>
-                  {/* Phase label */}
-                  <TouchableOpacity
-                    style={styles.phaseLabel}
-                    onPress={() => onPhasePress?.(phase)}
-                  >
-                    <Text style={styles.phaseLabelText} numberOfLines={1}>
-                      {phase.name}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Tasks row */}
-                  <View style={styles.tasksRow}>
-                    {phaseTasks.map((task, taskIndex) => {
-                      const position = getTaskPosition(task);
-                      if (!position) return null;
-
-                      return (
-                        <GanttTaskBar
-                          key={task.id}
-                          task={task}
-                          left={position.left}
-                          width={position.width}
-                          top={taskIndex * ROW_HEIGHT}
-                          height={ROW_HEIGHT - 4}
-                          onPress={() => onTaskPress?.(task)}
-                        />
-                      );
-                    })}
-                  </View>
-                </View>
-              );
-            })}
-
-            {/* Standalone tasks */}
-            {tasksByPhase.standalone.length > 0 && (
-              <View style={styles.phaseRow}>
-                <View style={styles.phaseLabel}>
-                  <Text style={styles.phaseLabelText}>Không thuộc giai đoạn</Text>
-                </View>
-                <View style={styles.tasksRow}>
-                  {tasksByPhase.standalone.map((task, taskIndex) => {
-                    const position = getTaskPosition(task);
-                    if (!position) return null;
-
+      <View style={styles.chartWrapper}>
+        <ScrollView
+          ref={horizontalScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          style={styles.horizontalScroll}
+          contentContainerStyle={{ minWidth: Math.max(chartWidth, screenWidth) }}
+        >
+          <View style={[styles.chartContainer, { width: Math.max(chartWidth, screenWidth) }]}>
+            {/* Timeline header */}
+            <View style={styles.timelineHeader}>
+              <View style={styles.phaseHeader}>
+                <Text style={styles.phaseHeaderText}>Giai đoạn / Công việc</Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                scrollEnabled={false}
+              >
+                <View style={styles.datesContainer}>
+                  {timelineDates.map((date, index) => {
+                    const isTodayDate = isToday(date, viewMode);
                     return (
-                      <GanttTaskBar
-                        key={task.id}
-                        task={task}
-                        left={position.left}
-                        width={position.width}
-                        top={taskIndex * ROW_HEIGHT}
-                        height={ROW_HEIGHT - 4}
-                        onPress={() => onTaskPress?.(task)}
-                      />
+                      <View
+                        key={index}
+                        style={[
+                          styles.dateCell,
+                          isTodayDate && styles.dateCellToday,
+                          {
+                            width:
+                              viewMode === "day"
+                                ? DAY_WIDTH
+                                : viewMode === "week"
+                                  ? WEEK_WIDTH
+                                  : MONTH_WIDTH,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.dateText, isTodayDate && styles.dateTextToday]}>
+                          {formatDate(date, viewMode)}
+                        </Text>
+                        {isTodayDate && (
+                          <View style={styles.todayIndicator} />
+                        )}
+                      </View>
                     );
                   })}
                 </View>
-              </View>
-            )}
+              </ScrollView>
+            </View>
 
-            {phases.length === 0 && tasksByPhase.standalone.length === 0 && (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="calendar-outline" size={48} color="#D1D5DB" />
-                <Text style={styles.emptyText}>Chưa có giai đoạn hoặc công việc</Text>
+            {/* Today line */}
+            <View style={styles.todayLineContainer}>
+              <View style={styles.phaseHeader} />
+              <View style={styles.todayLineWrapper}>
+                {timelineDates.map((date, index) => {
+                  if (!isToday(date, viewMode)) return null;
+                  const cellWidth = viewMode === "day" ? DAY_WIDTH : viewMode === "week" ? WEEK_WIDTH : MONTH_WIDTH;
+                  return (
+                    <View
+                      key={index}
+                      style={[
+                        styles.todayLine,
+                        { left: index * cellWidth + cellWidth / 2 },
+                      ]}
+                    />
+                  );
+                })}
               </View>
-            )}
-          </ScrollView>
-        </View>
-      </ScrollView>
+            </View>
+
+            {/* Parent tasks (act as "phases") and their children */}
+            <ScrollView
+              ref={verticalScrollRef}
+              style={styles.tasksContainer}
+              nestedScrollEnabled={true}
+            >
+              {taskHierarchy.rootTasks.map((parentTask) => {
+                const childTasks = parentTask.children || [];
+                const hasChildren = childTasks.length > 0;
+                const isExpanded = expandedTasks.has(parentTask.id);
+                const taskNodes = renderTaskTree(parentTask, 0);
+                const taskHeight = hasChildren && isExpanded
+                  ? (childTasks.length * ROW_HEIGHT) + ROW_HEIGHT
+                  : ROW_HEIGHT;
+
+                return (
+                  <View key={parentTask.id} style={styles.phaseSection}>
+                    {/* Parent task row (acts as "phase") */}
+                    <View style={styles.phaseRow}>
+                      <TouchableOpacity
+                        style={styles.phaseLabel}
+                        onPress={() => {
+                          if (hasChildren) {
+                            toggleTask(parentTask.id);
+                          } else {
+                            onTaskPress?.(parentTask);
+                          }
+                        }}
+                      >
+                        {hasChildren && (
+                          <Ionicons
+                            name={isExpanded ? "chevron-down" : "chevron-forward"}
+                            size={16}
+                            color="#6B7280"
+                            style={styles.expandIcon}
+                          />
+                        )}
+                        <View style={styles.phaseLabelContent}>
+                          <Text style={styles.phaseLabelText} numberOfLines={1}>
+                            {parentTask.name}
+                          </Text>
+                          {parentTask.description && (
+                            <Text style={styles.phaseDescription} numberOfLines={1}>
+                              {parentTask.description}
+                            </Text>
+                          )}
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => onTaskPress?.(parentTask)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                      <View style={styles.tasksRow}>
+                        {/* Parent task bar */}
+                        {(() => {
+                          const position = getTaskPosition(parentTask);
+                          if (!position) return null;
+                          return (
+                            <View
+                              style={[
+                                styles.phaseBar,
+                                {
+                                  left: position.left,
+                                  width: position.width,
+                                },
+                              ]}
+                            />
+                          );
+                        })()}
+                      </View>
+                    </View>
+
+                    {/* Children tasks (with hierarchy) */}
+                    {hasChildren && isExpanded && (
+                      <View style={styles.tasksContainer}>
+                        <View
+                          style={[styles.taskRow, { minHeight: taskHeight }]}
+                        >
+                          <View style={styles.taskLabel}>
+                            <View style={styles.taskLabelContent}>
+                              <Text style={styles.taskLabelText} numberOfLines={1}>
+                                Công việc con
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.tasksRow}>
+                            {childTasks.map((childTask) => {
+                              const childNodes = renderTaskTree(childTask, 1);
+                              return <React.Fragment key={childTask.id}>{childNodes}</React.Fragment>;
+                            })}
+                          </View>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+
+              {taskHierarchy.rootTasks.length === 0 && (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
+                  <Text style={styles.emptyText}>Chưa có công việc</Text>
+                  <Text style={styles.emptySubtext}>
+                    Nhấn nút + ở góc trên để tạo công việc mới
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </ScrollView>
+      </View>
     </View>
   );
 }
@@ -356,23 +528,29 @@ const styles = StyleSheet.create({
   },
   viewModeButton: {
     flex: 1,
-    padding: 8,
-    borderRadius: 6,
+    padding: 10,
+    borderRadius: 8,
     backgroundColor: "#F3F4F6",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   viewModeButtonActive: {
     backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
   },
   viewModeText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#6B7280",
   },
   viewModeTextActive: {
     color: "#FFFFFF",
   },
-  scrollView: {
+  chartWrapper: {
+    flex: 1,
+  },
+  horizontalScroll: {
     flex: 1,
   },
   chartContainer: {
@@ -383,15 +561,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 2,
     borderBottomColor: "#E5E7EB",
-    position: "sticky",
-    top: 0,
+    position: "relative",
     zIndex: 10,
   },
   phaseHeader: {
-    width: 120,
+    width: 180,
     padding: 12,
     borderRightWidth: 1,
     borderRightColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+    justifyContent: "center",
+  },
+  phaseHeaderText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6B7280",
+    textTransform: "uppercase",
   },
   datesContainer: {
     flexDirection: "row",
@@ -402,33 +587,89 @@ const styles = StyleSheet.create({
     borderRightColor: "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
+    backgroundColor: "#FFFFFF",
+  },
+  dateCellToday: {
+    backgroundColor: "#EFF6FF",
+    borderRightColor: "#3B82F6",
   },
   dateText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#1F2937",
   },
+  dateTextToday: {
+    color: "#3B82F6",
+    fontWeight: "700",
+  },
+  todayIndicator: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: "#3B82F6",
+  },
+  todayLineContainer: {
+    flexDirection: "row",
+    position: "absolute",
+    top: HEADER_HEIGHT,
+    left: 0,
+    right: 0,
+    height: 2,
+    zIndex: 5,
+    pointerEvents: "none",
+  },
+  todayLineWrapper: {
+    flex: 1,
+    position: "relative",
+  },
+  todayLine: {
+    position: "absolute",
+    top: 0,
+    width: 2,
+    height: "100%",
+    backgroundColor: "#3B82F6",
+    zIndex: 5,
+  },
   tasksContainer: {
     flex: 1,
+  },
+  phaseSection: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
   phaseRow: {
     flexDirection: "row",
     minHeight: ROW_HEIGHT,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    backgroundColor: "#FFFFFF",
   },
   phaseLabel: {
-    width: 120,
+    width: 180,
     padding: 12,
     borderRightWidth: 1,
     borderRightColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
+    backgroundColor: "#F9FAFB",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  expandIcon: {
+    marginRight: 4,
+  },
+  phaseLabelContent: {
+    flex: 1,
   },
   phaseLabelText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: "#1F2937",
+  },
+  phaseDescription: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
   },
   tasksRow: {
     flex: 1,
@@ -436,15 +677,74 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFAFA",
     minHeight: ROW_HEIGHT,
   },
+  taskRow: {
+    flexDirection: "row",
+    minHeight: ROW_HEIGHT,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  taskLabel: {
+    width: 180,
+    padding: 12,
+    paddingLeft: 24,
+    borderRightWidth: 1,
+    borderRightColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  taskLabelContent: {
+    flex: 1,
+  },
+  taskLabelText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#1F2937",
+  },
+  taskPhaseName: {
+    fontSize: 10,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  taskPhaseWarning: {
+    fontSize: 10,
+    color: "#F59E0B",
+    marginTop: 2,
+    fontStyle: "italic",
+  },
+  phaseLabelWarning: {
+    backgroundColor: "#FEF3C7",
+  },
+  phaseLabelTextWarning: {
+    color: "#F59E0B",
+  },
+  phaseBar: {
+    position: "absolute",
+    top: 8,
+    height: ROW_HEIGHT - 16,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderStyle: "dashed",
+  },
   emptyContainer: {
-    padding: 40,
+    padding: 60,
     alignItems: "center",
     justifyContent: "center",
   },
   emptyText: {
     marginTop: 16,
     fontSize: 16,
-    color: "#9CA3AF",
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  emptySubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
   },
 });
 

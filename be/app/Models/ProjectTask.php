@@ -15,14 +15,15 @@ class ProjectTask extends Model
     protected $fillable = [
         'uuid',
         'project_id',
-        'phase_id',
+        'parent_id', // For hierarchical structure (WBS) - parent tasks act as "phases"
         'name',
         'description',
         'start_date',
         'end_date',
         'duration',
-        'progress_percentage',
-        'status',
+        // progress_percentage and status are NOT fillable - they are system-calculated
+        // 'progress_percentage', // Calculated from Daily Logs only
+        // 'status', // Auto-calculated based on dates and progress
         'priority',
         'assigned_to',
         'order',
@@ -47,11 +48,6 @@ class ProjectTask extends Model
         return $this->belongsTo(Project::class);
     }
 
-    public function phase(): BelongsTo
-    {
-        return $this->belongsTo(ProjectPhase::class);
-    }
-
     public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
@@ -65,6 +61,38 @@ class ProjectTask extends Model
     public function dependents(): HasMany
     {
         return $this->hasMany(ProjectTaskDependency::class, 'depends_on_task_id');
+    }
+
+    /**
+     * Parent task (for hierarchical structure)
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(ProjectTask::class, 'parent_id');
+    }
+
+    /**
+     * Child tasks (for hierarchical structure)
+     */
+    public function children(): HasMany
+    {
+        return $this->hasMany(ProjectTask::class, 'parent_id')->orderBy('order');
+    }
+
+    /**
+     * Construction logs for this task
+     */
+    public function constructionLogs(): HasMany
+    {
+        return $this->hasMany(ConstructionLog::class, 'task_id');
+    }
+
+    /**
+     * Acceptance stages linked to this task (parent task only - Category A)
+     */
+    public function acceptanceStages(): HasMany
+    {
+        return $this->hasMany(AcceptanceStage::class, 'task_id');
     }
 
     public function creator(): BelongsTo
@@ -174,8 +202,22 @@ class ProjectTask extends Model
         });
 
         static::saved(function ($task) {
-            // Khi task progress thay đổi, cập nhật project progress
-            if ($task->isDirty('progress_percentage')) {
+            // Prevent infinite loop: Check if this save was triggered by TaskProgressService
+            // If progress/status changed but dates/parent didn't, it's a system update from service
+            $isSystemUpdate = $task->wasChanged(['progress_percentage', 'status']) 
+                && !$task->wasChanged(['start_date', 'end_date', 'parent_id']);
+            
+            // When task dates or parent relationship changes, recalculate progress and status
+            // Only if this is NOT a system update (to avoid recursion)
+            if ($task->wasChanged(['start_date', 'end_date', 'parent_id']) && !$isSystemUpdate) {
+                $service = app(\App\Services\TaskProgressService::class);
+                // updateTaskFromLogs uses saveQuietly, so it won't trigger this event again
+                $service->updateTaskFromLogs($task, true);
+            }
+            
+            // When task progress changes (from service), update project progress
+            // Only update project progress, don't recalculate task progress again
+            if ($task->wasChanged('progress_percentage') && $isSystemUpdate) {
                 $task->updateProjectProgress();
             }
         });

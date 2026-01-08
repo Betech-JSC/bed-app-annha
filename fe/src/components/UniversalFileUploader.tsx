@@ -171,23 +171,54 @@ export default function UniversalFileUploader({
             files.forEach((file, index) => {
                 // Determine file extension and type
                 const uri = file.uri || file.localUri;
-                const fileName = file.name || file.fileName || `file_${Date.now()}_${index}`;
-                const mimeType = file.mimeType || file.type || "application/octet-stream";
+                if (!uri) {
+                    console.error("File URI is missing:", file);
+                    return;
+                }
 
+                const fileName = file.name || file.fileName || `file_${Date.now()}_${index}`;
+                
                 // Extract extension from filename or URI
                 let extension = fileName.split(".").pop()?.toLowerCase() || "";
                 if (!extension && uri) {
-                    extension = uri.split(".").pop()?.toLowerCase() || "";
+                    const uriParts = uri.split(".");
+                    extension = uriParts.length > 1 ? uriParts.pop()?.toLowerCase() || "" : "";
                 }
 
-                // Create proper file object for FormData
+                // Determine MIME type - prioritize from file object
+                let mimeType = file.mimeType || file.type;
+                if (!mimeType) {
+                    // Auto-detect MIME type from extension
+                    if (['jpg', 'jpeg'].includes(extension)) {
+                        mimeType = 'image/jpeg';
+                    } else if (extension === 'png') {
+                        mimeType = 'image/png';
+                    } else if (extension === 'gif') {
+                        mimeType = 'image/gif';
+                    } else if (extension === 'webp') {
+                        mimeType = 'image/webp';
+                    } else if (extension === 'pdf') {
+                        mimeType = 'application/pdf';
+                    } else if (extension === 'mp4') {
+                        mimeType = 'video/mp4';
+                    } else {
+                        mimeType = 'application/octet-stream';
+                    }
+                }
+
+                // Ensure fileName has extension
+                const finalFileName = fileName.includes('.') ? fileName : `${fileName}.${extension || 'jpg'}`;
+
+                // Create proper file object for FormData (React Native format)
+                // React Native FormData requires: { uri, type, name }
                 const fileObject: any = {
                     uri: uri,
                     type: mimeType,
-                    name: fileName,
+                    name: finalFileName,
                 };
 
                 // Append with correct format: files[0], files[1], etc.
+                // Backend expects files as array
                 formData.append(`files[${index}]`, fileObject as any);
             });
 
@@ -219,11 +250,29 @@ export default function UniversalFileUploader({
             }
         } catch (error: any) {
             console.error("Upload error:", error);
-            const errorMessage = error.response?.data?.message
-                || error.message
-                || "Upload thất bại. Vui lòng thử lại.";
+            console.error("Upload error details:", {
+                response: error.response?.data,
+                status: error.response?.status,
+                message: error.message,
+            });
 
-            Alert.alert("Lỗi", errorMessage);
+            // Extract detailed error message
+            let errorMessage = "Upload thất bại. Vui lòng thử lại.";
+            
+            if (error.response?.data) {
+                // Check for validation errors
+                if (error.response.data.errors) {
+                    const errors = error.response.data.errors;
+                    const firstError = Object.values(errors)[0];
+                    errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
+                } else if (error.response.data.message) {
+                    errorMessage = error.response.data.message;
+                }
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            Alert.alert("Lỗi upload", errorMessage);
         } finally {
             setUploading(false);
             setUploadProgress({});

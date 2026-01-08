@@ -13,6 +13,7 @@ use App\Models\SubcontractorPayment;
 use App\Models\SupplierAcceptance;
 use App\Models\SubcontractorAcceptance;
 use App\Services\FinancialCalculationService;
+use App\Services\TaskProgressService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -24,6 +25,117 @@ class ReportController extends Controller
     public function __construct(FinancialCalculationService $financialCalculationService)
     {
         $this->financialCalculationService = $financialCalculationService;
+    }
+
+    /**
+     * Progress Report - Column-based overview with horizontal scrolling
+     * 
+     * Returns progress data organized by columns (phases/tasks) for reporting
+     */
+    public function progressReport(Request $request, string $projectId)
+    {
+        $user = auth()->user();
+
+        if (!$user->hasPermission('reports.view') && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền xem báo cáo.'
+            ], 403);
+        }
+
+        $project = Project::findOrFail($projectId);
+        $taskProgressService = app(TaskProgressService::class);
+
+        // Get all tasks with hierarchy
+        $tasks = ProjectTask::where('project_id', $projectId)
+            ->whereNull('deleted_at')
+            ->with(['parent', 'children'])
+            ->orderBy('order')
+            ->get();
+
+        // Build column structure (by parent tasks - parent tasks act as "phases")
+        $rootTasks = $tasks->whereNull('parent_id');
+        
+        $columns = [];
+        foreach ($rootTasks as $parentTask) {
+            $columnTasks = [];
+            $columnTasks[] = $this->buildTaskColumnData($parentTask, $tasks, $taskProgressService);
+            
+            // Get children of this parent task
+            $childTasks = $tasks->where('parent_id', $parentTask->id);
+            foreach ($childTasks as $childTask) {
+                $columnTasks[] = $this->buildTaskColumnData($childTask, $tasks, $taskProgressService);
+            }
+
+            $columns[] = [
+                'parent_task' => [
+                    'id' => $parentTask->id,
+                    'name' => $parentTask->name,
+                    'order' => $parentTask->order,
+                ],
+                'tasks' => $columnTasks,
+            ];
+        }
+
+        // Overall statistics
+        $overallProgress = 0;
+        $rootTasks = $tasks->whereNull('parent_id');
+        if ($rootTasks->isNotEmpty()) {
+            $totalProgress = 0;
+            $count = 0;
+            foreach ($rootTasks as $task) {
+                $totalProgress += (float) ($task->progress_percentage ?? 0);
+                $count++;
+            }
+            $overallProgress = $count > 0 ? round($totalProgress / $count, 2) : 0;
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'project' => [
+                    'id' => $project->id,
+                    'name' => $project->name,
+                    'code' => $project->code,
+                ],
+                'overall_progress' => $overallProgress,
+                'columns' => $columns,
+                'statistics' => [
+                    'total_tasks' => $tasks->count(),
+                    'tasks_by_status' => [
+                        'not_started' => $tasks->where('status', 'not_started')->count(),
+                        'in_progress' => $tasks->where('status', 'in_progress')->count(),
+                        'delayed' => $tasks->where('status', 'delayed')->count(),
+                        'completed' => $tasks->where('status', 'completed')->count(),
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Build task column data recursively
+     */
+    private function buildTaskColumnData(ProjectTask $task, $allTasks, TaskProgressService $service): array
+    {
+        $children = $allTasks->where('parent_id', $task->id);
+        $childData = [];
+        
+        foreach ($children as $child) {
+            $childData[] = $this->buildTaskColumnData($child, $allTasks, $service);
+        }
+
+        return [
+            'id' => $task->id,
+            'name' => $task->name,
+            'start_date' => $task->start_date?->toDateString(),
+            'end_date' => $task->end_date?->toDateString(),
+            'progress_percentage' => (float) ($task->progress_percentage ?? 0),
+            'status' => $task->status,
+            'priority' => $task->priority,
+            'has_children' => $children->isNotEmpty(),
+            'children' => $childData,
+        ];
     }
 
     /**
@@ -57,9 +169,56 @@ class ReportController extends Controller
             ->orderBy('progress_date', 'desc')
             ->get();
 
-        // Tiến độ tổng thể dự án
-        $overallProgress = $project->progress;
-        $overallPercentage = $overallProgress ? $overallProgress->overall_percentage : 0;
+        // BUSINESS RULE: Tiến độ tổng thể dự án phải được tính từ Daily Logs
+        // Single source of truth: Daily Construction Logs
+        $overallPercentage = 0;
+        
+        // Tính tiến độ từ nhật ký thi công (single source of truth)
+        // Lấy log mới nhất có completion_percentage
+        $latestLog = ConstructionLog::where('project_id', $projectId)
+            ->whereNotNull('completion_percentage')
+            ->orderBy('log_date', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->first();
+        
+        if ($latestLog && $latestLog->completion_percentage !== null) {
+            $overallPercentage = (float) $latestLog->completion_percentage;
+        } else {
+            // Nếu không có log với completion_percentage, tính từ tasks thông qua TaskProgressService
+            // Đảm bảo tính nhất quán với logic tính toán task progress
+            $taskProgressService = app(TaskProgressService::class);
+            $taskProgressService->recalculateAllTasks($projectId);
+            
+            // Tính trung bình từ tất cả root tasks (nếu có)
+            $rootTasks = $project->tasks()
+                ->whereNull('deleted_at')
+                ->whereNull('parent_id')
+                ->get();
+            
+            if ($rootTasks->isNotEmpty()) {
+                $totalProgress = 0;
+                $count = 0;
+                foreach ($rootTasks as $task) {
+                    // Kiểm tra nếu task có children
+                    $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
+                        ->whereNull('deleted_at')
+                        ->exists();
+                    
+                    if ($hasChildren) {
+                        // Nếu task có children, dùng parent calculation
+                        $taskProgress = $taskProgressService->calculateParentProgress($task);
+                    } else {
+                        // Nếu không có children, tính từ logs
+                        $taskProgress = $taskProgressService->calculateProgressFromLogs($task);
+                    }
+                    $totalProgress += $taskProgress;
+                    $count++;
+                }
+                if ($count > 0) {
+                    $overallPercentage = round($totalProgress / $count, 2);
+                }
+            }
+        }
 
         // Thống kê theo tuần
         $weeklyStats = [];
@@ -238,26 +397,26 @@ class ReportController extends Controller
         // Thu từ thanh toán dự án
         $revenue = $this->financialCalculationService->calculateRevenue($project);
 
-        // Chi phí theo phase (nếu có)
-        $phases = $project->phases()->with('tasks')->get();
-        $phaseStats = [];
+        // Chi phí theo parent tasks (parent tasks act as "phases")
+        $rootTasks = $project->tasks()->whereNull('parent_id')->orderBy('order')->get();
+        $parentTaskStats = [];
 
-        foreach ($phases as $phase) {
-            // Chi phí liên quan đến phase này (có thể link qua Cost hoặc Task)
-            $phaseCosts = Cost::where('project_id', $projectId)
+        foreach ($rootTasks as $parentTask) {
+            // Chi phí liên quan đến parent task này (có thể link qua Cost hoặc Task)
+            $taskCosts = Cost::where('project_id', $projectId)
                 ->where('status', 'approved')
-                ->where('description', 'like', "%{$phase->name}%")
+                ->where('description', 'like', "%{$parentTask->name}%")
                 ->sum('amount');
 
-            $phaseStats[] = [
-                'phase' => [
-                    'id' => $phase->id,
-                    'name' => $phase->name,
-                    'order' => $phase->order,
+            $parentTaskStats[] = [
+                'parent_task' => [
+                    'id' => $parentTask->id,
+                    'name' => $parentTask->name,
+                    'order' => $parentTask->order,
                 ],
                 'revenue' => 0, // Có thể tính từ payment schedule
-                'expenses' => (float) $phaseCosts,
-                'profit' => -$phaseCosts,
+                'expenses' => (float) $taskCosts,
+                'profit' => -$taskCosts,
             ];
         }
 
@@ -289,7 +448,7 @@ class ReportController extends Controller
                 'total_revenue' => $revenue['total_revenue'],
                 'total_expenses' => $this->financialCalculationService->calculateTotalCosts($project)['total_costs'],
                 'total_profit' => $this->financialCalculationService->calculateProfit($project)['profit'] ?? 0,
-                'by_phase' => $phaseStats,
+                'by_parent_task' => $parentTaskStats,
                 'by_cost_group' => $costsByGroup,
             ],
         ]);

@@ -78,5 +78,36 @@ class ConstructionLog extends Model
                 $log->uuid = Str::uuid();
             }
         });
+
+        // BUSINESS RULE: When log is created/updated/deleted, recalculate task progress
+        static::created(function ($log) {
+            if ($log->task_id) {
+                $task = ProjectTask::find($log->task_id);
+                if ($task) {
+                    $service = app(\App\Services\TaskProgressService::class);
+                    $service->updateTaskFromLogs($task, true);
+                }
+            }
+        });
+
+        static::updated(function ($log) {
+            if ($log->task_id) {
+                $task = ProjectTask::find($log->task_id);
+                if ($task) {
+                    $service = app(\App\Services\TaskProgressService::class);
+                    $service->updateTaskFromLogs($task, true);
+                }
+            }
+        });
+
+        static::deleted(function ($log) {
+            if ($log->task_id) {
+                $task = ProjectTask::find($log->task_id);
+                if ($task) {
+                    $service = app(\App\Services\TaskProgressService::class);
+                    $service->updateTaskFromLogs($task, true);
+                }
+            }
+        });
     }
 }

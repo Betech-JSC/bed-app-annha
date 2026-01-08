@@ -18,7 +18,13 @@ class ProjectPhaseController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $phases = $project->phases()
-            ->with(['tasks', 'creator', 'updater'])
+            ->with([
+                'tasks',
+                'tasks.acceptanceStages', // Load acceptance stages for tasks
+                'acceptanceStages', // Load acceptance stages for phase
+                'creator', 
+                'updater'
+            ])
             ->ordered()
             ->get();
 

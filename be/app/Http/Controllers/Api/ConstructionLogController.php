@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConstructionLog;
 use App\Models\Project;
 use App\Models\Attachment;
+use App\Services\TaskProgressService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -58,6 +59,48 @@ class ConstructionLogController extends Controller
             'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
+        // BUSINESS RULE: Only child tasks (leaf tasks without children) can receive progress input
+        // Parent tasks (A) progress is auto-calculated from children
+        if (isset($validated['task_id'])) {
+            $task = \App\Models\ProjectTask::where('project_id', $project->id)
+                ->find($validated['task_id']);
+            if (!$task) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Công việc không thuộc dự án này.',
+                ], 422);
+            }
+            
+            // Check if task has children (is a parent task)
+            $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
+                ->whereNull('deleted_at')
+                ->exists();
+            
+            if ($hasChildren) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Chỉ có thể ghi nhật ký cho công việc con (công việc không có công việc con). Tiến độ công việc cha được tự động tính từ các công việc con.',
+                ], 422);
+            }
+        }
+
+        // BUSINESS RULE: completion_percentage can only increase
+        // Get last recorded percentage for this task
+        if (isset($validated['task_id']) && isset($validated['completion_percentage'])) {
+            $lastLog = ConstructionLog::where('task_id', $validated['task_id'])
+                ->whereNotNull('completion_percentage')
+                ->orderBy('log_date', 'desc')
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            if ($lastLog && $validated['completion_percentage'] < $lastLog->completion_percentage) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Phần trăm hoàn thành chỉ có thể tăng. Giá trị tối thiểu: {$lastLog->completion_percentage}%",
+                ], 422);
+            }
+        }
+
         try {
             DB::beginTransaction();
 
@@ -71,18 +114,6 @@ class ConstructionLogController extends Controller
                     'success' => false,
                     'message' => 'Nhật ký cho ngày này đã tồn tại.'
                 ], 400);
-            }
-
-            // Validate task belongs to project if provided
-            if (isset($validated['task_id'])) {
-                $task = \App\Models\ProjectTask::where('project_id', $project->id)
-                    ->find($validated['task_id']);
-                if (!$task) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Công việc không thuộc dự án này.'
-                    ], 422);
-                }
             }
 
             $log = ConstructionLog::create([
@@ -109,23 +140,13 @@ class ConstructionLogController extends Controller
                 }
             }
 
-            // Update task progress if task_id and completion_percentage are provided
+            // BUSINESS RULE: Progress percentage is ONLY calculated from Daily Logs
+            // Use TaskProgressService to recalculate task progress and status automatically
             if (isset($validated['task_id']) && isset($validated['completion_percentage'])) {
                 $task = \App\Models\ProjectTask::find($validated['task_id']);
                 if ($task) {
-                    $task->update([
-                        'progress_percentage' => $validated['completion_percentage'],
-                        'updated_by' => $user->id,
-                    ]);
-                    
-                    // Auto-update status based on progress
-                    if ($task->progress_percentage == 100 && $task->status !== 'completed') {
-                        $task->update(['status' => 'completed']);
-                    } elseif ($task->progress_percentage > 0 && $task->progress_percentage < 100 && $task->status === 'not_started') {
-                        $task->update(['status' => 'in_progress']);
-                    }
-                    
-                    // Task progress sẽ tự động cập nhật project progress qua event saved()
+                    $service = app(TaskProgressService::class);
+                    $service->updateTaskFromLogs($task, true); // Update parent if exists
                 }
             }
 
@@ -164,7 +185,8 @@ class ConstructionLogController extends Controller
         }
 
         $validated = $request->validate([
-            'log_date' => 'sometimes|date',
+            // BUSINESS RULE: log_date is NOT editable (always today for new logs)
+            // 'log_date' => REMOVED - not editable
             'task_id' => 'nullable|exists:project_tasks,id',
             'weather' => 'nullable|string|max:100',
             'personnel_count' => 'nullable|integer|min:0',
@@ -177,22 +199,7 @@ class ConstructionLogController extends Controller
         try {
             DB::beginTransaction();
 
-            // Check if log date is being changed and conflicts with another log
-            if (isset($validated['log_date']) && $validated['log_date'] !== $log->log_date) {
-                $exists = ConstructionLog::where('project_id', $project->id)
-                    ->where('log_date', $validated['log_date'])
-                    ->where('id', '!=', $log->id)
-                    ->exists();
-
-                if ($exists) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Nhật ký cho ngày này đã tồn tại.'
-                    ], 400);
-                }
-            }
-
-            // Validate task belongs to project if provided
+            // BUSINESS RULE: Only child tasks (leaf tasks without children) can receive progress input
             if (isset($validated['task_id'])) {
                 $task = \App\Models\ProjectTask::where('project_id', $project->id)
                     ->find($validated['task_id']);
@@ -201,6 +208,44 @@ class ConstructionLogController extends Controller
                         'success' => false,
                         'message' => 'Công việc không thuộc dự án này.'
                     ], 422);
+                }
+                
+                // Check if task has children (is a parent task)
+                $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
+                    ->whereNull('deleted_at')
+                    ->exists();
+                
+                if ($hasChildren) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Chỉ có thể ghi nhật ký cho công việc con (công việc không có công việc con). Tiến độ công việc cha được tự động tính từ các công việc con.',
+                    ], 422);
+                }
+            }
+
+            // BUSINESS RULE: completion_percentage can only increase
+            // Get last recorded percentage for this task (excluding current log)
+            if (isset($validated['completion_percentage'])) {
+                $taskId = $validated['task_id'] ?? $log->task_id;
+                if ($taskId) {
+                    $lastLog = ConstructionLog::where('task_id', $taskId)
+                        ->where('id', '!=', $log->id)
+                        ->whereNotNull('completion_percentage')
+                        ->orderBy('log_date', 'desc')
+                        ->orderBy('created_at', 'desc')
+                        ->first();
+                    
+                    // Use current log's percentage as minimum if no other logs exist
+                    $minPercentage = $lastLog 
+                        ? $lastLog->completion_percentage 
+                        : ($log->completion_percentage ?? 0);
+                    
+                    if ($validated['completion_percentage'] < $minPercentage) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Phần trăm hoàn thành chỉ có thể tăng. Giá trị tối thiểu: {$minPercentage}%",
+                        ], 422);
+                    }
                 }
             }
 
@@ -226,24 +271,14 @@ class ConstructionLogController extends Controller
                 }
             }
 
-            // Update task progress if task_id and completion_percentage are provided
+            // BUSINESS RULE: Progress percentage is ONLY calculated from Daily Logs
+            // Recalculate task progress when log is updated
             $taskId = $validated['task_id'] ?? $log->task_id;
-            if ($taskId && isset($validated['completion_percentage'])) {
+            if ($taskId) {
                 $task = \App\Models\ProjectTask::find($taskId);
                 if ($task) {
-                    $task->update([
-                        'progress_percentage' => $validated['completion_percentage'],
-                        'updated_by' => $user->id,
-                    ]);
-                    
-                    // Auto-update status based on progress
-                    if ($task->progress_percentage == 100 && $task->status !== 'completed') {
-                        $task->update(['status' => 'completed']);
-                    } elseif ($task->progress_percentage > 0 && $task->progress_percentage < 100 && $task->status === 'not_started') {
-                        $task->update(['status' => 'in_progress']);
-                    }
-                    
-                    // Task progress đã tự động cập nhật project progress qua event saved()
+                    $service = app(TaskProgressService::class);
+                    $service->updateTaskFromLogs($task, true); // Update parent if exists
                 }
             }
 
@@ -293,8 +328,20 @@ class ConstructionLogController extends Controller
                 $attachment->delete();
             }
 
+            // Store task_id before deletion for recalculation
+            $taskId = $log->task_id;
+
             // Delete log
             $log->delete();
+
+            // Recalculate task progress after log deletion
+            if ($taskId) {
+                $task = \App\Models\ProjectTask::find($taskId);
+                if ($task) {
+                    $service = app(TaskProgressService::class);
+                    $service->updateTaskFromLogs($task, true); // Update parent if exists
+                }
+            }
 
             DB::commit();
 

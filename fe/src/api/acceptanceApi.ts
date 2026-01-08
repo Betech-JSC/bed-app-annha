@@ -1,4 +1,6 @@
 import api from "./api";
+import { ProjectTask } from "@/types/ganttTypes";
+import { IssueRecord } from "./issueRecordApi";
 
 export interface AcceptanceItem {
   id: number;
@@ -11,7 +13,7 @@ export interface AcceptanceItem {
   start_date: string;
   end_date: string;
   acceptance_status: "not_started" | "pending" | "approved" | "rejected";
-  workflow_status: "draft" | "submitted" | "project_manager_approved" | "customer_approved" | "rejected";
+  workflow_status: "draft" | "submitted" | "supervisor_approved" | "project_manager_approved" | "customer_approved" | "rejected";
   notes?: string;
   approved_by?: number;
   approved_at?: string;
@@ -20,6 +22,8 @@ export interface AcceptanceItem {
   rejection_reason?: string;
   submitted_by?: number;
   submitted_at?: string;
+  supervisor_approved_by?: number;
+  supervisor_approved_at?: string;
   project_manager_approved_by?: number;
   project_manager_approved_at?: string;
   customer_approved_by?: number;
@@ -36,6 +40,7 @@ export interface AcceptanceItem {
   task?: any;
   template?: AcceptanceTemplate;
   submitter?: any;
+  supervisor_approver?: any;
   project_manager_approver?: any;
   customer_approver?: any;
   attachments?: any[];
@@ -57,19 +62,27 @@ export interface AcceptanceStage {
   id: number;
   uuid: string;
   project_id: number;
+  task_id?: number; // BUSINESS RULE: Must be selected from Progress (parent progress A only)
+  phase_id?: number; // BUSINESS RULE: Auto-synced from task.phase_id
   name: string;
   description?: string;
   order: number;
   is_custom: boolean;
   status:
   | "pending"
-  | "internal_approved"
+  | "supervisor_approved"
+  | "project_manager_approved"
   | "customer_approved"
+  | "internal_approved"
   | "design_approved"
   | "owner_approved"
   | "rejected";
   internal_approved_by?: number;
   internal_approved_at?: string;
+  supervisor_approved_by?: number;
+  supervisor_approved_at?: string;
+  project_manager_approved_by?: number;
+  project_manager_approved_at?: string;
   customer_approved_by?: number;
   customer_approved_at?: string;
   design_approved_by?: number;
@@ -79,15 +92,27 @@ export interface AcceptanceStage {
   rejected_by?: number;
   rejected_at?: string;
   rejection_reason?: string;
-  defects?: any[];
+  defects?: any[]; // Deprecated - use issueRecords instead
+  issueRecords?: IssueRecord[]; // BUSINESS RULE: Use IssueRecord instead of Defect
+  task?: ProjectTask; // BUSINESS RULE: Link to parent task (A)
+  phase?: any; // BUSINESS RULE: Link to phase (auto-synced from task)
   attachments?: any[];
   items?: AcceptanceItem[];
   is_completed?: boolean;
   completion_percentage?: number;
+  acceptability_status?: "acceptable" | "not_acceptable"; // BUSINESS RULE: Calculated from IssueRecord status
 }
 
 export interface CreateAcceptanceStageData {
+  task_id: number; // BUSINESS RULE: REQUIRED - must be parent task (A)
   name: string;
+  description?: string;
+  order?: number;
+}
+
+export interface UpdateAcceptanceStageData {
+  task_id?: number; // BUSINESS RULE: Must be parent task (A)
+  name?: string;
   description?: string;
   order?: number;
 }
@@ -118,7 +143,7 @@ export const acceptanceApi = {
   updateStage: async (
     projectId: string | number,
     stageId: string | number,
-    data: Partial<CreateAcceptanceStageData>
+    data: UpdateAcceptanceStageData
   ) => {
     const response = await api.put(`/projects/${projectId}/acceptance/${stageId}`, data);
     return response.data;
@@ -130,15 +155,42 @@ export const acceptanceApi = {
     return response.data;
   },
 
-  // Approve acceptance stage
+  // Approve acceptance stage (Legacy)
   approveStage: async (
     projectId: string | number,
     stageId: string | number,
-    approvalType: "internal" | "customer" | "design" | "owner"
+    approvalType: "internal" | "customer" | "design" | "owner" | "supervisor" | "project_manager"
   ) => {
     const response = await api.post(`/projects/${projectId}/acceptance/${stageId}/approve`, {
       approval_type: approvalType,
     });
+    return response.data;
+  },
+
+  // Supervisor approve stage
+  supervisorApproveStage: async (
+    projectId: string | number,
+    stageId: string | number
+  ) => {
+    const response = await api.post(`/projects/${projectId}/acceptance/${stageId}/supervisor-approve`);
+    return response.data;
+  },
+
+  // Project manager approve stage
+  projectManagerApproveStage: async (
+    projectId: string | number,
+    stageId: string | number
+  ) => {
+    const response = await api.post(`/projects/${projectId}/acceptance/${stageId}/project-manager-approve`);
+    return response.data;
+  },
+
+  // Customer approve stage
+  customerApproveStage: async (
+    projectId: string | number,
+    stageId: string | number
+  ) => {
+    const response = await api.post(`/projects/${projectId}/acceptance/${stageId}/customer-approve`);
     return response.data;
   },
 
@@ -248,6 +300,18 @@ export const acceptanceApi = {
   ) => {
     const response = await api.post(
       `/projects/${projectId}/acceptance/${stageId}/items/${itemId}/submit`
+    );
+    return response.data;
+  },
+
+  // Supervisor approve
+  supervisorApproveItem: async (
+    projectId: string | number,
+    stageId: string | number,
+    itemId: string | number
+  ) => {
+    const response = await api.post(
+      `/projects/${projectId}/acceptance/${stageId}/items/${itemId}/supervisor-approve`
     );
     return response.data;
   },

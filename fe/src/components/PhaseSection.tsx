@@ -34,7 +34,7 @@ export default function PhaseSection({
   const phaseTasks = tasks.filter((task) => task.phase_id === phase.id);
   const progress =
     phaseTasks.length > 0
-      ? phaseTasks.reduce((sum, task) => sum + task.progress_percentage, 0) /
+      ? phaseTasks.reduce((sum, task) => sum + (task.progress_percentage || 0), 0) /
         phaseTasks.length
       : 0;
 
@@ -97,7 +97,9 @@ export default function PhaseSection({
                     <Text style={styles.taskName}>{task.name}</Text>
                   </View>
                   <Text style={styles.taskProgress}>
-                    {task.progress_percentage}%
+                    {task.progress_percentage != null && typeof task.progress_percentage === 'number' 
+                      ? `${task.progress_percentage}%` 
+                      : '0%'}
                   </Text>
                 </TouchableOpacity>
               ))}

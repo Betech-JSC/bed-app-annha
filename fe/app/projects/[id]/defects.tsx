@@ -16,23 +16,28 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { defectApi, Defect } from "@/api/defectApi";
+import { acceptanceApi } from "@/api/acceptanceApi";
 import { DefectItem, UniversalFileUploader, ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ganttApi } from "@/api/ganttApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function DefectsScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, acceptance_stage_id } = useLocalSearchParams<{ id: string; acceptance_stage_id?: string }>();
   const tabBarHeight = useTabBarHeight();
+  const insets = useSafeAreaInsets();
   const [defects, setDefects] = useState<Defect[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [acceptanceStage, setAcceptanceStage] = useState<any>(null);
   const [formData, setFormData] = useState({
     description: "",
     severity: "medium" as "low" | "medium" | "high" | "critical",
     task_id: "",
+    acceptance_stage_id: acceptance_stage_id ? parseInt(acceptance_stage_id) : undefined,
     before_image_ids: [] as number[],
   });
   const [beforeImages, setBeforeImages] = useState<any[]>([]);
@@ -59,7 +64,26 @@ export default function DefectsScreen() {
   useEffect(() => {
     loadDefects();
     loadTasks();
-  }, [id]);
+    if (acceptance_stage_id) {
+      loadAcceptanceStage();
+    }
+  }, [id, acceptance_stage_id]);
+
+  const loadAcceptanceStage = async () => {
+    if (!acceptance_stage_id || !id) return;
+    try {
+      const response = await acceptanceApi.getStage(id, acceptance_stage_id);
+      if (response.success) {
+        setAcceptanceStage(response.data);
+        // Auto-set task_id from acceptance stage if available
+        if (response.data.task_id && !formData.task_id) {
+          setFormData(prev => ({ ...prev, task_id: response.data.task_id.toString() }));
+        }
+      }
+    } catch (error) {
+      console.error("Error loading acceptance stage:", error);
+    }
+  };
 
   const loadTasks = async () => {
     try {
@@ -75,7 +99,12 @@ export default function DefectsScreen() {
   const loadDefects = async () => {
     try {
       setLoading(true);
-      const response = await defectApi.getDefects(id!);
+      // BUSINESS RULE: Filter by acceptance_stage_id if provided
+      const params: any = {};
+      if (acceptance_stage_id) {
+        params.acceptance_stage_id = parseInt(acceptance_stage_id);
+      }
+      const response = await defectApi.getDefects(id!, params);
       if (response.success) {
         setDefects(response.data || []);
       }
@@ -85,6 +114,13 @@ export default function DefectsScreen() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (acceptance_stage_id) {
+      // Auto-open create modal if coming from acceptance
+      setModalVisible(true);
+    }
+  }, [acceptance_stage_id]);
 
   const handleSubmit = async () => {
     if (!formData.description) {
@@ -97,6 +133,7 @@ export default function DefectsScreen() {
         description: formData.description,
         severity: formData.severity,
         task_id: formData.task_id ? parseInt(formData.task_id) : undefined,
+        acceptance_stage_id: formData.acceptance_stage_id, // BUSINESS RULE: Auto-link from Acceptance
         before_image_ids: formData.before_image_ids.length > 0 ? formData.before_image_ids : undefined,
       });
 
@@ -107,6 +144,7 @@ export default function DefectsScreen() {
           description: "",
           severity: "medium",
           task_id: "",
+          acceptance_stage_id: acceptance_stage_id ? parseInt(acceptance_stage_id) : undefined,
           before_image_ids: [],
         });
         setBeforeImages([]);
@@ -319,6 +357,7 @@ export default function DefectsScreen() {
                       description: "",
                       severity: "medium",
                       task_id: "",
+                      acceptance_stage_id: acceptance_stage_id ? parseInt(acceptance_stage_id) : undefined,
                       before_image_ids: [],
                     });
                     setBeforeImages([]);
@@ -336,6 +375,25 @@ export default function DefectsScreen() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
+                {/* BUSINESS RULE: Show acceptance stage info if created from Acceptance */}
+                {acceptance_stage_id && acceptanceStage && (
+                  <View style={styles.acceptanceStageInfo}>
+                    <View style={styles.acceptanceStageHeader}>
+                      <Ionicons name="checkmark-circle-outline" size={20} color="#3B82F6" />
+                      <Text style={styles.acceptanceStageTitle}>Giai đoạn nghiệm thu</Text>
+                    </View>
+                    <Text style={styles.acceptanceStageName}>{acceptanceStage.name}</Text>
+                    {acceptanceStage.task && (
+                      <Text style={styles.acceptanceStageTask}>
+                        Công việc: {acceptanceStage.task.name}
+                      </Text>
+                    )}
+                    <Text style={styles.acceptanceStageHelper}>
+                      Lỗi này sẽ được liên kết với giai đoạn nghiệm thu và công việc trên
+                    </Text>
+                  </View>
+                )}
+
                 {/* Hạng mục thi công */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>
@@ -741,7 +799,12 @@ export default function DefectsScreen() {
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody}>
+            <ScrollView 
+              style={styles.modalBody}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 20, flexGrow: 1 }}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
               {selectedDefect && (
                 <>
                   <View style={styles.detailSection}>
@@ -1273,5 +1336,40 @@ const styles = StyleSheet.create({
   historyUser: {
     fontSize: 12,
     color: "#6B7280",
+  },
+  acceptanceStageInfo: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#3B82F620",
+  },
+  acceptanceStageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  acceptanceStageTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
+  acceptanceStageName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  acceptanceStageTask: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginBottom: 8,
+  },
+  acceptanceStageHelper: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontStyle: "italic",
   },
 });

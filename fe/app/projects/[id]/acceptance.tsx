@@ -12,6 +12,7 @@ import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
 import { acceptanceApi, AcceptanceStage } from "@/api/acceptanceApi";
 import { projectApi, Project } from "@/api/projectApi";
+import { personnelApi } from "@/api/personnelApi";
 import { Ionicons } from "@expo/vector-icons";
 import { AcceptanceChecklist, ScreenHeader } from "@/components";
 
@@ -22,10 +23,12 @@ export default function AcceptanceScreen() {
   const [stages, setStages] = useState<AcceptanceStage[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSupervisor, setIsSupervisor] = useState(false);
 
   useEffect(() => {
     loadProject();
     loadStages();
+    loadPersonnel();
   }, [id]);
 
   const loadProject = async () => {
@@ -53,6 +56,24 @@ export default function AcceptanceScreen() {
     }
   };
 
+  const loadPersonnel = async () => {
+    if (!id || !user?.id) return;
+    try {
+      const response = await personnelApi.getPersonnel(id);
+      if (response.success) {
+        const personnel = response.data || [];
+        const supervisor = personnel.find(
+          (p: any) =>
+            p.user_id?.toString() === user.id?.toString() &&
+            (p.role === "supervisor" || p.role === "supervisor_guest")
+        );
+        setIsSupervisor(!!supervisor);
+      }
+    } catch (error) {
+      console.error("Error loading personnel:", error);
+    }
+  };
+
   // Xác định role của user
   const isProjectManager = project?.project_manager_id?.toString() === user?.id?.toString();
   const isCustomer = project?.customer_id?.toString() === user?.id?.toString();
@@ -75,8 +96,15 @@ export default function AcceptanceScreen() {
         projectId={id}
         isProjectManager={isProjectManager}
         isCustomer={isCustomer}
+        isSupervisor={isSupervisor}
         onRefresh={loadStages}
-        onNavigateToDefects={() => router.push(`/projects/${id}/defects`)}
+        onNavigateToDefects={(stageId?: number) => {
+          if (stageId) {
+            router.push(`/projects/${id}/defects?acceptance_stage_id=${stageId}`);
+          } else {
+            router.push(`/projects/${id}/defects`);
+          }
+        }}
       />
     </View>
   );

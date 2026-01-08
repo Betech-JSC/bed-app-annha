@@ -260,6 +260,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'update'])->where('id', '[0-9]+');
         Route::delete('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'destroy'])->where('id', '[0-9]+');
         Route::post('/{projectId}/acceptance/{id}/approve', [AcceptanceStageController::class, 'approve'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{id}/supervisor-approve', [AcceptanceStageController::class, 'supervisorApprove'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{id}/project-manager-approve', [AcceptanceStageController::class, 'projectManagerApprove'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{id}/customer-approve', [AcceptanceStageController::class, 'customerApprove'])->where('id', '[0-9]+');
         Route::post('/{projectId}/acceptance/{id}/attach-files', [AcceptanceStageController::class, 'attachFiles'])->where('id', '[0-9]+');
 
         // Acceptance Items
@@ -274,6 +277,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/acceptance/{stageId}/items/reorder', [AcceptanceItemController::class, 'reorder'])->where('stageId', '[0-9]+');
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/attach-files', [AcceptanceItemController::class, 'attachFiles'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/submit', [AcceptanceItemController::class, 'submit'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/supervisor-approve', [AcceptanceItemController::class, 'supervisorApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/project-manager-approve', [AcceptanceItemController::class, 'projectManagerApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/customer-approve', [AcceptanceItemController::class, 'customerApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/workflow-reject', [AcceptanceItemController::class, 'workflowReject'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
@@ -332,6 +336,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Progress
         Route::get('/{projectId}/progress', [ProjectProgressController::class, 'show']);
+        Route::get('/{projectId}/progress/overview', [ProjectProgressController::class, 'overview']);
 
         // Gantt Chart - Phases
         Route::get('/{projectId}/phases', [ProjectPhaseController::class, 'index']);
@@ -798,6 +803,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 
     // Reports (Báo cáo)
     Route::prefix('reports')->group(function () {
+        Route::get('/projects/{projectId}/progress', [ReportController::class, 'progressReport']);
         Route::get('/projects/{projectId}/construction-progress', [ReportController::class, 'constructionProgress']);
         Route::get('/projects/{projectId}/material-procurement', [ReportController::class, 'materialProcurement']);
         Route::get('/projects/{projectId}/revenue-expense-by-work', [ReportController::class, 'revenueExpenseByWork']);

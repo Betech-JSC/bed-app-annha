@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
@@ -19,32 +20,23 @@ import {
   TaskStatus,
   TaskPriority,
 } from "@/types/ganttTypes";
-import { ProjectPhase } from "@/types/ganttTypes";
-
 interface TaskFormModalProps {
   visible: boolean;
   task?: ProjectTask | null;
-  phases: ProjectPhase[];
+  tasks?: ProjectTask[]; // For parent task selection - parent tasks act as "phases"
+  projectId?: string; // For navigation to acceptance
   onClose: () => void;
   onSubmit: (data: CreateTaskData | UpdateTaskData) => Promise<void>;
 }
 
-const STATUS_OPTIONS: TaskStatus[] = [
-  "not_started",
-  "in_progress",
-  "completed",
-  "cancelled",
-  "on_hold",
-];
-
 const PRIORITY_OPTIONS: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
-const STATUS_LABELS: { [key in TaskStatus]: string } = {
+// BUSINESS RULE: Only these statuses are allowed (auto-calculated)
+const STATUS_LABELS: { [key: string]: string } = {
   not_started: "Chưa bắt đầu",
   in_progress: "Đang thực hiện",
   completed: "Hoàn thành",
-  cancelled: "Đã hủy",
-  on_hold: "Tạm dừng",
+  delayed: "Trễ tiến độ",
 };
 
 const PRIORITY_LABELS: { [key in TaskPriority]: string } = {
@@ -57,31 +49,38 @@ const PRIORITY_LABELS: { [key in TaskPriority]: string } = {
 export default function TaskFormModal({
   visible,
   task,
-  phases,
+  tasks = [],
+  projectId,
   onClose,
   onSubmit,
 }: TaskFormModalProps) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [phaseId, setPhaseId] = useState<number | null>(null);
+  const [parentId, setParentId] = useState<number | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState<TaskStatus>("not_started");
+  // BUSINESS RULE: progress_percentage and status are NOT editable
+  // They are calculated from Daily Logs and dates automatically
+  const [progress, setProgress] = useState(0); // Display only
+  const [status, setStatus] = useState<TaskStatus>("not_started"); // Display only
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (task) {
       setName(task.name);
       setDescription(task.description || "");
-      setPhaseId(task.phase_id || null);
+      setParentId((task as any).parent_id || null); // For hierarchical structure - parent tasks act as "phases"
       setStartDate(task.start_date ? new Date(task.start_date) : null);
       setEndDate(task.end_date ? new Date(task.end_date) : null);
-      setProgress(task.progress_percentage);
-      setStatus(task.status);
+      setProgress(task.progress_percentage != null && typeof task.progress_percentage === 'number'
+        ? task.progress_percentage
+        : 0); // Display only
+      setStatus(task.status); // Display only
       setPriority(task.priority);
     } else {
       resetForm();
@@ -91,12 +90,134 @@ export default function TaskFormModal({
   const resetForm = () => {
     setName("");
     setDescription("");
-    setPhaseId(null);
+    setParentId(null);
     setStartDate(null);
     setEndDate(null);
     setProgress(0);
     setStatus("not_started");
     setPriority("medium");
+    setExpandedTasks(new Set());
+  };
+
+  // Build task hierarchy for tree view
+  const taskHierarchy = useMemo(() => {
+    if (tasks.length === 0) return { taskMap: new Map(), rootTasks: [] };
+
+    const taskMap = new Map<number, ProjectTask & { children: ProjectTask[] }>();
+    const rootTasks: (ProjectTask & { children: ProjectTask[] })[] = [];
+
+    // Initialize all tasks (exclude current task and its descendants)
+    const excludedIds = new Set<number>();
+    if (task) {
+      excludedIds.add(task.id);
+      // Get all descendant IDs
+      const getDescendants = (taskId: number): number[] => {
+        const descendants: number[] = [];
+        tasks.forEach(t => {
+          if ((t as any).parent_id === taskId) {
+            descendants.push(t.id);
+            descendants.push(...getDescendants(t.id));
+          }
+        });
+        return descendants;
+      };
+      getDescendants(task.id).forEach(id => excludedIds.add(id));
+    }
+
+    tasks
+      .filter(t => !excludedIds.has(t.id))
+      .forEach(t => {
+        taskMap.set(t.id, { ...t, children: [] });
+      });
+
+    // Build hierarchy
+    taskMap.forEach((taskWithChildren, taskId) => {
+      const parentId = (taskWithChildren as any).parent_id;
+      if (parentId && taskMap.has(parentId)) {
+        const parent = taskMap.get(parentId)!;
+        parent.children.push(taskWithChildren);
+      } else {
+        rootTasks.push(taskWithChildren);
+      }
+    });
+
+    return { taskMap, rootTasks };
+  }, [tasks, task]);
+
+  const toggleTask = (taskId: number) => {
+    const newExpanded = new Set(expandedTasks);
+    if (newExpanded.has(taskId)) {
+      newExpanded.delete(taskId);
+    } else {
+      newExpanded.add(taskId);
+    }
+    setExpandedTasks(newExpanded);
+  };
+
+  // Render tree node
+  const renderTreeNode = (
+    taskNode: ProjectTask & { children: ProjectTask[] },
+    level: number = 0
+  ) => {
+    const children = taskNode.children || [];
+    const hasChildren = children.length > 0;
+    const isExpanded = expandedTasks.has(taskNode.id);
+    const isSelected = parentId === taskNode.id;
+
+    return (
+      <View key={taskNode.id}>
+        <TouchableOpacity
+          style={[
+            styles.treeNode,
+            { paddingLeft: 12 + level * 24 },
+            isSelected && styles.treeNodeSelected,
+          ]}
+          onPress={() => setParentId(taskNode.id)}
+        >
+          <View style={styles.treeNodeContent}>
+            {hasChildren ? (
+              <TouchableOpacity
+                onPress={() => toggleTask(taskNode.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons
+                  name={isExpanded ? "chevron-down" : "chevron-forward"}
+                  size={16}
+                  color="#6B7280"
+                  style={styles.treeExpandIcon}
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.treeExpandIcon} />
+            )}
+            <View style={styles.treeNodeInfo}>
+              <Text
+                style={[
+                  styles.treeNodeName,
+                  isSelected && styles.treeNodeNameSelected,
+                ]}
+                numberOfLines={1}
+              >
+                {taskNode.name}
+              </Text>
+              {taskNode.description && (
+                <Text style={styles.treeNodeDescription} numberOfLines={1}>
+                  {taskNode.description}
+                </Text>
+              )}
+            </View>
+            {isSelected && (
+              <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+            )}
+          </View>
+        </TouchableOpacity>
+        {hasChildren && isExpanded && (
+          <View style={styles.treeChildren}>
+            {children.map((child: ProjectTask & { children: ProjectTask[] }) => renderTreeNode(child, level + 1))}
+          </View>
+        )}
+      </View>
+    );
   };
 
   const handleSubmit = async () => {
@@ -107,14 +228,16 @@ export default function TaskFormModal({
 
     try {
       setSubmitting(true);
+      // BUSINESS RULE: progress_percentage and status are NOT sent to API
+      // They are calculated from Daily Logs and dates automatically
       const data: CreateTaskData | UpdateTaskData = {
         name: name.trim(),
         description: description.trim() || undefined,
-        phase_id: phaseId || undefined,
+        parent_id: parentId || undefined, // For hierarchical structure - parent tasks act as "phases"
         start_date: startDate?.toISOString().split("T")[0],
         end_date: endDate?.toISOString().split("T")[0],
-        progress_percentage: progress,
-        status,
+        // progress_percentage: REMOVED - calculated from logs only
+        // status: REMOVED - auto-calculated based on dates and progress
         priority,
       };
 
@@ -174,52 +297,6 @@ export default function TaskFormModal({
               />
             </View>
 
-            {/* Phase */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Giai đoạn</Text>
-              <View style={styles.optionsRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.optionButton,
-                    phaseId === null && styles.optionButtonActive,
-                  ]}
-                  onPress={() => setPhaseId(null)}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      phaseId === null && styles.optionTextActive,
-                    ]}
-                  >
-                    Không thuộc giai đoạn
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.optionsRow}>
-                  {phases.map((phase) => (
-                    <TouchableOpacity
-                      key={phase.id}
-                      style={[
-                        styles.optionButton,
-                        phaseId === phase.id && styles.optionButtonActive,
-                      ]}
-                      onPress={() => setPhaseId(phase.id)}
-                    >
-                      <Text
-                        style={[
-                          styles.optionText,
-                          phaseId === phase.id && styles.optionTextActive,
-                        ]}
-                      >
-                        {phase.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-            </View>
-
             {/* Dates */}
             <View style={styles.field}>
               <Text style={styles.label}>Ngày bắt đầu</Text>
@@ -272,52 +349,136 @@ export default function TaskFormModal({
               )}
             </View>
 
-            {/* Progress */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Tiến độ: {progress}%</Text>
-              <View style={styles.progressContainer}>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[styles.progressFill, { width: `${progress}%` }]}
-                  />
-                </View>
-                <TextInput
-                  style={styles.progressInput}
-                  value={progress.toString()}
-                  onChangeText={(text) => {
-                    const value = parseInt(text) || 0;
-                    setProgress(Math.min(100, Math.max(0, value)));
-                  }}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-
-            {/* Status */}
-            <View style={styles.field}>
-              <Text style={styles.label}>Trạng thái</Text>
-              <View style={styles.optionsRow}>
-                {STATUS_OPTIONS.map((s) => (
+            {/* Parent Task (Tree View) */}
+            {tasks.length > 0 && (
+              <View style={styles.field}>
+                <Text style={styles.label}>Công việc cha (tùy chọn)</Text>
+                <View style={styles.treeContainer}>
                   <TouchableOpacity
-                    key={s}
                     style={[
-                      styles.optionButton,
-                      status === s && styles.optionButtonActive,
+                      styles.treeNode,
+                      styles.treeNodeRoot,
+                      parentId === null && styles.treeNodeSelected,
                     ]}
-                    onPress={() => setStatus(s)}
+                    onPress={() => setParentId(null)}
                   >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        status === s && styles.optionTextActive,
-                      ]}
-                    >
-                      {STATUS_LABELS[s]}
-                    </Text>
+                    <View style={styles.treeNodeContent}>
+                      <View style={styles.treeExpandIcon} />
+                      <View style={styles.treeNodeInfo}>
+                        <Text
+                          style={[
+                            styles.treeNodeName,
+                            parentId === null && styles.treeNodeNameSelected,
+                          ]}
+                        >
+                          Không có công việc cha
+                        </Text>
+                        <Text style={styles.treeNodeDescription}>
+                          Tạo công việc ở cấp gốc
+                        </Text>
+                      </View>
+                      {parentId === null && (
+                        <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+                      )}
+                    </View>
                   </TouchableOpacity>
-                ))}
+                  <ScrollView
+                    style={styles.treeScrollView}
+                    nestedScrollEnabled={true}
+                  >
+                    {taskHierarchy.rootTasks.map(rootTask =>
+                      renderTreeNode(rootTask, 0)
+                    )}
+                  </ScrollView>
+                </View>
+                <Text style={styles.helpText}>
+                  Chọn công việc cha để tạo cấu trúc phân cấp (WBS). Công việc cha đóng vai trò như "giai đoạn". Nhấn vào mũi tên để mở rộng/thu gọn.
+                </Text>
               </View>
-            </View>
+            )}
+
+            {/* Acceptance Stages - Show linked acceptance stages */}
+            {task && (() => {
+              const stages = (task as any).acceptanceStages || [];
+              if (stages.length > 0) {
+                return (
+                  <View style={styles.field}>
+                    <Text style={styles.label}>
+                      Giai đoạn nghiệm thu{" "}
+                      <Text style={styles.readOnlyLabel}>({stages.length})</Text>
+                    </Text>
+                    <View style={styles.acceptanceStagesContainer}>
+                      {stages.map((stage: any) => (
+                        <TouchableOpacity
+                          key={stage.id}
+                          style={styles.acceptanceStageItem}
+                          onPress={() => {
+                            // Navigate to acceptance screen
+                            if (onClose) {
+                              onClose();
+                            }
+                            if (projectId) {
+                              router.push(`/projects/${projectId}/acceptance`);
+                            }
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={16} color="#3B82F6" />
+                          <View style={styles.acceptanceStageInfo}>
+                            <Text style={styles.acceptanceStageName}>{stage.name}</Text>
+                            {stage.status && (
+                              <Text style={styles.acceptanceStageStatus}>
+                                {stage.status === 'customer_approved' ? 'Đã duyệt' :
+                                  stage.status === 'project_manager_approved' ? 'QL dự án đã duyệt' :
+                                    stage.status === 'supervisor_approved' ? 'Giám sát đã duyệt' :
+                                      stage.status === 'pending' ? 'Chờ duyệt' :
+                                        stage.status === 'rejected' ? 'Từ chối' : stage.status}
+                              </Text>
+                            )}
+                          </View>
+                          <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={styles.helpText}>
+                      Nhấn vào giai đoạn nghiệm thu để xem chi tiết
+                    </Text>
+                  </View>
+                );
+              }
+              return null;
+            })()}
+
+            {/* Progress & Status - READ ONLY (only show when editing) */}
+            {task && (
+              <>
+                <View style={styles.field}>
+                  <Text style={styles.label}>
+                    Tiến độ{" "}
+                    <Text style={styles.readOnlyLabel}>(Tự động tính)</Text>
+                  </Text>
+                  <View style={styles.progressContainer}>
+                    <View style={styles.progressBar}>
+                      <View
+                        style={[styles.progressFill, { width: `${progress}%` }]}
+                      />
+                    </View>
+                    <Text style={styles.progressText}>{progress.toFixed(0)}%</Text>
+                  </View>
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.label}>
+                    Trạng thái{" "}
+                    <Text style={styles.readOnlyLabel}>(Tự động tính)</Text>
+                  </Text>
+                  <View style={styles.readOnlyStatusContainer}>
+                    <Text style={styles.readOnlyStatusText}>
+                      {STATUS_LABELS[status] || status}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
 
             {/* Priority */}
             <View style={styles.field}>
@@ -452,14 +613,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#3B82F6",
     borderRadius: 4,
   },
-  progressInput: {
-    width: 60,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 6,
-    padding: 8,
-    textAlign: "center",
+  progressText: {
     fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    minWidth: 50,
+    textAlign: "right",
   },
   optionsRow: {
     flexDirection: "row",
@@ -514,6 +673,137 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+  readOnlyLabel: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: "#6B7280",
+    fontStyle: "italic",
+  },
+  readOnlyInput: {
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  readOnlyText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  readOnlyStatusContainer: {
+    padding: 12,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+  },
+  readOnlyStatusText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  helpText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 4,
+    fontStyle: "italic",
+  },
+  treeContainer: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    maxHeight: 200,
+    overflow: "hidden",
+  },
+  treeScrollView: {
+    maxHeight: 200,
+  },
+  treeNode: {
+    paddingVertical: 10,
+    paddingRight: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  treeNodeRoot: {
+    backgroundColor: "#F9FAFB",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  treeNodeSelected: {
+    backgroundColor: "#EFF6FF",
+    borderLeftWidth: 3,
+    borderLeftColor: "#3B82F6",
+  },
+  treeNodeContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  treeExpandIcon: {
+    width: 20,
+    alignItems: "center",
+  },
+  treeNodeInfo: {
+    flex: 1,
+  },
+  treeNodeName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  treeNodeNameSelected: {
+    color: "#3B82F6",
+  },
+  treeNodeDescription: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  treeChildren: {
+    backgroundColor: "#F9FAFB",
+  },
+  acceptanceStagesContainer: {
+    gap: 8,
+  },
+  acceptanceStageItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#3B82F620",
+  },
+  acceptanceStageInfo: {
+    flex: 1,
+  },
+  acceptanceStageName: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#1F2937",
+  },
+  acceptanceStageStatus: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  phaseWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#F59E0B30",
+  },
+  phaseWarningText: {
+    fontSize: 12,
+    color: "#F59E0B",
+    flex: 1,
   },
 });
 

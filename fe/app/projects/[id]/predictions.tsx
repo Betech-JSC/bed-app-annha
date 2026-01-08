@@ -156,7 +156,9 @@ export default function PredictionsScreen() {
                 ]}
               >
                 {analysis.completion_prediction.delay_days > 0 ? "+" : ""}
-                {analysis.completion_prediction.delay_days} ngày
+                {typeof analysis.completion_prediction.delay_days === 'number' 
+                  ? analysis.completion_prediction.delay_days.toFixed(2) 
+                  : analysis.completion_prediction.delay_days} ngày
               </Text>
             </View>
             <View style={styles.predictionRow}>
@@ -258,7 +260,9 @@ export default function PredictionsScreen() {
               <Text style={styles.riskScoreText}>Điểm: {analysis.delay_risk.risk_score}/100</Text>
             </View>
             <Text style={styles.riskDetailText}>
-              Chậm tiến độ: {analysis.delay_risk.delay_days} ngày
+              Chậm tiến độ: {typeof analysis.delay_risk.delay_days === 'number' 
+                ? analysis.delay_risk.delay_days.toFixed(2) 
+                : analysis.delay_risk.delay_days} ngày
             </Text>
             <Text style={styles.riskDetailText}>
               Công việc quá hạn: {analysis.delay_risk.delayed_tasks_count}

@@ -40,9 +40,16 @@ class AppServiceProvider extends ServiceProvider
 
     public function bootRoute(): void
     {
+        // Increased rate limit for mobile app usage
+        // 120 requests per minute per user (2 requests per second)
+        // For unauthenticated requests, use IP-based limiting (60 per minute)
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            if ($request->user()) {
+                // Authenticated users: 120 requests per minute
+                return Limit::perMinute(120)->by($request->user()->id);
+            }
+            // Unauthenticated: 60 requests per minute per IP
+            return Limit::perMinute(60)->by($request->ip());
         });
-
     }
 }

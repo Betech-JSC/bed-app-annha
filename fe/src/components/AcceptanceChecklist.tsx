@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,12 +10,16 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
+  FlatList,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AcceptanceStage, CreateAcceptanceStageData } from "@/api/acceptanceApi";
 import { Ionicons } from "@expo/vector-icons";
 import { acceptanceApi } from "@/api/acceptanceApi";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import AcceptanceItemList from "@/components/AcceptanceItemList";
+import { ganttApi } from "@/api/ganttApi";
+import { ProjectTask } from "@/types/ganttTypes";
 import api from "@/api/api";
 
 interface AcceptanceChecklistProps {
@@ -23,8 +27,9 @@ interface AcceptanceChecklistProps {
   projectId?: string | number;
   isProjectManager?: boolean;
   isCustomer?: boolean;
+  isSupervisor?: boolean;
   onRefresh?: () => void;
-  onNavigateToDefects?: () => void;
+  onNavigateToDefects?: (stageId?: number) => void;
 }
 
 export default function AcceptanceChecklist({
@@ -32,6 +37,7 @@ export default function AcceptanceChecklist({
   projectId,
   isProjectManager = false,
   isCustomer = false,
+  isSupervisor = false,
   onRefresh,
   onNavigateToDefects,
 }: AcceptanceChecklistProps) {
@@ -40,30 +46,70 @@ export default function AcceptanceChecklist({
   const [editingStage, setEditingStage] = useState<AcceptanceStage | null>(null);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<CreateAcceptanceStageData>({
+    task_id: undefined,
     name: "",
     description: "",
     order: undefined,
   });
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<ProjectTask[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [showTaskPicker, setShowTaskPicker] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    if (projectId && (createModalVisible || editModalVisible)) {
+      loadParentTasks();
+    }
+  }, [projectId, createModalVisible, editModalVisible]);
+
+  const loadParentTasks = async () => {
+    if (!projectId) return;
+    try {
+      setLoadingTasks(true);
+      // BUSINESS RULE: Only load parent tasks (A), not children (A', A'')
+      const response = await ganttApi.getTasks(projectId.toString());
+      if (response.success) {
+        const allTasks = response.data.data || response.data || [];
+        // Filter only parent tasks (no parent_id)
+        const parentTasks = allTasks.filter((task: ProjectTask) => !(task as any).parent_id);
+        setTasks(parentTasks);
+      }
+    } catch (error) {
+      console.error("Error loading tasks:", error);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
 
   const openCreateModal = () => {
-    setFormData({ name: "", description: "", order: undefined });
+    setFormData({ task_id: undefined, name: "", description: "", order: undefined });
     setCreateModalVisible(true);
   };
 
   const openEditModal = (stage: AcceptanceStage) => {
     setEditingStage(stage);
     setFormData({
+      task_id: stage.task_id,
       name: stage.name,
       description: stage.description || "",
       order: stage.order,
     });
+    // Load tasks for edit modal
+    if (projectId) {
+      loadParentTasks();
+    }
     setEditModalVisible(true);
   };
 
   const handleCreate = async () => {
     if (!formData.name.trim()) {
       Alert.alert("Lỗi", "Vui lòng nhập tên giai đoạn nghiệm thu");
+      return;
+    }
+
+    if (!formData.task_id) {
+      Alert.alert("Lỗi", "Vui lòng chọn công việc từ tiến độ (Category A)");
       return;
     }
 
@@ -74,7 +120,7 @@ export default function AcceptanceChecklist({
       await acceptanceApi.createStage(projectId, formData);
       Alert.alert("Thành công", "Đã tạo giai đoạn nghiệm thu mới");
       setCreateModalVisible(false);
-      setFormData({ name: "", description: "", order: undefined });
+      setFormData({ task_id: undefined, name: "", description: "", order: undefined });
       onRefresh?.();
     } catch (error: any) {
       Alert.alert("Lỗi", error.response?.data?.message || "Không thể tạo giai đoạn nghiệm thu");
@@ -97,7 +143,7 @@ export default function AcceptanceChecklist({
       Alert.alert("Thành công", "Đã cập nhật giai đoạn nghiệm thu");
       setEditModalVisible(false);
       setEditingStage(null);
-      setFormData({ name: "", description: "", order: undefined });
+      setFormData({ task_id: undefined, name: "", description: "", order: undefined });
       onRefresh?.();
     } catch (error: any) {
       Alert.alert("Lỗi", error.response?.data?.message || "Không thể cập nhật giai đoạn nghiệm thu");
@@ -150,7 +196,10 @@ export default function AcceptanceChecklist({
 
   return (
     <>
-      <ScrollView style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100, flexGrow: 1 }}
+      >
         {/* Header với nút thêm mới */}
         {projectId && (
           <View style={styles.headerActions}>
@@ -178,11 +227,15 @@ export default function AcceptanceChecklist({
             const hasOpenDefects = stage.defects?.some(
               (d: any) => d.status === "open" || d.status === "in_progress"
             );
+            // BUSINESS RULE: Calculate acceptability_status from defects
+            const acceptabilityStatus = stage.acceptability_status ||
+              (hasOpenDefects ? "not_acceptable" : "acceptable");
 
-            // Tính completion dựa trên acceptance_status thực tế: approved = hoàn thành
+            // BUSINESS RULE: Tính completion dựa trên workflow_status = customer_approved
+            // Giai đoạn nghiệm thu chỉ được xem là hoàn thành khi 100% hạng mục đã được duyệt xong
             const totalItems = stage.items?.length || 0;
             const approvedItems = stage.items?.filter((i: any) =>
-              i.acceptance_status === 'approved'
+              i.workflow_status === 'customer_approved'
             ).length || 0;
             const completionPercentage = totalItems > 0 ? (approvedItems / totalItems) * 100 : 0;
 
@@ -195,7 +248,25 @@ export default function AcceptanceChecklist({
                       <Ionicons name={icon.name as any} size={20} color={icon.color} />
                     </View>
                     <View style={styles.stageText}>
-                      <Text style={styles.stageName}>{stage.name}</Text>
+                      <View style={styles.stageNameRow}>
+                        <Text style={styles.stageName}>{stage.name}</Text>
+                        {/* BUSINESS RULE: Acceptability Status Indicator */}
+                        <View style={[
+                          styles.acceptabilityIndicator,
+                          { backgroundColor: acceptabilityStatus === "acceptable" ? "#10B98120" : "#EF444420" }
+                        ]}>
+                          <View style={[
+                            styles.acceptabilityDot,
+                            { backgroundColor: acceptabilityStatus === "acceptable" ? "#10B981" : "#EF4444" }
+                          ]} />
+                          <Text style={[
+                            styles.acceptabilityText,
+                            { color: acceptabilityStatus === "acceptable" ? "#10B981" : "#EF4444" }
+                          ]}>
+                            {acceptabilityStatus === "acceptable" ? "Có thể nghiệm thu" : "Chưa thể nghiệm thu"}
+                          </Text>
+                        </View>
+                      </View>
                       {/* Gộp progress và items count vào một dòng */}
                       {totalItems > 0 && (
                         <View style={styles.stageMeta}>
@@ -205,6 +276,17 @@ export default function AcceptanceChecklist({
                               {approvedItems}/{totalItems} hạng mục ({completionPercentage.toFixed(0)}%)
                             </Text>
                           </View>
+                        </View>
+                      )}
+                      {/* Show linked task (Category A) and phase */}
+                      {stage.task && (
+                        <View style={styles.taskInfo}>
+                          <Ionicons name="construct-outline" size={14} color="#6B7280" />
+                          <Text style={styles.taskInfoText}>
+                            {stage.task.name}
+                            {stage.phase && ` • ${stage.phase.name}`}
+                            {stage.task.phase && !stage.phase && ` • ${stage.task.phase.name}`}
+                          </Text>
                         </View>
                       )}
                     </View>
@@ -249,23 +331,67 @@ export default function AcceptanceChecklist({
                   </View>
                 )}
 
-                {/* Warning Box - Chỉ hiện khi có lỗi chưa xử lý (ưu tiên hiển thị) */}
-                {hasOpenDefects && (
+                {/* BUSINESS RULE: Warning Box - Show based on acceptability_status */}
+                {acceptabilityStatus === "not_acceptable" && (
                   <TouchableOpacity
                     style={styles.warningBox}
-                    onPress={onNavigateToDefects}
+                    onPress={() => {
+                      // BUSINESS RULE: Navigate to defects screen with acceptance_stage_id filter
+                      if (onNavigateToDefects) {
+                        onNavigateToDefects(stage.id);
+                      }
+                    }}
                     activeOpacity={0.7}
                   >
                     <Ionicons name="warning-outline" size={20} color="#EF4444" />
                     <View style={styles.warningContent}>
                       <Text style={styles.warningText}>
-                        Còn {stage.defects?.filter((d: any) => d.status === "open" || d.status === "in_progress").length || 0} lỗi chưa được khắc phục
+                        Còn {stage.defects?.filter((d: any) => d.status !== "verified").length || 0} lỗi chưa được khắc phục hoàn toàn
                       </Text>
                       <Text style={styles.warningLink}>
-                        Xem chi tiết →
+                        Xem chi tiết lỗi →
                       </Text>
                     </View>
                   </TouchableOpacity>
+                )}
+
+                {/* BUSINESS RULE: Image Gallery per Category A */}
+                {stage.attachments && stage.attachments.length > 0 && (
+                  <View style={styles.attachmentsSection}>
+                    <View style={styles.attachmentsHeader}>
+                      <Ionicons name="images-outline" size={18} color="#1F2937" />
+                      <Text style={styles.attachmentsTitle}>
+                        Hình ảnh nghiệm thu ({stage.attachments.length})
+                      </Text>
+                    </View>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.imagesScrollContent}
+                    >
+                      {stage.attachments.map((attachment: any, index: number) => {
+                        const imageUrl = attachment.file_url || attachment.url ||
+                          (attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : null);
+                        if (!imageUrl) return null;
+                        return (
+                          <TouchableOpacity
+                            key={attachment.id || index}
+                            style={styles.imageWrapper}
+                            onPress={() => setPreviewImage(imageUrl)}
+                          >
+                            <Image
+                              source={{ uri: imageUrl }}
+                              style={styles.attachmentImage}
+                              resizeMode="cover"
+                            />
+                            <View style={styles.imageOverlay}>
+                              <Ionicons name="expand-outline" size={24} color="#FFFFFF" />
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
                 )}
 
                 {/* Acceptance Items Section - Luôn hiển thị để người dùng thấy rõ các hạng mục */}
@@ -278,6 +404,7 @@ export default function AcceptanceChecklist({
                       onRefresh={onRefresh || (() => { })}
                       isProjectManager={isProjectManager}
                       isCustomer={isCustomer}
+                      isSupervisor={isSupervisor}
                       onItemApprove={async (itemId: number) => {
                         const item = stage.items?.find((i) => i.id === itemId);
                         if (!item) return;
@@ -315,6 +442,26 @@ export default function AcceptanceChecklist({
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
+              {/* BUSINESS RULE: Task selection - Only parent tasks (A) */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Công việc từ tiến độ (Category A) <Text style={styles.required}>*</Text>
+                </Text>
+                <TouchableOpacity
+                  style={styles.taskSelectButton}
+                  onPress={() => setShowTaskPicker(true)}
+                >
+                  <Text style={[
+                    styles.taskSelectText,
+                    !formData.task_id && styles.placeholderText
+                  ]}>
+                    {formData.task_id
+                      ? tasks.find(t => t.id === formData.task_id)?.name || "Chọn công việc"
+                      : "Chọn công việc từ tiến độ (chỉ công việc cha)"}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
                   Tên giai đoạn <Text style={styles.required}>*</Text>
@@ -364,9 +511,9 @@ export default function AcceptanceChecklist({
                   <Text style={styles.cancelButtonText}>Hủy</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.saveButton]}
+                  style={[styles.modalButton, styles.saveButton, !formData.task_id && styles.saveButtonDisabled]}
                   onPress={handleCreate}
-                  disabled={saving}
+                  disabled={saving || !formData.task_id}
                 >
                   {saving ? (
                     <ActivityIndicator color="#FFFFFF" />
@@ -378,6 +525,65 @@ export default function AcceptanceChecklist({
             </View>
           </View>
         </View>
+
+        {/* Task Picker Modal */}
+        {showTaskPicker && (
+          <Modal
+            visible={showTaskPicker}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowTaskPicker(false)}
+          >
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContent}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Chọn công việc (Category A)</Text>
+                  <TouchableOpacity onPress={() => setShowTaskPicker(false)}>
+                    <Ionicons name="close" size={24} color="#1F2937" />
+                  </TouchableOpacity>
+                </View>
+                {loadingTasks ? (
+                  <View style={styles.pickerLoadingContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                  </View>
+                ) : (
+                  <FlatList
+                    data={tasks}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerOption,
+                          formData.task_id === item.id && styles.pickerOptionActive
+                        ]}
+                        onPress={() => {
+                          setFormData({ ...formData, task_id: item.id });
+                          setShowTaskPicker(false);
+                        }}
+                      >
+                        <Text style={[
+                          styles.pickerOptionText,
+                          formData.task_id === item.id && styles.pickerOptionTextActive
+                        ]}>
+                          {item.name}
+                        </Text>
+                        {formData.task_id === item.id && (
+                          <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.pickerEmptyContainer}>
+                        <Ionicons name="construct-outline" size={48} color="#D1D5DB" />
+                        <Text style={styles.pickerEmptyText}>Chưa có công việc cha nào</Text>
+                      </View>
+                    }
+                  />
+                )}
+              </View>
+            </View>
+          </Modal>
+        )}
       </Modal>
 
       {/* Edit Stage Modal */}
@@ -399,6 +605,26 @@ export default function AcceptanceChecklist({
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
+              {/* BUSINESS RULE: Task selection - Only parent tasks (A) */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Công việc từ tiến độ (Category A) <Text style={styles.required}>*</Text>
+                </Text>
+                <TouchableOpacity
+                  style={styles.taskSelectButton}
+                  onPress={() => setShowTaskPicker(true)}
+                >
+                  <Text style={[
+                    styles.taskSelectText,
+                    !formData.task_id && styles.placeholderText
+                  ]}>
+                    {formData.task_id
+                      ? tasks.find(t => t.id === formData.task_id)?.name || "Chọn công việc"
+                      : "Chọn công việc từ tiến độ (chỉ công việc cha)"}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
                   Tên giai đoạn <Text style={styles.required}>*</Text>
@@ -425,7 +651,7 @@ export default function AcceptanceChecklist({
                 <Text style={styles.label}>Thứ tự</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Thứ tự"
+                  placeholder="Tự động (để trống)"
                   value={formData.order?.toString() || ""}
                   onChangeText={(text) =>
                     setFormData({
@@ -435,6 +661,9 @@ export default function AcceptanceChecklist({
                   }
                   keyboardType="numeric"
                 />
+                <Text style={styles.helperText}>
+                  Để trống để tự động thêm vào cuối danh sách
+                </Text>
               </View>
               <View style={styles.modalActions}>
                 <TouchableOpacity
@@ -445,9 +674,9 @@ export default function AcceptanceChecklist({
                   <Text style={styles.cancelButtonText}>Hủy</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.saveButton]}
+                  style={[styles.modalButton, styles.saveButton, !formData.task_id && styles.saveButtonDisabled]}
                   onPress={handleUpdate}
-                  disabled={saving}
+                  disabled={saving || !formData.task_id}
                 >
                   {saving ? (
                     <ActivityIndicator color="#FFFFFF" />
@@ -459,6 +688,65 @@ export default function AcceptanceChecklist({
             </View>
           </View>
         </View>
+
+        {/* Task Picker Modal for Edit */}
+        {editModalVisible && showTaskPicker && (
+          <Modal
+            visible={showTaskPicker}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowTaskPicker(false)}
+          >
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContent}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Chọn công việc (Category A)</Text>
+                  <TouchableOpacity onPress={() => setShowTaskPicker(false)}>
+                    <Ionicons name="close" size={24} color="#1F2937" />
+                  </TouchableOpacity>
+                </View>
+                {loadingTasks ? (
+                  <View style={styles.pickerLoadingContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                  </View>
+                ) : (
+                  <FlatList
+                    data={tasks}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerOption,
+                          formData.task_id === item.id && styles.pickerOptionActive
+                        ]}
+                        onPress={() => {
+                          setFormData({ ...formData, task_id: item.id });
+                          setShowTaskPicker(false);
+                        }}
+                      >
+                        <Text style={[
+                          styles.pickerOptionText,
+                          formData.task_id === item.id && styles.pickerOptionTextActive
+                        ]}>
+                          {item.name}
+                        </Text>
+                        {formData.task_id === item.id && (
+                          <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.pickerEmptyContainer}>
+                        <Ionicons name="construct-outline" size={48} color="#D1D5DB" />
+                        <Text style={styles.pickerEmptyText}>Chưa có công việc cha nào</Text>
+                      </View>
+                    }
+                  />
+                )}
+              </View>
+            </View>
+          </Modal>
+        )}
       </Modal>
 
       {/* Image Preview Modal */}
@@ -867,5 +1155,121 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: 16,
+  },
+  taskSelectButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  taskSelectText: {
+    fontSize: 16,
+    color: "#1F2937",
+    flex: 1,
+  },
+  placeholderText: {
+    color: "#9CA3AF",
+  },
+  taskInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  taskInfoText: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  acceptabilityIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  acceptabilityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  acceptabilityText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  stageNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  pickerModalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+  },
+  pickerModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  pickerModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  pickerLoadingContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  pickerOptionActive: {
+    backgroundColor: "#EFF6FF",
+  },
+  pickerOptionText: {
+    fontSize: 16,
+    color: "#1F2937",
+    flex: 1,
+  },
+  pickerOptionTextActive: {
+    color: "#3B82F6",
+    fontWeight: "600",
+  },
+  pickerEmptyContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerEmptyText: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    marginTop: 12,
+  },
+  saveButtonDisabled: {
+    backgroundColor: "#D1D5DB",
+    opacity: 0.6,
   },
 });

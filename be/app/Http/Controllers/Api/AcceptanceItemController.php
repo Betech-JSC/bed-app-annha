@@ -21,7 +21,16 @@ class AcceptanceItemController extends Controller
         $project = Project::findOrFail($projectId);
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
 
+        // BUSINESS RULE: Show ONLY Category A (parent) items, hide children A' and A''
         $items = $stage->items()
+            ->where(function ($query) {
+                // Items without task_id (Category A items)
+                $query->whereNull('task_id')
+                    // OR items linked to parent tasks (task.parent_id is null)
+                    ->orWhereHas('task', function ($taskQuery) {
+                        $taskQuery->whereNull('parent_id');
+                    });
+            })
             ->with([
                 'approver',
                 'rejector',
@@ -420,10 +429,11 @@ class AcceptanceItemController extends Controller
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
 
-        if ($item->workflow_status !== 'draft') {
+        // Cho phép gửi lại khi ở trạng thái draft hoặc rejected
+        if (!in_array($item->workflow_status, ['draft', 'rejected'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể gửi duyệt khi ở trạng thái draft.'
+                'message' => 'Chỉ có thể gửi duyệt khi ở trạng thái draft hoặc rejected.'
             ], 400);
         }
 
@@ -449,29 +459,84 @@ class AcceptanceItemController extends Controller
             ->with('task')
             ->get();
 
-        $incompleteTasks = [];
-        foreach ($stageItems as $stageItem) {
-            if ($stageItem->task && $stageItem->task->progress_percentage < 100) {
-                $incompleteTasks[] = $stageItem->task->name ?? "Hạng mục #{$stageItem->id}";
-            }
-        }
-
-        if (count($incompleteTasks) > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể gửi duyệt. Các hạng mục sau chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks)
-            ], 400);
-        }
+        // Lưu trạng thái cũ để kiểm tra
+        $oldStatus = $item->workflow_status;
 
         $item->workflow_status = 'submitted';
         $item->submitted_by = $user->id;
         $item->submitted_at = now();
+        // Xóa rejection_reason khi gửi lại từ rejected
+        if ($oldStatus === 'rejected') {
+            $item->rejection_reason = null;
+            $item->rejected_by = null;
+            $item->rejected_at = null;
+        }
         $item->save();
 
         return response()->json([
             'success' => true,
             'message' => 'Đã gửi duyệt thành công.',
             'data' => $item->fresh()->load(['submitter', 'attachments'])
+        ]);
+    }
+
+    /**
+     * Supervisor approve (Giám sát duyệt)
+     */
+    public function supervisorApprove(Request $request, string $projectId, string $stageId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+        $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check if user is admin (full permission)
+        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
+
+        // Check if user is supervisor
+        $isSupervisor = \App\Models\ProjectPersonnel::where('project_id', $project->id)
+            ->where('user_id', $user->id)
+            ->whereIn('role', ['supervisor', 'supervisor_guest'])
+            ->exists();
+
+        if (!$isAdmin && !$isSupervisor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ giám sát mới có quyền duyệt.'
+            ], 403);
+        }
+
+        if ($item->workflow_status !== 'submitted') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể duyệt khi đã được gửi duyệt.'
+            ], 400);
+        }
+
+        // Kiểm tra lỗi (defects) liên quan đến task của item
+        if ($item->task_id) {
+            $openDefects = \App\Models\Defect::where('project_id', $project->id)
+                ->where('task_id', $item->task_id)
+                ->whereIn('status', ['open', 'in_progress'])
+                ->count();
+
+            if ($openDefects > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong. Vui lòng xử lý tất cả lỗi trước khi duyệt nghiệm thu."
+                ], 400);
+            }
+        }
+
+        $item->workflow_status = 'supervisor_approved';
+        $item->supervisor_approved_by = $user->id;
+        $item->supervisor_approved_at = now();
+        $item->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã duyệt thành công.',
+            'data' => $item->fresh()->load(['supervisorApprover', 'attachments'])
         ]);
     }
 
@@ -485,18 +550,23 @@ class AcceptanceItemController extends Controller
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
 
+        // Check if user is admin (full permission)
+        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
+
         // Check if user is project manager
-        if ($user->id !== $project->project_manager_id) {
+        $isProjectManager = $user->id === $project->project_manager_id;
+
+        if (!$isAdmin && !$isProjectManager) {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ quản lý dự án mới có quyền duyệt.'
             ], 403);
         }
 
-        if ($item->workflow_status !== 'submitted') {
+        if ($item->workflow_status !== 'supervisor_approved') {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt khi đã được gửi duyệt.'
+                'message' => 'Chỉ có thể duyệt sau khi giám sát đã duyệt.'
             ], 400);
         }
 
@@ -564,17 +634,16 @@ class AcceptanceItemController extends Controller
             ], 400);
         }
 
-        // Check if user is customer or supervisor
-        $isCustomer = $project->customer_id === $user->id;
-        $isSupervisor = \App\Models\ProjectPersonnel::where('project_id', $project->id)
-            ->where('user_id', $user->id)
-            ->whereIn('role', ['supervisor', 'supervisor_guest'])
-            ->exists();
+        // Check if user is admin (full permission)
+        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
 
-        if (!$isCustomer && !$isSupervisor) {
+        // Check if user is customer
+        $isCustomer = $project->customer_id === $user->id;
+
+        if (!$isAdmin && !$isCustomer) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ khách hàng hoặc giám sát mới có quyền duyệt cuối.'
+                'message' => 'Chỉ khách hàng mới có quyền duyệt cuối.'
             ], 403);
         }
 
@@ -625,6 +694,9 @@ class AcceptanceItemController extends Controller
         // Update project progress
         $item->updateProjectProgress();
 
+        // Check if stage is completed (100% items customer_approved)
+        $stage->checkCompletion();
+
         return response()->json([
             'success' => true,
             'message' => 'Đã duyệt nghiệm thu thành công.',
@@ -646,7 +718,7 @@ class AcceptanceItemController extends Controller
             'rejection_reason' => 'required|string|max:1000',
         ]);
 
-        if (!in_array($item->workflow_status, ['submitted', 'project_manager_approved'])) {
+        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved', 'project_manager_approved'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể từ chối khi đã được gửi duyệt.'
@@ -659,9 +731,12 @@ class AcceptanceItemController extends Controller
         $item->rejected_at = now();
         $item->save();
 
+        // BUSINESS RULE: Khi từ chối nghiệm thu → tự động tạo lỗi ghi nhận
+        $item->autoCreateDefectOnReject($user, $validated['rejection_reason']);
+
         return response()->json([
             'success' => true,
-            'message' => 'Đã từ chối nghiệm thu.',
+            'message' => 'Đã từ chối nghiệm thu. Lỗi ghi nhận đã được tự động tạo.',
             'data' => $item->fresh()->load(['rejector', 'attachments'])
         ]);
     }

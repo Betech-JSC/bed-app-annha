@@ -79,9 +79,12 @@ export const ganttApi = {
       phase_id?: number | "null";
       status?: string;
       assigned_to?: number;
+      leaf_only?: boolean; // Only return leaf tasks (tasks without children)
     }
   ) => {
-    const response = await api.get(`/projects/${projectId}/tasks`, { params });
+    const response = await api.get(`/projects/${projectId}/tasks`, { 
+      params: params ? { ...params, leaf_only: params.leaf_only ? 'true' : undefined } : undefined 
+    });
     return response.data;
   },
 

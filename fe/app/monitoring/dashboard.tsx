@@ -137,6 +137,61 @@ export default function MonitoringDashboardScreen() {
           </View>
         </View>
 
+        {/* Progress Overview */}
+        {dashboardData?.progress_overview && dashboardData.progress_overview.length > 0 && (
+          <View style={styles.progressSection}>
+            <Text style={styles.sectionTitle}>Tổng Quan Tiến Độ</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {dashboardData.progress_overview.map((project: any) => (
+                <TouchableOpacity
+                  key={project.project_id}
+                  style={styles.progressCard}
+                  onPress={() => router.push(`/projects/${project.project_id}/progress-overview`)}
+                >
+                  <Text style={styles.progressProjectName} numberOfLines={1}>
+                    {project.project_name}
+                  </Text>
+                  <View style={styles.progressBarContainer}>
+                    <View style={styles.progressBar}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          { width: `${project.overall_progress}%` },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.progressPercentage}>
+                      {project.overall_progress.toFixed(0)}%
+                    </Text>
+                  </View>
+                  <View style={styles.progressStats}>
+                    <View style={styles.progressStatItem}>
+                      <Text style={styles.progressStatLabel}>Tổng</Text>
+                      <Text style={styles.progressStatValue}>{project.total_tasks}</Text>
+                    </View>
+                    {project.delayed_tasks > 0 && (
+                      <View style={styles.progressStatItem}>
+                        <Text style={[styles.progressStatLabel, { color: "#EF4444" }]}>Trễ</Text>
+                        <Text style={[styles.progressStatValue, { color: "#EF4444" }]}>
+                          {project.delayed_tasks}
+                        </Text>
+                      </View>
+                    )}
+                    {project.high_priority_tasks > 0 && (
+                      <View style={styles.progressStatItem}>
+                        <Text style={[styles.progressStatLabel, { color: "#F59E0B" }]}>Ưu tiên</Text>
+                        <Text style={[styles.progressStatValue, { color: "#F59E0B" }]}>
+                          {project.high_priority_tasks}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Alert Summary */}
         {dashboardData?.summary && (
           <View style={styles.alertSummaryContainer}>
@@ -255,14 +310,14 @@ export default function MonitoringDashboardScreen() {
           </View>
         )}
 
-        {(!dashboardData?.alerts || dashboardData.alerts.length === 0) && 
-         (!dashboardData?.overdue_tasks || dashboardData.overdue_tasks.length === 0) && (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="checkmark-circle-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>Không có cảnh báo</Text>
-            <Text style={styles.emptySubtext}>Tất cả dự án đang hoạt động bình thường</Text>
-          </View>
-        )}
+        {(!dashboardData?.alerts || dashboardData.alerts.length === 0) &&
+          (!dashboardData?.overdue_tasks || dashboardData.overdue_tasks.length === 0) && (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="checkmark-circle-outline" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyText}>Không có cảnh báo</Text>
+              <Text style={styles.emptySubtext}>Tất cả dự án đang hoạt động bình thường</Text>
+            </View>
+          )}
       </ScrollView>
     </View>
   );
@@ -448,6 +503,69 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 8,
     textAlign: "center",
+  },
+  progressSection: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  progressCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    marginRight: 12,
+    width: 280,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  progressProjectName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 12,
+  },
+  progressBarContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  progressBar: {
+    flex: 1,
+    height: 8,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#3B82F6",
+    borderRadius: 4,
+  },
+  progressPercentage: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    minWidth: 45,
+  },
+  progressStats: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  progressStatItem: {
+    alignItems: "center",
+  },
+  progressStatLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  progressStatValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
   },
 });
 

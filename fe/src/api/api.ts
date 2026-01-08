@@ -76,12 +76,18 @@ api.interceptors.response.use(
         }
         // Xử lý lỗi 429 (Too Many Requests) - Rate Limiting
         else if (status === 429) {
-            const retryAfter = error.response?.headers['retry-after'] || 60;
-            console.warn(`429 Too Many Requests - Rate limit exceeded. Retry after ${retryAfter} seconds`);
+            const retryAfter = parseInt(error.response?.headers['retry-after'] || error.response?.headers['x-ratelimit-reset'] || '60');
+            const remaining = error.response?.headers['x-ratelimit-remaining'] || '0';
 
-            // Có thể thêm logic retry sau một khoảng thời gian
+            console.warn(`429 Too Many Requests - Rate limit exceeded. Retry after ${retryAfter} seconds. Remaining: ${remaining}`);
+
+            // Store retry information
             error.retryAfter = retryAfter;
+            error.rateLimitRemaining = remaining;
             error.userMessage = `Quá nhiều yêu cầu. Vui lòng thử lại sau ${retryAfter} giây.`;
+            
+            // Note: User-friendly alert should be shown in the component that catches this error
+            // This prevents showing multiple alerts for the same rate limit event
         }
         // Xử lý lỗi 500 (Internal Server Error)
         else if (status === 500) {

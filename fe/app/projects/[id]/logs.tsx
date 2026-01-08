@@ -15,9 +15,9 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { constructionLogApi, ConstructionLog } from "@/api/constructionLogApi";
-import { ganttApi, ProjectTask } from "@/api/ganttApi";
+import { ganttApi } from "@/api/ganttApi";
+import { ProjectTask } from "@/types/ganttTypes";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
@@ -52,20 +52,29 @@ export default function ConstructionLogsScreen() {
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Partial<ProjectTask> | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
+  // BUSINESS RULE: Date is auto-set to current day and NOT editable
+  const today = new Date().toISOString().split("T")[0];
   const [formData, setFormData] = useState({
-    log_date: new Date().toISOString().split("T")[0],
+    log_date: today, // Always set to today
     task_id: null as number | null,
     weather: "",
     personnel_count: "",
-    completion_percentage: "",
+    completion_percentage: 0, // Use number for slider
     notes: "",
   });
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [minCompletionPercentage, setMinCompletionPercentage] = useState(0);
+
+  // Helper function to ensure completion_percentage is always a valid number
+  const getCompletionPercentage = (value: any): number => {
+    if (value == null || value === undefined) return 0;
+    const num = typeof value === 'number' ? value : Number(value);
+    return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
+  };
 
   useEffect(() => {
     loadLogs();
@@ -100,10 +109,20 @@ export default function ConstructionLogsScreen() {
   const loadTasks = async () => {
     try {
       setLoadingTasks(true);
-      const response = await ganttApi.getTasks(id!);
+      // BUSINESS RULE: Only load leaf tasks (tasks without children)
+      // Parent tasks (A) progress is auto-calculated from children
+      const response = await ganttApi.getTasks(id!, { leaf_only: true });
       if (response.success) {
         const allTasks = response.data.data || response.data || [];
-        setTasks(Array.isArray(allTasks) ? allTasks : []);
+        // Additional filter on frontend to ensure only leaf tasks
+        const leafTasks = Array.isArray(allTasks)
+          ? allTasks.filter((task: ProjectTask) => {
+            // Check if task has children by checking if any other task has this as parent
+            const hasChildren = allTasks.some((t: ProjectTask) => (t as any).parent_id === task.id);
+            return !hasChildren;
+          })
+          : [];
+        setTasks(leafTasks);
       }
     } catch (error) {
       console.error("Error loading tasks:", error);
@@ -114,15 +133,34 @@ export default function ConstructionLogsScreen() {
 
   const openEditModal = (log: ConstructionLog) => {
     setEditingLog(log);
+    // BUSINESS RULE: Date is NOT editable, but we show the log's date for reference
+    // For editing, we still use today's date as the base (but backend will use log's original date)
     setFormData({
-      log_date: log.log_date,
+      log_date: today, // Always today, not editable
       task_id: log.task_id || null,
       weather: log.weather || "",
       personnel_count: log.personnel_count?.toString() || "",
-      completion_percentage: log.completion_percentage?.toString() || "",
+      completion_percentage: getCompletionPercentage(log.completion_percentage),
       notes: log.notes || "",
     });
     setSelectedTask(log.task || null);
+
+    // Calculate minimum completion percentage (last recorded % for this task)
+    const taskId = log.task_id;
+    if (taskId) {
+      const taskLogs = logs
+        .filter(l => l.task_id === taskId && l.id !== log.id)
+        .sort((a, b) => {
+          const dateA = new Date(a.log_date).getTime();
+          const dateB = new Date(b.log_date).getTime();
+          return dateB - dateA;
+        });
+      const lastLog = taskLogs.find(l => l.completion_percentage != null);
+      setMinCompletionPercentage(getCompletionPercentage(lastLog?.completion_percentage ?? log.completion_percentage));
+    } else {
+      setMinCompletionPercentage(getCompletionPercentage(log.completion_percentage));
+    }
+
     setUploadedFiles(
       (log.attachments || []).map((att: any) => ({
         id: att.id,
@@ -131,6 +169,7 @@ export default function ConstructionLogsScreen() {
         file_path: att.file_path,
         file_size: att.file_size,
         mime_type: att.mime_type,
+        file_url: att.file_path ? `http://localhost:8000/storage/${att.file_path}` : att.file_url,
       }))
     );
     setModalVisible(true);
@@ -172,15 +211,19 @@ export default function ConstructionLogsScreen() {
         .filter(f => f.attachment_id || f.id)
         .map(f => f.attachment_id || f.id!);
 
+      // BUSINESS RULE: Date is always today for new logs
+      // For editing, use the original log's date (backend will handle this)
+      const logDate = editingLog ? editingLog.log_date : today;
+
       const data = {
-        log_date: formData.log_date,
+        log_date: logDate,
         task_id: formData.task_id || undefined,
         weather: formData.weather || undefined,
         personnel_count: formData.personnel_count
           ? parseInt(formData.personnel_count)
           : undefined,
-        completion_percentage: formData.completion_percentage
-          ? parseFloat(formData.completion_percentage)
+        completion_percentage: formData.completion_percentage > 0
+          ? formData.completion_percentage
           : undefined,
         notes: formData.notes || undefined,
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
@@ -209,13 +252,14 @@ export default function ConstructionLogsScreen() {
     setEditingLog(null);
     setSelectedTask(null);
     setFormData({
-      log_date: new Date().toISOString().split("T")[0],
+      log_date: today, // Always today
       task_id: null,
       weather: "",
       personnel_count: "",
-      completion_percentage: "",
+      completion_percentage: 0,
       notes: "",
     });
+    setMinCompletionPercentage(0);
     setUploadedFiles([]);
   };
 
@@ -230,10 +274,25 @@ export default function ConstructionLogsScreen() {
       setSelectedDate(dateString);
       setDetailModalVisible(true);
     } else {
-      // Tạo nhật ký mới cho ngày này
-      setFormData(prev => ({ ...prev, log_date: dateString }));
+      // BUSINESS RULE: Only allow creating logs for today
+      const clickedDate = new Date(dateString);
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      clickedDate.setHours(0, 0, 0, 0);
+
+      if (clickedDate.getTime() === todayDate.getTime()) {
+        // Only allow creating log for today
+        setFormData(prev => ({ ...prev, log_date: today }));
       setSelectedDate(dateString);
+        setMinCompletionPercentage(0);
       setModalVisible(true);
+      } else {
+        // Show existing log or inform user they can only create logs for today
+        Alert.alert(
+          "Thông báo",
+          "Chỉ có thể tạo nhật ký cho ngày hôm nay. Vui lòng chọn ngày hôm nay để tạo nhật ký mới."
+        );
+      }
     }
   };
 
@@ -256,9 +315,9 @@ export default function ConstructionLogsScreen() {
   };
 
   const goToToday = () => {
-    const today = new Date();
-    setCurrentMonth(today.getMonth() + 1);
-    setCurrentYear(today.getFullYear());
+    const todayDate = new Date();
+    setCurrentMonth(todayDate.getMonth() + 1);
+    setCurrentYear(todayDate.getFullYear());
   };
 
   // Tạo map các ngày có log
@@ -302,13 +361,11 @@ export default function ConstructionLogsScreen() {
     }
 
     // Add days of the current month
-    const today = new Date();
+    const todayDate = new Date();
+    const todayString = todayDate.toISOString().split("T")[0];
     for (let i = 1; i <= daysInMonth; i++) {
       const dateString = `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
-      const isToday =
-        i === today.getDate() &&
-        currentMonth === today.getMonth() + 1 &&
-        currentYear === today.getFullYear();
+      const isToday = dateString === todayString;
       const hasLog = !!logsByDate[dateString];
 
       days.push({
@@ -403,32 +460,44 @@ export default function ConstructionLogsScreen() {
 
           {/* Calendar grid */}
           <View style={styles.calendarGrid}>
-            {calendarData.map((day, index) => (
+            {calendarData.map((day, index) => {
+              // BUSINESS RULE: Always highlight today
+              const isTodayDate = day.dateString === today;
+
+              return (
               <TouchableOpacity
                 key={index}
                 style={[
                   styles.dayCell,
                   !day.isCurrentMonth && styles.dayCellDisabled,
-                  day.isToday && styles.dayCellToday,
-                  day.hasLog && styles.dayCellHasLog,
-                  !day.hasLog && day.isCurrentMonth && styles.dayCellNoLog,
+                    isTodayDate && styles.dayCellToday,
+                    day.hasLog && !isTodayDate && styles.dayCellHasLog,
+                    !day.hasLog && day.isCurrentMonth && !isTodayDate && styles.dayCellNoLog,
                 ]}
-                onPress={() => day.isCurrentMonth && handleDateClick(day.dateString)}
+                  onPress={() => {
+                    if (day.isCurrentMonth) {
+                      handleDateClick(day.dateString);
+                    }
+                  }}
                 disabled={!day.isCurrentMonth}
               >
                 <Text
                   style={[
                     styles.dayText,
                     !day.isCurrentMonth && styles.dayTextDisabled,
-                    day.isToday && styles.dayTextToday,
-                    day.hasLog && styles.dayTextHasLog,
-                    !day.hasLog && day.isCurrentMonth && styles.dayTextNoLog,
+                      isTodayDate && styles.dayTextToday,
+                      day.hasLog && !isTodayDate && styles.dayTextHasLog,
+                      !day.hasLog && day.isCurrentMonth && !isTodayDate && styles.dayTextNoLog,
                   ]}
                 >
                   {day.date}
                 </Text>
+                  {isTodayDate && (
+                    <View style={styles.todayIndicator} />
+                  )}
               </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
 
           {/* Legend */}
@@ -578,28 +647,16 @@ export default function ConstructionLogsScreen() {
           <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={true}>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Ngày *</Text>
-              <TouchableOpacity
-                style={styles.selectButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={styles.selectButtonText}>
+              {/* BUSINESS RULE: Date is auto-set to current day and NOT editable */}
+              <View style={[styles.selectButton, styles.disabledInput]}>
+                <Text style={[styles.selectButtonText, styles.disabledText]}>
                   {new Date(formData.log_date).toLocaleDateString("vi-VN")}
                 </Text>
-                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={new Date(formData.log_date)}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowDatePicker(false);
-                    if (date) {
-                      setFormData({ ...formData, log_date: date.toISOString().split("T")[0] });
-                    }
-                  }}
-                />
-              )}
+                <Ionicons name="calendar-outline" size={20} color="#9CA3AF" />
+              </View>
+              <Text style={styles.helperText}>
+                Ngày được tự động đặt là hôm nay và không thể thay đổi
+              </Text>
             </View>
 
             <View style={styles.formGroup}>
@@ -633,21 +690,86 @@ export default function ConstructionLogsScreen() {
               )}
             </View>
 
+            {selectedTask && (
             <View style={styles.formGroup}>
+                <View style={styles.sliderHeader}>
               <Text style={styles.label}>% Hoàn thành</Text>
+                  <Text style={styles.sliderValue}>
+                    {getCompletionPercentage(formData.completion_percentage).toFixed(0)}%
+                  </Text>
+                </View>
+                {/* BUSINESS RULE: Use slider input, value can ONLY increase, minimum = last recorded %} */}
+                <View style={styles.sliderContainer}>
+                  <View style={styles.sliderTrack}>
+                    <View
+                      style={[
+                        styles.sliderFill,
+                        { width: `${((getCompletionPercentage(formData.completion_percentage) - minCompletionPercentage) / (100 - minCompletionPercentage)) * 100}%` }
+                      ]}
+                    />
+                    <View
+                      style={[
+                        styles.sliderThumb,
+                        { left: `${((getCompletionPercentage(formData.completion_percentage) - minCompletionPercentage) / (100 - minCompletionPercentage)) * 100}%` }
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.sliderInputContainer}>
+                    <TouchableOpacity
+                      style={styles.sliderButton}
+                      onPress={() => {
+                        const currentValue = getCompletionPercentage(formData.completion_percentage);
+                        const newValue = Math.max(minCompletionPercentage, currentValue - 1);
+                        setFormData({ ...formData, completion_percentage: newValue });
+                      }}
+                      disabled={getCompletionPercentage(formData.completion_percentage) <= minCompletionPercentage}
+                    >
+                      <Ionicons
+                        name="remove-circle-outline"
+                        size={24}
+                        color={getCompletionPercentage(formData.completion_percentage) <= minCompletionPercentage ? "#D1D5DB" : "#3B82F6"}
+                      />
+                    </TouchableOpacity>
               <TextInput
-                style={styles.input}
-                value={formData.completion_percentage}
+                      style={styles.sliderInput}
+                      value={getCompletionPercentage(formData.completion_percentage).toFixed(0)}
                 onChangeText={(text) => {
-                  setFormData({ ...formData, completion_percentage: text });
+                        const numValue = parseInt(text) || minCompletionPercentage;
+                        const newValue = Math.max(minCompletionPercentage, Math.min(100, numValue));
+                        setFormData({ ...formData, completion_percentage: newValue });
                 }}
-                placeholder="0"
                 keyboardType="numeric"
+                      editable={true}
               />
+                    <Text style={styles.sliderPercent}>%</Text>
+                    <TouchableOpacity
+                      style={styles.sliderButton}
+                      onPress={() => {
+                        const currentValue = getCompletionPercentage(formData.completion_percentage);
+                        const newValue = Math.min(100, currentValue + 1);
+                        setFormData({ ...formData, completion_percentage: newValue });
+                      }}
+                      disabled={getCompletionPercentage(formData.completion_percentage) >= 100}
+                    >
+                      <Ionicons
+                        name="add-circle-outline"
+                        size={24}
+                        color={getCompletionPercentage(formData.completion_percentage) >= 100 ? "#D1D5DB" : "#3B82F6"}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <View style={styles.sliderLabels}>
+                  <Text style={styles.sliderLabel}>
+                    Tối thiểu: {minCompletionPercentage}%
+                  </Text>
+                  <Text style={styles.sliderLabel}>100%</Text>
+                </View>
               <Text style={styles.helperText}>
-                Nhập % hoàn thành sẽ tự động cập nhật sang tiến độ công việc đã chọn
+                  Phần trăm hoàn thành chỉ có thể tăng. Giá trị tối thiểu: {minCompletionPercentage}%
               </Text>
             </View>
+            )}
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>Thời tiết</Text>
@@ -691,13 +813,61 @@ export default function ConstructionLogsScreen() {
             <View style={styles.formGroup}>
               <Text style={styles.label}>Hình ảnh thực tế tại công trình</Text>
               <UniversalFileUploader
-                onUploadComplete={(files) => setUploadedFiles(files)}
+                onUploadComplete={(files) => {
+                  setUploadedFiles(files);
+                }}
                 multiple={true}
-                accept="all"
+                accept="image"
                 maxFiles={10}
                 initialFiles={uploadedFiles}
-                label="Chọn hình ảnh, tài liệu..."
+                label="Chọn hình ảnh..."
+                showPreview={true}
               />
+
+              {/* Preview uploaded images */}
+              {uploadedFiles.length > 0 && (
+                <View style={styles.uploadedImagesContainer}>
+                  <Text style={styles.uploadedImagesLabel}>
+                    Đã tải lên ({uploadedFiles.length}/10)
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.uploadedImagesScroll}
+                  >
+                    {uploadedFiles.map((file, index) => {
+                      const imageUrl = file.file_url || file.url || file.location ||
+                        ((file as any).file_path ? `http://localhost:8000/storage/${(file as any).file_path}` : null);
+                      const isImage = file.type === "image" || file.mime_type?.startsWith("image/") || imageUrl;
+
+                      return (
+                        <View key={file.attachment_id || file.id || index} style={styles.uploadedImageItem}>
+                          {isImage && imageUrl ? (
+                            <Image
+                              source={{ uri: imageUrl }}
+                              style={styles.uploadedImage}
+                              resizeMode="cover"
+              />
+                          ) : (
+                            <View style={styles.uploadedFileIcon}>
+                              <Ionicons name="document-outline" size={24} color="#3B82F6" />
+                            </View>
+                          )}
+                          <TouchableOpacity
+                            style={styles.removeImageButton}
+                            onPress={() => {
+                              const newFiles = uploadedFiles.filter((_, i) => i !== index);
+                              setUploadedFiles(newFiles);
+                            }}
+                          >
+                            <Ionicons name="close-circle" size={20} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
             </View>
 
             <View style={styles.modalButtons}>
@@ -745,6 +915,20 @@ export default function ConstructionLogsScreen() {
                         onPress={() => {
                           setSelectedTask(item);
                           setFormData({ ...formData, task_id: item.id });
+
+                          // Calculate minimum completion percentage (last recorded % for this task)
+                          const taskLogs = logs
+                            .filter(l => l.task_id === item.id)
+                            .sort((a, b) => {
+                              const dateA = new Date(a.log_date).getTime();
+                              const dateB = new Date(b.log_date).getTime();
+                              return dateB - dateA;
+                            });
+                          const lastLog = taskLogs.find(l => l.completion_percentage != null);
+                          const minPercentage = getCompletionPercentage(lastLog?.completion_percentage);
+                          setMinCompletionPercentage(minPercentage);
+                          setFormData(prev => ({ ...prev, completion_percentage: minPercentage }));
+
                           setShowTaskPicker(false);
                         }}
                       >
@@ -906,17 +1090,26 @@ export default function ConstructionLogsScreen() {
               <View style={styles.emptyContainer}>
                 <Ionicons name="document-outline" size={64} color="#D1D5DB" />
                 <Text style={styles.emptyText}>Chưa có nhật ký cho ngày này</Text>
+                {/* BUSINESS RULE: Only allow creating logs for today */}
+                {selectedDate === today && (
                 <TouchableOpacity
                   style={styles.createButton}
                   onPress={() => {
                     setDetailModalVisible(false);
-                    setFormData(prev => ({ ...prev, log_date: selectedDate || new Date().toISOString().split("T")[0] }));
+                      setFormData(prev => ({ ...prev, log_date: today }));
+                      setMinCompletionPercentage(0);
                     setModalVisible(true);
                   }}
                 >
                   <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
                   <Text style={styles.createButtonText}>Tạo nhật ký</Text>
                 </TouchableOpacity>
+                )}
+                {selectedDate !== today && (
+                  <Text style={styles.helperText}>
+                    Chỉ có thể tạo nhật ký cho ngày hôm nay
+                  </Text>
+                )}
               </View>
             )}
           </ScrollView>
@@ -1072,6 +1265,14 @@ const styles = StyleSheet.create({
   dayTextNoLog: {
     color: "#FFFFFF",
     fontWeight: "700",
+  },
+  todayIndicator: {
+    position: "absolute",
+    bottom: 2,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#3B82F6",
   },
   legend: {
     flexDirection: "row",
@@ -1502,5 +1703,126 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 16,
+  },
+  disabledInput: {
+    backgroundColor: "#F3F4F6",
+    opacity: 0.7,
+  },
+  disabledText: {
+    color: "#6B7280",
+  },
+  sliderHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  sliderValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#3B82F6",
+  },
+  sliderContainer: {
+    marginVertical: 8,
+  },
+  sliderTrack: {
+    height: 8,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
+    position: "relative",
+    marginBottom: 16,
+  },
+  sliderFill: {
+    height: "100%",
+    backgroundColor: "#3B82F6",
+    borderRadius: 4,
+  },
+  sliderThumb: {
+    position: "absolute",
+    top: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#3B82F6",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    marginLeft: -12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  sliderInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  sliderButton: {
+    padding: 4,
+  },
+  sliderInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    textAlign: "center",
+    minWidth: 60,
+    backgroundColor: "#FFFFFF",
+  },
+  sliderPercent: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  sliderLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  sliderLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  uploadedImagesContainer: {
+    marginTop: 12,
+  },
+  uploadedImagesLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  uploadedImagesScroll: {
+    marginTop: 8,
+  },
+  uploadedImageItem: {
+    marginRight: 12,
+    position: "relative",
+  },
+  uploadedImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+  },
+  uploadedFileIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
   },
 });

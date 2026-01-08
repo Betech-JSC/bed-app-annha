@@ -241,6 +241,7 @@ export default function ProjectsListScreen() {
 
     // Tính toán giá trị hiển thị
     const delayDays = prediction?.delay_risk?.delay_days || 0;
+    const delayDaysText = typeof delayDays === 'number' ? delayDays.toFixed(2) : delayDays;
     const overrunPercentage = prediction?.cost_risk?.overrun_percentage;
     const overrunPercentageText = overrunPercentage != null && typeof overrunPercentage === 'number' && overrunPercentage > 0
       ? overrunPercentage.toFixed(1)
@@ -339,7 +340,7 @@ export default function ProjectsListScreen() {
               <View style={[styles.warningItem, styles.warningItemDelay]}>
                 <Ionicons name="time" size={16} color="#DC2626" />
                 <Text style={[styles.warningItemText, { color: "#991B1B" }]}>
-                  Chậm {delayDays} ngày
+                  Chậm {delayDaysText} ngày
                 </Text>
               </View>
             )}

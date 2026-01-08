@@ -66,12 +66,21 @@ class DefectController extends Controller
             'before_image_ids.*' => 'required|integer|exists:attachments,id',
         ]);
 
+        // BUSINESS RULE: Auto-link task_id from acceptance_stage if provided
+        $taskId = $validated['task_id'] ?? null;
+        if (!$taskId && isset($validated['acceptance_stage_id'])) {
+            $acceptanceStage = \App\Models\AcceptanceStage::find($validated['acceptance_stage_id']);
+            if ($acceptanceStage && $acceptanceStage->task_id) {
+                $taskId = $acceptanceStage->task_id; // Auto-link to Category A (parent task)
+            }
+        }
+
         try {
             DB::beginTransaction();
 
             $defect = Defect::create([
                 'project_id' => $project->id,
-                'task_id' => $validated['task_id'] ?? null,
+                'task_id' => $taskId, // BUSINESS RULE: Auto-linked from acceptance_stage or provided
                 'reported_by' => $user->id,
                 'acceptance_stage_id' => $validated['acceptance_stage_id'] ?? null,
                 'description' => $validated['description'],

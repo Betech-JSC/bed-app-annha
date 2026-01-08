@@ -19,16 +19,11 @@ class ContractController extends Controller
         $project = Project::findOrFail($projectId);
         $contract = $project->contract()->with(['attachments', 'approver'])->first();
 
-        if (!$contract) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hợp đồng chưa được tạo.'
-            ], 404);
-        }
-
+        // Trả về 200 với data null nếu chưa có contract (không phải lỗi)
         return response()->json([
             'success' => true,
-            'data' => $contract
+            'data' => $contract,
+            'message' => $contract ? 'Hợp đồng đã được tải.' : 'Hợp đồng chưa được tạo.'
         ]);
     }
 

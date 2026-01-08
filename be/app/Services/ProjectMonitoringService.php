@@ -18,6 +18,11 @@ class ProjectMonitoringService
     {
         $query = Project::with([
             'progress',
+            'tasks' => function ($q) {
+                $q->whereNull('deleted_at')
+                    ->with(['parent', 'children'])
+                    ->orderBy('order');
+            },
             'risks' => function ($q) {
                 $q->active()->latest();
             },
@@ -125,6 +130,47 @@ class ProjectMonitoringService
                 ];
             });
 
+        // Progress overview for dashboard
+        $progressOverview = [];
+        foreach ($projects as $project) {
+            $tasks = $project->tasks;
+            $rootTasks = $tasks->whereNull('parent_id');
+            
+            // Calculate overall progress from root tasks
+            $overallProgress = 0;
+            if ($rootTasks->isNotEmpty()) {
+                $totalProgress = 0;
+                $count = 0;
+                foreach ($rootTasks as $task) {
+                    $totalProgress += (float) ($task->progress_percentage ?? 0);
+                    $count++;
+                }
+                $overallProgress = $count > 0 ? round($totalProgress / $count, 2) : 0;
+            }
+
+            // Count tasks by status
+            $tasksByStatus = [
+                'not_started' => $tasks->where('status', 'not_started')->count(),
+                'in_progress' => $tasks->where('status', 'in_progress')->count(),
+                'delayed' => $tasks->where('status', 'delayed')->count(),
+                'completed' => $tasks->where('status', 'completed')->count(),
+            ];
+
+            // High priority tasks
+            $highPriorityTasks = $tasks->whereIn('priority', ['high', 'urgent'])->count();
+
+            $progressOverview[] = [
+                'project_id' => $project->id,
+                'project_name' => $project->name,
+                'project_code' => $project->code,
+                'overall_progress' => $overallProgress,
+                'total_tasks' => $tasks->count(),
+                'tasks_by_status' => $tasksByStatus,
+                'high_priority_tasks' => $highPriorityTasks,
+                'delayed_tasks' => $tasksByStatus['delayed'],
+            ];
+        }
+
         return [
             'total_projects' => $projects->count(),
             'active_projects' => $projects->where('status', 'in_progress')->count(),
@@ -133,6 +179,7 @@ class ProjectMonitoringService
             'alerts' => $alerts,
             'overdue_tasks' => $overdueTasks,
             'budget_alerts' => $budgetAlerts,
+            'progress_overview' => $progressOverview,
             'summary' => [
                 'critical_alerts' => count(array_filter($alerts, fn($a) => $a['severity'] === 'critical')),
                 'high_alerts' => count(array_filter($alerts, fn($a) => $a['severity'] === 'high')),

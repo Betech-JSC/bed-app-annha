@@ -45,21 +45,31 @@ export default function ContractScreen() {
     try {
       setLoading(true);
       const response = await contractApi.getContract(id!);
-      if (response.success && response.data) {
-        setContract(response.data);
-        setFormData({
-          contract_value: response.data.contract_value?.toString() || "",
-          signed_date: response.data.signed_date || "",
-        });
-        if (response.data.signed_date) {
-          setSignedDate(new Date(response.data.signed_date));
-        }
-        // Set uploaded files for display
-        if (response.data.attachments) {
-          setUploadedFiles(response.data.attachments);
+      if (response.success) {
+        if (response.data) {
+          // Có contract - hiển thị thông tin
+          setContract(response.data);
+          setFormData({
+            contract_value: response.data.contract_value?.toString() || "",
+            signed_date: response.data.signed_date || "",
+          });
+          if (response.data.signed_date) {
+            setSignedDate(new Date(response.data.signed_date));
+          }
+          // Set uploaded files for display
+          if (response.data.attachments) {
+            setUploadedFiles(response.data.attachments);
+          }
+        } else {
+          // Không có contract - hiển thị form tạo mới (đây là trạng thái bình thường)
+          setContract(null);
+          setFormData({
+            contract_value: "",
+            signed_date: "",
+          });
         }
       } else {
-        // Không có contract - hiển thị form tạo mới
+        // Response không thành công
         setContract(null);
         setFormData({
           contract_value: "",
@@ -68,8 +78,9 @@ export default function ContractScreen() {
       }
     } catch (error: any) {
       console.error("Error loading contract:", error);
-      // Xử lý 404 - không có contract
+      // Xử lý lỗi thực sự (không phải 404 - không có contract)
       if (error.response?.status === 404) {
+        // Vẫn xử lý 404 để tương thích với code cũ
         setContract(null);
         setFormData({
           contract_value: "",

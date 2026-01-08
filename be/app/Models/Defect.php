@@ -133,6 +133,12 @@ class Defect extends Model
         if ($saved && $this->task_id) {
             $this->checkAndUpdateTaskProgress();
         }
+
+        // BUSINESS RULE: Khi tất cả defects của acceptance stage đã verified
+        // Tự động gửi duyệt lại (resubmit) acceptance stage
+        if ($saved && $this->acceptance_stage_id) {
+            $this->autoResubmitAcceptanceStage();
+        }
         
         return $saved;
     }
@@ -172,6 +178,72 @@ class Defect extends Model
                     ]);
                 }
             }
+        }
+    }
+
+    /**
+     * BUSINESS RULE: Tự động gửi duyệt lại acceptance stage khi tất cả defects đã verified
+     */
+    protected function autoResubmitAcceptanceStage(): void
+    {
+        try {
+            if (!$this->acceptance_stage_id) {
+                return;
+            }
+
+            $stage = \App\Models\AcceptanceStage::find($this->acceptance_stage_id);
+            if (!$stage) {
+                return;
+            }
+
+            // Kiểm tra xem tất cả defects của stage đã verified chưa
+            $unverifiedDefects = Defect::where('acceptance_stage_id', $stage->id)
+                ->whereIn('status', ['open', 'in_progress', 'fixed'])
+                ->count();
+
+            // Nếu vẫn còn defects chưa verified, không resubmit
+            if ($unverifiedDefects > 0) {
+                return;
+            }
+
+            // Nếu tất cả defects đã verified, tự động resubmit acceptance items
+            // Resubmit các items đã bị rejected
+            $rejectedItems = $stage->items()
+                ->where('workflow_status', 'rejected')
+                ->get();
+
+            foreach ($rejectedItems as $item) {
+                // Reset rejection fields và chuyển về draft để có thể gửi duyệt lại
+                $item->update([
+                    'workflow_status' => 'draft',
+                    'rejected_by' => null,
+                    'rejected_at' => null,
+                    'rejection_reason' => null,
+                ]);
+            }
+
+            // Nếu stage đang ở trạng thái rejected, reset về pending
+            if ($stage->status === 'rejected') {
+                $stage->update([
+                    'status' => 'pending',
+                    'rejected_by' => null,
+                    'rejected_at' => null,
+                    'rejection_reason' => null,
+                ]);
+            }
+
+            \Illuminate\Support\Facades\Log::info('Auto-resubmitted acceptance stage after all defects verified', [
+                'stage_id' => $stage->id,
+                'stage_name' => $stage->name,
+                'defect_id' => $this->id,
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error auto-resubmitting acceptance stage', [
+                'defect_id' => $this->id,
+                'stage_id' => $this->acceptance_stage_id,
+                'error' => $e->getMessage()
+            ]);
+            // Don't throw - resubmit is not critical
         }
     }
 

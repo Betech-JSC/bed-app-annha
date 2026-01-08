@@ -22,6 +22,7 @@ import { PermissionGuard } from "./PermissionGuard";
 import { UniversalFileUploader } from "@/components";
 import { defectApi } from "@/api/defectApi";
 import { attachmentApi } from "@/api/attachmentApi";
+import { ganttApi } from "@/api/ganttApi";
 
 interface AcceptanceItemListProps {
   stage: AcceptanceStage;
@@ -32,6 +33,7 @@ interface AcceptanceItemListProps {
   onItemReject: (itemId: number, reason: string) => Promise<void>;
   isProjectManager?: boolean;
   isCustomer?: boolean;
+  isSupervisor?: boolean;
 }
 
 export default function AcceptanceItemList({
@@ -43,6 +45,7 @@ export default function AcceptanceItemList({
   onItemReject,
   isProjectManager = false,
   isCustomer = false,
+  isSupervisor = false,
 }: AcceptanceItemListProps) {
   const [showForm, setShowForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<AcceptanceItem | null>(null);
@@ -64,18 +67,18 @@ export default function AcceptanceItemList({
   // Kiểm tra quyền upload files cho item
   const canUploadFiles = (item: AcceptanceItem): boolean => {
     if (!user?.id) return false;
-    
+
     // Admin luôn có quyền upload
     if (isAdmin) return true;
-    
+
     // Project manager có quyền upload
     if (isProjectManager) return true;
-    
+
     // Người tạo có quyền upload khi ở trạng thái draft hoặc submitted
     if (item.created_by?.toString() === user.id.toString()) {
       return item.workflow_status === "draft" || item.workflow_status === "submitted";
     }
-    
+
     return false;
   };
 
@@ -113,10 +116,12 @@ export default function AcceptanceItemList({
         return "Nháp";
       case "submitted":
         return "Đã gửi duyệt";
+      case "supervisor_approved":
+        return "Giám sát đã duyệt";
       case "project_manager_approved":
         return "QLDA đã duyệt";
       case "customer_approved":
-        return "KH/Giám sát đã duyệt";
+        return "KH đã duyệt";
       case "rejected":
         return "Đã từ chối";
       default:
@@ -129,9 +134,11 @@ export default function AcceptanceItemList({
       case "draft":
         return "#6B7280";
       case "submitted":
-        return "#F59E0B";
-      case "project_manager_approved":
         return "#3B82F6";
+      case "supervisor_approved":
+        return "#10B981";
+      case "project_manager_approved":
+        return "#10B981";
       case "customer_approved":
         return "#10B981";
       case "rejected":
@@ -214,40 +221,6 @@ export default function AcceptanceItemList({
   };
 
   const handleSubmit = async (item: AcceptanceItem) => {
-    // Validate có upload hình ảnh (bắt buộc cho tất cả)
-    const attachmentsCount = item.attachments?.length || 0;
-    if (attachmentsCount === 0) {
-      Alert.alert(
-        "Không thể gửi duyệt",
-        "Vui lòng upload hình ảnh thực tế nghiệm thu trước khi gửi duyệt."
-      );
-      return;
-    }
-
-    // Admin có thể bypass một số validation
-    if (!isAdmin) {
-      // Validate chỉ kiểm tra task của item hiện tại (cho phép gửi duyệt từng hạng mục riêng lẻ)
-      if (item.task_id) {
-        const progress = item.task?.progress_percentage ?? itemTaskProgress[item.id] ?? 0;
-        if (progress < 100) {
-          Alert.alert(
-            "Không thể gửi duyệt",
-            `Hạng mục thi công "${item.task?.name || 'chưa có tên'}" chưa hoàn thành 100%. Vui lòng hoàn thành hạng mục trước khi gửi duyệt nghiệm thu.`
-          );
-          return;
-        }
-      }
-
-      // Validate không có lỗi chưa xử lý
-      if (itemDefects[item.id] > 0) {
-        Alert.alert(
-          "Không thể gửi duyệt",
-          `Còn ${itemDefects[item.id]} lỗi chưa được xử lý. Vui lòng xử lý tất cả lỗi trước khi gửi duyệt nghiệm thu.`
-        );
-        return;
-      }
-    }
-
     try {
       await acceptanceApi.submitItem(projectId, stage.id, item.id);
       Alert.alert("Thành công", "Đã gửi duyệt hạng mục nghiệm thu thành công");
@@ -257,11 +230,27 @@ export default function AcceptanceItemList({
     }
   };
 
+  const handleSupervisorApprove = async (item: AcceptanceItem) => {
+    try {
+      await acceptanceApi.supervisorApproveItem(projectId, stage.id, item.id);
+      Alert.alert("Thành công", "Đã duyệt thành công");
+      // Delay nhỏ để backend xử lý xong trước khi refresh
+      setTimeout(() => {
+        onRefresh();
+      }, 500);
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể duyệt");
+    }
+  };
+
   const handleProjectManagerApprove = async (item: AcceptanceItem) => {
     try {
       await acceptanceApi.projectManagerApproveItem(projectId, stage.id, item.id);
       Alert.alert("Thành công", "Đã duyệt thành công");
-      onRefresh();
+      // Delay nhỏ để backend xử lý xong trước khi refresh
+      setTimeout(() => {
+        onRefresh();
+      }, 500);
     } catch (error: any) {
       Alert.alert("Lỗi", error.response?.data?.message || "Không thể duyệt");
     }
@@ -271,7 +260,10 @@ export default function AcceptanceItemList({
     try {
       await acceptanceApi.customerApproveItem(projectId, stage.id, item.id);
       Alert.alert("Thành công", "Đã duyệt nghiệm thu thành công");
-      onRefresh();
+      // Delay nhỏ để backend xử lý xong (tạo ConstructionLog, cập nhật progress) trước khi refresh
+      setTimeout(() => {
+        onRefresh();
+      }, 1000);
     } catch (error: any) {
       Alert.alert("Lỗi", error.response?.data?.message || "Không thể duyệt");
     }
@@ -355,18 +347,18 @@ export default function AcceptanceItemList({
   // Kiểm tra quyền xóa file
   const canDeleteAttachment = (attachment: any): boolean => {
     if (!user?.id) return false;
-    
+
     // Admin luôn có quyền xóa
     if (isAdmin) return true;
-    
+
     // Project manager có quyền xóa
     if (isProjectManager) return true;
-    
+
     // Người upload file có quyền xóa file của mình
     if (attachment.uploaded_by?.toString() === user.id.toString()) {
       return true;
     }
-    
+
     return false;
   };
 
@@ -376,26 +368,49 @@ export default function AcceptanceItemList({
       const defectsMap: Record<number, number> = {};
       const progressMap: Record<number, number> = {};
 
-      for (const item of items) {
-        if (item.task_id) {
-          try {
-            // Load defects
-            const response = await defectApi.getDefects(projectId);
-            if (response.success) {
-              const openDefects = (response.data || []).filter(
+      // Load all defects once
+      try {
+        const defectsResponse = await defectApi.getDefects(projectId);
+        if (defectsResponse.success) {
+          const allDefects = defectsResponse.data || [];
+          items.forEach((item) => {
+            if (item.task_id) {
+              const openDefects = allDefects.filter(
                 (defect: any) =>
                   defect.task_id === item.task_id &&
                   (defect.status === 'open' || defect.status === 'in_progress')
               );
               defectsMap[item.id] = openDefects.length;
             }
+          });
+        }
+      } catch (error) {
+        console.error("Error loading defects:", error);
+      }
 
-            // Get task progress from item.task if available
+      // Load task progress for items with task_id
+      // Always reload from API to get latest progress after acceptance updates
+      for (const item of items) {
+        if (item.task_id) {
+          try {
+            // Always reload from API to ensure we have the latest progress
+            // This is important after acceptance approval which updates task progress
+            const taskResponse = await ganttApi.getTask(projectId.toString(), item.task_id.toString());
+            if (taskResponse.success && taskResponse.data) {
+              const task = taskResponse.data;
+              if (task.progress_percentage !== undefined) {
+                progressMap[item.id] = task.progress_percentage;
+              }
+            } else if (item.task && item.task.progress_percentage !== undefined) {
+              // Fallback to item.task if API call fails
+              progressMap[item.id] = item.task.progress_percentage;
+            }
+          } catch (taskError) {
+            console.error(`Error loading task ${item.task_id} progress:`, taskError);
+            // Fallback to item.task if available
             if (item.task && item.task.progress_percentage !== undefined) {
               progressMap[item.id] = item.task.progress_percentage;
             }
-          } catch (error) {
-            console.error(`Error loading data for item ${item.id}:`, error);
           }
         }
       }
@@ -601,9 +616,25 @@ export default function AcceptanceItemList({
                 {(item.task || item.template) && (
                   <View style={styles.infoRow}>
                     {item.task && (
-                      <View style={styles.infoItem}>
-                        <Ionicons name="construct-outline" size={14} color="#6B7280" />
-                        <Text style={styles.infoText}>{item.task.name}</Text>
+                      <View style={styles.taskProgressContainer}>
+                        <View style={styles.infoItem}>
+                          <Ionicons name="construct-outline" size={14} color="#6B7280" />
+                          <Text style={styles.infoText}>{item.task.name}</Text>
+                        </View>
+                        {(() => {
+                          const taskProgress = item.task?.progress_percentage ?? itemTaskProgress[item.id] ?? 0;
+                          const progressValue = typeof taskProgress === 'number' ? taskProgress : 0;
+                          return (
+                            <View style={styles.taskProgressInfo}>
+                              <View style={styles.taskProgressBarContainer}>
+                                <View style={[styles.taskProgressBar, { width: `${Math.min(100, Math.max(0, progressValue))}%` }]} />
+                              </View>
+                              <Text style={styles.taskProgressText}>
+                                {progressValue.toFixed(0)}%
+                              </Text>
+                            </View>
+                          );
+                        })()}
                       </View>
                     )}
                     {item.template && (
@@ -631,10 +662,10 @@ export default function AcceptanceItemList({
                         styles.attachmentsIconContainer,
                         (item.attachments?.length || 0) > 0 && styles.attachmentsIconContainerCompleted
                       ]}>
-                        <Ionicons 
-                          name={(item.attachments?.length || 0) > 0 ? "checkmark-circle" : "images-outline"} 
-                          size={18} 
-                          color={(item.attachments?.length || 0) > 0 ? "#10B981" : "#3B82F6"} 
+                        <Ionicons
+                          name={(item.attachments?.length || 0) > 0 ? "checkmark-circle" : "images-outline"}
+                          size={18}
+                          color={(item.attachments?.length || 0) > 0 ? "#10B981" : "#3B82F6"}
                         />
                       </View>
                       <View style={styles.attachmentsTitleContainer}>
@@ -642,8 +673,8 @@ export default function AcceptanceItemList({
                           Hình ảnh nghiệm thu thực tế
                         </Text>
                         <Text style={styles.attachmentsSubtitle}>
-                          {item.attachments && item.attachments.length > 0 
-                            ? `${item.attachments.length} ảnh đã upload` 
+                          {item.attachments && item.attachments.length > 0
+                            ? `${item.attachments.length} ảnh đã upload`
                             : "Chưa có hình ảnh - Vui lòng upload để tiếp tục"}
                         </Text>
                       </View>
@@ -656,10 +687,10 @@ export default function AcceptanceItemList({
                         ]}
                         onPress={() => handleOpenUploadModal(item.id)}
                       >
-                        <Ionicons 
-                          name={item.attachments && item.attachments.length > 0 ? "add-circle-outline" : "cloud-upload-outline"} 
-                          size={16} 
-                          color={(item.attachments?.length || 0) === 0 ? "#FFFFFF" : "#3B82F6"} 
+                        <Ionicons
+                          name={item.attachments && item.attachments.length > 0 ? "add-circle-outline" : "cloud-upload-outline"}
+                          size={16}
+                          color={(item.attachments?.length || 0) === 0 ? "#FFFFFF" : "#3B82F6"}
                         />
                         <Text style={[
                           styles.uploadButtonInlineText,
@@ -752,10 +783,10 @@ export default function AcceptanceItemList({
                         styles.workflowIconContainer,
                         item.workflow_status === 'customer_approved' && styles.workflowIconContainerCompleted
                       ]}>
-                        <Ionicons 
-                          name={item.workflow_status === 'customer_approved' ? "checkmark-done-circle" : "checkmark-done-outline"} 
-                          size={18} 
-                          color={item.workflow_status === 'customer_approved' ? "#10B981" : "#3B82F6"} 
+                        <Ionicons
+                          name={item.workflow_status === 'customer_approved' ? "checkmark-done-circle" : "checkmark-done-outline"}
+                          size={18}
+                          color={item.workflow_status === 'customer_approved' ? "#10B981" : "#3B82F6"}
                         />
                       </View>
                       <Text style={styles.workflowTitle}>Luồng duyệt nghiệm thu</Text>
@@ -763,76 +794,52 @@ export default function AcceptanceItemList({
                     <View style={styles.workflowTimeline}>
                       {/* Connector line background */}
                       <View style={styles.workflowConnectorBackground} />
-                      
-                      {/* Step 1: Người lập */}
+
+                      {/* Step 1: Giám sát duyệt */}
                       <View style={styles.workflowStepContainer}>
                         <View style={styles.workflowStepContent}>
-                      <View style={[
+                          <View style={[
                             styles.workflowStepIcon,
-                            item.workflow_status !== 'draft' && styles.workflowStepIconCompleted
-                      ]}>
-                            <Ionicons 
-                              name={item.workflow_status !== 'draft' ? "checkmark" : "person-outline"} 
-                              size={16} 
-                              color={item.workflow_status !== 'draft' ? "#FFFFFF" : "#6B7280"} 
+                            ['submitted', 'supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepIconCompleted
+                          ]}>
+                            <Ionicons
+                              name={['submitted', 'supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "checkmark" : "eye-outline"}
+                              size={16}
+                              color={['submitted', 'supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "#FFFFFF" : "#6B7280"}
                             />
                           </View>
-                        <Text style={[
-                          styles.workflowStepLabel,
-                          item.workflow_status !== 'draft' && styles.workflowStepLabelCompleted
-                          ]}>Người lập</Text>
-                      </View>
+                          <Text style={[
+                            styles.workflowStepLabel,
+                            ['submitted', 'supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepLabelCompleted
+                          ]}>Giám sát</Text>
+                          <Text style={styles.workflowStepSubLabel}>Duyệt hạng mục</Text>
+                        </View>
                       </View>
 
                       {/* Connector 1-2 */}
                       <View style={[
                         styles.workflowConnector,
-                        item.workflow_status !== 'draft' && styles.workflowConnectorActive
+                        ['submitted', 'supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowConnectorActive
                       ]} />
 
-                      {/* Step 2: QLDA */}
+                      {/* Step 2: Quản lý dự án duyệt */}
                       <View style={styles.workflowStepContainer}>
                         <View style={styles.workflowStepContent}>
                           <View style={[
                             styles.workflowStepIcon,
-                            ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepIconCompleted
-                      ]}>
-                            <Ionicons 
-                              name={['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "checkmark" : "briefcase-outline"} 
-                              size={16} 
-                              color={['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "#FFFFFF" : "#6B7280"} 
-                            />
-                          </View>
-                        <Text style={[
-                          styles.workflowStepLabel,
-                          ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepLabelCompleted
-                          ]}>QLDA</Text>
-                      </View>
-                      </View>
-
-                      {/* Connector 2-3 */}
-                      <View style={[
-                        styles.workflowConnector,
-                        ['submitted', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowConnectorActive
-                      ]} />
-
-                      {/* Step 3: KH/Giám sát */}
-                      <View style={styles.workflowStepContainer}>
-                        <View style={styles.workflowStepContent}>
-                        <View style={[
-                            styles.workflowStepIcon,
-                            item.workflow_status === 'customer_approved' && styles.workflowStepIconCompleted
+                            ['supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepIconCompleted
                           ]}>
-                            <Ionicons 
-                              name={item.workflow_status === 'customer_approved' ? "checkmark" : "people-outline"} 
-                              size={16} 
-                              color={item.workflow_status === 'customer_approved' ? "#FFFFFF" : "#6B7280"} 
+                            <Ionicons
+                              name={['supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "checkmark" : "briefcase-outline"}
+                              size={16}
+                              color={['supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "#FFFFFF" : "#6B7280"}
                             />
                           </View>
-                        <Text style={[
-                          styles.workflowStepLabel,
-                          item.workflow_status === 'customer_approved' && styles.workflowStepLabelCompleted
-                          ]}>KH/Giám sát</Text>
+                          <Text style={[
+                            styles.workflowStepLabel,
+                            ['supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepLabelCompleted
+                          ]}>Quản lý dự án</Text>
+                          <Text style={styles.workflowStepSubLabel}>Duyệt hạng mục</Text>
                         </View>
                       </View>
                     </View>
@@ -855,6 +862,14 @@ export default function AcceptanceItemList({
                 )}
 
                 {/* Warnings Section - Cảnh báo */}
+                {(item.workflow_status === "draft" || item.workflow_status === "rejected") && (item.attachments?.length || 0) === 0 && (
+                  <View style={styles.defectsWarningContainer}>
+                    <Ionicons name="document-attach-outline" size={16} color="#F59E0B" />
+                    <Text style={styles.defectsWarningText}>
+                      <Text style={styles.warningBold}>Bắt buộc:</Text> Vui lòng đính kèm hồ sơ nghiệm thu (file PDF/Word/hình ảnh…) trước khi gửi xét duyệt.
+                    </Text>
+                  </View>
+                )}
                 {item.task_id && itemDefects[item.id] > 0 && (
                   <View style={styles.defectsWarningContainer}>
                     <Ionicons name="warning-outline" size={16} color="#EF4444" />
@@ -882,17 +897,17 @@ export default function AcceptanceItemList({
                 {item.approved_at && (
                   <View style={styles.approvedContainer}>
                     <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                  <Text style={styles.approvedText}>
-                    Đã nghiệm thu: {new Date(item.approved_at).toLocaleString("vi-VN")}
-                        </Text>
-                      </View>
+                    <Text style={styles.approvedText}>
+                      Đã nghiệm thu: {new Date(item.approved_at).toLocaleString("vi-VN")}
+                    </Text>
+                  </View>
                 )}
 
                 {/* Action Buttons Section */}
                 <View style={styles.itemActions}>
                   {/* Workflow Actions */}
-                  {/* Người tạo hoặc admin có thể gửi duyệt */}
-                  {item.workflow_status === "draft" &&
+                  {/* Người tạo hoặc admin có thể gửi duyệt (draft hoặc rejected) */}
+                  {(item.workflow_status === "draft" || item.workflow_status === "rejected") &&
                     user?.id &&
                     (item.created_by?.toString() === user.id.toString() || isAdmin) && (
                       <View style={styles.actionButtonsRow}>
@@ -900,57 +915,15 @@ export default function AcceptanceItemList({
                           style={[
                             styles.actionButton,
                             styles.submitButton,
-                            ((!isAdmin && (
-                              itemDefects[item.id] > 0 ||
-                              (item.attachments?.length || 0) === 0 ||
-                              (() => {
-                                // Chỉ kiểm tra task của item hiện tại
-                                if (!item.task_id) return false; // Nếu không có task thì không cần kiểm tra
-                                const progress = item.task?.progress_percentage ?? itemTaskProgress[item.id] ?? 0;
-                                return progress < 100;
-                              })()
-                            )) ||
-                              (isAdmin && (item.attachments?.length || 0) === 0)) && styles.disabledButton
                           ]}
                           onPress={() => {
-                            // Admin có thể bypass một số validation
-                            if (!isAdmin) {
-                              if (itemDefects[item.id] > 0) {
-                                Alert.alert(
-                                  "Không thể gửi duyệt",
-                                  `Còn ${itemDefects[item.id]} lỗi chưa được xử lý. Vui lòng xử lý tất cả lỗi trước khi gửi duyệt nghiệm thu.`
-                                );
-                                return;
-                              }
-                            }
-                            const attachmentsCount = item.attachments?.length || 0;
-                            if (attachmentsCount === 0) {
-                              Alert.alert(
-                                "Không thể gửi duyệt",
-                                "Vui lòng upload hình ảnh thực tế nghiệm thu trước khi gửi duyệt."
-                              );
-                              return;
-                            }
                             handleSubmit(item);
                           }}
-                          disabled={
-                            // Admin có thể bypass một số validation, nhưng vẫn cần có hình ảnh
-                            !isAdmin && (
-                              itemDefects[item.id] > 0 ||
-                              (item.attachments?.length || 0) === 0 ||
-                              (() => {
-                                // Chỉ kiểm tra task của item hiện tại
-                                if (!item.task_id) return false; // Nếu không có task thì không cần kiểm tra
-                                const progress = item.task?.progress_percentage ?? itemTaskProgress[item.id] ?? 0;
-                                return progress < 100;
-                              })()
-                            ) ||
-                            // Admin vẫn cần có hình ảnh (bắt buộc)
-                            (isAdmin && (item.attachments?.length || 0) === 0)
-                          }
                         >
                           <Ionicons name="send-outline" size={16} color="#FFFFFF" />
-                          <Text style={styles.submitButtonText}>Gửi duyệt</Text>
+                          <Text style={styles.submitButtonText}>
+                            {item.workflow_status === "rejected" ? "Gửi duyệt lại" : "Gửi duyệt"}
+                          </Text>
                         </TouchableOpacity>
                         <View style={styles.secondaryActionsRow}>
                           <TouchableOpacity
@@ -972,7 +945,42 @@ export default function AcceptanceItemList({
                       </View>
                     )}
 
-                  {item.workflow_status === "submitted" && isProjectManager && (
+                  {/* Supervisor approve - khi submitted */}
+                  {item.workflow_status === "submitted" && (isSupervisor || isAdmin) && (
+                    <View style={styles.actionButtonGroup}>
+                      <TouchableOpacity
+                        style={[
+                          styles.actionButton,
+                          styles.approveButtonPrimary,
+                          itemDefects[item.id] > 0 && styles.disabledButton
+                        ]}
+                        onPress={() => {
+                          if (itemDefects[item.id] > 0) {
+                            Alert.alert(
+                              "Không thể duyệt",
+                              `Còn ${itemDefects[item.id]} lỗi chưa được xử lý. Vui lòng xử lý tất cả lỗi trước khi duyệt nghiệm thu.`
+                            );
+                            return;
+                          }
+                          handleSupervisorApprove(item);
+                        }}
+                        disabled={itemDefects[item.id] > 0}
+                      >
+                        <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                        <Text style={styles.approveButtonTextPrimary}>Duyệt</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.rejectButtonSecondary]}
+                        onPress={() => handleWorkflowReject(item)}
+                      >
+                        <Ionicons name="close-circle" size={16} color="#EF4444" />
+                        <Text style={styles.rejectButtonTextSecondary}>Từ chối</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Project Manager approve - khi supervisor_approved */}
+                  {item.workflow_status === "supervisor_approved" && (isProjectManager || isAdmin) && (
                     <View style={styles.actionButtonGroup}>
                       <TouchableOpacity
                         style={[
@@ -1005,7 +1013,8 @@ export default function AcceptanceItemList({
                     </View>
                   )}
 
-                  {item.workflow_status === "project_manager_approved" && (isCustomer || isProjectManager) && (
+                  {/* Customer approve - khi project_manager_approved (legacy - không còn dùng cho item) */}
+                  {item.workflow_status === "project_manager_approved" && (isCustomer || isAdmin) && (
                     <View style={styles.actionButtonGroup}>
                       <TouchableOpacity
                         style={[
@@ -1093,7 +1102,7 @@ export default function AcceptanceItemList({
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleContainer}>
-              <Text style={styles.modalTitle}>Upload hình ảnh nghiệm thu</Text>
+                <Text style={styles.modalTitle}>Upload hình ảnh nghiệm thu</Text>
                 {uploadingItemId && (
                   <Text style={styles.modalSubtitle}>
                     {items.find(i => i.id === uploadingItemId)?.name || "Hạng mục"}
@@ -1127,21 +1136,21 @@ export default function AcceptanceItemList({
                 />
               </View>
               <View style={styles.uploaderContainer}>
-              <UniversalFileUploader
-                onUploadComplete={handleUploadComplete}
-                multiple={true}
-                accept="image"
-                maxFiles={10}
-              />
-            </View>
+                <UniversalFileUploader
+                  onUploadComplete={handleUploadComplete}
+                  multiple={true}
+                  accept="image"
+                  maxFiles={10}
+                />
+              </View>
               {uploading && (
                 <View style={styles.uploadingContainer}>
                   <ActivityIndicator size="small" color="#3B82F6" />
                   <Text style={styles.uploadingText}>Đang upload...</Text>
-          </View>
+                </View>
               )}
             </ScrollView>
-        </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -1450,6 +1459,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
   },
+  taskProgressContainer: {
+    flex: 1,
+    marginBottom: 8,
+  },
+  taskProgressInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6,
+  },
+  taskProgressBarContainer: {
+    flex: 1,
+    height: 6,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  taskProgressBar: {
+    height: "100%",
+    backgroundColor: "#3B82F6",
+    borderRadius: 3,
+  },
+  taskProgressText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#3B82F6",
+    minWidth: 35,
+    textAlign: "right",
+  },
   workflowStatusContainer: {
     marginTop: 16,
     marginBottom: 12,
@@ -1549,6 +1587,13 @@ const styles = StyleSheet.create({
   workflowStepLabelCompleted: {
     color: "#10B981",
     fontWeight: "600",
+  },
+  workflowStepSubLabel: {
+    fontSize: 10,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginTop: 2,
+    lineHeight: 14,
   },
   workflowStatusBadge: {
     paddingHorizontal: 12,
@@ -1908,6 +1953,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#DC2626",
     lineHeight: 18,
+  },
+  warningBold: {
+    fontWeight: "700",
+    color: "#DC2626",
   },
   progressWarningContainer: {
     flexDirection: "row",

@@ -21,6 +21,7 @@ class ProjectPhase extends Model
         'end_date',
         'order',
         'status',
+        'progress_percentage', // System-calculated: average of tasks in phase
         'created_by',
         'updated_by',
     ];
@@ -29,6 +30,7 @@ class ProjectPhase extends Model
         'start_date' => 'date',
         'end_date' => 'date',
         'order' => 'integer',
+        'progress_percentage' => 'decimal:2',
     ];
 
     // ==================================================================
@@ -43,6 +45,14 @@ class ProjectPhase extends Model
     public function tasks(): HasMany
     {
         return $this->hasMany(ProjectTask::class)->orderBy('order');
+    }
+
+    /**
+     * Acceptance stages linked to this phase
+     */
+    public function acceptanceStages(): HasMany
+    {
+        return $this->hasMany(AcceptanceStage::class, 'phase_id');
     }
 
     public function creator(): BelongsTo

@@ -41,6 +41,7 @@ export default function ProgressScreen() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"structure" | "report">("structure");
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set());
+  const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     loadAllData();
@@ -126,7 +127,7 @@ export default function ProgressScreen() {
   const calculatePhaseProgress = (phase: ProjectPhase): number => {
     const phaseTasks = tasks.filter(t => t.phase_id === phase.id);
     if (phaseTasks.length === 0) return 0;
-    
+
     const totalProgress = phaseTasks.reduce((sum, task) => sum + (task.progress_percentage || 0), 0);
     return Math.round(totalProgress / phaseTasks.length);
   };
@@ -138,11 +139,11 @@ export default function ProgressScreen() {
     today.setHours(0, 0, 0, 0);
     const endDate = new Date(item.end_date);
     endDate.setHours(0, 0, 0, 0);
-    
+
     if (today > endDate) {
       // Nếu đã quá ngày kết thúc và chưa hoàn thành
-      if ('status' in item) {
-        return item.status !== 'completed' && (item.progress_percentage || 0) < 100;
+      if ('status' in item && 'progress_percentage' in item) {
+        return item.status !== 'completed' && ((item as ProjectTask).progress_percentage || 0) < 100;
       }
       return true;
     }
@@ -176,7 +177,7 @@ export default function ProgressScreen() {
     }
 
     // Kiểm tra log gần nhất
-    const latestLog = relatedLogs.sort((a, b) => 
+    const latestLog = relatedLogs.sort((a, b) =>
       new Date(b.log_date).getTime() - new Date(a.log_date).getTime()
     )[0];
 
@@ -195,7 +196,7 @@ export default function ProgressScreen() {
       const calculatedProgress = calculatePhaseProgress(phase);
       const isDelayed = checkDelayed(phase);
       const needsUpdate = checkNeedsUpdate(phase);
-      
+
       return {
         ...phase,
         calculated_progress: calculatedProgress,
@@ -210,7 +211,7 @@ export default function ProgressScreen() {
     return tasks.map(task => {
       const isDelayed = checkDelayed(task);
       const needsUpdate = checkNeedsUpdate(task);
-      
+
       return {
         ...task,
         isDelayed,
@@ -218,6 +219,219 @@ export default function ProgressScreen() {
       };
     });
   }, [tasks, logs]);
+
+  // Build task hierarchy for tree view
+  const taskHierarchy = useMemo(() => {
+    const taskMap = new Map<number, TaskWithAlerts & { children: TaskWithAlerts[] }>();
+    const rootTasks: (TaskWithAlerts & { children: TaskWithAlerts[] })[] = [];
+
+    // Initialize all tasks
+    tasksWithAlerts.forEach(task => {
+      taskMap.set(task.id, { ...task, children: [] });
+    });
+
+    // Build hierarchy
+    tasksWithAlerts.forEach(task => {
+      const taskWithChildren = taskMap.get(task.id)!;
+      const parentId = (task as any).parent_id;
+      if (parentId && taskMap.has(parentId)) {
+        const parent = taskMap.get(parentId)!;
+        parent.children.push(taskWithChildren);
+      } else {
+        rootTasks.push(taskWithChildren);
+      }
+    });
+
+    return { taskMap, rootTasks };
+  }, [tasksWithAlerts]);
+
+  const toggleTask = (taskId: number) => {
+    const newExpanded = new Set(expandedTasks);
+    if (newExpanded.has(taskId)) {
+      newExpanded.delete(taskId);
+    } else {
+      newExpanded.add(taskId);
+    }
+    setExpandedTasks(newExpanded);
+  };
+
+  // Get status color
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "not_started":
+        return "#6B7280";
+      case "in_progress":
+        return "#3B82F6";
+      case "completed":
+        return "#10B981";
+      case "delayed":
+        return "#EF4444";
+      default:
+        return "#6B7280";
+    }
+  };
+
+  // Get status label
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "not_started":
+        return "Chưa bắt đầu";
+      case "in_progress":
+        return "Đang thực hiện";
+      case "completed":
+        return "Hoàn thành";
+      case "delayed":
+        return "Trễ tiến độ";
+      default:
+        return status;
+    }
+  };
+
+  // Get priority config
+  const getPriorityConfig = (priority: string) => {
+    switch (priority) {
+      case "urgent":
+        return { color: "#DC2626", bg: "#DC262620", icon: "alert-circle" };
+      case "high":
+        return { color: "#F59E0B", bg: "#F59E0B20", icon: "warning" };
+      case "medium":
+        return { color: "#3B82F6", bg: "#3B82F620", icon: "information-circle" };
+      case "low":
+        return { color: "#10B981", bg: "#10B98120", icon: "checkmark-circle" };
+      default:
+        return { color: "#6B7280", bg: "#6B728020", icon: "ellipse" };
+    }
+  };
+
+  // Render task tree recursively
+  const renderTaskTree = (
+    task: TaskWithAlerts & { children: TaskWithAlerts[] },
+    level: number = 0
+  ) => {
+    const hasChildren = task.children && task.children.length > 0;
+    const isExpanded = expandedTasks.has(task.id);
+    const statusColor = getStatusColor(task.status || "not_started");
+    const priorityConfig = getPriorityConfig(task.priority || "medium");
+
+    return (
+      <View key={task.id} style={styles.treeTaskItem}>
+        <TouchableOpacity
+          style={[styles.treeTaskRow, { paddingLeft: 12 + level * 24 }]}
+          onPress={() => {
+            // Navigate to task detail or open modal
+            router.push({
+              pathname: `/projects/${id}/construction-plan`,
+              params: { taskId: task.id.toString() },
+            });
+          }}
+        >
+          <View style={styles.treeTaskLeft}>
+            {hasChildren ? (
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  toggleTask(task.id);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons
+                  name={isExpanded ? "chevron-down" : "chevron-forward"}
+                  size={18}
+                  color="#6B7280"
+                  style={styles.treeExpandIcon}
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.treeExpandIcon} />
+            )}
+
+            {/* Priority Badge */}
+            <View style={[styles.treePriorityBadge, { backgroundColor: priorityConfig.bg }]}>
+              <Ionicons name={priorityConfig.icon as any} size={14} color={priorityConfig.color} />
+            </View>
+
+            <View style={styles.treeTaskInfo}>
+              <View style={styles.treeTaskNameRow}>
+                <Text style={styles.treeTaskName} numberOfLines={1}>
+                  {task.name}
+                </Text>
+                {/* Show acceptance stage badge if task has acceptance stages */}
+                {(() => {
+                  const taskStages = (task as any).acceptanceStages || [];
+                  if (taskStages.length > 0) {
+                    return (
+                      <View style={styles.treeAcceptanceBadge}>
+                        <Ionicons name="checkmark-circle" size={12} color="#10B981" />
+                        <Text style={styles.treeAcceptanceBadgeText}>
+                          {taskStages.length}
+                        </Text>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
+              </View>
+              <View style={styles.treeTaskMeta}>
+                <Text style={styles.treeTaskDates}>
+                  {formatDate(task.start_date)} - {formatDate(task.end_date)}
+                </Text>
+                <View style={[styles.treeStatusBadge, { backgroundColor: statusColor + "20" }]}>
+                  <Text style={[styles.treeStatusText, { color: statusColor }]}>
+                    {getStatusLabel(task.status || "not_started")}
+                  </Text>
+                </View>
+                {(task.isDelayed || task.needsUpdate) && (
+                  <View style={styles.treeAlertBadges}>
+                    {task.isDelayed && (
+                      <View style={[styles.treeAlertBadge, { backgroundColor: "#EF444420" }]}>
+                        <Ionicons name="warning" size={10} color="#EF4444" />
+                      </View>
+                    )}
+                    {task.needsUpdate && (
+                      <View style={[styles.treeAlertBadge, { backgroundColor: "#F59E0B20" }]}>
+                        <Ionicons name="time" size={10} color="#F59E0B" />
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.treeTaskRight}>
+            <View style={styles.treeProgressContainer}>
+              <View style={styles.treeProgressBar}>
+                <View
+                  style={[
+                    styles.treeProgressFill,
+                    {
+                      width: `${task.progress_percentage || 0}%`,
+                      backgroundColor: statusColor,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.treeProgressText}>
+                {(task.progress_percentage != null && typeof task.progress_percentage === 'number'
+                  ? task.progress_percentage.toFixed(0)
+                  : 0)}%
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          </View>
+        </TouchableOpacity>
+
+        {/* Render children recursively */}
+        {hasChildren && isExpanded && (
+          <View style={styles.treeChildrenContainer}>
+            {task.children.map((child: TaskWithAlerts & { children: TaskWithAlerts[] }) =>
+              renderTaskTree(child, level + 1)
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   // Tổng hợp cảnh báo
   const warnings = useMemo(() => {
@@ -256,8 +470,20 @@ export default function ProgressScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: tabBarHeight }}>
-      <ScreenHeader title="Tiến Độ Thi Công" showBackButton />
+    <View style={styles.container}>
+      <ScreenHeader
+        title="Tiến Độ Thi Công"
+        showBackButton
+        rightComponent={
+          <TouchableOpacity
+            style={styles.createButtonHeader}
+            onPress={() => router.push(`/projects/${id}/construction-plan`)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="add" size={24} color="#3B82F6" />
+          </TouchableOpacity>
+        }
+      />
 
       {/* View Mode Toggle */}
       <View style={styles.viewModeContainer}>
@@ -273,7 +499,7 @@ export default function ProgressScreen() {
         <TouchableOpacity
           style={[styles.viewModeButton, viewMode === "report" && styles.viewModeButtonActive]}
           onPress={() => setViewMode("report")}
-          >
+        >
           <Ionicons name="bar-chart-outline" size={20} color={viewMode === "report" ? "#FFFFFF" : "#6B7280"} />
           <Text style={[styles.viewModeText, viewMode === "report" && styles.viewModeTextActive]}>
             Báo cáo tiến độ
@@ -281,251 +507,141 @@ export default function ProgressScreen() {
         </TouchableOpacity>
       </View>
 
-      {viewMode === "structure" ? (
-        <>
-          {/* Cảnh báo */}
-          {(warnings.delayed.length > 0 || warnings.needsUpdate.length > 0) && (
-            <View style={styles.warningsSection}>
-              <Text style={styles.sectionTitle}>Cảnh báo</Text>
-              
-              {warnings.delayed.length > 0 && (
-                <View style={styles.warningCard}>
-                  <View style={[styles.warningIcon, { backgroundColor: "#EF444420" }]}>
-                    <Ionicons name="warning-outline" size={24} color="#EF4444" />
-                  </View>
-                  <View style={styles.warningContent}>
-                    <Text style={[styles.warningTitle, { color: "#EF4444" }]}>
-                      Trễ tiến độ ({warnings.delayed.length})
-                    </Text>
-                    <Text style={styles.warningText}>
-                      {warnings.delayed.slice(0, 3).map((item: any) => item.name).join(", ")}
-                      {warnings.delayed.length > 3 && ` và ${warnings.delayed.length - 3} hạng mục khác`}
-                    </Text>
-                  </View>
-                </View>
-              )}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: tabBarHeight }}
+      >
+        {viewMode === "structure" ? (
+          <>
+            {/* Cảnh báo */}
+            {(warnings.delayed.length > 0 || warnings.needsUpdate.length > 0) && (
+              <View style={styles.warningsSection}>
+                <Text style={styles.sectionTitle}>Cảnh báo</Text>
 
-              {warnings.needsUpdate.length > 0 && (
-                <View style={styles.warningCard}>
-                  <View style={[styles.warningIcon, { backgroundColor: "#F59E0B20" }]}>
-                    <Ionicons name="time-outline" size={24} color="#F59E0B" />
+                {warnings.delayed.length > 0 && (
+                  <View style={styles.warningCard}>
+                    <View style={[styles.warningIcon, { backgroundColor: "#EF444420" }]}>
+                      <Ionicons name="warning-outline" size={24} color="#EF4444" />
+                    </View>
+                    <View style={styles.warningContent}>
+                      <Text style={[styles.warningTitle, { color: "#EF4444" }]}>
+                        Trễ tiến độ ({warnings.delayed.length})
+                      </Text>
+                      <Text style={styles.warningText}>
+                        {warnings.delayed.slice(0, 3).map((item: any) => item.name).join(", ")}
+                        {warnings.delayed.length > 3 && ` và ${warnings.delayed.length - 3} hạng mục khác`}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.warningContent}>
-                    <Text style={[styles.warningTitle, { color: "#F59E0B" }]}>
-                      Chưa cập nhật theo ngày ({warnings.needsUpdate.length})
-                    </Text>
-                    <Text style={styles.warningText}>
-                      {warnings.needsUpdate.slice(0, 3).map((item: any) => item.name).join(", ")}
-                      {warnings.needsUpdate.length > 3 && ` và ${warnings.needsUpdate.length - 3} hạng mục khác`}
-                    </Text>
+                )}
+
+                {warnings.needsUpdate.length > 0 && (
+                  <View style={styles.warningCard}>
+                    <View style={[styles.warningIcon, { backgroundColor: "#F59E0B20" }]}>
+                      <Ionicons name="time-outline" size={24} color="#F59E0B" />
+                    </View>
+                    <View style={styles.warningContent}>
+                      <Text style={[styles.warningTitle, { color: "#F59E0B" }]}>
+                        Chưa cập nhật theo ngày ({warnings.needsUpdate.length})
+                      </Text>
+                      <Text style={styles.warningText}>
+                        {warnings.needsUpdate.slice(0, 3).map((item: any) => item.name).join(", ")}
+                        {warnings.needsUpdate.length > 3 && ` và ${warnings.needsUpdate.length - 3} hạng mục khác`}
+                      </Text>
+                    </View>
                   </View>
+                )}
+              </View>
+            )}
+
+            {/* Tree View - Cấu trúc tiến độ phân cấp */}
+            <View style={styles.structureSection}>
+              <Text style={styles.sectionTitle}>Cấu trúc tiến độ</Text>
+
+              {taskHierarchy.rootTasks.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="folder-outline" size={64} color="#D1D5DB" />
+                  <Text style={styles.emptyText}>Chưa có hạng mục công việc</Text>
+                  <TouchableOpacity
+                    style={styles.createButton}
+                    onPress={() => router.push(`/projects/${id}/construction-plan`)}
+                  >
+                    <Text style={styles.createButtonText}>Tạo kế hoạch thi công</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.treeContainer}>
+                  {taskHierarchy.rootTasks.map((rootTask) => renderTaskTree(rootTask, 0))}
                 </View>
               )}
             </View>
-          )}
-
-          {/* Cấu trúc tiến độ */}
-          <View style={styles.structureSection}>
-            <Text style={styles.sectionTitle}>Cấu trúc tiến độ</Text>
-            
-            {phasesWithProgress.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="folder-outline" size={64} color="#D1D5DB" />
-                <Text style={styles.emptyText}>Chưa có hạng mục công việc</Text>
-                <TouchableOpacity
-                  style={styles.createButton}
-                  onPress={() => router.push(`/projects/${id}/construction-plan`)}
-                >
-                  <Text style={styles.createButtonText}>Tạo kế hoạch thi công</Text>
-                </TouchableOpacity>
-          </View>
+          </>
         ) : (
-              phasesWithProgress.map((phase) => {
-                const phaseTasks = tasksWithAlerts.filter(t => t.phase_id === phase.id);
-                const isExpanded = expandedPhases.has(phase.id);
+          <>
+            {/* Báo cáo tiến độ */}
+            <View style={styles.reportSection}>
+              <Text style={styles.sectionTitle}>Báo cáo tiến độ</Text>
 
-                return (
-                  <View key={phase.id} style={styles.phaseCard}>
-                    <TouchableOpacity
-                      style={styles.phaseHeader}
-                      onPress={() => togglePhase(phase.id)}
-                    >
-                      <View style={styles.phaseHeaderLeft}>
-                        <Ionicons
-                          name={isExpanded ? "chevron-down" : "chevron-forward"}
-                          size={20}
-                          color="#6B7280"
-                        />
-                        <View style={styles.phaseInfo}>
-                          <View style={styles.phaseNameRow}>
-                            <Text style={styles.phaseName}>{phase.name}</Text>
-                            {(phase.isDelayed || phase.needsUpdate) && (
-                              <View style={styles.alertBadges}>
-                                {phase.isDelayed && (
-                                  <View style={[styles.alertBadge, { backgroundColor: "#EF444420" }]}>
-                                    <Ionicons name="warning" size={12} color="#EF4444" />
-                                    <Text style={[styles.alertBadgeText, { color: "#EF4444" }]}>
-                                      Trễ
-                                    </Text>
-                                  </View>
-                                )}
-                                {phase.needsUpdate && (
-                                  <View style={[styles.alertBadge, { backgroundColor: "#F59E0B20" }]}>
-                                    <Ionicons name="time" size={12} color="#F59E0B" />
-                                    <Text style={[styles.alertBadgeText, { color: "#F59E0B" }]}>
-                                      Cần cập nhật
-                                    </Text>
-                                  </View>
-                                )}
-                              </View>
-                            )}
-                          </View>
-                          <View style={styles.phaseDates}>
-                            <Text style={styles.phaseDateText}>
-                              {formatDate(phase.start_date)} - {formatDate(phase.end_date)}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={styles.phaseProgressContainer}>
-                        <View style={styles.progressBar}>
-                          <View
-                            style={[
-                              styles.progressFill,
-                              {
-                                width: `${phase.calculated_progress || 0}%`,
-                                backgroundColor: phase.isDelayed ? "#EF4444" : "#3B82F6",
-                              },
-                            ]}
-        />
-                        </View>
-                        <Text style={styles.progressText}>
-                          {phase.calculated_progress || 0}%
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    {isExpanded && (
-                      <View style={styles.tasksContainer}>
-                        {phaseTasks.length === 0 ? (
-                          <Text style={styles.noTasksText}>Chưa có công việc</Text>
-                        ) : (
-                          phaseTasks.map((task) => (
-                            <View key={task.id} style={styles.taskItem}>
-                              <View style={styles.taskInfo}>
-                                <Text style={styles.taskName}>{task.name}</Text>
-                                <View style={styles.taskDetails}>
-                                  <Text style={styles.taskDateText}>
-                                    {formatDate(task.start_date)} - {formatDate(task.end_date)}
-                                  </Text>
-                                  {(task.isDelayed || task.needsUpdate) && (
-                                    <View style={styles.alertBadges}>
-                                      {task.isDelayed && (
-                                        <View style={[styles.alertBadge, styles.alertBadgeSmall, { backgroundColor: "#EF444420" }]}>
-                                          <Ionicons name="warning" size={10} color="#EF4444" />
-                                        </View>
-                                      )}
-                                      {task.needsUpdate && (
-                                        <View style={[styles.alertBadge, styles.alertBadgeSmall, { backgroundColor: "#F59E0B20" }]}>
-                                          <Ionicons name="time" size={10} color="#F59E0B" />
-                                        </View>
-                                      )}
-                                    </View>
-                                  )}
-                                </View>
-                              </View>
-                              <View style={styles.taskProgressContainer}>
-                                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                                      styles.progressFill,
-                      {
-                                        width: `${task.progress_percentage || 0}%`,
-                                        backgroundColor: task.isDelayed ? "#EF4444" : "#10B981",
-                                      },
-                                    ]}
-                                  />
-                                </View>
-                                <Text style={styles.taskProgressText}>
-                                  {task.progress_percentage || 0}%
-                                </Text>
-                              </View>
-                            </View>
-                          ))
-                        )}
-                      </View>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </View>
-        </>
-      ) : (
-        <>
-          {/* Báo cáo tiến độ */}
-          <View style={styles.reportSection}>
-            <Text style={styles.sectionTitle}>Báo cáo tiến độ</Text>
-            
-            {progressData && progressData.progress ? (
-              <>
-                <View style={styles.chartContainer}>
-                  <ProgressChart
-                    progress={progressData.progress}
-                    logs={progressData.logs || []}
-                    type="progress"
-                  />
-                </View>
-
-                {progressData.logs && progressData.logs.length > 0 && (
+              {progressData && progressData.progress ? (
+                <>
                   <View style={styles.chartContainer}>
                     <ProgressChart
                       progress={progressData.progress}
-                      logs={progressData.logs}
-                      type="line"
+                      logs={progressData.logs || []}
+                      type="progress"
                     />
                   </View>
-                )}
-              </>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="bar-chart-outline" size={64} color="#D1D5DB" />
-                <Text style={styles.emptyText}>Chưa có dữ liệu tiến độ</Text>
-              </View>
-            )}
 
-            {/* Tóm tắt cảnh báo */}
-            {(warnings.delayed.length > 0 || warnings.needsUpdate.length > 0) && (
-              <View style={styles.summarySection}>
-                <Text style={styles.summaryTitle}>Tóm tắt cảnh báo</Text>
-                
-                <View style={styles.summaryCard}>
-                  <View style={styles.summaryRow}>
-                    <View style={[styles.summaryIcon, { backgroundColor: "#EF444420" }]}>
-                      <Ionicons name="warning-outline" size={20} color="#EF4444" />
+                  {progressData.logs && progressData.logs.length > 0 && (
+                    <View style={styles.chartContainer}>
+                      <ProgressChart
+                        progress={progressData.progress}
+                        logs={progressData.logs}
+                        type="line"
+                      />
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="bar-chart-outline" size={64} color="#D1D5DB" />
+                  <Text style={styles.emptyText}>Chưa có dữ liệu tiến độ</Text>
+                </View>
+              )}
+
+              {/* Tóm tắt cảnh báo */}
+              {(warnings.delayed.length > 0 || warnings.needsUpdate.length > 0) && (
+                <View style={styles.summarySection}>
+                  <Text style={styles.summaryTitle}>Tóm tắt cảnh báo</Text>
+
+                  <View style={styles.summaryCard}>
+                    <View style={styles.summaryRow}>
+                      <View style={[styles.summaryIcon, { backgroundColor: "#EF444420" }]}>
+                        <Ionicons name="warning-outline" size={20} color="#EF4444" />
+                      </View>
+                      <View style={styles.summaryContent}>
+                        <Text style={styles.summaryLabel}>Trễ tiến độ</Text>
+                        <Text style={styles.summaryValue}>{warnings.delayed.length} hạng mục</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.summaryCard}>
+                    <View style={[styles.summaryIcon, { backgroundColor: "#F59E0B20" }]}>
+                      <Ionicons name="time-outline" size={20} color="#F59E0B" />
                     </View>
                     <View style={styles.summaryContent}>
-                      <Text style={styles.summaryLabel}>Trễ tiến độ</Text>
-                      <Text style={styles.summaryValue}>{warnings.delayed.length} hạng mục</Text>
+                      <Text style={styles.summaryLabel}>Chưa cập nhật</Text>
+                      <Text style={styles.summaryValue}>{warnings.needsUpdate.length} hạng mục</Text>
                     </View>
                   </View>
                 </View>
-
-                <View style={styles.summaryCard}>
-                  <View style={[styles.summaryIcon, { backgroundColor: "#F59E0B20" }]}>
-                    <Ionicons name="time-outline" size={20} color="#F59E0B" />
-                  </View>
-                  <View style={styles.summaryContent}>
-                    <Text style={styles.summaryLabel}>Chưa cập nhật</Text>
-                    <Text style={styles.summaryValue}>{warnings.needsUpdate.length} hạng mục</Text>
-                  </View>
-              </View>
+              )}
             </View>
-            )}
-        </View>
-        </>
-      )}
-    </ScrollView>
+          </>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -808,6 +924,31 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 16,
   },
+  quickActions: {
+    flexDirection: "row",
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    gap: 12,
+  },
+  quickActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  quickActionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
   createButton: {
     marginTop: 16,
     paddingHorizontal: 24,
@@ -819,5 +960,141 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  createButtonHeader: {
+    padding: 8,
+    marginRight: 8,
+  },
+  treeContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  treeTaskItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  treeTaskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingRight: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  treeTaskLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  treeExpandIcon: {
+    width: 24,
+    alignItems: "center",
+  },
+  treePriorityBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  treeTaskInfo: {
+    flex: 1,
+  },
+  treeTaskNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  treeTaskName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1F2937",
+    flex: 1,
+  },
+  treeAcceptanceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: "#10B98120",
+    borderRadius: 10,
+  },
+  treeAcceptanceBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#10B981",
+  },
+  treeTaskMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  treeTaskDates: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  treeStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  treeStatusText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  treeAlertBadges: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  treeAlertBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  treeTaskRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  treeProgressContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minWidth: 80,
+  },
+  treeProgressBar: {
+    width: 60,
+    height: 6,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  treeProgressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  treeProgressText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1F2937",
+    minWidth: 35,
+  },
+  treeChildrenContainer: {
+    backgroundColor: "#F9FAFB",
+    borderLeftWidth: 2,
+    borderLeftColor: "#E5E7EB",
+    marginLeft: 24,
   },
 });
