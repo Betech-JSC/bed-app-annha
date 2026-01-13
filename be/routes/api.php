@@ -545,11 +545,15 @@ Route::middleware('auth:sanctum')->group(function () {
     // ===================================================================
     // SETTINGS ROUTES - Quản lý cấu hình hệ thống
     // ===================================================================
-    Route::middleware(['auth:sanctum', 'check.permission:settings.manage'])->prefix('settings')->group(function () {
-        // Cost Groups (Nhóm chi phí dự án)
+    // Cost Groups - View endpoint (accessible to users with costs.view or costs.create)
+    Route::middleware(['auth:sanctum'])->prefix('settings')->group(function () {
         Route::get('/cost-groups', [CostGroupController::class, 'index']);
-        Route::post('/cost-groups', [CostGroupController::class, 'store']);
         Route::get('/cost-groups/{id}', [CostGroupController::class, 'show']);
+    });
+
+    // Cost Groups - Manage endpoints (require settings.manage permission)
+    Route::middleware(['auth:sanctum', 'check.permission:settings.manage'])->prefix('settings')->group(function () {
+        Route::post('/cost-groups', [CostGroupController::class, 'store']);
         Route::put('/cost-groups/{id}', [CostGroupController::class, 'update']);
         Route::delete('/cost-groups/{id}', [CostGroupController::class, 'destroy']);
 

@@ -58,11 +58,11 @@ export default function SettingsScreen() {
     loadRoles();
   };
 
+  const { hasPermission: checkPermission } = usePermissions();
+  
   const hasPermission = (permission: string): boolean => {
-    // Admin và owner luôn có toàn quyền
-    if (user?.owner || user?.role === "admin") return true;
-    if (permissions.includes("*")) return true;
-    return permissions.includes(permission);
+    // Use permission-based check instead of role check
+    return checkPermission(permission);
   };
 
   const handleDeleteAccount = async () => {

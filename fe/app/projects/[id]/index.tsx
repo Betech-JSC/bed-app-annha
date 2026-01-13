@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
 
 export default function ProjectDetailScreen() {
   const router = useRouter();
@@ -278,7 +279,7 @@ export default function ProjectDetailScreen() {
         showBackButton
         rightComponent={
           <View style={styles.headerActions}>
-            <PermissionGuard permission="projects.update">
+            <PermissionGuard permission={Permissions.PROJECT_UPDATE}>
               <TouchableOpacity
                 style={styles.headerActionButton}
                 onPress={handleEdit}
@@ -286,7 +287,7 @@ export default function ProjectDetailScreen() {
                 <Ionicons name="create-outline" size={24} color="#3B82F6" />
               </TouchableOpacity>
             </PermissionGuard>
-            <PermissionGuard permission="projects.delete">
+            <PermissionGuard permission={Permissions.PROJECT_DELETE}>
               <TouchableOpacity
                 style={styles.headerActionButton}
                 onPress={handleDelete}

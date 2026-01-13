@@ -22,10 +22,13 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import BackButton from "@/components/BackButton";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Permissions } from "@/constants/Permissions";
 
 export default function ReceiptsScreen() {
     const router = useRouter();
     const user = useSelector((state: RootState) => state.user);
+    const { hasPermission } = usePermissions();
     const [receipts, setReceipts] = useState<Receipt[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -247,7 +250,7 @@ export default function ReceiptsScreen() {
             <View style={styles.cardActions}>
                 {item.status === "draft" && (
                     <>
-                        {user?.role === "accountant" && (
+                        {hasPermission(Permissions.INVOICE_APPROVE) && (
                             <TouchableOpacity
                                 style={[styles.actionButton, styles.verifyButton]}
                                 onPress={() => handleVerify(item.id)}

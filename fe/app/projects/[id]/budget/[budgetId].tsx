@@ -18,15 +18,18 @@ import { budgetApi, ProjectBudget, CreateBudgetData, BudgetItem } from "@/api/bu
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionGuard } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import { Permissions } from "@/constants/Permissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 export default function BudgetDetailScreen() {
     const router = useRouter();
     const { id, budgetId } = useLocalSearchParams<{ id: string; budgetId: string }>();
     const tabBarHeight = useTabBarHeight();
+    const { hasPermission } = useProjectPermissions(id || null);
     const [budget, setBudget] = useState<ProjectBudget | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);

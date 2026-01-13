@@ -20,45 +20,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import { setUser } from "@/reducers/userSlice";
 
-/**
- * Xác định đường dẫn redirect dựa trên permissions và role của user
- */
-function determineRedirectPath(userData: any, permissions: string[]): string {
-  const userRole = userData.role?.toLowerCase();
-  const isOwner = userData.owner === true;
-
-  // Super Admin (owner = true) có toàn quyền, mặc định vào projects
-  if (isOwner && userRole === "admin") {
-    return "/projects";
-  }
-
-  // Kiểm tra permissions để quyết định module
-  const hasHRPermissions = permissions.some((perm) =>
-    perm.startsWith("hr.")
-  );
-  const hasProjectPermissions = permissions.some((perm) =>
-    perm.startsWith("projects.")
-  );
-
-  // Nếu có quyền HR và không có quyền projects -> vào HR
-  if (hasHRPermissions && !hasProjectPermissions) {
-    return "/hr";
-  }
-
-  // Nếu có quyền projects (hoặc cả hai) -> vào Projects
-  if (hasProjectPermissions) {
-    return "/projects";
-  }
-
-  // Nếu có quyền HR -> vào HR
-  if (hasHRPermissions) {
-    return "/hr";
-  }
-
-  // Mặc định vào projects
-  return "/projects";
-}
-
 export default function LoginScreen() {
   const router = useRouter();
   const dispatch = useDispatch();

@@ -25,6 +25,7 @@ import { useProjectPermissions } from "@/hooks/usePermissions";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
 
 export default function CostsScreen() {
   const router = useRouter();
@@ -373,36 +374,42 @@ export default function CostsScreen() {
 
       {/* Actions based on status */}
       {item.status === "draft" && (
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.submitButton]}
-            onPress={() => handleSubmit(item.id)}
-          >
-            <Text style={styles.actionButtonText}>Gửi duyệt</Text>
-          </TouchableOpacity>
-        </View>
+        <PermissionGuard permission={Permissions.COST_SUBMIT} projectId={id}>
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.submitButton]}
+              onPress={() => handleSubmit(item.id)}
+            >
+              <Text style={styles.actionButtonText}>Gửi duyệt</Text>
+            </TouchableOpacity>
+          </View>
+        </PermissionGuard>
       )}
 
       {item.status === "pending_management_approval" && (
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.approveButton]}
-            onPress={() => handleApproveManagement(item.id)}
-          >
-            <Text style={styles.actionButtonText}>Duyệt (Ban điều hành)</Text>
-          </TouchableOpacity>
-        </View>
+        <PermissionGuard permission={Permissions.COST_APPROVE_MANAGEMENT} projectId={id}>
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={() => handleApproveManagement(item.id)}
+            >
+              <Text style={styles.actionButtonText}>Duyệt (Ban điều hành)</Text>
+            </TouchableOpacity>
+          </View>
+        </PermissionGuard>
       )}
 
       {item.status === "pending_accountant_approval" && (
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.approveButton]}
-            onPress={() => handleApproveAccountant(item.id)}
-          >
-            <Text style={styles.actionButtonText}>Xác nhận (Kế toán)</Text>
-          </TouchableOpacity>
-        </View>
+        <PermissionGuard permission={Permissions.COST_APPROVE_ACCOUNTANT} projectId={id}>
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={() => handleApproveAccountant(item.id)}
+            >
+              <Text style={styles.actionButtonText}>Xác nhận (Kế toán)</Text>
+            </TouchableOpacity>
+          </View>
+        </PermissionGuard>
       )}
     </TouchableOpacity>
   );
@@ -421,7 +428,7 @@ export default function CostsScreen() {
         title="Chi Phí Dự Án"
         showBackButton
         rightComponent={
-          <PermissionGuard permission="costs.create" projectId={id}>
+          <PermissionGuard permission={Permissions.COST_CREATE} projectId={id}>
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => setShowCreateModal(true)}

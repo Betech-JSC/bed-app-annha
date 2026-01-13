@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
 
 export default function ProjectsListScreen() {
   const router = useRouter();
@@ -459,7 +460,7 @@ export default function ProjectsListScreen() {
               </Text>
             </View>
             <View style={styles.actionButtons}>
-              <PermissionGuard permission="projects.update">
+              <PermissionGuard permission={Permissions.PROJECT_UPDATE}>
                 <TouchableOpacity
                   style={styles.actionButton}
                   onPress={(e) => handleEdit(item, e)}
@@ -467,7 +468,7 @@ export default function ProjectsListScreen() {
                   <Ionicons name="create-outline" size={18} color="#3B82F6" />
                 </TouchableOpacity>
               </PermissionGuard>
-              <PermissionGuard permission="projects.delete">
+              <PermissionGuard permission={Permissions.PROJECT_DELETE}>
                 <TouchableOpacity
                   style={styles.actionButton}
                   onPress={(e) => handleDelete(item, e)}
@@ -640,7 +641,7 @@ export default function ProjectsListScreen() {
             >
               <Ionicons name="options-outline" size={20} color={hasActiveFilters() ? "#FFFFFF" : "#3B82F6"} />
             </TouchableOpacity>
-            <PermissionGuard permission="projects.create">
+            <PermissionGuard permission={Permissions.PROJECT_CREATE}>
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={() => router.push("/projects/create")}
@@ -943,12 +944,14 @@ export default function ProjectsListScreen() {
               </TouchableOpacity>
             )}
             {!hasActiveFilters() && (
-              <TouchableOpacity
-                style={styles.emptyButton}
-                onPress={() => router.push("/projects/create")}
-              >
-                <Text style={styles.emptyButtonText}>Tạo dự án mới</Text>
-              </TouchableOpacity>
+              <PermissionGuard permission={Permissions.PROJECT_CREATE}>
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={() => router.push("/projects/create")}
+                >
+                  <Text style={styles.emptyButtonText}>Tạo dự án mới</Text>
+                </TouchableOpacity>
+              </PermissionGuard>
             )}
           </View>
         }

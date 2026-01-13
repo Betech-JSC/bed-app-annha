@@ -21,6 +21,7 @@ import { useProjectPermissions } from "@/hooks/usePermissions";
 import { ScreenHeader, DatePickerInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
+import { Permissions } from "@/constants/Permissions";
 
 export default function PaymentsScreen() {
   const router = useRouter();
@@ -256,14 +257,16 @@ export default function PaymentsScreen() {
         </View>
       )}
 
-      {item.status === "pending" && hasPermission("payments.confirm") && (
-        <TouchableOpacity
-          style={styles.confirmButton}
-          onPress={() => handleConfirmPayment(item)}
-        >
-          <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
-          <Text style={styles.confirmButtonText}>Xác nhận thanh toán</Text>
-        </TouchableOpacity>
+      {item.status === "pending" && (
+        <PermissionGuard permission={Permissions.PAYMENT_CONFIRM} projectId={id}>
+          <TouchableOpacity
+            style={styles.confirmButton}
+            onPress={() => handleConfirmPayment(item)}
+          >
+            <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.confirmButtonText}>Xác nhận thanh toán</Text>
+          </TouchableOpacity>
+        </PermissionGuard>
       )}
     </View>
   );
@@ -399,7 +402,7 @@ export default function PaymentsScreen() {
         title="Thanh Toán"
         showBackButton
         rightComponent={
-          <PermissionGuard permission="payments.create" projectId={id}>
+          <PermissionGuard permission={Permissions.PAYMENT_CREATE} projectId={id}>
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => {

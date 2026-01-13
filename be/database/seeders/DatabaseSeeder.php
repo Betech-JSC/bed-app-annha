@@ -15,10 +15,11 @@ class DatabaseSeeder extends Seeder
     {
         // Chạy các seeders theo thứ tự
         $this->call([
-            // 1. Cấu hình hệ thống
-            RolePermissionSeeder::class, // Chạy trước để tạo roles và permissions
-            PermissionSeeder::class, // Tạo các permissions và gán cho roles
-            PersonnelRoleSeeder::class, // Tạo các vai trò mặc định cho nhân sự
+            // 1. RBAC System - Must run in this order
+            RoleSeeder::class, // Create core roles first
+            PermissionSeeder::class, // Create all permissions
+            RolePermissionSeeder::class, // Map permissions to roles
+            PersonnelRoleSeeder::class, // Tạo các vai trò mặc định cho nhân sự (if exists)
 
             // 2. Users và Admin
             AdminSeeder::class, // Sau đó mới tạo admins và gán roles

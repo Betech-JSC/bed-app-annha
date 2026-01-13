@@ -23,12 +23,16 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { ScreenHeader } from "@/components";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 export default function SubcontractorsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const tabBarHeight = useTabBarHeight();
+  const { hasPermission } = useProjectPermissions(id || null);
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -421,12 +425,14 @@ export default function SubcontractorsScreen() {
         title="Nhà Thầu Phụ"
         showBackButton
         rightComponent={
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setModalVisible(true)}
-          >
-            <Ionicons name="add" size={24} color="#3B82F6" />
-          </TouchableOpacity>
+          <PermissionGuard permission={Permissions.SUBCONTRACTOR_CREATE} projectId={id}>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setModalVisible(true)}
+            >
+              <Ionicons name="add" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          </PermissionGuard>
         }
       />
 

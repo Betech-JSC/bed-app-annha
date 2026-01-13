@@ -20,13 +20,16 @@ import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { revenueApi } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionGuard } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 export default function BudgetScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const tabBarHeight = useTabBarHeight();
+    const { hasPermission } = useProjectPermissions(id || null);
     const [budgets, setBudgets] = useState<ProjectBudget[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -346,7 +349,13 @@ export default function BudgetScreen() {
                         </View>
                         <TouchableOpacity
                             style={styles.duplicateButton}
-                            onPress={(e) => handleDuplicate(item, e)}
+                            onPress={(e) => {
+                                if (!hasPermission(Permissions.COST_CREATE)) {
+                                    Alert.alert("Lỗi", "Bạn không có quyền sao chép ngân sách");
+                                    return;
+                                }
+                                handleDuplicate(item, e);
+                            }}
                         >
                             <Ionicons name="copy-outline" size={18} color="#6B7280" />
                         </TouchableOpacity>
@@ -442,15 +451,17 @@ export default function BudgetScreen() {
                                 color={filterStatus ? "#3B82F6" : "#6B7280"} 
                             />
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.addButton}
-                            onPress={() => {
-                                resetForm();
-                                setShowCreateModal(true);
-                            }}
-                        >
-                            <Ionicons name="add" size={24} color="#3B82F6" />
-                        </TouchableOpacity>
+                        <PermissionGuard permission={Permissions.COST_CREATE} projectId={id}>
+                            <TouchableOpacity
+                                style={styles.addButton}
+                                onPress={() => {
+                                    resetForm();
+                                    setShowCreateModal(true);
+                                }}
+                            >
+                                <Ionicons name="add" size={24} color="#3B82F6" />
+                            </TouchableOpacity>
+                        </PermissionGuard>
                     </View>
                 }
             />

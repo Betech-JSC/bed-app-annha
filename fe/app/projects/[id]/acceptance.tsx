@@ -15,6 +15,8 @@ import { projectApi, Project } from "@/api/projectApi";
 import { personnelApi } from "@/api/personnelApi";
 import { Ionicons } from "@expo/vector-icons";
 import { AcceptanceChecklist, ScreenHeader } from "@/components";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Permissions } from "@/constants/Permissions";
 
 export default function AcceptanceScreen() {
   const router = useRouter();
@@ -74,12 +76,17 @@ export default function AcceptanceScreen() {
     }
   };
 
-  // Xác định role của user
+  // Xác định role của user (for display purposes only, not for authorization)
   const isProjectManager = project?.project_manager_id?.toString() === user?.id?.toString();
   const isCustomer = project?.customer_id?.toString() === user?.id?.toString();
   const { permissions } = useSelector((state: RootState) => state.permissions);
-  // BUSINESS RULE: Admin có full quyền xem và duyệt tất cả
-  const isAdmin = permissions?.includes("*") || user?.role === "admin" || user?.role === "super_admin";
+  
+  // Use permission-based checks instead of role checks
+  const { hasPermission } = usePermissions();
+  const isAdmin = hasPermission("*"); // Super admin has all permissions
+  const canApproveLevel1 = hasPermission(Permissions.ACCEPTANCE_APPROVE_LEVEL_1);
+  const canApproveLevel2 = hasPermission(Permissions.ACCEPTANCE_APPROVE_LEVEL_2);
+  const canApproveLevel3 = hasPermission(Permissions.ACCEPTANCE_APPROVE_LEVEL_3);
 
 
   if (loading) {
@@ -101,6 +108,11 @@ export default function AcceptanceScreen() {
         isCustomer={isCustomer}
         isSupervisor={isSupervisor}
         isAdmin={isAdmin}
+        canApproveLevel1={canApproveLevel1}
+        canApproveLevel2={canApproveLevel2}
+        canApproveLevel3={canApproveLevel3}
+        canCreate={hasPermission(Permissions.ACCEPTANCE_CREATE)}
+        canUpdate={hasPermission(Permissions.ACCEPTANCE_UPDATE)}
         onRefresh={loadStages}
         onNavigateToDefects={(stageId?: number) => {
           if (stageId) {

@@ -8,6 +8,8 @@ interface DefectItemProps {
   onPress?: () => void;
   onUpdate?: (defectId: number, status: string) => void;
   canEdit?: boolean;
+  canDelete?: boolean;
+  canVerify?: boolean;
 }
 
 export default function DefectItem({
@@ -15,6 +17,8 @@ export default function DefectItem({
   onPress,
   onUpdate,
   canEdit = false,
+  canDelete = false,
+  canVerify = false,
 }: DefectItemProps) {
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -207,7 +211,7 @@ export default function DefectItem({
         </View>
       )}
 
-      {canEdit && defect.status === "fixed" && (
+      {canVerify && defect.status === "fixed" && (
         <TouchableOpacity
           style={[styles.actionButton, styles.verifyButton]}
           onPress={() => onUpdate?.(defect.id, "verified")}

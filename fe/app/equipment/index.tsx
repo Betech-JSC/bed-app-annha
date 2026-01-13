@@ -18,7 +18,10 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { equipmentApi, Equipment, CreateEquipmentData } from "@/api/equipmentApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader, PermissionGuard } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const STATUS_LABELS: Record<string, string> = {
     available: "Sẵn sàng",
@@ -34,6 +37,8 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function EquipmentScreen() {
     const router = useRouter();
+    const tabBarHeight = useTabBarHeight();
+    const { hasPermission } = usePermissions();
     const [equipment, setEquipment] = useState<Equipment[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -265,39 +270,47 @@ export default function EquipmentScreen() {
                     <Ionicons name="eye" size={18} color="#3B82F6" />
                     <Text style={styles.actionText}>Chi tiết</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => handleEdit(item)}
-                >
-                    <Ionicons name="pencil" size={18} color="#3B82F6" />
-                    <Text style={styles.actionText}>Sửa</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => handleDelete(item)}
-                >
-                    <Ionicons name="trash" size={18} color="#EF4444" />
-                    <Text style={[styles.actionText, styles.deleteText]}>Xóa</Text>
-                </TouchableOpacity>
+                <PermissionGuard permission={Permissions.EQUIPMENT_UPDATE}>
+                    <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => handleEdit(item)}
+                    >
+                        <Ionicons name="pencil" size={18} color="#3B82F6" />
+                        <Text style={styles.actionText}>Sửa</Text>
+                    </TouchableOpacity>
+                </PermissionGuard>
+                <PermissionGuard permission={Permissions.EQUIPMENT_DELETE}>
+                    <TouchableOpacity
+                        style={[styles.actionButton, styles.deleteButton]}
+                        onPress={() => handleDelete(item)}
+                    >
+                        <Ionicons name="trash" size={18} color="#EF4444" />
+                        <Text style={[styles.actionText, styles.deleteText]}>Xóa</Text>
+                    </TouchableOpacity>
+                </PermissionGuard>
             </View>
         </View>
     );
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <BackButton />
-                <Text style={styles.headerTitle}>Quản Lý Thiết Bị</Text>
-                <TouchableOpacity
-                    style={styles.addButton}
-                    onPress={() => {
-                        resetForm();
-                        setShowCreateModal(true);
-                    }}
-                >
-                    <Ionicons name="add" size={24} color="#3B82F6" />
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader
+                title="Quản Lý Thiết Bị"
+                showBackButton
+                rightComponent={
+                    <PermissionGuard permission={Permissions.EQUIPMENT_CREATE}>
+                        <TouchableOpacity
+                            style={styles.addButton}
+                            onPress={() => {
+                                resetForm();
+                                setShowCreateModal(true);
+                            }}
+                        >
+                            <Ionicons name="add" size={24} color="#3B82F6" />
+                        </TouchableOpacity>
+                    </PermissionGuard>
+                }
+            />
 
             <View style={styles.searchContainer}>
                 <Ionicons name="search" size={20} color="#6B7280" style={styles.searchIcon} />
@@ -325,6 +338,7 @@ export default function EquipmentScreen() {
                     data={equipment}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={{ paddingBottom: tabBarHeight }}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                     }
@@ -708,20 +722,6 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: 16,
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1F2937",
     },
     addButton: {
         padding: 4,

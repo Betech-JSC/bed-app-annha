@@ -17,17 +17,20 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { defectApi, Defect } from "@/api/defectApi";
 import { acceptanceApi } from "@/api/acceptanceApi";
-import { DefectItem, UniversalFileUploader, ScreenHeader, DatePickerInput } from "@/components";
+import { DefectItem, UniversalFileUploader, ScreenHeader, DatePickerInput, PermissionGuard } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ganttApi } from "@/api/ganttApi";
+import { Permissions } from "@/constants/Permissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 export default function DefectsScreen() {
   const router = useRouter();
   const { id, acceptance_stage_id } = useLocalSearchParams<{ id: string; acceptance_stage_id?: string }>();
   const tabBarHeight = useTabBarHeight();
   const insets = useSafeAreaInsets();
+  const { hasPermission } = useProjectPermissions(id || null);
   const [defects, setDefects] = useState<Defect[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -296,12 +299,14 @@ export default function DefectsScreen() {
         title="Lỗi Ghi Nhận"
         showBackButton
         rightComponent={
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setModalVisible(true)}
-          >
-            <Ionicons name="add" size={24} color="#3B82F6" />
-          </TouchableOpacity>
+          <PermissionGuard permission={Permissions.DEFECT_CREATE} projectId={id}>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setModalVisible(true)}
+            >
+              <Ionicons name="add" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          </PermissionGuard>
         }
       />
 
@@ -312,7 +317,9 @@ export default function DefectsScreen() {
             defect={item}
             onPress={() => handleDefectPress(item)}
             onUpdate={handleUpdate}
-            canEdit={true}
+            canEdit={hasPermission(Permissions.DEFECT_UPDATE)}
+            canDelete={hasPermission(Permissions.DEFECT_DELETE)}
+            canVerify={hasPermission(Permissions.DEFECT_VERIFY)}
           />
         )}
         keyExtractor={(item) => item.id.toString()}

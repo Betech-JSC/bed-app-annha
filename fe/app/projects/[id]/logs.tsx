@@ -20,7 +20,10 @@ import { ProjectTask } from "@/types/ganttTypes";
 import { Ionicons } from "@expo/vector-icons";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { ScreenHeader, DatePickerInput } from "@/components";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 const DAYS_OF_WEEK = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const MONTHS = [
@@ -42,6 +45,7 @@ export default function ConstructionLogsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const tabBarHeight = useTabBarHeight();
+  const { hasPermission } = useProjectPermissions(id || null);
   const [logs, setLogs] = useState<ConstructionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -251,7 +255,6 @@ export default function ConstructionLogsScreen() {
     setModalVisible(false);
     setEditingLog(null);
     setSelectedTask(null);
-    setShowDatePicker(false);
     setFormData({
       log_date: today, // Default to today for new logs
       task_id: null,
@@ -395,15 +398,17 @@ export default function ConstructionLogsScreen() {
         title="Nhật Ký Công Trình"
         showBackButton
         rightComponent={
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => {
-              handleCloseModal();
-              setModalVisible(true);
-            }}
-          >
-            <Ionicons name="add" size={24} color="#3B82F6" />
-          </TouchableOpacity>
+          <PermissionGuard permission={Permissions.LOG_CREATE} projectId={id}>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => {
+                handleCloseModal();
+                setModalVisible(true);
+              }}
+            >
+              <Ionicons name="add" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          </PermissionGuard>
         }
       />
 
@@ -1065,26 +1070,30 @@ export default function ConstructionLogsScreen() {
                 )}
 
                 <View style={styles.detailActions}>
-                  <TouchableOpacity
-                    style={[styles.detailActionButton, styles.editButton]}
-                    onPress={() => {
-                      setDetailModalVisible(false);
-                      openEditModal(selectedDateLog);
-                    }}
-                  >
-                    <Ionicons name="create-outline" size={20} color="#FFFFFF" />
-                    <Text style={styles.detailActionButtonText}>Chỉnh sửa</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.detailActionButton, styles.deleteButton]}
-                    onPress={() => {
-                      setDetailModalVisible(false);
-                      handleDelete(selectedDateLog);
-                    }}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-                    <Text style={styles.detailActionButtonText}>Xóa</Text>
-                  </TouchableOpacity>
+                  <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
+                    <TouchableOpacity
+                      style={[styles.detailActionButton, styles.editButton]}
+                      onPress={() => {
+                        setDetailModalVisible(false);
+                        openEditModal(selectedDateLog);
+                      }}
+                    >
+                      <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+                      <Text style={styles.detailActionButtonText}>Chỉnh sửa</Text>
+                    </TouchableOpacity>
+                  </PermissionGuard>
+                  <PermissionGuard permission={Permissions.LOG_DELETE} projectId={id}>
+                    <TouchableOpacity
+                      style={[styles.detailActionButton, styles.deleteButton]}
+                      onPress={() => {
+                        setDetailModalVisible(false);
+                        handleDelete(selectedDateLog);
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                      <Text style={styles.detailActionButtonText}>Xóa</Text>
+                    </TouchableOpacity>
+                  </PermissionGuard>
                 </View>
               </>
             ) : (
@@ -1093,18 +1102,20 @@ export default function ConstructionLogsScreen() {
                 <Text style={styles.emptyText}>Chưa có nhật ký cho ngày này</Text>
                 {/* BUSINESS RULE: Only allow creating logs for today */}
                 {selectedDate === today && (
-                  <TouchableOpacity
-                    style={styles.createButton}
-                    onPress={() => {
-                      setDetailModalVisible(false);
-                      setFormData(prev => ({ ...prev, log_date: today }));
-                      setMinCompletionPercentage(0);
-                      setModalVisible(true);
-                    }}
-                  >
-                    <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
-                    <Text style={styles.createButtonText}>Tạo nhật ký</Text>
-                  </TouchableOpacity>
+                  <PermissionGuard permission={Permissions.LOG_CREATE} projectId={id}>
+                    <TouchableOpacity
+                      style={styles.createButton}
+                      onPress={() => {
+                        setDetailModalVisible(false);
+                        setFormData(prev => ({ ...prev, log_date: today }));
+                        setMinCompletionPercentage(0);
+                        setModalVisible(true);
+                      }}
+                    >
+                      <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
+                      <Text style={styles.createButtonText}>Tạo nhật ký</Text>
+                    </TouchableOpacity>
+                  </PermissionGuard>
                 )}
                 {selectedDate !== today && (
                   <Text style={styles.helperText}>

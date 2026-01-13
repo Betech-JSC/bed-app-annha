@@ -11,7 +11,7 @@ interface PermissionGuardProps extends ViewProps {
   children: React.ReactNode;
 }
 
-export function PermissionGuard({
+function PermissionGuard({
   permission,
   permissions,
   requireAll = false,
@@ -48,3 +48,7 @@ export function PermissionGuard({
 
   return <View {...viewProps}>{children}</View>;
 }
+
+PermissionGuard.displayName = 'PermissionGuard';
+
+export { PermissionGuard };

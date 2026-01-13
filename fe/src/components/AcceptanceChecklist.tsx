@@ -25,6 +25,7 @@ import type { UploadedFile } from "@/components/UniversalFileUploader";
 import { defectApi, Defect, CreateDefectData } from "@/api/defectApi";
 import { useRouter } from "expo-router";
 import { AcceptanceTemplate } from "@/api/acceptanceApi";
+import { Permissions } from "@/constants/Permissions";
 
 interface AcceptanceChecklistProps {
   stages: AcceptanceStage[];
@@ -33,6 +34,11 @@ interface AcceptanceChecklistProps {
   isCustomer?: boolean;
   isSupervisor?: boolean;
   isAdmin?: boolean; // BUSINESS RULE: Admin có full quyền xem và duyệt tất cả
+  canApproveLevel1?: boolean;
+  canApproveLevel2?: boolean;
+  canApproveLevel3?: boolean;
+  canCreate?: boolean;
+  canUpdate?: boolean;
   onRefresh?: () => void;
   onNavigateToDefects?: (stageId?: number) => void;
 }
@@ -44,6 +50,11 @@ export default function AcceptanceChecklist({
   isCustomer = false,
   isSupervisor = false,
   isAdmin = false, // BUSINESS RULE: Admin có full quyền xem và duyệt tất cả
+  canApproveLevel1 = false,
+  canApproveLevel2 = false,
+  canApproveLevel3 = false,
+  canCreate = false,
+  canUpdate = false,
   onRefresh,
   onNavigateToDefects,
 }: AcceptanceChecklistProps) {
@@ -392,7 +403,7 @@ export default function AcceptanceChecklist({
         {/* Header với nút thêm mới */}
         {projectId && (
           <View style={styles.headerActions}>
-            <PermissionGuard permission="acceptance.create">
+            <PermissionGuard permission={Permissions.ACCEPTANCE_CREATE} projectId={projectId}>
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={openCreateModal}
@@ -1254,13 +1265,13 @@ export default function AcceptanceChecklist({
                 </View>
               </View>
 
-              {/* Approval Actions - BUSINESS RULE: Admin có thể duyệt tất cả các bước */}
-              {(isAdmin || isSupervisor || isProjectManager || isCustomer) && acceptingStage && (
+              {/* Approval Actions - Use permission-based checks */}
+              {(isAdmin || canApproveLevel1 || canApproveLevel2 || canApproveLevel3) && acceptingStage && (
                 <View style={styles.approvalActionsSection}>
                   <Text style={styles.approvalSectionTitle}>Quy trình duyệt</Text>
 
-                  {/* Supervisor Approve Button */}
-                  {(isAdmin || isSupervisor) && acceptingStage.status !== "customer_approved" && (
+                  {/* Supervisor Approve Button - Level 1 */}
+                  {(isAdmin || canApproveLevel1) && acceptingStage.status !== "customer_approved" && (
                     <TouchableOpacity
                       style={[
                         styles.approvalButton,
@@ -1295,8 +1306,8 @@ export default function AcceptanceChecklist({
                     </TouchableOpacity>
                   )}
 
-                  {/* Project Manager Approve Button */}
-                  {(isAdmin || isProjectManager) && (
+                  {/* Project Manager Approve Button - Level 2 */}
+                  {(isAdmin || canApproveLevel2) && (
                     <TouchableOpacity
                       style={[
                         styles.approvalButton,
@@ -1332,8 +1343,8 @@ export default function AcceptanceChecklist({
                     </TouchableOpacity>
                   )}
 
-                  {/* Customer Approve Button */}
-                  {(isAdmin || isCustomer) && (
+                  {/* Customer Approve Button - Level 3 */}
+                  {(isAdmin || canApproveLevel3) && (
                     <TouchableOpacity
                       style={[
                         styles.approvalButton,

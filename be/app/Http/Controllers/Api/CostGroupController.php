@@ -11,9 +11,23 @@ class CostGroupController extends Controller
 {
     /**
      * Display a listing of the resource.
+     * Accessible to users with costs.view or costs.create permission
      */
     public function index(Request $request)
     {
+        $user = auth()->user();
+
+        // Check permission: allow users with costs.view, costs.create, or settings.manage
+        if (!$user->owner && $user->role !== 'admin' && 
+            !$user->hasPermission('costs.view') && 
+            !$user->hasPermission('costs.create') && 
+            !$user->hasPermission('settings.manage')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền xem danh sách nhóm chi phí.'
+            ], 403);
+        }
+
         $query = CostGroup::with('creator')->ordered();
 
         // Filter active
@@ -102,9 +116,23 @@ class CostGroupController extends Controller
 
     /**
      * Display the specified resource.
+     * Accessible to users with costs.view or costs.create permission
      */
     public function show(string $id)
     {
+        $user = auth()->user();
+
+        // Check permission: allow users with costs.view, costs.create, or settings.manage
+        if (!$user->owner && $user->role !== 'admin' && 
+            !$user->hasPermission('costs.view') && 
+            !$user->hasPermission('costs.create') && 
+            !$user->hasPermission('settings.manage')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền xem nhóm chi phí này.'
+            ], 403);
+        }
+
         $costGroup = CostGroup::with('creator')->find($id);
 
         if (!$costGroup) {
