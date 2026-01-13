@@ -11,6 +11,7 @@ import {
   Modal,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/api/api";
 
@@ -170,6 +171,40 @@ export default function FileUploader({
   const uploadFiles = async (files: any[]) => {
     if (uploadedFiles.length + files.length > maxFiles) {
       Alert.alert("Lỗi", `Chỉ được upload tối đa ${maxFiles} file`);
+      return;
+    }
+
+    // Validate file size (2MB limit)
+    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB in bytes
+    const oversizedFiles: string[] = [];
+    
+    for (const file of files) {
+      let fileSize = file.fileSize || file.size || 0;
+      
+      // If fileSize is not available, try to get it from FileSystem
+      if (fileSize === 0 && file.uri) {
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(file.uri);
+          if (fileInfo.exists && fileInfo.size) {
+            fileSize = fileInfo.size;
+          }
+        } catch (error) {
+          console.warn("Could not get file size:", error);
+        }
+      }
+      
+      if (fileSize > MAX_FILE_SIZE) {
+        const fileName = file.fileName || file.name || "file";
+        const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+        oversizedFiles.push(`${fileName} (${fileSizeMB}MB)`);
+      }
+    }
+
+    if (oversizedFiles.length > 0) {
+      Alert.alert(
+        "Lỗi",
+        `Các file sau vượt quá giới hạn 2MB:\n${oversizedFiles.join("\n")}\n\nVui lòng chọn file nhỏ hơn 2MB.`
+      );
       return;
     }
 

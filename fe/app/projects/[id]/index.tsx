@@ -407,7 +407,7 @@ export default function ProjectDetailScreen() {
               />
             </View>
             <Text style={styles.progressText}>
-              {project.progress.overall_percentage}%
+              {Math.round(project.progress.overall_percentage || 0)}%
             </Text>
           </View>
         )}

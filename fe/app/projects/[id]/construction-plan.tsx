@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ganttApi } from "@/api/ganttApi";
 import { acceptanceApi } from "@/api/acceptanceApi";
+import { projectApi, Project } from "@/api/projectApi";
 import { ProjectTask, CreateTaskData } from "@/types/ganttTypes";
 import { GanttChart } from "@/components";
 import TaskFormModal from "@/components/TaskFormModal";
@@ -25,6 +26,7 @@ export default function ConstructionPlanScreen() {
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId?: string }>();
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [acceptanceStages, setAcceptanceStages] = useState<any[]>([]);
+  const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -50,9 +52,10 @@ export default function ConstructionPlanScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [tasksResponse, stagesResponse] = await Promise.all([
+      const [tasksResponse, stagesResponse, projectResponse] = await Promise.all([
         ganttApi.getTasks(id!),
         acceptanceApi.getStages(id!).catch(() => ({ success: false, data: [] })), // Load acceptance stages
+        projectApi.getProject(id!).catch(() => ({ success: false, data: null })), // Load project info
       ]);
 
       if (tasksResponse.success) {
@@ -60,6 +63,9 @@ export default function ConstructionPlanScreen() {
       }
       if (stagesResponse.success) {
         setAcceptanceStages(stagesResponse.data || []);
+      }
+      if (projectResponse.success && projectResponse.data) {
+        setProject(projectResponse.data);
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -361,6 +367,8 @@ export default function ConstructionPlanScreen() {
           <GanttChart
             tasks={tasks}
             onTaskPress={handleTaskPress}
+            projectName={project?.name}
+            projectStartDate={project?.start_date}
           />
         ) : (
           <View style={styles.listView}>

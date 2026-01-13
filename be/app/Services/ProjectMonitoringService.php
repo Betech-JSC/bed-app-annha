@@ -270,6 +270,7 @@ class ProjectMonitoringService
 
         // So sánh tiến độ với thời gian
         $progressGap = $timePercentage - $progress;
+        $progressGapRounded = round($progressGap);
 
         $hasRisk = false;
         $severity = 'low';
@@ -278,15 +279,15 @@ class ProjectMonitoringService
         if ($progressGap > 20) {
             $hasRisk = true;
             $severity = 'critical';
-            $message = "Tiến độ chậm {$progressGap}% so với kế hoạch";
+            $message = "Tiến độ chậm {$progressGapRounded}% so với kế hoạch";
         } elseif ($progressGap > 10) {
             $hasRisk = true;
             $severity = 'high';
-            $message = "Tiến độ chậm {$progressGap}% so với kế hoạch";
+            $message = "Tiến độ chậm {$progressGapRounded}% so với kế hoạch";
         } elseif ($progressGap > 5) {
             $hasRisk = true;
             $severity = 'medium';
-            $message = "Tiến độ chậm {$progressGap}% so với kế hoạch";
+            $message = "Tiến độ chậm {$progressGapRounded}% so với kế hoạch";
         }
 
         // Kiểm tra deadline
@@ -325,6 +326,7 @@ class ProjectMonitoringService
         $actualCost = $costsData['total_costs'] ?? 0;
         
         $budgetUsed = $totalBudget > 0 ? (($actualCost / $totalBudget) * 100) : 0;
+        $budgetUsedRounded = round($budgetUsed);
         $overrun = $actualCost - $totalBudget;
 
         $hasRisk = false;
@@ -338,11 +340,11 @@ class ProjectMonitoringService
         } elseif ($budgetUsed > 90) {
             $hasRisk = true;
             $severity = 'high';
-            $message = "Đã sử dụng {$budgetUsed}% ngân sách";
+            $message = "Đã sử dụng {$budgetUsedRounded}% ngân sách";
         } elseif ($budgetUsed > 80) {
             $hasRisk = true;
             $severity = 'medium';
-            $message = "Đã sử dụng {$budgetUsed}% ngân sách";
+            $message = "Đã sử dụng {$budgetUsedRounded}% ngân sách";
         }
 
         return [

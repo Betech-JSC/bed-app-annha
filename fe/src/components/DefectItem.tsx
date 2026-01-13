@@ -145,11 +145,14 @@ export default function DefectItem({
           >
             {defect.attachments
               .filter((a: any) => a.description === 'before')
-              .map((attachment: any, index: number) => (
+              .map((attachment: any, index: number, array) => (
                 <Image
                   key={attachment.id || index}
                   source={{ uri: attachment.file_url }}
-                  style={styles.image}
+                  style={[
+                    styles.image,
+                    index < array.length - 1 && styles.imageSpacing,
+                  ]}
                 />
               ))}
           </ScrollView>
@@ -167,11 +170,14 @@ export default function DefectItem({
           >
             {defect.attachments
               .filter((a: any) => a.description === 'after')
-              .map((attachment: any, index: number) => (
+              .map((attachment: any, index: number, array) => (
                 <Image
                   key={attachment.id || index}
                   source={{ uri: attachment.file_url }}
-                  style={styles.image}
+                  style={[
+                    styles.image,
+                    index < array.length - 1 && styles.imageSpacing,
+                  ]}
                 />
               ))}
           </ScrollView>
@@ -299,6 +305,9 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 8,
     backgroundColor: "#F3F4F6",
+  },
+  imageSpacing: {
+    marginRight: 8,
   },
   moreImages: {
     width: 80,

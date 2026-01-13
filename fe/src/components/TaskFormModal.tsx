@@ -448,38 +448,6 @@ export default function TaskFormModal({
               return null;
             })()}
 
-            {/* Progress & Status - READ ONLY (only show when editing) */}
-            {task && (
-              <>
-                <View style={styles.field}>
-                  <Text style={styles.label}>
-                    Tiến độ{" "}
-                    <Text style={styles.readOnlyLabel}>(Tự động tính)</Text>
-                  </Text>
-                  <View style={styles.progressContainer}>
-                    <View style={styles.progressBar}>
-                      <View
-                        style={[styles.progressFill, { width: `${progress}%` }]}
-                      />
-                    </View>
-                    <Text style={styles.progressText}>{progress.toFixed(0)}%</Text>
-                  </View>
-                </View>
-
-                <View style={styles.field}>
-                  <Text style={styles.label}>
-                    Trạng thái{" "}
-                    <Text style={styles.readOnlyLabel}>(Tự động tính)</Text>
-                  </Text>
-                  <View style={styles.readOnlyStatusContainer}>
-                    <Text style={styles.readOnlyStatusText}>
-                      {STATUS_LABELS[status] || status}
-                    </Text>
-                  </View>
-                </View>
-              </>
-            )}
-
             {/* Priority */}
             <View style={styles.field}>
               <Text style={styles.label}>Độ ưu tiên</Text>

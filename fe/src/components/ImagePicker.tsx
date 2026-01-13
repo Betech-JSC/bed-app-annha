@@ -11,6 +11,7 @@ import {
   Modal,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import { attachmentApi, UploadResponse } from "@/api/attachmentApi";
 
@@ -118,6 +119,31 @@ export default function ImagePickerComponent({
       return;
     }
 
+    // Validate file size (2MB limit)
+    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB in bytes
+    let fileSize = asset.fileSize || 0;
+    
+    // If fileSize is not available, try to get it from FileSystem
+    if (fileSize === 0 && asset.uri) {
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+        if (fileInfo.exists && fileInfo.size) {
+          fileSize = fileInfo.size;
+        }
+      } catch (error) {
+        console.warn("Could not get file size:", error);
+      }
+    }
+    
+    if (fileSize > MAX_FILE_SIZE) {
+      const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+      Alert.alert(
+        "Lỗi",
+        `File ảnh quá lớn (${fileSizeMB}MB). Vui lòng chọn ảnh nhỏ hơn 2MB.`
+      );
+      return;
+    }
+
     const tempId = `temp_${Date.now()}`;
     const tempImage: ImageItem = {
       id: tempId,
@@ -171,6 +197,40 @@ export default function ImagePickerComponent({
       Alert.alert(
         "Lỗi",
         `Chỉ có thể thêm ${remainingSlots} ảnh nữa (tối đa ${maxImages} ảnh)`
+      );
+      return;
+    }
+
+    // Validate file size (2MB limit)
+    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB in bytes
+    const oversizedFiles: string[] = [];
+    
+    for (const asset of assets) {
+      let fileSize = asset.fileSize || 0;
+      
+      // If fileSize is not available, try to get it from FileSystem
+      if (fileSize === 0 && asset.uri) {
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+          if (fileInfo.exists && fileInfo.size) {
+            fileSize = fileInfo.size;
+          }
+        } catch (error) {
+          console.warn("Could not get file size:", error);
+        }
+      }
+      
+      if (fileSize > MAX_FILE_SIZE) {
+        const fileName = asset.fileName || `image_${Date.now()}`;
+        const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+        oversizedFiles.push(`${fileName} (${fileSizeMB}MB)`);
+      }
+    }
+
+    if (oversizedFiles.length > 0) {
+      Alert.alert(
+        "Lỗi",
+        `Các ảnh sau vượt quá giới hạn 2MB:\n${oversizedFiles.join("\n")}\n\nVui lòng chọn ảnh nhỏ hơn 2MB.`
       );
       return;
     }

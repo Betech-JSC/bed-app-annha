@@ -10,6 +10,8 @@ interface GanttTaskBarProps {
   top: number;
   height: number;
   onPress?: () => void;
+  phaseColor?: string;
+  showTriangle?: boolean;
 }
 
 const getStatusColor = (status: TaskStatus): string => {
@@ -45,8 +47,10 @@ export default function GanttTaskBar({
   top,
   height,
   onPress,
+  phaseColor,
+  showTriangle = false,
 }: GanttTaskBarProps) {
-  const statusColor = getStatusColor(task.status);
+  const statusColor = phaseColor || getStatusColor(task.status);
   const priorityColor = getPriorityColor(task.priority);
   const progressPercentage = task.progress_percentage != null && typeof task.progress_percentage === 'number' 
     ? task.progress_percentage 
@@ -85,6 +89,11 @@ export default function GanttTaskBar({
         />
       )}
 
+      {/* Triangle indicator at start */}
+      {showTriangle && (
+        <View style={[styles.triangleIndicator, { borderLeftColor: statusColor }]} />
+      )}
+      
       {/* Task name */}
       <View style={styles.taskNameContainer}>
         {hasChildren && (
@@ -175,6 +184,21 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1F2937",
     zIndex: 2,
+  },
+  triangleIndicator: {
+    position: "absolute",
+    left: -8,
+    top: "50%",
+    marginTop: -6,
+    width: 0,
+    height: 0,
+    borderTopWidth: 6,
+    borderBottomWidth: 6,
+    borderRightWidth: 8,
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
+    borderLeftWidth: 0,
+    zIndex: 3,
   },
 });
 

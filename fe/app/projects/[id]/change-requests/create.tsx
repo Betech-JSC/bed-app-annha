@@ -32,6 +32,29 @@ export default function CreateChangeRequestScreen() {
     implementation_plan: "",
   });
 
+  // Helper functions to translate English to Vietnamese
+  const getChangeTypeLabel = (type: string): string => {
+    const labels: Record<string, string> = {
+      scope: "Phạm vi",
+      schedule: "Tiến độ",
+      cost: "Chi phí",
+      quality: "Chất lượng",
+      resource: "Nguồn lực",
+      other: "Khác",
+    };
+    return labels[type] || type;
+  };
+
+  const getPriorityLabel = (priority: string): string => {
+    const labels: Record<string, string> = {
+      low: "Thấp",
+      medium: "Trung bình",
+      high: "Cao",
+      urgent: "Khẩn cấp",
+    };
+    return labels[priority] || priority;
+  };
+
   const handleSubmit = async () => {
     if (!formData.title.trim()) {
       Alert.alert("Lỗi", "Vui lòng nhập tiêu đề");
@@ -56,7 +79,7 @@ export default function CreateChangeRequestScreen() {
       const response = await changeRequestApi.createChangeRequest(id!, submitData);
       if (response.success) {
         Alert.alert("Thành công", "Đã tạo yêu cầu thay đổi", [
-          { text: "OK", onPress: () => router.back() },
+          { text: "Đồng ý", onPress: () => router.back() },
         ]);
       }
     } catch (error: any) {
@@ -111,7 +134,7 @@ export default function CreateChangeRequestScreen() {
                       formData.change_type === type && styles.optionTextActive,
                     ]}
                   >
-                    {type}
+                    {getChangeTypeLabel(type)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -136,7 +159,7 @@ export default function CreateChangeRequestScreen() {
                       formData.priority === priority && styles.optionTextActive,
                     ]}
                   >
-                    {priority}
+                    {getPriorityLabel(priority)}
                   </Text>
                 </TouchableOpacity>
               ))}

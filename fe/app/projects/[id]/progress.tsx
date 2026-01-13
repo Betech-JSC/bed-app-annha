@@ -87,11 +87,14 @@ export default function ProgressScreen() {
       // This ensures progress_percentage is always up-to-date
       try {
         await ganttApi.recalculateAllTasks(id!);
+        // Small delay to ensure backend has finished updating
+        await new Promise(resolve => setTimeout(resolve, 300));
       } catch (error) {
         console.warn("Error recalculating tasks (non-critical):", error);
         // Continue even if recalculate fails
       }
 
+      // Load phases and tasks after recalculate is complete
       const [phasesResponse, tasksResponse] = await Promise.all([
         ganttApi.getPhases(id!),
         ganttApi.getTasks(id!),
@@ -123,7 +126,28 @@ export default function ProgressScreen() {
         }
       }
       console.log("Loaded tasks:", tasksData.length, tasksData);
-      setTasks(tasksData);
+
+      // Normalize progress_percentage - ensure it's a number
+      const normalizedTasks = tasksData.map((task: any) => {
+        // Parse progress_percentage if it's a string
+        if (task.progress_percentage != null) {
+          if (typeof task.progress_percentage === 'string') {
+            task.progress_percentage = parseFloat(task.progress_percentage);
+          }
+          // If status is completed but progress is not 100, set to 100
+          if (task.status === 'completed' && task.progress_percentage !== 100) {
+            console.warn(`Task ${task.id} (${task.name}) is completed but progress is ${task.progress_percentage}, setting to 100`);
+            task.progress_percentage = 100;
+          }
+        } else if (task.status === 'completed') {
+          // If status is completed but no progress_percentage, set to 100
+          console.warn(`Task ${task.id} (${task.name}) is completed but has no progress_percentage, setting to 100`);
+          task.progress_percentage = 100;
+        }
+        return task;
+      });
+
+      setTasks(normalizedTasks);
     } catch (error) {
       console.error("Error loading phases and tasks:", error);
     }
@@ -145,7 +169,21 @@ export default function ProgressScreen() {
     const phaseTasks = tasks.filter(t => t.phase_id === phase.id);
     if (phaseTasks.length === 0) return 0;
 
-    const totalProgress = phaseTasks.reduce((sum, task) => sum + (task.progress_percentage || 0), 0);
+    const totalProgress = phaseTasks.reduce((sum, task) => {
+      // If status is completed, count as 100%
+      if (task.status === 'completed') {
+        return sum + 100;
+      }
+      // Parse progress_percentage (handle string or number)
+      let progress = task.progress_percentage;
+      if (typeof progress === 'string') {
+        progress = parseFloat(progress);
+      }
+      if (progress != null && typeof progress === 'number' && !isNaN(progress)) {
+        return sum + Math.max(0, Math.min(100, progress));
+      }
+      return sum;
+    }, 0);
     return Math.round(totalProgress / phaseTasks.length);
   };
 
@@ -422,16 +460,42 @@ export default function ProgressScreen() {
                   style={[
                     styles.treeProgressFill,
                     {
-                      width: `${task.progress_percentage || 0}%`,
+                      width: `${(() => {
+                        // If status is completed, always show 100%
+                        if (task.status === 'completed') {
+                          return 100;
+                        }
+                        // Parse progress_percentage (handle string or number)
+                        let progress = task.progress_percentage;
+                        if (typeof progress === 'string') {
+                          progress = parseFloat(progress);
+                        }
+                        if (progress != null && typeof progress === 'number' && !isNaN(progress)) {
+                          return Math.max(0, Math.min(100, progress));
+                        }
+                        return 0;
+                      })()}%`,
                       backgroundColor: statusColor,
                     },
                   ]}
                 />
               </View>
               <Text style={styles.treeProgressText}>
-                {(task.progress_percentage != null && typeof task.progress_percentage === 'number'
-                  ? task.progress_percentage.toFixed(0)
-                  : 0)}%
+                {(() => {
+                  // If status is completed, always show 100%
+                  if (task.status === 'completed') {
+                    return '100%';
+                  }
+                  // Parse progress_percentage (handle string or number)
+                  let progress = task.progress_percentage;
+                  if (typeof progress === 'string') {
+                    progress = parseFloat(progress);
+                  }
+                  if (progress != null && typeof progress === 'number' && !isNaN(progress)) {
+                    return `${Math.max(0, Math.min(100, progress)).toFixed(0)}%`;
+                  }
+                  return '0%';
+                })()}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
@@ -463,15 +527,6 @@ export default function ProgressScreen() {
     };
   }, [phasesWithProgress, tasksWithAlerts]);
 
-  const togglePhase = (phaseId: number) => {
-    const newExpanded = new Set(expandedPhases);
-    if (newExpanded.has(phaseId)) {
-      newExpanded.delete(phaseId);
-    } else {
-      newExpanded.add(phaseId);
-    }
-    setExpandedPhases(newExpanded);
-  };
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return "-";

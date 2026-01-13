@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import ImagePicker, { ImageItem } from "./ImagePicker";
-import { jsonToImages, imagesToJson } from "@/utils/imageUtils";
+import UniversalFileUploader, { UploadedFile } from "./UniversalFileUploader";
+import { jsonToFiles, filesToJson } from "@/utils/imageUtils";
 
 interface ImagePickerFieldProps {
   label?: string;
-  value?: string | null; // JSON string containing images array
+  value?: string | null; // JSON string containing files array
   onChange?: (jsonValue: string) => void;
   maxImages?: number;
   multiple?: boolean;
@@ -16,6 +16,8 @@ interface ImagePickerFieldProps {
 /**
  * Component để chọn/chụp nhiều ảnh và lưu vào JSON field
  * Sử dụng cho các module cần lưu nhiều ảnh vào database field dạng JSON
+ * 
+ * @deprecated This component now uses UniversalFileUploader internally
  */
 export default function ImagePickerField({
   label,
@@ -26,22 +28,22 @@ export default function ImagePickerField({
   disabled = false,
   required = false,
 }: ImagePickerFieldProps) {
-  const [images, setImages] = useState<ImageItem[]>([]);
+  const [files, setFiles] = useState<UploadedFile[]>([]);
 
-  // Parse JSON value to images array
+  // Parse JSON value to files array
   useEffect(() => {
     if (value) {
-      const parsed = jsonToImages(value);
-      setImages(parsed);
+      const parsed = jsonToFiles(value);
+      setFiles(parsed);
     } else {
-      setImages([]);
+      setFiles([]);
     }
   }, [value]);
 
-  // Handle images change
-  const handleImagesChange = (newImages: ImageItem[]) => {
-    setImages(newImages);
-    const jsonValue = imagesToJson(newImages);
+  // Handle files change
+  const handleFilesChange = (newFiles: UploadedFile[]) => {
+    setFiles(newFiles);
+    const jsonValue = filesToJson(newFiles);
     onChange?.(jsonValue);
   };
 
@@ -53,16 +55,19 @@ export default function ImagePickerField({
           {required && <Text style={styles.required}> *</Text>}
         </Text>
       )}
-      <ImagePicker
-        value={images}
-        onChange={handleImagesChange}
-        maxImages={maxImages}
+      <UniversalFileUploader
+        onUploadComplete={handleFilesChange}
         multiple={multiple}
+        accept="image"
+        maxFiles={maxImages}
+        initialFiles={files}
         disabled={disabled}
+        showPreview={true}
+        label={label ? undefined : "Chọn ảnh"}
       />
-      {images.length > 0 && (
+      {files.length > 0 && (
         <Text style={styles.countText}>
-          Đã chọn {images.length} ảnh
+          Đã chọn {files.length} ảnh
         </Text>
       )}
     </View>

@@ -139,8 +139,8 @@ export default function ProjectMonitoringScreen() {
           <View style={styles.metricCard}>
             <Text style={styles.metricValue}>
               {monitoringData.metrics.progress != null
-                ? monitoringData.metrics.progress.toFixed(1)
-                : "0.0"}
+                ? Math.round(monitoringData.metrics.progress)
+                : 0}
               %
             </Text>
             <Text style={styles.metricLabel}>Tiến độ</Text>
