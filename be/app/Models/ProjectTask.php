@@ -15,6 +15,7 @@ class ProjectTask extends Model
     protected $fillable = [
         'uuid',
         'project_id',
+        'phase_id', // Link to ProjectPhase
         'parent_id', // For hierarchical structure (WBS) - parent tasks act as "phases"
         'name',
         'description',
@@ -46,6 +47,11 @@ class ProjectTask extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function phase(): BelongsTo
+    {
+        return $this->belongsTo(ProjectPhase::class, 'phase_id');
     }
 
     public function assignedUser(): BelongsTo

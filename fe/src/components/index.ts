@@ -40,3 +40,4 @@ export { default as GanttTaskBar } from "./GanttTaskBar";
 export { default as PhaseSection } from "./PhaseSection";
 export { default as AcceptanceItemForm } from "./AcceptanceItemForm";
 export { default as AcceptanceItemList } from "./AcceptanceItemList";
+export { default as DatePickerInput } from "./DatePickerInput";

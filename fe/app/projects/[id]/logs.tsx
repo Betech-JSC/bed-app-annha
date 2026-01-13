@@ -19,9 +19,8 @@ import { ganttApi } from "@/api/ganttApi";
 import { ProjectTask } from "@/types/ganttTypes";
 import { Ionicons } from "@expo/vector-icons";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
-import DateTimePicker from "@react-native-community/datetimepicker";
 
 const DAYS_OF_WEEK = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const MONTHS = [
@@ -69,7 +68,6 @@ export default function ConstructionLogsScreen() {
   });
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [minCompletionPercentage, setMinCompletionPercentage] = useState(0);
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Helper function to ensure completion_percentage is always a valid number
   const getCompletionPercentage = (value: any): number => {
@@ -685,37 +683,25 @@ export default function ConstructionLogsScreen() {
 
           <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={true}>
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Ngày *</Text>
-              {/* BUSINESS RULE: Allow selecting date in the past, but not future */}
-              <TouchableOpacity
-                style={styles.selectButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={styles.selectButtonText}>
-                  {new Date(formData.log_date).toLocaleDateString("vi-VN")}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-              </TouchableOpacity>
+              <DatePickerInput
+                label="Ngày"
+                value={new Date(formData.log_date)}
+                onChange={(date) => {
+                  if (date) {
+                    const dateString = date.toISOString().split('T')[0];
+                    setFormData(prev => ({ ...prev, log_date: dateString }));
+                  }
+                }}
+                placeholder="Chọn ngày"
+                required
+                maximumDate={new Date()}
+                containerStyle={{ marginBottom: 0 }}
+              />
               <Text style={styles.helperText}>
                 {editingLog
                   ? "Có thể chọn ngày trong quá khứ để chỉnh sửa nhật ký"
                   : "Có thể chọn ngày hôm nay hoặc ngày trong quá khứ. Không thể chọn ngày tương lai."}
               </Text>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={new Date(formData.log_date)}
-                  mode="date"
-                  display="default"
-                  maximumDate={new Date()} // Cannot select future dates
-                  onChange={(event, selectedDate) => {
-                    setShowDatePicker(Platform.OS === 'ios');
-                    if (selectedDate) {
-                      const dateString = selectedDate.toISOString().split('T')[0];
-                      setFormData(prev => ({ ...prev, log_date: dateString }));
-                    }
-                  }}
-                />
-              )}
             </View>
 
             <View style={styles.formGroup}>

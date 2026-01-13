@@ -42,7 +42,7 @@ class BudgetController extends Controller
 
         $project = Project::findOrFail($projectId);
         $budgets = $project->budgets()
-            ->with(['items.costGroup', 'creator', 'approver'])
+            ->with(['items.costGroup', 'creator', 'approver', 'project'])
             ->orderBy('budget_date', 'desc')
             ->paginate(20);
 
@@ -149,7 +149,13 @@ class BudgetController extends Controller
         }
 
         $budget = ProjectBudget::where('project_id', $projectId)
-            ->with(['items.costGroup', 'project', 'creator', 'approver'])
+            ->with([
+                'items.costGroup',
+                'project',
+                'project.contract',
+                'creator',
+                'approver'
+            ])
             ->findOrFail($id);
 
         return response()->json([
@@ -170,7 +176,17 @@ class BudgetController extends Controller
         }
 
         $budget = ProjectBudget::where('project_id', $projectId)
-            ->with(['items.costGroup', 'project'])
+            ->with([
+                'items.costGroup',
+                'project',
+                'project.contract',
+                'project.costs' => function ($query) {
+                    $query->where('status', 'approved')
+                        ->whereNotNull('cost_group_id')
+                        ->select('cost_group_id', \Illuminate\Support\Facades\DB::raw('SUM(amount) as total'))
+                        ->groupBy('cost_group_id');
+                }
+            ])
             ->findOrFail($id);
 
         // Sử dụng BudgetComparisonService để so sánh

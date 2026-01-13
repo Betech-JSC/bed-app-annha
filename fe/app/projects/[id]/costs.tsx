@@ -651,11 +651,16 @@ export default function CostsScreen() {
                 <DateTimePicker
                   value={formData.cost_date}
                   mode="date"
-                  display="default"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   onChange={(event, date) => {
-                    setShowDatePicker(false);
-                    if (date) {
+                    if (Platform.OS === 'android') {
+                      setShowDatePicker(false);
+                    }
+                    if (date && (Platform.OS === 'android' || event.type !== 'dismissed')) {
                       setFormData({ ...formData, cost_date: date });
+                    }
+                    if (Platform.OS === 'ios' && event.type === 'dismissed') {
+                      setShowDatePicker(false);
                     }
                   }}
                 />

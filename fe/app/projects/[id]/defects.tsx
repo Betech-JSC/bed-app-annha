@@ -17,12 +17,11 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { defectApi, Defect } from "@/api/defectApi";
 import { acceptanceApi } from "@/api/acceptanceApi";
-import { DefectItem, UniversalFileUploader, ScreenHeader } from "@/components";
+import { DefectItem, UniversalFileUploader, ScreenHeader, DatePickerInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ganttApi } from "@/api/ganttApi";
-import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function DefectsScreen() {
   const router = useRouter();
@@ -48,7 +47,6 @@ export default function DefectsScreen() {
   const [inProgressModalVisible, setInProgressModalVisible] = useState(false);
   const [selectedDefectForProgress, setSelectedDefectForProgress] = useState<Defect | null>(null);
   const [expectedCompletionDate, setExpectedCompletionDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Fix modal
   const [fixModalVisible, setFixModalVisible] = useState(false);
@@ -622,36 +620,15 @@ export default function DefectsScreen() {
                 showsVerticalScrollIndicator={true}
                 keyboardShouldPersistTaps="handled"
               >
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>
-                    Thời gian hoàn thành dự kiến <Text style={styles.required}>*</Text>
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.dateInput}
-                    onPress={() => setShowDatePicker(true)}
-                  >
-                    <Text style={[styles.dateInputText, !expectedCompletionDate && styles.placeholderText]}>
-                      {expectedCompletionDate
-                        ? expectedCompletionDate.toLocaleDateString('vi-VN')
-                        : "Chọn ngày"}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                  </TouchableOpacity>
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={expectedCompletionDate || new Date()}
-                      mode="date"
-                      display="default"
-                      minimumDate={new Date()}
-                      onChange={(event, date) => {
-                        setShowDatePicker(false);
-                        if (date) {
-                          setExpectedCompletionDate(date);
-                        }
-                      }}
-                    />
-                  )}
-                </View>
+                <DatePickerInput
+                  label="Thời gian hoàn thành dự kiến"
+                  value={expectedCompletionDate}
+                  onChange={setExpectedCompletionDate}
+                  placeholder="Chọn ngày"
+                  required
+                  minimumDate={new Date()}
+                  containerStyle={styles.formGroup}
+                />
               </ScrollView>
               <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                 <TouchableOpacity

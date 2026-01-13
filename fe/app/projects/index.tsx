@@ -8,6 +8,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  TextInput,
+  ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
@@ -29,10 +31,23 @@ export default function ProjectsListScreen() {
   const [monitoringData, setMonitoringData] = useState<Record<number, ProjectMonitoringData>>({});
   const [predictions, setPredictions] = useState<Record<number, any>>({});
   const [latestComments, setLatestComments] = useState<Record<number, any>>({});
+  const [searchText, setSearchText] = useState("");
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [showYearFilter, setShowYearFilter] = useState(false);
   const [showStatusFilter, setShowStatusFilter] = useState(false);
+  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+
+  // Advanced filter states
+  const [minProgress, setMinProgress] = useState<string>("");
+  const [maxProgress, setMaxProgress] = useState<string>("");
+  const [startDateFrom, setStartDateFrom] = useState<string>("");
+  const [startDateTo, setStartDateTo] = useState<string>("");
+  const [endDateFrom, setEndDateFrom] = useState<string>("");
+  const [endDateTo, setEndDateTo] = useState<string>("");
+  const [hasDelayRisk, setHasDelayRisk] = useState<boolean | null>(null);
+  const [hasCostRisk, setHasCostRisk] = useState<boolean | null>(null);
+  const [hasOverdueTasks, setHasOverdueTasks] = useState<boolean | null>(null);
 
   useEffect(() => {
     loadProjects();
@@ -45,7 +60,23 @@ export default function ProjectsListScreen() {
       if (response.success) {
         const projectsList = response.data?.data || response.data || [];
         setProjects(projectsList);
-        applyFilters(projectsList, selectedYear, selectedStatus);
+        applyFilters(
+          projectsList,
+          selectedYear,
+          selectedStatus,
+          searchText,
+          {
+            minProgress,
+            maxProgress,
+            startDateFrom,
+            startDateTo,
+            endDateFrom,
+            endDateTo,
+            hasDelayRisk,
+            hasCostRisk,
+            hasOverdueTasks,
+          }
+        );
 
         // Load monitoring data, predictions và comments cho từng project
         loadMonitoringData(projectsList);
@@ -129,8 +160,35 @@ export default function ProjectsListScreen() {
     setLatestComments(commentsMap);
   };
 
-  const applyFilters = (projectsList: Project[], year: number | null, status: string | null) => {
+  const applyFilters = (
+    projectsList: Project[],
+    year: number | null,
+    status: string | null,
+    search: string = "",
+    filters: {
+      minProgress?: string;
+      maxProgress?: string;
+      startDateFrom?: string;
+      startDateTo?: string;
+      endDateFrom?: string;
+      endDateTo?: string;
+      hasDelayRisk?: boolean | null;
+      hasCostRisk?: boolean | null;
+      hasOverdueTasks?: boolean | null;
+    } = {}
+  ) => {
     let filtered = [...projectsList];
+
+    // Search filter - tìm theo tên, mã, mô tả
+    if (search.trim()) {
+      const searchLower = search.toLowerCase().trim();
+      filtered = filtered.filter((project) => {
+        const nameMatch = project.name?.toLowerCase().includes(searchLower);
+        const codeMatch = project.code?.toLowerCase().includes(searchLower);
+        const descMatch = project.description?.toLowerCase().includes(searchLower);
+        return nameMatch || codeMatch || descMatch;
+      });
+    }
 
     // Filter theo năm
     if (year) {
@@ -149,15 +207,136 @@ export default function ProjectsListScreen() {
         filtered = filtered.filter((p) => p.status === "in_progress");
       } else if (status === "completed") {
         filtered = filtered.filter((p) => p.status === "completed");
+      } else if (status === "planning") {
+        filtered = filtered.filter((p) => p.status === "planning");
+      } else if (status === "cancelled") {
+        filtered = filtered.filter((p) => p.status === "cancelled");
       }
+    }
+
+    // Filter theo tiến độ
+    if (filters.minProgress) {
+      const min = parseFloat(filters.minProgress);
+      if (!isNaN(min)) {
+        filtered = filtered.filter((p) => {
+          const progress = p.progress?.overall_percentage || 0;
+          return progress >= min;
+        });
+      }
+    }
+    if (filters.maxProgress) {
+      const max = parseFloat(filters.maxProgress);
+      if (!isNaN(max)) {
+        filtered = filtered.filter((p) => {
+          const progress = p.progress?.overall_percentage || 0;
+          return progress <= max;
+        });
+      }
+    }
+
+    // Filter theo ngày bắt đầu
+    if (filters.startDateFrom) {
+      const fromDate = new Date(filters.startDateFrom);
+      filtered = filtered.filter((p) => {
+        if (!p.start_date) return false;
+        return new Date(p.start_date) >= fromDate;
+      });
+    }
+    if (filters.startDateTo) {
+      const toDate = new Date(filters.startDateTo);
+      toDate.setHours(23, 59, 59, 999);
+      filtered = filtered.filter((p) => {
+        if (!p.start_date) return false;
+        return new Date(p.start_date) <= toDate;
+      });
+    }
+
+    // Filter theo ngày kết thúc
+    if (filters.endDateFrom) {
+      const fromDate = new Date(filters.endDateFrom);
+      filtered = filtered.filter((p) => {
+        if (!p.end_date) return false;
+        return new Date(p.end_date) >= fromDate;
+      });
+    }
+    if (filters.endDateTo) {
+      const toDate = new Date(filters.endDateTo);
+      toDate.setHours(23, 59, 59, 999);
+      filtered = filtered.filter((p) => {
+        if (!p.end_date) return false;
+        return new Date(p.end_date) <= toDate;
+      });
+    }
+
+    // Filter theo cảnh báo delay risk
+    if (filters.hasDelayRisk !== null) {
+      filtered = filtered.filter((p) => {
+        const prediction = predictions[p.id];
+        const hasDelay = prediction?.delay_risk?.risk_level === 'high' ||
+          prediction?.delay_risk?.risk_level === 'critical' ||
+          (prediction?.delay_risk?.delay_days && prediction.delay_risk.delay_days > 0);
+        return filters.hasDelayRisk ? hasDelay : !hasDelay;
+      });
+    }
+
+    // Filter theo cảnh báo cost risk
+    if (filters.hasCostRisk !== null) {
+      filtered = filtered.filter((p) => {
+        const prediction = predictions[p.id];
+        const hasCost = prediction?.cost_risk?.risk_level === 'high' ||
+          prediction?.cost_risk?.risk_level === 'critical' ||
+          (prediction?.cost_risk?.overrun_percentage && prediction.cost_risk.overrun_percentage > 0);
+        return filters.hasCostRisk ? hasCost : !hasCost;
+      });
+    }
+
+    // Filter theo overdue tasks
+    if (filters.hasOverdueTasks !== null) {
+      filtered = filtered.filter((p) => {
+        const monitoring = monitoringData[p.id];
+        const hasOverdue = (monitoring?.metrics?.overdue_tasks || 0) > 0;
+        return filters.hasOverdueTasks ? hasOverdue : !hasOverdue;
+      });
     }
 
     setFilteredProjects(filtered);
   };
 
   useEffect(() => {
-    applyFilters(projects, selectedYear, selectedStatus);
-  }, [selectedYear, selectedStatus, projects]);
+    applyFilters(
+      projects,
+      selectedYear,
+      selectedStatus,
+      searchText,
+      {
+        minProgress,
+        maxProgress,
+        startDateFrom,
+        startDateTo,
+        endDateFrom,
+        endDateTo,
+        hasDelayRisk,
+        hasCostRisk,
+        hasOverdueTasks,
+      }
+    );
+  }, [
+    selectedYear,
+    selectedStatus,
+    projects,
+    searchText,
+    minProgress,
+    maxProgress,
+    startDateFrom,
+    startDateTo,
+    endDateFrom,
+    endDateTo,
+    hasDelayRisk,
+    hasCostRisk,
+    hasOverdueTasks,
+    predictions,
+    monitoringData,
+  ]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -403,6 +582,38 @@ export default function ProjectsListScreen() {
     );
   }
 
+  const clearAllFilters = () => {
+    setSearchText("");
+    setSelectedYear(null);
+    setSelectedStatus(null);
+    setMinProgress("");
+    setMaxProgress("");
+    setStartDateFrom("");
+    setStartDateTo("");
+    setEndDateFrom("");
+    setEndDateTo("");
+    setHasDelayRisk(null);
+    setHasCostRisk(null);
+    setHasOverdueTasks(null);
+  };
+
+  const hasActiveFilters = () => {
+    return !!(
+      searchText ||
+      selectedYear ||
+      selectedStatus ||
+      minProgress ||
+      maxProgress ||
+      startDateFrom ||
+      startDateTo ||
+      endDateFrom ||
+      endDateTo ||
+      hasDelayRisk !== null ||
+      hasCostRisk !== null ||
+      hasOverdueTasks !== null
+    );
+  };
+
   return (
     <View style={styles.container}>
       <ScreenHeader
@@ -423,6 +634,12 @@ export default function ProjectsListScreen() {
             >
               <Ionicons name="filter-outline" size={20} color={selectedStatus ? "#FFFFFF" : "#3B82F6"} />
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, hasActiveFilters() && styles.filterButtonActive]}
+              onPress={() => setShowAdvancedFilter(true)}
+            >
+              <Ionicons name="options-outline" size={20} color={hasActiveFilters() ? "#FFFFFF" : "#3B82F6"} />
+            </TouchableOpacity>
             <PermissionGuard permission="projects.create">
               <TouchableOpacity
                 style={styles.addButton}
@@ -434,6 +651,23 @@ export default function ProjectsListScreen() {
           </View>
         }
       />
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search-outline" size={20} color="#6B7280" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Tìm kiếm theo tên, mã, mô tả..."
+          placeholderTextColor="#9CA3AF"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+        {searchText.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearSearchButton}>
+            <Ionicons name="close-circle" size={20} color="#6B7280" />
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Year Filter Modal */}
       {showYearFilter && (
@@ -498,6 +732,17 @@ export default function ProjectsListScreen() {
             <TouchableOpacity
               style={styles.filterOption}
               onPress={() => {
+                setSelectedStatus("planning");
+                setShowStatusFilter(false);
+              }}
+            >
+              <Text style={selectedStatus === "planning" ? styles.filterOptionActive : styles.filterOptionText}>
+                Lập kế hoạch
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => {
                 setSelectedStatus("in_progress");
                 setShowStatusFilter(false);
               }}
@@ -517,6 +762,160 @@ export default function ProjectsListScreen() {
                 Đã hoàn thành
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.filterOption}
+              onPress={() => {
+                setSelectedStatus("cancelled");
+                setShowStatusFilter(false);
+              }}
+            >
+              <Text style={selectedStatus === "cancelled" ? styles.filterOptionActive : styles.filterOptionText}>
+                Đã hủy
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Advanced Filter Modal */}
+      {showAdvancedFilter && (
+        <View style={styles.filterModalOverlay}>
+          <View style={[styles.filterModal, styles.advancedFilterModal]}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>Bộ Lọc Nâng Cao</Text>
+              <TouchableOpacity onPress={() => setShowAdvancedFilter(false)}>
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.advancedFilterContent} showsVerticalScrollIndicator={false}>
+              {/* Tiến độ */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Tiến độ (%)</Text>
+                <View style={styles.rangeInputContainer}>
+                  <View style={styles.rangeInput}>
+                    <Text style={styles.rangeLabel}>Từ:</Text>
+                    <TextInput
+                      style={styles.rangeInputField}
+                      placeholder="0"
+                      keyboardType="numeric"
+                      value={minProgress}
+                      onChangeText={setMinProgress}
+                    />
+                  </View>
+                  <View style={styles.rangeInput}>
+                    <Text style={styles.rangeLabel}>Đến:</Text>
+                    <TextInput
+                      style={styles.rangeInputField}
+                      placeholder="100"
+                      keyboardType="numeric"
+                      value={maxProgress}
+                      onChangeText={setMaxProgress}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Ngày bắt đầu */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Ngày bắt đầu</Text>
+                <View style={styles.dateInputContainer}>
+                  <View style={styles.dateInput}>
+                    <Text style={styles.dateLabel}>Từ:</Text>
+                    <TextInput
+                      style={styles.dateInputField}
+                      placeholder="YYYY-MM-DD"
+                      value={startDateFrom}
+                      onChangeText={setStartDateFrom}
+                    />
+                  </View>
+                  <View style={styles.dateInput}>
+                    <Text style={styles.dateLabel}>Đến:</Text>
+                    <TextInput
+                      style={styles.dateInputField}
+                      placeholder="YYYY-MM-DD"
+                      value={startDateTo}
+                      onChangeText={setStartDateTo}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Ngày kết thúc */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Ngày kết thúc</Text>
+                <View style={styles.dateInputContainer}>
+                  <View style={styles.dateInput}>
+                    <Text style={styles.dateLabel}>Từ:</Text>
+                    <TextInput
+                      style={styles.dateInputField}
+                      placeholder="YYYY-MM-DD"
+                      value={endDateFrom}
+                      onChangeText={setEndDateFrom}
+                    />
+                  </View>
+                  <View style={styles.dateInput}>
+                    <Text style={styles.dateLabel}>Đến:</Text>
+                    <TextInput
+                      style={styles.dateInputField}
+                      placeholder="YYYY-MM-DD"
+                      value={endDateTo}
+                      onChangeText={setEndDateTo}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Cảnh báo */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Cảnh báo</Text>
+                <TouchableOpacity
+                  style={[styles.toggleOption, hasDelayRisk === true && styles.toggleOptionActive]}
+                  onPress={() => setHasDelayRisk(hasDelayRisk === true ? null : true)}
+                >
+                  <Text style={[styles.toggleOptionText, hasDelayRisk === true && styles.toggleOptionTextActive]}>
+                    Có cảnh báo chậm tiến độ
+                  </Text>
+                  {hasDelayRisk === true && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleOption, hasCostRisk === true && styles.toggleOptionActive]}
+                  onPress={() => setHasCostRisk(hasCostRisk === true ? null : true)}
+                >
+                  <Text style={[styles.toggleOptionText, hasCostRisk === true && styles.toggleOptionTextActive]}>
+                    Có cảnh báo vượt ngân sách
+                  </Text>
+                  {hasCostRisk === true && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleOption, hasOverdueTasks === true && styles.toggleOptionActive]}
+                  onPress={() => setHasOverdueTasks(hasOverdueTasks === true ? null : true)}
+                >
+                  <Text style={[styles.toggleOptionText, hasOverdueTasks === true && styles.toggleOptionTextActive]}>
+                    Có công việc quá hạn
+                  </Text>
+                  {hasOverdueTasks === true && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                </TouchableOpacity>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.filterActions}>
+                <TouchableOpacity
+                  style={[styles.filterActionButton, styles.clearButton]}
+                  onPress={() => {
+                    clearAllFilters();
+                    setShowAdvancedFilter(false);
+                  }}
+                >
+                  <Text style={styles.clearButtonText}>Xóa tất cả</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.filterActionButton, styles.applyButton]}
+                  onPress={() => setShowAdvancedFilter(false)}
+                >
+                  <Text style={styles.applyButtonText}>Áp dụng</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       )}
@@ -532,13 +931,25 @@ export default function ProjectsListScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="folder-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>Chưa có dự án nào</Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={() => router.push("/projects/create")}
-            >
-              <Text style={styles.emptyButtonText}>Tạo dự án mới</Text>
-            </TouchableOpacity>
+            <Text style={styles.emptyText}>
+              {hasActiveFilters() ? "Không tìm thấy dự án phù hợp" : "Chưa có dự án nào"}
+            </Text>
+            {hasActiveFilters() && (
+              <TouchableOpacity
+                style={styles.clearFiltersButton}
+                onPress={clearAllFilters}
+              >
+                <Text style={styles.clearFiltersButtonText}>Xóa bộ lọc</Text>
+              </TouchableOpacity>
+            )}
+            {!hasActiveFilters() && (
+              <TouchableOpacity
+                style={styles.emptyButton}
+                onPress={() => router.push("/projects/create")}
+              >
+                <Text style={styles.emptyButtonText}>Tạo dự án mới</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -877,5 +1288,159 @@ const styles = StyleSheet.create({
   commentTime: {
     fontSize: 12,
     color: "#9CA3AF",
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#1F2937",
+    padding: 0,
+  },
+  clearSearchButton: {
+    marginLeft: 8,
+  },
+  advancedFilterModal: {
+    maxHeight: "80%",
+    width: "90%",
+  },
+  advancedFilterContent: {
+    maxHeight: 500,
+  },
+  filterSection: {
+    marginBottom: 24,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 12,
+  },
+  rangeInputContainer: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  rangeInput: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  rangeLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    minWidth: 40,
+  },
+  rangeInputField: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#1F2937",
+    backgroundColor: "#FFFFFF",
+  },
+  dateInputContainer: {
+    gap: 12,
+  },
+  dateInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dateLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    minWidth: 50,
+  },
+  dateInputField: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#1F2937",
+    backgroundColor: "#FFFFFF",
+  },
+  toggleOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 8,
+  },
+  toggleOptionActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#3B82F6",
+  },
+  toggleOptionText: {
+    fontSize: 14,
+    color: "#1F2937",
+  },
+  toggleOptionTextActive: {
+    color: "#3B82F6",
+    fontWeight: "600",
+  },
+  filterActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  filterActionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  clearButton: {
+    backgroundColor: "#F3F4F6",
+  },
+  clearButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  applyButton: {
+    backgroundColor: "#3B82F6",
+  },
+  applyButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  clearFiltersButton: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  clearFiltersButtonText: {
+    color: "#6B7280",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

@@ -44,7 +44,7 @@ class ProjectPhase extends Model
 
     public function tasks(): HasMany
     {
-        return $this->hasMany(ProjectTask::class)->orderBy('order');
+        return $this->hasMany(ProjectTask::class, 'phase_id')->orderBy('order');
     }
 
     /**
@@ -109,4 +109,3 @@ class ProjectPhase extends Model
         });
     }
 }
-

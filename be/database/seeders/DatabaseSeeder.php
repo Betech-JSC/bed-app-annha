@@ -35,7 +35,10 @@ class DatabaseSeeder extends Seeder
 
             // 4. Dự án và dữ liệu liên quan
             ProjectSeeder::class, // Tạo dữ liệu mẫu cho module quản lý dự án
-            SampleDataSeeder::class, // Tạo dữ liệu mẫu cho tất cả các module (contracts, payments, costs, etc.)
+            ProjectPersonnelSeeder::class, // Gán personnel vào projects
+            ProjectPhaseTaskSeeder::class, // Tạo phases và tasks cho projects
+            AcceptanceWorkflowSeeder::class, // Tạo acceptance stages và items
+            SampleDataSeeder::class, // Tạo dữ liệu mẫu cho tất cả các module (contracts, payments, costs, logs, defects, change requests, etc.)
             BudgetSeeder::class, // Tạo ngân sách dự án
             InvoiceSeeder::class, // Tạo hóa đơn
             ReceiptSeeder::class, // Tạo chứng từ

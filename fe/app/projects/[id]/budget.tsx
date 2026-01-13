@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
     View,
     Text,
@@ -17,6 +17,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { budgetApi, ProjectBudget, CreateBudgetData } from "@/api/budgetApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
+import { revenueApi } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { ScreenHeader } from "@/components";
@@ -31,6 +32,12 @@ export default function BudgetScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
+    const [actualCosts, setActualCosts] = useState<number>(0);
+    const [searchText, setSearchText] = useState("");
+    const [debouncedSearchText, setDebouncedSearchText] = useState("");
+    const [filterStatus, setFilterStatus] = useState<string | null>(null);
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [formData, setFormData] = useState<Partial<CreateBudgetData>>({
         name: "",
         version: "1.0",
@@ -42,11 +49,28 @@ export default function BudgetScreen() {
     const [submitting, setSubmitting] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
     const [showItemModal, setShowItemModal] = useState(false);
+    const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
     useEffect(() => {
         loadBudgets();
         loadCostGroups();
+        loadActualCosts();
     }, [id]);
+
+    // Debounce search text
+    useEffect(() => {
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+        searchTimeoutRef.current = setTimeout(() => {
+            setDebouncedSearchText(searchText);
+        }, 300);
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
+    }, [searchText]);
 
     const loadBudgets = async () => {
         try {
@@ -60,6 +84,17 @@ export default function BudgetScreen() {
         } finally {
             setLoading(false);
             setRefreshing(false);
+        }
+    };
+
+    const loadActualCosts = async () => {
+        try {
+            const response = await revenueApi.getProjectSummary(id!);
+            if (response.success) {
+                setActualCosts(response.data.costs?.total_costs || 0);
+            }
+        } catch (error) {
+            console.error("Error loading actual costs:", error);
         }
     };
 
@@ -78,7 +113,47 @@ export default function BudgetScreen() {
     const onRefresh = () => {
         setRefreshing(true);
         loadBudgets();
+        loadActualCosts();
     };
+
+    // Calculate summary statistics
+    const summaryStats = useMemo(() => {
+        const activeBudgets = budgets.filter(b => b.status === "approved" || b.status === "active");
+        const totalBudget = activeBudgets.reduce((sum, b) => sum + b.total_budget, 0);
+        const totalRemaining = activeBudgets.reduce((sum, b) => sum + b.remaining_budget, 0);
+        const totalUsed = totalBudget - totalRemaining;
+        const utilization = totalBudget > 0 ? (totalUsed / totalBudget) * 100 : 0;
+        
+        return {
+            totalBudget,
+            totalUsed,
+            totalRemaining,
+            utilization,
+            actualCosts,
+            variance: actualCosts - totalBudget,
+        };
+    }, [budgets, actualCosts]);
+
+    // Filter budgets with debounced search
+    const filteredBudgets = useMemo(() => {
+        let filtered = [...budgets];
+        
+        // Search filter (using debounced text)
+        if (debouncedSearchText.trim()) {
+            const searchLower = debouncedSearchText.toLowerCase().trim();
+            filtered = filtered.filter(b => 
+                b.name.toLowerCase().includes(searchLower) ||
+                b.version?.toLowerCase().includes(searchLower)
+            );
+        }
+        
+        // Status filter
+        if (filterStatus) {
+            filtered = filtered.filter(b => b.status === filterStatus);
+        }
+        
+        return filtered;
+    }, [budgets, debouncedSearchText, filterStatus]);
 
     const handleAddItem = () => {
         setEditingItem(null);
@@ -97,7 +172,9 @@ export default function BudgetScreen() {
         } else {
             items.push(item);
         }
-        setFormData({ ...formData, items });
+        // Auto-calculate total
+        const total = items.reduce((sum, i) => sum + (i.estimated_amount || 0), 0);
+        setFormData({ ...formData, items, total });
         setShowItemModal(false);
         setEditingItem(null);
     };
@@ -105,7 +182,9 @@ export default function BudgetScreen() {
     const handleRemoveItem = (index: number) => {
         const items = formData.items || [];
         items.splice(index, 1);
-        setFormData({ ...formData, items });
+        // Recalculate total
+        const total = items.reduce((sum, i) => sum + (i.estimated_amount || 0), 0);
+        setFormData({ ...formData, items, total });
     };
 
     const handleCreate = async () => {
@@ -140,65 +219,211 @@ export default function BudgetScreen() {
         });
     };
 
+    const handleUseTemplate = (templateBudget: ProjectBudget) => {
+        setFormData({
+            name: `${templateBudget.name} (Mới)`,
+            version: "1.0",
+            budget_date: new Date().toISOString().split("T")[0],
+            notes: templateBudget.notes || "",
+            items: templateBudget.items?.map(item => ({
+                name: item.name,
+                cost_group_id: item.cost_group_id,
+                description: item.description,
+                estimated_amount: item.estimated_amount,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+            })) || [],
+        });
+        setShowTemplatePicker(false);
+    };
+
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("vi-VN").format(amount) + " VNĐ";
     };
 
-    const renderItem = ({ item }: { item: ProjectBudget }) => (
-        <TouchableOpacity
-            style={styles.card}
-            onPress={() => router.push(`/projects/${id}/budget/${item.id}`)}
-        >
-            <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderLeft}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    {item.version && <Text style={styles.cardVersion}>v{item.version}</Text>}
-                </View>
-                <View
-                    style={[
-                        styles.statusBadge,
-                        {
-                            backgroundColor:
-                                item.status === "approved"
-                                    ? "#10B98120"
+    const getBudgetUtilization = (budget: ProjectBudget): number => {
+        if (budget.total_budget === 0) return 0;
+        const used = budget.total_budget - budget.remaining_budget;
+        return (used / budget.total_budget) * 100;
+    };
+
+    const handleDuplicate = async (budget: ProjectBudget, e: any) => {
+        e?.stopPropagation?.();
+        Alert.alert(
+            "Sao chép ngân sách",
+            `Bạn có muốn sao chép ngân sách "${budget.name}"?`,
+            [
+                { text: "Hủy", style: "cancel" },
+                {
+                    text: "Sao chép",
+                    onPress: async () => {
+                        try {
+                            const newVersion = budget.version 
+                                ? `${parseFloat(budget.version) + 0.1}`.substring(0, 3)
+                                : "1.0";
+                            const duplicateData: CreateBudgetData = {
+                                name: `${budget.name} (Bản sao)`,
+                                version: newVersion,
+                                budget_date: new Date().toISOString().split("T")[0],
+                                notes: budget.notes || "",
+                                items: budget.items?.map(item => ({
+                                    name: item.name,
+                                    cost_group_id: item.cost_group_id,
+                                    description: item.description,
+                                    estimated_amount: item.estimated_amount,
+                                    quantity: item.quantity,
+                                    unit_price: item.unit_price,
+                                })) || [],
+                            };
+                            const response = await budgetApi.createBudget(Number(id), duplicateData);
+                            if (response.success) {
+                                Alert.alert("Thành công", "Đã sao chép ngân sách");
+                                loadBudgets();
+                            }
+                        } catch (error: any) {
+                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể sao chép ngân sách");
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    const renderItem = useCallback(({ item }: { item: ProjectBudget }) => {
+        const utilization = getBudgetUtilization(item);
+        const isOverBudget = utilization > 100;
+        const isWarning = utilization > 80 && utilization <= 100;
+        
+        return (
+            <TouchableOpacity
+                style={styles.card}
+                onPress={() => router.push(`/projects/${id}/budget/${item.id}`)}
+            >
+                <View style={styles.cardHeader}>
+                    <View style={styles.cardHeaderLeft}>
+                        <Text style={styles.cardTitle}>{item.name}</Text>
+                        {item.version && <Text style={styles.cardVersion}>v{item.version}</Text>}
+                    </View>
+                    <View style={styles.cardHeaderRight}>
+                        <View
+                            style={[
+                                styles.statusBadge,
+                                {
+                                    backgroundColor:
+                                        item.status === "approved"
+                                            ? "#10B98120"
+                                            : item.status === "active"
+                                                ? "#3B82F620"
+                                                : item.status === "archived"
+                                                    ? "#6B728020"
+                                                    : "#F59E0B20",
+                                },
+                            ]}
+                        >
+                            <Text
+                                style={[
+                                    styles.statusText,
+                                    {
+                                        color:
+                                            item.status === "approved"
+                                                ? "#10B981"
+                                                : item.status === "active"
+                                                    ? "#3B82F6"
+                                                    : item.status === "archived"
+                                                        ? "#6B7280"
+                                                        : "#F59E0B",
+                                    },
+                                ]}
+                            >
+                                {item.status === "approved"
+                                    ? "Đã duyệt"
                                     : item.status === "active"
-                                        ? "#3B82F620"
-                                        : "#F59E0B20",
-                        },
-                    ]}
-                >
-                    <Text
-                        style={[
-                            styles.statusText,
-                            {
-                                color:
-                                    item.status === "approved"
-                                        ? "#10B981"
-                                        : item.status === "active"
-                                            ? "#3B82F6"
-                                            : "#F59E0B",
-                            },
-                        ]}
-                    >
-                        {item.status === "approved"
-                            ? "Đã duyệt"
-                            : item.status === "active"
-                                ? "Đang áp dụng"
-                                : "Nháp"}
-                    </Text>
+                                        ? "Đang áp dụng"
+                                        : item.status === "archived"
+                                            ? "Đã lưu trữ"
+                                            : "Nháp"}
+                            </Text>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.duplicateButton}
+                            onPress={(e) => handleDuplicate(item, e)}
+                        >
+                            <Ionicons name="copy-outline" size={18} color="#6B7280" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
-            <Text style={styles.budgetAmount}>
-                {formatCurrency(item.total_budget)}
-            </Text>
-            <Text style={styles.budgetDate}>
-                Ngày lập: {new Date(item.budget_date).toLocaleDateString("vi-VN")}
-            </Text>
-            {item.items && item.items.length > 0 && (
-                <Text style={styles.itemsCount}>{item.items.length} hạng mục</Text>
-            )}
-        </TouchableOpacity>
-    );
+                
+                <Text style={styles.budgetAmount}>
+                    {formatCurrency(item.total_budget)}
+                </Text>
+                
+                {/* Progress Bar */}
+                {(item.status === "approved" || item.status === "active") && (
+                    <View style={styles.progressContainer}>
+                        <View style={styles.progressBar}>
+                            <View
+                                style={[
+                                    styles.progressFill,
+                                    {
+                                        width: `${Math.min(utilization, 100)}%`,
+                                        backgroundColor: isOverBudget 
+                                            ? "#EF4444" 
+                                            : isWarning 
+                                                ? "#F59E0B" 
+                                                : "#10B981",
+                                    },
+                                ]}
+                            />
+                        </View>
+                        <View style={styles.progressInfo}>
+                            <Text style={styles.progressText}>
+                                Đã sử dụng: {utilization.toFixed(1)}%
+                            </Text>
+                            {isOverBudget && (
+                                <View style={styles.warningBadge}>
+                                    <Ionicons name="warning" size={14} color="#EF4444" />
+                                    <Text style={styles.warningText}>Vượt ngân sách</Text>
+                                </View>
+                            )}
+                            {isWarning && !isOverBudget && (
+                                <View style={[styles.warningBadge, { backgroundColor: "#FEF3C7" }]}>
+                                    <Ionicons name="alert-circle" size={14} color="#F59E0B" />
+                                    <Text style={[styles.warningText, { color: "#92400E" }]}>Cảnh báo</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                )}
+                
+                <View style={styles.cardFooter}>
+                    <View style={styles.footerItem}>
+                        <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+                        <Text style={styles.footerText}>
+                            {new Date(item.budget_date).toLocaleDateString("vi-VN")}
+                        </Text>
+                    </View>
+                    {item.items && item.items.length > 0 && (
+                        <View style={styles.footerItem}>
+                            <Ionicons name="list-outline" size={14} color="#6B7280" />
+                            <Text style={styles.footerText}>{item.items.length} hạng mục</Text>
+                        </View>
+                    )}
+                    {(item.status === "approved" || item.status === "active") && (
+                        <TouchableOpacity
+                            style={styles.compareButton}
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                router.push(`/projects/${id}/budget/${item.id}/compare`);
+                            }}
+                        >
+                            <Ionicons name="analytics-outline" size={14} color="#3B82F6" />
+                            <Text style={styles.compareButtonText}>So sánh</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </TouchableOpacity>
+        );
+    }, [id, router, handleDuplicate]);
 
     return (
         <View style={styles.container}>
@@ -206,17 +431,107 @@ export default function BudgetScreen() {
                 title="Ngân Sách Dự Án"
                 showBackButton
                 rightComponent={
-                    <TouchableOpacity
-                        style={styles.addButton}
-                        onPress={() => {
-                            resetForm();
-                            setShowCreateModal(true);
-                        }}
-                    >
-                        <Ionicons name="add" size={24} color="#3B82F6" />
-                    </TouchableOpacity>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={styles.filterButton}
+                            onPress={() => setShowFilterModal(true)}
+                        >
+                            <Ionicons 
+                                name="filter-outline" 
+                                size={20} 
+                                color={filterStatus ? "#3B82F6" : "#6B7280"} 
+                            />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.addButton}
+                            onPress={() => {
+                                resetForm();
+                                setShowCreateModal(true);
+                            }}
+                        >
+                            <Ionicons name="add" size={24} color="#3B82F6" />
+                        </TouchableOpacity>
+                    </View>
                 }
             />
+
+            {/* Summary Card */}
+            {!loading && budgets.length > 0 && (
+                <View style={styles.summaryCard}>
+                    <View style={styles.summaryRow}>
+                        <View style={styles.summaryItem}>
+                            <Text style={styles.summaryLabel}>Tổng ngân sách</Text>
+                            <Text style={styles.summaryValue}>
+                                {formatCurrency(summaryStats.totalBudget)}
+                            </Text>
+                        </View>
+                        <View style={styles.summaryItem}>
+                            <Text style={styles.summaryLabel}>Đã sử dụng</Text>
+                            <Text style={[styles.summaryValue, { color: "#3B82F6" }]}>
+                                {formatCurrency(summaryStats.totalUsed)}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.summaryRow}>
+                        <View style={styles.summaryItem}>
+                            <Text style={styles.summaryLabel}>Còn lại</Text>
+                            <Text style={[
+                                styles.summaryValue,
+                                { color: summaryStats.totalRemaining >= 0 ? "#10B981" : "#EF4444" }
+                            ]}>
+                                {formatCurrency(summaryStats.totalRemaining)}
+                            </Text>
+                        </View>
+                        <View style={styles.summaryItem}>
+                            <Text style={styles.summaryLabel}>Sử dụng</Text>
+                            <Text style={[
+                                styles.summaryValue,
+                                { 
+                                    color: summaryStats.utilization > 100 
+                                        ? "#EF4444" 
+                                        : summaryStats.utilization > 80 
+                                            ? "#F59E0B" 
+                                            : "#10B981" 
+                                }
+                            ]}>
+                                {summaryStats.utilization.toFixed(1)}%
+                            </Text>
+                        </View>
+                    </View>
+                    {summaryStats.variance !== 0 && (
+                        <View style={styles.varianceRow}>
+                            <Ionicons 
+                                name={summaryStats.variance > 0 ? "arrow-up" : "arrow-down"} 
+                                size={16} 
+                                color={summaryStats.variance > 0 ? "#EF4444" : "#10B981"} 
+                            />
+                            <Text style={[
+                                styles.varianceText,
+                                { color: summaryStats.variance > 0 ? "#EF4444" : "#10B981" }
+                            ]}>
+                                {summaryStats.variance > 0 ? "Vượt" : "Tiết kiệm"} {formatCurrency(Math.abs(summaryStats.variance))} so với ngân sách
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            )}
+
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+                <Ionicons name="search-outline" size={20} color="#6B7280" style={styles.searchIcon} />
+                <TextInput
+                    style={styles.searchInput}
+                    placeholder="Tìm kiếm ngân sách..."
+                    placeholderTextColor="#9CA3AF"
+                    value={searchText}
+                    onChangeText={setSearchText}
+                />
+                {searchText.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearSearchButton}>
+                        <Ionicons name="close-circle" size={20} color="#6B7280" />
+                    </TouchableOpacity>
+                )}
+            </View>
 
             {loading ? (
                 <View style={styles.centerContainer}>
@@ -224,20 +539,103 @@ export default function BudgetScreen() {
                 </View>
             ) : (
                 <FlatList
-                    data={budgets}
+                    data={filteredBudgets}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id.toString()}
                     contentContainerStyle={{ paddingBottom: tabBarHeight }}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                     }
+                    removeClippedSubviews={true}
+                    maxToRenderPerBatch={10}
+                    updateCellsBatchingPeriod={50}
+                    initialNumToRender={10}
+                    windowSize={10}
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <Ionicons name="wallet-outline" size={64} color="#9CA3AF" />
-                            <Text style={styles.emptyText}>Chưa có ngân sách</Text>
+                            <Text style={styles.emptyText}>
+                                {debouncedSearchText || filterStatus ? "Không tìm thấy ngân sách phù hợp" : "Chưa có ngân sách"}
+                            </Text>
                         </View>
                     }
                 />
+            )}
+
+            {/* Filter Modal */}
+            {showFilterModal && (
+                <Modal
+                    visible={showFilterModal}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowFilterModal(false)}
+                >
+                    <View style={styles.filterModalOverlay}>
+                        <View style={styles.filterModal}>
+                            <View style={styles.filterModalHeader}>
+                                <Text style={styles.filterModalTitle}>Lọc theo trạng thái</Text>
+                                <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                                    <Ionicons name="close" size={24} color="#1F2937" />
+                                </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity
+                                style={styles.filterOption}
+                                onPress={() => {
+                                    setFilterStatus(null);
+                                    setShowFilterModal(false);
+                                }}
+                            >
+                                <Text style={!filterStatus ? styles.filterOptionActive : styles.filterOptionText}>
+                                    Tất cả
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.filterOption}
+                                onPress={() => {
+                                    setFilterStatus("draft");
+                                    setShowFilterModal(false);
+                                }}
+                            >
+                                <Text style={filterStatus === "draft" ? styles.filterOptionActive : styles.filterOptionText}>
+                                    Nháp
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.filterOption}
+                                onPress={() => {
+                                    setFilterStatus("approved");
+                                    setShowFilterModal(false);
+                                }}
+                            >
+                                <Text style={filterStatus === "approved" ? styles.filterOptionActive : styles.filterOptionText}>
+                                    Đã duyệt
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.filterOption}
+                                onPress={() => {
+                                    setFilterStatus("active");
+                                    setShowFilterModal(false);
+                                }}
+                            >
+                                <Text style={filterStatus === "active" ? styles.filterOptionActive : styles.filterOptionText}>
+                                    Đang áp dụng
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.filterOption}
+                                onPress={() => {
+                                    setFilterStatus("archived");
+                                    setShowFilterModal(false);
+                                }}
+                            >
+                                <Text style={filterStatus === "archived" ? styles.filterOptionActive : styles.filterOptionText}>
+                                    Đã lưu trữ
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
             )}
 
             {/* Create Budget Modal */}
@@ -267,6 +665,22 @@ export default function BudgetScreen() {
                             showsVerticalScrollIndicator={true}
                             nestedScrollEnabled={true}
                         >
+                            {/* Template Selection */}
+                            {budgets.length > 0 && (
+                                <View style={styles.formGroup}>
+                                    <View style={styles.templateHeader}>
+                                        <Text style={styles.label}>Tạo từ ngân sách có sẵn</Text>
+                                        <TouchableOpacity
+                                            style={styles.templateButton}
+                                            onPress={() => setShowTemplatePicker(true)}
+                                        >
+                                            <Ionicons name="copy-outline" size={18} color="#3B82F6" />
+                                            <Text style={styles.templateButtonText}>Chọn ngân sách</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            )}
+
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Tên ngân sách *</Text>
                                 <TextInput
@@ -300,14 +714,19 @@ export default function BudgetScreen() {
                                     <DateTimePicker
                                         value={new Date(formData.budget_date || new Date())}
                                         mode="date"
-                                        display="default"
+                                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                                         onChange={(event, date) => {
-                                            setShowDatePicker(false);
-                                            if (date) {
+                                            if (Platform.OS === 'android') {
+                                                setShowDatePicker(false);
+                                            }
+                                            if (date && (Platform.OS === 'android' || event.type !== 'dismissed')) {
                                                 setFormData({
                                                     ...formData,
                                                     budget_date: date.toISOString().split("T")[0],
                                                 });
+                                            }
+                                            if (Platform.OS === 'ios' && event.type === 'dismissed') {
+                                                setShowDatePicker(false);
                                             }
                                         }}
                                     />
@@ -326,28 +745,38 @@ export default function BudgetScreen() {
                                     </TouchableOpacity>
                                 </View>
                                 {formData.items && formData.items.length > 0 ? (
-                                    <View style={styles.itemsList}>
-                                        {formData.items.map((item: any, index: number) => (
-                                            <View key={index} style={styles.itemRow}>
-                                                <View style={styles.itemInfo}>
-                                                    <Text style={styles.itemName}>{item.name}</Text>
-                                                    <Text style={styles.itemAmount}>
-                                                        {formatCurrency(item.estimated_amount || 0)}
-                                                    </Text>
+                                    <>
+                                        <View style={styles.itemsList}>
+                                            {formData.items.map((item: any, index: number) => (
+                                                <View key={index} style={styles.itemRow}>
+                                                    <View style={styles.itemInfo}>
+                                                        <Text style={styles.itemName}>{item.name}</Text>
+                                                        <Text style={styles.itemAmount}>
+                                                            {formatCurrency(item.estimated_amount || 0)}
+                                                        </Text>
+                                                    </View>
+                                                    <View style={styles.itemActions}>
+                                                        <TouchableOpacity
+                                                            onPress={() => handleEditItem(item, index)}
+                                                        >
+                                                            <Ionicons name="pencil" size={20} color="#3B82F6" />
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity onPress={() => handleRemoveItem(index)}>
+                                                            <Ionicons name="trash" size={20} color="#EF4444" />
+                                                        </TouchableOpacity>
+                                                    </View>
                                                 </View>
-                                                <View style={styles.itemActions}>
-                                                    <TouchableOpacity
-                                                        onPress={() => handleEditItem(item, index)}
-                                                    >
-                                                        <Ionicons name="pencil" size={20} color="#3B82F6" />
-                                                    </TouchableOpacity>
-                                                    <TouchableOpacity onPress={() => handleRemoveItem(index)}>
-                                                        <Ionicons name="trash" size={20} color="#EF4444" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            </View>
-                                        ))}
-                                    </View>
+                                            ))}
+                                        </View>
+                                        <View style={styles.totalRow}>
+                                            <Text style={styles.totalLabel}>Tổng ngân sách:</Text>
+                                            <Text style={styles.totalValue}>
+                                                {formatCurrency(
+                                                    formData.items.reduce((sum: number, i: any) => sum + (i.estimated_amount || 0), 0)
+                                                )}
+                                            </Text>
+                                        </View>
+                                    </>
                                 ) : (
                                     <Text style={styles.emptyItemsText}>
                                         Chưa có hạng mục. Nhấn "Thêm" để thêm hạng mục.
@@ -402,6 +831,53 @@ export default function BudgetScreen() {
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+
+            {/* Template Picker Modal */}
+            {showTemplatePicker && (
+                <Modal
+                    visible={showTemplatePicker}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowTemplatePicker(false)}
+                >
+                    <View style={styles.templatePickerOverlay}>
+                        <View style={styles.templatePickerContent}>
+                            <View style={styles.templatePickerHeader}>
+                                <Text style={styles.templatePickerTitle}>Chọn ngân sách làm mẫu</Text>
+                                <TouchableOpacity onPress={() => setShowTemplatePicker(false)}>
+                                    <Ionicons name="close" size={24} color="#1F2937" />
+                                </TouchableOpacity>
+                            </View>
+                            <FlatList
+                                data={budgets}
+                                keyExtractor={(item) => item.id.toString()}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={styles.templateOption}
+                                        onPress={() => handleUseTemplate(item)}
+                                    >
+                                        <View style={styles.templateOptionLeft}>
+                                            <Text style={styles.templateOptionName}>{item.name}</Text>
+                                            {item.version && (
+                                                <Text style={styles.templateOptionVersion}>v{item.version}</Text>
+                                            )}
+                                            <Text style={styles.templateOptionAmount}>
+                                                {formatCurrency(item.total_budget)}
+                                            </Text>
+                                        </View>
+                                        <Ionicons name="chevron-forward" size={20} color="#6B7280" />
+                                    </TouchableOpacity>
+                                )}
+                                ListEmptyComponent={
+                                    <View style={styles.emptyContainer}>
+                                        <Text style={styles.emptyText}>Chưa có ngân sách nào</Text>
+                                    </View>
+                                }
+                            />
+                        </View>
+                    </View>
+                </Modal>
+            )}
         </View>
     );
 }
@@ -582,8 +1058,83 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
     },
+    headerActions: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    filterButton: {
+        padding: 4,
+    },
     addButton: {
         padding: 4,
+    },
+    summaryCard: {
+        backgroundColor: "#FFFFFF",
+        margin: 16,
+        marginBottom: 8,
+        borderRadius: 12,
+        padding: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    summaryRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        marginBottom: 12,
+    },
+    summaryItem: {
+        flex: 1,
+    },
+    summaryLabel: {
+        fontSize: 12,
+        color: "#6B7280",
+        marginBottom: 4,
+    },
+    summaryValue: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#1F2937",
+    },
+    varianceRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        marginTop: 8,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: "#E5E7EB",
+    },
+    varianceText: {
+        fontSize: 13,
+        fontWeight: "600",
+    },
+    searchContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#FFFFFF",
+        marginHorizontal: 16,
+        marginBottom: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
+    },
+    searchIcon: {
+        marginRight: 8,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 14,
+        color: "#1F2937",
+        padding: 0,
+    },
+    clearSearchButton: {
+        marginLeft: 8,
     },
     card: {
         backgroundColor: "#FFFFFF",
@@ -592,19 +1143,28 @@ const styles = StyleSheet.create({
         marginTop: 12,
         borderRadius: 12,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
     cardHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "flex-start",
-        marginBottom: 8,
+        marginBottom: 12,
     },
     cardHeaderLeft: {
         flex: 1,
+        marginRight: 8,
+    },
+    cardHeaderRight: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    duplicateButton: {
+        padding: 4,
     },
     cardTitle: {
         fontSize: 16,
@@ -626,20 +1186,79 @@ const styles = StyleSheet.create({
         fontWeight: "600",
     },
     budgetAmount: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: "700",
         color: "#3B82F6",
-        marginTop: 8,
+        marginBottom: 12,
     },
-    budgetDate: {
-        fontSize: 13,
+    progressContainer: {
+        marginBottom: 12,
+    },
+    progressBar: {
+        height: 8,
+        backgroundColor: "#E5E7EB",
+        borderRadius: 4,
+        overflow: "hidden",
+        marginBottom: 8,
+    },
+    progressFill: {
+        height: "100%",
+        borderRadius: 4,
+    },
+    progressInfo: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    progressText: {
+        fontSize: 12,
         color: "#6B7280",
-        marginTop: 4,
+        fontWeight: "600",
     },
-    itemsCount: {
-        fontSize: 13,
-        color: "#9CA3AF",
-        marginTop: 4,
+    warningBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: "#FEE2E2",
+    },
+    warningText: {
+        fontSize: 11,
+        fontWeight: "600",
+        color: "#EF4444",
+    },
+    cardFooter: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: "#E5E7EB",
+    },
+    footerItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+    },
+    footerText: {
+        fontSize: 12,
+        color: "#6B7280",
+    },
+    compareButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        backgroundColor: "#EFF6FF",
+        borderRadius: 8,
+    },
+    compareButtonText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#3B82F6",
     },
     emptyContainer: {
         flex: 1,
@@ -729,6 +1348,27 @@ const styles = StyleSheet.create({
     },
     itemsList: {
         gap: 8,
+        marginBottom: 12,
+    },
+    totalRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: 12,
+        backgroundColor: "#EFF6FF",
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#3B82F6",
+    },
+    totalLabel: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#1F2937",
+    },
+    totalValue: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#3B82F6",
     },
     itemRow: {
         flexDirection: "row",
@@ -851,6 +1491,118 @@ const styles = StyleSheet.create({
         color: "#FFFFFF",
         fontSize: 16,
         fontWeight: "600",
+    },
+    filterModalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        justifyContent: "flex-end",
+    },
+    filterModal: {
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        maxHeight: "50%",
+    },
+    filterModalHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 20,
+    },
+    filterModalTitle: {
+        fontSize: 18,
+        fontWeight: "700",
+        color: "#1F2937",
+    },
+    filterOption: {
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 8,
+        backgroundColor: "#F9FAFB",
+    },
+    filterOptionText: {
+        fontSize: 16,
+        color: "#1F2937",
+    },
+    filterOptionActive: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#3B82F6",
+    },
+    templateHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    templateButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: "#EFF6FF",
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#3B82F6",
+    },
+    templateButtonText: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#3B82F6",
+    },
+    templatePickerOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        justifyContent: "flex-end",
+    },
+    templatePickerContent: {
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: "70%",
+        padding: 16,
+    },
+    templatePickerHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 16,
+    },
+    templatePickerTitle: {
+        fontSize: 18,
+        fontWeight: "700",
+        color: "#1F2937",
+    },
+    templateOption: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: 16,
+        borderRadius: 10,
+        backgroundColor: "#F9FAFB",
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
+    },
+    templateOptionLeft: {
+        flex: 1,
+    },
+    templateOptionName: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#1F2937",
+        marginBottom: 4,
+    },
+    templateOptionVersion: {
+        fontSize: 12,
+        color: "#6B7280",
+        marginBottom: 4,
+    },
+    templateOptionAmount: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#3B82F6",
     },
 });
 

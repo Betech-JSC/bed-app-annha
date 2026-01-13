@@ -16,10 +16,9 @@ import {
   CreateContractData,
 } from "@/api/contractApi";
 import { attachmentApi, Attachment } from "@/api/attachmentApi";
-import { UniversalFileUploader, ScreenHeader } from "@/components";
+import { UniversalFileUploader, ScreenHeader, DatePickerInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ContractScreen() {
   const router = useRouter();
@@ -28,7 +27,6 @@ export default function ContractScreen() {
   const [contract, setContract] = useState<Contract | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [signedDate, setSignedDate] = useState(new Date());
   const [formData, setFormData] = useState({
     contract_value: "",
@@ -333,42 +331,21 @@ export default function ContractScreen() {
           />
         </View>
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Ngày ký hợp đồng</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-            disabled={!editing && !!contract}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-            <Text style={styles.dateButtonText}>
-              {formData.signed_date
-                ? new Date(formData.signed_date).toLocaleDateString("vi-VN", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })
-                : "Chọn ngày ký hợp đồng"}
-            </Text>
-          </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={signedDate}
-              mode="date"
-              display="default"
-              onChange={(event, date) => {
-                setShowDatePicker(false);
-                if (date && event.type !== "dismissed") {
-                  setSignedDate(date);
-                  setFormData({
-                    ...formData,
-                    signed_date: date.toISOString().split("T")[0],
-                  });
-                }
-              }}
-            />
-          )}
-        </View>
+        <DatePickerInput
+          label="Ngày ký hợp đồng"
+          value={signedDate}
+          onChange={(date) => {
+            if (date) {
+              setSignedDate(date);
+              setFormData({
+                ...formData,
+                signed_date: date.toISOString().split("T")[0],
+              });
+            }
+          }}
+          placeholder="Chọn ngày ký hợp đồng"
+          disabled={!editing && !!contract}
+        />
 
         {/* File Upload Section - Show when editing or when contract doesn't exist */}
         {(editing || !contract) && (

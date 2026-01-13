@@ -26,22 +26,28 @@ class BudgetComparisonService
     public function compareBudget(ProjectBudget $budget): array
     {
         $project = $budget->project;
-        $costs = $this->financialCalculationService->calculateTotalCosts($project);
+        
+        // Optimize: Load all costs once grouped by cost_group_id
+        $costsByGroup = Cost::where('project_id', $project->id)
+            ->where('status', 'approved')
+            ->whereNotNull('cost_group_id')
+            ->select('cost_group_id', \Illuminate\Support\Facades\DB::raw('SUM(amount) as total'))
+            ->groupBy('cost_group_id')
+            ->get()
+            ->mapWithKeys(function ($item) {
+                return [$item->cost_group_id => (float) $item->total];
+            });
 
         // Tính actual cost cho từng budget item
-        $items = $budget->items->map(function ($item) use ($project) {
+        $items = $budget->items->map(function ($item) use ($costsByGroup) {
             $actualAmount = 0;
 
-            // Nếu có cost_group_id, lấy costs từ cùng cost_group
-            if ($item->cost_group_id) {
-                $actualAmount = $project->costs()
-                    ->where('cost_group_id', $item->cost_group_id)
-                    ->where('status', 'approved')
-                    ->sum('amount');
-            } else {
-                // Nếu không có cost_group, thử match theo tên hoặc category
-                // TODO: Có thể cải thiện logic matching
+            // Nếu có cost_group_id, lấy từ map đã tính sẵn
+            if ($item->cost_group_id && $costsByGroup->has($item->cost_group_id)) {
+                $actualAmount = $costsByGroup[$item->cost_group_id];
             }
+            // Nếu không có cost_group, thử match theo tên hoặc category
+            // TODO: Có thể cải thiện logic matching
 
             $item->actual_amount = $actualAmount;
             $item->remaining_amount = max(0, $item->estimated_amount - $actualAmount);
@@ -86,29 +92,38 @@ class BudgetComparisonService
     {
         $project = $budget->project;
 
-        // Lấy costs theo category
+        // Optimize: Load all costs by category in one query
         $costsByCategory = Cost::where('project_id', $project->id)
             ->where('status', 'approved')
             ->select('category', \Illuminate\Support\Facades\DB::raw('SUM(amount) as total'))
             ->groupBy('category')
             ->get()
             ->mapWithKeys(function ($item) {
-                return [$item->category => $item->total];
+                return [$item->category => (float) $item->total];
             });
 
-        // Group budget items by category (nếu có)
-        // Lấy category từ costs trong cost_group
+        // Optimize: Load cost groups with their categories in one query
+        $costGroupCategories = [];
+        $costGroupIds = $budget->items->pluck('cost_group_id')->filter()->unique()->toArray();
+        
+        if (!empty($costGroupIds)) {
+            $costGroupCategories = Cost::where('project_id', $project->id)
+                ->whereIn('cost_group_id', $costGroupIds)
+                ->whereNotNull('cost_group_id')
+                ->select('cost_group_id', 'category')
+                ->distinct()
+                ->get()
+                ->mapWithKeys(function ($item) {
+                    return [$item->cost_group_id => $item->category ?? 'other'];
+                });
+        }
+
+        // Group budget items by category
         $budgetByCategory = [];
         foreach ($budget->items as $item) {
-            // Lấy category từ costs trong cost_group
             $category = 'other';
-            if ($item->cost_group_id) {
-                $firstCost = Cost::where('cost_group_id', $item->cost_group_id)
-                    ->where('project_id', $project->id)
-                    ->first();
-                if ($firstCost) {
-                    $category = $firstCost->category ?? 'other';
-                }
+            if ($item->cost_group_id && $costGroupCategories->has($item->cost_group_id)) {
+                $category = $costGroupCategories[$item->cost_group_id];
             }
             
             if (!isset($budgetByCategory[$category])) {
@@ -118,7 +133,10 @@ class BudgetComparisonService
         }
 
         $comparison = [];
-        $allCategories = array_unique(array_merge(array_keys($costsByCategory->toArray()), array_keys($budgetByCategory)));
+        $allCategories = array_unique(array_merge(
+            $costsByCategory->keys()->toArray(), 
+            array_keys($budgetByCategory)
+        ));
 
         foreach ($allCategories as $category) {
             $budgetAmount = $budgetByCategory[$category] ?? 0;

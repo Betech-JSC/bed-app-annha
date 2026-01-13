@@ -16,8 +16,7 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { projectApi, CreateProjectData, Project } from "@/api/projectApi";
 import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput } from "@/components";
 
 interface User {
   id: number;
@@ -32,8 +31,6 @@ export default function EditProjectScreen() {
   const tabBarHeight = useTabBarHeight();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showManagerModal, setShowManagerModal] = useState(false);
   const [customers, setCustomers] = useState<User[]>([]);
@@ -169,27 +166,6 @@ export default function EditProjectScreen() {
     setManagerSearch("");
   };
 
-  const handleStartDateChange = (event: any, selectedDate?: Date) => {
-    setShowStartDatePicker(false);
-    if (selectedDate) {
-      setStartDate(selectedDate);
-      setFormData({
-        ...formData,
-        start_date: selectedDate.toISOString().split("T")[0],
-      });
-    }
-  };
-
-  const handleEndDateChange = (event: any, selectedDate?: Date) => {
-    setShowEndDatePicker(false);
-    if (selectedDate) {
-      setEndDate(selectedDate);
-      setFormData({
-        ...formData,
-        end_date: selectedDate.toISOString().split("T")[0],
-      });
-    }
-  };
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
@@ -361,62 +337,38 @@ export default function EditProjectScreen() {
               <Text style={styles.sectionTitle}>Thời gian dự án</Text>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Ngày bắt đầu</Text>
-              <TouchableOpacity
-                style={styles.selectButton}
-                onPress={() => setShowStartDatePicker(true)}
-              >
-                <Text
-                  style={[
-                    styles.selectButtonText,
-                    !formData.start_date && styles.placeholderText,
-                  ]}
-                >
-                  {formData.start_date
-                    ? new Date(formData.start_date).toLocaleDateString("vi-VN")
-                    : "Chọn ngày bắt đầu"}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-              </TouchableOpacity>
-              {showStartDatePicker && (
-                <DateTimePicker
-                  value={startDate}
-                  mode="date"
-                  display="default"
-                  onChange={handleStartDateChange}
-                />
-              )}
-            </View>
+            <DatePickerInput
+              label="Ngày bắt đầu"
+              value={formData.start_date ? new Date(formData.start_date) : null}
+              onChange={(date) => {
+                if (date) {
+                  setStartDate(date);
+                  setFormData({
+                    ...formData,
+                    start_date: date.toISOString().split("T")[0],
+                  });
+                }
+              }}
+              placeholder="Chọn ngày bắt đầu"
+              containerStyle={styles.inputGroup}
+            />
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Ngày kết thúc</Text>
-              <TouchableOpacity
-                style={styles.selectButton}
-                onPress={() => setShowEndDatePicker(true)}
-              >
-                <Text
-                  style={[
-                    styles.selectButtonText,
-                    !formData.end_date && styles.placeholderText,
-                  ]}
-                >
-                  {formData.end_date
-                    ? new Date(formData.end_date).toLocaleDateString("vi-VN")
-                    : "Chọn ngày kết thúc"}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-              </TouchableOpacity>
-              {showEndDatePicker && (
-                <DateTimePicker
-                  value={endDate}
-                  mode="date"
-                  display="default"
-                  onChange={handleEndDateChange}
-                  minimumDate={formData.start_date ? new Date(formData.start_date) : undefined}
-                />
-              )}
-            </View>
+            <DatePickerInput
+              label="Ngày kết thúc"
+              value={formData.end_date ? new Date(formData.end_date) : null}
+              onChange={(date) => {
+                if (date) {
+                  setEndDate(date);
+                  setFormData({
+                    ...formData,
+                    end_date: date.toISOString().split("T")[0],
+                  });
+                }
+              }}
+              placeholder="Chọn ngày kết thúc"
+              minimumDate={formData.start_date ? new Date(formData.start_date) : undefined}
+              containerStyle={styles.inputGroup}
+            />
           </View>
 
           {/* Trạng thái */}

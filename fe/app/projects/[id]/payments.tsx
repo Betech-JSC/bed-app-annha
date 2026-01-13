@@ -16,10 +16,9 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { paymentApi, ProjectPayment, CreatePaymentData } from "@/api/paymentApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 
@@ -37,7 +36,6 @@ export default function PaymentsScreen() {
   const [showCustomerApprovalModal, setShowCustomerApprovalModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<ProjectPayment | null>(null);
   const [confirmPaidDate, setConfirmPaidDate] = useState(new Date().toISOString().split("T")[0]);
-  const [showConfirmDatePicker, setShowConfirmDatePicker] = useState(false);
   const [project, setProject] = useState<any>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
@@ -51,7 +49,6 @@ export default function PaymentsScreen() {
     due_date: new Date().toISOString().split("T")[0],
     contract_id: undefined,
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     loadPayments();
@@ -547,39 +544,21 @@ export default function PaymentsScreen() {
               </Text>
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>
-                Ngày đến hạn <Text style={styles.required}>*</Text>
-              </Text>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                <Text style={styles.dateButtonText}>
-                  {formData.due_date
-                    ? new Date(formData.due_date).toLocaleDateString("vi-VN")
-                    : "Chọn ngày đến hạn"}
-                </Text>
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={formData.due_date ? new Date(formData.due_date) : new Date()}
-                  mode="date"
-                  display="default"
-                  minimumDate={new Date()}
-                  onChange={(event, date) => {
-                    setShowDatePicker(false);
-                    if (date) {
-                      setFormData({
-                        ...formData,
-                        due_date: date.toISOString().split("T")[0],
-                      });
-                    }
-                  }}
-                />
-              )}
-            </View>
+            <DatePickerInput
+              label="Ngày đến hạn"
+              value={formData.due_date ? new Date(formData.due_date) : null}
+              onChange={(date) => {
+                if (date) {
+                  setFormData({
+                    ...formData,
+                    due_date: date.toISOString().split("T")[0],
+                  });
+                }
+              }}
+              placeholder="Chọn ngày đến hạn"
+              required
+              minimumDate={new Date()}
+            />
 
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -642,36 +621,18 @@ export default function PaymentsScreen() {
                   </Text>
                 </View>
 
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>
-                    Ngày thanh toán <Text style={styles.required}>*</Text>
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.dateButton}
-                    onPress={() => setShowConfirmDatePicker(true)}
-                  >
-                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                    <Text style={styles.dateButtonText}>
-                      {confirmPaidDate
-                        ? new Date(confirmPaidDate).toLocaleDateString("vi-VN")
-                        : "Chọn ngày thanh toán"}
-                    </Text>
-                  </TouchableOpacity>
-                  {showConfirmDatePicker && (
-                    <DateTimePicker
-                      value={confirmPaidDate ? new Date(confirmPaidDate) : new Date()}
-                      mode="date"
-                      display="default"
-                      maximumDate={new Date()}
-                      onChange={(event, date) => {
-                        setShowConfirmDatePicker(false);
-                        if (date) {
-                          setConfirmPaidDate(date.toISOString().split("T")[0]);
-                        }
-                      }}
-                    />
-                  )}
-                </View>
+                <DatePickerInput
+                  label="Ngày thanh toán"
+                  value={confirmPaidDate ? new Date(confirmPaidDate) : null}
+                  onChange={(date) => {
+                    if (date) {
+                      setConfirmPaidDate(date.toISOString().split("T")[0]);
+                    }
+                  }}
+                  placeholder="Chọn ngày thanh toán"
+                  required
+                  maximumDate={new Date()}
+                />
 
                 <View style={styles.modalActions}>
                   <TouchableOpacity

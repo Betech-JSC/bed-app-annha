@@ -214,10 +214,10 @@ export default function SubcontractorsScreen() {
         Alert.alert("Lỗi", "Không có đường dẫn file");
         return;
       }
-      
+
       // Kiểm tra xem URL có hợp lệ không
       const fileUrl = url.startsWith("http") ? url : `http://localhost:8000/storage/${url}`;
-      
+
       const canOpen = await Linking.canOpenURL(fileUrl);
       if (canOpen) {
         await Linking.openURL(fileUrl);
@@ -505,30 +505,6 @@ export default function SubcontractorsScreen() {
                 )}
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Tên nhà thầu *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập tên nhà thầu phụ"
-                  value={formData.name}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, name: text, global_subcontractor_id: null })
-                  }
-                  editable={!formData.global_subcontractor_id}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Hạng mục</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập hạng mục"
-                  value={formData.category}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, category: text })
-                  }
-                />
-              </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Tổng báo giá *</Text>
@@ -552,7 +528,13 @@ export default function SubcontractorsScreen() {
                 <Text style={styles.inputLabel}>Ngày bắt đầu</Text>
                 <TouchableOpacity
                   style={styles.selectButton}
-                  onPress={() => setShowStartDatePicker(true)}
+                  onPress={() => {
+                    if (Platform.OS === 'android') {
+                      setShowStartDatePicker(true);
+                    } else {
+                      setShowStartDatePicker(true);
+                    }
+                  }}
                 >
                   <Text style={styles.selectButtonText}>
                     {formData.progress_start_date
@@ -565,13 +547,18 @@ export default function SubcontractorsScreen() {
                   <DateTimePicker
                     value={formData.progress_start_date || new Date()}
                     mode="date"
-                    display="default"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                     onChange={(event, date) => {
-                      setShowStartDatePicker(false);
-                      if (date) {
+                      if (Platform.OS === 'android') {
+                        setShowStartDatePicker(false);
+                      }
+                      if (date && (Platform.OS === 'android' || event.type !== 'dismissed')) {
                         setFormData({ ...formData, progress_start_date: date });
                         // Tự động tính toán trạng thái
                         calculateProgressStatus(date, formData.progress_end_date);
+                      }
+                      if (Platform.OS === 'ios' && event.type === 'dismissed') {
+                        setShowStartDatePicker(false);
                       }
                     }}
                   />
@@ -582,7 +569,13 @@ export default function SubcontractorsScreen() {
                 <Text style={styles.inputLabel}>Ngày kết thúc</Text>
                 <TouchableOpacity
                   style={styles.selectButton}
-                  onPress={() => setShowEndDatePicker(true)}
+                  onPress={() => {
+                    if (Platform.OS === 'android') {
+                      setShowEndDatePicker(true);
+                    } else {
+                      setShowEndDatePicker(true);
+                    }
+                  }}
                 >
                   <Text style={styles.selectButtonText}>
                     {formData.progress_end_date
@@ -595,13 +588,18 @@ export default function SubcontractorsScreen() {
                   <DateTimePicker
                     value={formData.progress_end_date || new Date()}
                     mode="date"
-                    display="default"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                     onChange={(event, date) => {
-                      setShowEndDatePicker(false);
-                      if (date) {
+                      if (Platform.OS === 'android') {
+                        setShowEndDatePicker(false);
+                      }
+                      if (date && (Platform.OS === 'android' || event.type !== 'dismissed')) {
                         setFormData({ ...formData, progress_end_date: date });
                         // Tự động tính toán trạng thái
                         calculateProgressStatus(formData.progress_start_date, date);
+                      }
+                      if (Platform.OS === 'ios' && event.type === 'dismissed') {
+                        setShowEndDatePicker(false);
                       }
                     }}
                   />
@@ -640,7 +638,6 @@ export default function SubcontractorsScreen() {
 
               {/* File Upload Section */}
               <View style={styles.sectionDivider} />
-              <Text style={styles.sectionTitle}>Đính kèm & Báo cáo</Text>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Báo giá, Hồ sơ liên quan</Text>
                 <UniversalFileUploader
@@ -664,8 +661,12 @@ export default function SubcontractorsScreen() {
                 <TouchableOpacity
                   style={[styles.modalButton, styles.submitButton]}
                   onPress={async () => {
-                    if (!formData.name || !formData.total_quote) {
-                      Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin bắt buộc");
+                    if (!formData.total_quote) {
+                      Alert.alert("Lỗi", "Vui lòng nhập tổng báo giá");
+                      return;
+                    }
+                    if (!formData.global_subcontractor_id && !formData.name) {
+                      Alert.alert("Lỗi", "Vui lòng chọn nhà thầu phụ từ danh sách hoặc nhập tên nhà thầu");
                       return;
                     }
                     try {
@@ -907,9 +908,9 @@ export default function SubcontractorsScreen() {
                       <Text style={styles.detailSectionTitle}>Chứng từ đính kèm</Text>
                       <View style={styles.attachmentsList}>
                         {selectedSubcontractorDetail.attachments.map((attachment: any, index: number) => {
-                          const imageUrl = attachment.file_url || attachment.url || attachment.location || 
+                          const imageUrl = attachment.file_url || attachment.url || attachment.location ||
                             (attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : null);
-                          const isImage = attachment.type === "image" || 
+                          const isImage = attachment.type === "image" ||
                             attachment.mime_type?.startsWith("image/") ||
                             (imageUrl && /\.(jpg|jpeg|png|gif|webp)$/i.test(imageUrl));
 
