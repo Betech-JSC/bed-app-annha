@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
+use App\Models\AcceptanceTemplate;
 
 class AcceptanceStage extends Model
 {
@@ -14,6 +15,7 @@ class AcceptanceStage extends Model
         'uuid',
         'project_id',
         'task_id', // BUSINESS RULE: Must be parent task (A) from Progress - parent task acts as "phase"
+        'acceptance_template_id', // Link to acceptance template from Settings
         'name',
         'description',
         'order',
@@ -120,6 +122,11 @@ class AcceptanceStage extends Model
         return $this->belongsTo(ProjectTask::class, 'task_id');
     }
 
+    public function acceptanceTemplate(): BelongsTo
+    {
+        return $this->belongsTo(AcceptanceTemplate::class, 'acceptance_template_id');
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================
@@ -168,17 +175,17 @@ class AcceptanceStage extends Model
     public function getAcceptabilityStatusAttribute(): string
     {
         $defects = $this->defects;
-        
+
         // If no defects, it's acceptable
         if ($defects->isEmpty()) {
             return 'acceptable';
         }
-        
+
         // Check if all defects are completed (verified)
         $allCompleted = $defects->every(function ($defect) {
             return $defect->status === 'verified';
         });
-        
+
         return $allCompleted ? 'acceptable' : 'not_acceptable';
     }
 
@@ -245,14 +252,14 @@ class AcceptanceStage extends Model
         }
         $this->customer_approved_at = now();
         $saved = $this->save();
-        
+
         // BUSINESS RULE: Khi nghiệm thu ĐẠT (customer_approved)
         // Tự động tạo hạng mục nghiệm thu hoàn thành
         if ($saved) {
             $this->autoCreateAcceptanceItems();
             $this->updateProjectProgress();
         }
-        
+
         return $saved;
     }
 
@@ -284,12 +291,12 @@ class AcceptanceStage extends Model
         }
         $this->owner_approved_at = now();
         $saved = $this->save();
-        
+
         // Cập nhật tiến độ dự án khi stage được owner approved
         if ($saved) {
             $this->updateProjectProgress();
         }
-        
+
         return $saved;
     }
 
@@ -302,12 +309,12 @@ class AcceptanceStage extends Model
         }
         $this->rejected_at = now();
         $saved = $this->save();
-        
+
         // BUSINESS RULE: Khi từ chối nghiệm thu → tự động tạo lỗi ghi nhận
         if ($saved) {
             $this->autoCreateDefectIfNotAcceptable($user, $reason);
         }
-        
+
         return $saved;
     }
 
@@ -318,7 +325,7 @@ class AcceptanceStage extends Model
     {
         // BUSINESS RULE: Stage chỉ hoàn thành khi 100% items customer_approved
         // Không tự động cập nhật status, phải qua workflow: pending → supervisor_approved → project_manager_approved → customer_approved
-        
+
         // Cập nhật tiến độ dự án
         $this->updateProjectProgress();
     }
@@ -336,7 +343,7 @@ class AcceptanceStage extends Model
                     'calculated_from' => 'acceptance',
                 ]);
             }
-            
+
             // Tính lại tiến độ tổng hợp (ưu tiên nghiệm thu)
             $this->project->progress->calculateOverall();
         }
@@ -475,13 +482,15 @@ class AcceptanceStage extends Model
         static::saved(function ($stage) {
             // Chỉ kiểm tra khi stage đã được customer_approved hoặc rejected
             // và acceptability_status = "not_acceptable"
-            if (in_array($stage->status, ['customer_approved', 'rejected', 'project_manager_approved']) 
-                && $stage->acceptability_status === 'not_acceptable') {
+            if (
+                in_array($stage->status, ['customer_approved', 'rejected', 'project_manager_approved'])
+                && $stage->acceptability_status === 'not_acceptable'
+            ) {
                 // Kiểm tra xem đã có defects chưa verified chưa
                 $hasUnverifiedDefects = $stage->defects()
                     ->whereIn('status', ['open', 'in_progress', 'fixed'])
                     ->exists();
-                
+
                 // Nếu chưa có defects chưa verified, tự động tạo
                 if (!$hasUnverifiedDefects) {
                     $stage->autoCreateDefectIfNotAcceptable();

@@ -342,13 +342,12 @@ export default function DefectsScreen() {
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
           >
-            <TouchableOpacity
-              style={styles.modalContent}
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
+            <View
+              style={[styles.modalContent, { maxHeight: "90%" }]}
             >
-              <View style={styles.modalHeader}>
+              <View style={[styles.modalHeader, { paddingTop: insets.top + 20 }]}>
                 <Text style={styles.modalTitle}>Ghi Nhận Lỗi</Text>
                 <TouchableOpacity
                   onPress={() => {
@@ -372,8 +371,10 @@ export default function DefectsScreen() {
 
               <ScrollView
                 style={styles.modalBody}
-                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                showsVerticalScrollIndicator={true}
                 keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled={true}
               >
                 {/* BUSINESS RULE: Show acceptance stage info if created from Acceptance */}
                 {acceptance_stage_id && acceptanceStage && (
@@ -547,7 +548,7 @@ export default function DefectsScreen() {
                 </View>
               )}
 
-              <View style={styles.modalFooter}>
+              <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => {
@@ -556,6 +557,7 @@ export default function DefectsScreen() {
                       description: "",
                       severity: "medium",
                       task_id: "",
+                      acceptance_stage_id: acceptance_stage_id ? parseInt(acceptance_stage_id) : undefined,
                       before_image_ids: [],
                     });
                     setBeforeImages([]);
@@ -575,7 +577,7 @@ export default function DefectsScreen() {
                   <Text style={styles.submitButtonText}>Ghi nhận lỗi</Text>
                 </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            </View>
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
@@ -595,13 +597,12 @@ export default function DefectsScreen() {
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
           >
-            <TouchableOpacity
-              style={styles.modalContent}
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
+            <View
+              style={[styles.modalContent, { maxHeight: "90%" }]}
             >
-              <View style={styles.modalHeader}>
+              <View style={[styles.modalHeader, { paddingTop: insets.top + 20 }]}>
                 <Text style={styles.modalTitle}>Bắt đầu xử lý</Text>
                 <TouchableOpacity
                   onPress={() => {
@@ -615,7 +616,12 @@ export default function DefectsScreen() {
                   <Ionicons name="close" size={24} color="#1F2937" />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={styles.modalBody}>
+              <ScrollView
+                style={styles.modalBody}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+              >
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>
                     Thời gian hoàn thành dự kiến <Text style={styles.required}>*</Text>
@@ -647,7 +653,7 @@ export default function DefectsScreen() {
                   )}
                 </View>
               </ScrollView>
-              <View style={styles.modalFooter}>
+              <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => {
@@ -670,7 +676,7 @@ export default function DefectsScreen() {
                   <Text style={styles.submitButtonText}>Bắt đầu xử lý</Text>
                 </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            </View>
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
@@ -700,13 +706,12 @@ export default function DefectsScreen() {
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
           >
-            <TouchableOpacity
-              style={styles.modalContent}
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
+            <View
+              style={[styles.modalContent, { maxHeight: "90%" }]}
             >
-              <View style={styles.modalHeader}>
+              <View style={[styles.modalHeader, { paddingTop: insets.top + 20 }]}>
                 <Text style={styles.modalTitle}>Khắc phục lỗi</Text>
                 <TouchableOpacity
                   onPress={() => {
@@ -721,7 +726,12 @@ export default function DefectsScreen() {
                   <Ionicons name="close" size={24} color="#1F2937" />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={styles.modalBody}>
+              <ScrollView
+                style={styles.modalBody}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+              >
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>
                     Hình ảnh sau khi khắc phục <Text style={styles.required}>*</Text>
@@ -743,7 +753,7 @@ export default function DefectsScreen() {
                   )}
                 </View>
               </ScrollView>
-              <View style={styles.modalFooter}>
+              <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => {
@@ -767,7 +777,7 @@ export default function DefectsScreen() {
                   <Text style={styles.submitButtonText}>Xác nhận hoàn thành</Text>
                 </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            </View>
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
@@ -785,11 +795,11 @@ export default function DefectsScreen() {
           onPress={() => setDetailModalVisible(false)}
         >
           <TouchableOpacity
-            style={styles.modalContent}
+            style={[styles.modalContent, { maxHeight: "95%", paddingBottom: insets.bottom }]}
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
           >
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { paddingTop: insets.top + 20 }]}>
               <Text style={styles.modalTitle}>Chi tiết lỗi</Text>
               <TouchableOpacity
                 onPress={() => setDetailModalVisible(false)}
@@ -799,9 +809,9 @@ export default function DefectsScreen() {
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-            <ScrollView 
+            <ScrollView
               style={styles.modalBody}
-              contentContainerStyle={{ paddingBottom: insets.bottom + 20, flexGrow: 1 }}
+              contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
               showsVerticalScrollIndicator={true}
               nestedScrollEnabled={true}
             >
@@ -1010,15 +1020,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: "90%",
     flex: 1,
-    position: "relative",
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    width: "100%",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
@@ -1034,15 +1048,18 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   modalFooter: {
     flexDirection: "row",
     gap: 12,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
     backgroundColor: "#FFFFFF",
+    position: "relative",
   },
   formGroup: {
     marginBottom: 16,

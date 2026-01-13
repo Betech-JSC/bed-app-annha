@@ -381,6 +381,32 @@ class ProjectTaskController extends Controller
     }
 
     /**
+     * Recalculate all tasks progress for a project
+     * 
+     * This ensures all progress_percentage values are up-to-date from Daily Logs
+     */
+    public function recalculateAll(string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+
+        try {
+            $service = app(TaskProgressService::class);
+            $service->recalculateAllTasks($projectId);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã tính toán lại tiến độ cho tất cả công việc.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi tính toán lại tiến độ.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get all descendant task IDs (for circular reference check)
      */
     private function getDescendantIds(ProjectTask $task): array

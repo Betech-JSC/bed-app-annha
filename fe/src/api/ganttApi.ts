@@ -133,6 +133,14 @@ export const ganttApi = {
     return response.data;
   },
 
+  // Recalculate all tasks progress
+  recalculateAllTasks: async (projectId: string | number) => {
+    const response = await api.post(
+      `/projects/${projectId}/tasks/recalculate-all`
+    );
+    return response.data;
+  },
+
   // Update task progress
   updateTaskProgress: async (
     projectId: string | number,

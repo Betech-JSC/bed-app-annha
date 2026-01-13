@@ -46,7 +46,7 @@ export const defectApi = {
   // Get defects for project
   getDefects: async (
     projectId: string | number,
-    params?: { status?: string; severity?: string }
+    params?: { status?: string; severity?: string; acceptance_stage_id?: number }
   ) => {
     const response = await api.get(`/projects/${projectId}/defects`, { params });
     return response.data;

@@ -77,6 +77,9 @@ export default function AcceptanceScreen() {
   // Xác định role của user
   const isProjectManager = project?.project_manager_id?.toString() === user?.id?.toString();
   const isCustomer = project?.customer_id?.toString() === user?.id?.toString();
+  const { permissions } = useSelector((state: RootState) => state.permissions);
+  // BUSINESS RULE: Admin có full quyền xem và duyệt tất cả
+  const isAdmin = permissions?.includes("*") || user?.role === "admin" || user?.role === "super_admin";
 
 
   if (loading) {
@@ -97,6 +100,7 @@ export default function AcceptanceScreen() {
         isProjectManager={isProjectManager}
         isCustomer={isCustomer}
         isSupervisor={isSupervisor}
+        isAdmin={isAdmin}
         onRefresh={loadStages}
         onNavigateToDefects={(stageId?: number) => {
           if (stageId) {

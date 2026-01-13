@@ -354,6 +354,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{projectId}/tasks/{id}', [ProjectTaskController::class, 'destroy']);
         Route::post('/{projectId}/tasks/reorder', [ProjectTaskController::class, 'reorder']);
         Route::post('/{projectId}/tasks/{id}/progress', [ProjectTaskController::class, 'updateProgress']);
+        Route::post('/{projectId}/tasks/recalculate-all', [ProjectTaskController::class, 'recalculateAll']);
 
         // Gantt Chart - Task Dependencies
         Route::post('/{projectId}/tasks/{taskId}/dependencies', [ProjectTaskDependencyController::class, 'store']);

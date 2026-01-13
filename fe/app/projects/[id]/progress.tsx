@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { progressApi } from "@/api/progressApi";
 import { ProgressChart, ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
@@ -47,6 +48,13 @@ export default function ProgressScreen() {
     loadAllData();
   }, [id]);
 
+  // Refresh data when screen comes into focus (e.g., after creating/updating logs)
+  useFocusEffect(
+    useCallback(() => {
+      loadAllData();
+    }, [id])
+  );
+
   const loadAllData = async () => {
     try {
       setLoading(true);
@@ -75,6 +83,15 @@ export default function ProgressScreen() {
 
   const loadPhasesAndTasks = async () => {
     try {
+      // First, ensure all progress is recalculated from logs
+      // This ensures progress_percentage is always up-to-date
+      try {
+        await ganttApi.recalculateAllTasks(id!);
+      } catch (error) {
+        console.warn("Error recalculating tasks (non-critical):", error);
+        // Continue even if recalculate fails
+      }
+
       const [phasesResponse, tasksResponse] = await Promise.all([
         ganttApi.getPhases(id!),
         ganttApi.getTasks(id!),
@@ -510,6 +527,14 @@ export default function ProgressScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: tabBarHeight }}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={loadAllData}
+            colors={["#3B82F6"]}
+            tintColor="#3B82F6"
+          />
+        }
       >
         {viewMode === "structure" ? (
           <>

@@ -115,6 +115,7 @@ export interface UpdateAcceptanceStageData {
   name?: string;
   description?: string;
   order?: number;
+  acceptance_template_id?: number; // Link to acceptance template from Settings
 }
 
 export const acceptanceApi = {

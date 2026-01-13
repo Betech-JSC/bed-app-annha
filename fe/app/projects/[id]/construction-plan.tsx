@@ -30,6 +30,7 @@ export default function ConstructionPlanScreen() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null);
   const [viewMode, setViewMode] = useState<"gantt" | "list">("gantt");
+  const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     loadData();
@@ -163,6 +164,145 @@ export default function ConstructionPlanScreen() {
     }
   };
 
+  const toggleTask = (taskId: number) => {
+    const newExpanded = new Set(expandedTasks);
+    if (newExpanded.has(taskId)) {
+      newExpanded.delete(taskId);
+    } else {
+      newExpanded.add(taskId);
+    }
+    setExpandedTasks(newExpanded);
+  };
+
+  // Get status color
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "not_started":
+        return "#6B7280";
+      case "in_progress":
+        return "#3B82F6";
+      case "completed":
+        return "#10B981";
+      case "delayed":
+        return "#EF4444";
+      default:
+        return "#6B7280";
+    }
+  };
+
+  // Render task tree recursively - Tree folder style with parent-child aligned
+  const renderTaskTree = (
+    task: ProjectTask & { children: ProjectTask[] },
+    level: number = 0
+  ) => {
+    const hasChildren = task.children && task.children.length > 0;
+    const isExpanded = expandedTasks.has(task.id);
+    const statusColor = getStatusColor(task.status || "not_started");
+    const taskStages = acceptanceStages.filter(
+      (stage: any) => stage.task_id === task.id
+    );
+
+    return (
+      <View key={task.id} style={styles.treeTaskItem}>
+        <TouchableOpacity
+          style={[styles.treeTaskRow, { paddingLeft: 12 + level * 20 }]}
+          onPress={() => handleTaskPress(task)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.treeTaskLeft}>
+            {/* Expand/Collapse Icon */}
+            {hasChildren ? (
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  toggleTask(task.id);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.treeExpandButton}
+              >
+                <Ionicons
+                  name={isExpanded ? "chevron-down" : "chevron-forward"}
+                  size={18}
+                  color="#6B7280"
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.treeExpandIconPlaceholder} />
+            )}
+
+            {/* Folder/File Icon */}
+            <View style={styles.treeIconContainer}>
+              <Ionicons
+                name={hasChildren ? (isExpanded ? "folder-open" : "folder") : "document"}
+                size={20}
+                color={hasChildren ? "#3B82F6" : "#6B7280"}
+              />
+            </View>
+
+            {/* Task Info */}
+            <View style={styles.treeTaskInfo}>
+              <View style={styles.treeTaskNameRow}>
+                <Text style={styles.treeTaskName} numberOfLines={1}>
+                  {task.name}
+                </Text>
+                {/* Acceptance badge */}
+                {taskStages.length > 0 && (
+                  <View style={styles.treeAcceptanceBadge}>
+                    <Ionicons name="checkmark-circle" size={12} color="#10B981" />
+                    <Text style={styles.treeAcceptanceBadgeText}>
+                      {taskStages.length}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {/* Status indicator */}
+              <View style={styles.treeTaskMeta}>
+                <View style={[styles.treeStatusDot, { backgroundColor: statusColor }]} />
+                <Text style={styles.treeTaskStatus}>
+                  {task.status === "completed" ? "Hoàn thành" :
+                    task.status === "in_progress" ? "Đang thực hiện" :
+                      task.status === "delayed" ? "Trễ tiến độ" : "Chưa bắt đầu"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Progress */}
+          <View style={styles.treeTaskRight}>
+            <View style={styles.treeProgressContainer}>
+              <View style={styles.treeProgressBar}>
+                <View
+                  style={[
+                    styles.treeProgressFill,
+                    {
+                      width: `${task.progress_percentage || 0}%`,
+                      backgroundColor: statusColor,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.treeProgressText}>
+                {task.progress_percentage != null && typeof task.progress_percentage === 'number'
+                  ? `${task.progress_percentage.toFixed(0)}%`
+                  : '0%'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          </View>
+        </TouchableOpacity>
+
+        {/* Render children recursively - aligned directly below parent */}
+        {hasChildren && isExpanded && (
+          <View style={styles.treeChildrenContainer}>
+            {task.children.map((child: ProjectTask & { children: ProjectTask[] }) =>
+              renderTaskTree(child, level + 1)
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
+
 
   if (loading) {
     return (
@@ -224,102 +364,15 @@ export default function ConstructionPlanScreen() {
           />
         ) : (
           <View style={styles.listView}>
-            {/* Render parent tasks as "phases" */}
-            {taskHierarchy.rootTasks.map((parentTask) => {
-              const childTasks = parentTask.children || [];
-              const taskStages = acceptanceStages.filter(
-                (stage: any) => stage.task_id === parentTask.id
-              );
-
-              return (
-                <View key={parentTask.id} style={styles.phaseCard}>
-                  <View style={styles.phaseCardHeader}>
-                    <Text style={styles.phaseCardTitle}>{parentTask.name}</Text>
-                    <View style={styles.phaseCardActions}>
-                      <PermissionGuard permission="projects.update">
-                        <TouchableOpacity
-                          onPress={() => handleTaskPress(parentTask)}
-                        >
-                          <Ionicons name="create-outline" size={20} color="#3B82F6" />
-                        </TouchableOpacity>
-                      </PermissionGuard>
-                    </View>
-                  </View>
-                  {parentTask.description && (
-                    <Text style={styles.phaseCardDescription}>{parentTask.description}</Text>
-                  )}
-                  {/* Show acceptance stages linked to this parent task */}
-                  {taskStages.length > 0 && (
-                    <View style={styles.acceptanceInfo}>
-                      <Ionicons name="checkmark-circle-outline" size={16} color="#3B82F6" />
-                      <Text style={styles.acceptanceInfoText}>
-                        {taskStages.length} giai đoạn nghiệm thu
-                      </Text>
-                    </View>
-                  )}
-                  <View style={styles.tasksList}>
-                    {childTasks.length > 0 ? (
-                      childTasks.map((task) => (
-                        <TouchableOpacity
-                          key={task.id}
-                          style={styles.taskCard}
-                          onPress={() => handleTaskPress(task)}
-                        >
-                          <View style={styles.taskCardLeft}>
-                            <View
-                              style={[
-                                styles.taskStatusDot,
-                                {
-                                  backgroundColor:
-                                    task.status === "completed"
-                                      ? "#10B981"
-                                      : task.status === "in_progress"
-                                        ? "#3B82F6"
-                                        : "#6B7280",
-                                },
-                              ]}
-                            />
-                            <View style={styles.taskCardInfo}>
-                              <Text style={styles.taskCardName}>{task.name}</Text>
-                            </View>
-                            {/* Show acceptance stage badge if task has acceptance stages */}
-                            {(() => {
-                              const childTaskStages = acceptanceStages.filter(
-                                (stage: any) => stage.task_id === task.id
-                              );
-                              if (childTaskStages.length > 0) {
-                                return (
-                                  <View style={styles.acceptanceBadge}>
-                                    <Ionicons name="checkmark-circle" size={12} color="#10B981" />
-                                    <Text style={styles.acceptanceBadgeText}>
-                                      {childTaskStages.length}
-                                    </Text>
-                                  </View>
-                                );
-                              }
-                              return null;
-                            })()}
-                          </View>
-                          <Text style={styles.taskCardProgress}>
-                            {task.progress_percentage != null && typeof task.progress_percentage === 'number'
-                              ? `${task.progress_percentage}%`
-                              : '0%'}
-                          </Text>
-                        </TouchableOpacity>
-                      ))
-                    ) : (
-                      <View style={styles.emptyTasksContainer}>
-                        <Text style={styles.emptyTasksText}>Chưa có công việc con</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
-            {taskHierarchy.rootTasks.length === 0 && tasks.length === 0 && (
+            {/* Tree folder view - parent and child aligned */}
+            {taskHierarchy.rootTasks.length === 0 && tasks.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
+                <Ionicons name="folder-outline" size={64} color="#D1D5DB" />
                 <Text style={styles.emptyText}>Chưa có công việc</Text>
+              </View>
+            ) : (
+              <View style={styles.treeContainer}>
+                {taskHierarchy.rootTasks.map((rootTask) => renderTaskTree(rootTask, 0))}
               </View>
             )}
           </View>
@@ -390,66 +443,72 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   listView: {
-    padding: 16,
+    padding: 0,
   },
-  phaseCard: {
+  treeContainer: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
   },
-  phaseCardHeader: {
+  treeTaskItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  treeTaskRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingRight: 16,
+    backgroundColor: "#FFFFFF",
   },
-  phaseCardTitle: {
-    fontSize: 18,
-    fontWeight: "700",
+  treeTaskLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  treeExpandButton: {
+    width: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  treeExpandIconPlaceholder: {
+    width: 24,
+  },
+  treeIconContainer: {
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  treeTaskInfo: {
+    flex: 1,
+  },
+  treeTaskNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  treeTaskName: {
+    fontSize: 15,
+    fontWeight: "600",
     color: "#1F2937",
     flex: 1,
   },
-  phaseCardActions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  phaseCardDescription: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginBottom: 12,
-  },
-  tasksList: {
-    gap: 8,
-  },
-  taskCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-  },
-  taskCardLeft: {
+  treeTaskMeta: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
+    gap: 6,
   },
-  taskStatusDot: {
+  treeStatusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 8,
   },
-  taskCardInfo: {
-    flex: 1,
-  },
-  taskCardName: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#1F2937",
+  treeTaskStatus: {
+    fontSize: 12,
+    color: "#6B7280",
   },
   taskPhaseName: {
     fontSize: 11,
@@ -477,10 +536,52 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     fontStyle: "italic",
   },
-  taskCardProgress: {
+  treeTaskRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  treeProgressContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minWidth: 80,
+  },
+  treeProgressBar: {
+    width: 60,
+    height: 6,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  treeProgressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  treeProgressText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#3B82F6",
+    color: "#1F2937",
+    minWidth: 35,
+  },
+  treeChildrenContainer: {
+    backgroundColor: "#F9FAFB",
+    borderLeftWidth: 2,
+    borderLeftColor: "#E5E7EB",
+  },
+  treeAcceptanceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: "#10B98120",
+    borderRadius: 10,
+  },
+  treeAcceptanceBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#10B981",
   },
   emptyContainer: {
     padding: 40,

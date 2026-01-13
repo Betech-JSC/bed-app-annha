@@ -24,6 +24,7 @@ class AcceptanceStageController extends Controller
                 'designApprover',
                 'ownerApprover',
                 'task', // BUSINESS RULE: Link to parent task (A) - parent task acts as "phase"
+                'acceptanceTemplate', // Link to acceptance template from Settings
                 'defects' => function ($q) {
                     $q->whereIn('status', ['open', 'in_progress']);
                 },
@@ -33,20 +34,20 @@ class AcceptanceStageController extends Controller
                     $q->where(function ($query) {
                         // Items without task_id (Category A items)
                         $query->whereNull('task_id')
-                              // OR items linked to parent tasks (task.parent_id is null)
-                              ->orWhereHas('task', function ($taskQuery) {
-                                  $taskQuery->whereNull('parent_id');
-                              });
+                            // OR items linked to parent tasks (task.parent_id is null)
+                            ->orWhereHas('task', function ($taskQuery) {
+                                $taskQuery->whereNull('parent_id');
+                            });
                     })
-                      ->orderBy('order')
-                      ->with([
-                          'attachments',
-                          'task',
-                          'template.attachments',
-                          'submitter',
-                          'projectManagerApprover',
-                          'customerApprover',
-                      ]);
+                        ->orderBy('order')
+                        ->with([
+                            'attachments',
+                            'task',
+                            'template.attachments',
+                            'submitter',
+                            'projectManagerApprover',
+                            'customerApprover',
+                        ]);
                 }
             ])
             ->orderBy('order')
@@ -70,7 +71,7 @@ class AcceptanceStageController extends Controller
 
         // Check if user is admin (full permission)
         $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
-        
+
         // Check if user is supervisor
         $isSupervisor = \App\Models\ProjectPersonnel::where('project_id', $project->id)
             ->where('user_id', $user->id)
@@ -84,7 +85,8 @@ class AcceptanceStageController extends Controller
             ], 403);
         }
 
-        if ($stage->status !== 'pending') {
+        // BUSINESS RULE: Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
+        if (!$isAdmin && $stage->status !== 'pending') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể duyệt khi ở trạng thái pending.'
@@ -119,7 +121,7 @@ class AcceptanceStageController extends Controller
 
         // Check if user is admin (full permission)
         $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
-        
+
         // Check if user is project manager
         $isProjectManager = $user->id === $project->project_manager_id;
 
@@ -130,7 +132,8 @@ class AcceptanceStageController extends Controller
             ], 403);
         }
 
-        if ($stage->status !== 'supervisor_approved') {
+        // BUSINESS RULE: Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
+        if (!$isAdmin && $stage->status !== 'supervisor_approved') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể duyệt sau khi giám sát đã duyệt.'
@@ -165,7 +168,7 @@ class AcceptanceStageController extends Controller
 
         // Check if user is admin (full permission)
         $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
-        
+
         // Check if user is customer
         $isCustomer = $project->customer_id === $user->id;
 
@@ -176,14 +179,15 @@ class AcceptanceStageController extends Controller
             ], 403);
         }
 
-        if ($stage->status !== 'project_manager_approved') {
+        // BUSINESS RULE: Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
+        if (!$isAdmin && $stage->status !== 'project_manager_approved') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể duyệt sau khi quản lý dự án đã duyệt.'
             ], 400);
         }
 
-        // Check for open defects
+        // Check for open defects (admin vẫn phải kiểm tra defects)
         if ($stage->has_open_defects) {
             return response()->json([
                 'success' => false,
@@ -334,6 +338,7 @@ class AcceptanceStageController extends Controller
                 'designApprover',
                 'ownerApprover',
                 'task', // BUSINESS RULE: Link to parent task (A) - parent task acts as "phase"
+                'acceptanceTemplate', // Link to acceptance template from Settings
                 'defects',
                 'attachments'
             ])
@@ -364,6 +369,7 @@ class AcceptanceStageController extends Controller
 
         $validated = $request->validate([
             'task_id' => 'required|exists:project_tasks,id', // BUSINESS RULE: REQUIRED - must be parent task (A)
+            'acceptance_template_id' => 'nullable|exists:acceptance_templates,id', // Link to template from Settings
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'order' => 'nullable|integer|min:0',
@@ -377,7 +383,7 @@ class AcceptanceStageController extends Controller
                 'message' => 'Công việc không tồn tại trong dự án này.'
             ], 404);
         }
-        
+
         // Check if task is a parent task (no parent_id)
         if ($task->parent_id !== null) {
             return response()->json([
@@ -396,6 +402,7 @@ class AcceptanceStageController extends Controller
             $stage = AcceptanceStage::create([
                 'project_id' => $project->id,
                 'task_id' => $validated['task_id'], // BUSINESS RULE: Link to parent task (A)
+                'acceptance_template_id' => $validated['acceptance_template_id'] ?? null, // Link to template from Settings
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
                 'order' => $validated['order'],
@@ -448,6 +455,7 @@ class AcceptanceStageController extends Controller
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
             'order' => 'sometimes|integer|min:0',
+            'acceptance_template_id' => 'nullable|exists:acceptance_templates,id', // Link to template from Settings
         ]);
 
         // BUSINESS RULE: If task_id is provided, verify it's a parent task
@@ -459,7 +467,7 @@ class AcceptanceStageController extends Controller
                     'message' => 'Công việc không tồn tại trong dự án này.'
                 ], 404);
             }
-            
+
             if ($task->parent_id !== null) {
                 return response()->json([
                     'success' => false,
@@ -518,5 +526,4 @@ class AcceptanceStageController extends Controller
             'message' => 'Đã xóa giai đoạn nghiệm thu.'
         ]);
     }
-
 }

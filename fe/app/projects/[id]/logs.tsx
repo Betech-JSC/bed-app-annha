@@ -21,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const DAYS_OF_WEEK = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const MONTHS = [
@@ -68,6 +69,7 @@ export default function ConstructionLogsScreen() {
   });
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [minCompletionPercentage, setMinCompletionPercentage] = useState(0);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Helper function to ensure completion_percentage is always a valid number
   const getCompletionPercentage = (value: any): number => {
@@ -133,10 +135,11 @@ export default function ConstructionLogsScreen() {
 
   const openEditModal = (log: ConstructionLog) => {
     setEditingLog(log);
-    // BUSINESS RULE: Date is NOT editable, but we show the log's date for reference
-    // For editing, we still use today's date as the base (but backend will use log's original date)
+    // BUSINESS RULE: When editing, allow selecting date in the past, but not future
+    // Use the log's original date as default
+    const logDate = log.log_date.split('T')[0]; // Get date part only
     setFormData({
-      log_date: today, // Always today, not editable
+      log_date: logDate, // Use log's date, can be edited to past dates
       task_id: log.task_id || null,
       weather: log.weather || "",
       personnel_count: log.personnel_count?.toString() || "",
@@ -211,9 +214,8 @@ export default function ConstructionLogsScreen() {
         .filter(f => f.attachment_id || f.id)
         .map(f => f.attachment_id || f.id!);
 
-      // BUSINESS RULE: Date is always today for new logs
-      // For editing, use the original log's date (backend will handle this)
-      const logDate = editingLog ? editingLog.log_date : today;
+      // BUSINESS RULE: Use selected date (can be today or past date, but not future)
+      const logDate = formData.log_date;
 
       const data = {
         log_date: logDate,
@@ -251,8 +253,9 @@ export default function ConstructionLogsScreen() {
     setModalVisible(false);
     setEditingLog(null);
     setSelectedTask(null);
+    setShowDatePicker(false);
     setFormData({
-      log_date: today, // Always today
+      log_date: today, // Default to today for new logs
       task_id: null,
       weather: "",
       personnel_count: "",
@@ -270,27 +273,27 @@ export default function ConstructionLogsScreen() {
       return normalizedLogDate === dateString;
     });
     if (log) {
-      setSelectedDateLog(log);
-      setSelectedDate(dateString);
-      setDetailModalVisible(true);
+      // If log exists, open edit modal (can edit date to past dates)
+      openEditModal(log);
     } else {
-      // BUSINESS RULE: Only allow creating logs for today
+      // BUSINESS RULE: Allow creating logs for today or past dates, but not future
       const clickedDate = new Date(dateString);
       const todayDate = new Date();
       todayDate.setHours(0, 0, 0, 0);
       clickedDate.setHours(0, 0, 0, 0);
 
-      if (clickedDate.getTime() === todayDate.getTime()) {
-        // Only allow creating log for today
-        setFormData(prev => ({ ...prev, log_date: today }));
-      setSelectedDate(dateString);
+      if (clickedDate.getTime() <= todayDate.getTime()) {
+        // Allow creating log for today or past dates
+        setFormData(prev => ({ ...prev, log_date: dateString }));
+        setSelectedDate(dateString);
         setMinCompletionPercentage(0);
-      setModalVisible(true);
+        setEditingLog(null); // New log
+        setModalVisible(true);
       } else {
-        // Show existing log or inform user they can only create logs for today
+        // Cannot create logs for future dates
         Alert.alert(
           "Thông báo",
-          "Chỉ có thể tạo nhật ký cho ngày hôm nay. Vui lòng chọn ngày hôm nay để tạo nhật ký mới."
+          "Không thể tạo nhật ký cho ngày tương lai. Vui lòng chọn ngày hôm nay hoặc ngày trong quá khứ."
         );
       }
     }
@@ -465,37 +468,37 @@ export default function ConstructionLogsScreen() {
               const isTodayDate = day.dateString === today;
 
               return (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.dayCell,
-                  !day.isCurrentMonth && styles.dayCellDisabled,
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.dayCell,
+                    !day.isCurrentMonth && styles.dayCellDisabled,
                     isTodayDate && styles.dayCellToday,
                     day.hasLog && !isTodayDate && styles.dayCellHasLog,
                     !day.hasLog && day.isCurrentMonth && !isTodayDate && styles.dayCellNoLog,
-                ]}
+                  ]}
                   onPress={() => {
                     if (day.isCurrentMonth) {
                       handleDateClick(day.dateString);
                     }
                   }}
-                disabled={!day.isCurrentMonth}
-              >
-                <Text
-                  style={[
-                    styles.dayText,
-                    !day.isCurrentMonth && styles.dayTextDisabled,
+                  disabled={!day.isCurrentMonth}
+                >
+                  <Text
+                    style={[
+                      styles.dayText,
+                      !day.isCurrentMonth && styles.dayTextDisabled,
                       isTodayDate && styles.dayTextToday,
                       day.hasLog && !isTodayDate && styles.dayTextHasLog,
                       !day.hasLog && day.isCurrentMonth && !isTodayDate && styles.dayTextNoLog,
-                  ]}
-                >
-                  {day.date}
-                </Text>
+                    ]}
+                  >
+                    {day.date}
+                  </Text>
                   {isTodayDate && (
                     <View style={styles.todayIndicator} />
                   )}
-              </TouchableOpacity>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -524,95 +527,131 @@ export default function ConstructionLogsScreen() {
                 setDetailModalVisible(true);
               }}
             >
-              <View style={styles.logHeader}>
-                <View style={styles.logHeaderLeft}>
-                  <Text style={styles.logDate}>
-                    {new Date(item.log_date).toLocaleDateString("vi-VN", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </Text>
-                  {item.completion_percentage > 0 && (
-                    <View style={styles.progressBadge}>
-                      <Text style={styles.progressText}>
-                        {item.completion_percentage}%
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.logActions}>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => openEditModal(item)}
-                  >
-                    <Ionicons name="create-outline" size={20} color="#3B82F6" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => handleDelete(item)}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {item.task && (
-                <View style={styles.taskInfo}>
-                  <Ionicons name="checkmark-circle-outline" size={16} color="#3B82F6" />
-                  <Text style={styles.taskName}>{item.task.name}</Text>
-                </View>
-              )}
-
-              <View style={styles.logDetails}>
-                {item.weather && (
-                  <View style={styles.detailRow}>
-                    <Ionicons name="partly-sunny-outline" size={16} color="#6B7280" />
-                    <Text style={styles.detailText}>{item.weather}</Text>
-                  </View>
-                )}
-                {item.personnel_count && (
-                  <View style={styles.detailRow}>
-                    <Ionicons name="people-outline" size={16} color="#6B7280" />
-                    <Text style={styles.detailText}>
-                      {item.personnel_count} người
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {item.notes && (
-                <Text style={styles.notes}>{item.notes}</Text>
-              )}
-
-              {item.attachments && item.attachments.length > 0 && (
-                <View style={styles.attachmentsContainer}>
-                  <Text style={styles.attachmentsLabel}>
-                    {item.attachments.length} hình ảnh
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentsScroll}>
-                    {item.attachments.map((attachment: any, index: number) => (
-                      <View key={attachment.id || index} style={styles.attachmentItem}>
+              <View style={styles.logCardContent}>
+                {/* Preview files bên trái - Compact */}
+                {item.attachments && item.attachments.length > 0 && (
+                  <View style={styles.logCardLeft}>
+                    {item.attachments.slice(0, 2).map((attachment: any, index: number) => (
+                      <View key={attachment.id || index} style={styles.logCardAttachmentItem}>
                         {attachment.mime_type?.startsWith("image/") ? (
                           <Image
-                            source={{ uri: attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : attachment.file_url }}
-                            style={styles.attachmentImage}
+                            source={{
+                              uri: attachment.file_path
+                                ? `http://localhost:8000/storage/${attachment.file_path}`
+                                : attachment.file_url
+                            }}
+                            style={styles.logCardAttachmentImage}
                             resizeMode="cover"
                           />
                         ) : (
-                          <View style={styles.attachmentFile}>
-                            <Ionicons name="document-outline" size={24} color="#3B82F6" />
-                            <Text style={styles.attachmentFileName} numberOfLines={1}>
-                              {attachment.file_name || "File"}
-                            </Text>
+                          <View style={styles.logCardAttachmentFile}>
+                            <Ionicons name="document-outline" size={16} color="#3B82F6" />
                           </View>
                         )}
                       </View>
                     ))}
-                  </ScrollView>
+                    {item.attachments.length > 2 && (
+                      <View style={styles.logCardAttachmentMore}>
+                        <Text style={styles.logCardAttachmentMoreText}>
+                          +{item.attachments.length - 2}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Nội dung bên phải - Compact */}
+                <View style={styles.logCardRight}>
+                  {/* Header với ngày và actions */}
+                  <View style={styles.logHeader}>
+                    <View style={styles.logHeaderLeft}>
+                      <Text style={styles.logDate} numberOfLines={1}>
+                        {new Date(item.log_date).toLocaleDateString("vi-VN", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })}
+                      </Text>
+                      {item.completion_percentage > 0 && (
+                        <View style={styles.progressBadge}>
+                          <Text style={styles.progressText}>
+                            {item.completion_percentage}%
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.logActions}>
+                      <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          openEditModal(item);
+                        }}
+                      >
+                        <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDelete(item);
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Task name - Compact */}
+                  {item.task && (
+                    <View style={styles.taskInfo}>
+                      <Ionicons name="checkmark-circle-outline" size={14} color="#3B82F6" />
+                      <Text style={styles.taskName} numberOfLines={1}>
+                        {item.task.name}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Details - Inline compact */}
+                  {(item.weather || item.personnel_count) && (
+                    <View style={styles.logDetails}>
+                      {item.weather && (
+                        <View style={styles.detailRow}>
+                          <Ionicons name="partly-sunny-outline" size={14} color="#6B7280" />
+                          <Text style={styles.detailText} numberOfLines={1}>
+                            {item.weather}
+                          </Text>
+                        </View>
+                      )}
+                      {item.personnel_count && (
+                        <View style={styles.detailRow}>
+                          <Ionicons name="people-outline" size={14} color="#6B7280" />
+                          <Text style={styles.detailText}>
+                            {item.personnel_count} người
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Notes - Compact */}
+                  {item.notes && (
+                    <Text style={styles.notes} numberOfLines={1}>
+                      {item.notes}
+                    </Text>
+                  )}
+
+                  {/* Attachments count - Compact */}
+                  {item.attachments && item.attachments.length > 0 && (
+                    <View style={styles.attachmentsCountRow}>
+                      <Ionicons name="images-outline" size={12} color="#6B7280" />
+                      <Text style={styles.attachmentsCountText}>
+                        {item.attachments.length} ảnh
+                      </Text>
+                    </View>
+                  )}
                 </View>
-              )}
+              </View>
             </TouchableOpacity>
           )}
           keyExtractor={(item) => item.id.toString()}
@@ -647,16 +686,36 @@ export default function ConstructionLogsScreen() {
           <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={true}>
             <View style={styles.formGroup}>
               <Text style={styles.label}>Ngày *</Text>
-              {/* BUSINESS RULE: Date is auto-set to current day and NOT editable */}
-              <View style={[styles.selectButton, styles.disabledInput]}>
-                <Text style={[styles.selectButtonText, styles.disabledText]}>
+              {/* BUSINESS RULE: Allow selecting date in the past, but not future */}
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={styles.selectButtonText}>
                   {new Date(formData.log_date).toLocaleDateString("vi-VN")}
                 </Text>
-                <Ionicons name="calendar-outline" size={20} color="#9CA3AF" />
-              </View>
+                <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
+              </TouchableOpacity>
               <Text style={styles.helperText}>
-                Ngày được tự động đặt là hôm nay và không thể thay đổi
+                {editingLog
+                  ? "Có thể chọn ngày trong quá khứ để chỉnh sửa nhật ký"
+                  : "Có thể chọn ngày hôm nay hoặc ngày trong quá khứ. Không thể chọn ngày tương lai."}
               </Text>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={new Date(formData.log_date)}
+                  mode="date"
+                  display="default"
+                  maximumDate={new Date()} // Cannot select future dates
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(Platform.OS === 'ios');
+                    if (selectedDate) {
+                      const dateString = selectedDate.toISOString().split('T')[0];
+                      setFormData(prev => ({ ...prev, log_date: dateString }));
+                    }
+                  }}
+                />
+              )}
             </View>
 
             <View style={styles.formGroup}>
@@ -691,9 +750,9 @@ export default function ConstructionLogsScreen() {
             </View>
 
             {selectedTask && (
-            <View style={styles.formGroup}>
+              <View style={styles.formGroup}>
                 <View style={styles.sliderHeader}>
-              <Text style={styles.label}>% Hoàn thành</Text>
+                  <Text style={styles.label}>% Hoàn thành</Text>
                   <Text style={styles.sliderValue}>
                     {getCompletionPercentage(formData.completion_percentage).toFixed(0)}%
                   </Text>
@@ -730,17 +789,17 @@ export default function ConstructionLogsScreen() {
                         color={getCompletionPercentage(formData.completion_percentage) <= minCompletionPercentage ? "#D1D5DB" : "#3B82F6"}
                       />
                     </TouchableOpacity>
-              <TextInput
+                    <TextInput
                       style={styles.sliderInput}
                       value={getCompletionPercentage(formData.completion_percentage).toFixed(0)}
-                onChangeText={(text) => {
+                      onChangeText={(text) => {
                         const numValue = parseInt(text) || minCompletionPercentage;
                         const newValue = Math.max(minCompletionPercentage, Math.min(100, numValue));
                         setFormData({ ...formData, completion_percentage: newValue });
-                }}
-                keyboardType="numeric"
+                      }}
+                      keyboardType="numeric"
                       editable={true}
-              />
+                    />
                     <Text style={styles.sliderPercent}>%</Text>
                     <TouchableOpacity
                       style={styles.sliderButton}
@@ -765,10 +824,10 @@ export default function ConstructionLogsScreen() {
                   </Text>
                   <Text style={styles.sliderLabel}>100%</Text>
                 </View>
-              <Text style={styles.helperText}>
+                <Text style={styles.helperText}>
                   Phần trăm hoàn thành chỉ có thể tăng. Giá trị tối thiểu: {minCompletionPercentage}%
-              </Text>
-            </View>
+                </Text>
+              </View>
             )}
 
             <View style={styles.formGroup}>
@@ -824,50 +883,6 @@ export default function ConstructionLogsScreen() {
                 showPreview={true}
               />
 
-              {/* Preview uploaded images */}
-              {uploadedFiles.length > 0 && (
-                <View style={styles.uploadedImagesContainer}>
-                  <Text style={styles.uploadedImagesLabel}>
-                    Đã tải lên ({uploadedFiles.length}/10)
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.uploadedImagesScroll}
-                  >
-                    {uploadedFiles.map((file, index) => {
-                      const imageUrl = file.file_url || file.url || file.location ||
-                        ((file as any).file_path ? `http://localhost:8000/storage/${(file as any).file_path}` : null);
-                      const isImage = file.type === "image" || file.mime_type?.startsWith("image/") || imageUrl;
-
-                      return (
-                        <View key={file.attachment_id || file.id || index} style={styles.uploadedImageItem}>
-                          {isImage && imageUrl ? (
-                            <Image
-                              source={{ uri: imageUrl }}
-                              style={styles.uploadedImage}
-                              resizeMode="cover"
-              />
-                          ) : (
-                            <View style={styles.uploadedFileIcon}>
-                              <Ionicons name="document-outline" size={24} color="#3B82F6" />
-                            </View>
-                          )}
-                          <TouchableOpacity
-                            style={styles.removeImageButton}
-                            onPress={() => {
-                              const newFiles = uploadedFiles.filter((_, i) => i !== index);
-                              setUploadedFiles(newFiles);
-                            }}
-                          >
-                            <Ionicons name="close-circle" size={20} color="#EF4444" />
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
             </View>
 
             <View style={styles.modalButtons}>
@@ -1092,18 +1107,18 @@ export default function ConstructionLogsScreen() {
                 <Text style={styles.emptyText}>Chưa có nhật ký cho ngày này</Text>
                 {/* BUSINESS RULE: Only allow creating logs for today */}
                 {selectedDate === today && (
-                <TouchableOpacity
-                  style={styles.createButton}
-                  onPress={() => {
-                    setDetailModalVisible(false);
+                  <TouchableOpacity
+                    style={styles.createButton}
+                    onPress={() => {
+                      setDetailModalVisible(false);
                       setFormData(prev => ({ ...prev, log_date: today }));
                       setMinCompletionPercentage(0);
-                    setModalVisible(true);
-                  }}
-                >
-                  <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
-                  <Text style={styles.createButtonText}>Tạo nhật ký</Text>
-                </TouchableOpacity>
+                      setModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.createButtonText}>Tạo nhật ký</Text>
+                  </TouchableOpacity>
                 )}
                 {selectedDate !== today && (
                   <Text style={styles.helperText}>
@@ -1301,84 +1316,142 @@ const styles = StyleSheet.create({
   logCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    marginBottom: 10,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    overflow: "hidden",
+  },
+  logCardContent: {
+    flexDirection: "row",
+    padding: 12,
+    minHeight: 80,
+  },
+  logCardLeft: {
+    width: 70,
+    marginRight: 10,
+    gap: 6,
+  },
+  logCardAttachmentItem: {
+    marginBottom: 4,
+  },
+  logCardAttachmentImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    backgroundColor: "#F3F4F6",
+  },
+  logCardAttachmentFile: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logCardAttachmentMore: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    backgroundColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logCardAttachmentMoreText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  logCardRight: {
+    flex: 1,
+    minWidth: 0, // Prevent overflow
+  },
+  attachmentsCountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 6,
+  },
+  attachmentsCountText: {
+    fontSize: 11,
+    color: "#6B7280",
   },
   logHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   logHeaderLeft: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
+    minWidth: 0, // Prevent overflow
   },
   logActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: 4,
+    marginLeft: 8,
   },
   actionButton: {
     padding: 4,
   },
   logDate: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
     color: "#1F2937",
+    flexShrink: 1,
   },
   progressBadge: {
     backgroundColor: "#3B82F620",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   progressText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
     color: "#3B82F6",
   },
   taskInfo: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-    padding: 8,
+    gap: 6,
+    marginBottom: 6,
+    padding: 6,
     backgroundColor: "#EFF6FF",
-    borderRadius: 8,
+    borderRadius: 6,
   },
   taskName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#3B82F6",
+    flex: 1,
   },
   logDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 6,
   },
   detailRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
   },
   detailText: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#6B7280",
+    flexShrink: 1,
   },
   notes: {
-    fontSize: 14,
-    color: "#1F2937",
-    lineHeight: 20,
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    fontSize: 12,
+    color: "#6B7280",
+    lineHeight: 16,
+    marginTop: 4,
   },
   attachmentsContainer: {
     marginTop: 12,
