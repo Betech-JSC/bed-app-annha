@@ -12,7 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('notifications', function (Blueprint $table) {
-            //
+            // Add polymorphic relationship fields for notifiable (Project, Task, etc.)
+            $table->string('notifiable_type')->nullable()->after('user_id');
+            $table->unsignedBigInteger('notifiable_id')->nullable()->after('notifiable_type');
+            
+            // Add index for polymorphic relationship
+            $table->index(['notifiable_type', 'notifiable_id']);
         });
     }
 
@@ -22,7 +27,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('notifications', function (Blueprint $table) {
-            //
+            // Drop index first
+            $table->dropIndex(['notifiable_type', 'notifiable_id']);
+            
+            // Drop columns
+            $table->dropColumn(['notifiable_type', 'notifiable_id']);
         });
     }
 };
