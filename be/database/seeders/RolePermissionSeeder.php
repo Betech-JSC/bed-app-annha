@@ -175,7 +175,8 @@ class RolePermissionSeeder extends Seeder
             Permissions::CONTRACT_CREATE,
             Permissions::CONTRACT_UPDATE,
             Permissions::CONTRACT_DELETE,
-            Permissions::CONTRACT_APPROVE,
+            Permissions::CONTRACT_APPROVE_LEVEL_1,
+            Permissions::CONTRACT_APPROVE_LEVEL_2,
 
             // Payment
             Permissions::PAYMENT_VIEW,
@@ -280,7 +281,7 @@ class RolePermissionSeeder extends Seeder
 
             // Contract
             Permissions::CONTRACT_VIEW,
-            Permissions::CONTRACT_APPROVE,
+            Permissions::CONTRACT_APPROVE_LEVEL_2, // Final approval for Project Owner
 
             // Payment
             Permissions::PAYMENT_VIEW,
@@ -380,7 +381,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::CONTRACT_VIEW,
             Permissions::CONTRACT_CREATE,
             Permissions::CONTRACT_UPDATE,
-            Permissions::CONTRACT_APPROVE,
+            Permissions::CONTRACT_APPROVE_LEVEL_1, // First level approval for Project Manager
 
             // Payment
             Permissions::PAYMENT_VIEW,
@@ -628,7 +629,7 @@ class RolePermissionSeeder extends Seeder
 
             // Contract
             Permissions::CONTRACT_VIEW,
-            Permissions::CONTRACT_APPROVE,
+            Permissions::CONTRACT_APPROVE_LEVEL_2, // Final approval for Client
 
             // Payment
             Permissions::PAYMENT_VIEW,
