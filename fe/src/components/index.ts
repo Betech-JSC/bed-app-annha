@@ -25,6 +25,7 @@ export { default as MultiMediaUploader } from "./MultiMediaUploader";
 export type { MediaItem } from "./MultiMediaUploader";
 
 export { ScreenHeader } from "./ScreenHeader";
+export { PermissionGuard } from "./PermissionGuard";
 export { default as CustomTabBar } from "./CustomTabBar";
 
 // Export HR management components
@@ -41,3 +42,5 @@ export { default as PhaseSection } from "./PhaseSection";
 export { default as AcceptanceItemForm } from "./AcceptanceItemForm";
 export { default as AcceptanceItemList } from "./AcceptanceItemList";
 export { default as DatePickerInput } from "./DatePickerInput";
+export { NotificationItem } from "./NotificationItem";
+export { NotificationBadge } from "./NotificationBadge";

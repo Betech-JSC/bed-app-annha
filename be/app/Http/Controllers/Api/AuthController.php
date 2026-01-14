@@ -107,8 +107,21 @@ class AuthController extends Controller
 
             $token = $user->createToken('MyApp')->plainTextToken;
 
+            // Load roles relationship
+            $user->load('roles');
+
+            $userData = $user->toArray();
+            $userData['token'] = $token;
+            $userData['roles'] = $user->roles->map(function ($role) {
+                return [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                    'description' => $role->description,
+                ];
+            })->toArray();
+
             return ApiResponse::success([
-                'user' => array_merge($user->toArray(), ['token' => $token]),
+                'user' => $userData,
             ], 'User Login successful');
         } catch (ValidationException $e) {
             return ApiResponse::validationError($e->validator);

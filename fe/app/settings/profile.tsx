@@ -58,14 +58,30 @@ export default function ProfileScreen() {
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Vai trò</Text>
             <View style={styles.badgeContainer}>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {user?.role?.toUpperCase() || "USER"}
-                </Text>
-              </View>
               {user?.owner && (
                 <View style={[styles.badge, styles.superAdminBadge]}>
                   <Text style={styles.superAdminBadgeText}>SUPER ADMIN</Text>
+                </View>
+              )}
+              {user?.role && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {user.role.toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              {user?.roles && user.roles.length > 0 && (
+                <>
+                  {user.roles.map((role) => (
+                    <View key={role.id} style={[styles.badge, styles.roleBadge]}>
+                      <Text style={styles.roleBadgeText}>{role.name}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+              {(!user?.roles || user.roles.length === 0) && !user?.role && !user?.owner && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>USER</Text>
                 </View>
               )}
             </View>
@@ -207,6 +223,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     color: "#D97706",
+  },
+  roleBadge: {
+    backgroundColor: "#DBEAFE",
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#1E40AF",
   },
   divider: {
     height: 1,

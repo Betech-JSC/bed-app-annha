@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import {
   contractApi,
   Contract,
@@ -17,7 +17,9 @@ import {
 } from "@/api/contractApi";
 import { attachmentApi, Attachment } from "@/api/attachmentApi";
 import { UniversalFileUploader, ScreenHeader, DatePickerInput } from "@/components";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ContractScreen() {
@@ -38,6 +40,13 @@ export default function ContractScreen() {
   useEffect(() => {
     loadContract();
   }, [id]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadContract();
+    }, [id])
+  );
 
   const loadContract = async () => {
     try {
@@ -427,12 +436,14 @@ export default function ContractScreen() {
             )}
             {contract &&
               contract.status === "pending_customer_approval" && (
-                <TouchableOpacity
-                  style={[styles.button, styles.approveButton]}
-                  onPress={handleApprove}
-                >
-                  <Text style={styles.approveButtonText}>Duyệt hợp đồng</Text>
-                </TouchableOpacity>
+                <PermissionGuard permission={Permissions.CONTRACT_APPROVE_LEVEL_1} projectId={id}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.approveButton]}
+                    onPress={handleApprove}
+                  >
+                    <Text style={styles.approveButtonText}>Duyệt hợp đồng</Text>
+                  </TouchableOpacity>
+                </PermissionGuard>
               )}
           </>
         )}

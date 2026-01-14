@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootState } from "@/reducers/index";
+import { NotificationBadge } from "./NotificationBadge";
+import { useUnreadCount } from "@/hooks/useUnreadCount";
 
 const tabs = [
   {
@@ -38,6 +40,8 @@ export default function CustomTabBar() {
   const pathname = usePathname();
   const user = useSelector((state: RootState) => state.user);
   const insets = useSafeAreaInsets();
+  // Tăng interval lên 60 giây để giảm số lần gọi API
+  const { unreadCount } = useUnreadCount({ autoRefresh: true, refreshInterval: 60000 });
 
   // Ẩn tab bar ở các màn hình auth
   const hideTabBarRoutes = [
@@ -67,6 +71,8 @@ export default function CustomTabBar() {
     return pathname === route;
   };
 
+  const isNotificationsActive = pathname?.startsWith("/notifications");
+
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       {tabs.map((tab) => {
@@ -94,6 +100,31 @@ export default function CustomTabBar() {
           </TouchableOpacity>
         );
       })}
+      {/* Notification Button */}
+      <TouchableOpacity
+        style={styles.tab}
+        onPress={() => router.push("/notifications" as any)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.notificationIconContainer}>
+          <Ionicons
+            name={isNotificationsActive ? "notifications" : "notifications-outline"}
+            size={isNotificationsActive ? 26 : 24}
+            color={isNotificationsActive ? "#3B82F6" : "#9CA3AF"}
+          />
+          {unreadCount > 0 && (
+            <NotificationBadge count={unreadCount} size="small" style={styles.notificationBadge} />
+          )}
+        </View>
+        <Text
+          style={[
+            styles.label,
+            isNotificationsActive && styles.labelActive,
+          ]}
+        >
+          Thông báo
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -131,6 +162,14 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     color: "#3B82F6",
+  },
+  notificationIconContainer: {
+    position: "relative",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -4,
+    right: -8,
   },
 });
 

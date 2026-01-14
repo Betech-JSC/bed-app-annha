@@ -11,11 +11,13 @@ import {
   Modal,
   RefreshControl,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { additionalCostApi, AdditionalCost } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
 
 export default function AdditionalCostDetailScreen() {
   const router = useRouter();
@@ -29,6 +31,15 @@ export default function AdditionalCostDetailScreen() {
   useEffect(() => {
     loadCostDetail();
   }, [id, costId]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (id && costId) {
+        loadCostDetail();
+      }
+    }, [id, costId])
+  );
 
   const loadCostDetail = async () => {
     try {
@@ -299,20 +310,24 @@ export default function AdditionalCostDetailScreen() {
         {/* Actions - Chỉ hiển thị nếu chờ duyệt */}
         {cost.status === "pending_approval" && (
           <View style={styles.actionsContainer}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.approveButton]}
-              onPress={handleApprove}
-            >
-              <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-              <Text style={styles.actionButtonText}>Duyệt</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.rejectButton]}
-              onPress={handleReject}
-            >
-              <Ionicons name="close-circle" size={20} color="#FFFFFF" />
-              <Text style={styles.actionButtonText}>Từ Chối</Text>
-            </TouchableOpacity>
+            <PermissionGuard permission={Permissions.ADDITIONAL_COST_APPROVE} projectId={id}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.approveButton]}
+                onPress={handleApprove}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>Duyệt</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
+            <PermissionGuard permission={Permissions.ADDITIONAL_COST_REJECT} projectId={id}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={handleReject}
+              >
+                <Ionicons name="close-circle" size={20} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>Từ Chối</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
           </View>
         )}
       </ScrollView>

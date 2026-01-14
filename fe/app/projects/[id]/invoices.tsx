@@ -14,7 +14,7 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { invoiceApi, Invoice, CreateInvoiceData } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -45,6 +45,13 @@ export default function InvoicesScreen() {
     useEffect(() => {
         loadInvoices();
     }, [id]);
+
+    // Reload data when screen comes into focus
+    useFocusEffect(
+        React.useCallback(() => {
+            loadInvoices();
+        }, [id])
+    );
 
     const loadInvoices = async () => {
         try {

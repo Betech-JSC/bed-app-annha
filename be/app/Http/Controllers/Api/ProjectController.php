@@ -101,7 +101,7 @@ class ProjectController extends Controller
             });
         }
 
-        $customers = $customerQuery->orderBy('name')->limit(100)->get([
+        $customers = $customerQuery->orderBy('name')->get([
             'id',
             'name',
             'email',
@@ -123,7 +123,7 @@ class ProjectController extends Controller
                 });
             }
 
-            $customers = $fallbackQuery->orderBy('name')->limit(100)->get([
+            $customers = $fallbackQuery->orderBy('name')->get([
                 'id',
                 'name',
                 'email',
@@ -144,7 +144,7 @@ class ProjectController extends Controller
                     });
                 }
 
-                $customers = $finalQuery->orderBy('name')->limit(100)->get([
+                $customers = $finalQuery->orderBy('name')->get([
                     'id',
                     'name',
                     'email',
@@ -203,7 +203,7 @@ class ProjectController extends Controller
             });
         }
 
-        $managers = $query->orderBy('name')->limit(100)->get([
+        $managers = $query->orderBy('name')->get([
             'id',
             'name',
             'email',
@@ -214,6 +214,36 @@ class ProjectController extends Controller
         return response()->json([
             'success' => true,
             'data' => $managers,
+        ]);
+    }
+
+    /**
+     * Lấy toàn bộ danh sách users hệ thống (cho form tạo/sửa dự án)
+     */
+    public function getAllUsers(Request $request)
+    {
+        $query = User::whereNull('deleted_at');
+
+        // Search
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+
+        $users = $query->orderBy('name')->get([
+            'id',
+            'name',
+            'email',
+            'phone',
+            'role',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $users,
         ]);
     }
 

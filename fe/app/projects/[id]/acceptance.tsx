@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
 import { acceptanceApi, AcceptanceStage } from "@/api/acceptanceApi";
@@ -32,6 +32,15 @@ export default function AcceptanceScreen() {
     loadStages();
     loadPersonnel();
   }, [id]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (id) {
+        loadStages();
+      }
+    }, [id])
+  );
 
   const loadProject = async () => {
     try {

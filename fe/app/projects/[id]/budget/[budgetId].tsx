@@ -12,13 +12,16 @@ import {
     KeyboardAvoidingView,
     Platform,
     RefreshControl,
+    SafeAreaView,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { budgetApi, ProjectBudget, CreateBudgetData, BudgetItem } from "@/api/budgetApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader, PermissionGuard } from "@/components";
+import { ScreenHeader } from "@/components";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -29,44 +32,29 @@ export default function BudgetDetailScreen() {
     const router = useRouter();
     const { id, budgetId } = useLocalSearchParams<{ id: string; budgetId: string }>();
     const tabBarHeight = useTabBarHeight();
+    const insets = useSafeAreaInsets();
     const { hasPermission } = useProjectPermissions(id || null);
     const [budget, setBudget] = useState<ProjectBudget | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [showItemModal, setShowItemModal] = useState(false);
-    const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
-    const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
-    const [formData, setFormData] = useState<Partial<CreateBudgetData>>({
-        name: "",
-        version: "",
-        budget_date: "",
-        notes: "",
-        items: [],
-    });
-    const [itemData, setItemData] = useState({
-        name: "",
-        cost_group_id: undefined as number | undefined,
-        description: "",
-        estimated_amount: "",
-        quantity: "",
-        unit_price: "",
-    });
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
-    const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
-    const [submitting, setSubmitting] = useState(false);
-    const [errors, setErrors] = useState<Record<string, string>>({});
-    const [focusedField, setFocusedField] = useState<string | null>(null);
     const [comparisonData, setComparisonData] = useState<any>(null);
     const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
     const [activeTab, setActiveTab] = useState<"overview" | "items">("overview");
 
     useEffect(() => {
         loadBudget();
-        loadCostGroups();
         loadComparison();
     }, [id, budgetId]);
+
+    // Reload data when screen comes into focus
+    useFocusEffect(
+        React.useCallback(() => {
+            if (budgetId) {
+                loadBudget();
+                loadComparison();
+            }
+        }, [id, budgetId])
+    );
 
     const loadComparison = async () => {
         try {
@@ -85,13 +73,6 @@ export default function BudgetDetailScreen() {
             const response = await budgetApi.getBudget(Number(id), Number(budgetId));
             if (response.success) {
                 setBudget(response.data);
-                setFormData({
-                    name: response.data.name,
-                    version: response.data.version || "",
-                    budget_date: response.data.budget_date,
-                    notes: response.data.notes || "",
-                    items: response.data.items || [],
-                });
             }
         } catch (error: any) {
             const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải ngân sách";
@@ -102,17 +83,6 @@ export default function BudgetDetailScreen() {
         }
     };
 
-    const loadCostGroups = async () => {
-        try {
-            const response = await costGroupApi.getCostGroups({ active_only: true });
-            if (response.success) {
-                const data = response.data?.data || response.data || [];
-                setCostGroups(Array.isArray(data) ? data : []);
-            }
-        } catch (error) {
-            console.error("Error loading cost groups:", error);
-        }
-    };
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -136,42 +106,6 @@ export default function BudgetDetailScreen() {
         return comparisonData.items.find((i: any) => i.id === itemId);
     };
 
-    const validateForm = () => {
-        const newErrors: Record<string, string> = {};
-        
-        if (!formData.name || formData.name.trim() === "") {
-            newErrors.name = "Tên ngân sách là bắt buộc";
-        }
-        
-        if (!formData.budget_date) {
-            newErrors.budget_date = "Ngày lập ngân sách là bắt buộc";
-        }
-        
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const handleUpdate = async () => {
-        if (!validateForm()) {
-            return;
-        }
-
-        try {
-            setSubmitting(true);
-            const response = await budgetApi.updateBudget(Number(id), Number(budgetId), formData as CreateBudgetData);
-            if (response.success) {
-                Alert.alert("Thành công", "Đã cập nhật ngân sách");
-                setShowEditModal(false);
-                setErrors({});
-                loadBudget();
-            }
-        } catch (error: any) {
-            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể cập nhật ngân sách";
-            Alert.alert("Lỗi", errorMessage);
-        } finally {
-            setSubmitting(false);
-        }
-    };
 
     const handleDelete = () => {
         Alert.alert(
@@ -200,65 +134,20 @@ export default function BudgetDetailScreen() {
     };
 
     const handleAddItem = () => {
-        setEditingItem(null);
-        setItemData({
-            name: "",
-            cost_group_id: undefined,
-            description: "",
-            estimated_amount: "",
-            quantity: "",
-            unit_price: "",
-        });
-        setSelectedCostGroup(null);
-        setShowItemModal(true);
+        router.push(`/projects/${id}/budget/${budgetId}/items/create`);
     };
 
     const handleEditItem = (item: BudgetItem) => {
-        setEditingItem(item);
-        setItemData({
-            name: item.name,
-            cost_group_id: item.cost_group_id,
-            description: item.description || "",
-            estimated_amount: item.estimated_amount.toString(),
-            quantity: item.quantity?.toString() || "",
-            unit_price: item.unit_price?.toString() || "",
-        });
-        const costGroup = costGroups.find(cg => cg.id === item.cost_group_id);
-        setSelectedCostGroup(costGroup || null);
-        setShowItemModal(true);
+        router.push(`/projects/${id}/budget/${budgetId}/items/${item.id}/edit`);
     };
 
-    const handleSaveItem = () => {
-        if (!itemData.name || !itemData.estimated_amount) {
-            Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin");
+
+    const handleDeleteItem = (itemId: number) => {
+        if (!budget) {
+            Alert.alert("Lỗi", "Không tìm thấy ngân sách");
             return;
         }
 
-        const items = [...(formData.items || [])];
-        const itemPayload = {
-            name: itemData.name,
-            cost_group_id: itemData.cost_group_id,
-            description: itemData.description || undefined,
-            estimated_amount: parseFloat(itemData.estimated_amount),
-            quantity: itemData.quantity ? parseFloat(itemData.quantity) : undefined,
-            unit_price: itemData.unit_price ? parseFloat(itemData.unit_price) : undefined,
-        };
-
-        if (editingItem) {
-            const index = items.findIndex(i => i.id === editingItem.id);
-            if (index !== -1) {
-                items[index] = { ...items[index], ...itemPayload };
-            }
-        } else {
-            items.push(itemPayload);
-        }
-
-        setFormData({ ...formData, items });
-        setShowItemModal(false);
-        setEditingItem(null);
-    };
-
-    const handleDeleteItem = (itemId: number) => {
         Alert.alert(
             "Xác nhận",
             "Bạn có chắc chắn muốn xóa hạng mục này?",
@@ -267,9 +156,29 @@ export default function BudgetDetailScreen() {
                 {
                     text: "Xóa",
                     style: "destructive",
-                    onPress: () => {
-                        const items = (formData.items || []).filter(i => i.id !== itemId);
-                        setFormData({ ...formData, items });
+                    onPress: async () => {
+                        try {
+                            const currentItems = budget.items || [];
+                            const updatedItems = currentItems.filter(i => i.id !== itemId);
+
+                            const response = await budgetApi.updateBudget(Number(id), Number(budgetId), {
+                                items: updatedItems.map(item => ({
+                                    name: item.name,
+                                    cost_group_id: item.cost_group_id,
+                                    description: item.description,
+                                    estimated_amount: item.estimated_amount,
+                                    quantity: item.quantity,
+                                    unit_price: item.unit_price,
+                                }))
+                            });
+
+                            if (response.success) {
+                                Alert.alert("Thành công", "Đã xóa hạng mục");
+                                loadBudget();
+                            }
+                        } catch (error: any) {
+                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa hạng mục");
+                        }
                     },
                 },
             ]
@@ -282,7 +191,7 @@ export default function BudgetDetailScreen() {
 
     const handleExport = async () => {
         if (!budget) return;
-        
+
         try {
             // Generate text report
             let report = `BÁO CÁO NGÂN SÁCH DỰ ÁN\n`;
@@ -297,7 +206,7 @@ export default function BudgetDetailScreen() {
             report += `\n================================\n`;
             report += `DANH SÁCH HẠNG MỤC\n`;
             report += `================================\n\n`;
-            
+
             if (budget.items && budget.items.length > 0) {
                 budget.items.forEach((item, index) => {
                     report += `${index + 1}. ${item.name}\n`;
@@ -316,21 +225,21 @@ export default function BudgetDetailScreen() {
             } else {
                 report += `Chưa có hạng mục\n`;
             }
-            
+
             report += `\n================================\n`;
             report += `Tổng số hạng mục: ${budget.items?.length || 0}\n`;
             report += `Tổng ngân sách: ${formatCurrency(budget.total_budget)}\n`;
             report += `Ngày xuất báo cáo: ${new Date().toLocaleDateString("vi-VN")} ${new Date().toLocaleTimeString("vi-VN")}\n`;
-            
+
             // Save to file
             const directory = FileSystem.cacheDirectory || FileSystem.documentDirectory || "";
             const fileName = `budget_report_${budget.name.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}.txt`;
             const fileUri = `${directory}${fileName}`;
-            
+
             await FileSystem.writeAsStringAsync(fileUri, report, {
                 encoding: FileSystem.EncodingType.UTF8,
             });
-            
+
             // Share file
             const isAvailable = await Sharing.isAvailableAsync();
             if (isAvailable) {
@@ -390,26 +299,26 @@ export default function BudgetDetailScreen() {
             <ScreenHeader
                 title="Chi Tiết Ngân Sách"
                 rightComponent={
-                <View style={styles.headerActions}>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={handleExport}
-                    >
-                        <Ionicons name="download-outline" size={20} color="#10B981" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={() => setShowEditModal(true)}
-                    >
-                        <Ionicons name="pencil" size={20} color="#3B82F6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={handleDelete}
-                    >
-                        <Ionicons name="trash" size={20} color="#EF4444" />
-                    </TouchableOpacity>
-                </View>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={handleExport}
+                        >
+                            <Ionicons name="download-outline" size={20} color="#10B981" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => router.push(`/projects/${id}/budget/${budgetId}/edit`)}
+                        >
+                            <Ionicons name="pencil" size={20} color="#3B82F6" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={handleDelete}
+                        >
+                            <Ionicons name="trash" size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
                 }
             />
 
@@ -425,26 +334,26 @@ export default function BudgetDetailScreen() {
                         <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
                         <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
                     </View>
-                    
+
                     <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Tên ngân sách:</Text>
                         <Text style={styles.infoValue}>{budget.name}</Text>
                     </View>
-                    
+
                     {budget.version && (
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Phiên bản:</Text>
                             <Text style={styles.infoValue}>v{budget.version}</Text>
                         </View>
                     )}
-                    
+
                     <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Ngày lập:</Text>
                         <Text style={styles.infoValue}>
                             {new Date(budget.budget_date).toLocaleDateString("vi-VN")}
                         </Text>
                     </View>
-                    
+
                     <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Trạng thái:</Text>
                         <View
@@ -464,7 +373,7 @@ export default function BudgetDetailScreen() {
                             </Text>
                         </View>
                     </View>
-                    
+
                     {budget.notes && (
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Ghi chú:</Text>
@@ -479,18 +388,18 @@ export default function BudgetDetailScreen() {
                         <Ionicons name="wallet-outline" size={20} color="#3B82F6" />
                         <Text style={styles.sectionTitle}>Tổng quan ngân sách</Text>
                     </View>
-                    
+
                     <View style={styles.summaryCard}>
                         <View style={styles.summaryItem}>
                             <Text style={styles.summaryLabel}>Tổng ngân sách</Text>
                             <Text style={styles.summaryValue}>{formatCurrency(budget.total_budget)}</Text>
                         </View>
-                        
+
                         <View style={styles.summaryItem}>
                             <Text style={styles.summaryLabel}>Chi phí ước tính</Text>
                             <Text style={styles.summaryValue}>{formatCurrency(budget.estimated_cost)}</Text>
                         </View>
-                        
+
                         <View style={styles.summaryItem}>
                             <Text style={styles.summaryLabel}>Ngân sách còn lại</Text>
                             <Text style={[styles.summaryValue, { color: budget.remaining_budget >= 0 ? "#10B981" : "#EF4444" }]}>
@@ -527,7 +436,7 @@ export default function BudgetDetailScreen() {
                             <Ionicons name="analytics-outline" size={20} color="#3B82F6" />
                             <Text style={styles.sectionTitle}>Phân tích ngân sách</Text>
                         </View>
-                        
+
                         {comparisonData?.summary && (
                             <View style={styles.analysisCard}>
                                 <View style={styles.analysisRow}>
@@ -559,12 +468,12 @@ export default function BudgetDetailScreen() {
                                     <Text style={styles.analysisLabel}>Tỷ lệ sử dụng:</Text>
                                     <Text style={[
                                         styles.analysisValue,
-                                        { 
-                                            color: comparisonData.summary.budget_utilization > 100 
-                                                ? "#EF4444" 
-                                                : comparisonData.summary.budget_utilization > 80 
-                                                    ? "#F59E0B" 
-                                                    : "#10B981" 
+                                        {
+                                            color: comparisonData.summary.budget_utilization > 100
+                                                ? "#EF4444"
+                                                : comparisonData.summary.budget_utilization > 80
+                                                    ? "#F59E0B"
+                                                    : "#10B981"
                                         }
                                     ]}>
                                         {comparisonData.summary.budget_utilization.toFixed(1)}%
@@ -572,7 +481,7 @@ export default function BudgetDetailScreen() {
                                 </View>
                             </View>
                         )}
-                        
+
                         {(budget.status === "approved" || budget.status === "active") && (
                             <TouchableOpacity
                                 style={styles.compareButton}
@@ -598,20 +507,20 @@ export default function BudgetDetailScreen() {
                                 <Ionicons name="add-circle" size={24} color="#3B82F6" />
                             </TouchableOpacity>
                         </View>
-                        
+
                         {budget.items && budget.items.length > 0 ? (
                             budget.items.map((item, index) => {
                                 const comparison = getItemComparison(item.id);
                                 const actualAmount = comparison?.actual_amount || 0;
-                                const utilization = item.estimated_amount > 0 
-                                    ? (actualAmount / item.estimated_amount) * 100 
+                                const utilization = item.estimated_amount > 0
+                                    ? (actualAmount / item.estimated_amount) * 100
                                     : 0;
                                 const isOverBudget = actualAmount > item.estimated_amount;
                                 const isExpanded = expandedItems.has(item.id);
-                                
+
                                 return (
-                                    <View 
-                                        key={item.id || index} 
+                                    <View
+                                        key={item.id || index}
                                         style={[
                                             styles.itemCard,
                                             isOverBudget && styles.itemCardOverBudget
@@ -640,14 +549,14 @@ export default function BudgetDetailScreen() {
                                                 <Text style={styles.itemAmount}>
                                                     {formatCurrency(item.estimated_amount)}
                                                 </Text>
-                                                <Ionicons 
-                                                    name={isExpanded ? "chevron-up" : "chevron-down"} 
-                                                    size={20} 
-                                                    color="#6B7280" 
+                                                <Ionicons
+                                                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                                                    size={20}
+                                                    color="#6B7280"
                                                 />
                                             </View>
                                         </TouchableOpacity>
-                                        
+
                                         {/* Progress Bar */}
                                         {(budget.status === "approved" || budget.status === "active") && comparison && (
                                             <View style={styles.itemProgressContainer}>
@@ -657,10 +566,10 @@ export default function BudgetDetailScreen() {
                                                             styles.itemProgressFill,
                                                             {
                                                                 width: `${Math.min(utilization, 100)}%`,
-                                                                backgroundColor: isOverBudget 
-                                                                    ? "#EF4444" 
-                                                                    : utilization > 80 
-                                                                        ? "#F59E0B" 
+                                                                backgroundColor: isOverBudget
+                                                                    ? "#EF4444"
+                                                                    : utilization > 80
+                                                                        ? "#F59E0B"
                                                                         : "#10B981",
                                                             },
                                                         ]}
@@ -679,14 +588,14 @@ export default function BudgetDetailScreen() {
                                                 </View>
                                             </View>
                                         )}
-                                        
+
                                         {/* Expanded Content */}
                                         {isExpanded && (
                                             <View style={styles.itemExpandedContent}>
                                                 {item.description && (
                                                     <Text style={styles.itemDescription}>{item.description}</Text>
                                                 )}
-                                                
+
                                                 <View style={styles.itemDetails}>
                                                     <View style={styles.itemDetailRow}>
                                                         <Text style={styles.itemDetailLabel}>Số tiền ước tính:</Text>
@@ -694,7 +603,7 @@ export default function BudgetDetailScreen() {
                                                             {formatCurrency(item.estimated_amount)}
                                                         </Text>
                                                     </View>
-                                                    
+
                                                     {comparison && (
                                                         <>
                                                             <View style={styles.itemDetailRow}>
@@ -710,8 +619,8 @@ export default function BudgetDetailScreen() {
                                                                 <Text style={styles.itemDetailLabel}>Chênh lệch:</Text>
                                                                 <Text style={[
                                                                     styles.itemDetailValue,
-                                                                    { 
-                                                                        color: comparison.variance > 0 ? "#EF4444" : "#10B981" 
+                                                                    {
+                                                                        color: comparison.variance > 0 ? "#EF4444" : "#10B981"
                                                                     }
                                                                 ]}>
                                                                     {formatCurrency(Math.abs(comparison.variance))}
@@ -720,7 +629,7 @@ export default function BudgetDetailScreen() {
                                                             </View>
                                                         </>
                                                     )}
-                                                    
+
                                                     {item.quantity && item.unit_price && (
                                                         <>
                                                             <View style={styles.itemDetailRow}>
@@ -735,7 +644,7 @@ export default function BudgetDetailScreen() {
                                                             </View>
                                                         </>
                                                     )}
-                                                    
+
                                                     {item.remaining_amount !== undefined && (
                                                         <View style={styles.itemDetailRow}>
                                                             <Text style={styles.itemDetailLabel}>Còn lại:</Text>
@@ -748,7 +657,7 @@ export default function BudgetDetailScreen() {
                                                         </View>
                                                     )}
                                                 </View>
-                                                
+
                                                 <View style={styles.itemActions}>
                                                     <TouchableOpacity
                                                         style={styles.itemActionButton}
@@ -786,354 +695,6 @@ export default function BudgetDetailScreen() {
                     </View>
                 )}
             </ScrollView>
-
-            {/* Edit Modal */}
-            <Modal
-                visible={showEditModal}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setShowEditModal(false)}
-            >
-                <KeyboardAvoidingView
-                    style={styles.modalOverlay}
-                    behavior={Platform.OS === "ios" ? "padding" : "height"}
-                    keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-                >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Sửa Ngân Sách</Text>
-                            <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView
-                            style={styles.modalBody}
-                            contentContainerStyle={styles.modalBodyContent}
-                            keyboardShouldPersistTaps="handled"
-                        >
-                            <View style={styles.formSection}>
-                                <View style={styles.sectionHeader}>
-                                    <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
-                                    <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
-                                </View>
-                                
-                                <View style={styles.formGroup}>
-                                    <View style={styles.labelContainer}>
-                                        <Text style={styles.label}>Tên ngân sách</Text>
-                                        <Text style={styles.required}>*</Text>
-                                    </View>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            focusedField === "name" && styles.inputFocused,
-                                            errors.name && styles.inputError,
-                                        ]}
-                                        placeholder="Nhập tên ngân sách"
-                                        placeholderTextColor="#9CA3AF"
-                                        value={formData.name}
-                                        onChangeText={(text) => {
-                                            setFormData({ ...formData, name: text });
-                                            if (errors.name) setErrors({ ...errors, name: "" });
-                                        }}
-                                        onFocus={() => setFocusedField("name")}
-                                        onBlur={() => setFocusedField(null)}
-                                    />
-                                    {errors.name && (
-                                        <View style={styles.errorContainer}>
-                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                            <Text style={styles.errorText}>{errors.name}</Text>
-                                        </View>
-                                    )}
-                                </View>
-
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Phiên bản</Text>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            focusedField === "version" && styles.inputFocused,
-                                        ]}
-                                        placeholder="1.0"
-                                        placeholderTextColor="#9CA3AF"
-                                        value={formData.version}
-                                        onChangeText={(text) => setFormData({ ...formData, version: text })}
-                                        onFocus={() => setFocusedField("version")}
-                                        onBlur={() => setFocusedField(null)}
-                                    />
-                                </View>
-
-                                <View style={styles.formGroup}>
-                                    <View style={styles.labelContainer}>
-                                        <Text style={styles.label}>Ngày lập ngân sách</Text>
-                                        <Text style={styles.required}>*</Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.dateInput,
-                                            focusedField === "budget_date" && styles.inputFocused,
-                                            errors.budget_date && styles.inputError,
-                                        ]}
-                                        onPress={() => {
-                                            setShowDatePicker(true);
-                                            setFocusedField("budget_date");
-                                        }}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text style={formData.budget_date ? {} : styles.placeholderText}>
-                                            {formData.budget_date
-                                                ? new Date(formData.budget_date).toLocaleDateString("vi-VN")
-                                                : "Chọn ngày"}
-                                        </Text>
-                                        <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                    </TouchableOpacity>
-                                    {showDatePicker && (
-                                        <DateTimePicker
-                                            value={formData.budget_date ? new Date(formData.budget_date) : new Date()}
-                                            mode="date"
-                                            display="default"
-                                            onChange={(event, date) => {
-                                                setShowDatePicker(false);
-                                                setFocusedField(null);
-                                                if (date) {
-                                                    setFormData({
-                                                        ...formData,
-                                                        budget_date: date.toISOString().split("T")[0],
-                                                    });
-                                                    if (errors.budget_date) setErrors({ ...errors, budget_date: "" });
-                                                }
-                                            }}
-                                        />
-                                    )}
-                                    {errors.budget_date && (
-                                        <View style={styles.errorContainer}>
-                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                            <Text style={styles.errorText}>{errors.budget_date}</Text>
-                                        </View>
-                                    )}
-                                </View>
-
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Ghi chú</Text>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            styles.textArea,
-                                            focusedField === "notes" && styles.inputFocused,
-                                        ]}
-                                        placeholder="Nhập ghi chú..."
-                                        placeholderTextColor="#9CA3AF"
-                                        value={formData.notes}
-                                        onChangeText={(text) => setFormData({ ...formData, notes: text })}
-                                        multiline
-                                        numberOfLines={4}
-                                        textAlignVertical="top"
-                                        onFocus={() => setFocusedField("notes")}
-                                        onBlur={() => setFocusedField(null)}
-                                    />
-                                </View>
-                            </View>
-
-                            <View style={styles.buttonContainer}>
-                                <TouchableOpacity
-                                    style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-                                    onPress={handleUpdate}
-                                    disabled={submitting}
-                                    activeOpacity={0.8}
-                                >
-                                    {submitting ? (
-                                        <View style={styles.buttonContent}>
-                                            <ActivityIndicator color="#FFFFFF" size="small" />
-                                            <Text style={styles.submitButtonText}>Đang cập nhật...</Text>
-                                        </View>
-                                    ) : (
-                                        <View style={styles.buttonContent}>
-                                            <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                                            <Text style={styles.submitButtonText}>Cập Nhật</Text>
-                                        </View>
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        </ScrollView>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
-
-            {/* Item Modal */}
-            <Modal
-                visible={showItemModal}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setShowItemModal(false)}
-            >
-                <KeyboardAvoidingView
-                    style={styles.modalOverlay}
-                    behavior={Platform.OS === "ios" ? "padding" : "height"}
-                    keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-                >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>
-                                {editingItem ? "Sửa Hạng Mục" : "Thêm Hạng Mục"}
-                            </Text>
-                            <TouchableOpacity onPress={() => setShowItemModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView
-                            style={styles.modalBody}
-                            contentContainerStyle={styles.modalBodyContent}
-                            keyboardShouldPersistTaps="handled"
-                        >
-                            <View style={styles.formGroup}>
-                                <View style={styles.labelContainer}>
-                                    <Text style={styles.label}>Tên hạng mục</Text>
-                                    <Text style={styles.required}>*</Text>
-                                </View>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập tên hạng mục"
-                                    placeholderTextColor="#9CA3AF"
-                                    value={itemData.name}
-                                    onChangeText={(text) => setItemData({ ...itemData, name: text })}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Nhóm chi phí</Text>
-                                <TouchableOpacity
-                                    style={styles.selectInput}
-                                    onPress={() => setShowCostGroupPicker(true)}
-                                >
-                                    <Text style={selectedCostGroup ? {} : styles.placeholderText}>
-                                        {selectedCostGroup ? selectedCostGroup.name : "Chọn nhóm chi phí"}
-                                    </Text>
-                                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Mô tả</Text>
-                                <TextInput
-                                    style={[styles.input, styles.textArea]}
-                                    placeholder="Nhập mô tả..."
-                                    placeholderTextColor="#9CA3AF"
-                                    value={itemData.description}
-                                    onChangeText={(text) => setItemData({ ...itemData, description: text })}
-                                    multiline
-                                    numberOfLines={3}
-                                    textAlignVertical="top"
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <View style={styles.labelContainer}>
-                                    <Text style={styles.label}>Số tiền ước tính (VNĐ)</Text>
-                                    <Text style={styles.required}>*</Text>
-                                </View>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    placeholderTextColor="#9CA3AF"
-                                    value={itemData.estimated_amount}
-                                    onChangeText={(text) => setItemData({ ...itemData, estimated_amount: text })}
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Số lượng</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    placeholderTextColor="#9CA3AF"
-                                    value={itemData.quantity}
-                                    onChangeText={(text) => setItemData({ ...itemData, quantity: text })}
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Đơn giá (VNĐ)</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    placeholderTextColor="#9CA3AF"
-                                    value={itemData.unit_price}
-                                    onChangeText={(text) => setItemData({ ...itemData, unit_price: text })}
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            <View style={styles.buttonContainer}>
-                                <TouchableOpacity
-                                    style={styles.submitButton}
-                                    onPress={handleSaveItem}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={styles.buttonContent}>
-                                        <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                                        <Text style={styles.submitButtonText}>Lưu</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            </View>
-                        </ScrollView>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
-
-            {/* Cost Group Picker Modal */}
-            {showCostGroupPicker && (
-                <Modal
-                    visible={showCostGroupPicker}
-                    transparent={true}
-                    animationType="slide"
-                    onRequestClose={() => setShowCostGroupPicker(false)}
-                >
-                    <View style={styles.pickerOverlay}>
-                        <View style={styles.pickerContent}>
-                            <View style={styles.pickerHeader}>
-                                <Text style={styles.pickerTitle}>Chọn nhóm chi phí</Text>
-                                <TouchableOpacity onPress={() => setShowCostGroupPicker(false)}>
-                                    <Ionicons name="close" size={24} color="#1F2937" />
-                                </TouchableOpacity>
-                            </View>
-                            <ScrollView>
-                                <TouchableOpacity
-                                    style={styles.pickerItem}
-                                    onPress={() => {
-                                        setSelectedCostGroup(null);
-                                        setItemData({ ...itemData, cost_group_id: undefined });
-                                        setShowCostGroupPicker(false);
-                                    }}
-                                >
-                                    <Text>Không chọn</Text>
-                                    {!selectedCostGroup && (
-                                        <Ionicons name="checkmark" size={20} color="#3B82F6" />
-                                    )}
-                                </TouchableOpacity>
-                                {costGroups.map((item) => (
-                                    <TouchableOpacity
-                                        key={item.id}
-                                        style={styles.pickerItem}
-                                        onPress={() => {
-                                            setSelectedCostGroup(item);
-                                            setItemData({ ...itemData, cost_group_id: item.id });
-                                            setShowCostGroupPicker(false);
-                                        }}
-                                    >
-                                        <Text>{item.name}</Text>
-                                        {selectedCostGroup?.id === item.id && (
-                                            <Ionicons name="checkmark" size={20} color="#3B82F6" />
-                                        )}
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        </View>
-                    </View>
-                </Modal>
-            )}
         </View>
     );
 }
@@ -1478,14 +1039,28 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: "rgba(0, 0, 0, 0.5)",
         justifyContent: "flex-end",
+        zIndex: 1000,
+        elevation: 1000,
     },
-    modalContent: {
+    modalSafeArea: {
         backgroundColor: "#FFFFFF",
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        maxHeight: "95%",
+        maxHeight: "92%",
+        width: "100%",
+        zIndex: 1001,
+        elevation: 1001,
+    },
+    modalKeyboardView: {
+        flex: 1,
+        maxHeight: "100%",
+    },
+    modalContent: {
+        backgroundColor: "#FFFFFF",
         padding: 16,
-        paddingBottom: Platform.OS === "ios" ? 34 : 16,
+        paddingTop: 8,
+        flex: 1,
+        minHeight: 0,
     },
     modalHeader: {
         flexDirection: "row",
@@ -1500,9 +1075,13 @@ const styles = StyleSheet.create({
     },
     modalBody: {
         flex: 1,
+        minHeight: 0,
     },
     modalBodyContent: {
-        paddingBottom: 40,
+        paddingBottom: 20,
+        paddingHorizontal: 0,
+        flexGrow: 1,
+        minHeight: 400,
     },
     formSection: {
         marginBottom: 24,
@@ -1594,8 +1173,9 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     buttonContainer: {
-        marginTop: 8,
-        marginBottom: 8,
+        marginTop: 24,
+        marginBottom: 16,
+        paddingBottom: 8,
     },
     submitButton: {
         backgroundColor: "#3B82F6",
@@ -1625,8 +1205,15 @@ const styles = StyleSheet.create({
     },
     pickerOverlay: {
         flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        backgroundColor: "rgba(0, 0, 0, 0.7)",
         justifyContent: "flex-end",
+        zIndex: 2000,
+        elevation: 2000,
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
     },
     pickerContent: {
         backgroundColor: "#FFFFFF",
@@ -1634,6 +1221,8 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 20,
         maxHeight: "70%",
         padding: 16,
+        zIndex: 2001,
+        elevation: 2001,
     },
     pickerHeader: {
         flexDirection: "row",

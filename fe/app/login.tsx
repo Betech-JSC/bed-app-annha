@@ -19,6 +19,7 @@ import { permissionApi } from "@/api/permissionApi";
 import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import { setUser } from "@/reducers/userSlice";
+import { setPermissions } from "@/reducers/permissionsSlice";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -66,24 +67,26 @@ export default function LoginScreen() {
             token: userData.token || null,
             password: null,
             owner: userData.owner || false,
+            roles: userData.roles || [],
           })
         );
 
-        // Get user permissions to determine redirect
+        // Get user permissions and save to Redux
         try {
           const permissionsResponse = await permissionApi.getMyPermissions();
           const permissions: string[] = permissionsResponse.success
             ? permissionsResponse.data || []
             : [];
 
+          // Save permissions to Redux
+          dispatch(setPermissions(permissions));
+
           // Redirect to tabs layout (main app)
           router.replace("/(tabs)");
         } catch (error) {
           console.error("Error getting permissions:", error);
-          // Fallback to role-based redirect if permissions API fails
-          const userRole = userData.role?.toLowerCase();
-          const isOwner = userData.owner === true;
-
+          // Fallback: clear permissions and redirect
+          dispatch(setPermissions([]));
           // Redirect to tabs layout
           router.replace("/(tabs)/projects");
         }

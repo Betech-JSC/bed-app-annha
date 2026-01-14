@@ -606,7 +606,7 @@ export default function AcceptanceChecklist({
               {/* BUSINESS RULE: Task selection - Only parent tasks (A) */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>
-                  Công việc từ tiến độ (Category A) <Text style={styles.required}>*</Text>
+                  Công việc từ tiến độ  <Text style={styles.required}>*</Text>
                 </Text>
                 <TouchableOpacity
                   style={styles.taskSelectButton}
@@ -618,7 +618,7 @@ export default function AcceptanceChecklist({
                   ]}>
                     {formData.task_id
                       ? tasks.find(t => t.id === formData.task_id)?.name || "Chọn công việc"
-                      : "Chọn công việc từ tiến độ (chỉ công việc cha)"}
+                      : "Công việc từ tiến độ "}
                   </Text>
                   <Ionicons name="chevron-down" size={20} color="#6B7280" />
                 </TouchableOpacity>
@@ -847,7 +847,7 @@ export default function AcceptanceChecklist({
                   ]}>
                     {formData.task_id
                       ? tasks.find(t => t.id === formData.task_id)?.name || "Chọn công việc"
-                      : "Chọn công việc từ tiến độ (chỉ công việc cha)"}
+                      : "Công việc từ tiến độ "}
                   </Text>
                   <Ionicons name="chevron-down" size={20} color="#6B7280" />
                 </TouchableOpacity>

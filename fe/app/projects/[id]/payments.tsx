@@ -12,7 +12,7 @@ import {
   ScrollView,
   RefreshControl,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { paymentApi, ProjectPayment, CreatePaymentData } from "@/api/paymentApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
@@ -55,6 +55,13 @@ export default function PaymentsScreen() {
     loadPayments();
     loadProject();
   }, [id]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPayments();
+    }, [id])
+  );
 
   const loadProject = async () => {
     try {

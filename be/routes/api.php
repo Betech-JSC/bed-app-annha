@@ -100,10 +100,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     // Notifications
-    Route::get('notifications', [NotificationController::class, 'index']);
-    Route::put('notifications/{notification}', [NotificationController::class, 'markAsRead']);
-    Route::put('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']); // Đánh dấu tất cả đã đọc
-    Route::post('notifications/broadcast', [NotificationController::class, 'broadcast']); // Gửi thông báo hệ thống
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::get('/unread-count', [NotificationController::class, 'getUnreadCount']);
+        Route::get('/settings', [NotificationController::class, 'getSettings']);
+        Route::put('/settings', [NotificationController::class, 'updateSettings']);
+        Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+        Route::get('/{notification}', [NotificationController::class, 'show']);
+        Route::put('/{notification}/read', [NotificationController::class, 'markAsRead']);
+        Route::delete('/{notification}', [NotificationController::class, 'delete']);
+        Route::post('/broadcast', [NotificationController::class, 'broadcast']); // Gửi thông báo hệ thống (admin only)
+    });
 
     Route::get('user/profile', [UserController::class, 'show']);
     Route::put('user/profile', [UserController::class, 'update']);
@@ -145,6 +152,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [ProjectController::class, 'index']);
         Route::get('/customers', [ProjectController::class, 'getCustomers']);
         Route::get('/project-managers', [ProjectController::class, 'getProjectManagers']);
+        Route::get('/all-users', [ProjectController::class, 'getAllUsers']);
         Route::post('/', [ProjectController::class, 'store']);
         Route::get('/{id}', [ProjectController::class, 'show']);
         Route::put('/{id}', [ProjectController::class, 'update']);
@@ -553,6 +561,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Cost Groups - Manage endpoints (require settings.manage permission)
     Route::middleware(['auth:sanctum', 'check.permission:settings.manage'])->prefix('settings')->group(function () {
+        // Permissions Management
+        Route::get('/permissions', [PermissionController::class, 'index']);
+        Route::post('/permissions', [PermissionController::class, 'store']);
+        Route::put('/permissions/{id}', [PermissionController::class, 'update']);
+        Route::delete('/permissions/{id}', [PermissionController::class, 'destroy']);
+
         Route::post('/cost-groups', [CostGroupController::class, 'store']);
         Route::put('/cost-groups/{id}', [CostGroupController::class, 'update']);
         Route::delete('/cost-groups/{id}', [CostGroupController::class, 'destroy']);

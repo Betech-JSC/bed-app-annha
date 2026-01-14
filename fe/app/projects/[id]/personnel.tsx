@@ -11,7 +11,7 @@ import {
   Alert,
   RefreshControl,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { personnelApi, ProjectPersonnel, CreatePersonnelData } from "@/api/personnelApi";
 import { employeesApi, Employee } from "@/api/employeesApi";
 import { optionsApi, Option } from "@/api/optionsApi";
@@ -42,6 +42,13 @@ export default function PersonnelScreen() {
     loadPersonnel();
     loadPersonnelRoles();
   }, [id]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPersonnel();
+    }, [id])
+  );
 
   const loadPersonnelRoles = async () => {
     try {

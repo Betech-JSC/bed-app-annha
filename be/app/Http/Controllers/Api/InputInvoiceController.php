@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Models\InputInvoice;
 use App\Models\Project;
@@ -19,11 +20,11 @@ class InputInvoiceController extends Controller
     {
         $user = auth()->user();
 
-        // Chỉ kế toán mới có quyền xem
-        if (!$user->hasPermission('accounting.manage') && $user->role !== 'accountant' && !$user->owner && $user->role !== 'admin') {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(Permissions::INPUT_INVOICE_VIEW)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ kế toán mới có quyền xem hóa đơn đầu vào.'
+                'message' => 'Không có quyền xem hóa đơn đầu vào.'
             ], 403);
         }
 
@@ -65,11 +66,11 @@ class InputInvoiceController extends Controller
     {
         $user = auth()->user();
 
-        // Chỉ kế toán mới có quyền tạo
-        if (!$user->hasPermission('accounting.manage') && $user->role !== 'accountant' && !$user->owner && $user->role !== 'admin') {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(Permissions::INPUT_INVOICE_CREATE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ kế toán mới có quyền tạo hóa đơn đầu vào.'
+                'message' => 'Không có quyền tạo hóa đơn đầu vào.'
             ], 403);
         }
 
@@ -126,7 +127,7 @@ class InputInvoiceController extends Controller
             if (!empty($request->attachment_ids)) {
                 foreach ($request->attachment_ids as $attachmentId) {
                     $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->owner === true)) {
                         $attachment->update([
                             'attachable_type' => InputInvoice::class,
                             'attachable_id' => $invoice->id,
@@ -159,11 +160,11 @@ class InputInvoiceController extends Controller
     {
         $user = auth()->user();
 
-        // Chỉ kế toán mới có quyền xem
-        if (!$user->hasPermission('accounting.manage') && $user->role !== 'accountant' && !$user->owner && $user->role !== 'admin') {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(Permissions::INPUT_INVOICE_VIEW)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ kế toán mới có quyền xem hóa đơn đầu vào.'
+                'message' => 'Không có quyền xem hóa đơn đầu vào.'
             ], 403);
         }
 
@@ -189,11 +190,11 @@ class InputInvoiceController extends Controller
     {
         $user = auth()->user();
 
-        // Chỉ kế toán mới có quyền cập nhật
-        if (!$user->hasPermission('accounting.manage') && $user->role !== 'accountant' && !$user->owner && $user->role !== 'admin') {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(Permissions::INPUT_INVOICE_UPDATE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ kế toán mới có quyền cập nhật hóa đơn đầu vào.'
+                'message' => 'Không có quyền cập nhật hóa đơn đầu vào.'
             ], 403);
         }
 
@@ -265,7 +266,7 @@ class InputInvoiceController extends Controller
                 // Thêm các attachments mới
                 foreach ($newAttachmentIds as $attachmentId) {
                     $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->owner === true)) {
                         $attachment->update([
                             'attachable_type' => InputInvoice::class,
                             'attachable_id' => $invoice->id,
@@ -298,11 +299,11 @@ class InputInvoiceController extends Controller
     {
         $user = auth()->user();
 
-        // Chỉ kế toán mới có quyền xóa
-        if (!$user->hasPermission('accounting.manage') && $user->role !== 'accountant' && !$user->owner && $user->role !== 'admin') {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(Permissions::INPUT_INVOICE_DELETE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ kế toán mới có quyền xóa hóa đơn đầu vào.'
+                'message' => 'Không có quyền xóa hóa đơn đầu vào.'
             ], 403);
         }
 

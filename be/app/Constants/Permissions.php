@@ -26,6 +26,14 @@ class Permissions
     public const PROJECT_MANAGE = 'project.manage';
 
     // ===================================================================
+    // PROJECT COMMENT MODULE
+    // ===================================================================
+    public const PROJECT_COMMENT_VIEW = 'project.comment.view';
+    public const PROJECT_COMMENT_CREATE = 'project.comment.create';
+    public const PROJECT_COMMENT_UPDATE = 'project.comment.update';
+    public const PROJECT_COMMENT_DELETE = 'project.comment.delete';
+
+    // ===================================================================
     // PROGRESS MODULE
     // ===================================================================
     public const PROGRESS_VIEW = 'progress.view';
@@ -136,7 +144,7 @@ class Permissions
     public const REPORT_HR = 'report.hr';
 
     // ===================================================================
-    // INVOICE MODULE
+    // INVOICE MODULE (Output - Hóa đơn đầu ra cho khách hàng)
     // ===================================================================
     public const INVOICE_VIEW = 'invoice.view';
     public const INVOICE_CREATE = 'invoice.create';
@@ -146,13 +154,22 @@ class Permissions
     public const INVOICE_SEND = 'invoice.send';
 
     // ===================================================================
+    // INPUT INVOICE MODULE (Input - Hóa đơn đầu vào từ nhà cung cấp)
+    // ===================================================================
+    public const INPUT_INVOICE_VIEW = 'input_invoice.view';
+    public const INPUT_INVOICE_CREATE = 'input_invoice.create';
+    public const INPUT_INVOICE_UPDATE = 'input_invoice.update';
+    public const INPUT_INVOICE_DELETE = 'input_invoice.delete';
+
+    // ===================================================================
     // CONTRACT MODULE
     // ===================================================================
     public const CONTRACT_VIEW = 'contract.view';
     public const CONTRACT_CREATE = 'contract.create';
     public const CONTRACT_UPDATE = 'contract.update';
     public const CONTRACT_DELETE = 'contract.delete';
-    public const CONTRACT_APPROVE = 'contract.approve';
+    public const CONTRACT_APPROVE_LEVEL_1 = 'contract.approve.level_1';
+    public const CONTRACT_APPROVE_LEVEL_2 = 'contract.approve.level_2';
 
     // ===================================================================
     // PAYMENT MODULE
@@ -162,6 +179,7 @@ class Permissions
     public const PAYMENT_UPDATE = 'payment.update';
     public const PAYMENT_DELETE = 'payment.delete';
     public const PAYMENT_CONFIRM = 'payment.confirm';
+    public const PAYMENT_APPROVE = 'payment.approve';
 
     // ===================================================================
     // SUBCONTRACTOR MODULE
@@ -243,6 +261,11 @@ class Permissions
             self::PROJECT_UPDATE,
             self::PROJECT_DELETE,
             self::PROJECT_MANAGE,
+            // Project Comment
+            self::PROJECT_COMMENT_VIEW,
+            self::PROJECT_COMMENT_CREATE,
+            self::PROJECT_COMMENT_UPDATE,
+            self::PROJECT_COMMENT_DELETE,
 
             // Progress
             self::PROGRESS_VIEW,
@@ -336,12 +359,19 @@ class Permissions
             self::INVOICE_APPROVE,
             self::INVOICE_SEND,
 
+            // Input Invoice
+            self::INPUT_INVOICE_VIEW,
+            self::INPUT_INVOICE_CREATE,
+            self::INPUT_INVOICE_UPDATE,
+            self::INPUT_INVOICE_DELETE,
+
             // Contract
             self::CONTRACT_VIEW,
             self::CONTRACT_CREATE,
             self::CONTRACT_UPDATE,
             self::CONTRACT_DELETE,
-            self::CONTRACT_APPROVE,
+            self::CONTRACT_APPROVE_LEVEL_1,
+            self::CONTRACT_APPROVE_LEVEL_2,
 
             // Payment
             self::PAYMENT_VIEW,
@@ -412,6 +442,11 @@ class Permissions
                 self::PROJECT_UPDATE,
                 self::PROJECT_DELETE,
                 self::PROJECT_MANAGE,
+                // Project Comments
+                self::PROJECT_COMMENT_VIEW,
+                self::PROJECT_COMMENT_CREATE,
+                self::PROJECT_COMMENT_UPDATE,
+                self::PROJECT_COMMENT_DELETE,
             ],
             'progress' => [
                 self::PROGRESS_VIEW,
@@ -503,12 +538,19 @@ class Permissions
                 self::INVOICE_APPROVE,
                 self::INVOICE_SEND,
             ],
+            'input_invoice' => [
+                self::INPUT_INVOICE_VIEW,
+                self::INPUT_INVOICE_CREATE,
+                self::INPUT_INVOICE_UPDATE,
+                self::INPUT_INVOICE_DELETE,
+            ],
             'contract' => [
                 self::CONTRACT_VIEW,
                 self::CONTRACT_CREATE,
                 self::CONTRACT_UPDATE,
                 self::CONTRACT_DELETE,
-                self::CONTRACT_APPROVE,
+                self::CONTRACT_APPROVE_LEVEL_1,
+                self::CONTRACT_APPROVE_LEVEL_2,
             ],
             'payment' => [
                 self::PAYMENT_VIEW,

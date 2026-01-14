@@ -563,6 +563,12 @@ class RolePermissionSeeder extends Seeder
             Permissions::INVOICE_APPROVE,
             Permissions::INVOICE_SEND,
 
+            // Input Invoice - Full access (hóa đơn đầu vào từ nhà cung cấp)
+            Permissions::INPUT_INVOICE_VIEW,
+            Permissions::INPUT_INVOICE_CREATE,
+            Permissions::INPUT_INVOICE_UPDATE,
+            Permissions::INPUT_INVOICE_DELETE,
+
             // Subcontractor Payment
             Permissions::SUBCONTRACTOR_PAYMENT_VIEW,
             Permissions::SUBCONTRACTOR_PAYMENT_APPROVE,

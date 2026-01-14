@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Constants\Roles;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -532,12 +533,34 @@ class UserRoleSeeder extends Seeder
             }
 
             // Gán roles cho user qua role_user table
+            // Map old role names to new RBAC roles
+            $roleMapping = [
+                'Admin' => Roles::SUPER_ADMIN,
+                'Quản lý dự án' => Roles::PROJECT_MANAGER,
+                'Giám sát' => Roles::SITE_SUPERVISOR,
+                'Khách' => Roles::PROJECT_OWNER,
+                'Kế toán' => Roles::ACCOUNTANT,
+                'Ban điều hành' => Roles::ADMIN,
+                'Bên Thiết Kế' => Roles::CLIENT,
+                'Tổ trưởng' => Roles::SITE_SUPERVISOR,
+                'Thợ' => Roles::SITE_SUPERVISOR,
+                'Giám sát khách' => Roles::SITE_SUPERVISOR,
+            ];
+
             if (isset($userData['role_names']) && is_array($userData['role_names'])) {
                 $roleIds = [];
-                foreach ($userData['role_names'] as $roleName) {
-                    $role = Role::where('name', $roleName)->first();
+                foreach ($userData['role_names'] as $oldRoleName) {
+                    // Map to new RBAC role
+                    $newRoleName = $roleMapping[$oldRoleName] ?? $oldRoleName;
+                    $role = Role::where('name', $newRoleName)->first();
                     if ($role) {
                         $roleIds[] = $role->id;
+                    } else {
+                        // Fallback: try old role name
+                        $role = Role::where('name', $oldRoleName)->first();
+                        if ($role) {
+                            $roleIds[] = $role->id;
+                        }
                     }
                 }
                 if (!empty($roleIds)) {

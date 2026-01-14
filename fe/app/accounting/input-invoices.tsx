@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,19 +12,21 @@ import {
   ScrollView,
   RefreshControl,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { inputInvoiceApi, InputInvoice, CreateInputInvoiceData } from "@/api/inputInvoiceApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { PermissionGuard } from "@/components/PermissionGuard";
+import { Permissions } from "@/constants/Permissions";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function InputInvoicesScreen() {
   const router = useRouter();
   const tabBarHeight = useTabBarHeight();
+  const { hasPermission } = usePermissions();
   const [invoices, setInvoices] = useState<InputInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -35,6 +37,21 @@ export default function InputInvoicesScreen() {
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
+
+  // Search and filter states
+  const [searchText, setSearchText] = useState("");
+  const [filterInvoiceType, setFilterInvoiceType] = useState<string | null>(null);
+  const [filterFromDate, setFilterFromDate] = useState<string | null>(null);
+  const [filterToDate, setFilterToDate] = useState<string | null>(null);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+
+  // Summary statistics
+  const [summary, setSummary] = useState({
+    total: 0,
+    totalAmount: 0,
+    totalVat: 0,
+    totalBeforeVat: 0,
+  });
 
   // Form state
   const [formData, setFormData] = useState<CreateInputInvoiceData>({
@@ -48,13 +65,15 @@ export default function InputInvoicesScreen() {
     description: "",
     notes: "",
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
 
-  useEffect(() => {
-    loadInvoices();
-    loadProjects();
-  }, []);
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadInvoices();
+      loadProjects();
+    }, [])
+  );
 
   const loadProjects = async () => {
     try {
@@ -71,39 +90,103 @@ export default function InputInvoicesScreen() {
     try {
       setLoading(true);
       const response = await inputInvoiceApi.getAll();
-      if (response.success) {
+      console.log("Input Invoice API Response:", JSON.stringify(response, null, 2));
+
+      let invoicesList: InputInvoice[] = [];
+
+      if (response && response.success) {
         // Handle paginated response (Laravel paginate returns data in 'data' key)
         const responseData = response.data;
-        if (responseData && typeof responseData === 'object') {
-          // If paginated, data is in responseData.data
+        console.log("Response Data:", JSON.stringify(responseData, null, 2));
+
+        if (responseData) {
+          // Case 1: Paginated response - data is in responseData.data
           if (responseData.data && Array.isArray(responseData.data)) {
-            setInvoices(responseData.data);
-          } 
-          // If not paginated but is array
+            invoicesList = responseData.data;
+            console.log("Found paginated data:", invoicesList.length, "invoices");
+          }
+          // Case 2: Direct array response
           else if (Array.isArray(responseData)) {
-            setInvoices(responseData);
+            invoicesList = responseData;
+            console.log("Found direct array:", invoicesList.length, "invoices");
           }
-          // If data is nested
+          // Case 3: Nested data structure
           else if (responseData.data && Array.isArray(responseData.data)) {
-            setInvoices(responseData.data);
-          } else {
-            setInvoices([]);
+            invoicesList = responseData.data;
+            console.log("Found nested data:", invoicesList.length, "invoices");
           }
-        } else {
-          setInvoices([]);
+          // Case 4: Single object (shouldn't happen but handle it)
+          else if (typeof responseData === 'object' && responseData.id) {
+            invoicesList = [responseData];
+            console.log("Found single invoice");
+          }
         }
       } else {
-        setInvoices([]);
+        console.warn("Response not successful or missing success field:", response);
       }
+
+      console.log("Final invoices list:", invoicesList.length, "invoices");
+      setInvoices(invoicesList);
+
+      // Calculate summary based on loaded invoices
+      calculateSummary(invoicesList);
     } catch (error: any) {
       console.error("Error loading invoices:", error);
+      console.error("Error details:", error.response?.data || error.message);
       Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách hóa đơn");
       setInvoices([]);
+      calculateSummary([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
+
+  const calculateSummary = (invoicesList: InputInvoice[]) => {
+    const stats = invoicesList.reduce(
+      (acc, invoice) => {
+        acc.total++;
+        acc.totalBeforeVat += invoice.amount_before_vat;
+        acc.totalVat += invoice.vat_amount || (invoice.amount_before_vat * invoice.vat_percentage) / 100;
+        acc.totalAmount += invoice.total_amount || invoice.amount_before_vat + (invoice.amount_before_vat * invoice.vat_percentage) / 100;
+        return acc;
+      },
+      { total: 0, totalAmount: 0, totalVat: 0, totalBeforeVat: 0 }
+    );
+    setSummary(stats);
+  };
+
+  // Filter invoices based on search and filters
+  const filteredInvoices = useMemo(() => {
+    let filtered = [...invoices];
+
+    // Search filter
+    if (searchText.trim()) {
+      const searchLower = searchText.toLowerCase();
+      filtered = filtered.filter(
+        (invoice) =>
+          invoice.invoice_number?.toLowerCase().includes(searchLower) ||
+          invoice.supplier_name?.toLowerCase().includes(searchLower) ||
+          invoice.description?.toLowerCase().includes(searchLower) ||
+          invoice.project?.name?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Filter by invoice type
+    if (filterInvoiceType) {
+      filtered = filtered.filter((invoice) => invoice.invoice_type === filterInvoiceType);
+    }
+
+    // Filter by date range
+    if (filterFromDate) {
+      filtered = filtered.filter((invoice) => invoice.issue_date >= filterFromDate);
+    }
+    if (filterToDate) {
+      filtered = filtered.filter((invoice) => invoice.issue_date <= filterToDate);
+    }
+
+    return filtered;
+  }, [invoices, searchText, filterInvoiceType, filterFromDate, filterToDate]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -134,7 +217,7 @@ export default function InputInvoicesScreen() {
         Alert.alert("Thành công", "Đã tạo hóa đơn đầu vào");
         setShowCreateModal(false);
         resetForm();
-        loadInvoices();
+        await loadInvoices();
       }
     } catch (error: any) {
       Alert.alert("Lỗi", error.response?.data?.message || "Không thể tạo hóa đơn");
@@ -178,19 +261,19 @@ export default function InputInvoicesScreen() {
     try {
       const response = selectedInvoice.project_id
         ? await inputInvoiceApi.updateForProject(selectedInvoice.project_id, selectedInvoice.id, {
-            ...formData,
-            attachment_ids: attachmentIds,
-          })
+          ...formData,
+          attachment_ids: attachmentIds,
+        })
         : await inputInvoiceApi.update(selectedInvoice.id, {
-            ...formData,
-            attachment_ids: attachmentIds,
-          });
+          ...formData,
+          attachment_ids: attachmentIds,
+        });
 
       if (response.success) {
         Alert.alert("Thành công", "Đã cập nhật hóa đơn");
         setShowEditModal(false);
         resetForm();
-        loadInvoices();
+        await loadInvoices();
       }
     } catch (error: any) {
       Alert.alert("Lỗi", error.response?.data?.message || "Không thể cập nhật hóa đơn");
@@ -214,7 +297,7 @@ export default function InputInvoicesScreen() {
 
               if (response.success) {
                 Alert.alert("Thành công", "Đã xóa hóa đơn");
-                loadInvoices();
+                await loadInvoices();
               }
             } catch (error: any) {
               Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa hóa đơn");
@@ -282,12 +365,14 @@ export default function InputInvoicesScreen() {
               </View>
             )}
           </View>
-          <TouchableOpacity
-            onPress={() => handleDeleteInvoice(item)}
-            style={styles.deleteButton}
-          >
-            <Ionicons name="trash-outline" size={20} color="#EF4444" />
-          </TouchableOpacity>
+          <PermissionGuard permission={Permissions.INPUT_INVOICE_DELETE}>
+            <TouchableOpacity
+              onPress={() => handleDeleteInvoice(item)}
+              style={styles.deleteButton}
+            >
+              <Ionicons name="trash-outline" size={20} color="#EF4444" />
+            </TouchableOpacity>
+          </PermissionGuard>
         </View>
 
         <View style={styles.invoiceDetails}>
@@ -352,545 +437,685 @@ export default function InputInvoicesScreen() {
     );
   }
 
-  return (
-    <PermissionGuard permission="accounting.manage">
+  // Check permission first - if no permission, show message
+  if (!hasPermission(Permissions.INPUT_INVOICE_VIEW)) {
+    return (
       <View style={styles.container}>
-        <ScreenHeader
-          title="Hóa Đơn Đầu Vào"
-          showBackButton
-          rightComponent={
+        <ScreenHeader title="Hóa Đơn Đầu Vào" showBackButton />
+        <View style={styles.centerContainer}>
+          <Ionicons name="lock-closed" size={64} color="#D1D5DB" />
+          <Text style={styles.emptyText}>Bạn không có quyền xem hóa đơn đầu vào</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScreenHeader
+        title="Hóa Đơn Đầu Vào"
+        showBackButton
+        rightComponent={
+          <View style={styles.headerActions}>
             <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => {
-                resetForm();
-                setShowCreateModal(true);
-              }}
+              style={styles.filterButton}
+              onPress={() => setShowFilterModal(true)}
             >
-              <Ionicons name="add" size={24} color="#3B82F6" />
+              <Ionicons name="filter" size={20} color="#3B82F6" />
             </TouchableOpacity>
-          }
-        />
+            <PermissionGuard permission={Permissions.INPUT_INVOICE_CREATE}>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => {
+                  resetForm();
+                  setShowCreateModal(true);
+                }}
+              >
+                <Ionicons name="add" size={24} color="#3B82F6" />
+              </TouchableOpacity>
+            </PermissionGuard>
+          </View>
+        }
+      />
 
-        <FlatList
-          data={invoices}
-          renderItem={renderInvoiceItem}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingBottom: tabBarHeight },
-          ]}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="receipt-outline" size={64} color="#D1D5DB" />
-              <Text style={styles.emptyText}>Chưa có hóa đơn đầu vào</Text>
+      {/* Summary Cards */}
+      <View style={styles.summaryContainer}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Tổng số</Text>
+          <Text style={styles.summaryValue}>{summary.total}</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Tổng tiền</Text>
+          <Text style={[styles.summaryValue, styles.summaryAmount]}>
+            {formatCurrency(summary.totalAmount)}
+          </Text>
+        </View>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#6B7280" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Tìm kiếm theo số hóa đơn, nhà cung cấp, dự án..."
+          value={searchText}
+          onChangeText={setSearchText}
+          placeholderTextColor="#9CA3AF"
+        />
+        {searchText.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchText("")}>
+            <Ionicons name="close-circle" size={20} color="#6B7280" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Active Filters */}
+      {(filterInvoiceType || filterFromDate || filterToDate) && (
+        <View style={styles.activeFiltersContainer}>
+          <Text style={styles.activeFiltersLabel}>Bộ lọc:</Text>
+          {filterInvoiceType && (
+            <View style={styles.filterTag}>
+              <Text style={styles.filterTagText}>{filterInvoiceType}</Text>
+              <TouchableOpacity onPress={() => setFilterInvoiceType(null)}>
+                <Ionicons name="close" size={14} color="#6B7280" />
+              </TouchableOpacity>
             </View>
-          }
-        />
+          )}
+          {filterFromDate && (
+            <View style={styles.filterTag}>
+              <Text style={styles.filterTagText}>Từ: {formatDate(filterFromDate)}</Text>
+              <TouchableOpacity onPress={() => setFilterFromDate(null)}>
+                <Ionicons name="close" size={14} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+          )}
+          {filterToDate && (
+            <View style={styles.filterTag}>
+              <Text style={styles.filterTagText}>Đến: {formatDate(filterToDate)}</Text>
+              <TouchableOpacity onPress={() => setFilterToDate(null)}>
+                <Ionicons name="close" size={14} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.clearFiltersButton}
+            onPress={() => {
+              setFilterInvoiceType(null);
+              setFilterFromDate(null);
+              setFilterToDate(null);
+            }}
+          >
+            <Text style={styles.clearFiltersText}>Xóa tất cả</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-        {/* Create Modal */}
-        <Modal
-          visible={showCreateModal}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => {
-            setShowCreateModal(false);
-            resetForm();
-          }}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Tạo Hóa Đơn Đầu Vào</Text>
-              <ScrollView style={styles.modalScrollView}>
-                {/* Project Selection */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Dự án (tùy chọn)</Text>
-                  <TouchableOpacity
-                    style={styles.pickerButton}
-                    onPress={() => setShowProjectPicker(true)}
-                  >
-                    <Text style={styles.pickerText}>
-                      {selectedProject ? selectedProject.name : "Chọn dự án"}
+      <FlatList
+        data={filteredInvoices}
+        renderItem={renderInvoiceItem}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: tabBarHeight },
+        ]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="receipt-outline" size={64} color="#D1D5DB" />
+            <Text style={styles.emptyText}>
+              {searchText || filterInvoiceType || filterFromDate || filterToDate
+                ? "Không tìm thấy hóa đơn phù hợp"
+                : "Chưa có hóa đơn đầu vào"}
+            </Text>
+          </View>
+        }
+      />
+
+      {/* Create Modal */}
+      <Modal
+        visible={showCreateModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowCreateModal(false);
+          resetForm();
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Tạo Hóa Đơn Đầu Vào</Text>
+            <ScrollView style={styles.modalScrollView}>
+              {/* Project Selection */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Dự án (tùy chọn)</Text>
+                <TouchableOpacity
+                  style={styles.pickerButton}
+                  onPress={() => setShowProjectPicker(true)}
+                >
+                  <Text style={styles.pickerText}>
+                    {selectedProject ? selectedProject.name : "Chọn dự án"}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Invoice Type */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Loại hóa đơn</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.invoice_type}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, invoice_type: text })
+                  }
+                  placeholder="VD: VAT, Không VAT, Hóa đơn đỏ..."
+                />
+              </View>
+
+              {/* Issue Date */}
+              <DatePickerInput
+                label="Ngày xuất *"
+                value={formData.issue_date ? new Date(formData.issue_date) : null}
+                onChange={(date) => {
+                  if (date) {
+                    setFormData({
+                      ...formData,
+                      issue_date: date.toISOString().split("T")[0],
+                    });
+                  }
+                }}
+                placeholder="Chọn ngày xuất"
+                required
+              />
+
+              {/* Invoice Number */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Số hóa đơn</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.invoice_number}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, invoice_number: text })
+                  }
+                  placeholder="Nhập số hóa đơn"
+                />
+              </View>
+
+              {/* Supplier Name */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Nhà cung cấp</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.supplier_name}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, supplier_name: text })
+                  }
+                  placeholder="Tên nhà cung cấp"
+                />
+              </View>
+
+              {/* Amount Before VAT */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Giá chưa VAT (VNĐ) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={
+                    formData.amount_before_vat > 0
+                      ? formData.amount_before_vat.toString()
+                      : ""
+                  }
+                  onChangeText={(text) => {
+                    const value = parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
+                    setFormData({ ...formData, amount_before_vat: value });
+                  }}
+                  placeholder="0"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {/* VAT Percentage */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>VAT %</Text>
+                <TextInput
+                  style={styles.input}
+                  value={
+                    formData.vat_percentage > 0
+                      ? formData.vat_percentage.toString()
+                      : ""
+                  }
+                  onChangeText={(text) => {
+                    const value = parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
+                    setFormData({ ...formData, vat_percentage: value });
+                  }}
+                  placeholder="10"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {/* Calculated Values */}
+              {formData.amount_before_vat > 0 && (
+                <View style={styles.calculatedBox}>
+                  <View style={styles.calculatedRow}>
+                    <Text style={styles.calculatedLabel}>VAT ({formData.vat_percentage}%):</Text>
+                    <Text style={styles.calculatedValue}>
+                      {formatCurrency(
+                        calculateVatAmount(
+                          formData.amount_before_vat,
+                          formData.vat_percentage
+                        )
+                      )}
                     </Text>
-                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Invoice Type */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Loại hóa đơn</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.invoice_type}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, invoice_type: text })
-                    }
-                    placeholder="VD: VAT, Không VAT, Hóa đơn đỏ..."
-                  />
-                </View>
-
-                {/* Issue Date */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Ngày xuất *</Text>
-                  <TouchableOpacity
-                    style={styles.pickerButton}
-                    onPress={() => setShowDatePicker(true)}
-                  >
-                    <Text style={styles.pickerText}>
-                      {formatDate(formData.issue_date)}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                  </TouchableOpacity>
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={new Date(formData.issue_date)}
-                      mode="date"
-                      display="default"
-                      onChange={(event, date) => {
-                        setShowDatePicker(false);
-                        if (date) {
-                          setFormData({
-                            ...formData,
-                            issue_date: date.toISOString().split("T")[0],
-                          });
-                        }
-                      }}
-                    />
-                  )}
-                </View>
-
-                {/* Invoice Number */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Số hóa đơn</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.invoice_number}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, invoice_number: text })
-                    }
-                    placeholder="Nhập số hóa đơn"
-                  />
-                </View>
-
-                {/* Supplier Name */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Nhà cung cấp</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.supplier_name}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, supplier_name: text })
-                    }
-                    placeholder="Tên nhà cung cấp"
-                  />
-                </View>
-
-                {/* Amount Before VAT */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Giá chưa VAT (VNĐ) *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={
-                      formData.amount_before_vat > 0
-                        ? formData.amount_before_vat.toString()
-                        : ""
-                    }
-                    onChangeText={(text) => {
-                      const value = parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
-                      setFormData({ ...formData, amount_before_vat: value });
-                    }}
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                </View>
-
-                {/* VAT Percentage */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>VAT %</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={
-                      formData.vat_percentage > 0
-                        ? formData.vat_percentage.toString()
-                        : ""
-                    }
-                    onChangeText={(text) => {
-                      const value = parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
-                      setFormData({ ...formData, vat_percentage: value });
-                    }}
-                    placeholder="10"
-                    keyboardType="numeric"
-                  />
-                </View>
-
-                {/* Calculated Values */}
-                {formData.amount_before_vat > 0 && (
-                  <View style={styles.calculatedBox}>
-                    <View style={styles.calculatedRow}>
-                      <Text style={styles.calculatedLabel}>VAT ({formData.vat_percentage}%):</Text>
-                      <Text style={styles.calculatedValue}>
-                        {formatCurrency(
+                  </View>
+                  <View style={styles.calculatedRow}>
+                    <Text style={styles.calculatedLabel}>Thành tiền:</Text>
+                    <Text style={styles.calculatedTotal}>
+                      {formatCurrency(
+                        calculateTotalAmount(
+                          formData.amount_before_vat,
                           calculateVatAmount(
                             formData.amount_before_vat,
                             formData.vat_percentage
                           )
-                        )}
-                      </Text>
-                    </View>
-                    <View style={styles.calculatedRow}>
-                      <Text style={styles.calculatedLabel}>Thành tiền:</Text>
-                      <Text style={styles.calculatedTotal}>
-                        {formatCurrency(
-                          calculateTotalAmount(
-                            formData.amount_before_vat,
-                            calculateVatAmount(
-                              formData.amount_before_vat,
-                              formData.vat_percentage
-                            )
-                          )
-                        )}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* Description */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Mô tả</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={formData.description}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, description: text })
-                    }
-                    placeholder="Mô tả hóa đơn"
-                    multiline
-                    numberOfLines={3}
-                  />
-                </View>
-
-                {/* Notes */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Ghi chú</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={formData.notes}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, notes: text })
-                    }
-                    placeholder="Ghi chú thêm"
-                    multiline
-                    numberOfLines={3}
-                  />
-                </View>
-
-                {/* File Upload */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Đính kèm file</Text>
-                  <UniversalFileUploader
-                    onUploadComplete={handleFilesUpload}
-                    multiple={true}
-                    accept="all"
-                    maxFiles={10}
-                    initialFiles={uploadedFiles}
-                    showPreview={true}
-                    label="Chọn file hóa đơn"
-                  />
-                </View>
-              </ScrollView>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => {
-                    setShowCreateModal(false);
-                    resetForm();
-                  }}
-                >
-                  <Text style={styles.cancelButtonText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.saveButton]}
-                  onPress={handleCreateInvoice}
-                >
-                  <Text style={styles.saveButtonText}>Tạo</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Edit Modal - Similar to Create Modal */}
-        <Modal
-          visible={showEditModal}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => {
-            setShowEditModal(false);
-            resetForm();
-          }}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Sửa Hóa Đơn Đầu Vào</Text>
-              <ScrollView style={styles.modalScrollView}>
-                {/* Same form fields as Create Modal */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Dự án (tùy chọn)</Text>
-                  <TouchableOpacity
-                    style={styles.pickerButton}
-                    onPress={() => setShowProjectPicker(true)}
-                  >
-                    <Text style={styles.pickerText}>
-                      {selectedProject ? selectedProject.name : "Chọn dự án"}
+                        )
+                      )}
                     </Text>
-                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Loại hóa đơn</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.invoice_type}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, invoice_type: text })
-                    }
-                    placeholder="VD: VAT, Không VAT..."
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Ngày xuất *</Text>
-                  <TouchableOpacity
-                    style={styles.pickerButton}
-                    onPress={() => setShowDatePicker(true)}
-                  >
-                    <Text style={styles.pickerText}>
-                      {formatDate(formData.issue_date)}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                  </TouchableOpacity>
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={new Date(formData.issue_date)}
-                      mode="date"
-                      display="default"
-                      onChange={(event, date) => {
-                        setShowDatePicker(false);
-                        if (date) {
-                          setFormData({
-                            ...formData,
-                            issue_date: date.toISOString().split("T")[0],
-                          });
-                        }
-                      }}
-                    />
-                  )}
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Số hóa đơn</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.invoice_number}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, invoice_number: text })
-                    }
-                    placeholder="Nhập số hóa đơn"
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Nhà cung cấp</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.supplier_name}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, supplier_name: text })
-                    }
-                    placeholder="Tên nhà cung cấp"
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Giá chưa VAT (VNĐ) *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={
-                      formData.amount_before_vat > 0
-                        ? formData.amount_before_vat.toString()
-                        : ""
-                    }
-                    onChangeText={(text) => {
-                      const value = parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
-                      setFormData({ ...formData, amount_before_vat: value });
-                    }}
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>VAT %</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={
-                      formData.vat_percentage > 0
-                        ? formData.vat_percentage.toString()
-                        : ""
-                    }
-                    onChangeText={(text) => {
-                      const value = parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
-                      setFormData({ ...formData, vat_percentage: value });
-                    }}
-                    placeholder="10"
-                    keyboardType="numeric"
-                  />
-                </View>
-
-                {formData.amount_before_vat > 0 && (
-                  <View style={styles.calculatedBox}>
-                    <View style={styles.calculatedRow}>
-                      <Text style={styles.calculatedLabel}>VAT ({formData.vat_percentage}%):</Text>
-                      <Text style={styles.calculatedValue}>
-                        {formatCurrency(
-                          calculateVatAmount(
-                            formData.amount_before_vat,
-                            formData.vat_percentage
-                          )
-                        )}
-                      </Text>
-                    </View>
-                    <View style={styles.calculatedRow}>
-                      <Text style={styles.calculatedLabel}>Thành tiền:</Text>
-                      <Text style={styles.calculatedTotal}>
-                        {formatCurrency(
-                          calculateTotalAmount(
-                            formData.amount_before_vat,
-                            calculateVatAmount(
-                              formData.amount_before_vat,
-                              formData.vat_percentage
-                            )
-                          )
-                        )}
-                      </Text>
-                    </View>
                   </View>
-                )}
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Mô tả</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={formData.description}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, description: text })
-                    }
-                    placeholder="Mô tả hóa đơn"
-                    multiline
-                    numberOfLines={3}
-                  />
                 </View>
+              )}
 
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Ghi chú</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={formData.notes}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, notes: text })
-                    }
-                    placeholder="Ghi chú thêm"
-                    multiline
-                    numberOfLines={3}
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Đính kèm file</Text>
-                  <UniversalFileUploader
-                    onUploadComplete={handleFilesUpload}
-                    multiple={true}
-                    accept="all"
-                    maxFiles={10}
-                    initialFiles={uploadedFiles}
-                    showPreview={true}
-                    label="Chọn file hóa đơn"
-                  />
-                </View>
-              </ScrollView>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => {
-                    setShowEditModal(false);
-                    resetForm();
-                  }}
-                >
-                  <Text style={styles.cancelButtonText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.saveButton]}
-                  onPress={handleUpdateInvoice}
-                >
-                  <Text style={styles.saveButtonText}>Cập nhật</Text>
-                </TouchableOpacity>
+              {/* Description */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Mô tả</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.description}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, description: text })
+                  }
+                  placeholder="Mô tả hóa đơn"
+                  multiline
+                  numberOfLines={3}
+                />
               </View>
-            </View>
-          </View>
-        </Modal>
 
-        {/* Project Picker Modal */}
-        <Modal
-          visible={showProjectPicker}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowProjectPicker(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Chọn Dự Án</Text>
-              <ScrollView style={styles.modalScrollView}>
-                <TouchableOpacity
-                  style={styles.projectOption}
-                  onPress={() => {
-                    setSelectedProject(null);
-                    setFormData({ ...formData, project_id: undefined });
-                    setShowProjectPicker(false);
-                  }}
-                >
-                  <Text style={styles.projectOptionText}>Không chọn dự án</Text>
-                </TouchableOpacity>
-                {projects.map((project) => (
-                  <TouchableOpacity
-                    key={project.id}
-                    style={styles.projectOption}
-                    onPress={() => {
-                      setSelectedProject(project);
-                      setFormData({ ...formData, project_id: project.id });
-                      setShowProjectPicker(false);
-                    }}
-                  >
-                    <Text style={styles.projectOptionText}>{project.name}</Text>
-                    <Text style={styles.projectOptionCode}>{project.code}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {/* Notes */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Ghi chú</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.notes}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, notes: text })
+                  }
+                  placeholder="Ghi chú thêm"
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              {/* File Upload */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Đính kèm file</Text>
+                <UniversalFileUploader
+                  onUploadComplete={handleFilesUpload}
+                  multiple={true}
+                  accept="all"
+                  maxFiles={10}
+                  initialFiles={uploadedFiles}
+                  showPreview={true}
+                  label="Chọn file hóa đơn"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowProjectPicker(false)}
+                onPress={() => {
+                  setShowCreateModal(false);
+                  resetForm();
+                }}
               >
-                <Text style={styles.cancelButtonText}>Đóng</Text>
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleCreateInvoice}
+              >
+                <Text style={styles.saveButtonText}>Tạo</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </Modal>
-      </View>
-    </PermissionGuard>
+        </View>
+      </Modal>
+
+      {/* Edit Modal - Similar to Create Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowEditModal(false);
+          resetForm();
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Sửa Hóa Đơn Đầu Vào</Text>
+            <ScrollView style={styles.modalScrollView}>
+              {/* Same form fields as Create Modal */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Dự án (tùy chọn)</Text>
+                <TouchableOpacity
+                  style={styles.pickerButton}
+                  onPress={() => setShowProjectPicker(true)}
+                >
+                  <Text style={styles.pickerText}>
+                    {selectedProject ? selectedProject.name : "Chọn dự án"}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Loại hóa đơn</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.invoice_type}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, invoice_type: text })
+                  }
+                  placeholder="VD: VAT, Không VAT..."
+                />
+              </View>
+
+              <DatePickerInput
+                label="Ngày xuất *"
+                value={formData.issue_date ? new Date(formData.issue_date) : null}
+                onChange={(date) => {
+                  if (date) {
+                    setFormData({
+                      ...formData,
+                      issue_date: date.toISOString().split("T")[0],
+                    });
+                  }
+                }}
+                placeholder="Chọn ngày xuất"
+                required
+              />
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Số hóa đơn</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.invoice_number}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, invoice_number: text })
+                  }
+                  placeholder="Nhập số hóa đơn"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Nhà cung cấp</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.supplier_name}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, supplier_name: text })
+                  }
+                  placeholder="Tên nhà cung cấp"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Giá chưa VAT (VNĐ) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={
+                    formData.amount_before_vat > 0
+                      ? formData.amount_before_vat.toString()
+                      : ""
+                  }
+                  onChangeText={(text) => {
+                    const value = parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
+                    setFormData({ ...formData, amount_before_vat: value });
+                  }}
+                  placeholder="0"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>VAT %</Text>
+                <TextInput
+                  style={styles.input}
+                  value={
+                    formData.vat_percentage > 0
+                      ? formData.vat_percentage.toString()
+                      : ""
+                  }
+                  onChangeText={(text) => {
+                    const value = parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
+                    setFormData({ ...formData, vat_percentage: value });
+                  }}
+                  placeholder="10"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {formData.amount_before_vat > 0 && (
+                <View style={styles.calculatedBox}>
+                  <View style={styles.calculatedRow}>
+                    <Text style={styles.calculatedLabel}>VAT ({formData.vat_percentage}%):</Text>
+                    <Text style={styles.calculatedValue}>
+                      {formatCurrency(
+                        calculateVatAmount(
+                          formData.amount_before_vat,
+                          formData.vat_percentage
+                        )
+                      )}
+                    </Text>
+                  </View>
+                  <View style={styles.calculatedRow}>
+                    <Text style={styles.calculatedLabel}>Thành tiền:</Text>
+                    <Text style={styles.calculatedTotal}>
+                      {formatCurrency(
+                        calculateTotalAmount(
+                          formData.amount_before_vat,
+                          calculateVatAmount(
+                            formData.amount_before_vat,
+                            formData.vat_percentage
+                          )
+                        )
+                      )}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Mô tả</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.description}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, description: text })
+                  }
+                  placeholder="Mô tả hóa đơn"
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Ghi chú</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.notes}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, notes: text })
+                  }
+                  placeholder="Ghi chú thêm"
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Đính kèm file</Text>
+                <UniversalFileUploader
+                  onUploadComplete={handleFilesUpload}
+                  multiple={true}
+                  accept="all"
+                  maxFiles={10}
+                  initialFiles={uploadedFiles}
+                  showPreview={true}
+                  label="Chọn file hóa đơn"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowEditModal(false);
+                  resetForm();
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleUpdateInvoice}
+              >
+                <Text style={styles.saveButtonText}>Cập nhật</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Bộ Lọc</Text>
+            <ScrollView style={styles.modalScrollView}>
+              {/* Invoice Type Filter */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Loại hóa đơn</Text>
+                <TextInput
+                  style={styles.input}
+                  value={filterInvoiceType || ""}
+                  onChangeText={setFilterInvoiceType}
+                  placeholder="VD: VAT, Không VAT..."
+                />
+              </View>
+
+              {/* Date Range Filters */}
+              <DatePickerInput
+                label="Từ ngày"
+                value={filterFromDate ? new Date(filterFromDate) : null}
+                onChange={(date) => {
+                  if (date) {
+                    setFilterFromDate(date.toISOString().split("T")[0]);
+                  } else {
+                    setFilterFromDate(null);
+                  }
+                }}
+                placeholder="Chọn ngày bắt đầu"
+              />
+
+              <DatePickerInput
+                label="Đến ngày"
+                value={filterToDate ? new Date(filterToDate) : null}
+                onChange={(date) => {
+                  if (date) {
+                    setFilterToDate(date.toISOString().split("T")[0]);
+                  } else {
+                    setFilterToDate(null);
+                  }
+                }}
+                placeholder="Chọn ngày kết thúc"
+                minimumDate={filterFromDate ? new Date(filterFromDate) : undefined}
+              />
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowFilterModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Đóng</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={() => {
+                  setShowFilterModal(false);
+                }}
+              >
+                <Text style={styles.saveButtonText}>Áp dụng</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Project Picker Modal */}
+      <Modal
+        visible={showProjectPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowProjectPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Chọn Dự Án</Text>
+            <ScrollView style={styles.modalScrollView}>
+              <TouchableOpacity
+                style={styles.projectOption}
+                onPress={() => {
+                  setSelectedProject(null);
+                  setFormData({ ...formData, project_id: undefined });
+                  setShowProjectPicker(false);
+                }}
+              >
+                <Text style={styles.projectOptionText}>Không chọn dự án</Text>
+              </TouchableOpacity>
+              {projects.map((project) => (
+                <TouchableOpacity
+                  key={project.id}
+                  style={styles.projectOption}
+                  onPress={() => {
+                    setSelectedProject(project);
+                    setFormData({ ...formData, project_id: project.id });
+                    setShowProjectPicker(false);
+                  }}
+                >
+                  <Text style={styles.projectOptionText}>{project.name}</Text>
+                  <Text style={styles.projectOptionCode}>{project.code}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => setShowProjectPicker(false)}
+            >
+              <Text style={styles.cancelButtonText}>Đóng</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -1157,6 +1382,101 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginTop: 4,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  filterButton: {
+    padding: 4,
+  },
+  summaryContainer: {
+    flexDirection: "row",
+    padding: 16,
+    gap: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  summaryAmount: {
+    color: "#10B981",
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#1F2937",
+  },
+  activeFiltersContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#F9FAFB",
+    gap: 8,
+  },
+  activeFiltersLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontWeight: "600",
+    marginRight: 4,
+  },
+  filterTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E0E7FF",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  filterTagText: {
+    fontSize: 12,
+    color: "#4F46E5",
+    fontWeight: "500",
+  },
+  clearFiltersButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  clearFiltersText: {
+    fontSize: 12,
+    color: "#3B82F6",
+    fontWeight: "600",
   },
 });
 

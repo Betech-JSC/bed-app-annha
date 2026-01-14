@@ -13,7 +13,7 @@ import {
   Image,
   Platform,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { constructionLogApi, ConstructionLog } from "@/api/constructionLogApi";
 import { ganttApi } from "@/api/ganttApi";
 import { ProjectTask } from "@/types/ganttTypes";
@@ -84,6 +84,16 @@ export default function ConstructionLogsScreen() {
     loadLogs();
     loadTasks();
   }, [id]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (id) {
+        loadLogs();
+        loadTasks();
+      }
+    }, [id])
+  );
 
   useEffect(() => {
     if (currentMonth && currentYear) {

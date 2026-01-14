@@ -95,11 +95,11 @@ class AdditionalCostController extends Controller
 
         $user = auth()->user();
 
-        // Only customer can approve
-        if ($project->customer_id !== $user->id) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_APPROVE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ khách hàng mới có quyền duyệt.'
+                'message' => 'Bạn không có quyền duyệt chi phí phát sinh.'
             ], 403);
         }
 
@@ -129,10 +129,11 @@ class AdditionalCostController extends Controller
 
         $user = auth()->user();
 
-        if ($project->customer_id !== $user->id) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_REJECT)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ khách hàng mới có quyền từ chối.'
+                'message' => 'Bạn không có quyền từ chối chi phí phát sinh.'
             ], 403);
         }
 

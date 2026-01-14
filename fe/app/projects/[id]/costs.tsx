@@ -13,7 +13,7 @@ import {
   RefreshControl,
   Platform,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { costApi, Cost, revenueApi } from "@/api/revenueApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { subcontractorApi, Subcontractor } from "@/api/subcontractorApi";
@@ -85,6 +85,14 @@ export default function CostsScreen() {
     loadSubcontractors();
     loadMaterials();
   }, [id, filterStatus, filterCategory]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadCosts();
+      loadSummary();
+    }, [id])
+  );
 
   const loadCosts = async () => {
     try {

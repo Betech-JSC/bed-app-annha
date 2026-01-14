@@ -69,24 +69,16 @@ class AcceptanceStageController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check if user is admin (full permission)
-        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
-
-        // Check if user is supervisor
-        $isSupervisor = \App\Models\ProjectPersonnel::where('project_id', $project->id)
-            ->where('user_id', $user->id)
-            ->whereIn('role', ['supervisor', 'supervisor_guest'])
-            ->exists();
-
-        if (!$isAdmin && !$isSupervisor) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_1)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ giám sát mới có quyền duyệt.'
+                'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 1 - Giám sát).'
             ], 403);
         }
 
-        // BUSINESS RULE: Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
-        if (!$isAdmin && $stage->status !== 'pending') {
+        // BUSINESS RULE: Super Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
+        if (!$user->owner && $stage->status !== 'pending') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể duyệt khi ở trạng thái pending.'
@@ -119,21 +111,16 @@ class AcceptanceStageController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check if user is admin (full permission)
-        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
-
-        // Check if user is project manager
-        $isProjectManager = $user->id === $project->project_manager_id;
-
-        if (!$isAdmin && !$isProjectManager) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ quản lý dự án mới có quyền duyệt.'
+                'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 2 - Quản lý dự án).'
             ], 403);
         }
 
-        // BUSINESS RULE: Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
-        if (!$isAdmin && $stage->status !== 'supervisor_approved') {
+        // BUSINESS RULE: Super Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
+        if (!$user->owner && $stage->status !== 'supervisor_approved') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể duyệt sau khi giám sát đã duyệt.'
@@ -166,21 +153,16 @@ class AcceptanceStageController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check if user is admin (full permission)
-        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
-
-        // Check if user is customer
-        $isCustomer = $project->customer_id === $user->id;
-
-        if (!$isAdmin && !$isCustomer) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ khách hàng mới có quyền duyệt.'
+                'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 3 - Khách hàng).'
             ], 403);
         }
 
-        // BUSINESS RULE: Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
-        if (!$isAdmin && $stage->status !== 'project_manager_approved') {
+        // BUSINESS RULE: Super Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
+        if (!$user->owner && $stage->status !== 'project_manager_approved') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể duyệt sau khi quản lý dự án đã duyệt.'

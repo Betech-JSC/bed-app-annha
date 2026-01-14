@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   TextInput,
   ScrollView,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
 import { monitoringApi, ProjectMonitoringData } from "@/api/monitoringApi";
 import { predictiveAnalyticsApi } from "@/api/predictiveAnalyticsApi";
@@ -21,10 +21,14 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
+import { NotificationBadge } from "@/components";
+import { useUnreadCount } from "@/hooks/useUnreadCount";
 
 export default function ProjectsListScreen() {
   const router = useRouter();
   const tabBarHeight = useTabBarHeight();
+  // Chỉ load unread count khi cần, không polling (CustomTabBar đã polling rồi)
+  const { unreadCount } = useUnreadCount({ autoRefresh: false });
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +42,10 @@ export default function ProjectsListScreen() {
   const [showYearFilter, setShowYearFilter] = useState(false);
   const [showStatusFilter, setShowStatusFilter] = useState(false);
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage] = useState(3);
 
   // Advanced filter states
   const [minProgress, setMinProgress] = useState<string>("");
@@ -53,6 +61,13 @@ export default function ProjectsListScreen() {
   useEffect(() => {
     loadProjects();
   }, []);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadProjects();
+    }, [])
+  );
 
   const loadProjects = async () => {
     try {
@@ -79,9 +94,7 @@ export default function ProjectsListScreen() {
           }
         );
 
-        // Load monitoring data, predictions và comments cho từng project
-        loadMonitoringData(projectsList);
-        loadLatestComments(projectsList);
+        // Monitoring data và comments sẽ được load trong useEffect khi paginatedProjects thay đổi
       }
     } catch (error: any) {
       console.error("Error loading projects:", error);
@@ -94,40 +107,89 @@ export default function ProjectsListScreen() {
     }
   };
 
+  // Cache để tránh gọi lại quá thường xuyên (5 phút)
+  const monitoringCache = useRef<{
+    data: Record<number, ProjectMonitoringData>;
+    predictions: Record<number, any>;
+    timestamp: number;
+  }>({
+    data: {},
+    predictions: {},
+    timestamp: 0,
+  });
+
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 phút
+
   const loadMonitoringData = async (projectsList: Project[]) => {
-    const monitoringPromises = projectsList.map(async (project) => {
-      try {
-        const [monitoringResponse, predictionResponse] = await Promise.all([
-          monitoringApi.getProjectMonitoring(project.id).catch(() => null),
-          predictiveAnalyticsApi.getFullAnalysis(project.id).catch(() => null),
-        ]);
+    const now = Date.now();
+    
+    // Chỉ load lại nếu cache đã hết hạn
+    if (now - monitoringCache.current.timestamp < CACHE_DURATION && 
+        Object.keys(monitoringCache.current.data).length > 0) {
+      setMonitoringData(monitoringCache.current.data);
+      setPredictions(monitoringCache.current.predictions);
+      return;
+    }
 
-        return {
-          projectId: project.id,
-          monitoring: monitoringResponse?.success ? monitoringResponse.data : null,
-          prediction: predictionResponse?.success ? predictionResponse.data : null,
-        };
-      } catch (error) {
-        return {
-          projectId: project.id,
-          monitoring: null,
-          prediction: null,
-        };
-      }
-    });
-
-    const results = await Promise.all(monitoringPromises);
+    // Chỉ load cho 10 projects đầu tiên để tránh quá tải
+    const projectsToLoad = projectsList.slice(0, 10);
+    
+    // Batch requests: chỉ gọi 3 requests cùng lúc
+    const BATCH_SIZE = 3;
     const monitoringMap: Record<number, ProjectMonitoringData> = {};
     const predictionsMap: Record<number, any> = {};
 
-    results.forEach((result) => {
-      if (result.monitoring) {
-        monitoringMap[result.projectId] = result.monitoring;
+    for (let i = 0; i < projectsToLoad.length; i += BATCH_SIZE) {
+      const batch = projectsToLoad.slice(i, i + BATCH_SIZE);
+      
+      const batchPromises = batch.map(async (project) => {
+        try {
+          const [monitoringResponse, predictionResponse] = await Promise.all([
+            monitoringApi.getProjectMonitoring(project.id).catch(() => null),
+            predictiveAnalyticsApi.getFullAnalysis(project.id).catch(() => null),
+          ]);
+
+          return {
+            projectId: project.id,
+            monitoring: monitoringResponse?.success ? monitoringResponse.data : null,
+            prediction: predictionResponse?.success ? predictionResponse.data : null,
+          };
+        } catch (error: any) {
+          // Bỏ qua lỗi 429 và các lỗi khác
+          if (error.response?.status === 429) {
+            console.warn(`Rate limit hit for project ${project.id}, skipping...`);
+          }
+          return {
+            projectId: project.id,
+            monitoring: null,
+            prediction: null,
+          };
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      
+      batchResults.forEach((result) => {
+        if (result.monitoring) {
+          monitoringMap[result.projectId] = result.monitoring;
+        }
+        if (result.prediction) {
+          predictionsMap[result.projectId] = result.prediction;
+        }
+      });
+
+      // Thêm delay nhỏ giữa các batch để tránh rate limit
+      if (i + BATCH_SIZE < projectsToLoad.length) {
+        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay
       }
-      if (result.prediction) {
-        predictionsMap[result.projectId] = result.prediction;
-      }
-    });
+    }
+
+    // Update cache
+    monitoringCache.current = {
+      data: monitoringMap,
+      predictions: predictionsMap,
+      timestamp: now,
+    };
 
     setMonitoringData(monitoringMap);
     setPredictions(predictionsMap);
@@ -301,6 +363,8 @@ export default function ProjectsListScreen() {
     }
 
     setFilteredProjects(filtered);
+    // Reset về trang 1 khi filter thay đổi
+    setCurrentPage(1);
   };
 
   useEffect(() => {
@@ -338,6 +402,32 @@ export default function ProjectsListScreen() {
     predictions,
     monitoringData,
   ]);
+
+  // Tính toán phân trang
+  const totalPages = Math.ceil(filteredProjects.length / perPage);
+  const startIndex = (currentPage - 1) * perPage;
+  const endIndex = startIndex + perPage;
+  const paginatedProjects = filteredProjects.slice(startIndex, endIndex);
+  const [pageLoading, setPageLoading] = useState(false);
+
+  // Load monitoring data chỉ cho projects đang hiển thị
+  useEffect(() => {
+    if (paginatedProjects.length > 0) {
+      loadMonitoringData(paginatedProjects);
+      loadLatestComments(paginatedProjects);
+    }
+  }, [currentPage, paginatedProjects.length]);
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
+      setPageLoading(true);
+      setCurrentPage(page);
+      // Scroll to top khi chuyển trang
+      setTimeout(() => {
+        setPageLoading(false);
+      }, 300);
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -621,6 +711,16 @@ export default function ProjectsListScreen() {
         title="Danh Sách Dự Án"
         rightComponent={
           <View style={styles.headerActions}>
+            {/* Notification Button */}
+            <TouchableOpacity
+              style={styles.notificationButton}
+              onPress={() => router.push("/notifications")}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#3B82F6" />
+              {unreadCount > 0 && (
+                <NotificationBadge count={unreadCount} size="small" style={styles.headerNotificationBadge} />
+              )}
+            </TouchableOpacity>
             {/* Filter Buttons */}
             <TouchableOpacity
               style={[styles.filterButton, selectedYear && styles.filterButtonActive]}
@@ -921,11 +1021,20 @@ export default function ProjectsListScreen() {
         </View>
       )}
 
+      {pageLoading && (
+        <View style={styles.pageLoadingOverlay}>
+          <ActivityIndicator size="small" color="#3B82F6" />
+        </View>
+      )}
       <FlatList
-        data={filteredProjects.length > 0 ? filteredProjects : projects}
+        data={paginatedProjects}
         renderItem={renderProjectItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: tabBarHeight + 80 },
+          pageLoading && styles.listContentLoading,
+        ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -955,6 +1064,166 @@ export default function ProjectsListScreen() {
             )}
           </View>
         }
+        ListFooterComponent={
+          filteredProjects.length > 0 && totalPages > 1 ? (
+            <View style={styles.paginationContainer}>
+              <View style={styles.paginationInfo}>
+                <Text style={styles.paginationText}>
+                  Trang {currentPage} / {totalPages}
+                </Text>
+                <Text style={styles.paginationSubtext}>
+                  {filteredProjects.length} dự án • {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} hiển thị
+                </Text>
+              </View>
+              <View style={styles.paginationControls}>
+                <TouchableOpacity
+                  style={[
+                    styles.paginationButton,
+                    currentPage === 1 && styles.paginationButtonDisabled,
+                  ]}
+                  onPress={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || pageLoading}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="chevron-back"
+                    size={18}
+                    color={currentPage === 1 ? "#9CA3AF" : "#3B82F6"}
+                  />
+                  <Text
+                    style={[
+                      styles.paginationButtonText,
+                      currentPage === 1 && styles.paginationButtonTextDisabled,
+                    ]}
+                  >
+                    Trước
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Page numbers */}
+                <View style={styles.pageNumbers}>
+                  {totalPages <= 7 ? (
+                    // Hiển thị tất cả số trang nếu <= 7
+                    Array.from({ length: totalPages }, (_, i) => {
+                      const pageNum = i + 1;
+                      return (
+                        <TouchableOpacity
+                          key={pageNum}
+                          style={[
+                            styles.pageNumberButton,
+                            currentPage === pageNum && styles.pageNumberButtonActive,
+                          ]}
+                          onPress={() => handlePageChange(pageNum)}
+                          disabled={pageLoading}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.pageNumberText,
+                              currentPage === pageNum && styles.pageNumberTextActive,
+                            ]}
+                          >
+                            {pageNum}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  ) : (
+                    // Hiển thị với ellipsis nếu > 7
+                    <>
+                      {currentPage > 3 && (
+                        <>
+                          <TouchableOpacity
+                            style={styles.pageNumberButton}
+                            onPress={() => handlePageChange(1)}
+                            disabled={pageLoading}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.pageNumberText}>1</Text>
+                          </TouchableOpacity>
+                          {currentPage > 4 && (
+                            <Text style={styles.pageEllipsis}>...</Text>
+                          )}
+                        </>
+                      )}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum: number;
+                        if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        if (pageNum < 1 || pageNum > totalPages) return null;
+                        return (
+                          <TouchableOpacity
+                            key={pageNum}
+                            style={[
+                              styles.pageNumberButton,
+                              currentPage === pageNum && styles.pageNumberButtonActive,
+                            ]}
+                            onPress={() => handlePageChange(pageNum)}
+                            disabled={pageLoading}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.pageNumberText,
+                                currentPage === pageNum && styles.pageNumberTextActive,
+                              ]}
+                            >
+                              {pageNum}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      {currentPage < totalPages - 2 && (
+                        <>
+                          {currentPage < totalPages - 3 && (
+                            <Text style={styles.pageEllipsis}>...</Text>
+                          )}
+                          <TouchableOpacity
+                            style={styles.pageNumberButton}
+                            onPress={() => handlePageChange(totalPages)}
+                            disabled={pageLoading}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.pageNumberText}>{totalPages}</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </>
+                  )}
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.paginationButton,
+                    currentPage === totalPages && styles.paginationButtonDisabled,
+                  ]}
+                  onPress={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages || pageLoading}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.paginationButtonText,
+                      currentPage === totalPages && styles.paginationButtonTextDisabled,
+                    ]}
+                  >
+                    Sau
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={currentPage === totalPages ? "#9CA3AF" : "#3B82F6"}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null
+        }
       />
     </View>
   );
@@ -975,6 +1244,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  notificationButton: {
+    position: "relative",
+    padding: 8,
+  },
+  headerNotificationBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
   },
   addButton: {
     width: 40,
@@ -1445,5 +1723,110 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 16,
     fontWeight: "600",
+  },
+  pageLoadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  listContentLoading: {
+    opacity: 0.5,
+  },
+  paginationContainer: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    marginTop: 12,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  paginationInfo: {
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  paginationText: {
+    fontSize: 15,
+    color: "#1F2937",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  paginationSubtext: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  paginationControls: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  paginationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  paginationButtonDisabled: {
+    opacity: 0.5,
+  },
+  paginationButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
+  paginationButtonTextDisabled: {
+    color: "#9CA3AF",
+  },
+  pageNumbers: {
+    flexDirection: "row",
+    gap: 8,
+    flex: 1,
+    justifyContent: "center",
+  },
+  pageNumberButton: {
+    minWidth: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pageNumberButtonActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  pageNumberText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  pageNumberTextActive: {
+    color: "#FFFFFF",
+  },
+  pageEllipsis: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    paddingHorizontal: 4,
   },
 });

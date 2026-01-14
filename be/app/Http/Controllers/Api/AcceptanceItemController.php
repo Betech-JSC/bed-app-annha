@@ -490,19 +490,11 @@ class AcceptanceItemController extends Controller
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check if user is admin (full permission)
-        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
-
-        // Check if user is supervisor
-        $isSupervisor = \App\Models\ProjectPersonnel::where('project_id', $project->id)
-            ->where('user_id', $user->id)
-            ->whereIn('role', ['supervisor', 'supervisor_guest'])
-            ->exists();
-
-        if (!$isAdmin && !$isSupervisor) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_1)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ giám sát mới có quyền duyệt.'
+                'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 1 - Giám sát).'
             ], 403);
         }
 
@@ -550,16 +542,11 @@ class AcceptanceItemController extends Controller
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check if user is admin (full permission)
-        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
-
-        // Check if user is project manager
-        $isProjectManager = $user->id === $project->project_manager_id;
-
-        if (!$isAdmin && !$isProjectManager) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ quản lý dự án mới có quyền duyệt.'
+                'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 2 - Quản lý dự án).'
             ], 403);
         }
 
@@ -634,16 +621,11 @@ class AcceptanceItemController extends Controller
             ], 400);
         }
 
-        // Check if user is admin (full permission)
-        $isAdmin = $user->role === 'admin' || $user->role === 'super_admin';
-
-        // Check if user is customer
-        $isCustomer = $project->customer_id === $user->id;
-
-        if (!$isAdmin && !$isCustomer) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ khách hàng mới có quyền duyệt cuối.'
+                'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 3 - Khách hàng).'
             ], 403);
         }
 

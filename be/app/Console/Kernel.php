@@ -29,6 +29,9 @@ class Kernel extends ConsoleKernel
 
         // Gửi reminders mỗi giờ
         $schedule->command('reminders:send')->hourly();
+
+        // Kiểm tra hiệu suất dự án mỗi 6 giờ
+        $schedule->command('projects:check-performance')->everySixHours();
     }
 
     /**

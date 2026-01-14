@@ -29,7 +29,7 @@ class PermissionSeeder extends Seeder
             $parts = explode('.', $permissionName);
             $module = $parts[0];
             $action = end($parts);
-            
+
             // Generate human-readable description
             $description = $this->generateDescription($permissionName, $module, $action);
 
@@ -85,6 +85,7 @@ class PermissionSeeder extends Seeder
             'hr' => 'Nhân sự',
             'report' => 'Báo cáo',
             'invoice' => 'Hóa đơn',
+            'input_invoice' => 'Hóa đơn đầu vào',
             'contract' => 'Hợp đồng',
             'payment' => 'Thanh toán',
             'subcontractor' => 'Nhà thầu phụ',
@@ -124,7 +125,7 @@ class PermissionSeeder extends Seeder
         ];
 
         $moduleName = $moduleNames[$module] ?? ucfirst($module);
-        
+
         // Handle approval levels
         if (str_contains($permissionName, '.approve.level_')) {
             $level = substr($action, -1);

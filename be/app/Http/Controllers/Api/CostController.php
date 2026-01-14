@@ -260,8 +260,8 @@ class CostController extends Controller
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check permission
-        if (!$user->hasPermission('costs.approve_management')) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::COST_APPROVE_MANAGEMENT)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt chi phí (Ban điều hành).'
@@ -293,8 +293,8 @@ class CostController extends Controller
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check permission
-        if (!$user->hasPermission('costs.approve_accountant')) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::COST_APPROVE_ACCOUNTANT)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xác nhận chi phí (Kế toán).'

@@ -11,16 +11,14 @@ import {
     TextInput,
     ScrollView,
     RefreshControl,
-    KeyboardAvoidingView,
     Platform,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { budgetApi, ProjectBudget, CreateBudgetData } from "@/api/budgetApi";
-import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { revenueApi } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader, PermissionGuard } from "@/components";
+import { ScreenHeader } from "@/components";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 import { useProjectPermissions } from "@/hooks/usePermissions";
@@ -33,30 +31,15 @@ export default function BudgetScreen() {
     const [budgets, setBudgets] = useState<ProjectBudget[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
     const [actualCosts, setActualCosts] = useState<number>(0);
     const [searchText, setSearchText] = useState("");
     const [debouncedSearchText, setDebouncedSearchText] = useState("");
     const [filterStatus, setFilterStatus] = useState<string | null>(null);
     const [showFilterModal, setShowFilterModal] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const [formData, setFormData] = useState<Partial<CreateBudgetData>>({
-        name: "",
-        version: "1.0",
-        budget_date: new Date().toISOString().split("T")[0],
-        notes: "",
-        items: [],
-    });
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [submitting, setSubmitting] = useState(false);
-    const [editingItem, setEditingItem] = useState<any>(null);
-    const [showItemModal, setShowItemModal] = useState(false);
-    const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
     useEffect(() => {
         loadBudgets();
-        loadCostGroups();
         loadActualCosts();
     }, [id]);
 
@@ -74,6 +57,14 @@ export default function BudgetScreen() {
             }
         };
     }, [searchText]);
+
+    // Reload data when screen comes into focus
+    useFocusEffect(
+        React.useCallback(() => {
+            loadBudgets();
+            loadActualCosts();
+        }, [id])
+    );
 
     const loadBudgets = async () => {
         try {
@@ -101,18 +92,6 @@ export default function BudgetScreen() {
         }
     };
 
-    const loadCostGroups = async () => {
-        try {
-            const response = await costGroupApi.getCostGroups({ active_only: true });
-            if (response.success) {
-                const data = response.data?.data || response.data || [];
-                setCostGroups(Array.isArray(data) ? data : []);
-            }
-        } catch (error) {
-            console.error("Error loading cost groups:", error);
-        }
-    };
-
     const onRefresh = () => {
         setRefreshing(true);
         loadBudgets();
@@ -126,7 +105,7 @@ export default function BudgetScreen() {
         const totalRemaining = activeBudgets.reduce((sum, b) => sum + b.remaining_budget, 0);
         const totalUsed = totalBudget - totalRemaining;
         const utilization = totalBudget > 0 ? (totalUsed / totalBudget) * 100 : 0;
-        
+
         return {
             totalBudget,
             totalUsed,
@@ -140,105 +119,24 @@ export default function BudgetScreen() {
     // Filter budgets with debounced search
     const filteredBudgets = useMemo(() => {
         let filtered = [...budgets];
-        
+
         // Search filter (using debounced text)
         if (debouncedSearchText.trim()) {
             const searchLower = debouncedSearchText.toLowerCase().trim();
-            filtered = filtered.filter(b => 
+            filtered = filtered.filter(b =>
                 b.name.toLowerCase().includes(searchLower) ||
                 b.version?.toLowerCase().includes(searchLower)
             );
         }
-        
+
         // Status filter
         if (filterStatus) {
             filtered = filtered.filter(b => b.status === filterStatus);
         }
-        
+
         return filtered;
     }, [budgets, debouncedSearchText, filterStatus]);
 
-    const handleAddItem = () => {
-        setEditingItem(null);
-        setShowItemModal(true);
-    };
-
-    const handleEditItem = (item: any, index: number) => {
-        setEditingItem({ ...item, index });
-        setShowItemModal(true);
-    };
-
-    const handleSaveItem = (item: any) => {
-        const items = formData.items || [];
-        if (editingItem !== null && editingItem.index !== undefined) {
-            items[editingItem.index] = item;
-        } else {
-            items.push(item);
-        }
-        // Auto-calculate total
-        const total = items.reduce((sum, i) => sum + (i.estimated_amount || 0), 0);
-        setFormData({ ...formData, items, total });
-        setShowItemModal(false);
-        setEditingItem(null);
-    };
-
-    const handleRemoveItem = (index: number) => {
-        const items = formData.items || [];
-        items.splice(index, 1);
-        // Recalculate total
-        const total = items.reduce((sum, i) => sum + (i.estimated_amount || 0), 0);
-        setFormData({ ...formData, items, total });
-    };
-
-    const handleCreate = async () => {
-        if (!formData.name || !formData.budget_date || !formData.items || formData.items.length === 0) {
-            Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin và thêm ít nhất 1 hạng mục");
-            return;
-        }
-
-        try {
-            setSubmitting(true);
-            const response = await budgetApi.createBudget(Number(id), formData as CreateBudgetData);
-            if (response.success) {
-                Alert.alert("Thành công", "Đã tạo ngân sách thành công");
-                setShowCreateModal(false);
-                resetForm();
-                loadBudgets();
-            }
-        } catch (error: any) {
-            Alert.alert("Lỗi", error.response?.data?.message || "Không thể tạo ngân sách");
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const resetForm = () => {
-        setFormData({
-            name: "",
-            version: "1.0",
-            budget_date: new Date().toISOString().split("T")[0],
-            notes: "",
-            items: [],
-        });
-    };
-
-    const handleUseTemplate = (templateBudget: ProjectBudget) => {
-        setFormData({
-            name: `${templateBudget.name} (Mới)`,
-            version: "1.0",
-            budget_date: new Date().toISOString().split("T")[0],
-            notes: templateBudget.notes || "",
-            items: templateBudget.items?.map(item => ({
-                name: item.name,
-                cost_group_id: item.cost_group_id,
-                description: item.description,
-                estimated_amount: item.estimated_amount,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-            })) || [],
-        });
-        setShowTemplatePicker(false);
-    };
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("vi-VN").format(amount) + " VNĐ";
@@ -261,7 +159,7 @@ export default function BudgetScreen() {
                     text: "Sao chép",
                     onPress: async () => {
                         try {
-                            const newVersion = budget.version 
+                            const newVersion = budget.version
                                 ? `${parseFloat(budget.version) + 0.1}`.substring(0, 3)
                                 : "1.0";
                             const duplicateData: CreateBudgetData = {
@@ -296,7 +194,7 @@ export default function BudgetScreen() {
         const utilization = getBudgetUtilization(item);
         const isOverBudget = utilization > 100;
         const isWarning = utilization > 80 && utilization <= 100;
-        
+
         return (
             <TouchableOpacity
                 style={styles.card}
@@ -361,11 +259,11 @@ export default function BudgetScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
-                
+
                 <Text style={styles.budgetAmount}>
                     {formatCurrency(item.total_budget)}
                 </Text>
-                
+
                 {/* Progress Bar */}
                 {(item.status === "approved" || item.status === "active") && (
                     <View style={styles.progressContainer}>
@@ -375,10 +273,10 @@ export default function BudgetScreen() {
                                     styles.progressFill,
                                     {
                                         width: `${Math.min(utilization, 100)}%`,
-                                        backgroundColor: isOverBudget 
-                                            ? "#EF4444" 
-                                            : isWarning 
-                                                ? "#F59E0B" 
+                                        backgroundColor: isOverBudget
+                                            ? "#EF4444"
+                                            : isWarning
+                                                ? "#F59E0B"
                                                 : "#10B981",
                                     },
                                 ]}
@@ -403,7 +301,7 @@ export default function BudgetScreen() {
                         </View>
                     </View>
                 )}
-                
+
                 <View style={styles.cardFooter}>
                     <View style={styles.footerItem}>
                         <Ionicons name="calendar-outline" size={14} color="#6B7280" />
@@ -445,18 +343,17 @@ export default function BudgetScreen() {
                             style={styles.filterButton}
                             onPress={() => setShowFilterModal(true)}
                         >
-                            <Ionicons 
-                                name="filter-outline" 
-                                size={20} 
-                                color={filterStatus ? "#3B82F6" : "#6B7280"} 
+                            <Ionicons
+                                name="filter-outline"
+                                size={20}
+                                color={filterStatus ? "#3B82F6" : "#6B7280"}
                             />
                         </TouchableOpacity>
                         <PermissionGuard permission={Permissions.COST_CREATE} projectId={id}>
                             <TouchableOpacity
                                 style={styles.addButton}
                                 onPress={() => {
-                                    resetForm();
-                                    setShowCreateModal(true);
+                                    router.push(`/projects/${id}/budget/create`);
                                 }}
                             >
                                 <Ionicons name="add" size={24} color="#3B82F6" />
@@ -497,12 +394,12 @@ export default function BudgetScreen() {
                             <Text style={styles.summaryLabel}>Sử dụng</Text>
                             <Text style={[
                                 styles.summaryValue,
-                                { 
-                                    color: summaryStats.utilization > 100 
-                                        ? "#EF4444" 
-                                        : summaryStats.utilization > 80 
-                                            ? "#F59E0B" 
-                                            : "#10B981" 
+                                {
+                                    color: summaryStats.utilization > 100
+                                        ? "#EF4444"
+                                        : summaryStats.utilization > 80
+                                            ? "#F59E0B"
+                                            : "#10B981"
                                 }
                             ]}>
                                 {summaryStats.utilization.toFixed(1)}%
@@ -511,10 +408,10 @@ export default function BudgetScreen() {
                     </View>
                     {summaryStats.variance !== 0 && (
                         <View style={styles.varianceRow}>
-                            <Ionicons 
-                                name={summaryStats.variance > 0 ? "arrow-up" : "arrow-down"} 
-                                size={16} 
-                                color={summaryStats.variance > 0 ? "#EF4444" : "#10B981"} 
+                            <Ionicons
+                                name={summaryStats.variance > 0 ? "arrow-up" : "arrow-down"}
+                                size={16}
+                                color={summaryStats.variance > 0 ? "#EF4444" : "#10B981"}
                             />
                             <Text style={[
                                 styles.varianceText,
@@ -649,415 +546,10 @@ export default function BudgetScreen() {
                 </Modal>
             )}
 
-            {/* Create Budget Modal */}
-            <Modal
-                visible={showCreateModal}
-                animationType="slide"
-                presentationStyle="pageSheet"
-                onRequestClose={() => setShowCreateModal(false)}
-            >
-                <KeyboardAvoidingView
-                    style={styles.modalContainer}
-                    behavior={Platform.OS === "ios" ? "padding" : "height"}
-                    keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-                >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Tạo Ngân Sách</Text>
-                            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView
-                            style={styles.modalBody}
-                            contentContainerStyle={styles.modalBodyContent}
-                            keyboardShouldPersistTaps="handled"
-                            showsVerticalScrollIndicator={true}
-                            nestedScrollEnabled={true}
-                        >
-                            {/* Template Selection */}
-                            {budgets.length > 0 && (
-                                <View style={styles.formGroup}>
-                                    <View style={styles.templateHeader}>
-                                        <Text style={styles.label}>Tạo từ ngân sách có sẵn</Text>
-                                        <TouchableOpacity
-                                            style={styles.templateButton}
-                                            onPress={() => setShowTemplatePicker(true)}
-                                        >
-                                            <Ionicons name="copy-outline" size={18} color="#3B82F6" />
-                                            <Text style={styles.templateButtonText}>Chọn ngân sách</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                            )}
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Tên ngân sách *</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Nhập tên ngân sách"
-                                    value={formData.name}
-                                    onChangeText={(text) => setFormData({ ...formData, name: text })}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Phiên bản</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="1.0"
-                                    value={formData.version}
-                                    onChangeText={(text) => setFormData({ ...formData, version: text })}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày lập ngân sách *</Text>
-                                <TouchableOpacity
-                                    style={styles.dateInput}
-                                    onPress={() => setShowDatePicker(true)}
-                                >
-                                    <Text>{formData.budget_date}</Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {showDatePicker && (
-                                    <DateTimePicker
-                                        value={new Date(formData.budget_date || new Date())}
-                                        mode="date"
-                                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                                        onChange={(event, date) => {
-                                            if (Platform.OS === 'android') {
-                                                setShowDatePicker(false);
-                                            }
-                                            if (date && (Platform.OS === 'android' || event.type !== 'dismissed')) {
-                                                setFormData({
-                                                    ...formData,
-                                                    budget_date: date.toISOString().split("T")[0],
-                                                });
-                                            }
-                                            if (Platform.OS === 'ios' && event.type === 'dismissed') {
-                                                setShowDatePicker(false);
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <View style={styles.itemsHeader}>
-                                    <Text style={styles.label}>Hạng mục ngân sách *</Text>
-                                    <TouchableOpacity
-                                        style={styles.addItemButton}
-                                        onPress={handleAddItem}
-                                    >
-                                        <Ionicons name="add-circle" size={24} color="#3B82F6" />
-                                        <Text style={styles.addItemText}>Thêm</Text>
-                                    </TouchableOpacity>
-                                </View>
-                                {formData.items && formData.items.length > 0 ? (
-                                    <>
-                                        <View style={styles.itemsList}>
-                                            {formData.items.map((item: any, index: number) => (
-                                                <View key={index} style={styles.itemRow}>
-                                                    <View style={styles.itemInfo}>
-                                                        <Text style={styles.itemName}>{item.name}</Text>
-                                                        <Text style={styles.itemAmount}>
-                                                            {formatCurrency(item.estimated_amount || 0)}
-                                                        </Text>
-                                                    </View>
-                                                    <View style={styles.itemActions}>
-                                                        <TouchableOpacity
-                                                            onPress={() => handleEditItem(item, index)}
-                                                        >
-                                                            <Ionicons name="pencil" size={20} color="#3B82F6" />
-                                                        </TouchableOpacity>
-                                                        <TouchableOpacity onPress={() => handleRemoveItem(index)}>
-                                                            <Ionicons name="trash" size={20} color="#EF4444" />
-                                                        </TouchableOpacity>
-                                                    </View>
-                                                </View>
-                                            ))}
-                                        </View>
-                                        <View style={styles.totalRow}>
-                                            <Text style={styles.totalLabel}>Tổng ngân sách:</Text>
-                                            <Text style={styles.totalValue}>
-                                                {formatCurrency(
-                                                    formData.items.reduce((sum: number, i: any) => sum + (i.estimated_amount || 0), 0)
-                                                )}
-                                            </Text>
-                                        </View>
-                                    </>
-                                ) : (
-                                    <Text style={styles.emptyItemsText}>
-                                        Chưa có hạng mục. Nhấn "Thêm" để thêm hạng mục.
-                                    </Text>
-                                )}
-                            </View>
-
-                            <TouchableOpacity
-                                style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-                                onPress={handleCreate}
-                                disabled={submitting}
-                            >
-                                {submitting ? (
-                                    <ActivityIndicator color="#FFFFFF" />
-                                ) : (
-                                    <Text style={styles.submitButtonText}>Tạo Ngân Sách</Text>
-                                )}
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
-
-            {/* Budget Item Modal */}
-            <Modal
-                visible={showItemModal}
-                animationType="slide"
-                presentationStyle="pageSheet"
-                onRequestClose={() => setShowItemModal(false)}
-            >
-                <KeyboardAvoidingView
-                    style={styles.modalContainer}
-                    behavior={Platform.OS === "ios" ? "padding" : "height"}
-                    keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-                >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>
-                                {editingItem ? "Sửa Hạng Mục" : "Thêm Hạng Mục"}
-                            </Text>
-                            <TouchableOpacity onPress={() => setShowItemModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <BudgetItemForm
-                            costGroups={costGroups}
-                            initialData={editingItem}
-                            onSave={handleSaveItem}
-                            onCancel={() => setShowItemModal(false)}
-                        />
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
-
-            {/* Template Picker Modal */}
-            {showTemplatePicker && (
-                <Modal
-                    visible={showTemplatePicker}
-                    transparent={true}
-                    animationType="slide"
-                    onRequestClose={() => setShowTemplatePicker(false)}
-                >
-                    <View style={styles.templatePickerOverlay}>
-                        <View style={styles.templatePickerContent}>
-                            <View style={styles.templatePickerHeader}>
-                                <Text style={styles.templatePickerTitle}>Chọn ngân sách làm mẫu</Text>
-                                <TouchableOpacity onPress={() => setShowTemplatePicker(false)}>
-                                    <Ionicons name="close" size={24} color="#1F2937" />
-                                </TouchableOpacity>
-                            </View>
-                            <FlatList
-                                data={budgets}
-                                keyExtractor={(item) => item.id.toString()}
-                                renderItem={({ item }) => (
-                                    <TouchableOpacity
-                                        style={styles.templateOption}
-                                        onPress={() => handleUseTemplate(item)}
-                                    >
-                                        <View style={styles.templateOptionLeft}>
-                                            <Text style={styles.templateOptionName}>{item.name}</Text>
-                                            {item.version && (
-                                                <Text style={styles.templateOptionVersion}>v{item.version}</Text>
-                                            )}
-                                            <Text style={styles.templateOptionAmount}>
-                                                {formatCurrency(item.total_budget)}
-                                            </Text>
-                                        </View>
-                                        <Ionicons name="chevron-forward" size={20} color="#6B7280" />
-                                    </TouchableOpacity>
-                                )}
-                                ListEmptyComponent={
-                                    <View style={styles.emptyContainer}>
-                                        <Text style={styles.emptyText}>Chưa có ngân sách nào</Text>
-                                    </View>
-                                }
-                            />
-                        </View>
-                    </View>
-                </Modal>
-            )}
         </View>
     );
 }
 
-function BudgetItemForm({
-    costGroups,
-    initialData,
-    onSave,
-    onCancel,
-}: {
-    costGroups: CostGroup[];
-    initialData: any;
-    onSave: (item: any) => void;
-    onCancel: () => void;
-}) {
-    const [itemData, setItemData] = useState({
-        name: initialData?.name || "",
-        cost_group_id: initialData?.cost_group_id || null,
-        description: initialData?.description || "",
-        estimated_amount: initialData?.estimated_amount?.toString() || "",
-        quantity: initialData?.quantity?.toString() || "1",
-        unit_price: initialData?.unit_price?.toString() || "",
-    });
-    const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
-    const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(
-        costGroups.find((g) => g.id === initialData?.cost_group_id) || null
-    );
-
-    const handleSave = () => {
-        if (!itemData.name || !itemData.estimated_amount) {
-            Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin");
-            return;
-        }
-
-        onSave({
-            name: itemData.name,
-            cost_group_id: itemData.cost_group_id,
-            description: itemData.description,
-            estimated_amount: parseFloat(itemData.estimated_amount),
-            quantity: parseInt(itemData.quantity) || 1,
-            unit_price: parseFloat(itemData.unit_price) || parseFloat(itemData.estimated_amount),
-        });
-    };
-
-    return (
-        <ScrollView
-            style={styles.modalBody}
-            contentContainerStyle={styles.modalBodyContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            nestedScrollEnabled={true}
-        >
-            <View style={styles.formGroup}>
-                <Text style={styles.label}>Tên hạng mục *</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Nhập tên hạng mục"
-                    value={itemData.name}
-                    onChangeText={(text) => setItemData({ ...itemData, name: text })}
-                />
-            </View>
-
-            <View style={styles.formGroup}>
-                <Text style={styles.label}>Nhóm chi phí</Text>
-                <TouchableOpacity
-                    style={styles.selectInput}
-                    onPress={() => setShowCostGroupPicker(true)}
-                >
-                    <Text style={selectedCostGroup ? {} : styles.placeholderText}>
-                        {selectedCostGroup ? selectedCostGroup.name : "Chọn nhóm chi phí"}
-                    </Text>
-                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                {showCostGroupPicker && (
-                    <Modal
-                        visible={showCostGroupPicker}
-                        transparent={true}
-                        animationType="slide"
-                        onRequestClose={() => setShowCostGroupPicker(false)}
-                    >
-                        <View style={styles.pickerOverlay}>
-                            <View style={styles.pickerContent}>
-                                <View style={styles.pickerHeader}>
-                                    <Text style={styles.pickerTitle}>Chọn nhóm chi phí</Text>
-                                    <TouchableOpacity onPress={() => setShowCostGroupPicker(false)}>
-                                        <Ionicons name="close" size={24} color="#1F2937" />
-                                    </TouchableOpacity>
-                                </View>
-                                <FlatList
-                                    data={costGroups}
-                                    keyExtractor={(item) => item.id.toString()}
-                                    renderItem={({ item }) => (
-                                        <TouchableOpacity
-                                            style={styles.pickerItem}
-                                            onPress={() => {
-                                                setSelectedCostGroup(item);
-                                                setItemData({ ...itemData, cost_group_id: item.id });
-                                                setShowCostGroupPicker(false);
-                                            }}
-                                        >
-                                            <Text>{item.name}</Text>
-                                            {selectedCostGroup?.id === item.id && (
-                                                <Ionicons name="checkmark" size={20} color="#3B82F6" />
-                                            )}
-                                        </TouchableOpacity>
-                                    )}
-                                />
-                            </View>
-                        </View>
-                    </Modal>
-                )}
-            </View>
-
-            <View style={styles.formGroup}>
-                <Text style={styles.label}>Số tiền ước tính *</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="0"
-                    value={itemData.estimated_amount}
-                    onChangeText={(text) => setItemData({ ...itemData, estimated_amount: text })}
-                    keyboardType="numeric"
-                />
-            </View>
-
-            <View style={styles.formGroup}>
-                <Text style={styles.label}>Số lượng</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="1"
-                    value={itemData.quantity}
-                    onChangeText={(text) => setItemData({ ...itemData, quantity: text })}
-                    keyboardType="numeric"
-                />
-            </View>
-
-            <View style={styles.formGroup}>
-                <Text style={styles.label}>Đơn giá</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="0"
-                    value={itemData.unit_price}
-                    onChangeText={(text) => setItemData({ ...itemData, unit_price: text })}
-                    keyboardType="numeric"
-                />
-            </View>
-
-            <View style={styles.formGroup}>
-                <Text style={styles.label}>Mô tả</Text>
-                <TextInput
-                    style={[styles.input, styles.textArea]}
-                    placeholder="Nhập mô tả"
-                    value={itemData.description}
-                    onChangeText={(text) => setItemData({ ...itemData, description: text })}
-                    multiline
-                    numberOfLines={3}
-                />
-            </View>
-
-            <View style={styles.formActions}>
-                <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-                    <Text style={styles.cancelButtonText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                    <Text style={styles.saveButtonText}>Lưu</Text>
-                </TouchableOpacity>
-            </View>
-        </ScrollView>
-    );
-}
 
 const styles = StyleSheet.create({
     container: {
@@ -1308,8 +800,9 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     modalBodyContent: {
-        paddingBottom: Platform.OS === "ios" ? 100 : 80,
+        paddingBottom: Platform.OS === "ios" ? 120 : 100,
         paddingHorizontal: 16,
+        paddingTop: 8,
     },
     formGroup: {
         marginBottom: 16,

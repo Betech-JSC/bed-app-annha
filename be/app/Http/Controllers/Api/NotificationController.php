@@ -18,11 +18,66 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $notifications = Notification::where('user_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
+        $query = Notification::forUser($user->id)
+            ->notExpired();
+
+        // Filter by type
+        if ($request->has('type')) {
+            $query->byType($request->type);
+        }
+
+        // Filter by category
+        if ($request->has('category')) {
+            $query->byCategory($request->category);
+        }
+
+        // Filter by status (unread only)
+        if ($request->has('unread_only') && $request->boolean('unread_only')) {
+            $query->unread();
+        } else if ($request->has('status')) {
+            if ($request->status === 'read') {
+                $query->read();
+            } else if ($request->status === 'unread') {
+                $query->unread();
+            }
+        }
+
+        // Filter by priority
+        if ($request->has('priority')) {
+            $query->byPriority($request->priority);
+        }
+
+        // Search
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('body', 'like', "%{$search}%")
+                    ->orWhere('message', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = $request->get('per_page', 20);
+        $notifications = $query->orderBy('created_at', 'desc')
+            ->paginate($perPage);
 
         return response()->json($notifications);
+    }
+
+    /**
+     * Lấy chi tiết một notification
+     */
+    public function show(Request $request, Notification $notification)
+    {
+        $user = $request->user();
+
+        if ($notification->user_id !== $user->id) {
+            return response()->json([
+                'message' => 'Không có quyền xem thông báo này.'
+            ], 403);
+        }
+
+        return response()->json($notification);
     }
 
     /**
@@ -39,15 +94,12 @@ class NotificationController extends Controller
             ], 403);
         }
 
-        // Cập nhật trạng thái thành 'read' nếu đang là 'unread'
-        if ($notification->status === 'unread') {
-            $notification->status = 'read';
-            $notification->save();
-        }
+        $notification->markAsRead();
 
         return response()->json([
+            'success' => true,
             'message' => 'Thông báo đã được đánh dấu là đã đọc.',
-            'notification' => $notification
+            'notification' => $notification->fresh()
         ]);
     }
 
@@ -58,14 +110,117 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $updated = Notification::where('user_id', $user->id)
-            ->where('status', 'unread')
-            ->update(['status' => 'read']);
+        $notifications = Notification::forUser($user->id)
+            ->unread()
+            ->get();
+
+        $updated = 0;
+        foreach ($notifications as $notification) {
+            if ($notification->markAsRead()) {
+                $updated++;
+            }
+        }
 
         return response()->json([
             'success' => true,
             'message' => "Đã đánh dấu {$updated} thông báo là đã đọc.",
             'updated_count' => $updated
+        ]);
+    }
+
+    /**
+     * Lấy số lượng notifications chưa đọc
+     */
+    public function getUnreadCount(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            $count = Notification::forUser($user->id)
+                ->unread()
+                ->notExpired()
+                ->count();
+
+            return response()->json([
+                'success' => true,
+                'unread_count' => $count
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getting unread count: ' . $e->getMessage(), [
+                'user_id' => $request->user()?->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi lấy số lượng thông báo chưa đọc: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Xóa một notification
+     */
+    public function delete(Request $request, Notification $notification)
+    {
+        $user = $request->user();
+
+        if ($notification->user_id !== $user->id) {
+            return response()->json([
+                'message' => 'Không có quyền xóa thông báo này.'
+            ], 403);
+        }
+
+        $notification->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Thông báo đã được xóa.'
+        ]);
+    }
+
+    /**
+     * Lấy notification preferences (placeholder - có thể implement sau)
+     */
+    public function getSettings(Request $request)
+    {
+        $user = $request->user();
+
+        // TODO: Implement notification preferences table
+        return response()->json([
+            'success' => true,
+            'settings' => [
+                'push_enabled' => true,
+                'email_enabled' => false,
+            ]
+        ]);
+    }
+
+    /**
+     * Cập nhật notification preferences (placeholder - có thể implement sau)
+     */
+    public function updateSettings(Request $request)
+    {
+        $request->validate([
+            'push_enabled' => 'boolean',
+            'email_enabled' => 'boolean',
+        ]);
+
+        // TODO: Implement notification preferences table
+        return response()->json([
+            'success' => true,
+            'message' => 'Cài đặt đã được cập nhật.',
+            'settings' => [
+                'push_enabled' => $request->get('push_enabled', true),
+                'email_enabled' => $request->get('email_enabled', false),
+            ]
         ]);
     }
 

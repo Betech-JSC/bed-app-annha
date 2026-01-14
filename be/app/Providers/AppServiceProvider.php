@@ -33,7 +33,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Register Model Observers
+        \App\Models\Project::observe(\App\Observers\ProjectObserver::class);
+        \App\Models\ProjectTask::observe(\App\Observers\ProjectTaskObserver::class);
+        \App\Models\Defect::observe(\App\Observers\DefectObserver::class);
+        \App\Models\Cost::observe(\App\Observers\CostObserver::class);
+        \App\Models\AcceptanceStage::observe(\App\Observers\AcceptanceStageObserver::class);
+        \App\Models\ChangeRequest::observe(\App\Observers\ChangeRequestObserver::class);
+        \App\Models\ProjectPersonnel::observe(\App\Observers\ProjectPersonnelObserver::class);
 
         $this->bootRoute();
     }

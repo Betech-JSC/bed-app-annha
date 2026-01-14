@@ -79,4 +79,10 @@ export const projectApi = {
     const response = await api.get("/projects/project-managers", { params });
     return response.data;
   },
+
+  // Get all system users (for project form)
+  getAllUsers: async (params?: { search?: string }) => {
+    const response = await api.get("/projects/all-users", { params });
+    return response.data;
+  },
 };

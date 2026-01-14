@@ -13,47 +13,80 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->command->info('═══════════════════════════════════════════════════');
+        $this->command->info('🚀 Bắt đầu seeding dữ liệu mẫu cho hệ thống...');
+        $this->command->info('═══════════════════════════════════════════════════');
+        $this->command->newLine();
+
         // Chạy các seeders theo thứ tự
         $this->call([
+            // ============================================================
             // 1. RBAC System - Must run in this order
+            // ============================================================
             RoleSeeder::class, // Create core roles first
             PermissionSeeder::class, // Create all permissions
             RolePermissionSeeder::class, // Map permissions to roles
-            PersonnelRoleSeeder::class, // Tạo các vai trò mặc định cho nhân sự (if exists)
 
-            // 2. Users và Admin
-            AdminSeeder::class, // Sau đó mới tạo admins và gán roles
-            SuperAdminSeeder::class, // Tạo Super Admin user với toàn quyền truy cập app
-            UserRoleSeeder::class, // Tạo các users với các roles khác nhau
-            CustomerSeeder::class, // Tạo các users có role khách hàng để chọn khi tạo dự án
+            // ============================================================
+            // 2. Users & Admin Accounts
+            // ============================================================
+            SuperAdminSeeder::class, // Create super admin (superadmin@skysend.com)
+            AdminSeeder::class, // Create admin accounts (if needed)
+            UserRoleSeeder::class, // Create test users with roles (30-40 users)
 
-            // 3. Cấu hình dự án
-            DepartmentSeeder::class, // Tạo phòng ban
-            CostGroupSeeder::class, // Tạo nhóm chi phí (cần trước BudgetSeeder)
-            MaterialSupplierSeeder::class, // Tạo nhà cung cấp vật liệu
-            MaterialSeeder::class, // Tạo vật liệu
-            EquipmentSeeder::class, // Tạo thiết bị
+            // ============================================================
+            // 3. Settings & Master Data
+            // ============================================================
+            CostGroupSeeder::class, // Create cost groups for budgets and costs
+            SettingSeeder::class, // System settings
 
-            // 4. Dự án và dữ liệu liên quan
-            ProjectSeeder::class, // Tạo dữ liệu mẫu cho module quản lý dự án
-            ProjectPersonnelSeeder::class, // Gán personnel vào projects
-            ProjectPhaseTaskSeeder::class, // Tạo phases và tasks cho projects
-            AcceptanceWorkflowSeeder::class, // Tạo acceptance stages và items
-            SampleDataSeeder::class, // Tạo dữ liệu mẫu cho tất cả các module (contracts, payments, costs, logs, defects, change requests, etc.)
-            BudgetSeeder::class, // Tạo ngân sách dự án
-            InvoiceSeeder::class, // Tạo hóa đơn
-            ReceiptSeeder::class, // Tạo chứng từ
+            // ============================================================
+            // 4. Projects & Project Management
+            // ============================================================
+            ProjectSeeder::class, // Create projects (10-11 projects)
+            ProjectPersonnelSeeder::class, // Assign personnel to projects
+            ProjectPhaseTaskSeeder::class, // Create phases and tasks for projects
+            AcceptanceWorkflowSeeder::class, // Create acceptance stages and items
 
-            // 5. Nhân sự
-            PayrollSeeder::class, // Tạo dữ liệu mẫu cho module bảng lương
-            WorkScheduleSeeder::class, // Tạo dữ liệu mẫu cho module lịch làm việc
-            LeaveSeeder::class, // Tạo đơn nghỉ phép và leave balance
-            EmploymentContractSeeder::class, // Tạo hợp đồng lao động
-            InsuranceSeeder::class, // Tạo bảo hiểm và phúc lợi
-            PerformanceSeeder::class, // Tạo đánh giá hiệu suất
+            // ============================================================
+            // 5. Project Financial Data
+            // ============================================================
+            BudgetSeeder::class, // Create budgets for projects
+            SampleDataSeeder::class, // Create contracts, payments, costs, defects, logs, change requests
 
-            // 6. Nhắc nhở
-            ReminderSeeder::class, // Tạo nhắc nhở
+            // ============================================================
+            // 6. HR Module (Optional - if needed for testing)
+            // ============================================================
+            // DepartmentSeeder::class,
+            // PersonnelRoleSeeder::class,
+            // WorkScheduleSeeder::class,
+            // PayrollSeeder::class,
+            // LeaveSeeder::class,
+            // PerformanceSeeder::class,
+
+            // ============================================================
+            // 7. Other Modules (Optional)
+            // ============================================================
+            // MaterialSeeder::class,
+            // EquipmentSeeder::class,
+            // InvoiceSeeder::class,
+            // ReceiptSeeder::class,
+
+            // ============================================================
+            // 8. Reminders & Notifications
+            // ============================================================
+            ReminderSeeder::class, // Create reminders
         ]);
+
+        $this->command->newLine();
+        $this->command->info('═══════════════════════════════════════════════════');
+        $this->command->info('✅ Hoàn thành seeding dữ liệu mẫu!');
+        $this->command->info('═══════════════════════════════════════════════════');
+        $this->command->newLine();
+        $this->command->info('📋 Tài khoản test chính:');
+        $this->command->info('   Super Admin: superadmin@skysend.com / superadmin123');
+        $this->command->info('   HR Admin: hradmin@skysend.com / hradmin123');
+        $this->command->info('   Test Users: Xem chi tiết trong UserRoleSeeder output');
+        $this->command->newLine();
     }
 }

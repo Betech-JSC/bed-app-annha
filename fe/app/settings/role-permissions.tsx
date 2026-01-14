@@ -39,6 +39,8 @@ export default function RolePermissionsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [initialPermissionIds, setInitialPermissionIds] = useState<number[]>([]);
+  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     if (roleId) {
@@ -64,7 +66,10 @@ export default function RolePermissionsScreen() {
       }
 
       if (rolePermissionsRes.success) {
-        setSelectedPermissionIds(rolePermissionsRes.data.permissions || []);
+        const permissions = rolePermissionsRes.data.permissions || [];
+        setSelectedPermissionIds(permissions);
+        setInitialPermissionIds(permissions);
+        setHasChanges(false);
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -82,20 +87,30 @@ export default function RolePermissionsScreen() {
 
   const togglePermission = (permissionId: number) => {
     setSelectedPermissionIds((prev) => {
-      if (prev.includes(permissionId)) {
-        return prev.filter((id) => id !== permissionId);
-      } else {
-        return [...prev, permissionId];
-      }
+      const newIds = prev.includes(permissionId)
+        ? prev.filter((id) => id !== permissionId)
+        : [...prev, permissionId];
+
+      // Check if there are changes
+      const sortedNew = [...newIds].sort((a, b) => a - b);
+      const sortedInitial = [...initialPermissionIds].sort((a, b) => a - b);
+      setHasChanges(JSON.stringify(sortedNew) !== JSON.stringify(sortedInitial));
+
+      return newIds;
     });
   };
 
   const handleSelectAll = () => {
-    if (selectedPermissionIds.length === allPermissions.length) {
-      setSelectedPermissionIds([]);
-    } else {
-      setSelectedPermissionIds(allPermissions.map((p) => p.id));
-    }
+    const newIds = selectedPermissionIds.length === allPermissions.length
+      ? []
+      : allPermissions.map((p) => p.id);
+
+    setSelectedPermissionIds(newIds);
+
+    // Check if there are changes
+    const sortedNew = [...newIds].sort((a, b) => a - b);
+    const sortedInitial = [...initialPermissionIds].sort((a, b) => a - b);
+    setHasChanges(JSON.stringify(sortedNew) !== JSON.stringify(sortedInitial));
   };
 
   const handleSave = async () => {
@@ -109,6 +124,8 @@ export default function RolePermissionsScreen() {
       );
 
       if (response.success) {
+        setInitialPermissionIds(selectedPermissionIds);
+        setHasChanges(false);
         Alert.alert("Thành công", "Đã cập nhật quyền cho vai trò");
         router.back();
       } else {
@@ -280,19 +297,45 @@ export default function RolePermissionsScreen() {
         ))}
       </ScrollView>
 
-      {/* Save Button */}
+      {/* Save Button - Floating Action Button */}
+      {hasChanges && (
+        <View style={styles.floatingSaveContainer}>
+          <TouchableOpacity
+            style={[styles.floatingSaveButton, saving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
+                <Text style={styles.floatingSaveButtonText}>Lưu Thay Đổi</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Fixed Save Button at Bottom */}
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          style={[
+            styles.saveButton,
+            saving && styles.saveButtonDisabled,
+            hasChanges && styles.saveButtonActive,
+          ]}
           onPress={handleSave}
-          disabled={saving}
+          disabled={saving || !hasChanges}
         >
           {saving ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <>
               <Ionicons name="save" size={20} color="#FFFFFF" />
-              <Text style={styles.saveButtonText}>Lưu Quyền</Text>
+              <Text style={styles.saveButtonText}>
+                {hasChanges ? "Lưu Thay Đổi" : "Lưu Quyền"}
+              </Text>
             </>
           )}
         </TouchableOpacity>
@@ -476,13 +519,21 @@ const styles = StyleSheet.create({
     borderTopColor: "#E5E7EB",
   },
   saveButton: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: "#9CA3AF",
     borderRadius: 12,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+  saveButtonActive: {
+    backgroundColor: "#3B82F6",
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   saveButtonDisabled: {
     opacity: 0.6,
@@ -491,5 +542,31 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  floatingSaveContainer: {
+    position: "absolute",
+    bottom: 100,
+    left: 16,
+    right: 16,
+    zIndex: 1000,
+  },
+  floatingSaveButton: {
+    backgroundColor: "#10B981",
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  floatingSaveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

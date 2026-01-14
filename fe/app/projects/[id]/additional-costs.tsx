@@ -7,17 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  TextInput,
-  Modal,
-  Image,
-  ScrollView,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { additionalCostApi, AdditionalCost } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
-import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 
 export default function AdditionalCostsScreen() {
   const router = useRouter();
@@ -25,14 +20,17 @@ export default function AdditionalCostsScreen() {
   const tabBarHeight = useTabBarHeight();
   const [costs, setCosts] = useState<AdditionalCost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [formData, setFormData] = useState({ amount: "", description: "" });
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
 
   useEffect(() => {
     loadCosts();
   }, [id]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadCosts();
+    }, [id])
+  );
 
   const loadCosts = async () => {
     try {
@@ -48,39 +46,6 @@ export default function AdditionalCostsScreen() {
     }
   };
 
-  const handleFilesUpload = (files: UploadedFile[]) => {
-    setUploadedFiles(files);
-    const ids = files
-      .map((f) => f.id || f.attachment_id)
-      .filter((id): id is number => id !== undefined);
-    setAttachmentIds(ids);
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.amount || !formData.description) {
-      Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin");
-      return;
-    }
-
-    try {
-      const response = await additionalCostApi.createAdditionalCost(id!, {
-        amount: parseFloat(formData.amount),
-        description: formData.description,
-        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
-      });
-
-      if (response.success) {
-        Alert.alert("Thành công", "Chi phí phát sinh đã được đề xuất.");
-        setModalVisible(false);
-        setFormData({ amount: "", description: "" });
-        setUploadedFiles([]);
-        setAttachmentIds([]);
-        loadCosts();
-      }
-    } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
-    }
-  };
 
   const handleApprove = async (costId: number) => {
     try {
@@ -144,7 +109,7 @@ export default function AdditionalCostsScreen() {
       <Text style={styles.costDescription} numberOfLines={2}>
         {item.description}
       </Text>
-      
+
       {/* Hiển thị số lượng file đính kèm */}
       {item.attachments && item.attachments.length > 0 && (
         <View style={styles.attachmentsBadge}>
@@ -185,7 +150,7 @@ export default function AdditionalCostsScreen() {
         rightComponent={
           <TouchableOpacity
             style={styles.addButton}
-            onPress={() => setModalVisible(true)}
+            onPress={() => router.push(`/projects/${id}/additional-costs/create`)}
           >
             <Ionicons name="add" size={24} color="#3B82F6" />
           </TouchableOpacity>
@@ -205,78 +170,6 @@ export default function AdditionalCostsScreen() {
         }
       />
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Thêm Chi Phí Phát Sinh</Text>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Số tiền (VND)</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.amount}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, amount: text })
-                }
-                placeholder="Nhập số tiền"
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Mô tả</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={formData.description}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, description: text })
-                }
-                placeholder="Nhập mô tả chi phí"
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Đính kèm file/hình ảnh</Text>
-              <UniversalFileUploader
-                onUploadComplete={handleFilesUpload}
-                multiple={true}
-                accept="all"
-                maxFiles={10}
-                initialFiles={uploadedFiles}
-                showPreview={true}
-                label="Chọn file để đính kèm"
-              />
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setModalVisible(false);
-                  setFormData({ amount: "", description: "" });
-                  setUploadedFiles([]);
-                  setAttachmentIds([]);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={handleSubmit}
-              >
-                <Text style={styles.submitButtonText}>Gửi</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -356,72 +249,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#6B7280",
     marginTop: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    maxHeight: "80%",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1F2937",
-    marginBottom: 24,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: "#FFFFFF",
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: "top",
-  },
-  modalButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 24,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: "#F3F4F6",
-  },
-  cancelButtonText: {
-    color: "#6B7280",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  submitButton: {
-    backgroundColor: "#3B82F6",
-  },
-  submitButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
   },
   attachmentsBadge: {
     flexDirection: "row",

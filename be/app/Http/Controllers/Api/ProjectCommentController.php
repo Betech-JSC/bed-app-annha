@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectComment;
@@ -15,7 +16,28 @@ class ProjectCommentController extends Controller
      */
     public function index(Request $request, string $projectId)
     {
+        $user = auth()->user();
         $project = Project::findOrFail($projectId);
+
+        // Kiểm tra quyền xem comments
+        $canView = false;
+        if ($project->customer_id === $user->id) {
+            $canView = true; // Customer có thể xem
+        } elseif ($project->project_manager_id === $user->id) {
+            $canView = true; // Project manager có thể xem
+        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_VIEW) || 
+                  $user->hasPermission(Permissions::PROJECT_VIEW) ||
+                  $user->owner || 
+                  $user->role === 'admin') {
+            $canView = true; // Có quyền xem comment hoặc xem project
+        }
+
+        if (!$canView) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem bình luận của dự án này.'
+            ], 403);
+        }
 
         $query = ProjectComment::where('project_id', $projectId)
             ->whereNull('parent_id') // Chỉ lấy comments gốc
@@ -76,20 +98,23 @@ class ProjectCommentController extends Controller
 
         $project = Project::findOrFail($projectId);
 
-        // Kiểm tra quyền: user phải là customer, project manager, hoặc có quyền projects.view
+        // Kiểm tra quyền tạo comment
         $canComment = false;
         if ($project->customer_id === $user->id) {
             $canComment = true; // Customer có thể comment
         } elseif ($project->project_manager_id === $user->id) {
             $canComment = true; // Project manager có thể comment
-        } elseif ($user->hasPermission('projects.view') || $user->owner || $user->role === 'admin') {
-            $canComment = true; // Admin hoặc có quyền xem dự án
+        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_CREATE) || 
+                  ($user->hasPermission(Permissions::PROJECT_VIEW) && $user->hasPermission(Permissions::PROJECT_COMMENT_CREATE)) ||
+                  $user->owner || 
+                  $user->role === 'admin') {
+            $canComment = true; // Có quyền tạo comment hoặc admin
         }
 
         if (!$canComment) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền comment trên dự án này.'
+                'message' => 'Bạn không có quyền bình luận trên dự án này.'
             ], 403);
         }
 
@@ -118,11 +143,19 @@ class ProjectCommentController extends Controller
         $comment = ProjectComment::where('project_id', $projectId)
             ->findOrFail($id);
 
-        // Chỉ người tạo comment mới có thể sửa
-        if ($comment->user_id !== $user->id && !$user->owner && $user->role !== 'admin') {
+        // Kiểm tra quyền sửa comment
+        $canUpdate = false;
+        if ($comment->user_id === $user->id) {
+            $canUpdate = true; // Người tạo comment có thể sửa
+        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_UPDATE) && 
+                  ($user->owner || $user->role === 'admin')) {
+            $canUpdate = true; // Admin hoặc owner có quyền update
+        }
+
+        if (!$canUpdate) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền sửa comment này.'
+                'message' => 'Bạn không có quyền sửa bình luận này.'
             ], 403);
         }
 
@@ -160,11 +193,19 @@ class ProjectCommentController extends Controller
         $comment = ProjectComment::where('project_id', $projectId)
             ->findOrFail($id);
 
-        // Chỉ người tạo comment hoặc admin mới có thể xóa
-        if ($comment->user_id !== $user->id && !$user->owner && $user->role !== 'admin') {
+        // Kiểm tra quyền xóa comment
+        $canDelete = false;
+        if ($comment->user_id === $user->id) {
+            $canDelete = true; // Người tạo comment có thể xóa
+        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_DELETE) && 
+                  ($user->owner || $user->role === 'admin')) {
+            $canDelete = true; // Admin hoặc owner có quyền delete
+        }
+
+        if (!$canDelete) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xóa comment này.'
+                'message' => 'Bạn không có quyền xóa bình luận này.'
             ], 403);
         }
 

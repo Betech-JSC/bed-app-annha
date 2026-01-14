@@ -219,11 +219,11 @@ class ProjectPaymentController extends Controller
         $user = auth()->user();
         $project = $payment->project;
 
-        // Chỉ khách hàng mới có quyền duyệt
-        if ($project->customer_id !== $user->id) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_APPROVE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ khách hàng mới có quyền duyệt thanh toán này.'
+                'message' => 'Bạn không có quyền duyệt thanh toán.'
             ], 403);
         }
 
@@ -257,11 +257,11 @@ class ProjectPaymentController extends Controller
         $user = auth()->user();
         $project = $payment->project;
 
-        // Chỉ khách hàng mới có quyền từ chối
-        if ($project->customer_id !== $user->id) {
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_APPROVE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ khách hàng mới có quyền từ chối thanh toán này.'
+                'message' => 'Bạn không có quyền từ chối thanh toán.'
             ], 403);
         }
 

@@ -254,6 +254,12 @@ export default function ProjectDetailScreen() {
       route: `/projects/${id}/change-requests`,
       color: "#6366F1",
     },
+    {
+      title: "Bình Luận",
+      icon: "chatbubbles-outline",
+      route: `/projects/${id}/comments`,
+      color: "#3B82F6",
+    },
   ];
 
   if (loading) {

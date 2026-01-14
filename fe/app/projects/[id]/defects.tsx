@@ -14,10 +14,11 @@ import {
   Platform,
   Image,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { defectApi, Defect } from "@/api/defectApi";
 import { acceptanceApi } from "@/api/acceptanceApi";
-import { DefectItem, UniversalFileUploader, ScreenHeader, DatePickerInput, PermissionGuard } from "@/components";
+import { DefectItem, UniversalFileUploader, ScreenHeader, DatePickerInput } from "@/components";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -69,6 +70,15 @@ export default function DefectsScreen() {
       loadAcceptanceStage();
     }
   }, [id, acceptance_stage_id]);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (id) {
+        loadDefects();
+      }
+    }, [id])
+  );
 
   const loadAcceptanceStage = async () => {
     if (!acceptance_stage_id || !id) return;

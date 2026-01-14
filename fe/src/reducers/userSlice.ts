@@ -10,6 +10,11 @@ interface UserState {
     phone: string | null;
     token: string | null;
     owner?: boolean;
+    roles?: Array<{
+        id: number;
+        name: string;
+        description?: string;
+    }>;
 }
 
 const initialState: UserState = {

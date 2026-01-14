@@ -121,10 +121,12 @@ class ContractController extends Controller
         }
 
         $user = auth()->user();
-        if ($project->customer_id !== $user->id) {
+        
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::CONTRACT_APPROVE_LEVEL_1)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ khách hàng mới có quyền duyệt hợp đồng.'
+                'message' => 'Bạn không có quyền duyệt hợp đồng.'
             ], 403);
         }
 

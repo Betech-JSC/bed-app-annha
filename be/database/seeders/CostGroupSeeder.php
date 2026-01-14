@@ -74,7 +74,10 @@ class CostGroupSeeder extends Seeder
         ];
 
         foreach ($costGroups as $group) {
-            CostGroup::create($group);
+            CostGroup::firstOrCreate(
+                ['code' => $group['code']],
+                $group
+            );
         }
 
         $this->command->info('Đã tạo ' . count($costGroups) . ' nhóm chi phí.');

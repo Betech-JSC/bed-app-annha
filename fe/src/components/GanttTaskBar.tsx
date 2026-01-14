@@ -93,7 +93,7 @@ export default function GanttTaskBar({
       {showTriangle && (
         <View style={[styles.triangleIndicator, { borderLeftColor: statusColor }]} />
       )}
-      
+
       {/* Task name */}
       <View style={styles.taskNameContainer}>
         {hasChildren && (

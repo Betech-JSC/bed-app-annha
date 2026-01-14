@@ -15,7 +15,7 @@ import {
   Image,
   Linking,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { subcontractorApi, Subcontractor } from "@/api/subcontractorApi";
 import { globalSubcontractorApi, GlobalSubcontractor } from "@/api/globalSubcontractorApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
@@ -76,6 +76,13 @@ export default function SubcontractorsScreen() {
     loadSubcontractors();
     loadCostGroups();
   }, [id]);
+
+  // Reload data when screen comes into focus (e.g., after navigation back)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSubcontractors();
+    }, [id])
+  );
 
   const loadCostGroups = async () => {
     try {

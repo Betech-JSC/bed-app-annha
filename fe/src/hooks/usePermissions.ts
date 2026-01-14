@@ -18,8 +18,8 @@ export function usePermissions() {
     // Chỉ fetch nếu:
     // 1. Có user token
     // 2. Chưa có permissions hoặc đã quá 5 phút (300000ms) kể từ lần fetch cuối
-    const shouldFetch = 
-      user?.token && 
+    const shouldFetch =
+      user?.token &&
       (!lastFetched || Date.now() - lastFetched > 300000);
 
     if (shouldFetch && !fetchPromise) {
