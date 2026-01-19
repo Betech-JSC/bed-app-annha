@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
     View,
     Text,
@@ -19,7 +19,7 @@ import { materialApi, Material } from "@/api/materialApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DatePickerInput } from "@/components";
 
 export default function ProjectMaterialsScreen() {
     const router = useRouter();
@@ -34,19 +34,14 @@ export default function ProjectMaterialsScreen() {
     const [loadingAllMaterials, setLoadingAllMaterials] = useState(false);
     const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
     const [transactionData, setTransactionData] = useState({
-        type: "out" as "in" | "out" | "adjustment",
+        type: "out" as "out" | "adjustment",
         quantity: "",
         transaction_date: new Date(),
         notes: "",
     });
-    const [showDatePicker, setShowDatePicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        loadMaterials();
-    }, [id, searchQuery]);
-
-    const loadMaterials = async () => {
+    const loadMaterials = useCallback(async () => {
         try {
             setLoading(true);
             const response = await materialApi.getMaterialsByProject(id!, {
@@ -62,7 +57,11 @@ export default function ProjectMaterialsScreen() {
             setLoading(false);
             setRefreshing(false);
         }
-    };
+    }, [id, searchQuery]);
+
+    useEffect(() => {
+        loadMaterials();
+    }, [loadMaterials]);
 
     const loadAllMaterials = async () => {
         try {
@@ -132,10 +131,10 @@ export default function ProjectMaterialsScreen() {
         }
     };
 
-    const onRefresh = () => {
+    const onRefresh = useCallback(() => {
         setRefreshing(true);
         loadMaterials();
-    };
+    }, [loadMaterials]);
 
     const formatQuantity = (quantity: number, unit: string) => {
         return `${new Intl.NumberFormat("vi-VN").format(quantity)} ${unit}`;
@@ -214,14 +213,6 @@ export default function ProjectMaterialsScreen() {
         );
     };
 
-    if (loading && !refreshing) {
-        return (
-            <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color="#3B82F6" />
-            </View>
-        );
-    }
-
     return (
         <View style={styles.container}>
             <ScreenHeader
@@ -234,25 +225,31 @@ export default function ProjectMaterialsScreen() {
                 }
             />
 
-            <FlatList
-                data={materials}
-                renderItem={renderItem}
-                keyExtractor={(item) => item.id.toString()}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-                contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="cube-outline" size={64} color="#9CA3AF" />
-                        <Text style={styles.emptyText}>
-                            {searchQuery
-                                ? "Không tìm thấy vật liệu phù hợp"
-                                : "Chưa có vật liệu nào được sử dụng trong dự án này"}
-                        </Text>
-                    </View>
-                }
-            />
+            {loading && !refreshing ? (
+                <View style={styles.centerContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                </View>
+            ) : (
+                <FlatList
+                    data={materials}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => item.id.toString()}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                    }
+                    contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="cube-outline" size={64} color="#9CA3AF" />
+                            <Text style={styles.emptyText}>
+                                {searchQuery
+                                    ? "Không tìm thấy vật liệu phù hợp"
+                                    : "Chưa có vật liệu nào được sử dụng trong dự án này"}
+                            </Text>
+                        </View>
+                    }
+                />
+            )}
 
             {/* Add Material Modal */}
             <Modal
@@ -345,58 +342,64 @@ export default function ProjectMaterialsScreen() {
                                     <TouchableOpacity
                                         style={[
                                             styles.typeButton,
-                                            transactionData.type === "in" && styles.typeButtonActive,
+                                            transactionData.type === "adjustment" && styles.typeButtonActive,
                                         ]}
-                                        onPress={() => setTransactionData({ ...transactionData, type: "in" })}
+                                        onPress={() => setTransactionData({ ...transactionData, type: "adjustment" })}
                                     >
                                         <Text
                                             style={[
                                                 styles.typeButtonText,
-                                                transactionData.type === "in" && styles.typeButtonTextActive,
+                                                transactionData.type === "adjustment" && styles.typeButtonTextActive,
                                             ]}
                                         >
-                                            Nhập kho
+                                            Điều chỉnh
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
+                                <Text style={styles.helperText}>
+                                    {transactionData.type === "out"
+                                        ? "Xuất vật liệu từ kho để sử dụng trong dự án"
+                                        : "Điều chỉnh số lượng tồn kho (có thể dương hoặc âm)"}
+                                </Text>
                             </View>
 
                             <View style={styles.formGroup}>
-                                <Text style={styles.label}>Số lượng ({selectedMaterial.unit})</Text>
+                                <Text style={styles.label}>
+                                    Số lượng ({selectedMaterial.unit})
+                                    {transactionData.type === "adjustment" && (
+                                        <Text style={styles.helperTextInline}>
+                                            {" "}(dương để tăng, âm để giảm)
+                                        </Text>
+                                    )}
+                                </Text>
                                 <TextInput
                                     style={styles.input}
                                     value={transactionData.quantity}
                                     onChangeText={(text) => setTransactionData({ ...transactionData, quantity: text })}
-                                    placeholder="Nhập số lượng"
+                                    placeholder={
+                                        transactionData.type === "adjustment"
+                                            ? "Nhập số lượng (có thể âm)"
+                                            : "Nhập số lượng"
+                                    }
                                     keyboardType="decimal-pad"
                                 />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày giao dịch</Text>
-                                <TouchableOpacity
-                                    style={styles.dateButton}
-                                    onPress={() => setShowDatePicker(true)}
-                                >
-                                    <Text style={styles.dateButtonText}>
-                                        {transactionData.transaction_date.toLocaleDateString("vi-VN")}
+                                {transactionData.type === "out" && (
+                                    <Text style={styles.helperText}>
+                                        Tồn kho hiện tại: {formatQuantity(selectedMaterial.current_stock, selectedMaterial.unit)}
                                     </Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {showDatePicker && (
-                                    <DateTimePicker
-                                        value={transactionData.transaction_date}
-                                        mode="date"
-                                        display="default"
-                                        onChange={(event, date) => {
-                                            setShowDatePicker(false);
-                                            if (date) {
-                                                setTransactionData({ ...transactionData, transaction_date: date });
-                                            }
-                                        }}
-                                    />
                                 )}
                             </View>
+
+                            <DatePickerInput
+                                label="Ngày giao dịch"
+                                value={transactionData.transaction_date}
+                                onChange={(date) => {
+                                    if (date) {
+                                        setTransactionData({ ...transactionData, transaction_date: date });
+                                    }
+                                }}
+                                placeholder="Chọn ngày"
+                            />
 
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Ghi chú</Text>
@@ -679,5 +682,15 @@ const styles = StyleSheet.create({
         color: "#FFFFFF",
         fontSize: 16,
         fontWeight: "600",
+    },
+    helperText: {
+        fontSize: 12,
+        color: "#6B7280",
+        marginTop: 4,
+    },
+    helperTextInline: {
+        fontSize: 12,
+        color: "#6B7280",
+        fontWeight: "400",
     },
 });

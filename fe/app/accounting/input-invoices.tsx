@@ -16,7 +16,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { inputInvoiceApi, InputInvoice, CreateInputInvoiceData } from "@/api/inputInvoiceApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -657,23 +657,15 @@ export default function InputInvoicesScreen() {
               </View>
 
               {/* Amount Before VAT */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Giá chưa VAT (VNĐ) *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={
-                    formData.amount_before_vat > 0
-                      ? formData.amount_before_vat.toString()
-                      : ""
-                  }
-                  onChangeText={(text) => {
-                    const value = parseFloat(text.replace(/[^0-9.]/g, "")) || 0;
-                    setFormData({ ...formData, amount_before_vat: value });
-                  }}
-                  placeholder="0"
-                  keyboardType="numeric"
-                />
-              </View>
+              <CurrencyInput
+                label="Giá chưa VAT (VNĐ) *"
+                value={formData.amount_before_vat || 0}
+                onChangeText={(amount) => {
+                  setFormData({ ...formData, amount_before_vat: amount });
+                }}
+                placeholder="0"
+                required
+              />
 
               {/* VAT Percentage */}
               <View style={styles.formGroup}>

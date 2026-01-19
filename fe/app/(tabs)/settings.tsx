@@ -21,6 +21,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { setUser } from "@/reducers/userSlice";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { isAdmin } from "@/utils/permissions";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -59,7 +60,7 @@ export default function SettingsScreen() {
   };
 
   const { hasPermission: checkPermission } = usePermissions();
-  
+
   const hasPermission = (permission: string): boolean => {
     // Use permission-based check instead of role check
     return checkPermission(permission);
@@ -187,129 +188,129 @@ export default function SettingsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-      {/* User Info Card */}
-      <View style={styles.userCard}>
-        <View style={styles.userAvatar}>
-          <Ionicons name="person" size={32} color="#3B82F6" />
-        </View>
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{user?.name || "User"}</Text>
-          <Text style={styles.userEmail}>{user?.email || ""}</Text>
-          <View style={styles.userBadges}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {user?.role?.toUpperCase() || "USER"}
-              </Text>
-            </View>
-            {user?.owner && (
-              <View style={[styles.badge, styles.superAdminBadge]}>
-                <Text style={styles.superAdminBadgeText}>SUPER ADMIN</Text>
+        {/* User Info Card */}
+        <View style={styles.userCard}>
+          <View style={styles.userAvatar}>
+            <Ionicons name="person" size={32} color="#3B82F6" />
+          </View>
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{user?.name || "User"}</Text>
+            <Text style={styles.userEmail}>{user?.email || ""}</Text>
+            <View style={styles.userBadges}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {user?.role?.toUpperCase() || "USER"}
+                </Text>
               </View>
-            )}
+              {user?.owner && (
+                <View style={[styles.badge, styles.superAdminBadge]}>
+                  <Text style={styles.superAdminBadgeText}>SUPER ADMIN</Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Menu Items */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Cấu Hình</Text>
-        {menuItems.map((item, index) => {
-          // Admin và owner luôn thấy tất cả menu items
-          // Kiểm tra cả owner flag và role admin
-          const isAdminOrOwner =
-            (user && (user as any).owner === true) ||
-            (user && (user as any).role === "admin");
+        {/* Menu Items */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Cấu Hình</Text>
+          {menuItems.map((item, index) => {
+            // Admin và owner luôn thấy tất cả menu items
+            // Kiểm tra từ permissions thay vì role trực tiếp
+            const isAdminOrOwner =
+              (user && (user as any).owner === true) ||
+              isAdmin(permissions);
 
-          // Check permission if required (skip check for admin/owner)
-          if (item.permission && !isAdminOrOwner && !hasPermission(item.permission)) {
-            return null;
-          }
+            // Check permission if required (skip check for admin/owner)
+            if (item.permission && !isAdminOrOwner && !hasPermission(item.permission)) {
+              return null;
+            }
 
-          return (
-            <TouchableOpacity
-              key={index}
-              style={styles.menuItem}
-              onPress={() => router.push(item.route as any)}
-            >
-              <View
-                style={[
-                  styles.menuIconContainer,
-                  { backgroundColor: "#3B82F6" + "20" },
-                ]}
+            return (
+              <TouchableOpacity
+                key={index}
+                style={styles.menuItem}
+                onPress={() => router.push(item.route as any)}
               >
-                <Ionicons
-                  name={item.icon as any}
-                  size={24}
-                  color="#3B82F6"
-                />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>{item.title}</Text>
-                <Text style={styles.menuDescription}>{item.description}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+                <View
+                  style={[
+                    styles.menuIconContainer,
+                    { backgroundColor: "#3B82F6" + "20" },
+                  ]}
+                >
+                  <Ionicons
+                    name={item.icon as any}
+                    size={24}
+                    color="#3B82F6"
+                  />
+                </View>
+                <View style={styles.menuContent}>
+                  <Text style={styles.menuTitle}>{item.title}</Text>
+                  <Text style={styles.menuDescription}>{item.description}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      {/* Delete Account */}
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.deleteAccountButton}
-          onPress={() => setShowDeleteModal(true)}
+        {/* Delete Account */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.deleteAccountButton}
+            onPress={() => setShowDeleteModal(true)}
+          >
+            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+            <Text style={styles.deleteAccountText}>Xóa Tài Khoản</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Logout */}
+        <View style={styles.section}>
+          <LogoutButton variant="button" />
+        </View>
+
+        {/* Delete Account Confirmation Modal */}
+        <Modal
+          visible={showDeleteModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDeleteModal(false)}
         >
-          <Ionicons name="trash-outline" size={20} color="#EF4444" />
-          <Text style={styles.deleteAccountText}>Xóa Tài Khoản</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Ionicons name="warning" size={48} color="#EF4444" />
+                <Text style={styles.modalTitle}>Xóa Tài Khoản</Text>
+                <Text style={styles.modalDescription}>
+                  Bạn có chắc chắn muốn xóa tài khoản của mình? Hành động này không thể hoàn tác.
+                  Tất cả dữ liệu của bạn sẽ bị xóa vĩnh viễn.
+                </Text>
+              </View>
 
-      {/* Logout */}
-      <View style={styles.section}>
-        <LogoutButton variant="button" />
-      </View>
-
-      {/* Delete Account Confirmation Modal */}
-      <Modal
-        visible={showDeleteModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDeleteModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="warning" size={48} color="#EF4444" />
-              <Text style={styles.modalTitle}>Xóa Tài Khoản</Text>
-              <Text style={styles.modalDescription}>
-                Bạn có chắc chắn muốn xóa tài khoản của mình? Hành động này không thể hoàn tác.
-                Tất cả dữ liệu của bạn sẽ bị xóa vĩnh viễn.
-              </Text>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowDeleteModal(false)}
-                disabled={deleting}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.deleteButton]}
-                onPress={handleDeleteAccount}
-                disabled={deleting}
-              >
-                {deleting ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.deleteButtonText}>Xóa Tài Khoản</Text>
-                )}
-              </TouchableOpacity>
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.deleteButton]}
+                  onPress={handleDeleteAccount}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.deleteButtonText}>Xóa Tài Khoản</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
       </ScrollView>
     </View>
   );

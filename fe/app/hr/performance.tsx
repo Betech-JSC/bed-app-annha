@@ -21,8 +21,8 @@ import {
 } from "@/api/performanceApi";
 import { employeesApi } from "@/api/employeesApi";
 import { projectApi } from "@/api/projectApi";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import BackButton from "@/components/BackButton";
+import { DatePickerInput } from "@/components";
 
 const EVALUATION_TYPE_LABELS: Record<string, string> = {
   monthly: "Hàng tháng",
@@ -61,7 +61,6 @@ export default function PerformanceScreen() {
     comments: "",
     kpis: [],
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [showEmployeePicker, setShowEmployeePicker] = useState(false);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
@@ -390,32 +389,18 @@ export default function PerformanceScreen() {
                 />
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Ngày đánh giá *</Text>
-                <TouchableOpacity
-                  style={styles.dateInput}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Text>{formData.evaluation_date}</Text>
-                  <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={new Date(formData.evaluation_date || new Date())}
-                    mode="date"
-                    display="default"
-                    onChange={(event, date) => {
-                      setShowDatePicker(false);
-                      if (date) {
-                        setFormData({
-                          ...formData,
-                          evaluation_date: date.toISOString().split("T")[0],
-                        });
-                      }
-                    }}
-                  />
-                )}
-              </View>
+              <DatePickerInput
+                label="Ngày đánh giá *"
+                value={formData.evaluation_date}
+                onDateChange={(date) => {
+                  setFormData({
+                    ...formData,
+                    evaluation_date: date,
+                  });
+                }}
+                placeholder="Chọn ngày đánh giá"
+                required
+              />
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Điểm tổng thể (0-100)</Text>

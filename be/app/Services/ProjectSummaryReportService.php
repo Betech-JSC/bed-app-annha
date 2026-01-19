@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Project;
 use App\Models\Cost;
+use App\Models\AdditionalCost;
+use App\Models\ProjectPayment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -36,15 +38,28 @@ class ProjectSummaryReportService
         // Tổng tất cả chi phí (bao gồm cả lương để tham khảo)
         $totalAllCosts = $totalProjectCosts + $salaryCosts;
 
+        // Chi phí phát sinh (AdditionalCost đã được approved)
+        $additionalCosts = (float) AdditionalCost::where('project_id', $project->id)
+            ->where('status', 'approved')
+            ->sum('amount');
+
+        // Đã thanh toán (ProjectPayment đã được paid)
+        $paidPayments = (float) ProjectPayment::where('project_id', $project->id)
+            ->where('status', 'paid')
+            ->sum('amount');
+
         return [
             'project_id' => $project->id,
             'project_name' => $project->name,
             'project_code' => $project->code,
+            'project_status' => $project->status, // Thêm status để frontend kiểm tra
             'contract_value' => $contractValue,
             'cost_details' => $costDetails,
             'total_project_costs' => $totalProjectCosts, // Chi phí công trình
             'total_salary_costs' => $salaryCosts, // Chi phí công ty (lương)
             'total_all_costs' => $totalAllCosts, // Tổng tất cả (tham khảo)
+            'additional_costs' => $additionalCosts, // Chi phí phát sinh
+            'paid_payments' => $paidPayments, // Đã thanh toán
             'profit' => $contractValue - $totalProjectCosts, // Lợi nhuận = Hợp đồng - Chi phí công trình
             'profit_margin' => $contractValue > 0 
                 ? (($contractValue - $totalProjectCosts) / $contractValue) * 100 

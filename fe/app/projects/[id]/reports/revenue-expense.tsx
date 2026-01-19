@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { reportApi, RevenueExpenseReport } from "@/api/reportApi";
 import BackButton from "@/components/BackButton";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DatePickerInput } from "@/components";
 
 export default function RevenueExpenseReportScreen() {
   const router = useRouter();
@@ -22,8 +22,6 @@ export default function RevenueExpenseReportScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [fromDate, setFromDate] = useState<Date | null>(null);
   const [toDate, setToDate] = useState<Date | null>(null);
-  const [showFromDatePicker, setShowFromDatePicker] = useState(false);
-  const [showToDatePicker, setShowToDatePicker] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "monthly" | "details">("overview");
 
   useEffect(() => {
@@ -89,25 +87,30 @@ export default function RevenueExpenseReportScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Date Filters */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowFromDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-            <Text style={styles.dateButtonText}>
-              {fromDate ? fromDate.toLocaleDateString("vi-VN") : "Từ ngày"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowToDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-            <Text style={styles.dateButtonText}>
-              {toDate ? toDate.toLocaleDateString("vi-VN") : "Đến ngày"}
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.filterContainer, { flexDirection: 'row', gap: 12 }]}>
+          <View style={{ flex: 1 }}>
+            <DatePickerInput
+              label="Từ ngày"
+              value={fromDate}
+              onChange={(date) => {
+                setFromDate(date);
+              }}
+              placeholder="Chọn ngày bắt đầu"
+              containerStyle={{ marginBottom: 0 }}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <DatePickerInput
+              label="Đến ngày"
+              value={toDate}
+              onChange={(date) => {
+                setToDate(date);
+              }}
+              placeholder="Chọn ngày kết thúc"
+              minimumDate={fromDate || undefined}
+              containerStyle={{ marginBottom: 0 }}
+            />
+          </View>
         </View>
 
         {/* Tabs */}
@@ -338,29 +341,6 @@ export default function RevenueExpenseReportScreen() {
         )}
       </ScrollView>
 
-      {/* Date Pickers */}
-      {showFromDatePicker && (
-        <DateTimePicker
-          value={fromDate || new Date()}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowFromDatePicker(false);
-            if (selectedDate) setFromDate(selectedDate);
-          }}
-        />
-      )}
-      {showToDatePicker && (
-        <DateTimePicker
-          value={toDate || new Date()}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowToDatePicker(false);
-            if (selectedDate) setToDate(selectedDate);
-          }}
-        />
-      )}
     </View>
   );
 }

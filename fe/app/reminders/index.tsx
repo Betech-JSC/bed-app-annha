@@ -15,8 +15,8 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { reminderApi, Reminder, CreateReminderData } from "@/api/reminderApi";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import BackButton from "@/components/BackButton";
+import { DatePickerInput } from "@/components";
 
 const REMINDER_TYPE_LABELS: Record<string, string> = {
   payment_due: "Thanh toán đến hạn",
@@ -40,7 +40,6 @@ export default function RemindersScreen() {
     reminder_date: new Date().toISOString(),
     is_recurring: false,
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -222,36 +221,25 @@ export default function RemindersScreen() {
                 />
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Thời gian nhắc nhở *</Text>
-                <TouchableOpacity
-                  style={styles.dateInput}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Text>
-                    {formData.reminder_date
-                      ? new Date(formData.reminder_date).toLocaleString("vi-VN")
-                      : "Chọn thời gian"}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={formData.reminder_date ? new Date(formData.reminder_date) : new Date()}
-                    mode="datetime"
-                    display="default"
-                    onChange={(event, date) => {
-                      setShowDatePicker(false);
-                      if (date) {
-                        setFormData({
-                          ...formData,
-                          reminder_date: date.toISOString(),
-                        });
-                      }
-                    }}
-                  />
-                )}
-              </View>
+              <DatePickerInput
+                label="Thời gian nhắc nhở *"
+                value={formData.reminder_date ? new Date(formData.reminder_date) : null}
+                onChange={(date) => {
+                  if (date) {
+                    // Preserve time if exists, otherwise set to current time
+                    const existingDate = formData.reminder_date ? new Date(formData.reminder_date) : new Date();
+                    const newDate = new Date(date);
+                    newDate.setHours(existingDate.getHours());
+                    newDate.setMinutes(existingDate.getMinutes());
+                    setFormData({
+                      ...formData,
+                      reminder_date: newDate.toISOString(),
+                    });
+                  }
+                }}
+                placeholder="Chọn thời gian"
+                required
+              />
 
               <TouchableOpacity
                 style={[styles.submitButton, submitting && styles.submitButtonDisabled]}

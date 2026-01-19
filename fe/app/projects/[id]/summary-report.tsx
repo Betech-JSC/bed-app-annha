@@ -186,24 +186,48 @@ export default function ProjectSummaryReportScreen() {
         </TouchableOpacity>
 
 
-        {/* Lợi nhuận */}
-        <View style={[styles.card, styles.profitCard]}>
+        {/* Chi phí phát sinh */}
+        <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="trending-up" size={24} color="#10B981" />
-            <Text style={styles.cardTitle}>Lợi Nhuận</Text>
+            <Ionicons name="add-circle-outline" size={24} color="#F59E0B" />
+            <Text style={styles.cardTitle}>Chi Phí Phát Sinh</Text>
           </View>
-          <Text
-            style={[
-              styles.profitValue,
-              { color: report.profit >= 0 ? "#10B981" : "#EF4444" },
-            ]}
-          >
-            {formatCurrency(report.profit)}
-          </Text>
-          <Text style={styles.profitMargin}>
-            Tỷ lệ lợi nhuận: {formatPercentage(report.profit_margin)}
+          <Text style={styles.additionalCostValue}>
+            {formatCurrency(report.additional_costs)}
           </Text>
         </View>
+
+        {/* Đã thanh toán */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="checkmark-circle-outline" size={24} color="#10B981" />
+            <Text style={styles.cardTitle}>Đã Thanh Toán</Text>
+          </View>
+          <Text style={styles.paidPaymentsValue}>
+            {formatCurrency(report.paid_payments)}
+          </Text>
+        </View>
+
+        {/* Lợi nhuận - Chỉ hiển thị khi trạng thái dự án là "completed" */}
+        {report.project_status === "completed" && (
+          <View style={[styles.card, styles.profitCard]}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="trending-up" size={24} color="#10B981" />
+              <Text style={styles.cardTitle}>Lợi Nhuận</Text>
+            </View>
+            <Text
+              style={[
+                styles.profitValue,
+                { color: report.profit >= 0 ? "#10B981" : "#EF4444" },
+              ]}
+            >
+              {formatCurrency(report.profit)}
+            </Text>
+            <Text style={styles.profitMargin}>
+              Tỷ lệ lợi nhuận: {formatPercentage(report.profit_margin)}
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* Modal chọn loại chi phí */}
@@ -509,6 +533,16 @@ const styles = StyleSheet.create({
   profitMargin: {
     fontSize: 14,
     color: "#6B7280",
+  },
+  additionalCostValue: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#F59E0B",
+  },
+  paidPaymentsValue: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#10B981",
   },
   emptyText: {
     fontSize: 16,

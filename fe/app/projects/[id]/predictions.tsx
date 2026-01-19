@@ -76,7 +76,7 @@ export default function PredictionsScreen() {
   if (loading && !analysis) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Dự Đoán & Phân Tích" />
+        <ScreenHeader title="Dự Đoán & Phân Tích" showBackButton />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
@@ -87,7 +87,7 @@ export default function PredictionsScreen() {
   if (!analysis) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Dự Đoán & Phân Tích" />
+        <ScreenHeader title="Dự Đoán & Phân Tích" showBackButton />
         <View style={styles.emptyContainer}>
           <Ionicons name="information-circle-outline" size={64} color="#D1D5DB" />
           <Text style={styles.emptyText}>Không có dữ liệu phân tích</Text>
@@ -98,7 +98,7 @@ export default function PredictionsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Dự Đoán & Phân Tích" />
+      <ScreenHeader title="Dự Đoán & Phân Tích" showBackButton />
       <ScrollView
         style={[styles.scrollView, { marginBottom: tabBarHeight }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

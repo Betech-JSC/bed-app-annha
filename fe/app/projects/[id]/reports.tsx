@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
 
 export default function ReportsScreen() {
   const router = useRouter();
@@ -61,12 +61,7 @@ export default function ReportsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Báo Cáo Dự Án</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
+      <ScreenHeader title="Báo Cáo Dự Án" showBackButton />
       <ScrollView style={styles.content}>
         {reportItems.map((item, index) => (
           <TouchableOpacity
@@ -95,20 +90,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
   },
   content: {
     flex: 1,

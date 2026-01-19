@@ -45,7 +45,7 @@ export default function ConstructionLogsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const tabBarHeight = useTabBarHeight();
-  const { hasPermission } = useProjectPermissions(id || null);
+  const { hasPermission, refresh: refreshPermissions } = useProjectPermissions(id || null);
   const [logs, setLogs] = useState<ConstructionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -72,6 +72,9 @@ export default function ConstructionLogsScreen() {
   });
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [minCompletionPercentage, setMinCompletionPercentage] = useState(0);
+  const lastLoadTimeRef = React.useRef<number>(0);
+  const loadLogsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const isLoadingRef = React.useRef<boolean>(false);
 
   // Helper function to ensure completion_percentage is always a valid number
   const getCompletionPercentage = (value: any): number => {
@@ -80,32 +83,38 @@ export default function ConstructionLogsScreen() {
     return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
   };
 
-  useEffect(() => {
-    loadLogs();
-    loadTasks();
-  }, [id]);
-
-  // Reload data when screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      if (id) {
-        loadLogs();
-        loadTasks();
-      }
-    }, [id])
-  );
-
-  useEffect(() => {
-    if (currentMonth && currentYear) {
-      const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
-      const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
-      loadLogs(startDate, endDate);
+  // Debounced loadLogs function
+  const loadLogs = React.useCallback(async (startDate?: string, endDate?: string, force: boolean = false) => {
+    // Prevent concurrent calls
+    if (isLoadingRef.current && !force) {
+      return;
     }
-  }, [id, currentMonth, currentYear]);
 
-  const loadLogs = async (startDate?: string, endDate?: string) => {
+    const now = Date.now();
+    const timeSinceLastLoad = now - lastLoadTimeRef.current;
+
+    // If called within 2 seconds and not forced, debounce it
+    if (!force && timeSinceLastLoad < 2000) {
+      if (loadLogsTimeoutRef.current) {
+        clearTimeout(loadLogsTimeoutRef.current);
+      }
+      loadLogsTimeoutRef.current = setTimeout(() => {
+        loadLogs(startDate, endDate, true);
+      }, 2000 - timeSinceLastLoad);
+      return;
+    }
+
+    // Clear any pending timeout
+    if (loadLogsTimeoutRef.current) {
+      clearTimeout(loadLogsTimeoutRef.current);
+      loadLogsTimeoutRef.current = null;
+    }
+
     try {
+      isLoadingRef.current = true;
       setLoading(true);
+      lastLoadTimeRef.current = Date.now();
+
       const response = await constructionLogApi.getLogs(id!, {
         start_date: startDate,
         end_date: endDate,
@@ -113,14 +122,33 @@ export default function ConstructionLogsScreen() {
       if (response.success) {
         setLogs(response.data.data || []);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading logs:", error);
+
+      // Retry logic for 429 errors
+      if (error.response?.status === 429) {
+        const retryAfter = error.response?.headers?.['retry-after']
+          ? parseInt(error.response.headers['retry-after']) * 1000
+          : 3000; // Default 3 seconds
+
+        console.log(`Rate limited. Retrying after ${retryAfter}ms...`);
+        setTimeout(() => {
+          loadLogs(startDate, endDate, true);
+        }, retryAfter);
+        return;
+      }
+
+      // Only show alert for non-429 errors
+      if (error.response?.status !== 429) {
+        Alert.alert("Lỗi", "Không thể tải nhật ký công trình. Vui lòng thử lại.");
+      }
     } finally {
+      isLoadingRef.current = false;
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const loadTasks = async () => {
+  const loadTasks = React.useCallback(async () => {
     try {
       setLoadingTasks(true);
       // BUSINESS RULE: Only load leaf tasks (tasks without children)
@@ -143,7 +171,61 @@ export default function ConstructionLogsScreen() {
     } finally {
       setLoadingTasks(false);
     }
-  };
+  }, [id]);
+
+  // Initial load - only when id changes
+  useEffect(() => {
+    if (id) {
+      const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+      const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+      loadLogs(startDate, endDate, true);
+      loadTasks();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, loadLogs, loadTasks]);
+
+  // Reload data when screen comes into focus (with debouncing)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!id) return;
+
+      // Debounce permissions refresh - only refresh if cache is old
+      const permissionsTimeout = setTimeout(() => {
+        refreshPermissions();
+      }, 1500); // 1.5 second delay for permissions refresh
+
+      // Use a longer delay for focus effect to avoid immediate calls
+      const logsTimeout = setTimeout(() => {
+        if (currentMonth && currentYear) {
+          const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+          const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+          loadLogs(startDate, endDate, false); // Use debouncing
+        } else {
+          loadLogs(undefined, undefined, false); // Use debouncing
+        }
+        loadTasks();
+      }, 2000); // 2 second delay for logs load
+
+      return () => {
+        clearTimeout(permissionsTimeout);
+        clearTimeout(logsTimeout);
+        if (loadLogsTimeoutRef.current) {
+          clearTimeout(loadLogsTimeoutRef.current);
+          loadLogsTimeoutRef.current = null;
+        }
+      };
+    }, [id, refreshPermissions, currentMonth, currentYear, loadLogs, loadTasks])
+  );
+
+  // Load logs when month/year changes
+  useEffect(() => {
+    if (currentMonth && currentYear && id) {
+      const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+      const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+      loadLogs(startDate, endDate, false); // Use debouncing
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonth, currentYear, loadLogs]);
 
   const openEditModal = (log: ConstructionLog) => {
     setEditingLog(log);
@@ -204,7 +286,13 @@ export default function ConstructionLogsScreen() {
               const response = await constructionLogApi.deleteLog(id!, log.id);
               if (response.success) {
                 Alert.alert("Thành công", "Đã xóa nhật ký");
-                loadLogs();
+                if (currentMonth && currentYear) {
+                  const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+                  const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+                  loadLogs(startDate, endDate, true);
+                } else {
+                  loadLogs(undefined, undefined, true);
+                }
               }
             } catch (error: any) {
               Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa nhật ký");
@@ -253,7 +341,13 @@ export default function ConstructionLogsScreen() {
       if (response.success) {
         Alert.alert("Thành công", editingLog ? "Nhật ký đã được cập nhật." : "Nhật ký đã được tạo.");
         handleCloseModal();
-        loadLogs();
+        if (currentMonth && currentYear) {
+          const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+          const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+          loadLogs(startDate, endDate, true);
+        } else {
+          loadLogs(undefined, undefined, true);
+        }
         loadTasks(); // Reload tasks to get updated progress
       }
     } catch (error: any) {

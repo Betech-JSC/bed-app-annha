@@ -170,6 +170,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/payments', [ProjectPaymentController::class, 'store']);
         Route::put('/{projectId}/payments/{id}', [ProjectPaymentController::class, 'update']);
         Route::post('/{projectId}/payments/{id}/upload-proof', [ProjectPaymentController::class, 'uploadPaymentProof']);
+        Route::post('/{projectId}/payments/{id}/mark-paid-by-customer', [ProjectPaymentController::class, 'markAsPaidByCustomer']);
         Route::post('/{projectId}/payments/{id}/approve-by-customer', [ProjectPaymentController::class, 'approveByCustomer']);
         Route::post('/{projectId}/payments/{id}/reject-by-customer', [ProjectPaymentController::class, 'rejectByCustomer']);
         Route::post('/{projectId}/payments/{id}/confirm', [ProjectPaymentController::class, 'confirm']);
@@ -179,6 +180,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/additional-costs', [AdditionalCostController::class, 'store']);
         Route::get('/{projectId}/additional-costs/{id}', [AdditionalCostController::class, 'show']);
         Route::post('/{projectId}/additional-costs/{id}/attach-files', [AdditionalCostController::class, 'attachFiles']);
+        Route::post('/{projectId}/additional-costs/{id}/mark-paid-by-customer', [AdditionalCostController::class, 'markAsPaidByCustomer']);
+        Route::post('/{projectId}/additional-costs/{id}/confirm', [AdditionalCostController::class, 'confirm']);
         Route::post('/{projectId}/additional-costs/{id}/approve', [AdditionalCostController::class, 'approve']);
         Route::post('/{projectId}/additional-costs/{id}/reject', [AdditionalCostController::class, 'reject']);
 
@@ -236,6 +239,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/budgets/{id}/compare', [BudgetController::class, 'compareWithActual']);
         Route::put('/{projectId}/budgets/{id}', [BudgetController::class, 'update']);
         Route::delete('/{projectId}/budgets/{id}', [BudgetController::class, 'destroy']);
+        Route::post('/{projectId}/budgets/sync', [BudgetController::class, 'sync']);
+        Route::post('/{projectId}/budgets/{id}/sync', [BudgetController::class, 'sync']);
 
         // Materials
         Route::get('/{projectId}/materials', [MaterialController::class, 'getByProject']);
@@ -747,6 +752,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/{id}/transactions', [MaterialController::class, 'getTransactions']);
         Route::put('/{id}', [MaterialController::class, 'update']);
         Route::delete('/{id}', [MaterialController::class, 'destroy']);
+        Route::post('/{id}/adjust-stock', [MaterialController::class, 'adjustStock']);
     });
 
     // Equipment

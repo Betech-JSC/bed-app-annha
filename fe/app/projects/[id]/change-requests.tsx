@@ -109,7 +109,7 @@ export default function ChangeRequestsScreen() {
   if (loading && changeRequests.length === 0) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Yêu Cầu Thay Đổi" />
+        <ScreenHeader title="Yêu Cầu Thay Đổi" showBackButton />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
@@ -129,6 +129,7 @@ export default function ChangeRequestsScreen() {
     <View style={styles.container}>
       <ScreenHeader
         title="Yêu Cầu Thay Đổi"
+        showBackButton
         rightAction={
           <TouchableOpacity
             style={styles.addButton}

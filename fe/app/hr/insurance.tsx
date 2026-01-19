@@ -21,8 +21,7 @@ import {
   CreateBenefitData,
 } from "@/api/insuranceApi";
 import { employeesApi } from "@/api/employeesApi";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 
 const BENEFIT_TYPE_LABELS: Record<string, string> = {
   meal: "Phụ cấp ăn trưa",
@@ -55,8 +54,6 @@ export default function InsuranceScreen() {
     end_date: undefined,
     notes: "",
   });
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -477,18 +474,15 @@ export default function InsuranceScreen() {
                 </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Số tiền *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="0"
-                  value={formData.amount?.toString()}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, amount: parseFloat(text) || 0 })
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
+              <CurrencyInput
+                label="Số tiền *"
+                value={formData.amount || 0}
+                onChangeText={(amount) =>
+                  setFormData({ ...formData, amount })
+                }
+                placeholder="0"
+                required
+              />
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Cách tính</Text>
@@ -528,64 +522,31 @@ export default function InsuranceScreen() {
                 </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Ngày bắt đầu *</Text>
-                <TouchableOpacity
-                  style={styles.dateInput}
-                  onPress={() => setShowStartDatePicker(true)}
-                >
-                  <Text>{formData.start_date}</Text>
-                  <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                {showStartDatePicker && (
-                  <DateTimePicker
-                    value={new Date(formData.start_date || new Date())}
-                    mode="date"
-                    display="default"
-                    onChange={(event, date) => {
-                      setShowStartDatePicker(false);
-                      if (date) {
-                        setFormData({
-                          ...formData,
-                          start_date: date.toISOString().split("T")[0],
-                        });
-                      }
-                    }}
-                  />
-                )}
-              </View>
+              <DatePickerInput
+                label="Ngày bắt đầu *"
+                value={formData.start_date}
+                onDateChange={(date) => {
+                  setFormData({
+                    ...formData,
+                    start_date: date,
+                  });
+                }}
+                placeholder="Chọn ngày bắt đầu"
+                required
+              />
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Ngày kết thúc</Text>
-                <TouchableOpacity
-                  style={styles.dateInput}
-                  onPress={() => setShowEndDatePicker(true)}
-                >
-                  <Text>{formData.end_date || "Chọn ngày"}</Text>
-                  <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                {showEndDatePicker && (
-                  <DateTimePicker
-                    value={
-                      formData.end_date
-                        ? new Date(formData.end_date)
-                        : new Date(formData.start_date || new Date())
-                    }
-                    mode="date"
-                    display="default"
-                    minimumDate={new Date(formData.start_date || new Date())}
-                    onChange={(event, date) => {
-                      setShowEndDatePicker(false);
-                      if (date) {
-                        setFormData({
-                          ...formData,
-                          end_date: date.toISOString().split("T")[0],
-                        });
-                      }
-                    }}
-                  />
-                )}
-              </View>
+              <DatePickerInput
+                label="Ngày kết thúc"
+                value={formData.end_date}
+                onDateChange={(date) => {
+                  setFormData({
+                    ...formData,
+                    end_date: date,
+                  });
+                }}
+                placeholder="Chọn ngày kết thúc"
+                minimumDate={formData.start_date ? new Date(formData.start_date) : undefined}
+              />
 
               <TouchableOpacity
                 style={[styles.submitButton, submitting && styles.submitButtonDisabled]}

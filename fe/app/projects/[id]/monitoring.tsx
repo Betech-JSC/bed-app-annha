@@ -129,7 +129,7 @@ export default function ProjectMonitoringScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Giám Sát Dự Án" />
+      <ScreenHeader title="Giám Sát Dự Án" showBackButton />
       <ScrollView
         style={[styles.scrollView, { marginBottom: tabBarHeight }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

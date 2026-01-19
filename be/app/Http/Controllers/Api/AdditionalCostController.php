@@ -16,6 +16,16 @@ class AdditionalCostController extends Controller
     public function index(string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check RBAC permission
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_VIEW)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_VIEW
+            ], 403);
+        }
+
         $costs = $project->additionalCosts()
             ->with(['proposer', 'approver', 'attachments'])
             ->orderByDesc('created_at')
@@ -35,6 +45,14 @@ class AdditionalCostController extends Controller
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
+        // Check RBAC permission
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_CREATE)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_CREATE
+            ], 403);
+        }
+
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0',
             'description' => 'required|string|max:1000',
@@ -52,7 +70,7 @@ class AdditionalCostController extends Controller
                 'project_id' => $project->id,
                 'proposed_by' => $user->id,
                 ...$validated,
-                'status' => 'pending_approval',
+                'status' => 'pending',
             ]);
 
             // Đính kèm files nếu có
@@ -86,7 +104,113 @@ class AdditionalCostController extends Controller
     }
 
     /**
-     * Duyệt chi phí phát sinh (khách hàng)
+     * Khách hàng đánh dấu đã thanh toán (upload chứng từ + nhập thông tin)
+     */
+    public function markAsPaidByCustomer(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
+
+        $user = auth()->user();
+
+        // Check RBAC permission
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền đánh dấu đã thanh toán. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER
+            ], 403);
+        }
+
+        if ($cost->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể đánh dấu đã thanh toán khi chi phí ở trạng thái chờ thanh toán.'
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'paid_date' => 'nullable|date',
+            'actual_amount' => 'nullable|numeric|min:0',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Đính kèm files nếu có
+            if (!empty($validated['attachment_ids'])) {
+                foreach ($validated['attachment_ids'] as $attachmentId) {
+                    $attachment = \App\Models\Attachment::find($attachmentId);
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                        $attachment->update([
+                            'attachable_type' => AdditionalCost::class,
+                            'attachable_id' => $cost->id,
+                        ]);
+                    }
+                }
+            }
+
+            // Đánh dấu đã thanh toán
+            $cost->markAsPaidByCustomer(
+                $user,
+                $validated['paid_date'] ?? null,
+                $validated['actual_amount'] ?? null
+            );
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã đánh dấu thanh toán. Đang chờ kế toán xác nhận.',
+                'data' => $cost->fresh(['customerPaidBy', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Kế toán xác nhận đã nhận tiền
+     */
+    public function confirm(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
+
+        $user = auth()->user();
+
+        // Check RBAC permission
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_CONFIRM)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xác nhận chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_CONFIRM
+            ], 403);
+        }
+
+        if ($cost->status !== 'customer_paid') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể xác nhận khi khách hàng đã thanh toán.'
+            ], 400);
+        }
+
+        $cost->confirm($user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã xác nhận đã nhận tiền.',
+            'data' => $cost->fresh(['confirmer', 'customerPaidBy', 'attachments'])
+        ]);
+    }
+
+    /**
+     * Duyệt chi phí phát sinh (backward compatible - giữ lại cho workflow cũ)
      */
     public function approve(Request $request, string $projectId, string $id)
     {
@@ -96,13 +220,24 @@ class AdditionalCostController extends Controller
         $user = auth()->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_APPROVE)) {
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_APPROVE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền duyệt chi phí phát sinh.'
+                'message' => 'Bạn không có quyền duyệt chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_APPROVE
             ], 403);
         }
 
+        // Nếu đang ở customer_paid, chuyển thành confirm
+        if ($cost->status === 'customer_paid') {
+            $cost->confirm($user);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã xác nhận đã nhận tiền.',
+                'data' => $cost->fresh(['confirmer', 'customerPaidBy', 'attachments'])
+            ]);
+        }
+
+        // Workflow cũ: pending_approval → approved
         if ($cost->status !== 'pending_approval') {
             return response()->json([
                 'success' => false,
@@ -130,10 +265,10 @@ class AdditionalCostController extends Controller
         $user = auth()->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_REJECT)) {
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_REJECT)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền từ chối chi phí phát sinh.'
+                'message' => 'Bạn không có quyền từ chối chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_REJECT
             ], 403);
         }
 
@@ -156,6 +291,16 @@ class AdditionalCostController extends Controller
     public function show(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check RBAC permission
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_VIEW)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_VIEW
+            ], 403);
+        }
+
         $cost = AdditionalCost::where('project_id', $project->id)
             ->with(['proposer', 'approver', 'attachments'])
             ->findOrFail($id);
@@ -174,6 +319,14 @@ class AdditionalCostController extends Controller
         $project = Project::findOrFail($projectId);
         $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
         $user = auth()->user();
+
+        // Check RBAC permission - user must be able to update the cost
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_UPDATE)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_UPDATE
+            ], 403);
+        }
 
         $validated = $request->validate([
             'attachment_ids' => 'required|array',

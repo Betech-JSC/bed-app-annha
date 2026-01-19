@@ -698,7 +698,7 @@ export default function AcceptanceChecklist({
             <View style={styles.pickerModalOverlay}>
               <View style={styles.pickerModalContent}>
                 <View style={styles.pickerModalHeader}>
-                  <Text style={styles.pickerModalTitle}>Chọn công việc (Category A)</Text>
+                  <Text style={styles.pickerModalTitle}>Chọn công việc</Text>
                   <TouchableOpacity onPress={() => setShowTaskPicker(false)}>
                     <Ionicons name="close" size={24} color="#1F2937" />
                   </TouchableOpacity>
@@ -993,7 +993,7 @@ export default function AcceptanceChecklist({
             <View style={styles.pickerModalOverlay}>
               <View style={styles.pickerModalContent}>
                 <View style={styles.pickerModalHeader}>
-                  <Text style={styles.pickerModalTitle}>Chọn công việc (Category A)</Text>
+                  <Text style={styles.pickerModalTitle}>Chọn công việc</Text>
                   <TouchableOpacity onPress={() => setShowTaskPicker(false)}>
                     <Ionicons name="close" size={24} color="#1F2937" />
                   </TouchableOpacity>

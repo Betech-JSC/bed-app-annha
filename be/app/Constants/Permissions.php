@@ -40,6 +40,14 @@ class Permissions
     public const PROGRESS_UPDATE = 'progress.update';
 
     // ===================================================================
+    // PROJECT TASK MODULE
+    // ===================================================================
+    public const PROJECT_TASK_VIEW = 'project.task.view';
+    public const PROJECT_TASK_CREATE = 'project.task.create';
+    public const PROJECT_TASK_UPDATE = 'project.task.update';
+    public const PROJECT_TASK_DELETE = 'project.task.delete';
+
+    // ===================================================================
     // ACCEPTANCE MODULE
     // ===================================================================
     public const ACCEPTANCE_VIEW = 'acceptance.view';
@@ -76,6 +84,8 @@ class Permissions
     public const ADDITIONAL_COST_DELETE = 'additional_cost.delete';
     public const ADDITIONAL_COST_APPROVE = 'additional_cost.approve';
     public const ADDITIONAL_COST_REJECT = 'additional_cost.reject';
+    public const ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER = 'additional_cost.mark_paid_by_customer';
+    public const ADDITIONAL_COST_CONFIRM = 'additional_cost.confirm';
 
     // ===================================================================
     // MATERIAL MODULE
@@ -180,6 +190,7 @@ class Permissions
     public const PAYMENT_DELETE = 'payment.delete';
     public const PAYMENT_CONFIRM = 'payment.confirm';
     public const PAYMENT_APPROVE = 'payment.approve';
+    public const PAYMENT_MARK_AS_PAID_BY_CUSTOMER = 'payment.mark_paid_by_customer';
 
     // ===================================================================
     // SUBCONTRACTOR MODULE
@@ -238,6 +249,109 @@ class Permissions
     public const REVENUE_EXPORT = 'revenue.export';
 
     // ===================================================================
+    // BUDGET MODULE
+    // ===================================================================
+    public const BUDGET_VIEW = 'budgets.view';
+    public const BUDGET_CREATE = 'budgets.create';
+    public const BUDGET_UPDATE = 'budgets.update';
+    public const BUDGET_DELETE = 'budgets.delete';
+    public const BUDGET_APPROVE = 'budgets.approve';
+
+    // ===================================================================
+    // PROJECT PHASE MODULE
+    // ===================================================================
+    public const PROJECT_PHASE_VIEW = 'project.phase.view';
+    public const PROJECT_PHASE_CREATE = 'project.phase.create';
+    public const PROJECT_PHASE_UPDATE = 'project.phase.update';
+    public const PROJECT_PHASE_DELETE = 'project.phase.delete';
+
+    // ===================================================================
+    // PROJECT DOCUMENT MODULE
+    // ===================================================================
+    public const PROJECT_DOCUMENT_VIEW = 'project.document.view';
+    public const PROJECT_DOCUMENT_UPLOAD = 'project.document.upload';
+    public const PROJECT_DOCUMENT_DELETE = 'project.document.delete';
+
+    // ===================================================================
+    // RECEIPT MODULE
+    // ===================================================================
+    public const RECEIPT_VIEW = 'receipts.view';
+    public const RECEIPT_CREATE = 'receipts.create';
+    public const RECEIPT_UPDATE = 'receipts.update';
+    public const RECEIPT_DELETE = 'receipts.delete';
+    public const RECEIPT_VERIFY = 'receipts.verify';
+
+    // ===================================================================
+    // SUPPLIER MODULE
+    // ===================================================================
+    public const SUPPLIER_VIEW = 'suppliers.view';
+    public const SUPPLIER_CREATE = 'suppliers.create';
+    public const SUPPLIER_UPDATE = 'suppliers.update';
+    public const SUPPLIER_DELETE = 'suppliers.delete';
+
+    // ===================================================================
+    // SUPPLIER CONTRACT MODULE
+    // ===================================================================
+    public const SUPPLIER_CONTRACT_VIEW = 'supplier.contract.view';
+    public const SUPPLIER_CONTRACT_CREATE = 'supplier.contract.create';
+    public const SUPPLIER_CONTRACT_UPDATE = 'supplier.contract.update';
+    public const SUPPLIER_CONTRACT_DELETE = 'supplier.contract.delete';
+    public const SUPPLIER_CONTRACT_APPROVE = 'supplier.contract.approve';
+
+    // ===================================================================
+    // SUPPLIER ACCEPTANCE MODULE
+    // ===================================================================
+    public const SUPPLIER_ACCEPTANCE_VIEW = 'supplier.acceptance.view';
+    public const SUPPLIER_ACCEPTANCE_CREATE = 'supplier.acceptance.create';
+    public const SUPPLIER_ACCEPTANCE_UPDATE = 'supplier.acceptance.update';
+    public const SUPPLIER_ACCEPTANCE_DELETE = 'supplier.acceptance.delete';
+
+    // ===================================================================
+    // CHANGE REQUEST MODULE
+    // ===================================================================
+    public const CHANGE_REQUEST_VIEW = 'change_request.view';
+    public const CHANGE_REQUEST_CREATE = 'change_request.create';
+    public const CHANGE_REQUEST_UPDATE = 'change_request.update';
+    public const CHANGE_REQUEST_DELETE = 'change_request.delete';
+    public const CHANGE_REQUEST_APPROVE = 'change_request.approve';
+    public const CHANGE_REQUEST_REJECT = 'change_request.reject';
+
+    // ===================================================================
+    // PROJECT RISK MODULE
+    // ===================================================================
+    public const PROJECT_RISK_VIEW = 'project.risk.view';
+    public const PROJECT_RISK_CREATE = 'project.risk.create';
+    public const PROJECT_RISK_UPDATE = 'project.risk.update';
+    public const PROJECT_RISK_DELETE = 'project.risk.delete';
+
+    // ===================================================================
+    // ISSUE RECORD MODULE
+    // ===================================================================
+    public const ISSUE_VIEW = 'issue.view';
+    public const ISSUE_CREATE = 'issue.create';
+    public const ISSUE_UPDATE = 'issue.update';
+    public const ISSUE_DELETE = 'issue.delete';
+    public const ISSUE_RESOLVE = 'issue.resolve';
+
+    // ===================================================================
+    // ACCEPTANCE TEMPLATE MODULE
+    // ===================================================================
+    public const ACCEPTANCE_TEMPLATE_VIEW = 'acceptance.template.view';
+    public const ACCEPTANCE_TEMPLATE_CREATE = 'acceptance.template.create';
+    public const ACCEPTANCE_TEMPLATE_UPDATE = 'acceptance.template.update';
+    public const ACCEPTANCE_TEMPLATE_DELETE = 'acceptance.template.delete';
+
+    // ===================================================================
+    // PROJECT MONITORING MODULE
+    // ===================================================================
+    public const PROJECT_MONITORING_VIEW = 'project.monitoring.view';
+
+    // ===================================================================
+    // PROJECT SUMMARY REPORT MODULE
+    // ===================================================================
+    public const PROJECT_SUMMARY_REPORT_VIEW = 'report.project_summary.view';
+
+    // ===================================================================
     // SETTINGS MODULE
     // ===================================================================
     public const SETTINGS_MANAGE = 'settings.manage';
@@ -271,6 +385,12 @@ class Permissions
             self::PROGRESS_VIEW,
             self::PROGRESS_UPDATE,
 
+            // Project Task
+            self::PROJECT_TASK_VIEW,
+            self::PROJECT_TASK_CREATE,
+            self::PROJECT_TASK_UPDATE,
+            self::PROJECT_TASK_DELETE,
+
             // Acceptance
             self::ACCEPTANCE_VIEW,
             self::ACCEPTANCE_CREATE,
@@ -298,6 +418,8 @@ class Permissions
             self::ADDITIONAL_COST_DELETE,
             self::ADDITIONAL_COST_APPROVE,
             self::ADDITIONAL_COST_REJECT,
+            self::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
+            self::ADDITIONAL_COST_CONFIRM,
 
             // Material
             self::MATERIAL_VIEW,
@@ -379,6 +501,7 @@ class Permissions
             self::PAYMENT_UPDATE,
             self::PAYMENT_DELETE,
             self::PAYMENT_CONFIRM,
+            self::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
 
             // Subcontractor
             self::SUBCONTRACTOR_VIEW,
@@ -421,6 +544,83 @@ class Permissions
             self::REVENUE_VIEW,
             self::REVENUE_DASHBOARD,
             self::REVENUE_EXPORT,
+
+            // Budget
+            self::BUDGET_VIEW,
+            self::BUDGET_CREATE,
+            self::BUDGET_UPDATE,
+            self::BUDGET_DELETE,
+            self::BUDGET_APPROVE,
+
+            // Project Phase
+            self::PROJECT_PHASE_VIEW,
+            self::PROJECT_PHASE_CREATE,
+            self::PROJECT_PHASE_UPDATE,
+            self::PROJECT_PHASE_DELETE,
+
+            // Project Document
+            self::PROJECT_DOCUMENT_VIEW,
+            self::PROJECT_DOCUMENT_UPLOAD,
+            self::PROJECT_DOCUMENT_DELETE,
+
+            // Receipt
+            self::RECEIPT_VIEW,
+            self::RECEIPT_CREATE,
+            self::RECEIPT_UPDATE,
+            self::RECEIPT_DELETE,
+            self::RECEIPT_VERIFY,
+
+            // Supplier
+            self::SUPPLIER_VIEW,
+            self::SUPPLIER_CREATE,
+            self::SUPPLIER_UPDATE,
+            self::SUPPLIER_DELETE,
+
+            // Supplier Contract
+            self::SUPPLIER_CONTRACT_VIEW,
+            self::SUPPLIER_CONTRACT_CREATE,
+            self::SUPPLIER_CONTRACT_UPDATE,
+            self::SUPPLIER_CONTRACT_DELETE,
+            self::SUPPLIER_CONTRACT_APPROVE,
+
+            // Supplier Acceptance
+            self::SUPPLIER_ACCEPTANCE_VIEW,
+            self::SUPPLIER_ACCEPTANCE_CREATE,
+            self::SUPPLIER_ACCEPTANCE_UPDATE,
+            self::SUPPLIER_ACCEPTANCE_DELETE,
+
+            // Change Request
+            self::CHANGE_REQUEST_VIEW,
+            self::CHANGE_REQUEST_CREATE,
+            self::CHANGE_REQUEST_UPDATE,
+            self::CHANGE_REQUEST_DELETE,
+            self::CHANGE_REQUEST_APPROVE,
+            self::CHANGE_REQUEST_REJECT,
+
+            // Project Risk
+            self::PROJECT_RISK_VIEW,
+            self::PROJECT_RISK_CREATE,
+            self::PROJECT_RISK_UPDATE,
+            self::PROJECT_RISK_DELETE,
+
+            // Issue Record
+            self::ISSUE_VIEW,
+            self::ISSUE_CREATE,
+            self::ISSUE_UPDATE,
+            self::ISSUE_DELETE,
+            self::ISSUE_RESOLVE,
+
+            // Acceptance Template
+            self::ACCEPTANCE_TEMPLATE_VIEW,
+            self::ACCEPTANCE_TEMPLATE_CREATE,
+            self::ACCEPTANCE_TEMPLATE_UPDATE,
+            self::ACCEPTANCE_TEMPLATE_DELETE,
+
+            // Project Monitoring
+            self::PROJECT_MONITORING_VIEW,
+
+            // Project Summary Report
+            self::PROJECT_SUMMARY_REPORT_VIEW,
 
             // Settings
             self::SETTINGS_VIEW,
@@ -479,6 +679,8 @@ class Permissions
                 self::ADDITIONAL_COST_DELETE,
                 self::ADDITIONAL_COST_APPROVE,
                 self::ADDITIONAL_COST_REJECT,
+                self::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
+                self::ADDITIONAL_COST_CONFIRM,
             ],
             'material' => [
                 self::MATERIAL_VIEW,
@@ -558,6 +760,7 @@ class Permissions
                 self::PAYMENT_UPDATE,
                 self::PAYMENT_DELETE,
                 self::PAYMENT_CONFIRM,
+                self::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
             ],
             'subcontractor' => [
                 self::SUBCONTRACTOR_VIEW,
@@ -600,6 +803,65 @@ class Permissions
                 self::REVENUE_VIEW,
                 self::REVENUE_DASHBOARD,
                 self::REVENUE_EXPORT,
+            ],
+            'receipt' => [
+                self::RECEIPT_VIEW,
+                self::RECEIPT_CREATE,
+                self::RECEIPT_UPDATE,
+                self::RECEIPT_DELETE,
+                self::RECEIPT_VERIFY,
+            ],
+            'supplier' => [
+                self::SUPPLIER_VIEW,
+                self::SUPPLIER_CREATE,
+                self::SUPPLIER_UPDATE,
+                self::SUPPLIER_DELETE,
+            ],
+            'supplier_contract' => [
+                self::SUPPLIER_CONTRACT_VIEW,
+                self::SUPPLIER_CONTRACT_CREATE,
+                self::SUPPLIER_CONTRACT_UPDATE,
+                self::SUPPLIER_CONTRACT_DELETE,
+                self::SUPPLIER_CONTRACT_APPROVE,
+            ],
+            'supplier_acceptance' => [
+                self::SUPPLIER_ACCEPTANCE_VIEW,
+                self::SUPPLIER_ACCEPTANCE_CREATE,
+                self::SUPPLIER_ACCEPTANCE_UPDATE,
+                self::SUPPLIER_ACCEPTANCE_DELETE,
+            ],
+            'change_request' => [
+                self::CHANGE_REQUEST_VIEW,
+                self::CHANGE_REQUEST_CREATE,
+                self::CHANGE_REQUEST_UPDATE,
+                self::CHANGE_REQUEST_DELETE,
+                self::CHANGE_REQUEST_APPROVE,
+                self::CHANGE_REQUEST_REJECT,
+            ],
+            'project_risk' => [
+                self::PROJECT_RISK_VIEW,
+                self::PROJECT_RISK_CREATE,
+                self::PROJECT_RISK_UPDATE,
+                self::PROJECT_RISK_DELETE,
+            ],
+            'issue' => [
+                self::ISSUE_VIEW,
+                self::ISSUE_CREATE,
+                self::ISSUE_UPDATE,
+                self::ISSUE_DELETE,
+                self::ISSUE_RESOLVE,
+            ],
+            'acceptance_template' => [
+                self::ACCEPTANCE_TEMPLATE_VIEW,
+                self::ACCEPTANCE_TEMPLATE_CREATE,
+                self::ACCEPTANCE_TEMPLATE_UPDATE,
+                self::ACCEPTANCE_TEMPLATE_DELETE,
+            ],
+            'project_monitoring' => [
+                self::PROJECT_MONITORING_VIEW,
+            ],
+            'project_summary_report' => [
+                self::PROJECT_SUMMARY_REPORT_VIEW,
             ],
         ];
     }

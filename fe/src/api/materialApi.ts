@@ -35,7 +35,12 @@ export interface CreateMaterialData {
   code?: string;
   unit: string;
   description?: string;
-  min_stock_level?: number;
+  unit_price: number;
+  min_stock?: number;
+  max_stock?: number;
+  initial_stock?: number; // Tồn kho ban đầu khi tạo vật liệu mới
+  category?: string;
+  status?: string;
   project_id?: number;
 }
 
@@ -101,6 +106,15 @@ export const materialApi = {
     notes?: string;
   }) => {
     const response = await api.post(`/projects/${projectId}/materials/transactions`, data);
+    return response.data;
+  },
+
+  adjustStock: async (id: number, data: {
+    quantity: number;
+    transaction_date: string;
+    notes?: string;
+  }) => {
+    const response = await api.post(`/admin/materials/${id}/adjust-stock`, data);
     return response.data;
   },
 };

@@ -20,6 +20,8 @@ import {
   TaskStatus,
   TaskPriority,
 } from "@/types/ganttTypes";
+import { PermissionGuard } from "./PermissionGuard";
+import { Permissions } from "@/constants/Permissions";
 interface TaskFormModalProps {
   visible: boolean;
   task?: ProjectTask | null;
@@ -27,6 +29,7 @@ interface TaskFormModalProps {
   projectId?: string; // For navigation to acceptance
   onClose: () => void;
   onSubmit: (data: CreateTaskData | UpdateTaskData) => Promise<void>;
+  onDelete?: (taskId: number) => Promise<void>; // Optional delete handler
 }
 
 const PRIORITY_OPTIONS: TaskPriority[] = ["low", "medium", "high", "urgent"];
@@ -53,6 +56,7 @@ export default function TaskFormModal({
   projectId,
   onClose,
   onSubmit,
+  onDelete,
 }: TaskFormModalProps) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -476,6 +480,41 @@ export default function TaskFormModal({
           </ScrollView>
 
           <View style={styles.footer}>
+            <PermissionGuard permission={Permissions.PROJECT_TASK_DELETE} projectId={projectId}>
+              {task && onDelete ? (
+                <TouchableOpacity
+                  style={[styles.button, styles.deleteButton]}
+                  onPress={() => {
+                    Alert.alert(
+                      "Xác nhận xóa",
+                      "Bạn có chắc chắn muốn xóa công việc này?",
+                      [
+                        { text: "Hủy", style: "cancel" },
+                        {
+                          text: "Xóa",
+                          style: "destructive",
+                          onPress: async () => {
+                            try {
+                              await onDelete(task.id);
+                              onClose();
+                            } catch (error: any) {
+                              Alert.alert(
+                                "Lỗi",
+                                error.response?.data?.message || "Không thể xóa công việc"
+                              );
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                  disabled={submitting}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.deleteButtonText}>Xóa</Text>
+                </TouchableOpacity>
+              ) : null}
+            </PermissionGuard>
             <TouchableOpacity
               style={[styles.button, styles.cancelButton]}
               onPress={onClose}
@@ -638,6 +677,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#3B82F6",
   },
   submitButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  deleteButton: {
+    backgroundColor: "#EF4444",
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteButtonText: {
     fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",

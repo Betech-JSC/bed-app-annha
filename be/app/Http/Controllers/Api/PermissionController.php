@@ -135,8 +135,20 @@ class PermissionController extends Controller
                 $permissions = array_merge($permissions, $personnel->permissions);
             }
 
-            // Get permissions từ global roles
-            $globalPermissions = $user->permissions()->pluck('name')->toArray();
+            // Get permissions từ global roles (thông qua roles + trực tiếp)
+            $rolePermissions = $user->roles()
+                ->with('permissions')
+                ->get()
+                ->pluck('permissions')
+                ->flatten()
+                ->pluck('name')
+                ->toArray();
+            
+            $directPermissions = $user->directPermissions()
+                ->pluck('name')
+                ->toArray();
+            
+            $globalPermissions = array_merge($rolePermissions, $directPermissions);
             $permissions = array_merge($permissions, $globalPermissions);
         }
 

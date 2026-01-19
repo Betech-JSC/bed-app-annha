@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { materialApi, Material, CreateMaterialData } from "@/api/materialApi";
 import { projectApi } from "@/api/projectApi";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, CurrencyInput } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
@@ -34,12 +34,14 @@ export default function MaterialsScreen() {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
     const [projects, setProjects] = useState<any[]>([]);
-    const [formData, setFormData] = useState<CreateMaterialData>({
+    const [formData, setFormData] = useState<CreateMaterialData & { initial_stock?: number }>({
         name: "",
         code: "",
         unit: "kg",
         description: "",
-        min_stock_level: 0,
+        unit_price: 0,
+        min_stock: 0,
+        initial_stock: 0,
         project_id: undefined,
     });
     const [submitting, setSubmitting] = useState(false);
@@ -97,8 +99,16 @@ export default function MaterialsScreen() {
             newErrors.unit = "Đơn vị là bắt buộc";
         }
 
-        if (formData.min_stock_level !== undefined && formData.min_stock_level < 0) {
-            newErrors.min_stock_level = "Mức tồn kho tối thiểu không được âm";
+        if (formData.unit_price === undefined || formData.unit_price < 0) {
+            newErrors.unit_price = "Đơn giá phải lớn hơn hoặc bằng 0";
+        }
+
+        if (formData.min_stock !== undefined && formData.min_stock < 0) {
+            newErrors.min_stock = "Mức tồn kho tối thiểu không được âm";
+        }
+
+        if (formData.initial_stock !== undefined && formData.initial_stock < 0) {
+            newErrors.initial_stock = "Tồn kho ban đầu không được âm";
         }
 
         setErrors(newErrors);
@@ -112,9 +122,16 @@ export default function MaterialsScreen() {
 
         try {
             setSubmitting(true);
+
+            // Tách initial_stock ra khỏi formData khi gửi API
+            const { initial_stock, ...materialData } = formData;
+
             const response = editingMaterial
-                ? await materialApi.updateMaterial(editingMaterial.id, formData)
-                : await materialApi.createMaterial(formData);
+                ? await materialApi.updateMaterial(editingMaterial.id, materialData)
+                : await materialApi.createMaterial({
+                    ...materialData,
+                    initial_stock: initial_stock || 0, // Gửi initial_stock khi tạo mới
+                });
 
             if (response.success) {
                 Alert.alert("Thành công", editingMaterial ? "Đã cập nhật vật liệu" : "Đã tạo vật liệu thành công");
@@ -138,7 +155,9 @@ export default function MaterialsScreen() {
             code: material.code || "",
             unit: material.unit,
             description: material.description || "",
-            min_stock_level: material.min_stock_level || 0,
+            unit_price: (material as any).unit_price || 0,
+            min_stock: (material as any).min_stock || material.min_stock_level || 0,
+            initial_stock: material.current_stock || 0, // Hiển thị tồn kho hiện tại khi edit
             project_id: material.project_id,
         });
         setShowCreateModal(true);
@@ -177,7 +196,9 @@ export default function MaterialsScreen() {
             code: "",
             unit: "kg",
             description: "",
-            min_stock_level: 0,
+            unit_price: 0,
+            min_stock: 0,
+            initial_stock: 0,
             project_id: undefined,
         });
         setErrors({});
@@ -435,6 +456,22 @@ export default function MaterialsScreen() {
                                         </View>
                                     )}
                                 </View>
+
+                                <CurrencyInput
+                                    label={
+                                        <>
+                                            Đơn giá <Text style={styles.required}>*</Text>
+                                        </>
+                                    }
+                                    value={formData.unit_price}
+                                    onChangeText={(value) => {
+                                        setFormData({ ...formData, unit_price: value });
+                                        if (errors.unit_price) setErrors({ ...errors, unit_price: "" });
+                                    }}
+                                    placeholder="0"
+                                    error={errors.unit_price}
+                                    helperText="Đơn giá tính theo đơn vị (VND)"
+                                />
                             </View>
 
                             {/* Cài đặt tồn kho */}
@@ -446,36 +483,86 @@ export default function MaterialsScreen() {
 
                                 <View style={styles.formGroup}>
                                     <View style={styles.labelContainer}>
+                                        <Text style={styles.label}>Tồn kho ban đầu</Text>
+                                        {!editingMaterial && <Text style={styles.required}>*</Text>}
+                                        {editingMaterial && <Text style={styles.optional}>(Chỉ đọc)</Text>}
+                                    </View>
+                                    <TextInput
+                                        style={[
+                                            styles.input,
+                                            focusedField === "initial_stock" && styles.inputFocused,
+                                            errors.initial_stock && styles.inputError,
+                                            editingMaterial && styles.inputDisabled,
+                                        ]}
+                                        placeholder="0"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={formData.initial_stock?.toString() || "0"}
+                                        onChangeText={(text) => {
+                                            if (!editingMaterial) {
+                                                const value = parseFloat(text) || 0;
+                                                setFormData({ ...formData, initial_stock: value });
+                                                if (errors.initial_stock) setErrors({ ...errors, initial_stock: "" });
+                                            }
+                                        }}
+                                        keyboardType="numeric"
+                                        editable={!editingMaterial}
+                                        onFocus={() => {
+                                            if (!editingMaterial) {
+                                                setFocusedField("initial_stock");
+                                            }
+                                        }}
+                                        onBlur={() => {
+                                            setFocusedField(null);
+                                            if (!editingMaterial && formData.initial_stock !== undefined && formData.initial_stock < 0) {
+                                                setErrors({ ...errors, initial_stock: "Tồn kho ban đầu không được âm" });
+                                            }
+                                        }}
+                                    />
+                                    {errors.initial_stock && (
+                                        <View style={styles.errorContainer}>
+                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                                            <Text style={styles.errorText}>{errors.initial_stock}</Text>
+                                        </View>
+                                    )}
+                                    <Text style={styles.helperText}>
+                                        {editingMaterial
+                                            ? "Tồn kho hiện tại (chỉ đọc). Để thay đổi tồn kho, sử dụng chức năng điều chỉnh tồn kho."
+                                            : "Số lượng tồn kho ban đầu khi tạo vật liệu mới"}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.formGroup}>
+                                    <View style={styles.labelContainer}>
                                         <Text style={styles.label}>Mức tồn kho tối thiểu</Text>
                                         <Text style={styles.optional}>(Tùy chọn)</Text>
                                     </View>
                                     <TextInput
                                         style={[
                                             styles.input,
-                                            focusedField === "min_stock_level" && styles.inputFocused,
-                                            errors.min_stock_level && styles.inputError,
+                                            focusedField === "min_stock" && styles.inputFocused,
+                                            errors.min_stock && styles.inputError,
                                         ]}
                                         placeholder="0"
                                         placeholderTextColor="#9CA3AF"
-                                        value={formData.min_stock_level?.toString()}
+                                        value={formData.min_stock?.toString()}
                                         onChangeText={(text) => {
                                             const value = parseFloat(text) || 0;
-                                            setFormData({ ...formData, min_stock_level: value });
-                                            if (errors.min_stock_level) setErrors({ ...errors, min_stock_level: "" });
+                                            setFormData({ ...formData, min_stock: value });
+                                            if (errors.min_stock) setErrors({ ...errors, min_stock: "" });
                                         }}
                                         keyboardType="numeric"
-                                        onFocus={() => setFocusedField("min_stock_level")}
+                                        onFocus={() => setFocusedField("min_stock")}
                                         onBlur={() => {
                                             setFocusedField(null);
-                                            if (formData.min_stock_level !== undefined && formData.min_stock_level < 0) {
-                                                setErrors({ ...errors, min_stock_level: "Mức tồn kho không được âm" });
+                                            if (formData.min_stock !== undefined && formData.min_stock < 0) {
+                                                setErrors({ ...errors, min_stock: "Mức tồn kho không được âm" });
                                             }
                                         }}
                                     />
-                                    {errors.min_stock_level && (
+                                    {errors.min_stock && (
                                         <View style={styles.errorContainer}>
                                             <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                            <Text style={styles.errorText}>{errors.min_stock_level}</Text>
+                                            <Text style={styles.errorText}>{errors.min_stock}</Text>
                                         </View>
                                     )}
                                     <Text style={styles.helperText}>Cảnh báo khi tồn kho dưới mức này</Text>
@@ -764,6 +851,10 @@ const styles = StyleSheet.create({
     inputError: {
         borderColor: "#EF4444",
         backgroundColor: "#FEF2F2",
+    },
+    inputDisabled: {
+        backgroundColor: "#F3F4F6",
+        color: "#6B7280",
     },
     textArea: {
         minHeight: 100,

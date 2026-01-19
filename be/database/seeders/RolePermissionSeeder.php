@@ -115,6 +115,8 @@ class RolePermissionSeeder extends Seeder
             Permissions::ADDITIONAL_COST_DELETE,
             Permissions::ADDITIONAL_COST_APPROVE,
             Permissions::ADDITIONAL_COST_REJECT,
+            Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
+            Permissions::ADDITIONAL_COST_CONFIRM,
 
             // Material
             Permissions::MATERIAL_VIEW,
@@ -184,6 +186,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::PAYMENT_UPDATE,
             Permissions::PAYMENT_DELETE,
             Permissions::PAYMENT_CONFIRM,
+            Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
 
             // Subcontractor
             Permissions::SUBCONTRACTOR_VIEW,
@@ -209,6 +212,18 @@ class RolePermissionSeeder extends Seeder
             Permissions::LOG_CREATE,
             Permissions::LOG_UPDATE,
             Permissions::LOG_DELETE,
+
+            // Project Task
+            Permissions::PROJECT_TASK_VIEW,
+            Permissions::PROJECT_TASK_CREATE,
+            Permissions::PROJECT_TASK_UPDATE,
+            Permissions::PROJECT_TASK_DELETE,
+
+            // Project Comment
+            Permissions::PROJECT_COMMENT_VIEW,
+            Permissions::PROJECT_COMMENT_CREATE,
+            Permissions::PROJECT_COMMENT_UPDATE,
+            Permissions::PROJECT_COMMENT_DELETE,
 
             // Defect
             Permissions::DEFECT_VIEW,
@@ -270,6 +285,7 @@ class RolePermissionSeeder extends Seeder
             // Additional Cost
             Permissions::ADDITIONAL_COST_VIEW,
             Permissions::ADDITIONAL_COST_APPROVE,
+            Permissions::ADDITIONAL_COST_CONFIRM,
 
             // Material
             Permissions::MATERIAL_VIEW,
@@ -296,6 +312,15 @@ class RolePermissionSeeder extends Seeder
 
             // Construction Log
             Permissions::LOG_VIEW,
+
+            // Project Task
+            Permissions::PROJECT_TASK_VIEW,
+
+            // Project Comment
+            Permissions::PROJECT_COMMENT_VIEW,
+            Permissions::PROJECT_COMMENT_CREATE,
+            Permissions::PROJECT_COMMENT_UPDATE,
+            Permissions::PROJECT_COMMENT_DELETE,
 
             // Defect
             Permissions::DEFECT_VIEW,
@@ -362,6 +387,8 @@ class RolePermissionSeeder extends Seeder
             Permissions::ADDITIONAL_COST_UPDATE,
             Permissions::ADDITIONAL_COST_DELETE,
             Permissions::ADDITIONAL_COST_APPROVE,
+            Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
+            Permissions::ADDITIONAL_COST_CONFIRM,
 
             // Material
             Permissions::MATERIAL_VIEW,
@@ -410,6 +437,18 @@ class RolePermissionSeeder extends Seeder
             Permissions::LOG_CREATE,
             Permissions::LOG_UPDATE,
             Permissions::LOG_DELETE,
+
+            // Project Task
+            Permissions::PROJECT_TASK_VIEW,
+            Permissions::PROJECT_TASK_CREATE,
+            Permissions::PROJECT_TASK_UPDATE,
+            Permissions::PROJECT_TASK_DELETE,
+
+            // Project Comment
+            Permissions::PROJECT_COMMENT_VIEW,
+            Permissions::PROJECT_COMMENT_CREATE,
+            Permissions::PROJECT_COMMENT_UPDATE,
+            Permissions::PROJECT_COMMENT_DELETE,
 
             // Defect
             Permissions::DEFECT_VIEW,
@@ -482,6 +521,8 @@ class RolePermissionSeeder extends Seeder
             Permissions::ADDITIONAL_COST_VIEW,
             Permissions::ADDITIONAL_COST_CREATE,
             Permissions::ADDITIONAL_COST_UPDATE,
+            Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
+            Permissions::ADDITIONAL_COST_CONFIRM,
 
             // Material
             Permissions::MATERIAL_VIEW,
@@ -507,6 +548,16 @@ class RolePermissionSeeder extends Seeder
             Permissions::LOG_CREATE,
             Permissions::LOG_UPDATE,
             Permissions::LOG_DELETE,
+
+            // Project Task
+            Permissions::PROJECT_TASK_VIEW,
+            Permissions::PROJECT_TASK_CREATE,
+            Permissions::PROJECT_TASK_UPDATE,
+
+            // Project Comment
+            Permissions::PROJECT_COMMENT_VIEW,
+            Permissions::PROJECT_COMMENT_CREATE,
+            Permissions::PROJECT_COMMENT_UPDATE,
 
             // Defect
             Permissions::DEFECT_VIEW,
@@ -547,6 +598,7 @@ class RolePermissionSeeder extends Seeder
             // Additional Cost
             Permissions::ADDITIONAL_COST_VIEW,
             Permissions::ADDITIONAL_COST_APPROVE,
+            Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
 
             // Contract
             Permissions::CONTRACT_VIEW,
@@ -556,6 +608,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::PAYMENT_CREATE,
             Permissions::PAYMENT_UPDATE,
             Permissions::PAYMENT_CONFIRM,
+            Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
 
             // Invoice
             Permissions::INVOICE_VIEW,
@@ -633,6 +686,7 @@ class RolePermissionSeeder extends Seeder
 
             // Payment
             Permissions::PAYMENT_VIEW,
+            Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
 
             // Invoice
             Permissions::INVOICE_VIEW,
@@ -642,6 +696,13 @@ class RolePermissionSeeder extends Seeder
 
             // Construction Log
             Permissions::LOG_VIEW,
+
+            // Project Task
+            Permissions::PROJECT_TASK_VIEW,
+
+            // Project Comment
+            Permissions::PROJECT_COMMENT_VIEW,
+            Permissions::PROJECT_COMMENT_CREATE,
 
             // Defect
             Permissions::DEFECT_VIEW,

@@ -105,7 +105,6 @@ class ProjectCommentController extends Controller
         } elseif ($project->project_manager_id === $user->id) {
             $canComment = true; // Project manager có thể comment
         } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_CREATE) || 
-                  ($user->hasPermission(Permissions::PROJECT_VIEW) && $user->hasPermission(Permissions::PROJECT_COMMENT_CREATE)) ||
                   $user->owner || 
                   $user->role === 'admin') {
             $canComment = true; // Có quyền tạo comment hoặc admin
@@ -147,9 +146,10 @@ class ProjectCommentController extends Controller
         $canUpdate = false;
         if ($comment->user_id === $user->id) {
             $canUpdate = true; // Người tạo comment có thể sửa
-        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_UPDATE) && 
-                  ($user->owner || $user->role === 'admin')) {
-            $canUpdate = true; // Admin hoặc owner có quyền update
+        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_UPDATE) || 
+                  $user->owner || 
+                  $user->role === 'admin') {
+            $canUpdate = true; // Có quyền update hoặc admin/owner
         }
 
         if (!$canUpdate) {
@@ -197,9 +197,10 @@ class ProjectCommentController extends Controller
         $canDelete = false;
         if ($comment->user_id === $user->id) {
             $canDelete = true; // Người tạo comment có thể xóa
-        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_DELETE) && 
-                  ($user->owner || $user->role === 'admin')) {
-            $canDelete = true; // Admin hoặc owner có quyền delete
+        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_DELETE) || 
+                  $user->owner || 
+                  $user->role === 'admin') {
+            $canDelete = true; // Có quyền delete hoặc admin/owner
         }
 
         if (!$canDelete) {

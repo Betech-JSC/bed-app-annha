@@ -18,7 +18,8 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { materialApi, Material, MaterialTransaction, CreateMaterialData } from "@/api/materialApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function MaterialDetailScreen() {
     const router = useRouter();
@@ -43,6 +44,13 @@ export default function MaterialDetailScreen() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [focusedField, setFocusedField] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"details" | "transactions">("details");
+    const [showAdjustStockModal, setShowAdjustStockModal] = useState(false);
+    const [adjustStockData, setAdjustStockData] = useState({
+        quantity: "",
+        notes: "",
+        transaction_date: new Date().toISOString().split("T")[0],
+    });
+    const [adjustingStock, setAdjustingStock] = useState(false);
 
     useEffect(() => {
         loadMaterial();
@@ -144,6 +152,38 @@ export default function MaterialDetailScreen() {
             Alert.alert("Lỗi", errorMessage);
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleAdjustStock = async () => {
+        if (!adjustStockData.quantity || parseFloat(adjustStockData.quantity) === 0) {
+            Alert.alert("Lỗi", "Vui lòng nhập số lượng điều chỉnh (khác 0)");
+            return;
+        }
+
+        try {
+            setAdjustingStock(true);
+            const response = await materialApi.adjustStock(Number(id), {
+                quantity: parseFloat(adjustStockData.quantity),
+                transaction_date: adjustStockData.transaction_date,
+                notes: adjustStockData.notes || undefined,
+            });
+
+            if (response.success) {
+                Alert.alert("Thành công", `Đã điều chỉnh tồn kho. Tồn kho mới: ${response.data.new_stock} ${material?.unit || ""}`);
+                setShowAdjustStockModal(false);
+                setAdjustStockData({
+                    quantity: "",
+                    notes: "",
+                    transaction_date: new Date().toISOString().split("T")[0],
+                });
+                loadMaterial();
+            }
+        } catch (error: any) {
+            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể điều chỉnh tồn kho";
+            Alert.alert("Lỗi", errorMessage);
+        } finally {
+            setAdjustingStock(false);
         }
     };
 
@@ -274,27 +314,30 @@ export default function MaterialDetailScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <BackButton />
-                <Text style={styles.headerTitle}>Chi Tiết Vật Liệu</Text>
-                <View style={styles.headerActions}>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={() => setShowEditModal(true)}
-                    >
-                        <Ionicons name="pencil" size={24} color="#3B82F6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={handleDelete}
-                    >
-                        <Ionicons name="trash" size={24} color="#EF4444" />
-                    </TouchableOpacity>
-                </View>
-            </View>
+            <ScreenHeader
+                title="Chi Tiết Vật Liệu"
+                showBackButton
+                rightComponent={
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => setShowEditModal(true)}
+                        >
+                            <Ionicons name="pencil" size={24} color="#3B82F6" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={handleDelete}
+                        >
+                            <Ionicons name="trash" size={24} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
+                }
+            />
 
             <ScrollView
                 style={styles.content}
+                contentContainerStyle={{ paddingBottom: useTabBarHeight() }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
                 {/* Stock Status Card */}
@@ -405,12 +448,13 @@ export default function MaterialDetailScreen() {
                                 <Text style={styles.emptyText}>Chưa có giao dịch</Text>
                             </View>
                         ) : (
-                            <FlatList
-                                data={transactions}
-                                renderItem={renderTransactionItem}
-                                keyExtractor={(item) => item.id.toString()}
-                                scrollEnabled={false}
-                            />
+                            <View>
+                                {transactions.map((item) => (
+                                    <View key={item.id.toString()}>
+                                        {renderTransactionItem({ item })}
+                                    </View>
+                                ))}
+                            </View>
                         )}
                     </View>
                 )}
@@ -560,23 +604,35 @@ export default function MaterialDetailScreen() {
                                 )}
                             </View>
 
+                            {/* Điều chỉnh tồn kho */}
                             <View style={styles.formGroup}>
-                                <Text style={styles.label}>Dự án</Text>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.input,
-                                        styles.pickerInput,
-                                        focusedField === "project_id" && styles.inputFocused,
-                                    ]}
-                                    onPress={() => setShowProjectPicker(true)}
-                                    onFocus={() => setFocusedField("project_id")}
-                                >
-                                    <Text style={selectedProject ? styles.pickerText : styles.pickerPlaceholder}>
-                                        {selectedProject ? selectedProject.name : "Chọn dự án (tùy chọn)"}
-                                    </Text>
-                                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                                </TouchableOpacity>
+                                <View style={styles.labelContainer}>
+                                    <Text style={styles.label}>Điều chỉnh tồn kho</Text>
+                                    <Text style={styles.optional}>(Tùy chọn)</Text>
+                                </View>
+                                <View style={styles.stockAdjustmentContainer}>
+                                    <View style={styles.stockInfoRow}>
+                                        <Text style={styles.stockInfoLabel}>Tồn kho hiện tại:</Text>
+                                        <Text style={styles.stockInfoValue}>
+                                            {material?.current_stock || 0} {material?.unit || ""}
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.adjustStockButton}
+                                        onPress={() => {
+                                            setShowEditModal(false);
+                                            setShowAdjustStockModal(true);
+                                        }}
+                                    >
+                                        <Ionicons name="create-outline" size={18} color="#FFFFFF" />
+                                        <Text style={styles.adjustStockButtonText}>Điều chỉnh tồn kho</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <Text style={styles.helperText}>
+                                    Nhấn để mở form điều chỉnh tồn kho (tăng/giảm)
+                                </Text>
                             </View>
+
                         </View>
 
                         <View style={styles.modalActions}>
@@ -657,6 +713,108 @@ export default function MaterialDetailScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Adjust Stock Modal */}
+            <Modal
+                visible={showAdjustStockModal}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowAdjustStockModal(false)}
+            >
+                <KeyboardAvoidingView
+                    style={styles.modalContainer}
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                >
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Điều chỉnh tồn kho</Text>
+                        <TouchableOpacity onPress={() => setShowAdjustStockModal(false)}>
+                            <Ionicons name="close" size={24} color="#1F2937" />
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView
+                        style={styles.modalContent}
+                        contentContainerStyle={styles.modalBodyContent}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        <View style={styles.infoBox}>
+                            <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
+                            <View style={styles.infoBoxContent}>
+                                <Text style={styles.infoBoxText}>
+                                    Tồn kho hiện tại: <Text style={styles.infoBoxBold}>{material?.current_stock || 0} {material?.unit || ""}</Text>
+                                </Text>
+                                <Text style={styles.infoBoxSubtext}>
+                                    Nhập số dương để tăng tồn kho, số âm để giảm tồn kho
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.formGroup}>
+                            <Text style={styles.label}>Số lượng điều chỉnh ({material?.unit || ""}) *</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Ví dụ: +10 hoặc -5"
+                                value={adjustStockData.quantity}
+                                onChangeText={(text) => setAdjustStockData({ ...adjustStockData, quantity: text })}
+                                keyboardType="decimal-pad"
+                            />
+                            <Text style={styles.helperText}>
+                                Số dương: tăng tồn kho | Số âm: giảm tồn kho
+                            </Text>
+                        </View>
+
+                        <View style={styles.formGroup}>
+                            <Text style={styles.label}>Ngày điều chỉnh</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={adjustStockData.transaction_date}
+                                onChangeText={(text) => setAdjustStockData({ ...adjustStockData, transaction_date: text })}
+                                placeholder="YYYY-MM-DD"
+                            />
+                        </View>
+
+                        <View style={styles.formGroup}>
+                            <Text style={styles.label}>Ghi chú</Text>
+                            <TextInput
+                                style={[styles.input, styles.textArea]}
+                                placeholder="Nhập lý do điều chỉnh..."
+                                value={adjustStockData.notes}
+                                onChangeText={(text) => setAdjustStockData({ ...adjustStockData, notes: text })}
+                                multiline
+                                numberOfLines={3}
+                                textAlignVertical="top"
+                            />
+                        </View>
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={() => {
+                                    setShowAdjustStockModal(false);
+                                    setAdjustStockData({
+                                        quantity: "",
+                                        notes: "",
+                                        transaction_date: new Date().toISOString().split("T")[0],
+                                    });
+                                }}
+                            >
+                                <Text style={styles.cancelButtonText}>Hủy</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.submitButton, adjustingStock && styles.submitButtonDisabled]}
+                                onPress={handleAdjustStock}
+                                disabled={adjustingStock}
+                            >
+                                {adjustingStock ? (
+                                    <ActivityIndicator color="#FFFFFF" size="small" />
+                                ) : (
+                                    <Text style={styles.submitButtonText}>Xác nhận</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </Modal>
         </View>
     );
 }
@@ -671,22 +829,6 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: "#F9FAFB",
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: 16,
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1F2937",
-        flex: 1,
-        marginLeft: 12,
     },
     headerActions: {
         flexDirection: "row",
@@ -1019,6 +1161,102 @@ const styles = StyleSheet.create({
     },
     pickerItemTextSelected: {
         color: "#3B82F6",
+        fontWeight: "600",
+    },
+    stockAdjustmentContainer: {
+        marginTop: 8,
+    },
+    stockInfoRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12,
+        padding: 12,
+        backgroundColor: "#F3F4F6",
+        borderRadius: 8,
+    },
+    stockInfoLabel: {
+        fontSize: 14,
+        color: "#6B7280",
+    },
+    stockInfoValue: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#1F2937",
+    },
+    adjustStockButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#3B82F6",
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        gap: 8,
+    },
+    adjustStockButtonText: {
+        color: "#FFFFFF",
+        fontSize: 14,
+        fontWeight: "600",
+    },
+    labelContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 8,
+        gap: 4,
+    },
+    optional: {
+        fontSize: 12,
+        color: "#9CA3AF",
+        fontStyle: "italic",
+    },
+    helperText: {
+        fontSize: 12,
+        color: "#6B7280",
+        marginTop: 6,
+        fontStyle: "italic",
+    },
+    infoBox: {
+        flexDirection: "row",
+        backgroundColor: "#EFF6FF",
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 16,
+        gap: 8,
+    },
+    infoBoxContent: {
+        flex: 1,
+    },
+    infoBoxText: {
+        fontSize: 14,
+        color: "#1E40AF",
+        lineHeight: 20,
+    },
+    infoBoxBold: {
+        fontWeight: "700",
+    },
+    infoBoxSubtext: {
+        fontSize: 12,
+        color: "#3B82F6",
+        marginTop: 4,
+    },
+    modalBodyContent: {
+        padding: 16,
+        paddingBottom: 40,
+    },
+    modalActions: {
+        flexDirection: "row",
+        gap: 12,
+        marginTop: 24,
+    },
+    submitButton: {
+        backgroundColor: "#3B82F6",
+    },
+    submitButtonDisabled: {
+        opacity: 0.6,
+    },
+    submitButtonText: {
+        color: "#FFFFFF",
         fontWeight: "600",
     },
 });

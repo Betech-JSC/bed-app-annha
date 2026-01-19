@@ -13,10 +13,13 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { costApi, Cost } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
+import { ScreenHeader } from "@/components";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function CostDetailScreen() {
   const router = useRouter();
   const { id, costId } = useLocalSearchParams<{ id: string; costId: string }>();
+  const tabBarHeight = useTabBarHeight();
   const [cost, setCost] = useState<Cost | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -102,19 +105,12 @@ export default function CostDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi Tiết Chi Phí</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <View style={styles.content}>
+    <View style={styles.container}>
+      <ScreenHeader title="Chi Tiết Chi Phí" showBackButton />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight }]}
+      >
         {/* Status Badge */}
         <View style={styles.statusSection}>
           <View
@@ -308,8 +304,8 @@ export default function CostDetailScreen() {
             </View>
           </View>
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -324,27 +320,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#F9FAFB",
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
+  scrollView: {
     flex: 1,
-    marginLeft: 12,
-  },
-  placeholder: {
-    width: 32,
   },
   content: {
     padding: 16,

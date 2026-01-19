@@ -10,7 +10,7 @@ export interface ProjectPayment {
   notes?: string;
   due_date: string;
   paid_date?: string;
-  status: "pending" | "customer_pending_approval" | "customer_approved" | "paid" | "overdue";
+  status: "pending" | "customer_pending_approval" | "customer_approved" | "customer_paid" | "confirmed" | "paid" | "overdue";
   confirmed_by?: number;
   confirmed_at?: string;
   customer_approved_by?: number;
@@ -94,6 +94,20 @@ export const paymentApi = {
     const response = await api.post(`/projects/${projectId}/payments/${paymentId}/reject-by-customer`, {
       rejection_reason: reason,
     });
+    return response.data;
+  },
+
+  // Mark as paid by customer (khách hàng đánh dấu đã thanh toán)
+  markAsPaidByCustomer: async (
+    projectId: string | number,
+    paymentId: string | number,
+    data: {
+      paid_date?: string;
+      actual_amount?: number;
+      attachment_ids?: number[];
+    }
+  ) => {
+    const response = await api.post(`/projects/${projectId}/payments/${paymentId}/mark-paid-by-customer`, data);
     return response.data;
   },
 };

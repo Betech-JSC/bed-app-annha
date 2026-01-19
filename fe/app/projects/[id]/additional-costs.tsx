@@ -11,8 +11,9 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { additionalCostApi, AdditionalCost } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionGuard } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
 
 export default function AdditionalCostsScreen() {
   const router = useRouter();
@@ -47,6 +48,18 @@ export default function AdditionalCostsScreen() {
   };
 
 
+  const handleConfirm = async (costId: number) => {
+    try {
+      const response = await additionalCostApi.confirmAdditionalCost(id!, costId);
+      if (response.success) {
+        Alert.alert("Thành công", "Đã xác nhận đã nhận tiền.");
+        loadCosts();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
+    }
+  };
+
   const handleApprove = async (costId: number) => {
     try {
       const response = await additionalCostApi.approveAdditionalCost(id!, costId);
@@ -68,14 +81,37 @@ export default function AdditionalCostsScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case "confirmed":
       case "approved":
         return "#10B981";
+      case "customer_paid":
+        return "#3B82F6";
+      case "pending":
       case "pending_approval":
         return "#F59E0B";
       case "rejected":
         return "#EF4444";
       default:
         return "#6B7280";
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "Chờ thanh toán";
+      case "customer_paid":
+        return "Khách đã thanh toán";
+      case "confirmed":
+        return "Đã nhận tiền";
+      case "pending_approval":
+        return "Chờ duyệt";
+      case "approved":
+        return "Đã duyệt";
+      case "rejected":
+        return "Đã từ chối";
+      default:
+        return status;
     }
   };
 
@@ -98,11 +134,7 @@ export default function AdditionalCostsScreen() {
               { color: getStatusColor(item.status) },
             ]}
           >
-            {item.status === "approved"
-              ? "Đã duyệt"
-              : item.status === "pending_approval"
-                ? "Chờ duyệt"
-                : "Đã từ chối"}
+            {getStatusText(item.status)}
           </Text>
         </View>
       </View>
@@ -120,16 +152,49 @@ export default function AdditionalCostsScreen() {
         </View>
       )}
 
+      {/* Khách hàng đánh dấu đã thanh toán */}
+      {item.status === "pending" && (
+        <PermissionGuard permission={Permissions.ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER} projectId={id}>
+          <TouchableOpacity
+            style={styles.markPaidButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              router.push(`/projects/${id}/additional-costs/${item.id}/mark-paid`);
+            }}
+          >
+            <Text style={styles.markPaidButtonText}>Đã thanh toán</Text>
+          </TouchableOpacity>
+        </PermissionGuard>
+      )}
+
+      {/* Kế toán xác nhận đã nhận tiền */}
+      {item.status === "customer_paid" && (
+        <PermissionGuard permission={Permissions.ADDITIONAL_COST_CONFIRM} projectId={id}>
+          <TouchableOpacity
+            style={styles.confirmButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleConfirm(item.id);
+            }}
+          >
+            <Text style={styles.confirmButtonText}>Xác nhận đã nhận tiền</Text>
+          </TouchableOpacity>
+        </PermissionGuard>
+      )}
+
+      {/* Backward compatible: pending_approval → approve */}
       {item.status === "pending_approval" && (
-        <TouchableOpacity
-          style={styles.approveButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            handleApprove(item.id);
-          }}
-        >
-          <Text style={styles.approveButtonText}>Duyệt</Text>
-        </TouchableOpacity>
+        <PermissionGuard permission={Permissions.ADDITIONAL_COST_APPROVE} projectId={id}>
+          <TouchableOpacity
+            style={styles.approveButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleApprove(item.id);
+            }}
+          >
+            <Text style={styles.approveButtonText}>Duyệt</Text>
+          </TouchableOpacity>
+        </PermissionGuard>
       )}
     </TouchableOpacity>
   );
@@ -148,12 +213,14 @@ export default function AdditionalCostsScreen() {
         title="Phát Sinh Ngoài Báo Giá"
         showBackButton
         rightComponent={
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => router.push(`/projects/${id}/additional-costs/create`)}
-          >
-            <Ionicons name="add" size={24} color="#3B82F6" />
-          </TouchableOpacity>
+          <PermissionGuard permission={Permissions.ADDITIONAL_COST_CREATE} projectId={id}>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => router.push(`/projects/${id}/additional-costs/create`)}
+            >
+              <Ionicons name="add" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          </PermissionGuard>
         }
       />
 
@@ -228,11 +295,36 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     lineHeight: 20,
   },
+  markPaidButton: {
+    backgroundColor: "#3B82F6",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  markPaidButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  confirmButton: {
+    backgroundColor: "#10B981",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  confirmButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
   approveButton: {
     backgroundColor: "#10B981",
     padding: 12,
     borderRadius: 8,
     alignItems: "center",
+    marginTop: 8,
   },
   approveButtonText: {
     color: "#FFFFFF",

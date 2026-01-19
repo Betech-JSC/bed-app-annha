@@ -42,5 +42,6 @@ export { default as PhaseSection } from "./PhaseSection";
 export { default as AcceptanceItemForm } from "./AcceptanceItemForm";
 export { default as AcceptanceItemList } from "./AcceptanceItemList";
 export { default as DatePickerInput } from "./DatePickerInput";
+export { default as CurrencyInput } from "./CurrencyInput";
 export { NotificationItem } from "./NotificationItem";
 export { NotificationBadge } from "./NotificationBadge";

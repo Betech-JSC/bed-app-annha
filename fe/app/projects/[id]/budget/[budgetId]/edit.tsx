@@ -14,8 +14,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { budgetApi, CreateBudgetData } from "@/api/budgetApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -31,7 +30,6 @@ export default function EditBudgetScreen() {
         notes: "",
         items: [],
     });
-    const [showDatePicker, setShowDatePicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -185,55 +183,23 @@ export default function EditBudgetScreen() {
                             />
                         </View>
 
-                        <View style={styles.formGroup}>
-                            <View style={styles.labelContainer}>
-                                <Text style={styles.label}>Ngày lập ngân sách</Text>
-                                <Text style={styles.required}>*</Text>
-                            </View>
-                            <TouchableOpacity
-                                style={[
-                                    styles.dateInput,
-                                    focusedField === "budget_date" && styles.inputFocused,
-                                    errors.budget_date && styles.inputError,
-                                ]}
-                                onPress={() => {
-                                    setShowDatePicker(true);
-                                    setFocusedField("budget_date");
-                                }}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={formData.budget_date ? {} : styles.placeholderText}>
-                                    {formData.budget_date
-                                        ? new Date(formData.budget_date).toLocaleDateString("vi-VN")
-                                        : "Chọn ngày"}
+                        <DatePickerInput
+                            label={
+                                <Text>
+                                    Ngày lập ngân sách <Text style={styles.required}>*</Text>
                                 </Text>
-                                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                            </TouchableOpacity>
-                            {showDatePicker && (
-                                <DateTimePicker
-                                    value={formData.budget_date ? new Date(formData.budget_date) : new Date()}
-                                    mode="date"
-                                    display="default"
-                                    onChange={(event, date) => {
-                                        setShowDatePicker(false);
-                                        setFocusedField(null);
-                                        if (date) {
-                                            setFormData({
-                                                ...formData,
-                                                budget_date: date.toISOString().split("T")[0],
-                                            });
-                                            if (errors.budget_date) setErrors({ ...errors, budget_date: "" });
-                                        }
-                                    }}
-                                />
-                            )}
-                            {errors.budget_date && (
-                                <View style={styles.errorContainer}>
-                                    <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                    <Text style={styles.errorText}>{errors.budget_date}</Text>
-                                </View>
-                            )}
-                        </View>
+                            }
+                            value={formData.budget_date}
+                            onDateChange={(date) => {
+                                setFormData({
+                                    ...formData,
+                                    budget_date: date,
+                                });
+                                if (errors.budget_date) setErrors({ ...errors, budget_date: "" });
+                            }}
+                            placeholder="Chọn ngày"
+                            error={errors.budget_date}
+                        />
 
                         <View style={styles.formGroup}>
                             <Text style={styles.label}>Ghi chú</Text>

@@ -12,7 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { changeRequestApi, CreateChangeRequestData } from "@/api/changeRequestApi";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, CurrencyInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function CreateChangeRequestScreen() {
@@ -190,21 +190,17 @@ export default function CreateChangeRequestScreen() {
             />
           </View>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Tác động chi phí (VNĐ)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.estimated_cost_impact?.toString() || ""}
-              onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  estimated_cost_impact: text ? parseFloat(text) : undefined,
-                })
-              }
-              placeholder="Nhập số tiền"
-              keyboardType="numeric"
-            />
-          </View>
+          <CurrencyInput
+            label="Tác động chi phí (VNĐ)"
+            value={formData.estimated_cost_impact || 0}
+            onChangeText={(amount) =>
+              setFormData({
+                ...formData,
+                estimated_cost_impact: amount > 0 ? amount : undefined,
+              })
+            }
+            placeholder="Nhập số tiền"
+          />
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Tác động tiến độ (ngày)</Text>

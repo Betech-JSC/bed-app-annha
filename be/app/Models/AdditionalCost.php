@@ -19,11 +19,21 @@ class AdditionalCost extends Model
         'approved_by',
         'approved_at',
         'rejected_reason',
+        'paid_date',
+        'actual_amount',
+        'confirmed_by',
+        'confirmed_at',
+        'customer_paid_by',
+        'customer_paid_at',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'actual_amount' => 'decimal:2',
         'approved_at' => 'datetime',
+        'paid_date' => 'date',
+        'confirmed_at' => 'datetime',
+        'customer_paid_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -61,26 +71,86 @@ class AdditionalCost extends Model
 
     public function getIsApprovedAttribute(): bool
     {
-        return $this->status === 'approved';
+        return in_array($this->status, ['approved', 'confirmed']); // Backward compatible
     }
 
     public function getIsPendingAttribute(): bool
     {
-        return $this->status === 'pending_approval';
+        return $this->status === 'pending' || $this->status === 'pending_approval'; // Backward compatible
     }
 
     // ==================================================================
     // METHODS
     // ==================================================================
 
+    /**
+     * Khách hàng đánh dấu đã thanh toán (upload chứng từ + nhập thông tin)
+     */
+    public function markAsPaidByCustomer(?User $user = null, ?string $paidDate = null, ?float $actualAmount = null): bool
+    {
+        if ($this->status !== 'pending') {
+            return false;
+        }
+
+        $this->status = 'customer_paid';
+        if ($paidDate) {
+            $this->paid_date = $paidDate;
+        } else {
+            $this->paid_date = now()->toDateString();
+        }
+        
+        // Nếu có số tiền thực tế khác với số tiền ban đầu
+        if ($actualAmount !== null && $actualAmount != $this->amount) {
+            $this->actual_amount = $actualAmount;
+        }
+
+        if ($user) {
+            $this->customer_paid_by = $user->id;
+            $this->customer_paid_at = now();
+        }
+        
+        return $this->save();
+    }
+
+    /**
+     * Kế toán xác nhận đã nhận tiền (sau khi khách hàng đã thanh toán)
+     */
+    public function confirm(?User $user = null): bool
+    {
+        // Chỉ cho phép nếu khách hàng đã thanh toán
+        if ($this->status !== 'customer_paid') {
+            return false;
+        }
+
+        $this->status = 'confirmed';
+        if ($user) {
+            $this->confirmed_by = $user->id;
+            $this->confirmed_at = now();
+        }
+        return $this->save();
+    }
+
+    /**
+     * Duyệt chi phí phát sinh (backward compatible - giữ lại cho workflow cũ)
+     */
     public function approve(?User $user = null): bool
     {
-        $this->status = 'approved';
-        if ($user) {
-            $this->approved_by = $user->id;
+        // Nếu đang ở customer_paid, chuyển thành confirmed
+        if ($this->status === 'customer_paid') {
+            return $this->confirm($user);
         }
-        $this->approved_at = now();
-        return $this->save();
+
+        // Workflow cũ: pending_approval → approved
+        if ($this->status === 'pending_approval') {
+            $this->status = 'approved';
+            if ($user) {
+                $this->approved_by = $user->id;
+            }
+            $this->approved_at = now();
+            return $this->save();
+        }
+
+        return false;
     }
 
     public function reject(string $reason): bool
@@ -96,12 +166,12 @@ class AdditionalCost extends Model
 
     public function scopePending($query)
     {
-        return $query->where('status', 'pending_approval');
+        return $query->whereIn('status', ['pending', 'pending_approval']); // Backward compatible
     }
 
     public function scopeApproved($query)
     {
-        return $query->where('status', 'approved');
+        return $query->whereIn('status', ['approved', 'confirmed']); // Backward compatible
     }
 
     // ==================================================================

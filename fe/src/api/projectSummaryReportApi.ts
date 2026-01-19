@@ -4,6 +4,7 @@ export interface ProjectSummaryReport {
   project_id: number;
   project_name: string;
   project_code: string;
+  project_status: string; // Trạng thái dự án
   contract_value: number;
   cost_details: {
     material_costs: number;
@@ -15,6 +16,8 @@ export interface ProjectSummaryReport {
   total_project_costs: number; // Chi phí công trình
   total_salary_costs: number; // Chi phí công ty (lương)
   total_all_costs: number; // Tổng tất cả (tham khảo)
+  additional_costs: number; // Chi phí phát sinh
+  paid_payments: number; // Đã thanh toán
   profit: number; // Lợi nhuận = Hợp đồng - Chi phí công trình
   profit_margin: number; // Tỷ lệ lợi nhuận (%)
 }

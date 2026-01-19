@@ -23,6 +23,7 @@ import { UniversalFileUploader } from "@/components";
 import { defectApi } from "@/api/defectApi";
 import { attachmentApi } from "@/api/attachmentApi";
 import { ganttApi } from "@/api/ganttApi";
+import { isAdmin } from "@/utils/permissions";
 
 interface AcceptanceItemListProps {
   stage: AcceptanceStage;
@@ -61,15 +62,15 @@ export default function AcceptanceItemList({
   const user = useSelector((state: RootState) => state.user);
   const { permissions } = useSelector((state: RootState) => state.permissions);
 
-  // Kiểm tra nếu user là admin (có permission "*" hoặc role là admin)
-  const isAdmin = permissions.includes("*") || user?.role === "admin" || user?.role === "super_admin";
+  // Kiểm tra nếu user là admin từ permissions
+  const isAdminUser = isAdmin(permissions);
 
   // Kiểm tra quyền upload files cho item
   const canUploadFiles = (item: AcceptanceItem): boolean => {
     if (!user?.id) return false;
 
     // Admin luôn có quyền upload
-    if (isAdmin) return true;
+    if (isAdminUser) return true;
 
     // Project manager có quyền upload
     if (isProjectManager) return true;
@@ -349,7 +350,7 @@ export default function AcceptanceItemList({
     if (!user?.id) return false;
 
     // Admin luôn có quyền xóa
-    if (isAdmin) return true;
+    if (isAdminUser) return true;
 
     // Project manager có quyền xóa
     if (isProjectManager) return true;
@@ -909,7 +910,7 @@ export default function AcceptanceItemList({
                   {/* Người tạo hoặc admin có thể gửi duyệt (draft hoặc rejected) */}
                   {(item.workflow_status === "draft" || item.workflow_status === "rejected") &&
                     user?.id &&
-                    (item.created_by?.toString() === user.id.toString() || isAdmin) && (
+                    (item.created_by?.toString() === user.id.toString() || isAdminUser) && (
                       <View style={styles.actionButtonsRow}>
                         <TouchableOpacity
                           style={[
@@ -946,7 +947,7 @@ export default function AcceptanceItemList({
                     )}
 
                   {/* Supervisor approve - khi submitted */}
-                  {item.workflow_status === "submitted" && (isSupervisor || isAdmin) && (
+                  {item.workflow_status === "submitted" && (isSupervisor || isAdminUser) && (
                     <View style={styles.actionButtonGroup}>
                       <TouchableOpacity
                         style={[
@@ -980,7 +981,7 @@ export default function AcceptanceItemList({
                   )}
 
                   {/* Project Manager approve - khi supervisor_approved */}
-                  {item.workflow_status === "supervisor_approved" && (isProjectManager || isAdmin) && (
+                  {item.workflow_status === "supervisor_approved" && (isProjectManager || isAdminUser) && (
                     <View style={styles.actionButtonGroup}>
                       <TouchableOpacity
                         style={[
@@ -1014,7 +1015,7 @@ export default function AcceptanceItemList({
                   )}
 
                   {/* Customer approve - khi project_manager_approved (legacy - không còn dùng cho item) */}
-                  {item.workflow_status === "project_manager_approved" && (isCustomer || isAdmin) && (
+                  {item.workflow_status === "project_manager_approved" && (isCustomer || isAdminUser) && (
                     <View style={styles.actionButtonGroup}>
                       <TouchableOpacity
                         style={[

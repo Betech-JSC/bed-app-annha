@@ -36,10 +36,10 @@ class ProjectPaymentController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission('payments.create')) {
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_CREATE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền tạo đợt thanh toán.'
+                'message' => 'Bạn không có quyền tạo đợt thanh toán. Cần quyền: ' . \App\Constants\Permissions::PAYMENT_CREATE
             ], 403);
         }
 
@@ -124,17 +124,17 @@ class ProjectPaymentController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission('payments.confirm')) {
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_CONFIRM)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xác nhận thanh toán.'
+                'message' => 'Bạn không có quyền xác nhận thanh toán. Cần quyền: ' . \App\Constants\Permissions::PAYMENT_CONFIRM
             ], 403);
         }
 
-        if ($payment->status === 'paid') {
+        if ($payment->status !== 'customer_paid') {
             return response()->json([
                 'success' => false,
-                'message' => 'Đợt thanh toán này đã được xác nhận.'
+                'message' => 'Chỉ có thể xác nhận thanh toán khi khách hàng đã thanh toán.'
             ], 400);
         }
 
@@ -209,7 +209,82 @@ class ProjectPaymentController extends Controller
     }
 
     /**
-     * Khách hàng duyệt thanh toán
+     * Khách hàng đánh dấu đã thanh toán (upload chứng từ + nhập thông tin)
+     */
+    public function markAsPaidByCustomer(Request $request, string $projectId, string $id)
+    {
+        $payment = ProjectPayment::where('project_id', $projectId)
+            ->findOrFail($id);
+
+        $user = auth()->user();
+
+        // Check RBAC permission
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền đánh dấu đã thanh toán. Cần quyền: ' . \App\Constants\Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER
+            ], 403);
+        }
+
+        if ($payment->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể đánh dấu đã thanh toán khi thanh toán ở trạng thái chờ thanh toán.'
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'paid_date' => 'nullable|date',
+            'actual_amount' => 'nullable|numeric|min:0',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Đính kèm files nếu có
+            if (!empty($validated['attachment_ids'])) {
+                foreach ($validated['attachment_ids'] as $attachmentId) {
+                    $attachment = \App\Models\Attachment::find($attachmentId);
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                        $attachment->update([
+                            'attachable_type' => ProjectPayment::class,
+                            'attachable_id' => $payment->id,
+                        ]);
+                    }
+                }
+            }
+
+            // Đánh dấu đã thanh toán
+            $payment->markAsPaidByCustomer(
+                $user,
+                $validated['paid_date'] ?? null,
+                $validated['actual_amount'] ?? null
+            );
+
+            // Gửi thông báo cho kế toán
+            $this->notifyAccountantForConfirmation($payment);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã đánh dấu thanh toán. Đang chờ kế toán xác nhận.',
+                'data' => $payment->fresh(['customerApprover', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Khách hàng duyệt thanh toán (backward compatible - giữ lại cho workflow cũ)
      */
     public function approveByCustomer(Request $request, string $projectId, string $id)
     {
@@ -220,7 +295,7 @@ class ProjectPaymentController extends Controller
         $project = $payment->project;
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_APPROVE)) {
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_APPROVE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt thanh toán.'

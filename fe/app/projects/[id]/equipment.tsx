@@ -19,9 +19,8 @@ import { equipmentApi, Equipment } from "@/api/equipmentApi";
 import { optionsApi, Option } from "@/api/optionsApi";
 import { employeesApi } from "@/api/employeesApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
-import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function ProjectEquipmentScreen() {
     const router = useRouter();
@@ -46,17 +45,11 @@ export default function ProjectEquipmentScreen() {
         handover_date: undefined as Date | undefined,
         return_date: undefined as Date | undefined,
         // Cho THUÊ (rent):
-        daily_rate: "",
-        rental_fee: "",
+        daily_rate: 0,
+        rental_fee: 0,
         billing_start_date: undefined as Date | undefined,
         billing_end_date: undefined as Date | undefined,
     });
-    const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-    const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-    const [showHandoverDatePicker, setShowHandoverDatePicker] = useState(false);
-    const [showReturnDatePicker, setShowReturnDatePicker] = useState(false);
-    const [showBillingStartDatePicker, setShowBillingStartDatePicker] = useState(false);
-    const [showBillingEndDatePicker, setShowBillingEndDatePicker] = useState(false);
     const [users, setUsers] = useState<any[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [showManagerPicker, setShowManagerPicker] = useState(false);
@@ -136,8 +129,8 @@ export default function ProjectEquipmentScreen() {
             manager_id: null,
             handover_date: undefined,
             return_date: undefined,
-            daily_rate: "",
-            rental_fee: "",
+            daily_rate: 0,
+            rental_fee: 0,
             billing_start_date: undefined,
             billing_end_date: undefined,
         });
@@ -192,8 +185,8 @@ export default function ProjectEquipmentScreen() {
 
         // Validation cho THUÊ
         if (allocationData.allocation_type === "rent") {
-            const dailyRate = allocationData.daily_rate 
-                ? parseFloat(allocationData.daily_rate) 
+            const dailyRate = allocationData.daily_rate > 0
+                ? allocationData.daily_rate 
                 : selectedEquipment.rental_rate_per_day;
             if (!dailyRate || dailyRate <= 0) {
                 Alert.alert("Lỗi", "Vui lòng nhập giá thuê/ngày");
@@ -223,11 +216,11 @@ export default function ProjectEquipmentScreen() {
 
             // Cho THUÊ (rent)
             if (allocationData.allocation_type === "rent") {
-                requestData.daily_rate = allocationData.daily_rate 
-                    ? parseFloat(allocationData.daily_rate) 
+                requestData.daily_rate = allocationData.daily_rate > 0
+                    ? allocationData.daily_rate 
                     : selectedEquipment.rental_rate_per_day;
-                requestData.rental_fee = allocationData.rental_fee 
-                    ? parseFloat(allocationData.rental_fee) 
+                requestData.rental_fee = allocationData.rental_fee > 0
+                    ? allocationData.rental_fee 
                     : undefined;
                 requestData.billing_start_date = allocationData.billing_start_date?.toISOString().split("T")[0]
                     || allocationData.start_date.toISOString().split("T")[0];
@@ -583,155 +576,69 @@ export default function ProjectEquipmentScreen() {
                                 />
                             </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày bắt đầu *</Text>
-                                <TouchableOpacity
-                                    style={styles.dateButton}
-                                    onPress={() => setShowStartDatePicker(true)}
-                                >
-                                    <Text style={styles.dateButtonText}>
-                                        {allocationData.start_date.toLocaleDateString("vi-VN")}
-                                    </Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {showStartDatePicker && (
-                                    <DateTimePicker
-                                        value={allocationData.start_date}
-                                        mode="date"
-                                        display="default"
-                                        onChange={(event, date) => {
-                                            setShowStartDatePicker(false);
-                                            if (date) {
-                                                setAllocationData({ ...allocationData, start_date: date });
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
+                            <DatePickerInput
+                                label="Ngày bắt đầu *"
+                                value={allocationData.start_date}
+                                onChange={(date) => {
+                                    if (date) {
+                                        setAllocationData({ ...allocationData, start_date: date });
+                                    }
+                                }}
+                                placeholder="Chọn ngày bắt đầu"
+                                required
+                            />
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày kết thúc (tùy chọn)</Text>
-                                <TouchableOpacity
-                                    style={styles.dateButton}
-                                    onPress={() => setShowEndDatePicker(true)}
-                                >
-                                    <Text style={styles.dateButtonText}>
-                                        {allocationData.end_date
-                                            ? allocationData.end_date.toLocaleDateString("vi-VN")
-                                            : "Chọn ngày kết thúc"}
-                                    </Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {allocationData.end_date && (
-                                    <TouchableOpacity
-                                        style={styles.clearDateButton}
-                                        onPress={() => setAllocationData({ ...allocationData, end_date: undefined })}
-                                    >
-                                        <Text style={styles.clearDateText}>Xóa ngày kết thúc</Text>
-                                    </TouchableOpacity>
-                                )}
-                                {showEndDatePicker && (
-                                    <DateTimePicker
-                                        value={allocationData.end_date || new Date()}
-                                        mode="date"
-                                        display="default"
-                                        minimumDate={allocationData.start_date}
-                                        onChange={(event, date) => {
-                                            setShowEndDatePicker(false);
-                                            if (date) {
-                                                setAllocationData({ ...allocationData, end_date: date });
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
+                            <DatePickerInput
+                                label="Ngày kết thúc (tùy chọn)"
+                                value={allocationData.end_date || null}
+                                onChange={(date) => {
+                                    setAllocationData({ ...allocationData, end_date: date || undefined });
+                                }}
+                                placeholder="Chọn ngày kết thúc"
+                                minimumDate={allocationData.start_date}
+                            />
 
                             {/* Fields for THUÊ (rent) */}
                             {allocationData.allocation_type === "rent" && (
                                 <>
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Giá thuê/ngày (VNĐ) *</Text>
-                                        <TextInput
-                                            style={styles.input}
-                                            value={allocationData.daily_rate}
-                                            onChangeText={(text) => setAllocationData({ ...allocationData, daily_rate: text })}
-                                            placeholder={selectedEquipment.rental_rate_per_day
-                                                ? `Mặc định: ${formatCurrency(selectedEquipment.rental_rate_per_day)}`
-                                                : "Nhập giá thuê"}
-                                            keyboardType="decimal-pad"
-                                        />
-                                    </View>
+                                    <CurrencyInput
+                                        label="Giá thuê/ngày (VNĐ) *"
+                                        value={allocationData.daily_rate > 0 ? allocationData.daily_rate : (selectedEquipment.rental_rate_per_day || 0)}
+                                        onChangeText={(amount) => setAllocationData({ ...allocationData, daily_rate: amount })}
+                                        placeholder={selectedEquipment.rental_rate_per_day
+                                            ? `Mặc định: ${formatCurrency(selectedEquipment.rental_rate_per_day)}`
+                                            : "Nhập giá thuê"}
+                                        required
+                                    />
 
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Tổng phí thuê (VNĐ) - tùy chọn</Text>
-                                        <Text style={styles.helperText}>
-                                            Nếu để trống, hệ thống sẽ tự tính từ giá thuê/ngày × số ngày
-                                        </Text>
-                                        <TextInput
-                                            style={styles.input}
-                                            value={allocationData.rental_fee}
-                                            onChangeText={(text) => setAllocationData({ ...allocationData, rental_fee: text })}
-                                            placeholder="Nhập tổng phí thuê (tùy chọn)"
-                                            keyboardType="decimal-pad"
-                                        />
-                                    </View>
+                                    <CurrencyInput
+                                        label="Tổng phí thuê (VNĐ) - tùy chọn"
+                                        value={allocationData.rental_fee}
+                                        onChangeText={(amount) => setAllocationData({ ...allocationData, rental_fee: amount })}
+                                        placeholder="Nhập tổng phí thuê (tùy chọn)"
+                                        helperText="Nếu để trống, hệ thống sẽ tự tính từ giá thuê/ngày × số ngày"
+                                    />
 
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Ngày bắt đầu tính phí</Text>
-                                        <TouchableOpacity
-                                            style={styles.dateButton}
-                                            onPress={() => setShowBillingStartDatePicker(true)}
-                                        >
-                                            <Text style={styles.dateButtonText}>
-                                                {allocationData.billing_start_date
-                                                    ? allocationData.billing_start_date.toLocaleDateString("vi-VN")
-                                                    : "Mặc định: Ngày bắt đầu"}
-                                            </Text>
-                                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                        </TouchableOpacity>
-                                        {showBillingStartDatePicker && (
-                                            <DateTimePicker
-                                                value={allocationData.billing_start_date || allocationData.start_date}
-                                                mode="date"
-                                                display="default"
-                                                onChange={(event, date) => {
-                                                    setShowBillingStartDatePicker(false);
-                                                    if (date) {
-                                                        setAllocationData({ ...allocationData, billing_start_date: date });
-                                                    }
-                                                }}
-                                            />
-                                        )}
-                                    </View>
+                                    <DatePickerInput
+                                        label="Ngày bắt đầu tính phí"
+                                        value={allocationData.billing_start_date || allocationData.start_date}
+                                        onChange={(date) => {
+                                            if (date) {
+                                                setAllocationData({ ...allocationData, billing_start_date: date });
+                                            }
+                                        }}
+                                        placeholder="Mặc định: Ngày bắt đầu"
+                                    />
 
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Ngày kết thúc tính phí</Text>
-                                        <TouchableOpacity
-                                            style={styles.dateButton}
-                                            onPress={() => setShowBillingEndDatePicker(true)}
-                                        >
-                                            <Text style={styles.dateButtonText}>
-                                                {allocationData.billing_end_date
-                                                    ? allocationData.billing_end_date.toLocaleDateString("vi-VN")
-                                                    : "Mặc định: Ngày kết thúc"}
-                                            </Text>
-                                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                        </TouchableOpacity>
-                                        {showBillingEndDatePicker && (
-                                            <DateTimePicker
-                                                value={allocationData.billing_end_date || allocationData.end_date || new Date()}
-                                                mode="date"
-                                                display="default"
-                                                minimumDate={allocationData.billing_start_date || allocationData.start_date}
-                                                onChange={(event, date) => {
-                                                    setShowBillingEndDatePicker(false);
-                                                    if (date) {
-                                                        setAllocationData({ ...allocationData, billing_end_date: date });
-                                                    }
-                                                }}
-                                            />
-                                        )}
-                                    </View>
+                                    <DatePickerInput
+                                        label="Ngày kết thúc tính phí"
+                                        value={allocationData.billing_end_date || allocationData.end_date || null}
+                                        onChange={(date) => {
+                                            setAllocationData({ ...allocationData, billing_end_date: date || undefined });
+                                        }}
+                                        placeholder="Mặc định: Ngày kết thúc"
+                                        minimumDate={allocationData.billing_start_date || allocationData.start_date}
+                                    />
                                 </>
                             )}
 
@@ -773,70 +680,26 @@ export default function ProjectEquipmentScreen() {
                                         )}
                                     </View>
 
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Ngày bàn giao</Text>
-                                        <TouchableOpacity
-                                            style={styles.dateButton}
-                                            onPress={() => setShowHandoverDatePicker(true)}
-                                        >
-                                            <Text style={styles.dateButtonText}>
-                                                {allocationData.handover_date
-                                                    ? allocationData.handover_date.toLocaleDateString("vi-VN")
-                                                    : "Mặc định: Ngày bắt đầu"}
-                                            </Text>
-                                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                        </TouchableOpacity>
-                                        {showHandoverDatePicker && (
-                                            <DateTimePicker
-                                                value={allocationData.handover_date || allocationData.start_date}
-                                                mode="date"
-                                                display="default"
-                                                onChange={(event, date) => {
-                                                    setShowHandoverDatePicker(false);
-                                                    if (date) {
-                                                        setAllocationData({ ...allocationData, handover_date: date });
-                                                    }
-                                                }}
-                                            />
-                                        )}
-                                    </View>
+                                    <DatePickerInput
+                                        label="Ngày bàn giao"
+                                        value={allocationData.handover_date || allocationData.start_date}
+                                        onChange={(date) => {
+                                            if (date) {
+                                                setAllocationData({ ...allocationData, handover_date: date });
+                                            }
+                                        }}
+                                        placeholder="Mặc định: Ngày bắt đầu"
+                                    />
 
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Ngày hoàn trả (dự kiến)</Text>
-                                        <TouchableOpacity
-                                            style={styles.dateButton}
-                                            onPress={() => setShowReturnDatePicker(true)}
-                                        >
-                                            <Text style={styles.dateButtonText}>
-                                                {allocationData.return_date
-                                                    ? allocationData.return_date.toLocaleDateString("vi-VN")
-                                                    : "Chọn ngày hoàn trả"}
-                                            </Text>
-                                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                        </TouchableOpacity>
-                                        {allocationData.return_date && (
-                                            <TouchableOpacity
-                                                style={styles.clearDateButton}
-                                                onPress={() => setAllocationData({ ...allocationData, return_date: undefined })}
-                                            >
-                                                <Text style={styles.clearDateText}>Xóa ngày hoàn trả</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                        {showReturnDatePicker && (
-                                            <DateTimePicker
-                                                value={allocationData.return_date || new Date()}
-                                                mode="date"
-                                                display="default"
-                                                minimumDate={allocationData.handover_date || allocationData.start_date}
-                                                onChange={(event, date) => {
-                                                    setShowReturnDatePicker(false);
-                                                    if (date) {
-                                                        setAllocationData({ ...allocationData, return_date: date });
-                                                    }
-                                                }}
-                                            />
-                                        )}
-                                    </View>
+                                    <DatePickerInput
+                                        label="Ngày hoàn trả (dự kiến)"
+                                        value={allocationData.return_date || null}
+                                        onChange={(date) => {
+                                            setAllocationData({ ...allocationData, return_date: date || undefined });
+                                        }}
+                                        placeholder="Chọn ngày hoàn trả"
+                                        minimumDate={allocationData.handover_date || allocationData.start_date}
+                                    />
                                 </>
                             )}
 

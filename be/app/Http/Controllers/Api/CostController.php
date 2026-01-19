@@ -65,7 +65,7 @@ class CostController extends Controller
         }
 
         $validated = $request->validate([
-            'cost_group_id' => 'required|exists:cost_groups,id',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
             'description' => 'nullable|string|max:2000',
@@ -78,25 +78,27 @@ class CostController extends Controller
             'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
 
-        // Kiểm tra cost_group có active không
-        $costGroup = \App\Models\CostGroup::find($validated['cost_group_id']);
-        if (!$costGroup || !$costGroup->is_active) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Nhóm chi phí không tồn tại hoặc đã bị vô hiệu hóa.'
-            ], 422);
-        }
+        // Nếu có cost_group_id, kiểm tra cost_group có active không
+        if (!empty($validated['cost_group_id'])) {
+            $costGroup = \App\Models\CostGroup::find($validated['cost_group_id']);
+            if (!$costGroup || !$costGroup->is_active) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Nhóm chi phí không tồn tại hoặc đã bị vô hiệu hóa.'
+                ], 422);
+            }
 
-        // Kiểm tra nếu cost group liên quan đến nhà thầu phụ thì bắt buộc phải chọn subcontractor
-        $isSubcontractorCostGroup = $costGroup->code === 'subcontractor'
-            || stripos($costGroup->name, 'nhà thầu phụ') !== false
-            || stripos($costGroup->name, 'thầu phụ') !== false;
+            // Kiểm tra nếu cost group liên quan đến nhà thầu phụ thì bắt buộc phải chọn subcontractor
+            $isSubcontractorCostGroup = $costGroup->code === 'subcontractor'
+                || stripos($costGroup->name, 'nhà thầu phụ') !== false
+                || stripos($costGroup->name, 'thầu phụ') !== false;
 
-        if ($isSubcontractorCostGroup && empty($validated['subcontractor_id'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vui lòng chọn nhà thầu phụ liên quan cho loại chi phí này.'
-            ], 422);
+            if ($isSubcontractorCostGroup && empty($validated['subcontractor_id'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Vui lòng chọn nhà thầu phụ liên quan cho loại chi phí này.'
+                ], 422);
+            }
         }
 
         // Kiểm tra subcontractor thuộc về project này
@@ -117,12 +119,25 @@ class CostController extends Controller
             $attachmentIds = $validated['attachment_ids'] ?? [];
             unset($validated['attachment_ids']);
 
-            $cost = Cost::create([
+            // Tự động xác định cost_group_id và category dựa trên nguồn phát sinh
+            $autoDetectService = app(\App\Services\CostGroupAutoDetectService::class);
+
+            $costData = [
                 'project_id' => $project->id,
                 'created_by' => $user->id,
                 ...$validated,
                 'status' => 'draft', // Mặc định là draft
-            ]);
+            ];
+
+            // Tự động xác định cost_group_id nếu chưa có
+            if (empty($costData['cost_group_id'])) {
+                $costData['cost_group_id'] = $autoDetectService->detectCostGroup($costData);
+            }
+
+            // Tự động xác định category
+            $costData['category'] = $autoDetectService->detectCategory($costData);
+
+            $cost = Cost::create($costData);
 
             // Đính kèm files nếu có
             if (!empty($attachmentIds)) {
@@ -197,7 +212,7 @@ class CostController extends Controller
         }
 
         $validated = $request->validate([
-            'cost_group_id' => 'sometimes|required|exists:cost_groups,id',
+            'cost_group_id' => 'sometimes|nullable|exists:cost_groups,id',
             'name' => 'sometimes|string|max:255',
             'amount' => 'sometimes|numeric|min:0',
             'description' => 'nullable|string|max:2000',
@@ -205,10 +220,34 @@ class CostController extends Controller
             'material_id' => 'nullable|exists:materials,id',
             'quantity' => 'nullable|numeric|min:0.01|required_with:material_id',
             'unit' => 'nullable|string|max:20|required_with:material_id',
+            'subcontractor_id' => 'nullable|exists:subcontractors,id',
+            'time_tracking_id' => 'nullable|exists:time_trackings,id',
+            'payroll_id' => 'nullable|exists:payrolls,id',
+            'equipment_allocation_id' => 'nullable|exists:equipment_allocations,id',
         ]);
 
+        // Tự động xác định cost_group_id và category nếu chưa có
+        $autoDetectService = app(\App\Services\CostGroupAutoDetectService::class);
+
+        // Merge với dữ liệu hiện tại của cost để có đầy đủ thông tin
+        $costData = array_merge([
+            'material_id' => $cost->material_id,
+            'subcontractor_id' => $cost->subcontractor_id,
+            'time_tracking_id' => $cost->time_tracking_id,
+            'payroll_id' => $cost->payroll_id,
+            'equipment_allocation_id' => $cost->equipment_allocation_id,
+        ], $validated);
+
+        if (empty($validated['cost_group_id'])) {
+            $validated['cost_group_id'] = $autoDetectService->detectCostGroup($costData);
+        }
+
+        if (empty($validated['category'])) {
+            $validated['category'] = $autoDetectService->detectCategory($costData);
+        }
+
         // Kiểm tra cost_group có active không (nếu được cập nhật)
-        if (isset($validated['cost_group_id'])) {
+        if (isset($validated['cost_group_id']) && $validated['cost_group_id']) {
             $costGroup = \App\Models\CostGroup::find($validated['cost_group_id']);
             if (!$costGroup || !$costGroup->is_active) {
                 return response()->json([
@@ -234,6 +273,15 @@ class CostController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::COST_SUBMIT)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền gửi chi phí để duyệt.'
+            ], 403);
+        }
 
         if ($cost->status !== 'draft') {
             return response()->json([
@@ -325,6 +373,14 @@ class CostController extends Controller
         $project = Project::findOrFail($projectId);
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
+
+        // Check RBAC permission
+        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::COST_REJECT)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền từ chối chi phí.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'rejected_reason' => 'required|string|max:500',

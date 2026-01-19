@@ -20,9 +20,8 @@ import { subcontractorApi, Subcontractor } from "@/api/subcontractorApi";
 import { globalSubcontractorApi, GlobalSubcontractor } from "@/api/globalSubcontractorApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
@@ -48,7 +47,7 @@ export default function SubcontractorsScreen() {
     global_subcontractor_id: null as number | null,
     name: "",
     category: "",
-    total_quote: "",
+    total_quote: 0,
     progress_start_date: null as Date | null,
     progress_end_date: null as Date | null,
     progress_status: "not_started" as "not_started" | "in_progress" | "completed" | "delayed",
@@ -57,15 +56,13 @@ export default function SubcontractorsScreen() {
     create_cost: false,
   });
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedSubcontractorDetail, setSelectedSubcontractorDetail] = useState<Subcontractor | null>(null);
   const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
   const [loadingCostGroups, setLoadingCostGroups] = useState(false);
   const [paymentFormData, setPaymentFormData] = useState({
     payment_stage: "",
-    amount: "",
+    amount: 0,
     payment_date: new Date().toISOString().split("T")[0],
     payment_method: "bank_transfer" as "cash" | "bank_transfer" | "check" | "other",
     reference_number: "",
@@ -519,105 +516,47 @@ export default function SubcontractorsScreen() {
               </View>
 
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Tổng báo giá *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập tổng báo giá"
-                  value={formData.total_quote}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, total_quote: text })
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
+              <CurrencyInput
+                label="Tổng báo giá *"
+                value={formData.total_quote}
+                onChangeText={(amount) =>
+                  setFormData({ ...formData, total_quote: amount })
+                }
+                placeholder="Nhập tổng báo giá"
+                required
+              />
 
 
               {/* Progress Information Section */}
               <View style={styles.sectionDivider} />
               <Text style={styles.sectionTitle}>Thông tin & Tiến độ</Text>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Ngày bắt đầu</Text>
-                <TouchableOpacity
-                  style={styles.selectButton}
-                  onPress={() => {
-                    if (Platform.OS === 'android') {
-                      setShowStartDatePicker(true);
-                    } else {
-                      setShowStartDatePicker(true);
-                    }
-                  }}
-                >
-                  <Text style={styles.selectButtonText}>
-                    {formData.progress_start_date
-                      ? formData.progress_start_date.toLocaleDateString("vi-VN")
-                      : "Chọn ngày bắt đầu"}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                {showStartDatePicker && (
-                  <DateTimePicker
-                    value={formData.progress_start_date || new Date()}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={(event, date) => {
-                      if (Platform.OS === 'android') {
-                        setShowStartDatePicker(false);
-                      }
-                      if (date && (Platform.OS === 'android' || event.type !== 'dismissed')) {
-                        setFormData({ ...formData, progress_start_date: date });
-                        // Tự động tính toán trạng thái
-                        calculateProgressStatus(date, formData.progress_end_date);
-                      }
-                      if (Platform.OS === 'ios' && event.type === 'dismissed') {
-                        setShowStartDatePicker(false);
-                      }
-                    }}
-                  />
-                )}
-              </View>
+              <DatePickerInput
+                label="Ngày bắt đầu"
+                value={formData.progress_start_date}
+                onChange={(date) => {
+                  if (date) {
+                    setFormData({ ...formData, progress_start_date: date });
+                    // Tự động tính toán trạng thái
+                    calculateProgressStatus(date, formData.progress_end_date);
+                  }
+                }}
+                placeholder="Chọn ngày bắt đầu"
+              />
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Ngày kết thúc</Text>
-                <TouchableOpacity
-                  style={styles.selectButton}
-                  onPress={() => {
-                    if (Platform.OS === 'android') {
-                      setShowEndDatePicker(true);
-                    } else {
-                      setShowEndDatePicker(true);
-                    }
-                  }}
-                >
-                  <Text style={styles.selectButtonText}>
-                    {formData.progress_end_date
-                      ? formData.progress_end_date.toLocaleDateString("vi-VN")
-                      : "Chọn ngày kết thúc"}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                {showEndDatePicker && (
-                  <DateTimePicker
-                    value={formData.progress_end_date || new Date()}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={(event, date) => {
-                      if (Platform.OS === 'android') {
-                        setShowEndDatePicker(false);
-                      }
-                      if (date && (Platform.OS === 'android' || event.type !== 'dismissed')) {
-                        setFormData({ ...formData, progress_end_date: date });
-                        // Tự động tính toán trạng thái
-                        calculateProgressStatus(formData.progress_start_date, date);
-                      }
-                      if (Platform.OS === 'ios' && event.type === 'dismissed') {
-                        setShowEndDatePicker(false);
-                      }
-                    }}
-                  />
-                )}
-              </View>
+              <DatePickerInput
+                label="Ngày kết thúc"
+                value={formData.progress_end_date}
+                onChange={(date) => {
+                  if (date) {
+                    setFormData({ ...formData, progress_end_date: date });
+                    // Tự động tính toán trạng thái
+                    calculateProgressStatus(formData.progress_start_date, date);
+                  }
+                }}
+                placeholder="Chọn ngày kết thúc"
+                minimumDate={formData.progress_start_date || undefined}
+              />
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Trạng thái</Text>
@@ -674,7 +613,7 @@ export default function SubcontractorsScreen() {
                 <TouchableOpacity
                   style={[styles.modalButton, styles.submitButton]}
                   onPress={async () => {
-                    if (!formData.total_quote) {
+                    if (!formData.total_quote || formData.total_quote <= 0) {
                       Alert.alert("Lỗi", "Vui lòng nhập tổng báo giá");
                       return;
                     }
@@ -702,7 +641,7 @@ export default function SubcontractorsScreen() {
                         global_subcontractor_id: formData.global_subcontractor_id || undefined,
                         name: formData.name,
                         category: formData.category || undefined,
-                        total_quote: parseFloat(formData.total_quote),
+                        total_quote: formData.total_quote,
                         progress_start_date: formData.progress_start_date
                           ? formData.progress_start_date.toISOString().split("T")[0]
                           : undefined,
@@ -723,7 +662,7 @@ export default function SubcontractorsScreen() {
                         global_subcontractor_id: null,
                         name: "",
                         category: "",
-                        total_quote: "",
+                        total_quote: 0,
                         progress_start_date: null,
                         progress_end_date: null,
                         progress_status: "not_started",
@@ -1015,20 +954,15 @@ export default function SubcontractorsScreen() {
                     />
                   </View>
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>
-                      Số tiền <Text style={styles.required}>*</Text>
-                    </Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Nhập số tiền"
-                      value={paymentFormData.amount}
-                      onChangeText={(text) =>
-                        setPaymentFormData({ ...paymentFormData, amount: text })
-                      }
-                      keyboardType="numeric"
-                    />
-                  </View>
+                  <CurrencyInput
+                    label="Số tiền *"
+                    value={paymentFormData.amount}
+                    onChangeText={(amount) =>
+                      setPaymentFormData({ ...paymentFormData, amount })
+                    }
+                    placeholder="Nhập số tiền"
+                    required
+                  />
 
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Ngày thanh toán</Text>
@@ -1130,7 +1064,7 @@ export default function SubcontractorsScreen() {
                     <TouchableOpacity
                       style={[styles.modalButton, styles.submitButton]}
                       onPress={async () => {
-                        if (!paymentFormData.amount || !selectedSubcontractor) {
+                        if (!paymentFormData.amount || paymentFormData.amount <= 0 || !selectedSubcontractor) {
                           Alert.alert("Lỗi", "Vui lòng nhập số tiền");
                           return;
                         }
@@ -1138,7 +1072,7 @@ export default function SubcontractorsScreen() {
                           await subcontractorApi.createPayment(id!, {
                             subcontractor_id: selectedSubcontractor.id,
                             payment_stage: paymentFormData.payment_stage || undefined,
-                            amount: parseFloat(paymentFormData.amount),
+                            amount: paymentFormData.amount,
                             payment_date: paymentFormData.payment_date || undefined,
                             payment_method: paymentFormData.payment_method,
                             reference_number: paymentFormData.reference_number || undefined,
@@ -1148,7 +1082,7 @@ export default function SubcontractorsScreen() {
                           setShowPaymentForm(false);
                           setPaymentFormData({
                             payment_stage: "",
-                            amount: "",
+                            amount: 0,
                             payment_date: new Date().toISOString().split("T")[0],
                             payment_method: "bank_transfer",
                             reference_number: "",

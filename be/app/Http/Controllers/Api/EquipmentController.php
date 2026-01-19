@@ -424,10 +424,12 @@ class EquipmentController extends Controller
 
             $allocation = EquipmentAllocation::create($allocationData);
 
-            // Tự động tạo Cost nếu là thuê
+            // Tự động tạo Cost
+            $allocationService = app(\App\Services\EquipmentAllocationService::class);
             if ($request->allocation_type === 'rent') {
-                $allocationService = app(\App\Services\EquipmentAllocationService::class);
                 $allocationService->createCostFromRental($allocation);
+            } elseif ($request->allocation_type === 'buy') {
+                $allocationService->createCostFromPurchase($allocation);
             }
 
             // Cập nhật status của equipment nếu cần

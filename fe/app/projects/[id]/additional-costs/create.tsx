@@ -14,17 +14,18 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { additionalCostApi } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionGuard, CurrencyInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
+import { Permissions } from "@/constants/Permissions";
 
 export default function CreateAdditionalCostScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const tabBarHeight = useTabBarHeight();
   const insets = useSafeAreaInsets();
-  const [formData, setFormData] = useState({ amount: "", description: "" });
+  const [formData, setFormData] = useState({ amount: 0, description: "" });
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -38,7 +39,7 @@ export default function CreateAdditionalCostScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.amount || !formData.description) {
+    if (!formData.amount || formData.amount <= 0 || !formData.description) {
       Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin");
       return;
     }
@@ -46,7 +47,7 @@ export default function CreateAdditionalCostScreen() {
     try {
       setSubmitting(true);
       const response = await additionalCostApi.createAdditionalCost(id!, {
-        amount: parseFloat(formData.amount),
+        amount: formData.amount,
         description: formData.description,
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
       });
@@ -69,17 +70,19 @@ export default function CreateAdditionalCostScreen() {
         title="Thêm Chi Phí Phát Sinh"
         showBackButton
         rightComponent={
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#3B82F6" size="small" />
-            ) : (
-              <Text style={styles.saveButtonText}>Gửi</Text>
-            )}
-          </TouchableOpacity>
+          <PermissionGuard permission={Permissions.ADDITIONAL_COST_CREATE} projectId={id}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#3B82F6" size="small" />
+              ) : (
+                <Text style={styles.saveButtonText}>Gửi</Text>
+              )}
+            </TouchableOpacity>
+          </PermissionGuard>
         }
       />
 
@@ -97,18 +100,14 @@ export default function CreateAdditionalCostScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={true}
         >
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Số tiền (VND) *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.amount}
-              onChangeText={(text) =>
-                setFormData({ ...formData, amount: text })
-              }
-              placeholder="Nhập số tiền"
-              keyboardType="numeric"
-            />
-          </View>
+          <CurrencyInput
+            label="Số tiền (VND) *"
+            value={formData.amount}
+            onChangeText={(amount) =>
+              setFormData({ ...formData, amount })
+            }
+            placeholder="Nhập số tiền"
+          />
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Mô tả *</Text>

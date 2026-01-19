@@ -6,11 +6,17 @@ export interface AdditionalCost {
   project_id: number;
   amount: number;
   description: string;
-  status: "pending_approval" | "approved" | "rejected";
+  status: "pending" | "pending_approval" | "customer_paid" | "confirmed" | "approved" | "rejected";
   proposed_by: number;
   approved_by?: number;
   approved_at?: string;
   rejected_reason?: string;
+  paid_date?: string;
+  actual_amount?: number;
+  confirmed_by?: number;
+  confirmed_at?: string;
+  customer_paid_by?: number;
+  customer_paid_at?: string;
   created_at?: string;
   updated_at?: string;
   proposer?: {
@@ -19,6 +25,16 @@ export interface AdditionalCost {
     email: string;
   };
   approver?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  confirmer?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  customer_paid_by_user?: {
     id: number;
     name: string;
     email: string;
@@ -85,6 +101,31 @@ export const additionalCostApi = {
     const response = await api.post(
       `/projects/${projectId}/additional-costs/${costId}/attach-files`,
       { attachment_ids: attachmentIds }
+    );
+    return response.data;
+  },
+
+  // Mark as paid by customer (khách hàng đánh dấu đã thanh toán)
+  markAsPaidByCustomer: async (
+    projectId: string | number,
+    costId: string | number,
+    data: {
+      paid_date?: string;
+      actual_amount?: number;
+      attachment_ids?: number[];
+    }
+  ) => {
+    const response = await api.post(
+      `/projects/${projectId}/additional-costs/${costId}/mark-paid-by-customer`,
+      data
+    );
+    return response.data;
+  },
+
+  // Confirm by accountant (kế toán xác nhận đã nhận tiền)
+  confirmAdditionalCost: async (projectId: string | number, costId: string | number) => {
+    const response = await api.post(
+      `/projects/${projectId}/additional-costs/${costId}/confirm`
     );
     return response.data;
   },

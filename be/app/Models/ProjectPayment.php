@@ -84,7 +84,7 @@ class ProjectPayment extends Model
 
     public function getIsPaidAttribute(): bool
     {
-        return $this->status === 'paid';
+        return in_array($this->status, ['confirmed', 'paid']); // Backward compatible
     }
 
     // ==================================================================
@@ -109,21 +109,51 @@ class ProjectPayment extends Model
     }
 
     /**
-     * Kế toán xác nhận thanh toán (sau khi khách hàng đã duyệt)
+     * Kế toán xác nhận thanh toán (sau khi khách hàng đã thanh toán)
      */
     public function markAsPaid(?User $user = null): bool
     {
-        // Chỉ cho phép nếu đã được khách hàng duyệt hoặc đang ở trạng thái pending (backward compatible)
-        if (!in_array($this->status, ['customer_approved', 'pending'])) {
+        // Chỉ cho phép nếu khách hàng đã thanh toán
+        if ($this->status !== 'customer_paid') {
             return false;
         }
 
-        $this->status = 'paid';
-        $this->paid_date = now()->toDateString();
+        $this->status = 'confirmed';
         if ($user) {
             $this->confirmed_by = $user->id;
             $this->confirmed_at = now();
         }
+        return $this->save();
+    }
+
+    /**
+     * Khách hàng đánh dấu đã thanh toán (upload chứng từ + nhập thông tin)
+     */
+    public function markAsPaidByCustomer(?User $user = null, ?string $paidDate = null, ?float $actualAmount = null): bool
+    {
+        if ($this->status !== 'pending') {
+            return false;
+        }
+
+        $this->status = 'customer_paid';
+        if ($paidDate) {
+            $this->paid_date = $paidDate;
+        } else {
+            $this->paid_date = now()->toDateString();
+        }
+        
+        // Nếu có số tiền thực tế khác với số tiền ban đầu, lưu vào notes hoặc tạo field mới
+        if ($actualAmount !== null && $actualAmount != $this->amount) {
+            $this->notes = ($this->notes ? $this->notes . "\n" : '') . 
+                "Số tiền thực tế: " . number_format($actualAmount, 0, ',', '.') . " VND";
+        }
+
+        if ($user) {
+            $this->customer_approved_by = $user->id;
+            $this->customer_approved_at = now();
+        }
+        $this->payment_proof_uploaded_at = now();
+        
         return $this->save();
     }
 

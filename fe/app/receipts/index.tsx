@@ -18,8 +18,8 @@ import { useRouter } from "expo-router";
 import { receiptApi, Receipt, CreateReceiptData } from "@/api/receiptApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import BackButton from "@/components/BackButton";
+import { CurrencyInput, DatePickerInput } from "@/components";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -42,7 +42,6 @@ export default function ReceiptsScreen() {
         description: "",
         notes: "",
     });
-    const [showDatePicker, setShowDatePicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [filterType, setFilterType] = useState<"all" | "purchase" | "expense" | "payment">("all");
     const [filterStatus, setFilterStatus] = useState<"all" | "draft" | "verified" | "cancelled">("all");
@@ -376,32 +375,18 @@ export default function ReceiptsScreen() {
                             showsVerticalScrollIndicator={true}
                             nestedScrollEnabled={true}
                         >
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày chứng từ *</Text>
-                                <TouchableOpacity
-                                    style={styles.dateInput}
-                                    onPress={() => setShowDatePicker(true)}
-                                >
-                                    <Text>{formData.receipt_date}</Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {showDatePicker && (
-                                    <DateTimePicker
-                                        value={new Date(formData.receipt_date || new Date())}
-                                        mode="date"
-                                        display="default"
-                                        onChange={(event, date) => {
-                                            setShowDatePicker(false);
-                                            if (date) {
-                                                setFormData({
-                                                    ...formData,
-                                                    receipt_date: date.toISOString().split("T")[0],
-                                                });
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
+                            <DatePickerInput
+                                label="Ngày chứng từ *"
+                                value={formData.receipt_date}
+                                onDateChange={(date) => {
+                                    setFormData({
+                                        ...formData,
+                                        receipt_date: date,
+                                    });
+                                }}
+                                placeholder="Chọn ngày"
+                                required
+                            />
 
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Loại chứng từ *</Text>
@@ -474,18 +459,14 @@ export default function ReceiptsScreen() {
                                 />
                             </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Số tiền *</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    value={formData.amount?.toString()}
-                                    onChangeText={(text) =>
-                                        setFormData({ ...formData, amount: parseFloat(text) || 0 })
-                                    }
-                                    keyboardType="numeric"
-                                />
-                            </View>
+                            <CurrencyInput
+                                label="Số tiền *"
+                                value={formData.amount}
+                                onChangeText={(amount) =>
+                                    setFormData({ ...formData, amount })
+                                }
+                                placeholder="0"
+                            />
 
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Phương thức thanh toán</Text>

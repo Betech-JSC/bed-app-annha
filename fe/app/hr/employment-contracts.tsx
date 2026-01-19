@@ -22,8 +22,7 @@ import {
     CreateEmploymentContractData,
 } from "@/api/employmentContractApi";
 import { employeesApi } from "@/api/employeesApi";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
     probation: "Thử việc",
@@ -51,8 +50,6 @@ export default function EmploymentContractsScreen() {
         job_description: "",
         benefits: "",
     });
-    const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-    const [showEndDatePicker, setShowEndDatePicker] = useState(false);
     const [showEmployeePicker, setShowEmployeePicker] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -443,79 +440,43 @@ export default function EmploymentContractsScreen() {
                                 </View>
                             </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày bắt đầu *</Text>
-                                <TouchableOpacity
-                                    style={styles.dateInput}
-                                    onPress={() => setShowStartDatePicker(true)}
-                                >
-                                    <Text>{formData.start_date}</Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {showStartDatePicker && (
-                                    <DateTimePicker
-                                        value={new Date(formData.start_date || new Date())}
-                                        mode="date"
-                                        display="default"
-                                        onChange={(event, date) => {
-                                            setShowStartDatePicker(false);
-                                            if (date) {
-                                                setFormData({
-                                                    ...formData,
-                                                    start_date: date.toISOString().split("T")[0],
-                                                });
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
+                            <DatePickerInput
+                                label="Ngày bắt đầu *"
+                                value={formData.start_date}
+                                onDateChange={(date) => {
+                                    setFormData({
+                                        ...formData,
+                                        start_date: date,
+                                    });
+                                }}
+                                placeholder="Chọn ngày bắt đầu"
+                                required
+                            />
 
                             {formData.contract_type !== "indefinite" && (
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Ngày kết thúc</Text>
-                                    <TouchableOpacity
-                                        style={styles.dateInput}
-                                        onPress={() => setShowEndDatePicker(true)}
-                                    >
-                                        <Text>{formData.end_date || "Chọn ngày"}</Text>
-                                        <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                    </TouchableOpacity>
-                                    {showEndDatePicker && (
-                                        <DateTimePicker
-                                            value={
-                                                formData.end_date
-                                                    ? new Date(formData.end_date)
-                                                    : new Date(formData.start_date || new Date())
-                                            }
-                                            mode="date"
-                                            display="default"
-                                            minimumDate={new Date(formData.start_date || new Date())}
-                                            onChange={(event, date) => {
-                                                setShowEndDatePicker(false);
-                                                if (date) {
-                                                    setFormData({
-                                                        ...formData,
-                                                        end_date: date.toISOString().split("T")[0],
-                                                    });
-                                                }
-                                            }}
-                                        />
-                                    )}
-                                </View>
+                                <DatePickerInput
+                                    label="Ngày kết thúc"
+                                    value={formData.end_date}
+                                    onDateChange={(date) => {
+                                        setFormData({
+                                            ...formData,
+                                            end_date: date,
+                                        });
+                                    }}
+                                    placeholder="Chọn ngày kết thúc"
+                                    minimumDate={formData.start_date ? new Date(formData.start_date) : undefined}
+                                />
                             )}
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Lương cơ bản *</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    value={formData.base_salary?.toString()}
-                                    onChangeText={(text) =>
-                                        setFormData({ ...formData, base_salary: parseFloat(text) || 0 })
-                                    }
-                                    keyboardType="numeric"
-                                />
-                            </View>
+                            <CurrencyInput
+                                label="Lương cơ bản *"
+                                value={formData.base_salary || 0}
+                                onChangeText={(amount) =>
+                                    setFormData({ ...formData, base_salary: amount })
+                                }
+                                placeholder="0"
+                                required
+                            />
 
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Chức danh</Text>

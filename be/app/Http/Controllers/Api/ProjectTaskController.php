@@ -80,6 +80,14 @@ class ProjectTaskController extends Controller
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
+        // Check permission
+        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_CREATE) && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo công việc. Cần quyền: ' . \App\Constants\Permissions::PROJECT_TASK_CREATE
+            ], 403);
+        }
+
         $validated = $request->validate([
             'phase_id' => 'nullable|exists:project_phases,id',
             'parent_id' => 'nullable|exists:project_tasks,id', // For hierarchical structure
@@ -208,6 +216,14 @@ class ProjectTaskController extends Controller
         $task = ProjectTask::where('project_id', $projectId)->findOrFail($id);
         $user = auth()->user();
 
+        // Check permission
+        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_UPDATE) && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật công việc. Cần quyền: ' . \App\Constants\Permissions::PROJECT_TASK_UPDATE
+            ], 403);
+        }
+
         $validated = $request->validate([
             'phase_id' => 'nullable|exists:project_phases,id',
             'parent_id' => 'nullable|exists:project_tasks,id', // For hierarchical structure
@@ -305,6 +321,15 @@ class ProjectTaskController extends Controller
     public function destroy(string $projectId, string $id)
     {
         $task = ProjectTask::where('project_id', $projectId)->findOrFail($id);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_DELETE) && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa công việc. Cần quyền: ' . \App\Constants\Permissions::PROJECT_TASK_DELETE
+            ], 403);
+        }
 
         // Check if task has dependencies
         if ($task->dependencies()->count() > 0 || $task->dependents()->count() > 0) {

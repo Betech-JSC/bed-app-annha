@@ -16,8 +16,8 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { invoiceApi, Invoice, CreateInvoiceData } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import BackButton from "@/components/BackButton";
+import { CurrencyInput, DatePickerInput } from "@/components";
 
 export default function InvoiceDetailScreen() {
     const router = useRouter();
@@ -37,9 +37,6 @@ export default function InvoiceDetailScreen() {
         notes: "",
     });
     const [paidDate, setPaidDate] = useState(new Date().toISOString().split("T")[0]);
-    const [showInvoiceDatePicker, setShowInvoiceDatePicker] = useState(false);
-    const [showDueDatePicker, setShowDueDatePicker] = useState(false);
-    const [showPaidDatePicker, setShowPaidDatePicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -433,95 +430,36 @@ export default function InvoiceDetailScreen() {
                                     <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
                                 </View>
                                 
-                                <View style={styles.formGroup}>
-                                    <View style={styles.labelContainer}>
-                                        <Text style={styles.label}>Ngày hóa đơn</Text>
-                                        <Text style={styles.required}>*</Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.dateInput,
-                                            focusedField === "invoice_date" && styles.inputFocused,
-                                            errors.invoice_date && styles.inputError,
-                                        ]}
-                                        onPress={() => {
-                                            setShowInvoiceDatePicker(true);
-                                            setFocusedField("invoice_date");
-                                        }}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text style={formData.invoice_date ? {} : styles.placeholderText}>
-                                            {formData.invoice_date
-                                                ? new Date(formData.invoice_date).toLocaleDateString("vi-VN")
-                                                : "Chọn ngày"}
+                                <DatePickerInput
+                                    label={
+                                        <Text>
+                                            Ngày hóa đơn <Text style={styles.required}>*</Text>
                                         </Text>
-                                        <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                    </TouchableOpacity>
-                                    {showInvoiceDatePicker && (
-                                        <DateTimePicker
-                                            value={formData.invoice_date ? new Date(formData.invoice_date) : new Date()}
-                                            mode="date"
-                                            display="default"
-                                            onChange={(event, date) => {
-                                                setShowInvoiceDatePicker(false);
-                                                setFocusedField(null);
-                                                if (date) {
-                                                    setFormData({
-                                                        ...formData,
-                                                        invoice_date: date.toISOString().split("T")[0],
-                                                    });
-                                                    if (errors.invoice_date) setErrors({ ...errors, invoice_date: "" });
-                                                }
-                                            }}
-                                        />
-                                    )}
-                                    {errors.invoice_date && (
-                                        <View style={styles.errorContainer}>
-                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                            <Text style={styles.errorText}>{errors.invoice_date}</Text>
-                                        </View>
-                                    )}
-                                </View>
+                                    }
+                                    value={formData.invoice_date}
+                                    onDateChange={(date) => {
+                                        setFormData({
+                                            ...formData,
+                                            invoice_date: date,
+                                        });
+                                        if (errors.invoice_date) setErrors({ ...errors, invoice_date: "" });
+                                    }}
+                                    placeholder="Chọn ngày"
+                                    error={errors.invoice_date}
+                                />
 
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Ngày đến hạn</Text>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.dateInput,
-                                            focusedField === "due_date" && styles.inputFocused,
-                                        ]}
-                                        onPress={() => {
-                                            setShowDueDatePicker(true);
-                                            setFocusedField("due_date");
-                                        }}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text style={formData.due_date ? {} : styles.placeholderText}>
-                                            {formData.due_date
-                                                ? new Date(formData.due_date).toLocaleDateString("vi-VN")
-                                                : "Chọn ngày"}
-                                        </Text>
-                                        <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                    </TouchableOpacity>
-                                    {showDueDatePicker && (
-                                        <DateTimePicker
-                                            value={formData.due_date ? new Date(formData.due_date) : new Date()}
-                                            mode="date"
-                                            display="default"
-                                            minimumDate={formData.invoice_date ? new Date(formData.invoice_date) : undefined}
-                                            onChange={(event, date) => {
-                                                setShowDueDatePicker(false);
-                                                setFocusedField(null);
-                                                if (date) {
-                                                    setFormData({
-                                                        ...formData,
-                                                        due_date: date.toISOString().split("T")[0],
-                                                    });
-                                                }
-                                            }}
-                                        />
-                                    )}
-                                </View>
+                                <DatePickerInput
+                                    label="Ngày đến hạn"
+                                    value={formData.due_date}
+                                    onDateChange={(date) => {
+                                        setFormData({
+                                            ...formData,
+                                            due_date: date,
+                                        });
+                                    }}
+                                    placeholder="Chọn ngày"
+                                    minimumDate={formData.invoice_date ? new Date(formData.invoice_date) : undefined}
+                                />
 
                                 <View style={styles.formGroup}>
                                     <Text style={styles.label}>Mô tả</Text>
@@ -570,76 +508,38 @@ export default function InvoiceDetailScreen() {
                                     <Text style={styles.sectionTitle}>Thông tin tài chính</Text>
                                 </View>
                                 
-                                <View style={styles.formGroup}>
-                                    <View style={styles.labelContainer}>
-                                        <Text style={styles.label}>Tổng tiền trước thuế (VNĐ)</Text>
-                                        <Text style={styles.required}>*</Text>
-                                    </View>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            focusedField === "subtotal" && styles.inputFocused,
-                                            errors.subtotal && styles.inputError,
-                                        ]}
-                                        placeholder="0"
-                                        placeholderTextColor="#9CA3AF"
-                                        value={formData.subtotal?.toString()}
-                                        onChangeText={(text) => {
-                                            const value = parseFloat(text) || 0;
-                                            setFormData({ ...formData, subtotal: value });
-                                            if (errors.subtotal) setErrors({ ...errors, subtotal: "" });
-                                        }}
-                                        keyboardType="numeric"
-                                        onFocus={() => setFocusedField("subtotal")}
-                                        onBlur={() => setFocusedField(null)}
-                                    />
-                                    {errors.subtotal && (
-                                        <View style={styles.errorContainer}>
-                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                            <Text style={styles.errorText}>{errors.subtotal}</Text>
-                                        </View>
-                                    )}
-                                </View>
+                                <CurrencyInput
+                                    label={
+                                        <>
+                                            Tổng tiền trước thuế (VNĐ) <Text style={styles.required}>*</Text>
+                                        </>
+                                    }
+                                    value={formData.subtotal}
+                                    onChangeText={(value) => {
+                                        setFormData({ ...formData, subtotal: value });
+                                        if (errors.subtotal) setErrors({ ...errors, subtotal: "" });
+                                    }}
+                                    placeholder="0"
+                                    error={errors.subtotal}
+                                />
 
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Thuế VAT (VNĐ)</Text>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            focusedField === "tax_amount" && styles.inputFocused,
-                                        ]}
-                                        placeholder="0"
-                                        placeholderTextColor="#9CA3AF"
-                                        value={formData.tax_amount?.toString()}
-                                        onChangeText={(text) => {
-                                            const value = parseFloat(text) || 0;
-                                            setFormData({ ...formData, tax_amount: value });
-                                        }}
-                                        keyboardType="numeric"
-                                        onFocus={() => setFocusedField("tax_amount")}
-                                        onBlur={() => setFocusedField(null)}
-                                    />
-                                </View>
+                                <CurrencyInput
+                                    label="Thuế VAT (VNĐ)"
+                                    value={formData.tax_amount}
+                                    onChangeText={(value) => {
+                                        setFormData({ ...formData, tax_amount: value });
+                                    }}
+                                    placeholder="0"
+                                />
 
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Giảm giá (VNĐ)</Text>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            focusedField === "discount_amount" && styles.inputFocused,
-                                        ]}
-                                        placeholder="0"
-                                        placeholderTextColor="#9CA3AF"
-                                        value={formData.discount_amount?.toString()}
-                                        onChangeText={(text) => {
-                                            const value = parseFloat(text) || 0;
-                                            setFormData({ ...formData, discount_amount: value });
-                                        }}
-                                        keyboardType="numeric"
-                                        onFocus={() => setFocusedField("discount_amount")}
-                                        onBlur={() => setFocusedField(null)}
-                                    />
-                                </View>
+                                <CurrencyInput
+                                    label="Giảm giá (VNĐ)"
+                                    value={formData.discount_amount}
+                                    onChangeText={(value) => {
+                                        setFormData({ ...formData, discount_amount: value });
+                                    }}
+                                    placeholder="0"
+                                />
 
                                 <View style={styles.summaryCard}>
                                     <View style={styles.summaryItem}>
@@ -705,32 +605,13 @@ export default function InvoiceDetailScreen() {
                             contentContainerStyle={styles.modalBodyContent}
                             keyboardShouldPersistTaps="handled"
                         >
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày thanh toán</Text>
-                                <TouchableOpacity
-                                    style={styles.dateInput}
-                                    onPress={() => setShowPaidDatePicker(true)}
-                                >
-                                    <Text>
-                                        {new Date(paidDate).toLocaleDateString("vi-VN")}
-                                    </Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {showPaidDatePicker && (
-                                    <DateTimePicker
-                                        value={new Date(paidDate)}
-                                        mode="date"
-                                        display="default"
-                                        maximumDate={new Date()}
-                                        onChange={(event, date) => {
-                                            setShowPaidDatePicker(false);
-                                            if (date) {
-                                                setPaidDate(date.toISOString().split("T")[0]);
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
+                            <DatePickerInput
+                                label="Ngày thanh toán"
+                                value={paidDate}
+                                onDateChange={(date) => setPaidDate(date)}
+                                placeholder="Chọn ngày"
+                                maximumDate={new Date()}
+                            />
 
                             <View style={styles.buttonContainer}>
                                 <TouchableOpacity

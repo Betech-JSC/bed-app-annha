@@ -98,7 +98,7 @@ export default function MonitoringDashboardScreen() {
   if (loading && !dashboardData) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Giám sát Dự án" />
+        <ScreenHeader title="Giám sát Dự án" showBackButton />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
@@ -108,7 +108,7 @@ export default function MonitoringDashboardScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Giám sát Dự án" />
+      <ScreenHeader title="Giám sát Dự án" showBackButton />
       <ScrollView
         style={[styles.scrollView, { marginBottom: tabBarHeight }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

@@ -9,6 +9,7 @@ use App\Models\BudgetItem;
 use App\Services\ProjectService;
 use App\Services\FinancialCalculationService;
 use App\Services\BudgetComparisonService;
+use App\Services\BudgetSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
@@ -18,15 +19,18 @@ class BudgetController extends Controller
     protected $projectService;
     protected $financialCalculationService;
     protected $budgetComparisonService;
+    protected $budgetSyncService;
 
     public function __construct(
         ProjectService $projectService,
         FinancialCalculationService $financialCalculationService,
-        BudgetComparisonService $budgetComparisonService
+        BudgetComparisonService $budgetComparisonService,
+        BudgetSyncService $budgetSyncService
     ) {
         $this->projectService = $projectService;
         $this->financialCalculationService = $financialCalculationService;
         $this->budgetComparisonService = $budgetComparisonService;
+        $this->budgetSyncService = $budgetSyncService;
     }
 
     public function index(string $projectId)
@@ -281,5 +285,37 @@ class BudgetController extends Controller
             'success' => true,
             'message' => 'Đã xóa ngân sách thành công.'
         ]);
+    }
+
+    /**
+     * Đồng bộ lại dữ liệu budget với actual costs
+     */
+    public function sync(string $projectId, ?string $id = null)
+    {
+        $user = auth()->user();
+        
+        if (!$user->hasPermission('budgets.view') && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền đồng bộ ngân sách.'
+            ], 403);
+        }
+
+        if ($id) {
+            // Đồng bộ một budget cụ thể
+            $budget = ProjectBudget::where('project_id', $projectId)->findOrFail($id);
+            $this->budgetSyncService->syncBudget($budget);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã đồng bộ ngân sách.',
+                'data' => $budget->fresh(['items.costGroup']),
+            ]);
+        } else {
+            // Đồng bộ tất cả budgets của project
+            $result = $this->budgetSyncService->syncProjectBudgets($projectId);
+            
+            return response()->json($result);
+        }
     }
 }

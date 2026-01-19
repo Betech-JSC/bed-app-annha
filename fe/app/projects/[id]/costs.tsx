@@ -15,15 +15,11 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { costApi, Cost, revenueApi } from "@/api/revenueApi";
-import { costGroupApi, CostGroup } from "@/api/costGroupApi";
-import { subcontractorApi, Subcontractor } from "@/api/subcontractorApi";
-import { materialApi, Material } from "@/api/materialApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 
@@ -48,43 +44,28 @@ export default function CostsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
-  const [loadingCostGroups, setLoadingCostGroups] = useState(false);
-  const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
-  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
-  const [loadingSubcontractors, setLoadingSubcontractors] = useState(false);
-  const [showSubcontractorPicker, setShowSubcontractorPicker] = useState(false);
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [loadingMaterials, setLoadingMaterials] = useState(false);
-  const [showMaterialPicker, setShowMaterialPicker] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+  const [filterDateFrom, setFilterDateFrom] = useState<Date | null>(null);
+  const [filterDateTo, setFilterDateTo] = useState<Date | null>(null);
+  const [filterAmountMin, setFilterAmountMin] = useState<number | null>(null);
+  const [filterAmountMax, setFilterAmountMax] = useState<number | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
-  // Form state
+  // Form state - chỉ cần các trường cơ bản cho chi phí "Khác"
   const [formData, setFormData] = useState({
-    cost_group_id: null as number | null,
-    subcontractor_id: null as number | null,
-    material_id: null as number | null,
-    quantity: "",
-    unit: "",
     name: "",
-    amount: "",
+    amount: 0,
     description: "",
     cost_date: new Date(),
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
-  const [selectedSubcontractor, setSelectedSubcontractor] = useState<Subcontractor | null>(null);
-  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
 
   useEffect(() => {
     loadCosts();
     loadSummary();
-    loadCostGroups();
-    loadSubcontractors();
-    loadMaterials();
-  }, [id, filterStatus, filterCategory]);
+  }, [id, filterStatus, filterCategory, searchQuery]);
 
   // Reload data when screen comes into focus
   useFocusEffect(
@@ -100,9 +81,33 @@ export default function CostsScreen() {
       const response = await costApi.getCosts(id!, {
         status: filterStatus || undefined,
         category: filterCategory || undefined,
+        search: searchQuery || undefined,
       });
       if (response.success) {
-        setCosts(response.data.data || []);
+        let costsData = response.data.data || [];
+
+        // Apply client-side filters for date range and amount range
+        if (filterDateFrom) {
+          costsData = costsData.filter((cost: Cost) => {
+            const costDate = new Date(cost.cost_date);
+            return costDate >= filterDateFrom;
+          });
+        }
+        if (filterDateTo) {
+          costsData = costsData.filter((cost: Cost) => {
+            const costDate = new Date(cost.cost_date);
+            costDate.setHours(23, 59, 59, 999);
+            return costDate <= filterDateTo;
+          });
+        }
+        if (filterAmountMin !== null) {
+          costsData = costsData.filter((cost: Cost) => cost.amount >= filterAmountMin);
+        }
+        if (filterAmountMax !== null) {
+          costsData = costsData.filter((cost: Cost) => cost.amount <= filterAmountMax);
+        }
+
+        setCosts(costsData);
       }
     } catch (error) {
       console.error("Error loading costs:", error);
@@ -123,57 +128,6 @@ export default function CostsScreen() {
     }
   };
 
-  const loadCostGroups = async () => {
-    try {
-      setLoadingCostGroups(true);
-      const response = await costGroupApi.getCostGroups({ active_only: true });
-      if (response.success) {
-        const data = response.data?.data || response.data || [];
-        setCostGroups(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      console.error("Error loading cost groups:", error);
-    } finally {
-      setLoadingCostGroups(false);
-    }
-  };
-
-  const loadSubcontractors = async () => {
-    try {
-      setLoadingSubcontractors(true);
-      const response = await subcontractorApi.getSubcontractors(id!);
-      if (response.success) {
-        // Backend trả về { success: true, data: [...] }
-        const data = Array.isArray(response.data) ? response.data : (response.data?.data || []);
-        setSubcontractors(data);
-      } else {
-        setSubcontractors([]);
-      }
-    } catch (error) {
-      console.error("Error loading subcontractors:", error);
-      setSubcontractors([]);
-    } finally {
-      setLoadingSubcontractors(false);
-    }
-  };
-
-  const loadMaterials = async () => {
-    try {
-      setLoadingMaterials(true);
-      const response = await materialApi.getMaterials({ active_only: true });
-      if (response.success) {
-        const data = Array.isArray(response.data) ? response.data : (response.data?.data || []);
-        setMaterials(data);
-      } else {
-        setMaterials([]);
-      }
-    } catch (error) {
-      console.error("Error loading materials:", error);
-      setMaterials([]);
-    } finally {
-      setLoadingMaterials(false);
-    }
-  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -183,25 +137,7 @@ export default function CostsScreen() {
 
   const handleCreateCost = async () => {
     if (!formData.name || !formData.amount) {
-      Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin");
-      return;
-    }
-
-    if (!formData.cost_group_id) {
-      Alert.alert("Lỗi", "Vui lòng chọn nhóm chi phí từ danh sách đã thiết lập");
-      return;
-    }
-
-    // Kiểm tra nếu cost group liên quan đến nhà thầu phụ
-    const selectedGroup = costGroups.find(g => g.id === formData.cost_group_id);
-    const isSubcontractorCostGroup = selectedGroup && (
-      selectedGroup.code === 'subcontractor' ||
-      selectedGroup.name.toLowerCase().includes('nhà thầu phụ') ||
-      selectedGroup.name.toLowerCase().includes('thầu phụ')
-    );
-
-    if (isSubcontractorCostGroup && !formData.subcontractor_id) {
-      Alert.alert("Lỗi", "Vui lòng chọn nhà thầu phụ liên quan cho loại chi phí này");
+      Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin (tên và số tiền)");
       return;
     }
 
@@ -210,13 +146,13 @@ export default function CostsScreen() {
         .filter(f => f.attachment_id || f.id)
         .map(f => f.attachment_id || f.id!);
 
+      // Chi phí khác không cần cost_group_id - để null, backend sẽ tự động set category = 'other'
       const response = await costApi.createCost(id!, {
-        cost_group_id: formData.cost_group_id,
+        cost_group_id: undefined, // Không cần chọn nhóm chi phí
         name: formData.name,
-        amount: parseFloat(formData.amount),
+        amount: formData.amount,
         description: formData.description || undefined,
         cost_date: formData.cost_date.toISOString().split("T")[0],
-        subcontractor_id: formData.subcontractor_id || undefined,
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
       });
 
@@ -272,30 +208,47 @@ export default function CostsScreen() {
     }
   };
 
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedCostForReject, setSelectedCostForReject] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const handleReject = (costId: number) => {
+    setSelectedCostForReject(costId);
+    setRejectReason("");
+    setShowRejectModal(true);
+  };
+
+  const submitReject = async () => {
+    if (!selectedCostForReject || !rejectReason.trim()) {
+      Alert.alert("Lỗi", "Vui lòng nhập lý do từ chối");
+      return;
+    }
+
+    try {
+      const response = await costApi.rejectCost(id!, selectedCostForReject, rejectReason.trim());
+      if (response.success) {
+        Alert.alert("Thành công", "Đã từ chối chi phí");
+        setShowRejectModal(false);
+        setSelectedCostForReject(null);
+        setRejectReason("");
+        loadCosts();
+        loadSummary();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể từ chối");
+    }
+  };
+
   const resetForm = () => {
     setFormData({
-      cost_group_id: null,
-      subcontractor_id: null,
-      material_id: null,
-      quantity: "",
-      unit: "",
       name: "",
-      amount: "",
+      amount: 0,
       description: "",
       cost_date: new Date(),
     });
-    setSelectedCostGroup(null);
-    setSelectedSubcontractor(null);
-    setSelectedMaterial(null);
     setUploadedFiles([]);
   };
 
-  const isSubcontractorCostGroup = (costGroup: CostGroup | null): boolean => {
-    if (!costGroup) return false;
-    return costGroup.code === 'subcontractor' ||
-      costGroup.name.toLowerCase().includes('nhà thầu phụ') ||
-      costGroup.name.toLowerCase().includes('thầu phụ');
-  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("vi-VN", {
@@ -339,6 +292,28 @@ export default function CostsScreen() {
   const getCategoryLabel = (cost: Cost) => {
     // Sử dụng cost_group.name nếu có, fallback về category_label
     return cost.cost_group?.name || cost.category_label || "Chưa phân loại";
+  };
+
+  const getActiveFilterCount = () => {
+    let count = 0;
+    if (filterStatus) count++;
+    if (filterCategory) count++;
+    if (searchQuery.trim()) count++;
+    if (filterDateFrom) count++;
+    if (filterDateTo) count++;
+    if (filterAmountMin !== null) count++;
+    if (filterAmountMax !== null) count++;
+    return count;
+  };
+
+  const clearAllFilters = () => {
+    setFilterStatus(null);
+    setFilterCategory(null);
+    setSearchQuery("");
+    setFilterDateFrom(null);
+    setFilterDateTo(null);
+    setFilterAmountMin(null);
+    setFilterAmountMax(null);
   };
 
   const renderCostItem = ({ item }: { item: Cost }) => (
@@ -403,6 +378,14 @@ export default function CostsScreen() {
             >
               <Text style={styles.actionButtonText}>Duyệt (Ban điều hành)</Text>
             </TouchableOpacity>
+            <PermissionGuard permission={Permissions.COST_REJECT} projectId={id}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => handleReject(item.id)}
+              >
+                <Text style={styles.actionButtonText}>Từ chối</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
           </View>
         </PermissionGuard>
       )}
@@ -416,6 +399,14 @@ export default function CostsScreen() {
             >
               <Text style={styles.actionButtonText}>Xác nhận (Kế toán)</Text>
             </TouchableOpacity>
+            <PermissionGuard permission={Permissions.COST_REJECT} projectId={id}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => handleReject(item.id)}
+              >
+                <Text style={styles.actionButtonText}>Từ chối</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
           </View>
         </PermissionGuard>
       )}
@@ -453,13 +444,19 @@ export default function CostsScreen() {
           <Text style={styles.sectionTitle}>Tổng Hợp Theo Nhóm</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {summary.grouped.map((group: any, index: number) => (
-              <View key={index} style={styles.summaryCard}>
+              <TouchableOpacity
+                key={index}
+                style={styles.summaryCard}
+                onPress={() => router.push(`/projects/${id}/costs/by-group/${group.category}`)}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.summaryCategory}>{group.category_label}</Text>
                 <Text style={styles.summaryAmount}>
                   {formatCurrency(group.total)}
                 </Text>
                 <Text style={styles.summaryCount}>{group.count} mục</Text>
-              </View>
+                <Ionicons name="chevron-forward" size={16} color="#9CA3AF" style={styles.summaryChevron} />
+              </TouchableOpacity>
             ))}
           </ScrollView>
           <View style={styles.totalSummary}>
@@ -471,20 +468,45 @@ export default function CostsScreen() {
         </View>
       )}
 
+      {/* Search Bar */}
+      <View style={styles.searchSection}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={20} color="#6B7280" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm theo tên, mô tả..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#9CA3AF"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              style={styles.clearSearchButton}
+            >
+              <Ionicons name="close-circle" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       {/* Filters */}
       <View style={styles.filters}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersContent}>
           <TouchableOpacity
             style={[
               styles.filterChip,
-              !filterStatus && styles.filterChipActive,
+              !filterStatus && getActiveFilterCount() === 0 && styles.filterChipActive,
             ]}
-            onPress={() => setFilterStatus(null)}
+            onPress={() => {
+              if (getActiveFilterCount() === 0) return;
+              clearAllFilters();
+            }}
           >
             <Text
               style={[
                 styles.filterChipText,
-                !filterStatus && styles.filterChipTextActive,
+                !filterStatus && getActiveFilterCount() === 0 && styles.filterChipTextActive,
               ]}
             >
               Tất cả
@@ -513,6 +535,59 @@ export default function CostsScreen() {
               </TouchableOpacity>
             )
           )}
+          {summary?.grouped && summary.grouped.length > 0 && (
+            <>
+              {summary.grouped.map((group: any, index: number) => (
+                <TouchableOpacity
+                  key={`category-${index}`}
+                  style={[
+                    styles.filterChip,
+                    filterCategory === group.category && styles.filterChipActive,
+                  ]}
+                  onPress={() =>
+                    setFilterCategory(filterCategory === group.category ? null : group.category)
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      filterCategory === group.category && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {group.category_label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              styles.advancedFilterChip,
+              getActiveFilterCount() > 0 && styles.filterChipActive,
+            ]}
+            onPress={() => setShowAdvancedFilter(true)}
+          >
+            <Ionicons
+              name="options-outline"
+              size={16}
+              color={getActiveFilterCount() > 0 ? "#FFFFFF" : "#6B7280"}
+              style={styles.filterIcon}
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                getActiveFilterCount() > 0 && styles.filterChipTextActive,
+              ]}
+            >
+              Lọc nâng cao
+            </Text>
+            {getActiveFilterCount() > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{getActiveFilterCount()}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </View>
 
@@ -563,67 +638,15 @@ export default function CostsScreen() {
             showsVerticalScrollIndicator={true}
             nestedScrollEnabled={true}
           >
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Nhóm chi phí *</Text>
-              {costGroups.length > 0 ? (
-                <>
-                  <TouchableOpacity
-                    style={styles.selectButton}
-                    onPress={() => {
-                      loadCostGroups();
-                      setShowCostGroupPicker(true);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.selectButtonText,
-                        !selectedCostGroup && styles.selectButtonPlaceholder,
-                      ]}
-                    >
-                      {selectedCostGroup
-                        ? selectedCostGroup.name
-                        : "Chọn nhóm chi phí"}
-                    </Text>
-                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                  </TouchableOpacity>
-                  {selectedCostGroup && (
-                    <TouchableOpacity
-                      style={styles.clearSelectionButton}
-                      onPress={() => {
-                        setSelectedCostGroup(null);
-                        setFormData({ ...formData, cost_group_id: null });
-                      }}
-                    >
-                      <Ionicons name="close-circle" size={20} color="#EF4444" />
-                      <Text style={styles.clearSelectionText}>Xóa lựa chọn</Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              ) : (
-                <View style={styles.fallbackCategoryGrid}>
-                  <Ionicons name="alert-circle-outline" size={48} color="#F59E0B" style={{ marginBottom: 12, alignSelf: "center" }} />
-                  <Text style={styles.helperText}>
-                    Chưa có nhóm chi phí được thiết lập
-                  </Text>
-                  <Text style={styles.helperTextSmall}>
-                    Vui lòng vào{" "}
-                    <Text style={styles.linkText}>Cấu hình → Nhóm Chi Phí Dự Án</Text>
-                    {" "}để tạo nhóm chi phí trước khi thêm chi phí cho dự án.
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.goToSettingsButton}
-                    onPress={() => {
-                      setShowCreateModal(false);
-                      router.push("/settings/cost-groups");
-                    }}
-                  >
-                    <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
-                    <Text style={styles.goToSettingsButtonText}>
-                      Đi đến Cấu hình
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+            {/* Thông tin về Chi phí khác */}
+            <View style={styles.infoBox}>
+              <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
+              <View style={styles.infoBoxContent}>
+                <Text style={styles.infoBoxTitle}>Chi phí khác</Text>
+                <Text style={styles.infoBoxText}>
+                  Các khoản chi hợp lệ phát sinh trong quá trình thi công dự án, không thuộc nhóm vật liệu, thiết bị, nhân công hoặc thầu phụ, được phê duyệt và ghi nhận riêng trong hệ thống.
+                </Text>
+              </View>
             </View>
 
             <View style={styles.formGroup}>
@@ -638,164 +661,26 @@ export default function CostsScreen() {
               />
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Số tiền *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập số tiền"
-                value={formData.amount}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, amount: text })
+            <CurrencyInput
+              label="Số tiền *"
+              value={formData.amount}
+              onChangeText={(amount) =>
+                setFormData({ ...formData, amount })
+              }
+              placeholder="Nhập số tiền"
+            />
+
+            <DatePickerInput
+              label="Ngày phát sinh *"
+              value={formData.cost_date}
+              onChange={(date) => {
+                if (date) {
+                  setFormData({ ...formData, cost_date: date });
                 }
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Ngày phát sinh *</Text>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                <Text style={styles.dateButtonText}>
-                  {formData.cost_date.toLocaleDateString("vi-VN")}
-                </Text>
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={formData.cost_date}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={(event, date) => {
-                    if (Platform.OS === 'android') {
-                      setShowDatePicker(false);
-                    }
-                    if (date && (Platform.OS === 'android' || event.type !== 'dismissed')) {
-                      setFormData({ ...formData, cost_date: date });
-                    }
-                    if (Platform.OS === 'ios' && event.type === 'dismissed') {
-                      setShowDatePicker(false);
-                    }
-                  }}
-                />
-              )}
-            </View>
-
-            {/* Subcontractor Selection - chỉ hiển thị khi chọn cost group nhà thầu phụ */}
-            {selectedCostGroup && isSubcontractorCostGroup(selectedCostGroup) && (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Nhà thầu phụ *</Text>
-                <TouchableOpacity
-                  style={styles.selectButton}
-                  onPress={() => {
-                    loadSubcontractors();
-                    setShowSubcontractorPicker(true);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.selectButtonText,
-                      !selectedSubcontractor && styles.selectButtonPlaceholder,
-                    ]}
-                  >
-                    {selectedSubcontractor
-                      ? selectedSubcontractor.name
-                      : "Chọn nhà thầu phụ"}
-                  </Text>
-                  <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                </TouchableOpacity>
-                {selectedSubcontractor && (
-                  <TouchableOpacity
-                    style={styles.clearSelectionButton}
-                    onPress={() => {
-                      setSelectedSubcontractor(null);
-                      setFormData({ ...formData, subcontractor_id: null });
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#EF4444" />
-                    <Text style={styles.clearSelectionText}>Xóa lựa chọn</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {/* Material Selection - cho phép chọn vật liệu để liên kết với kho */}
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Vật liệu (tùy chọn)</Text>
-              <Text style={styles.helperText}>
-                Chọn vật liệu để tự động tạo phiếu nhập kho khi chi phí được duyệt
-              </Text>
-              <TouchableOpacity
-                style={styles.selectButton}
-                onPress={() => {
-                  loadMaterials();
-                  setShowMaterialPicker(true);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.selectButtonText,
-                    !selectedMaterial && styles.selectButtonPlaceholder,
-                  ]}
-                >
-                  {selectedMaterial
-                    ? `${selectedMaterial.name}${selectedMaterial.code ? ` (${selectedMaterial.code})` : ''}`
-                    : "Chọn vật liệu"}
-                </Text>
-                <Ionicons name="chevron-down" size={20} color="#6B7280" />
-              </TouchableOpacity>
-              {selectedMaterial && (
-                <>
-                  <TouchableOpacity
-                    style={styles.clearSelectionButton}
-                    onPress={() => {
-                      setSelectedMaterial(null);
-                      setFormData({ 
-                        ...formData, 
-                        material_id: null,
-                        quantity: "",
-                        unit: "",
-                      });
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#EF4444" />
-                    <Text style={styles.clearSelectionText}>Xóa lựa chọn</Text>
-                  </TouchableOpacity>
-                  <View style={styles.row}>
-                    <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                      <Text style={styles.label}>Số lượng *</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Nhập số lượng"
-                        value={formData.quantity}
-                        onChangeText={(text) =>
-                          setFormData({ ...formData, quantity: text })
-                        }
-                        keyboardType="numeric"
-                      />
-                    </View>
-                    <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                      <Text style={styles.label}>Đơn vị *</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Đơn vị"
-                        value={formData.unit || selectedMaterial.unit}
-                        onChangeText={(text) =>
-                          setFormData({ ...formData, unit: text })
-                        }
-                        editable={true}
-                      />
-                    </View>
-                  </View>
-                  {selectedMaterial.current_stock !== undefined && (
-                    <Text style={styles.stockInfo}>
-                      Tồn kho hiện tại: {selectedMaterial.current_stock} {selectedMaterial.unit}
-                    </Text>
-                  )}
-                </>
-              )}
-            </View>
+              }}
+              placeholder="Chọn ngày"
+              required
+            />
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>Mô tả</Text>
@@ -841,219 +726,230 @@ export default function CostsScreen() {
               </TouchableOpacity>
             </View>
           </ScrollView>
+        </View>
+      </Modal>
 
-          {/* Cost Group Picker Modal - Đặt bên trong modal tạo cost */}
-          {showCostGroupPicker && (
-            <View style={styles.pickerModalOverlay}>
-              <View style={styles.pickerModalContainer}>
-                <View style={styles.pickerModalHeader}>
-                  <Text style={styles.pickerModalTitle}>Chọn Nhóm Chi Phí</Text>
-                  <TouchableOpacity onPress={() => setShowCostGroupPicker(false)}>
-                    <Ionicons name="close" size={24} color="#1F2937" />
+      {/* Reject Modal */}
+      <Modal
+        visible={showRejectModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowRejectModal(false);
+          setSelectedCostForReject(null);
+          setRejectReason("");
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Từ chối chi phí</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowRejectModal(false);
+                  setSelectedCostForReject(null);
+                  setRejectReason("");
+                }}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Lý do từ chối *</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Nhập lý do từ chối..."
+                  value={rejectReason}
+                  onChangeText={setRejectReason}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowRejectModal(false);
+                  setSelectedCostForReject(null);
+                  setRejectReason("");
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.rejectButton]}
+                onPress={submitReject}
+              >
+                <Text style={styles.submitButtonText}>Xác nhận từ chối</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Advanced Filter Modal */}
+      <Modal
+        visible={showAdvancedFilter}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAdvancedFilter(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.filterModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Lọc Nâng Cao</Text>
+              <TouchableOpacity
+                onPress={() => setShowAdvancedFilter(false)}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.filterModalBody} showsVerticalScrollIndicator={true}>
+              {/* Date Range Filter */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Khoảng thời gian</Text>
+                <DatePickerInput
+                  label="Từ ngày"
+                  value={filterDateFrom}
+                  onChange={(date) => setFilterDateFrom(date)}
+                  placeholder="Chọn ngày bắt đầu"
+                  maximumDate={filterDateTo || undefined}
+                />
+                <DatePickerInput
+                  label="Đến ngày"
+                  value={filterDateTo}
+                  onChange={(date) => setFilterDateTo(date)}
+                  placeholder="Chọn ngày kết thúc"
+                  minimumDate={filterDateFrom || undefined}
+                />
+                {(filterDateFrom || filterDateTo) && (
+                  <TouchableOpacity
+                    style={styles.clearFilterButton}
+                    onPress={() => {
+                      setFilterDateFrom(null);
+                      setFilterDateTo(null);
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#EF4444" />
+                    <Text style={styles.clearFilterText}>Xóa lọc ngày</Text>
                   </TouchableOpacity>
-                </View>
-                {loadingCostGroups ? (
-                  <View style={styles.pickerLoadingContainer}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                  </View>
-                ) : (
-                  <FlatList
-                    data={costGroups}
-                    keyExtractor={(item) => item.id.toString()}
-                    renderItem={({ item }) => (
+                )}
+              </View>
+
+              {/* Amount Range Filter */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Khoảng giá tiền</Text>
+                <CurrencyInput
+                  label="Từ số tiền"
+                  value={filterAmountMin || 0}
+                  onChangeText={(amount) => setFilterAmountMin(amount > 0 ? amount : null)}
+                  placeholder="Nhập số tiền tối thiểu"
+                />
+                <CurrencyInput
+                  label="Đến số tiền"
+                  value={filterAmountMax || 0}
+                  onChangeText={(amount) => setFilterAmountMax(amount > 0 ? amount : null)}
+                  placeholder="Nhập số tiền tối đa"
+                />
+                {(filterAmountMin !== null || filterAmountMax !== null) && (
+                  <TouchableOpacity
+                    style={styles.clearFilterButton}
+                    onPress={() => {
+                      setFilterAmountMin(null);
+                      setFilterAmountMax(null);
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#EF4444" />
+                    <Text style={styles.clearFilterText}>Xóa lọc giá tiền</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Status Filter */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Trạng thái</Text>
+                <View style={styles.filterOptions}>
+                  {["draft", "pending_management_approval", "pending_accountant_approval", "approved", "rejected"].map(
+                    (status) => (
                       <TouchableOpacity
+                        key={status}
                         style={[
-                          styles.costGroupItem,
-                          selectedCostGroup?.id === item.id && styles.costGroupItemActive,
+                          styles.filterOption,
+                          filterStatus === status && styles.filterOptionActive,
                         ]}
-                        onPress={() => {
-                          const newCostGroup = item;
-                          setSelectedCostGroup(newCostGroup);
-                          setFormData({ ...formData, cost_group_id: newCostGroup.id });
-
-                          // Nếu không phải cost group nhà thầu phụ, xóa subcontractor
-                          if (!isSubcontractorCostGroup(newCostGroup)) {
-                            setFormData(prev => ({ ...prev, subcontractor_id: null }));
-                            setSelectedSubcontractor(null);
-                          }
-
-                          setShowCostGroupPicker(false);
-                        }}
+                        onPress={() =>
+                          setFilterStatus(filterStatus === status ? null : status)
+                        }
                       >
-                        <View style={styles.costGroupItemContent}>
-                          <Text
-                            style={[
-                              styles.costGroupItemName,
-                              selectedCostGroup?.id === item.id && styles.costGroupItemNameActive,
-                            ]}
-                          >
-                            {item.name}
-                          </Text>
-                          {item.code && (
-                            <Text style={styles.costGroupItemCode}>Mã: {item.code}</Text>
-                          )}
-                          {item.description && (
-                            <Text style={styles.costGroupItemDescription} numberOfLines={2}>
-                              {item.description}
-                            </Text>
-                          )}
-                        </View>
-                        {selectedCostGroup?.id === item.id && (
-                          <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-                        )}
-                      </TouchableOpacity>
-                    )}
-                    ListEmptyComponent={
-                      <View style={styles.pickerEmptyContainer}>
-                        <Ionicons name="folder-outline" size={48} color="#D1D5DB" />
-                        <Text style={styles.pickerEmptyText}>Chưa có nhóm chi phí nào</Text>
-                        <Text style={styles.pickerEmptySubtext}>
-                          Vui lòng tạo nhóm chi phí trong phần Cấu hình
+                        <Text
+                          style={[
+                            styles.filterOptionText,
+                            filterStatus === status && styles.filterOptionTextActive,
+                          ]}
+                        >
+                          {getStatusText(status as Cost["status"])}
                         </Text>
-                      </View>
-                    }
-                  />
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Subcontractor Picker Modal - Đặt bên trong modal tạo cost */}
-          {showSubcontractorPicker && (
-            <View style={styles.pickerModalOverlay}>
-              <View style={styles.pickerModalContainer}>
-                <View style={styles.pickerModalHeader}>
-                  <Text style={styles.pickerModalTitle}>Chọn Nhà Thầu Phụ</Text>
-                  <TouchableOpacity onPress={() => setShowSubcontractorPicker(false)}>
-                    <Ionicons name="close" size={24} color="#1F2937" />
-                  </TouchableOpacity>
-                </View>
-                {loadingSubcontractors ? (
-                  <View style={styles.pickerLoadingContainer}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                  </View>
-                ) : (
-                  <FlatList
-                    data={subcontractors}
-                    keyExtractor={(item) => item.id.toString()}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={[
-                          styles.costGroupItem,
-                          selectedSubcontractor?.id === item.id && styles.costGroupItemActive,
-                        ]}
-                        onPress={() => {
-                          setSelectedSubcontractor(item);
-                          setFormData({ ...formData, subcontractor_id: item.id });
-                          setShowSubcontractorPicker(false);
-                        }}
-                      >
-                        <View style={styles.costGroupItemContent}>
-                          <Text
-                            style={[
-                              styles.costGroupItemName,
-                              selectedSubcontractor?.id === item.id && styles.costGroupItemNameActive,
-                            ]}
-                          >
-                            {item.name}
-                          </Text>
-                          {item.category && (
-                            <Text style={styles.costGroupItemCode}>Loại: {item.category}</Text>
-                          )}
-                        </View>
-                        {selectedSubcontractor?.id === item.id && (
-                          <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-                        )}
                       </TouchableOpacity>
-                    )}
-                    ListEmptyComponent={
-                      <View style={styles.pickerEmptyContainer}>
-                        <Ionicons name="business-outline" size={48} color="#D1D5DB" />
-                        <Text style={styles.pickerEmptyText}>Chưa có nhà thầu phụ nào</Text>
-                      </View>
-                    }
-                  />
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Material Picker Modal - Đặt bên trong modal tạo cost */}
-          {showMaterialPicker && (
-            <View style={styles.pickerModalOverlay}>
-              <View style={styles.pickerModalContainer}>
-                <View style={styles.pickerModalHeader}>
-                  <Text style={styles.pickerModalTitle}>Chọn Vật Liệu</Text>
-                  <TouchableOpacity onPress={() => setShowMaterialPicker(false)}>
-                    <Ionicons name="close" size={24} color="#1F2937" />
-                  </TouchableOpacity>
+                    )
+                  )}
                 </View>
-                {loadingMaterials ? (
-                  <View style={styles.pickerLoadingContainer}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                  </View>
-                ) : (
-                  <FlatList
-                    data={materials}
-                    keyExtractor={(item) => item.id.toString()}
-                    renderItem={({ item }) => (
+              </View>
+
+              {/* Category Filter */}
+              {summary?.grouped && summary.grouped.length > 0 && (
+                <View style={styles.filterSection}>
+                  <Text style={styles.filterSectionTitle}>Nhóm chi phí</Text>
+                  <View style={styles.filterOptions}>
+                    {summary.grouped.map((group: any, index: number) => (
                       <TouchableOpacity
+                        key={`category-filter-${index}`}
                         style={[
-                          styles.costGroupItem,
-                          selectedMaterial?.id === item.id && styles.costGroupItemActive,
+                          styles.filterOption,
+                          filterCategory === group.category && styles.filterOptionActive,
                         ]}
-                        onPress={() => {
-                          setSelectedMaterial(item);
-                          setFormData({ 
-                            ...formData, 
-                            material_id: item.id,
-                            unit: item.unit || formData.unit || "",
-                          });
-                          setShowMaterialPicker(false);
-                        }}
+                        onPress={() =>
+                          setFilterCategory(filterCategory === group.category ? null : group.category)
+                        }
                       >
-                        <View style={styles.costGroupItemContent}>
-                          <Text
-                            style={[
-                              styles.costGroupItemName,
-                              selectedMaterial?.id === item.id && styles.costGroupItemNameActive,
-                            ]}
-                          >
-                            {item.name}
-                          </Text>
-                          <View style={styles.materialInfoRow}>
-                            {item.code && (
-                              <Text style={styles.costGroupItemCode}>Mã: {item.code}</Text>
-                            )}
-                            <Text style={styles.costGroupItemCode}>
-                              Đơn vị: {item.unit}
-                            </Text>
-                            {item.current_stock !== undefined && (
-                              <Text style={styles.costGroupItemCode}>
-                                Tồn: {item.current_stock} {item.unit}
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-                        {selectedMaterial?.id === item.id && (
-                          <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-                        )}
-                      </TouchableOpacity>
-                    )}
-                    ListEmptyComponent={
-                      <View style={styles.pickerEmptyContainer}>
-                        <Ionicons name="cube-outline" size={48} color="#D1D5DB" />
-                        <Text style={styles.pickerEmptyText}>Chưa có vật liệu nào</Text>
-                        <Text style={styles.pickerEmptySubtext}>
-                          Vui lòng tạo vật liệu trong phần Quản lý kho
+                        <Text
+                          style={[
+                            styles.filterOptionText,
+                            filterCategory === group.category && styles.filterOptionTextActive,
+                          ]}
+                        >
+                          {group.category_label}
                         </Text>
-                      </View>
-                    }
-                  />
-                )}
-              </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.filterModalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.clearAllButton]}
+                onPress={clearAllFilters}
+              >
+                <Text style={styles.clearAllButtonText}>Xóa tất cả</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.applyButton]}
+                onPress={() => {
+                  setShowAdvancedFilter(false);
+                  loadCosts();
+                }}
+              >
+                <Text style={styles.applyButtonText}>Áp dụng</Text>
+              </TouchableOpacity>
             </View>
-          )}
+          </View>
         </View>
       </Modal>
     </View>
@@ -1098,6 +994,12 @@ const styles = StyleSheet.create({
     marginRight: 12,
     minWidth: 120,
     alignItems: "center",
+    position: "relative",
+  },
+  summaryChevron: {
+    position: "absolute",
+    top: 8,
+    right: 8,
   },
   summaryCategory: {
     fontSize: 12,
@@ -1134,12 +1036,43 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#EF4444",
   },
+  searchSection: {
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#1F2937",
+    padding: 0,
+  },
+  clearSearchButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
   filters: {
     backgroundColor: "#FFFFFF",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
+  },
+  filtersContent: {
+    paddingRight: 8,
   },
   filterChip: {
     paddingHorizontal: 16,
@@ -1159,6 +1092,29 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  advancedFilterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  filterIcon: {
+    marginRight: 0,
+  },
+  filterBadge: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    marginLeft: 4,
+  },
+  filterBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#3B82F6",
   },
   listContent: {
     padding: 16,
@@ -1238,6 +1194,9 @@ const styles = StyleSheet.create({
   },
   approveButton: {
     backgroundColor: "#10B981",
+  },
+  rejectButton: {
+    backgroundColor: "#EF4444",
   },
   actionButtonText: {
     color: "#FFFFFF",
@@ -1362,6 +1321,102 @@ const styles = StyleSheet.create({
     backgroundColor: "#3B82F6",
   },
   saveButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  submitButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBody: {
+    maxHeight: 300,
+    padding: 16,
+  },
+  filterModalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "90%",
+    width: "100%",
+  },
+  filterModalBody: {
+    maxHeight: 500,
+    padding: 16,
+  },
+  filterSection: {
+    marginBottom: 24,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 12,
+  },
+  filterOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  filterOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#FFFFFF",
+  },
+  filterOptionActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  filterOptionText: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
+  filterOptionTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  clearFilterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  clearFilterText: {
+    fontSize: 14,
+    color: "#EF4444",
+    fontWeight: "500",
+  },
+  filterModalActions: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+  },
+  clearAllButton: {
+    backgroundColor: "#E5E7EB",
+    flex: 1,
+  },
+  clearAllButtonText: {
+    color: "#1F2937",
+    fontWeight: "600",
+  },
+  applyButton: {
+    backgroundColor: "#3B82F6",
+    flex: 1,
+  },
+  applyButtonText: {
     color: "#FFFFFF",
     fontWeight: "600",
   },
@@ -1530,5 +1585,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#9CA3AF",
     textAlign: "center",
+  },
+  infoBox: {
+    flexDirection: "row",
+    backgroundColor: "#EFF6FF",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  infoBoxContent: {
+    flex: 1,
+  },
+  infoBoxTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1E40AF",
+    marginBottom: 4,
+  },
+  infoBoxText: {
+    fontSize: 13,
+    color: "#1E40AF",
+    lineHeight: 18,
+  },
+  warningBox: {
+    flexDirection: "row",
+    backgroundColor: "#FEF3C7",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  warningBoxContent: {
+    flex: 1,
+  },
+  warningBoxText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#92400E",
+    marginBottom: 4,
+  },
+  warningBoxSubtext: {
+    fontSize: 13,
+    color: "#78350F",
+    lineHeight: 18,
+    marginBottom: 8,
   },
 });

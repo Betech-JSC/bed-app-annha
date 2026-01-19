@@ -71,8 +71,12 @@ export default function AdditionalCostDetailScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case "confirmed":
       case "approved":
         return "#10B981";
+      case "customer_paid":
+        return "#3B82F6";
+      case "pending":
       case "pending_approval":
         return "#F59E0B";
       case "rejected":
@@ -84,14 +88,32 @@ export default function AdditionalCostDetailScreen() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case "approved":
-        return "Đã duyệt";
+      case "pending":
+        return "Chờ thanh toán";
+      case "customer_paid":
+        return "Khách đã thanh toán";
+      case "confirmed":
+        return "Đã nhận tiền";
       case "pending_approval":
         return "Chờ duyệt";
+      case "approved":
+        return "Đã duyệt";
       case "rejected":
         return "Đã từ chối";
       default:
         return status;
+    }
+  };
+
+  const handleConfirm = async () => {
+    try {
+      const response = await additionalCostApi.confirmAdditionalCost(id!, costId!);
+      if (response.success) {
+        Alert.alert("Thành công", "Đã xác nhận đã nhận tiền.");
+        loadCostDetail();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
     }
   };
 
@@ -307,7 +329,37 @@ export default function AdditionalCostDetailScreen() {
           </View>
         )}
 
-        {/* Actions - Chỉ hiển thị nếu chờ duyệt */}
+        {/* Actions - Khách hàng đánh dấu đã thanh toán */}
+        {cost.status === "pending" && (
+          <View style={styles.actionsContainer}>
+            <PermissionGuard permission={Permissions.ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER} projectId={id}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.markPaidButton]}
+                onPress={() => router.push(`/projects/${id}/additional-costs/${costId}/mark-paid`)}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>Đã thanh toán</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
+          </View>
+        )}
+
+        {/* Actions - Kế toán xác nhận đã nhận tiền */}
+        {cost.status === "customer_paid" && (
+          <View style={styles.actionsContainer}>
+            <PermissionGuard permission={Permissions.ADDITIONAL_COST_CONFIRM} projectId={id}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.confirmButton]}
+                onPress={handleConfirm}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>Xác nhận đã nhận tiền</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
+          </View>
+        )}
+
+        {/* Actions - Backward compatible: pending_approval → approve/reject */}
         {cost.status === "pending_approval" && (
           <View style={styles.actionsContainer}>
             <PermissionGuard permission={Permissions.ADDITIONAL_COST_APPROVE} projectId={id}>
@@ -483,6 +535,12 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 16,
     borderRadius: 8,
+  },
+  markPaidButton: {
+    backgroundColor: "#3B82F6",
+  },
+  confirmButton: {
+    backgroundColor: "#10B981",
   },
   approveButton: {
     backgroundColor: "#10B981",

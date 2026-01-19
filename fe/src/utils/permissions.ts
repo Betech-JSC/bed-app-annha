@@ -14,6 +14,22 @@ export const isSuperAdmin = (permissions: string[]): boolean => {
 };
 
 /**
+ * Check if user is admin based on permissions
+ * Admin users typically have settings.manage permission or super admin permission
+ */
+export const isAdmin = (permissions: string[]): boolean => {
+    if (!Array.isArray(permissions) || permissions.length === 0) {
+        return false;
+    }
+    // Super admin has all permissions
+    if (isSuperAdmin(permissions)) {
+        return true;
+    }
+    // Admin typically has settings.manage permission
+    return permissions.includes(Permissions.SETTINGS_MANAGE);
+};
+
+/**
  * Check if user has any project permissions
  */
 export const hasProjectPermissions = (permissions: string[]): boolean => {

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Cost;
 use App\Models\Material;
 use App\Models\MaterialTransaction;
+use App\Models\CostGroup;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -138,10 +139,64 @@ class MaterialInventoryService
             $unitPrice = $lastInTransaction?->unit_price ?? $material->unit_price ?? 0;
             $totalAmount = $quantity * $unitPrice;
 
+            // Kiểm tra xem đã có Cost nào với material_id cho dự án này chưa
+            // Nếu chưa có, tạo Cost mới khi xuất kho (vật liệu từ kho chung)
+            $existingCost = Cost::where('project_id', $projectId)
+                ->where('material_id', $materialId)
+                ->where('status', 'approved')
+                ->first();
+
+            $costId = null;
+            if (!$existingCost) {
+                // Tạo Cost mới cho vật liệu xuất kho từ kho chung
+                $costGroup = \App\Models\CostGroup::where('code', 'material')
+                    ->orWhere('name', 'like', '%vật liệu%')
+                    ->orWhere('name', 'like', '%material%')
+                    ->where('is_active', true)
+                    ->first();
+
+                if ($costGroup) {
+                    $cost = Cost::create([
+                        'project_id' => $projectId,
+                        'cost_group_id' => $costGroup->id,
+                        'material_id' => $materialId,
+                        'name' => "Sử dụng vật liệu: {$material->name}",
+                        'amount' => $totalAmount,
+                        'quantity' => $quantity,
+                        'description' => "Xuất kho sử dụng cho dự án" . ($notes ? ": {$notes}" : ""),
+                        'cost_date' => now()->toDateString(),
+                        'status' => 'approved', // Tự động approved vì đã được approve khi xuất kho
+                        'created_by' => $createdBy,
+                        'accountant_approved_by' => $createdBy,
+                        'accountant_approved_at' => now(),
+                    ]);
+                    $costId = $cost->id;
+                    
+                    // Sync với budget
+                    $syncService = app(\App\Services\BudgetSyncService::class);
+                    $syncService->syncProjectBudgets($projectId);
+                    
+                    Log::info("Đã tạo Cost {$cost->id} từ MaterialTransaction xuất kho cho Material {$materialId}");
+                }
+            } else {
+                // Nếu đã có Cost, liên kết với transaction nhập kho gần nhất
+                $lastInTransaction = MaterialTransaction::where('material_id', $materialId)
+                    ->where('project_id', $projectId)
+                    ->where('type', 'in')
+                    ->where('status', 'approved')
+                    ->whereNotNull('cost_id')
+                    ->orderBy('transaction_date', 'desc')
+                    ->first();
+                
+                if ($lastInTransaction && $lastInTransaction->cost_id) {
+                    $costId = $lastInTransaction->cost_id;
+                }
+            }
+
             $transaction = MaterialTransaction::create([
                 'material_id' => $materialId,
                 'project_id' => $projectId,
-                'cost_id' => null, // Xuất kho không liên kết với Cost
+                'cost_id' => $costId, // Liên kết với Cost nếu có
                 'type' => 'out', // Xuất kho
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
@@ -156,9 +211,9 @@ class MaterialInventoryService
 
             DB::commit();
 
-            Log::info("Đã tạo transaction xuất kho {$transaction->id} cho Material {$materialId}");
+            Log::info("Đã tạo transaction xuất kho {$transaction->id} cho Material {$materialId}" . ($costId ? " với Cost {$costId}" : ""));
 
-            return $transaction->load(['material', 'project']);
+            return $transaction->load(['material', 'project', 'cost']);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Lỗi khi tạo transaction xuất kho: " . $e->getMessage());

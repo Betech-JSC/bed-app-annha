@@ -15,8 +15,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { budgetApi, ProjectBudget, CreateBudgetData } from "@/api/budgetApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -35,7 +34,6 @@ export default function CreateBudgetScreen() {
         notes: "",
         items: [],
     });
-    const [showDatePicker, setShowDatePicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
@@ -234,37 +232,18 @@ export default function CreateBudgetScreen() {
                         />
                     </View>
 
-                    <View style={styles.formGroup}>
-                        <Text style={styles.label}>Ngày lập ngân sách *</Text>
-                        <TouchableOpacity
-                            style={styles.dateInput}
-                            onPress={() => setShowDatePicker(true)}
-                        >
-                            <Text>{formData.budget_date}</Text>
-                            <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                        </TouchableOpacity>
-                        {showDatePicker && (
-                            <DateTimePicker
-                                value={new Date(formData.budget_date || new Date())}
-                                mode="date"
-                                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                                onChange={(event, date) => {
-                                    if (Platform.OS === 'android') {
-                                        setShowDatePicker(false);
-                                    }
-                                    if (date && (Platform.OS === 'android' || event.type !== 'dismissed')) {
-                                        setFormData({
-                                            ...formData,
-                                            budget_date: date.toISOString().split("T")[0],
-                                        });
-                                    }
-                                    if (Platform.OS === 'ios' && event.type === 'dismissed') {
-                                        setShowDatePicker(false);
-                                    }
-                                }}
-                            />
-                        )}
-                    </View>
+                    <DatePickerInput
+                        label="Ngày lập ngân sách *"
+                        value={formData.budget_date}
+                        onDateChange={(date) => {
+                            setFormData({
+                                ...formData,
+                                budget_date: date,
+                            });
+                        }}
+                        placeholder="Chọn ngày"
+                        required
+                    />
 
                     <View style={styles.formGroup}>
                         <View style={styles.itemsHeader}>

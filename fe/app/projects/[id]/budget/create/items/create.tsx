@@ -15,7 +15,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, CurrencyInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -30,9 +30,9 @@ export default function CreateBudgetItemScreen() {
         name: "",
         cost_group_id: null as number | null,
         description: "",
-        estimated_amount: "",
-        quantity: "1",
-        unit_price: "",
+        estimated_amount: 0,
+        quantity: 1,
+        unit_price: 0,
     });
     const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
     const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
@@ -55,7 +55,7 @@ export default function CreateBudgetItemScreen() {
     };
 
     const handleSave = async () => {
-        if (!itemData.name || !itemData.estimated_amount) {
+        if (!itemData.name || !itemData.estimated_amount || itemData.estimated_amount <= 0) {
             Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin bắt buộc");
             return;
         }
@@ -66,15 +66,15 @@ export default function CreateBudgetItemScreen() {
                 name: itemData.name,
                 cost_group_id: itemData.cost_group_id,
                 description: itemData.description || undefined,
-                estimated_amount: parseFloat(itemData.estimated_amount),
-                quantity: itemData.quantity ? parseFloat(itemData.quantity) : undefined,
-                unit_price: itemData.unit_price ? parseFloat(itemData.unit_price) : undefined,
+                estimated_amount: itemData.estimated_amount,
+                quantity: itemData.quantity || undefined,
+                unit_price: itemData.unit_price || undefined,
             };
 
             // Store item data in AsyncStorage temporarily
             const storageKey = `budget_create_item_${id}`;
             await AsyncStorage.setItem(storageKey, JSON.stringify(itemPayload));
-            
+
             router.back();
         } catch (error) {
             Alert.alert("Lỗi", "Không thể lưu hạng mục");
@@ -139,38 +139,30 @@ export default function CreateBudgetItemScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <View style={styles.formGroup}>
-                        <Text style={styles.label}>Số tiền ước tính (VNĐ) *</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="0"
-                            value={itemData.estimated_amount}
-                            onChangeText={(text) => setItemData({ ...itemData, estimated_amount: text })}
-                            keyboardType="numeric"
-                        />
-                    </View>
+                    <CurrencyInput
+                        label="Số tiền ước tính (VNĐ) *"
+                        value={itemData.estimated_amount}
+                        onChangeText={(amount) => setItemData({ ...itemData, estimated_amount: amount })}
+                        placeholder="0"
+                    />
 
                     <View style={styles.formGroup}>
                         <Text style={styles.label}>Số lượng</Text>
                         <TextInput
                             style={styles.input}
                             placeholder="1"
-                            value={itemData.quantity}
-                            onChangeText={(text) => setItemData({ ...itemData, quantity: text })}
+                            value={itemData.quantity > 0 ? itemData.quantity.toString() : ""}
+                            onChangeText={(text) => setItemData({ ...itemData, quantity: parseFloat(text) || 0 })}
                             keyboardType="numeric"
                         />
                     </View>
 
-                    <View style={styles.formGroup}>
-                        <Text style={styles.label}>Đơn giá (VNĐ)</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="0"
-                            value={itemData.unit_price}
-                            onChangeText={(text) => setItemData({ ...itemData, unit_price: text })}
-                            keyboardType="numeric"
-                        />
-                    </View>
+                    <CurrencyInput
+                        label="Đơn giá (VNĐ)"
+                        value={itemData.unit_price}
+                        onChangeText={(price) => setItemData({ ...itemData, unit_price: price })}
+                        placeholder="0"
+                    />
 
                     <View style={styles.formGroup}>
                         <Text style={styles.label}>Mô tả</Text>

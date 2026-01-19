@@ -11,8 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { reportApi, ConstructionProgressReport } from "@/api/reportApi";
-import BackButton from "@/components/BackButton";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { ScreenHeader, DatePickerInput } from "@/components";
 
 export default function ConstructionProgressReportScreen() {
   const router = useRouter();
@@ -22,8 +21,6 @@ export default function ConstructionProgressReportScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [fromDate, setFromDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
   const [toDate, setToDate] = useState(new Date());
-  const [showFromDatePicker, setShowFromDatePicker] = useState(false);
-  const [showToDatePicker, setShowToDatePicker] = useState(false);
 
   useEffect(() => {
     loadReport();
@@ -70,36 +67,40 @@ export default function ConstructionProgressReportScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <Text style={styles.headerTitle}>Báo Cáo Tiến Độ Thi Công</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
+      <ScreenHeader title="Báo Cáo Tiến Độ Thi Công" showBackButton />
       <ScrollView
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Date Filters */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowFromDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-            <Text style={styles.dateButtonText}>
-              Từ: {fromDate.toLocaleDateString("vi-VN")}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowToDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-            <Text style={styles.dateButtonText}>
-              Đến: {toDate.toLocaleDateString("vi-VN")}
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.filterContainer, { flexDirection: 'row', gap: 12 }]}>
+          <View style={{ flex: 1 }}>
+            <DatePickerInput
+              label="Từ ngày"
+              value={fromDate}
+              onChange={(date) => {
+                if (date) {
+                  setFromDate(date);
+                }
+              }}
+              placeholder="Chọn ngày bắt đầu"
+              containerStyle={{ marginBottom: 0 }}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <DatePickerInput
+              label="Đến ngày"
+              value={toDate}
+              onChange={(date) => {
+                if (date) {
+                  setToDate(date);
+                }
+              }}
+              placeholder="Chọn ngày kết thúc"
+              minimumDate={fromDate}
+              containerStyle={{ marginBottom: 0 }}
+            />
+          </View>
         </View>
 
         {/* Overall Progress */}
@@ -125,27 +126,27 @@ export default function ConstructionProgressReportScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Thống Kê Theo Tuần</Text>
             {report.weekly_statistics.map((week, index) => (
-            <View key={index} style={styles.weekCard}>
-              <Text style={styles.weekLabel}>{week.week}</Text>
-              <View style={styles.weekStats}>
-                <View style={styles.weekStatItem}>
-                  <Text style={styles.weekStatLabel}>Tiến độ TB</Text>
-                  <Text style={styles.weekStatValue}>
-                    {(week.average_progress || 0).toFixed(2)}%
-                  </Text>
-                </View>
-                <View style={styles.weekStatItem}>
-                  <Text style={styles.weekStatLabel}>Nhân lực TB</Text>
-                  <Text style={styles.weekStatValue}>
-                    {(week.average_personnel || 0).toFixed(0)} người
-                  </Text>
-                </View>
-                <View style={styles.weekStatItem}>
-                  <Text style={styles.weekStatLabel}>Số bản ghi</Text>
-                  <Text style={styles.weekStatValue}>{week.log_count}</Text>
+              <View key={index} style={styles.weekCard}>
+                <Text style={styles.weekLabel}>{week.week}</Text>
+                <View style={styles.weekStats}>
+                  <View style={styles.weekStatItem}>
+                    <Text style={styles.weekStatLabel}>Tiến độ TB</Text>
+                    <Text style={styles.weekStatValue}>
+                      {(week.average_progress || 0).toFixed(2)}%
+                    </Text>
+                  </View>
+                  <View style={styles.weekStatItem}>
+                    <Text style={styles.weekStatLabel}>Nhân lực TB</Text>
+                    <Text style={styles.weekStatValue}>
+                      {(week.average_personnel || 0).toFixed(0)} người
+                    </Text>
+                  </View>
+                  <View style={styles.weekStatItem}>
+                    <Text style={styles.weekStatLabel}>Số bản ghi</Text>
+                    <Text style={styles.weekStatValue}>{week.log_count}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
             ))}
           </View>
         )}
@@ -179,8 +180,8 @@ export default function ConstructionProgressReportScreen() {
                         progress.status === "on_schedule"
                           ? "#10B98120"
                           : progress.status === "delayed"
-                          ? "#EF444420"
-                          : "#F59E0B20",
+                            ? "#EF444420"
+                            : "#F59E0B20",
                     },
                   ]}
                 >
@@ -192,16 +193,16 @@ export default function ConstructionProgressReportScreen() {
                           progress.status === "on_schedule"
                             ? "#10B981"
                             : progress.status === "delayed"
-                            ? "#EF4444"
-                            : "#F59E0B",
+                              ? "#EF4444"
+                              : "#F59E0B",
                       },
                     ]}
                   >
                     {progress.status === "on_schedule"
                       ? "Đúng tiến độ"
                       : progress.status === "delayed"
-                      ? "Chậm tiến độ"
-                      : "Sớm tiến độ"}
+                        ? "Chậm tiến độ"
+                        : "Sớm tiến độ"}
                   </Text>
                 </View>
               </View>
@@ -210,29 +211,6 @@ export default function ConstructionProgressReportScreen() {
         )}
       </ScrollView>
 
-      {/* Date Pickers */}
-      {showFromDatePicker && (
-        <DateTimePicker
-          value={fromDate}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowFromDatePicker(false);
-            if (selectedDate) setFromDate(selectedDate);
-          }}
-        />
-      )}
-      {showToDatePicker && (
-        <DateTimePicker
-          value={toDate}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowToDatePicker(false);
-            if (selectedDate) setToDate(selectedDate);
-          }}
-        />
-      )}
     </View>
   );
 }
@@ -247,20 +225,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
   },
   content: {
     flex: 1,

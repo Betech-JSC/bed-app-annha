@@ -19,6 +19,7 @@ import { ProjectTask, CreateTaskData } from "@/types/ganttTypes";
 import { GanttChart } from "@/components";
 import TaskFormModal from "@/components/TaskFormModal";
 import { PermissionGuard } from "@/components/PermissionGuard";
+import { Permissions } from "@/constants/Permissions";
 
 export default function ConstructionPlanScreen() {
   const router = useRouter();
@@ -341,7 +342,7 @@ export default function ConstructionPlanScreen() {
               color="#3B82F6"
             />
           </TouchableOpacity>
-          <PermissionGuard permission="projects.update">
+          <PermissionGuard permission={Permissions.PROJECT_TASK_CREATE} projectId={id}>
             <TouchableOpacity
               style={styles.createButtonHeader}
               onPress={() => {
@@ -398,6 +399,7 @@ export default function ConstructionPlanScreen() {
           setSelectedTask(null);
         }}
         onSubmit={selectedTask ? handleUpdateTask : handleCreateTask}
+        onDelete={selectedTask ? (taskId) => handleDeleteTask(taskId).then(() => loadData()) : undefined}
       />
     </View>
   );

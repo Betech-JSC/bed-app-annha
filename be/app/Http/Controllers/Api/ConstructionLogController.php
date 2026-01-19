@@ -48,6 +48,14 @@ class ConstructionLogController extends Controller
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
+        // Check permission
+        if (!$user->hasPermission(\App\Constants\Permissions::LOG_CREATE) && !$user->owner && $user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo nhật ký công trình. Cần quyền: ' . \App\Constants\Permissions::LOG_CREATE
+            ], 403);
+        }
+
         $validated = $request->validate([
             'log_date' => 'required|date',
             'task_id' => 'nullable|exists:project_tasks,id',

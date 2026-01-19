@@ -17,7 +17,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { budgetApi } from "@/api/budgetApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, CurrencyInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -31,9 +31,9 @@ export default function CreateBudgetItemDetailScreen() {
         name: "",
         cost_group_id: undefined as number | undefined,
         description: "",
-        estimated_amount: "",
-        quantity: "",
-        unit_price: "",
+        estimated_amount: 0,
+        quantity: 0,
+        unit_price: 0,
     });
     const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
     const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
@@ -63,7 +63,7 @@ export default function CreateBudgetItemDetailScreen() {
 
         try {
             setSubmitting(true);
-            
+
             // Load current budget to get items
             const budgetResponse = await budgetApi.getBudget(Number(id), Number(budgetId));
             if (!budgetResponse.success) {
@@ -78,9 +78,9 @@ export default function CreateBudgetItemDetailScreen() {
                 name: itemData.name,
                 cost_group_id: itemData.cost_group_id,
                 description: itemData.description || undefined,
-                estimated_amount: parseFloat(itemData.estimated_amount),
-                quantity: itemData.quantity ? parseFloat(itemData.quantity) : undefined,
-                unit_price: itemData.unit_price ? parseFloat(itemData.unit_price) : undefined,
+                estimated_amount: itemData.estimated_amount,
+                quantity: itemData.quantity || undefined,
+                unit_price: itemData.unit_price || undefined,
             };
 
             // Add new item to items array
@@ -166,38 +166,30 @@ export default function CreateBudgetItemDetailScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <View style={styles.formGroup}>
-                        <Text style={styles.label}>Số tiền ước tính (VNĐ) *</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="0"
-                            value={itemData.estimated_amount}
-                            onChangeText={(text) => setItemData({ ...itemData, estimated_amount: text })}
-                            keyboardType="numeric"
-                        />
-                    </View>
+                    <CurrencyInput
+                        label="Số tiền ước tính (VNĐ) *"
+                        value={itemData.estimated_amount}
+                        onChangeText={(amount) => setItemData({ ...itemData, estimated_amount: amount })}
+                        placeholder="0"
+                    />
 
                     <View style={styles.formGroup}>
                         <Text style={styles.label}>Số lượng</Text>
                         <TextInput
                             style={styles.input}
                             placeholder="1"
-                            value={itemData.quantity}
-                            onChangeText={(text) => setItemData({ ...itemData, quantity: text })}
+                            value={itemData.quantity > 0 ? itemData.quantity.toString() : ""}
+                            onChangeText={(text) => setItemData({ ...itemData, quantity: parseFloat(text) || 0 })}
                             keyboardType="numeric"
                         />
                     </View>
 
-                    <View style={styles.formGroup}>
-                        <Text style={styles.label}>Đơn giá (VNĐ)</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="0"
-                            value={itemData.unit_price}
-                            onChangeText={(text) => setItemData({ ...itemData, unit_price: text })}
-                            keyboardType="numeric"
-                        />
-                    </View>
+                    <CurrencyInput
+                        label="Đơn giá (VNĐ)"
+                        value={itemData.unit_price}
+                        onChangeText={(price) => setItemData({ ...itemData, unit_price: price })}
+                        placeholder="0"
+                    />
 
                     <View style={styles.formGroup}>
                         <Text style={styles.label}>Mô tả</Text>

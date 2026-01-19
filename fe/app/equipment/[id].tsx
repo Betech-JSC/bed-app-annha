@@ -17,8 +17,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { equipmentApi, Equipment, EquipmentAllocation, EquipmentMaintenance, CreateEquipmentData } from "@/api/equipmentApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 
 const STATUS_LABELS: Record<string, string> = {
     available: "Sẵn sàng",
@@ -55,8 +54,6 @@ export default function EquipmentDetailScreen() {
         maintenance_interval_days: 30,
         status: "available",
     });
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [datePickerField, setDatePickerField] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -292,43 +289,48 @@ export default function EquipmentDetailScreen() {
 
     if (loading) {
         return (
-            <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color="#3B82F6" />
+            <View style={styles.container}>
+                <ScreenHeader title="Chi Tiết Thiết Bị" showBackButton />
+                <View style={styles.centerContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                </View>
             </View>
         );
     }
 
     if (!equipment) {
         return (
-            <View style={styles.centerContainer}>
-                <Text style={styles.errorText}>Không tìm thấy thiết bị</Text>
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                    <Text style={styles.backButtonText}>Quay lại</Text>
-                </TouchableOpacity>
+            <View style={styles.container}>
+                <ScreenHeader title="Chi Tiết Thiết Bị" showBackButton />
+                <View style={styles.centerContainer}>
+                    <Text style={styles.errorText}>Không tìm thấy thiết bị</Text>
+                </View>
             </View>
         );
     }
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <BackButton />
-                <Text style={styles.headerTitle}>Chi Tiết Thiết Bị</Text>
-                <View style={styles.headerActions}>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={() => setShowEditModal(true)}
-                    >
-                        <Ionicons name="pencil" size={24} color="#3B82F6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={handleDelete}
-                    >
-                        <Ionicons name="trash" size={24} color="#EF4444" />
-                    </TouchableOpacity>
-                </View>
-            </View>
+            <ScreenHeader
+                title="Chi Tiết Thiết Bị"
+                showBackButton
+                rightComponent={
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => setShowEditModal(true)}
+                        >
+                            <Ionicons name="pencil" size={24} color="#3B82F6" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={handleDelete}
+                        >
+                            <Ionicons name="trash" size={24} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
+                }
+            />
 
             <ScrollView
                 style={styles.content}
@@ -654,78 +656,41 @@ export default function EquipmentDetailScreen() {
                                 />
                             </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày mua</Text>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.input,
-                                        styles.pickerInput,
-                                        focusedField === "purchase_date" && styles.inputFocused,
-                                    ]}
-                                    onPress={() => {
-                                        setDatePickerField("purchase_date");
-                                        setShowDatePicker(true);
-                                    }}
-                                >
-                                    <Text style={formData.purchase_date ? styles.pickerText : styles.pickerPlaceholder}>
-                                        {formData.purchase_date ? formatDate(formData.purchase_date) : "Chọn ngày mua (tùy chọn)"}
-                                    </Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                            </View>
+                            <DatePickerInput
+                                label="Ngày mua"
+                                value={formData.purchase_date}
+                                onDateChange={(date) => {
+                                    setFormData({ ...formData, purchase_date: date });
+                                }}
+                                placeholder="Chọn ngày mua (tùy chọn)"
+                            />
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Giá mua (VNĐ)</Text>
-                                <TextInput
-                                    style={[
-                                        styles.input,
-                                        errors.purchase_price && styles.inputError,
-                                        focusedField === "purchase_price" && styles.inputFocused,
-                                    ]}
-                                    placeholder="0"
-                                    value={formData.purchase_price?.toString() || "0"}
-                                    onChangeText={(text) => {
-                                        const value = text === "" ? 0 : parseFloat(text);
-                                        setFormData({ ...formData, purchase_price: isNaN(value) ? 0 : value });
-                                        if (errors.purchase_price) {
-                                            setErrors({ ...errors, purchase_price: "" });
-                                        }
-                                    }}
-                                    keyboardType="numeric"
-                                    onFocus={() => setFocusedField("purchase_price")}
-                                    onBlur={() => setFocusedField(null)}
-                                />
-                                {errors.purchase_price && (
-                                    <Text style={styles.errorText}>{errors.purchase_price}</Text>
-                                )}
-                            </View>
+                            <CurrencyInput
+                                label="Giá mua (VNĐ)"
+                                value={formData.purchase_price || 0}
+                                onChangeText={(amount) => {
+                                    setFormData({ ...formData, purchase_price: amount });
+                                    if (errors.purchase_price) {
+                                        setErrors({ ...errors, purchase_price: "" });
+                                    }
+                                }}
+                                placeholder="0"
+                                error={errors.purchase_price}
+                            />
 
                             {formData.type === "rented" && (
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Giá thuê/ngày (VNĐ)</Text>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            errors.rental_rate_per_day && styles.inputError,
-                                            focusedField === "rental_rate_per_day" && styles.inputFocused,
-                                        ]}
-                                        placeholder="0"
-                                        value={formData.rental_rate_per_day?.toString() || "0"}
-                                        onChangeText={(text) => {
-                                            const value = text === "" ? 0 : parseFloat(text);
-                                            setFormData({ ...formData, rental_rate_per_day: isNaN(value) ? 0 : value });
-                                            if (errors.rental_rate_per_day) {
-                                                setErrors({ ...errors, rental_rate_per_day: "" });
-                                            }
-                                        }}
-                                        keyboardType="numeric"
-                                        onFocus={() => setFocusedField("rental_rate_per_day")}
-                                        onBlur={() => setFocusedField(null)}
-                                    />
-                                    {errors.rental_rate_per_day && (
-                                        <Text style={styles.errorText}>{errors.rental_rate_per_day}</Text>
-                                    )}
-                                </View>
+                                <CurrencyInput
+                                    label="Giá thuê/ngày (VNĐ)"
+                                    value={formData.rental_rate_per_day || 0}
+                                    onChangeText={(amount) => {
+                                        setFormData({ ...formData, rental_rate_per_day: amount });
+                                        if (errors.rental_rate_per_day) {
+                                            setErrors({ ...errors, rental_rate_per_day: "" });
+                                        }
+                                    }}
+                                    placeholder="0"
+                                    error={errors.rental_rate_per_day}
+                                />
                             )}
 
                             <View style={styles.formGroup}>
@@ -799,21 +764,6 @@ export default function EquipmentDetailScreen() {
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* Date Picker */}
-            {showDatePicker && (
-                <DateTimePicker
-                    value={formData.purchase_date ? new Date(formData.purchase_date) : new Date()}
-                    mode="date"
-                    display="default"
-                    onChange={(event, selectedDate) => {
-                        setShowDatePicker(false);
-                        if (selectedDate && datePickerField === "purchase_date") {
-                            setFormData({ ...formData, purchase_date: selectedDate.toISOString().split("T")[0] });
-                        }
-                        setDatePickerField(null);
-                    }}
-                />
-            )}
         </View>
     );
 }
@@ -828,22 +778,6 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: "#F9FAFB",
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: 16,
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1F2937",
-        flex: 1,
-        marginLeft: 12,
     },
     headerActions: {
         flexDirection: "row",

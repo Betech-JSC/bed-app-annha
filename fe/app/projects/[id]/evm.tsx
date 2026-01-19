@@ -74,7 +74,7 @@ export default function ProjectEvmScreen() {
   if (loading && !analysis) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Phân Tích EVM" />
+        <ScreenHeader title="Phân Tích EVM" showBackButton />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
@@ -85,7 +85,7 @@ export default function ProjectEvmScreen() {
   if (!analysis) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Phân Tích EVM" />
+        <ScreenHeader title="Phân Tích EVM" showBackButton />
         <View style={styles.emptyContainer}>
           <Ionicons name="information-circle-outline" size={64} color="#D1D5DB" />
           <Text style={styles.emptyText}>Không có dữ liệu EVM</Text>
@@ -98,7 +98,7 @@ export default function ProjectEvmScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="EVM Analysis" />
+      <ScreenHeader title="EVM Analysis" showBackButton />
       <ScrollView
         style={[styles.scrollView, { marginBottom: tabBarHeight }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

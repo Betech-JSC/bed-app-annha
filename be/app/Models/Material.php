@@ -46,9 +46,32 @@ class Material extends Model
 
     public function getCurrentStockAttribute(): float
     {
-        $in = $this->transactions()->where('type', 'in')->sum('quantity');
-        $out = $this->transactions()->where('type', 'out')->sum('quantity');
-        return $in - $out;
+        // Chỉ tính các transaction đã được approved
+        $in = $this->transactions()
+            ->where('type', 'in')
+            ->where('status', 'approved')
+            ->sum('quantity');
+        
+        $out = $this->transactions()
+            ->where('type', 'out')
+            ->where('status', 'approved')
+            ->sum('quantity');
+        
+        // Adjustment có thể là số dương (tăng) hoặc âm (giảm)
+        $adjustment = $this->transactions()
+            ->where('type', 'adjustment')
+            ->where('status', 'approved')
+            ->sum('quantity');
+        
+        return ($in - $out) + ($adjustment ?? 0);
+    }
+
+    /**
+     * Accessor để tương thích với frontend (min_stock_level)
+     */
+    public function getMinStockLevelAttribute(): float
+    {
+        return $this->min_stock ?? 0;
     }
 
     // ==================================================================

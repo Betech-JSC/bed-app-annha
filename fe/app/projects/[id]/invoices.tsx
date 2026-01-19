@@ -17,8 +17,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { invoiceApi, Invoice, CreateInvoiceData } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function InvoicesScreen() {
@@ -38,8 +37,6 @@ export default function InvoicesScreen() {
         description: "",
         notes: "",
     });
-    const [showInvoiceDatePicker, setShowInvoiceDatePicker] = useState(false);
-    const [showDueDatePicker, setShowDueDatePicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
@@ -301,99 +298,58 @@ export default function InvoicesScreen() {
                             showsVerticalScrollIndicator={true}
                             nestedScrollEnabled={true}
                         >
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày hóa đơn *</Text>
-                                <TouchableOpacity
-                                    style={styles.dateInput}
-                                    onPress={() => setShowInvoiceDatePicker(true)}
-                                >
-                                    <Text>{formData.invoice_date}</Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {showInvoiceDatePicker && (
-                                    <DateTimePicker
-                                        value={new Date(formData.invoice_date || new Date())}
-                                        mode="date"
-                                        display="default"
-                                        onChange={(event, date) => {
-                                            setShowInvoiceDatePicker(false);
-                                            if (date) {
-                                                setFormData({
-                                                    ...formData,
-                                                    invoice_date: date.toISOString().split("T")[0],
-                                                });
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
+                            <DatePickerInput
+                                label="Ngày hóa đơn *"
+                                value={formData.invoice_date}
+                                onDateChange={(date) => {
+                                    setFormData({
+                                        ...formData,
+                                        invoice_date: date,
+                                    });
+                                }}
+                                placeholder="Chọn ngày"
+                                required
+                            />
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Ngày đến hạn</Text>
-                                <TouchableOpacity
-                                    style={styles.dateInput}
-                                    onPress={() => setShowDueDatePicker(true)}
-                                >
-                                    <Text>{formData.due_date}</Text>
-                                    <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                </TouchableOpacity>
-                                {showDueDatePicker && (
-                                    <DateTimePicker
-                                        value={new Date(formData.due_date || new Date())}
-                                        mode="date"
-                                        display="default"
-                                        minimumDate={new Date(formData.invoice_date || new Date())}
-                                        onChange={(event, date) => {
-                                            setShowDueDatePicker(false);
-                                            if (date) {
-                                                setFormData({
-                                                    ...formData,
-                                                    due_date: date.toISOString().split("T")[0],
-                                                });
-                                            }
-                                        }}
-                                    />
-                                )}
-                            </View>
+                            <DatePickerInput
+                                label="Ngày đến hạn"
+                                value={formData.due_date}
+                                onDateChange={(date) => {
+                                    setFormData({
+                                        ...formData,
+                                        due_date: date,
+                                    });
+                                }}
+                                placeholder="Chọn ngày"
+                                minimumDate={formData.invoice_date ? new Date(formData.invoice_date) : undefined}
+                            />
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Tổng tiền (chưa VAT) *</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    value={formData.subtotal?.toString()}
-                                    onChangeText={(text) =>
-                                        setFormData({ ...formData, subtotal: parseFloat(text) || 0 })
-                                    }
-                                    keyboardType="numeric"
-                                />
-                            </View>
+                            <CurrencyInput
+                                label="Tổng tiền (chưa VAT) *"
+                                value={formData.subtotal || 0}
+                                onChangeText={(amount) =>
+                                    setFormData({ ...formData, subtotal: amount })
+                                }
+                                placeholder="0"
+                            />
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>VAT</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    value={formData.tax_amount?.toString()}
-                                    onChangeText={(text) =>
-                                        setFormData({ ...formData, tax_amount: parseFloat(text) || 0 })
-                                    }
-                                    keyboardType="numeric"
-                                />
-                            </View>
+                            <CurrencyInput
+                                label="VAT"
+                                value={formData.tax_amount || 0}
+                                onChangeText={(amount) =>
+                                    setFormData({ ...formData, tax_amount: amount })
+                                }
+                                placeholder="0"
+                            />
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Giảm giá</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0"
-                                    value={formData.discount_amount?.toString()}
-                                    onChangeText={(text) =>
-                                        setFormData({ ...formData, discount_amount: parseFloat(text) || 0 })
-                                    }
-                                    keyboardType="numeric"
-                                />
-                            </View>
+                            <CurrencyInput
+                                label="Giảm giá"
+                                value={formData.discount_amount || 0}
+                                onChangeText={(amount) =>
+                                    setFormData({ ...formData, discount_amount: amount })
+                                }
+                                placeholder="0"
+                            />
 
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Mô tả</Text>

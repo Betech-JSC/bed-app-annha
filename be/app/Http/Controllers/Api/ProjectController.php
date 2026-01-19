@@ -17,7 +17,11 @@ class ProjectController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
+        
+        // Check if user has permission to view all projects (from permissions, not role)
+        $canViewAllProjects = $user->isAdmin()
+            || $user->hasPermission(\App\Constants\Permissions::PROJECT_VIEW)
+            || $user->hasPermission(\App\Constants\Permissions::PROJECT_MANAGE);
 
         $query = Project::with([
             'customer',
@@ -26,9 +30,11 @@ class ProjectController extends Controller
             'progress',
         ]);
 
-        // Super admin có thể xem tất cả projects
-        if (!$isSuperAdmin) {
+        // Super admin, admin, or users with PROJECT_VIEW/PROJECT_MANAGE permission can see all projects
+        // If user can view all projects, ignore my_projects filter
+        if (!$canViewAllProjects) {
             // Filter: Customer sees their projects, personnel sees assigned projects
+            // Only apply my_projects filter if user doesn't have permission to view all
             if ($request->has('my_projects') && $request->my_projects) {
                 $query->where(function ($q) use ($user) {
                     $q->where('customer_id', $user->id)
@@ -38,14 +44,17 @@ class ProjectController extends Controller
                         });
                 });
             } else {
-                // Admin or project manager can see all
-                $query->where('customer_id', $user->id)
-                    ->orWhere('project_manager_id', $user->id)
-                    ->orWhereHas('personnel', function ($q) use ($user) {
-                        $q->where('user_id', $user->id);
-                    });
+                // Regular users can only see projects they're related to
+                $query->where(function ($q) use ($user) {
+                    $q->where('customer_id', $user->id)
+                        ->orWhere('project_manager_id', $user->id)
+                        ->orWhereHas('personnel', function ($q) use ($user) {
+                            $q->where('user_id', $user->id);
+                        });
+                });
             }
         }
+        // If canViewAllProjects is true, no filter is applied - user sees all projects
 
         // Filter by status
         if ($status = $request->query('status')) {
@@ -255,8 +264,8 @@ class ProjectController extends Controller
         $user = auth()->user();
 
         // Check permission (super admin bypass)
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && !$user->hasPermission('projects.create')) {
+        $isSuperAdmin = $user->isAdmin();
+        if (!$isSuperAdmin && !$user->hasPermission(\App\Constants\Permissions::PROJECT_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền tạo dự án mới.'
@@ -358,8 +367,8 @@ class ProjectController extends Controller
         $user = auth()->user();
 
         // Check permission (super admin bypass)
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && !$user->hasPermission('projects.update')) {
+        $isSuperAdmin = $user->isAdmin();
+        if (!$isSuperAdmin && !$user->hasPermission(\App\Constants\Permissions::PROJECT_UPDATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền cập nhật dự án này.'
@@ -397,8 +406,8 @@ class ProjectController extends Controller
         $user = auth()->user();
 
         // Check permission (super admin bypass)
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && !$user->hasPermission('projects.delete')) {
+        $isSuperAdmin = $user->isAdmin();
+        if (!$isSuperAdmin && !$user->hasPermission(\App\Constants\Permissions::PROJECT_DELETE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xóa dự án này.'

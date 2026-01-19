@@ -274,6 +274,21 @@ class User extends Authenticatable
     }
 
     /**
+     * Kiểm tra user có phải admin không (dựa trên permissions)
+     * Admin là user có super admin permission hoặc có settings.manage permission
+     */
+    public function isAdmin(): bool
+    {
+        // Super admin (backward compatible)
+        if ($this->role === 'admin' && $this->owner === true) {
+            return true;
+        }
+
+        // Check từ permissions - admin thường có settings.manage permission
+        return $this->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE);
+    }
+
+    /**
      * Kiểm tra user có bất kỳ permission nào trong danh sách
      */
     public function hasAnyPermission(array $permissions): bool

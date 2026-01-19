@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { reportApi, MaterialUsageReport } from "@/api/reportApi";
 import BackButton from "@/components/BackButton";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DatePickerInput } from "@/components";
 
 export default function MaterialUsageReportScreen() {
   const router = useRouter();
@@ -22,8 +22,6 @@ export default function MaterialUsageReportScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [fromDate, setFromDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
   const [toDate, setToDate] = useState(new Date());
-  const [showFromDatePicker, setShowFromDatePicker] = useState(false);
-  const [showToDatePicker, setShowToDatePicker] = useState(false);
 
   useEffect(() => {
     loadReport();
@@ -88,25 +86,34 @@ export default function MaterialUsageReportScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Date Filters */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowFromDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-            <Text style={styles.dateButtonText}>
-              Từ: {fromDate.toLocaleDateString("vi-VN")}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowToDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-            <Text style={styles.dateButtonText}>
-              Đến: {toDate.toLocaleDateString("vi-VN")}
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.filterContainer, { flexDirection: 'row', gap: 12 }]}>
+          <View style={{ flex: 1 }}>
+            <DatePickerInput
+              label="Từ ngày"
+              value={fromDate}
+              onChange={(date) => {
+                if (date) {
+                  setFromDate(date);
+                }
+              }}
+              placeholder="Chọn ngày bắt đầu"
+              containerStyle={{ marginBottom: 0 }}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <DatePickerInput
+              label="Đến ngày"
+              value={toDate}
+              onChange={(date) => {
+                if (date) {
+                  setToDate(date);
+                }
+              }}
+              placeholder="Chọn ngày kết thúc"
+              minimumDate={fromDate}
+              containerStyle={{ marginBottom: 0 }}
+            />
+          </View>
         </View>
 
         {/* Summary */}
@@ -207,29 +214,6 @@ export default function MaterialUsageReportScreen() {
         )}
       </ScrollView>
 
-      {/* Date Pickers */}
-      {showFromDatePicker && (
-        <DateTimePicker
-          value={fromDate}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowFromDatePicker(false);
-            if (selectedDate) setFromDate(selectedDate);
-          }}
-        />
-      )}
-      {showToDatePicker && (
-        <DateTimePicker
-          value={toDate}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowToDatePicker(false);
-            if (selectedDate) setToDate(selectedDate);
-          }}
-        />
-      )}
     </View>
   );
 }

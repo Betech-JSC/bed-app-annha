@@ -209,6 +209,11 @@ class Cost extends Model
             $inventoryService = app(\App\Services\MaterialInventoryService::class);
             $inventoryService->createTransactionFromCost($this);
         }
+
+        // Cập nhật actual_amount trong BudgetItem khi chi phí được xác nhận
+        if ($saved) {
+            $this->updateBudgetItems();
+        }
         
         return $saved;
     }
@@ -263,6 +268,25 @@ class Cost extends Model
     }
 
     /**
+     * Cập nhật actual_amount trong BudgetItem khi chi phí được xác nhận
+     */
+    protected function updateBudgetItems(): void
+    {
+        if (!$this->project_id) {
+            return;
+        }
+
+        $project = $this->project;
+        if (!$project) {
+            return;
+        }
+
+        // Sử dụng BudgetSyncService để đồng bộ budget
+        $syncService = app(\App\Services\BudgetSyncService::class);
+        $syncService->syncProjectBudgets($project);
+    }
+
+    /**
      * Từ chối (có thể từ bất kỳ bước nào)
      */
     public function reject(string $reason, ?User $user = null): bool
@@ -296,6 +320,11 @@ class Cost extends Model
         if ($saved && $wasApproved && $this->material_id) {
             $inventoryService = app(\App\Services\MaterialInventoryService::class);
             $inventoryService->deleteTransactionFromCost($this);
+        }
+
+        // Cập nhật lại budget items khi cost bị reject sau khi đã được approve
+        if ($saved && $wasApproved) {
+            $this->updateBudgetItems();
         }
         
         return $saved;

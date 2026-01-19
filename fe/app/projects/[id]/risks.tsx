@@ -107,7 +107,7 @@ export default function ProjectRisksScreen() {
   if (loading && risks.length === 0) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Quản lý Rủi ro" />
+        <ScreenHeader title="Quản lý Rủi ro" showBackButton />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
@@ -125,6 +125,7 @@ export default function ProjectRisksScreen() {
     <View style={styles.container}>
       <ScreenHeader 
         title="Quản lý Rủi ro"
+        showBackButton
         rightAction={
           <TouchableOpacity
             style={styles.addButton}

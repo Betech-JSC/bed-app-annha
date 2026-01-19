@@ -17,8 +17,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { equipmentApi, Equipment, CreateEquipmentData } from "@/api/equipmentApi";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
@@ -59,7 +58,6 @@ export default function EquipmentScreen() {
         maintenance_interval_days: 30,
         status: "available",
     });
-    const [showDatePicker, setShowDatePicker] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -573,109 +571,41 @@ export default function EquipmentScreen() {
 
                                 <View style={styles.formGroup}>
                                     <Text style={styles.label}>Ngày mua</Text>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.dateInput,
-                                            focusedField === "purchase_date" && styles.inputFocused,
-                                        ]}
-                                        onPress={() => {
-                                            setShowDatePicker(true);
-                                            setFocusedField("purchase_date");
+                                    <DatePickerInput
+                                        label="Ngày mua"
+                                        value={formData.purchase_date}
+                                        onDateChange={(date) => {
+                                            setFormData({
+                                                ...formData,
+                                                purchase_date: date,
+                                            });
                                         }}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text style={formData.purchase_date ? {} : styles.placeholderText}>
-                                            {formData.purchase_date
-                                                ? new Date(formData.purchase_date).toLocaleDateString("vi-VN")
-                                                : "Chọn ngày mua"}
-                                        </Text>
-                                        <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-                                    </TouchableOpacity>
-                                    {showDatePicker && (
-                                        <DateTimePicker
-                                            value={formData.purchase_date ? new Date(formData.purchase_date) : new Date()}
-                                            mode="date"
-                                            display="default"
-                                            onChange={(event, date) => {
-                                                setShowDatePicker(false);
-                                                setFocusedField(null);
-                                                if (date) {
-                                                    setFormData({
-                                                        ...formData,
-                                                        purchase_date: date.toISOString().split("T")[0],
-                                                    });
-                                                }
-                                            }}
-                                        />
-                                    )}
+                                        placeholder="Chọn ngày mua"
+                                    />
                                 </View>
 
-                                <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Giá mua (VNĐ)</Text>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            focusedField === "purchase_price" && styles.inputFocused,
-                                            errors.purchase_price && styles.inputError,
-                                        ]}
-                                        placeholder="0"
-                                        placeholderTextColor="#9CA3AF"
-                                        value={formData.purchase_price?.toString()}
-                                        onChangeText={(text) => {
-                                            const value = parseFloat(text) || 0;
-                                            setFormData({ ...formData, purchase_price: value });
-                                            if (errors.purchase_price) setErrors({ ...errors, purchase_price: "" });
-                                        }}
-                                        keyboardType="numeric"
-                                        onFocus={() => setFocusedField("purchase_price")}
-                                        onBlur={() => {
-                                            setFocusedField(null);
-                                            if (formData.purchase_price !== undefined && formData.purchase_price < 0) {
-                                                setErrors({ ...errors, purchase_price: "Giá mua không được âm" });
-                                            }
-                                        }}
-                                    />
-                                    {errors.purchase_price && (
-                                        <View style={styles.errorContainer}>
-                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                            <Text style={styles.errorText}>{errors.purchase_price}</Text>
-                                        </View>
-                                    )}
-                                </View>
+                                <CurrencyInput
+                                    label="Giá mua (VNĐ)"
+                                    value={formData.purchase_price || 0}
+                                    onChangeText={(amount) => {
+                                        setFormData({ ...formData, purchase_price: amount });
+                                        if (errors.purchase_price) setErrors({ ...errors, purchase_price: "" });
+                                    }}
+                                    placeholder="0"
+                                    error={errors.purchase_price}
+                                />
 
                                 {formData.type === "rented" && (
-                                    <View style={styles.formGroup}>
-                                        <Text style={styles.label}>Giá thuê/ngày (VNĐ)</Text>
-                                        <TextInput
-                                            style={[
-                                                styles.input,
-                                                focusedField === "rental_rate_per_day" && styles.inputFocused,
-                                                errors.rental_rate_per_day && styles.inputError,
-                                            ]}
-                                            placeholder="0"
-                                            placeholderTextColor="#9CA3AF"
-                                            value={formData.rental_rate_per_day?.toString()}
-                                            onChangeText={(text) => {
-                                                const value = parseFloat(text) || 0;
-                                                setFormData({ ...formData, rental_rate_per_day: value });
-                                                if (errors.rental_rate_per_day) setErrors({ ...errors, rental_rate_per_day: "" });
-                                            }}
-                                            keyboardType="numeric"
-                                            onFocus={() => setFocusedField("rental_rate_per_day")}
-                                            onBlur={() => {
-                                                setFocusedField(null);
-                                                if (formData.rental_rate_per_day !== undefined && formData.rental_rate_per_day < 0) {
-                                                    setErrors({ ...errors, rental_rate_per_day: "Giá thuê không được âm" });
-                                                }
-                                            }}
-                                        />
-                                        {errors.rental_rate_per_day && (
-                                            <View style={styles.errorContainer}>
-                                                <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                                <Text style={styles.errorText}>{errors.rental_rate_per_day}</Text>
-                                            </View>
-                                        )}
-                                    </View>
+                                    <CurrencyInput
+                                        label="Giá thuê/ngày (VNĐ)"
+                                        value={formData.rental_rate_per_day || 0}
+                                        onChangeText={(amount) => {
+                                            setFormData({ ...formData, rental_rate_per_day: amount });
+                                            if (errors.rental_rate_per_day) setErrors({ ...errors, rental_rate_per_day: "" });
+                                        }}
+                                        placeholder="0"
+                                        error={errors.rental_rate_per_day}
+                                    />
                                 )}
                             </View>
 

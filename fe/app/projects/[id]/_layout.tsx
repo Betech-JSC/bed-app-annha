@@ -14,7 +14,10 @@ export default function ProjectDetailLayout() {
       <Stack.Screen name="additional-costs" />
       <Stack.Screen name="additional-costs/create" />
       <Stack.Screen name="additional-costs/[costId]" />
+      <Stack.Screen name="additional-costs/[costId]/mark-paid" />
       <Stack.Screen name="costs" />
+      <Stack.Screen name="costs/[costId]" />
+      <Stack.Screen name="costs/by-group/[category]" />
       <Stack.Screen name="budget" />
       <Stack.Screen name="budget/[budgetId]" />
       <Stack.Screen name="invoices" />

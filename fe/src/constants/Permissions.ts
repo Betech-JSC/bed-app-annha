@@ -30,6 +30,14 @@ export const Permissions = {
     PROGRESS_UPDATE: 'progress.update',
 
     // ===================================================================
+    // PROJECT TASK MODULE
+    // ===================================================================
+    PROJECT_TASK_VIEW: 'project.task.view',
+    PROJECT_TASK_CREATE: 'project.task.create',
+    PROJECT_TASK_UPDATE: 'project.task.update',
+    PROJECT_TASK_DELETE: 'project.task.delete',
+
+    // ===================================================================
     // ACCEPTANCE MODULE
     // ===================================================================
     ACCEPTANCE_VIEW: 'acceptance.view',
@@ -62,6 +70,8 @@ export const Permissions = {
     ADDITIONAL_COST_DELETE: 'additional_cost.delete',
     ADDITIONAL_COST_APPROVE: 'additional_cost.approve',
     ADDITIONAL_COST_REJECT: 'additional_cost.reject',
+    ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER: 'additional_cost.mark_paid_by_customer',
+    ADDITIONAL_COST_CONFIRM: 'additional_cost.confirm',
 
     // ===================================================================
     // MATERIAL MODULE
@@ -166,6 +176,7 @@ export const Permissions = {
     PAYMENT_DELETE: 'payment.delete',
     PAYMENT_CONFIRM: 'payment.confirm',
     PAYMENT_APPROVE: 'payment.approve',
+    PAYMENT_MARK_AS_PAID_BY_CUSTOMER: 'payment.mark_paid_by_customer',
 
     // ===================================================================
     // SUBCONTRACTOR MODULE
@@ -222,6 +233,109 @@ export const Permissions = {
     REVENUE_VIEW: 'revenue.view',
     REVENUE_DASHBOARD: 'revenue.dashboard',
     REVENUE_EXPORT: 'revenue.export',
+
+    // ===================================================================
+    // BUDGET MODULE
+    // ===================================================================
+    BUDGET_VIEW: 'budgets.view',
+    BUDGET_CREATE: 'budgets.create',
+    BUDGET_UPDATE: 'budgets.update',
+    BUDGET_DELETE: 'budgets.delete',
+    BUDGET_APPROVE: 'budgets.approve',
+
+    // ===================================================================
+    // PROJECT PHASE MODULE
+    // ===================================================================
+    PROJECT_PHASE_VIEW: 'project.phase.view',
+    PROJECT_PHASE_CREATE: 'project.phase.create',
+    PROJECT_PHASE_UPDATE: 'project.phase.update',
+    PROJECT_PHASE_DELETE: 'project.phase.delete',
+
+    // ===================================================================
+    // PROJECT DOCUMENT MODULE
+    // ===================================================================
+    PROJECT_DOCUMENT_VIEW: 'project.document.view',
+    PROJECT_DOCUMENT_UPLOAD: 'project.document.upload',
+    PROJECT_DOCUMENT_DELETE: 'project.document.delete',
+
+    // ===================================================================
+    // RECEIPT MODULE
+    // ===================================================================
+    RECEIPT_VIEW: 'receipts.view',
+    RECEIPT_CREATE: 'receipts.create',
+    RECEIPT_UPDATE: 'receipts.update',
+    RECEIPT_DELETE: 'receipts.delete',
+    RECEIPT_VERIFY: 'receipts.verify',
+
+    // ===================================================================
+    // SUPPLIER MODULE
+    // ===================================================================
+    SUPPLIER_VIEW: 'suppliers.view',
+    SUPPLIER_CREATE: 'suppliers.create',
+    SUPPLIER_UPDATE: 'suppliers.update',
+    SUPPLIER_DELETE: 'suppliers.delete',
+
+    // ===================================================================
+    // SUPPLIER CONTRACT MODULE
+    // ===================================================================
+    SUPPLIER_CONTRACT_VIEW: 'supplier.contract.view',
+    SUPPLIER_CONTRACT_CREATE: 'supplier.contract.create',
+    SUPPLIER_CONTRACT_UPDATE: 'supplier.contract.update',
+    SUPPLIER_CONTRACT_DELETE: 'supplier.contract.delete',
+    SUPPLIER_CONTRACT_APPROVE: 'supplier.contract.approve',
+
+    // ===================================================================
+    // SUPPLIER ACCEPTANCE MODULE
+    // ===================================================================
+    SUPPLIER_ACCEPTANCE_VIEW: 'supplier.acceptance.view',
+    SUPPLIER_ACCEPTANCE_CREATE: 'supplier.acceptance.create',
+    SUPPLIER_ACCEPTANCE_UPDATE: 'supplier.acceptance.update',
+    SUPPLIER_ACCEPTANCE_DELETE: 'supplier.acceptance.delete',
+
+    // ===================================================================
+    // CHANGE REQUEST MODULE
+    // ===================================================================
+    CHANGE_REQUEST_VIEW: 'change_request.view',
+    CHANGE_REQUEST_CREATE: 'change_request.create',
+    CHANGE_REQUEST_UPDATE: 'change_request.update',
+    CHANGE_REQUEST_DELETE: 'change_request.delete',
+    CHANGE_REQUEST_APPROVE: 'change_request.approve',
+    CHANGE_REQUEST_REJECT: 'change_request.reject',
+
+    // ===================================================================
+    // PROJECT RISK MODULE
+    // ===================================================================
+    PROJECT_RISK_VIEW: 'project.risk.view',
+    PROJECT_RISK_CREATE: 'project.risk.create',
+    PROJECT_RISK_UPDATE: 'project.risk.update',
+    PROJECT_RISK_DELETE: 'project.risk.delete',
+
+    // ===================================================================
+    // ISSUE RECORD MODULE
+    // ===================================================================
+    ISSUE_VIEW: 'issue.view',
+    ISSUE_CREATE: 'issue.create',
+    ISSUE_UPDATE: 'issue.update',
+    ISSUE_DELETE: 'issue.delete',
+    ISSUE_RESOLVE: 'issue.resolve',
+
+    // ===================================================================
+    // ACCEPTANCE TEMPLATE MODULE
+    // ===================================================================
+    ACCEPTANCE_TEMPLATE_VIEW: 'acceptance.template.view',
+    ACCEPTANCE_TEMPLATE_CREATE: 'acceptance.template.create',
+    ACCEPTANCE_TEMPLATE_UPDATE: 'acceptance.template.update',
+    ACCEPTANCE_TEMPLATE_DELETE: 'acceptance.template.delete',
+
+    // ===================================================================
+    // PROJECT MONITORING MODULE
+    // ===================================================================
+    PROJECT_MONITORING_VIEW: 'project.monitoring.view',
+
+    // ===================================================================
+    // PROJECT SUMMARY REPORT MODULE
+    // ===================================================================
+    PROJECT_SUMMARY_REPORT_VIEW: 'report.project_summary.view',
 
     // ===================================================================
     // SETTINGS MODULE
