@@ -15,12 +15,12 @@ const tabs = [
     icon: "folder-outline",
     iconFocused: "folder",
   },
-  {
-    name: "Nhân Sự",
-    route: "/(tabs)/hr",
-    icon: "people-outline",
-    iconFocused: "people",
-  },
+  // {
+  //   name: "Nhân Sự",
+  //   route: "/(tabs)/hr",
+  //   icon: "people-outline",
+  //   iconFocused: "people",
+  // },
   {
     name: "Báo Cáo",
     route: "/(tabs)/reports",

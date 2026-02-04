@@ -180,8 +180,8 @@ class UserController extends Controller
     {
         $user = $request->user();
 
-        // Không cho phép xóa tài khoản super admin
-        if ($user->owner === true) {
+        // Không cho phép xóa tài khoản có settings.manage permission (admin)
+        if ($user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không thể xóa tài khoản Super Admin.'

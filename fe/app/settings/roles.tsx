@@ -12,17 +12,17 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { personnelRoleApi, PersonnelRole } from "@/api/personnelRoleApi";
+import { roleApi, Role } from "@/api/roleApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
 
 export default function PersonnelRolesScreen() {
   const router = useRouter();
-  const [roles, setRoles] = useState<PersonnelRole[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingRole, setEditingRole] = useState<PersonnelRole | null>(null);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -35,7 +35,7 @@ export default function PersonnelRolesScreen() {
   const loadRoles = async () => {
     try {
       setLoading(true);
-      const response = await personnelRoleApi.getRolesWithUsage();
+      const response = await roleApi.getRolesWithUsage();
       if (response.success) {
         setRoles(response.data);
       }
@@ -60,7 +60,7 @@ export default function PersonnelRolesScreen() {
     }
 
     try {
-      const response = await personnelRoleApi.createRole(formData);
+      const response = await roleApi.createRole(formData);
       if (response.success) {
         Alert.alert("Thành công", "Đã tạo vai trò mới");
         setShowCreateModal(false);
@@ -82,7 +82,7 @@ export default function PersonnelRolesScreen() {
     }
 
     try {
-      const response = await personnelRoleApi.updateRole(
+      const response = await roleApi.updateRole(
         editingRole.id,
         formData
       );
@@ -100,7 +100,7 @@ export default function PersonnelRolesScreen() {
     }
   };
 
-  const handleDelete = async (role: PersonnelRole) => {
+  const handleDelete = async (role: Role) => {
     Alert.alert(
       "Xác nhận",
       `Bạn có chắc chắn muốn xóa vai trò "${role.name}"?`,
@@ -111,7 +111,7 @@ export default function PersonnelRolesScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const response = await personnelRoleApi.deleteRole(role.id);
+              const response = await roleApi.deleteRole(role.id);
               if (response.success) {
                 Alert.alert("Thành công", "Đã xóa vai trò");
                 loadRoles();
@@ -128,7 +128,7 @@ export default function PersonnelRolesScreen() {
     );
   };
 
-  const openEditModal = (role: PersonnelRole) => {
+  const openEditModal = (role: Role) => {
     setEditingRole(role);
     setFormData({
       name: role.name,
@@ -144,7 +144,7 @@ export default function PersonnelRolesScreen() {
     setEditingRole(null);
   };
 
-  const renderRoleItem = (role: PersonnelRole) => (
+  const renderRoleItem = (role: Role) => (
     <View style={styles.roleCard}>
       <View style={styles.roleHeader}>
         <View style={styles.roleInfo}>

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Equipment;
 use App\Models\EquipmentAllocation;
 use App\Models\EquipmentMaintenance;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,7 @@ class EquipmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('equipment.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::EQUIPMENT_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem danh sách thiết bị.'
@@ -61,7 +62,7 @@ class EquipmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('equipment.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::EQUIPMENT_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo thiết bị.'
@@ -117,7 +118,7 @@ class EquipmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('equipment.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::EQUIPMENT_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem thiết bị.'
@@ -136,7 +137,7 @@ class EquipmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('equipment.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::EQUIPMENT_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem phân bổ thiết bị.'
@@ -162,7 +163,7 @@ class EquipmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('equipment.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::EQUIPMENT_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem lịch bảo trì.'
@@ -191,7 +192,7 @@ class EquipmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('equipment.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::EQUIPMENT_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem thiết bị dự án.'
@@ -250,7 +251,7 @@ class EquipmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('equipment.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::EQUIPMENT_UPDATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật thiết bị.'
@@ -299,7 +300,7 @@ class EquipmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('equipment.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::EQUIPMENT_DELETE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa thiết bị.'
@@ -331,7 +332,7 @@ class EquipmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('equipment.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::EQUIPMENT_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo phân bổ thiết bị.'
@@ -424,12 +425,10 @@ class EquipmentController extends Controller
 
             $allocation = EquipmentAllocation::create($allocationData);
 
-            // Tự động tạo Cost
+            // Tự động tạo Cost - CHỈ cho Thuê. Có sẵn (buy) KHÔNG đẩy qua hạng mục thanh toán, mục đích theo dõi người sử dụng thiết bị
             $allocationService = app(\App\Services\EquipmentAllocationService::class);
             if ($request->allocation_type === 'rent') {
                 $allocationService->createCostFromRental($allocation);
-            } elseif ($request->allocation_type === 'buy') {
-                $allocationService->createCostFromPurchase($allocation);
             }
 
             // Cập nhật status của equipment nếu cần
@@ -444,7 +443,7 @@ class EquipmentController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $request->allocation_type === 'buy' 
-                    ? 'Đã phân bổ thiết bị (Mua) thành công.' 
+                    ? 'Đã phân bổ thiết bị (Có sẵn) thành công.' 
                     : 'Đã tạo phân bổ thiết bị (Thuê) thành công.',
                 'data' => $allocation
             ], 201);

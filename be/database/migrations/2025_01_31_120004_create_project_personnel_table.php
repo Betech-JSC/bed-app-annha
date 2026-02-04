@@ -15,14 +15,11 @@ return new class extends Migration
             $table->id();
             $table->foreignId('project_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->enum('role', ['project_manager', 'supervisor', 'accountant', 'viewer', 'editor'])->default('viewer');
-            $table->json('permissions')->nullable(); // ['view', 'edit', 'approve', etc.]
             $table->foreignId('assigned_by')->constrained('users')->cascadeOnDelete();
             $table->timestamp('assigned_at')->useCurrent();
             $table->timestamps();
 
             $table->unique(['project_id', 'user_id']);
-            $table->index(['project_id', 'role']);
         });
     }
 

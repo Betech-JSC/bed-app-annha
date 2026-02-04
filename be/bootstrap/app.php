@@ -27,7 +27,6 @@ return Application::configure(basePath: dirname(__DIR__))
         // Register project access middleware
         $middleware->alias([
             'project.access' => \App\Http\Middleware\CheckProjectAccess::class,
-            'hr' => \App\Http\Middleware\CheckHRAccess::class,
             'permission' => \App\Http\Middleware\CheckPermission::class,
             'check.permission' => \App\Http\Middleware\CheckPermission::class,
             'admin' => \App\Http\Middleware\EnsureAdminIsAuthenticated::class,

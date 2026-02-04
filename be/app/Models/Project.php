@@ -132,15 +132,9 @@ class Project extends Model
         return $this->hasMany(TimeTracking::class);
     }
 
-    public function payrolls(): HasMany
-    {
-        return $this->hasMany(Payroll::class);
-    }
+    // Payrolls relationship removed - HR module deleted
 
-    public function bonuses(): HasMany
-    {
-        return $this->hasMany(Bonus::class);
-    }
+    // Bonuses relationship removed - HR module deleted
 
     public function budgets(): HasMany
     {

@@ -37,23 +37,8 @@ use App\Http\Controllers\Api\ProjectMonitoringController;
 use App\Http\Controllers\Api\ProjectDocumentController;
 use App\Http\Controllers\Api\RevenueController;
 use App\Http\Controllers\Api\CostController;
-use App\Http\Controllers\Api\TimeTrackingController;
-use App\Http\Controllers\Api\PayrollController;
-use App\Http\Controllers\Api\BonusController;
-use App\Http\Controllers\Api\EmployeeSalaryConfigController;
-use App\Http\Controllers\Api\WorkScheduleController;
-use App\Http\Controllers\Api\PersonnelRoleController;
 use App\Http\Controllers\Api\PermissionController;
-use App\Http\Controllers\Api\UserPermissionController;
 use App\Http\Controllers\Api\RoleController;
-use App\Http\Controllers\Api\EmployeeProfileController;
-use App\Http\Controllers\Api\TeamCheckInController;
-use App\Http\Controllers\Api\OvertimeRuleController;
-use App\Http\Controllers\Api\OvertimeCategoryController;
-use App\Http\Controllers\Api\TeamController;
-use App\Http\Controllers\Api\TeamContractController;
-use App\Http\Controllers\Api\LaborStandardController;
-use App\Http\Controllers\Api\WorkVolumeController;
 use App\Http\Controllers\Api\SubcontractorPaymentController;
 use App\Http\Controllers\Api\ProjectPhaseController;
 use App\Http\Controllers\Api\ProjectTaskController;
@@ -66,10 +51,6 @@ use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InputInvoiceController;
 use App\Http\Controllers\Api\ReceiptController;
-use App\Http\Controllers\Api\LeaveController;
-use App\Http\Controllers\Api\EmploymentContractController;
-use App\Http\Controllers\Api\InsuranceController;
-use App\Http\Controllers\Api\PerformanceController;
 use App\Http\Controllers\Api\ReminderController;
 use App\Http\Controllers\Api\OptionsController;
 use App\Http\Controllers\Api\ReportController;
@@ -426,128 +407,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/acceptance-templates/{id}', [AcceptanceTemplateController::class, 'destroy'])->where('id', '[0-9]+');
 
     // ===================================================================
-    // HR MANAGEMENT ROUTES
-    // ===================================================================
-    Route::middleware(['auth:sanctum', 'hr'])->prefix('hr')->group(function () {
-        // Time Tracking
-        Route::get('/time-tracking', [TimeTrackingController::class, 'index']);
-        Route::post('/time-tracking', [TimeTrackingController::class, 'store']);
-        Route::post('/time-tracking/check-in/qr', [TimeTrackingController::class, 'checkInByQR']);
-        Route::post('/time-tracking/check-in/gps', [TimeTrackingController::class, 'checkInByGPS']);
-        Route::post('/time-tracking/check-in/faceid', [TimeTrackingController::class, 'checkInByFaceID']);
-        Route::put('/time-tracking/{id}', [TimeTrackingController::class, 'update']);
-        Route::post('/time-tracking/{id}/approve', [TimeTrackingController::class, 'approve']);
-        Route::post('/time-tracking/{id}/reject', [TimeTrackingController::class, 'reject']);
 
-        // Team Check-ins (Chấm công tập thể)
-        Route::get('/team-check-ins', [TeamCheckInController::class, 'index']);
-        Route::post('/team-check-ins', [TeamCheckInController::class, 'store']);
-        Route::get('/team-check-ins/{id}', [TeamCheckInController::class, 'show']);
-        Route::post('/team-check-ins/{id}/approve', [TeamCheckInController::class, 'approve']);
-        Route::post('/team-check-ins/{id}/sync', [TeamCheckInController::class, 'sync']);
-
-        // Overtime Rules (Quy định OT)
-        Route::get('/overtime-rules', [OvertimeRuleController::class, 'index']);
-        Route::post('/overtime-rules', [OvertimeRuleController::class, 'store']);
-        Route::put('/overtime-rules/{id}', [OvertimeRuleController::class, 'update']);
-        Route::delete('/overtime-rules/{id}', [OvertimeRuleController::class, 'destroy']);
-
-        // Overtime Categories (Hạng mục OT)
-        Route::get('/overtime-categories', [OvertimeCategoryController::class, 'index']);
-        Route::post('/overtime-categories', [OvertimeCategoryController::class, 'store']);
-        Route::put('/overtime-categories/{id}', [OvertimeCategoryController::class, 'update']);
-        Route::delete('/overtime-categories/{id}', [OvertimeCategoryController::class, 'destroy']);
-
-        // Payroll
-        Route::get('/payroll', [PayrollController::class, 'index']);
-        Route::post('/payroll/calculate', [PayrollController::class, 'calculate']);
-        Route::post('/payroll/calculate-all', [PayrollController::class, 'calculateAll']);
-        // Route cụ thể phải đặt trước route có parameter {id}
-        Route::get('/payroll/export', [PayrollController::class, 'export']);
-        // Routes có parameter {id} đặt sau
-        Route::get('/payroll/{id}', [PayrollController::class, 'show']);
-        Route::post('/payroll/{id}/approve', [PayrollController::class, 'approve']);
-        Route::post('/payroll/{id}/pay', [PayrollController::class, 'markAsPaid']);
-
-        // Bonuses
-        Route::get('/bonuses', [BonusController::class, 'index']);
-        Route::post('/bonuses', [BonusController::class, 'store']);
-        Route::put('/bonuses/{id}', [BonusController::class, 'update']);
-        Route::delete('/bonuses/{id}', [BonusController::class, 'destroy']);
-        Route::post('/bonuses/calculate-project/{projectId}', [BonusController::class, 'calculateFromProject']);
-        Route::post('/bonuses/{id}/approve', [BonusController::class, 'approve']);
-        Route::post('/bonuses/{id}/pay', [BonusController::class, 'markAsPaid']);
-
-        // Salary Config
-        Route::get('/salary-config', [EmployeeSalaryConfigController::class, 'index']);
-        Route::post('/salary-config', [EmployeeSalaryConfigController::class, 'store']);
-        Route::put('/salary-config/{id}', [EmployeeSalaryConfigController::class, 'update']);
-        Route::delete('/salary-config/{id}', [EmployeeSalaryConfigController::class, 'destroy']);
-        Route::get('/salary-config/user/{userId}', [EmployeeSalaryConfigController::class, 'getCurrentConfig']);
-
-        // Work Schedule
-        Route::get('/work-schedule', [WorkScheduleController::class, 'index']);
-        Route::post('/work-schedule', [WorkScheduleController::class, 'store']);
-        Route::put('/work-schedule/{id}', [WorkScheduleController::class, 'update']);
-        Route::delete('/work-schedule/{id}', [WorkScheduleController::class, 'destroy']);
-        Route::get('/work-schedule/calendar', [WorkScheduleController::class, 'calendar']);
-        Route::get('/work-schedule/statistics', [WorkScheduleController::class, 'statistics']);
-        Route::post('/work-schedule/bulk-create', [WorkScheduleController::class, 'bulkCreate']);
-
-        // Employees (using AdminUserController)
-        Route::get('/employees', [AdminUserController::class, 'index']);
-        Route::post('/employees', [AdminUserController::class, 'store']); // Tạo user mới
-        // Routes cụ thể phải đặt trước routes có parameter {id}
-        Route::get('/employees/stats', [AdminUserController::class, 'stats']);
-        Route::get('/employees/dashboard', [AdminUserController::class, 'dashboard']);
-        // Routes có parameter {id} đặt sau
-        Route::get('/employees/{id}', [AdminUserController::class, 'show']);
-        Route::put('/employees/{id}', [AdminUserController::class, 'update']);
-        Route::get('/employees/{id}/stats', [AdminUserController::class, 'employeeStats']);
-        Route::get('/employees/{id}/roles', [AdminUserController::class, 'getUserRoles']); // Lấy roles của user
-        Route::post('/employees/{id}/roles', [AdminUserController::class, 'syncUserRoles']); // Gán roles cho user
-
-        // Employee Profiles (Hồ sơ nhân sự)
-        Route::get('/employee-profiles', [EmployeeProfileController::class, 'index']);
-        Route::get('/employee-profiles/statistics', [EmployeeProfileController::class, 'statistics']);
-        Route::get('/employee-profiles/user/{userId}', [EmployeeProfileController::class, 'getByUserId']);
-        Route::get('/employee-profiles/{id}', [EmployeeProfileController::class, 'show']);
-        Route::post('/employee-profiles', [EmployeeProfileController::class, 'store']);
-        Route::put('/employee-profiles/{id}', [EmployeeProfileController::class, 'update']);
-        Route::delete('/employee-profiles/{id}', [EmployeeProfileController::class, 'destroy']);
-
-        // Roles Management
-        Route::get('/roles', [RoleController::class, 'index']); // Danh sách roles
-        Route::get('/roles/{id}', [RoleController::class, 'show']); // Chi tiết role
-        Route::post('/roles', [RoleController::class, 'store']); // Tạo role mới
-        Route::put('/roles/{id}', [RoleController::class, 'update']); // Cập nhật role
-        Route::delete('/roles/{id}', [RoleController::class, 'destroy']); // Xóa role
-
-        // Personnel Roles Management
-        Route::get('/personnel-roles', [PersonnelRoleController::class, 'index']);
-        Route::get('/personnel-roles/with-usage', [PersonnelRoleController::class, 'withUsage']);
-        Route::get('/personnel-roles/{id}', [PersonnelRoleController::class, 'show']);
-        Route::post('/personnel-roles', [PersonnelRoleController::class, 'store']);
-        Route::put('/personnel-roles/{id}', [PersonnelRoleController::class, 'update']);
-        Route::delete('/personnel-roles/{id}', [PersonnelRoleController::class, 'destroy']);
-        Route::get('/personnel-roles/permissions/{roleName}', [PersonnelRoleController::class, 'getDefaultPermissions']);
-        Route::get('/personnel-roles/{id}/permissions', [PersonnelRoleController::class, 'getRolePermissions']);
-        Route::post('/personnel-roles/{id}/permissions', [PersonnelRoleController::class, 'syncPermissions']);
-        Route::get('/permissions/all', [PersonnelRoleController::class, 'getAllPermissions']);
-
-        // User Permissions Management
-        Route::get('/users/{id}/permissions', [UserPermissionController::class, 'getUserPermissions']);
-        Route::post('/users/{id}/permissions', [UserPermissionController::class, 'syncUserPermissions']);
-    });
-
-    // User routes (không cần HR role)
+    // User routes
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/my-time-tracking', [TimeTrackingController::class, 'myTimeTracking']);
-        Route::post('/time-tracking/check-in', [TimeTrackingController::class, 'checkIn']);
-        Route::put('/time-tracking/check-out/{id}', [TimeTrackingController::class, 'checkOut']);
-        Route::get('/my-payroll', [PayrollController::class, 'myPayroll']);
-        Route::get('/my-bonuses', [BonusController::class, 'myBonuses']);
-
         // Permission checking routes
         Route::get('/permissions/my-permissions', [PermissionController::class, 'myPermissions']);
         Route::get('/permissions/check/{permission}', [PermissionController::class, 'checkPermission']);
@@ -571,6 +433,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/permissions', [PermissionController::class, 'store']);
         Route::put('/permissions/{id}', [PermissionController::class, 'update']);
         Route::delete('/permissions/{id}', [PermissionController::class, 'destroy']);
+
+        // Roles Management
+        Route::get('/roles', [RoleController::class, 'index']);
+        Route::get('/roles/{id}', [RoleController::class, 'show']);
+        Route::post('/roles', [RoleController::class, 'store']);
+        Route::put('/roles/{id}', [RoleController::class, 'update']);
+        Route::delete('/roles/{id}', [RoleController::class, 'destroy']);
 
         Route::post('/cost-groups', [CostGroupController::class, 'store']);
         Route::put('/cost-groups/{id}', [CostGroupController::class, 'update']);

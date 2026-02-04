@@ -13,7 +13,7 @@ class ReceiptController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('receipts.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('receipts.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem chứng từ.'
@@ -46,7 +46,7 @@ class ReceiptController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('receipts.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('receipts.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo chứng từ.'
@@ -100,7 +100,7 @@ class ReceiptController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('receipts.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('receipts.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem chứng từ.'
@@ -121,7 +121,7 @@ class ReceiptController extends Controller
         $user = auth()->user();
         
         // Chỉ kế toán mới được verify
-        if ($user->role !== 'accountant' && !$user->owner && $user->role !== 'admin' && !$user->hasPermission('receipts.verify')) {
+        if ($user->role !== 'accountant' && !$user->hasPermission('receipts.verify')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ kế toán mới được xác thực chứng từ.'
@@ -156,7 +156,7 @@ class ReceiptController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('receipts.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('receipts.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật chứng từ.'
@@ -209,7 +209,7 @@ class ReceiptController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('receipts.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('receipts.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa chứng từ.'

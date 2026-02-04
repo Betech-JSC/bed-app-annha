@@ -196,8 +196,6 @@ class ProjectSeeder extends Seeder
                     [
                         'project_id' => $project->id,
                         'user_id' => $hrAdmin->id,
-                        'role' => 'supervisor',
-                        'permissions' => ['view', 'edit', 'approve'],
                         'assigned_by' => $superAdmin->id,
                         'assigned_at' => now(),
                     ]

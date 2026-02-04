@@ -145,9 +145,8 @@ class AdminUserController extends Controller
                 if (class_exists(\App\Models\TimeTracking::class)) {
                     $timeTrackingsCount = \App\Models\TimeTracking::where('user_id', $user->id)->count();
                 }
-                if (class_exists(\App\Models\Payroll::class)) {
-                    $payrollsCount = \App\Models\Payroll::where('user_id', $user->id)->count();
-                }
+                // Payroll stats removed - HR module deleted
+                $payrollsCount = 0;
             } catch (\Exception $e) {
                 // Ignore errors from statistics
             }
@@ -350,10 +349,8 @@ class AdminUserController extends Controller
         $currentDate = $startDate->copy();
         while ($currentDate <= $endDate) {
             $monthKey = $currentDate->format('Y-m');
-            $totalSalary = \App\Models\Payroll::whereYear('period_start', $currentDate->year)
-                ->whereMonth('period_start', $currentDate->month)
-                ->where('status', 'approved')
-                ->sum('net_salary') ?? 0;
+            // Payroll stats removed - HR module deleted
+            $totalSalary = 0;
 
             $monthlyPayroll[] = [
                 'month' => $currentDate->format('M/Y'),
@@ -367,10 +364,8 @@ class AdminUserController extends Controller
         $monthlyBonuses = [];
         $currentDate = $startDate->copy();
         while ($currentDate <= $endDate) {
-            $totalBonus = \App\Models\Bonus::whereYear('created_at', $currentDate->year)
-                ->whereMonth('created_at', $currentDate->month)
-                ->where('status', 'approved')
-                ->sum('amount') ?? 0;
+            // Bonuses removed - HR module deleted
+            $totalBonus = 0;
 
             $monthlyBonuses[] = [
                 'month' => $currentDate->format('M/Y'),
@@ -399,8 +394,8 @@ class AdminUserController extends Controller
         // Stats tổng quan
         $stats = [
             'pending_time_tracking' => \App\Models\TimeTracking::where('status', 'pending')->count(),
-            'pending_payroll' => \App\Models\Payroll::where('status', 'calculated')->count(),
-            'pending_bonuses' => \App\Models\Bonus::where('status', 'pending')->count(),
+            'pending_payroll' => 0, // Payroll removed - HR module deleted
+            'pending_bonuses' => 0, // Bonuses removed - HR module deleted
             'total_employees' => User::whereNull('deleted_at')->count(),
         ];
 
@@ -439,21 +434,11 @@ class AdminUserController extends Controller
         $totalHours = $timeTrackings->sum('total_hours') ?? 0;
         $totalDays = $timeTrackings->count();
 
-        // Get payroll stats
-        $payrolls = \App\Models\Payroll::where('user_id', $user->id)
-            ->whereYear('period_start', $year)
-            ->whereMonth('period_start', $month)
-            ->get();
+        // Payroll stats removed - HR module deleted
+        $totalSalary = 0;
 
-        $totalSalary = $payrolls->sum('net_salary') ?? 0;
-
-        // Get bonuses
-        $bonuses = \App\Models\Bonus::where('user_id', $user->id)
-            ->whereYear('created_at', $year)
-            ->whereMonth('created_at', $month)
-            ->get();
-
-        $totalBonuses = $bonuses->sum('amount') ?? 0;
+        // Bonuses removed - HR module deleted
+        $totalBonuses = 0;
 
         return response()->json([
             'success' => true,

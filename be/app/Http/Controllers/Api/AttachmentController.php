@@ -315,8 +315,8 @@ class AttachmentController extends Controller
                 ], 401);
             }
 
-            // Allow deletion if user is the uploader or has admin role
-            $isAdmin = ($user->role === 'admin') || ($user->owner === true);
+            // Allow deletion if user is the uploader or has admin permission
+            $isAdmin = $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE);
             if ($attachment->uploaded_by !== $user->id && !$isAdmin) {
                 return response()->json([
                     'success' => false,

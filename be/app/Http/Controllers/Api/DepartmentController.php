@@ -4,9 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Department;
-use App\Models\Payroll;
-use App\Models\LeaveRequest;
-use App\Models\TimeTracking;
 use App\Models\Cost;
 use App\Models\Project;
 use Illuminate\Http\Request;
@@ -18,7 +15,7 @@ class DepartmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('departments.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('departments.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem danh sách phòng ban.'
@@ -54,7 +51,7 @@ class DepartmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('departments.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('departments.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo phòng ban.'
@@ -100,7 +97,7 @@ class DepartmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('departments.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('departments.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem phòng ban.'
@@ -119,7 +116,7 @@ class DepartmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('departments.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('departments.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật phòng ban.'
@@ -162,7 +159,7 @@ class DepartmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('departments.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('departments.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa phòng ban.'
@@ -202,7 +199,7 @@ class DepartmentController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('departments.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('departments.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem thống kê phòng ban.'
@@ -214,13 +211,11 @@ class DepartmentController extends Controller
         // Đếm số lượng nhân viên
         $employeeCount = $department->employees()->count();
 
-        // Thống kê Payroll
+        // Payroll stats removed - HR module deleted
         $payrollStats = [
-            'total' => Payroll::whereIn('user_id', $department->employees()->pluck('id'))->count(),
-            'approved' => Payroll::whereIn('user_id', $department->employees()->pluck('id'))
-                ->where('status', 'approved')->count(),
-            'total_amount' => Payroll::whereIn('user_id', $department->employees()->pluck('id'))
-                ->where('status', 'approved')->sum('net_salary'),
+            'total' => 0,
+            'approved' => 0,
+            'total_amount' => 0,
         ];
 
         // Thống kê Leave Requests

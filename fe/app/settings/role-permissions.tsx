@@ -10,7 +10,8 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { personnelRoleApi } from "@/api/personnelRoleApi";
+import { roleApi } from "@/api/roleApi";
+import { permissionApi } from "@/api/permissionApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
 
@@ -51,25 +52,23 @@ export default function RolePermissionsScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [roleRes, permissionsRes, rolePermissionsRes] = await Promise.all([
-        personnelRoleApi.getRole(roleId),
-        personnelRoleApi.getAllPermissions(),
-        personnelRoleApi.getRolePermissions(roleId),
+      const [roleRes, permissionsRes] = await Promise.all([
+        roleApi.getRole(parseInt(roleId)),
+        permissionApi.getAllPermissions(),
       ]);
 
       if (roleRes.success) {
         setRole(roleRes.data);
+        // Get permissions from role data
+        const rolePermissions = roleRes.data.permissions || [];
+        const permissionIds = rolePermissions.map((p: any) => typeof p === 'object' ? p.id : p);
+        setSelectedPermissionIds(permissionIds);
+        setInitialPermissionIds(permissionIds);
+        setHasChanges(false);
       }
 
       if (permissionsRes.success) {
         setAllPermissions(permissionsRes.data || []);
-      }
-
-      if (rolePermissionsRes.success) {
-        const permissions = rolePermissionsRes.data.permissions || [];
-        setSelectedPermissionIds(permissions);
-        setInitialPermissionIds(permissions);
-        setHasChanges(false);
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -118,9 +117,9 @@ export default function RolePermissionsScreen() {
 
     try {
       setSaving(true);
-      const response = await personnelRoleApi.syncRolePermissions(
-        roleId,
-        selectedPermissionIds
+      const response = await roleApi.updateRole(
+        parseInt(roleId),
+        { permission_ids: selectedPermissionIds }
       );
 
       if (response.success) {

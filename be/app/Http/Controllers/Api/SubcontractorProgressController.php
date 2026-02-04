@@ -18,7 +18,7 @@ class SubcontractorProgressController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem tiến độ thi công.'
@@ -62,7 +62,7 @@ class SubcontractorProgressController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo báo cáo tiến độ.'
@@ -125,7 +125,7 @@ class SubcontractorProgressController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem tiến độ.'
@@ -154,7 +154,7 @@ class SubcontractorProgressController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật tiến độ.'
@@ -224,7 +224,7 @@ class SubcontractorProgressController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa tiến độ.'
@@ -256,7 +256,7 @@ class SubcontractorProgressController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.approve') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.approve')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xác nhận tiến độ.'

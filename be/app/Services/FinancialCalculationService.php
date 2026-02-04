@@ -84,12 +84,15 @@ class FinancialCalculationService
             ? $subcontractorCostsFromCosts 
             : $subcontractorCostsFromQuote;
 
-        // Chi phí nhân công từ Payroll (đã approved)
-        $payrollCostsQuery = $project->payrolls()->where('status', 'approved');
+        // Chi phí nhân công từ Payroll (removed - HR module deleted)
+        // Only use costs from costs table with payroll_id
+        $payrollCostsQuery = $project->costs()
+            ->whereNotNull('payroll_id')
+            ->where('status', 'approved');
         if ($startDate && $endDate) {
-            $payrollCostsQuery->whereBetween('period_end', [$startDate, $endDate]);
+            $payrollCostsQuery->whereBetween('created_at', [$startDate, $endDate]);
         }
-        $payrollCosts = $payrollCostsQuery->sum('net_salary');
+        $payrollCosts = $payrollCostsQuery->sum('amount');
 
         // Chi phí nhân công từ TimeTracking (đã tạo Cost record)
         $timeTrackingCostsQuery = $project->costs()
@@ -124,12 +127,8 @@ class FinancialCalculationService
             ]);
         }
 
-        // Thưởng từ Bonus (đã approved)
-        $bonusCostsQuery = $project->bonuses()->where('status', 'approved');
-        if ($startDate && $endDate) {
-            $bonusCostsQuery->whereBetween('created_at', [$startDate, $endDate]);
-        }
-        $bonusCosts = $bonusCostsQuery->sum('amount');
+        // Bonuses removed - HR module deleted
+        $bonusCosts = 0;
 
         // Chi phí khác từ Cost (không phải từ Payroll hoặc TimeTracking)
         $otherCostsQuery = $project->costs()
@@ -228,24 +227,15 @@ class FinancialCalculationService
         $errors = [];
         $warnings = [];
 
-        // Kiểm tra double counting Payroll
-        $payrollCosts = $project->payrolls()
-            ->where('status', 'approved')
-            ->sum('net_salary');
-        
+        // Payroll costs check removed - HR module deleted
+        // Only check costs from costs table with payroll_id
         $payrollCostsFromCosts = $project->costs()
             ->whereNotNull('payroll_id')
             ->where('status', 'approved')
             ->sum('amount');
 
-        if ($payrollCostsFromCosts > 0 && $payrollCosts > 0) {
-            $warnings[] = [
-                'type' => 'potential_double_counting',
-                'message' => 'Payroll costs may be double counted. Both Payroll records and Cost records from Payroll exist.',
-                'payroll_costs' => $payrollCosts,
-                'payroll_costs_from_costs' => $payrollCostsFromCosts,
-            ];
-        }
+        // Payroll double counting check removed - HR module deleted
+        // No longer needed since payrolls() relationship doesn't exist
 
         // Kiểm tra double counting TimeTracking
         $timeTrackingCount = $project->timeTrackings()

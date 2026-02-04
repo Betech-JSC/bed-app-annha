@@ -132,37 +132,11 @@ class RolePermissionSeeder extends Seeder
             Permissions::EQUIPMENT_DELETE,
             Permissions::EQUIPMENT_APPROVE,
 
-            // HR - Full access
-            Permissions::HR_TIME_TRACKING_VIEW,
-            Permissions::HR_TIME_TRACKING_CREATE,
-            Permissions::HR_TIME_TRACKING_UPDATE,
-            Permissions::HR_TIME_TRACKING_DELETE,
-            Permissions::HR_TIME_TRACKING_APPROVE,
-            Permissions::HR_TIME_TRACKING_REJECT,
-            Permissions::HR_TIME_TRACKING_CHECK_IN,
-            Permissions::HR_TIME_TRACKING_CHECK_OUT,
-            Permissions::HR_PAYROLL_VIEW,
-            Permissions::HR_PAYROLL_CALCULATE,
-            Permissions::HR_PAYROLL_APPROVE,
-            Permissions::HR_PAYROLL_PAY,
-            Permissions::HR_PAYROLL_EXPORT,
-            Permissions::HR_BONUS_VIEW,
-            Permissions::HR_BONUS_CREATE,
-            Permissions::HR_BONUS_UPDATE,
-            Permissions::HR_BONUS_DELETE,
-            Permissions::HR_BONUS_APPROVE,
-            Permissions::HR_BONUS_PAY,
-            Permissions::HR_EMPLOYEE_VIEW,
-            Permissions::HR_EMPLOYEE_CREATE,
-            Permissions::HR_EMPLOYEE_UPDATE,
-            Permissions::HR_EMPLOYEE_DELETE,
-
-            // Report - Full access
+            // Report - Full access (HR reports removed)
             Permissions::REPORT_VIEW,
             Permissions::REPORT_EXPORT,
             Permissions::REPORT_FINANCIAL,
             Permissions::REPORT_PROGRESS,
-            Permissions::REPORT_HR,
 
             // Invoice
             Permissions::INVOICE_VIEW,
@@ -534,10 +508,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::EQUIPMENT_CREATE,
             Permissions::EQUIPMENT_UPDATE,
 
-            // HR - Time tracking approval
-            Permissions::HR_TIME_TRACKING_VIEW,
-            Permissions::HR_TIME_TRACKING_APPROVE,
-            Permissions::HR_TIME_TRACKING_REJECT,
+            // HR permissions removed - HR module deleted
 
             // Document
             Permissions::DOCUMENT_VIEW,
@@ -628,15 +599,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::SUBCONTRACTOR_PAYMENT_APPROVE,
             Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID,
 
-            // HR - Payroll and bonus
-            Permissions::HR_PAYROLL_VIEW,
-            Permissions::HR_PAYROLL_CALCULATE,
-            Permissions::HR_PAYROLL_APPROVE,
-            Permissions::HR_PAYROLL_PAY,
-            Permissions::HR_PAYROLL_EXPORT,
-            Permissions::HR_BONUS_VIEW,
-            Permissions::HR_BONUS_APPROVE,
-            Permissions::HR_BONUS_PAY,
+            // HR permissions removed - HR module deleted
 
             // Report
             Permissions::REPORT_VIEW,

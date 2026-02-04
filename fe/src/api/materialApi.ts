@@ -104,6 +104,8 @@ export const materialApi = {
     quantity: number;
     transaction_date: string;
     notes?: string;
+    cost_group_id?: number;
+    amount?: number;
   }) => {
     const response = await api.post(`/projects/${projectId}/materials/transactions`, data);
     return response.data;

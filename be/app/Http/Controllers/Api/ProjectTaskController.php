@@ -81,7 +81,7 @@ class ProjectTaskController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_CREATE) && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền tạo công việc. Cần quyền: ' . \App\Constants\Permissions::PROJECT_TASK_CREATE
@@ -217,7 +217,7 @@ class ProjectTaskController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_UPDATE) && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_UPDATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền cập nhật công việc. Cần quyền: ' . \App\Constants\Permissions::PROJECT_TASK_UPDATE
@@ -324,7 +324,7 @@ class ProjectTaskController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_DELETE) && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_DELETE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xóa công việc. Cần quyền: ' . \App\Constants\Permissions::PROJECT_TASK_DELETE

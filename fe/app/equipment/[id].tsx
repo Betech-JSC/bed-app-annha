@@ -21,7 +21,7 @@ import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 
 const STATUS_LABELS: Record<string, string> = {
     available: "Sẵn sàng",
-    in_use: "Đang sử dụng",
+    in_use: "Đã trả",
     maintenance: "Bảo trì",
     retired: "Ngừng sử dụng",
 };

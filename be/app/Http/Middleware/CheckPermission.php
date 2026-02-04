@@ -25,11 +25,6 @@ class CheckPermission
             ], 401);
         }
 
-        // Super admin có toàn quyền
-        if ($user->role === 'admin' && $user->owner === true) {
-            return $next($request);
-        }
-
         // Check permission thông qua ProjectPersonnel nếu có projectIdParam
         if ($projectIdParam && $request->route($projectIdParam)) {
             $projectId = $request->route($projectIdParam);

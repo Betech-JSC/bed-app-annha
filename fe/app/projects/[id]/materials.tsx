@@ -17,14 +17,18 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { materialApi, Material } from "@/api/materialApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionGuard, CurrencyInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { DatePickerInput } from "@/components";
+import { costGroupApi, CostGroup } from "@/api/costGroupApi";
+import { useProjectPermissions } from "@/hooks/usePermissions";
+import { Permissions } from "@/constants/Permissions";
 
 export default function ProjectMaterialsScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const tabBarHeight = useTabBarHeight();
+    const { hasPermission } = useProjectPermissions(id);
     const [materials, setMaterials] = useState<Material[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -38,12 +42,21 @@ export default function ProjectMaterialsScreen() {
         quantity: "",
         transaction_date: new Date(),
         notes: "",
+        cost_group_id: null as number | null,
+        amount: 0,
     });
+    const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
+    const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
+    const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [permissionMessage, setPermissionMessage] = useState("");
 
     const loadMaterials = useCallback(async () => {
         try {
             setLoading(true);
+            setPermissionDenied(false);
+            setPermissionMessage("");
             const response = await materialApi.getMaterialsByProject(id!, {
                 search: searchQuery || undefined,
             });
@@ -51,8 +64,14 @@ export default function ProjectMaterialsScreen() {
                 setMaterials(response.data.data || []);
             }
         } catch (error: any) {
-            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải danh sách vật liệu";
-            Alert.alert("Lỗi", errorMessage);
+            if (error.response?.status === 403) {
+                setPermissionDenied(true);
+                setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem vật liệu của dự án này.");
+                setMaterials([]);
+            } else {
+                const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải danh sách vật liệu";
+                Alert.alert("Lỗi", errorMessage);
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -84,6 +103,25 @@ export default function ProjectMaterialsScreen() {
     const handleOpenAddModal = () => {
         setShowAddModal(true);
         loadAllMaterials();
+        loadCostGroups();
+    };
+
+    const loadCostGroups = async () => {
+        try {
+            const response = await costGroupApi.getCostGroups({ active_only: true });
+            if (response.success) {
+                const data = response.data?.data ?? response.data ?? [];
+                setCostGroups(Array.isArray(data) ? data : []);
+            } else {
+                setCostGroups([]);
+            }
+        } catch (error: any) {
+            console.error("Error loading cost groups:", error);
+            setCostGroups([]);
+            if (error.response?.status === 403) {
+                Alert.alert("Không có quyền", "Bạn không có quyền xem nhóm chi phí. Vui lòng liên hệ quản trị viên.");
+            }
+        }
     };
 
     const handleSelectMaterial = (material: Material) => {
@@ -101,25 +139,43 @@ export default function ProjectMaterialsScreen() {
             return;
         }
 
+        if (transactionData.type === "out" && (!transactionData.amount || transactionData.amount <= 0)) {
+            Alert.alert("Lỗi", "Vui lòng nhập chi phí cho vật liệu");
+            return;
+        }
+
+        if (transactionData.type === "out" && !transactionData.cost_group_id) {
+            Alert.alert("Lỗi", "Vui lòng chọn nhóm chi phí");
+            return;
+        }
+
         try {
             setSubmitting(true);
-            const response = await materialApi.createTransaction(id!, {
+            const payload: any = {
                 material_id: selectedMaterial.id,
                 type: transactionData.type,
                 quantity: parseFloat(transactionData.quantity),
                 transaction_date: transactionData.transaction_date.toISOString().split("T")[0],
                 notes: transactionData.notes || undefined,
-            });
+            };
+            if (transactionData.type === "out") {
+                payload.cost_group_id = transactionData.cost_group_id;
+                payload.amount = transactionData.amount;
+            }
+            const response = await materialApi.createTransaction(id!, payload);
 
             if (response.success) {
-                Alert.alert("Thành công", "Đã thêm vật liệu vào dự án");
+                Alert.alert("Thành công", "Đã tạo phiếu xuất kho và đẩy qua chi phí dự án");
                 setShowAddModal(false);
                 setSelectedMaterial(null);
+                setSelectedCostGroup(null);
                 setTransactionData({
                     type: "out",
                     quantity: "",
                     transaction_date: new Date(),
                     notes: "",
+                    cost_group_id: null,
+                    amount: 0,
                 });
                 loadMaterials();
             }
@@ -136,8 +192,9 @@ export default function ProjectMaterialsScreen() {
         loadMaterials();
     }, [loadMaterials]);
 
-    const formatQuantity = (quantity: number, unit: string) => {
-        return `${new Intl.NumberFormat("vi-VN").format(quantity)} ${unit}`;
+    const formatQuantity = (quantity: number, unit: string | undefined) => {
+        const formattedQuantity = new Intl.NumberFormat("vi-VN").format(quantity);
+        return unit ? `${formattedQuantity} ${unit}` : formattedQuantity;
     };
 
     const getStockStatus = (material: Material) => {
@@ -213,43 +270,77 @@ export default function ProjectMaterialsScreen() {
         );
     };
 
+    if (loading) {
+        return (
+            <View style={styles.container}>
+                <ScreenHeader title="Vật Liệu Dự Án" showBackButton />
+                <View style={styles.centerContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                </View>
+            </View>
+        );
+    }
+
+    // Hiển thị thông báo RBAC nếu không có quyền
+    if (permissionDenied) {
+        return (
+            <View style={styles.container}>
+                <ScreenHeader title="Vật Liệu Dự Án" showBackButton />
+                <View style={styles.permissionDeniedContainer}>
+                    <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
+                    <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
+                    <Text style={styles.permissionDeniedMessage}>
+                        {permissionMessage || "Bạn không có quyền xem vật liệu của dự án này."}
+                    </Text>
+                    <Text style={styles.permissionDeniedSubtext}>
+                        Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
+                    </Text>
+                </View>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <ScreenHeader
                 title="Vật Liệu Dự Án"
                 showBackButton
                 rightComponent={
-                    <TouchableOpacity onPress={handleOpenAddModal} style={styles.addButton}>
-                        <Ionicons name="add" size={24} color="#3B82F6" />
-                    </TouchableOpacity>
+                    <PermissionGuard permission={Permissions.MATERIAL_CREATE} projectId={id}>
+                        <TouchableOpacity onPress={handleOpenAddModal} style={styles.addButton}>
+                            <Ionicons name="add" size={24} color="#3B82F6" />
+                        </TouchableOpacity>
+                    </PermissionGuard>
                 }
             />
 
-            {loading && !refreshing ? (
-                <View style={styles.centerContainer}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                </View>
-            ) : (
-                <FlatList
-                    data={materials}
-                    renderItem={renderItem}
-                    keyExtractor={(item) => item.id.toString()}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                    }
-                    contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
-                    ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Ionicons name="cube-outline" size={64} color="#9CA3AF" />
-                            <Text style={styles.emptyText}>
-                                {searchQuery
-                                    ? "Không tìm thấy vật liệu phù hợp"
-                                    : "Chưa có vật liệu nào được sử dụng trong dự án này"}
-                            </Text>
-                        </View>
-                    }
-                />
-            )}
+            <PermissionGuard permission={Permissions.MATERIAL_VIEW} projectId={id}>
+                {loading && !refreshing ? (
+                    <View style={styles.centerContainer}>
+                        <ActivityIndicator size="large" color="#3B82F6" />
+                    </View>
+                ) : (
+                    <FlatList
+                        data={materials}
+                        renderItem={renderItem}
+                        keyExtractor={(item) => item.id.toString()}
+                        refreshControl={
+                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                        }
+                        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Ionicons name="cube-outline" size={64} color="#9CA3AF" />
+                                <Text style={styles.emptyText}>
+                                    {searchQuery
+                                        ? "Không tìm thấy vật liệu phù hợp"
+                                        : "Chưa có vật liệu nào được sử dụng trong dự án này"}
+                                </Text>
+                            </View>
+                        }
+                    />
+                )}
+            </PermissionGuard>
 
             {/* Add Material Modal */}
             <Modal
@@ -365,7 +456,7 @@ export default function ProjectMaterialsScreen() {
 
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>
-                                    Số lượng ({selectedMaterial.unit})
+                                    Số lượng{selectedMaterial.unit ? ` (${selectedMaterial.unit})` : ""}
                                     {transactionData.type === "adjustment" && (
                                         <Text style={styles.helperTextInline}>
                                             {" "}(dương để tăng, âm để giảm)
@@ -389,6 +480,47 @@ export default function ProjectMaterialsScreen() {
                                     </Text>
                                 )}
                             </View>
+
+                            {transactionData.type === "out" && (
+                                <>
+                                    <View style={styles.formGroup}>
+                                        <Text style={styles.label}>Nhóm chi phí *</Text>
+                                        <TouchableOpacity
+                                            style={styles.selectButton}
+                                            onPress={() => setShowCostGroupPicker(true)}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.selectButtonText,
+                                                    !selectedCostGroup && styles.selectButtonPlaceholder,
+                                                ]}
+                                            >
+                                                {selectedCostGroup ? selectedCostGroup.name : "Chọn nhóm chi phí"}
+                                            </Text>
+                                            <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                                        </TouchableOpacity>
+                                        {selectedCostGroup && (
+                                            <TouchableOpacity
+                                                style={styles.clearSelectionButton}
+                                                onPress={() => {
+                                                    setSelectedCostGroup(null);
+                                                    setTransactionData({ ...transactionData, cost_group_id: null });
+                                                }}
+                                            >
+                                                <Ionicons name="close-circle" size={20} color="#EF4444" />
+                                                <Text style={styles.clearSelectionText}>Xóa lựa chọn</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                    <CurrencyInput
+                                        label="Chi phí (VNĐ) *"
+                                        value={transactionData.amount}
+                                        onChangeText={(amount) => setTransactionData({ ...transactionData, amount })}
+                                        placeholder="Nhập chi phí cho vật liệu"
+                                        helperText="Số tiền sẽ được đẩy qua chi phí dự án"
+                                    />
+                                </>
+                            )}
 
                             <DatePickerInput
                                 label="Ngày giao dịch"
@@ -421,10 +553,60 @@ export default function ProjectMaterialsScreen() {
                                 {submitting ? (
                                     <ActivityIndicator color="#FFFFFF" />
                                 ) : (
-                                    <Text style={styles.submitButtonText}>Thêm vào dự án</Text>
+                                    <Text style={styles.submitButtonText}>
+                                        {transactionData.type === "out" ? "Tạo phiếu và đẩy chi phí" : "Thêm vào dự án"}
+                                    </Text>
                                 )}
                             </TouchableOpacity>
                         </ScrollView>
+                    )}
+
+                    {/* Cost Group Picker - Overlay bên trong Modal để tránh lỗi nested modals */}
+                    {showCostGroupPicker && (
+                        <View style={styles.pickerOverlay} pointerEvents="box-none">
+                            <TouchableOpacity
+                                style={styles.pickerOverlayBackdrop}
+                                activeOpacity={1}
+                                onPress={() => setShowCostGroupPicker(false)}
+                            />
+                            <View style={styles.pickerContent}>
+                                <View style={styles.pickerHeader}>
+                                    <Text style={styles.pickerTitle}>Chọn nhóm chi phí</Text>
+                                    <TouchableOpacity onPress={() => setShowCostGroupPicker(false)}>
+                                        <Ionicons name="close" size={24} color="#1F2937" />
+                                    </TouchableOpacity>
+                                </View>
+                                <FlatList
+                                    data={costGroups}
+                                    keyExtractor={(item) => item.id.toString()}
+                                    renderItem={({ item }) => (
+                                        <TouchableOpacity
+                                            style={styles.pickerItem}
+                                            onPress={() => {
+                                                setSelectedCostGroup(item);
+                                                setTransactionData({ ...transactionData, cost_group_id: item.id });
+                                                setShowCostGroupPicker(false);
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text style={styles.pickerItemText}>{item.name}</Text>
+                                            {selectedCostGroup?.id === item.id && (
+                                                <Ionicons name="checkmark-circle" size={22} color="#3B82F6" />
+                                            )}
+                                        </TouchableOpacity>
+                                    )}
+                                    ListEmptyComponent={
+                                        <View style={styles.pickerEmpty}>
+                                            <Ionicons name="folder-open-outline" size={40} color="#D1D5DB" />
+                                            <Text style={styles.pickerEmptyText}>Chưa có nhóm chi phí</Text>
+                                            <Text style={styles.pickerEmptySubtext}>
+                                                Tạo nhóm chi phí trong Cài đặt → Nhóm chi phí
+                                            </Text>
+                                        </View>
+                                    }
+                                />
+                            </View>
+                        </View>
                     )}
                 </KeyboardAvoidingView>
             </Modal>
@@ -653,6 +835,100 @@ const styles = StyleSheet.create({
     typeButtonTextActive: {
         color: "#FFFFFF",
     },
+    selectButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        borderWidth: 1,
+        borderColor: "#D1D5DB",
+        borderRadius: 8,
+        padding: 12,
+        backgroundColor: "#FFFFFF",
+    },
+    selectButtonText: {
+        fontSize: 16,
+        color: "#1F2937",
+        fontWeight: "500",
+    },
+    selectButtonPlaceholder: {
+        color: "#9CA3AF",
+    },
+    clearSelectionButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        marginTop: 8,
+        alignSelf: "flex-start",
+    },
+    clearSelectionText: {
+        fontSize: 14,
+        color: "#EF4444",
+        fontWeight: "500",
+    },
+    pickerOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: "flex-end",
+        zIndex: 1000,
+    },
+    pickerOverlayBackdrop: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+    },
+    pickerContent: {
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: "70%",
+        paddingBottom: 24,
+        zIndex: 1001,
+    },
+    pickerHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E5E7EB",
+    },
+    pickerTitle: {
+        fontSize: 18,
+        fontWeight: "600",
+        color: "#1F2937",
+    },
+    pickerItem: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F3F4F6",
+    },
+    pickerItemText: {
+        fontSize: 16,
+        color: "#1F2937",
+    },
+    pickerEmpty: {
+        padding: 32,
+        alignItems: "center",
+    },
+    pickerEmptyText: {
+        fontSize: 14,
+        color: "#9CA3AF",
+    },
+    pickerEmptySubtext: {
+        fontSize: 12,
+        color: "#9CA3AF",
+        marginTop: 8,
+        textAlign: "center",
+    },
     dateButton: {
         flexDirection: "row",
         alignItems: "center",
@@ -692,5 +968,32 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: "#6B7280",
         fontWeight: "400",
+    },
+    permissionDeniedContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 32,
+    },
+    permissionDeniedTitle: {
+        fontSize: 20,
+        fontWeight: "600",
+        color: "#1F2937",
+        marginTop: 24,
+        marginBottom: 8,
+    },
+    permissionDeniedMessage: {
+        fontSize: 16,
+        color: "#6B7280",
+        textAlign: "center",
+        marginBottom: 8,
+        lineHeight: 24,
+    },
+    permissionDeniedSubtext: {
+        fontSize: 14,
+        color: "#9CA3AF",
+        textAlign: "center",
+        marginTop: 8,
+        lineHeight: 20,
     },
 });

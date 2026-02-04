@@ -32,11 +32,13 @@ class DatabaseSeeder extends Seeder
             // ============================================================
             SuperAdminSeeder::class, // Create super admin (superadmin@skysend.com)
             AdminSeeder::class, // Create admin accounts (if needed)
-            UserRoleSeeder::class, // Create test users with roles (30-40 users)
+            AssignSuperAdminRoleSeeder::class, // Assign super_admin role to existing super admin users
+            RBACTestUsersSeeder::class, // Create RBAC test users with all roles
 
             // ============================================================
             // 3. Settings & Master Data
             // ============================================================
+            PersonnelRoleSeeder::class, // Create personnel roles for projects
             CostGroupSeeder::class, // Create cost groups for budgets and costs
             SettingSeeder::class, // System settings
 
@@ -85,8 +87,14 @@ class DatabaseSeeder extends Seeder
         $this->command->newLine();
         $this->command->info('📋 Tài khoản test chính:');
         $this->command->info('   Super Admin: superadmin@skysend.com / superadmin123');
-        $this->command->info('   HR Admin: hradmin@skysend.com / hradmin123');
-        $this->command->info('   Test Users: Xem chi tiết trong UserRoleSeeder output');
+        $this->command->info('   Super Admin Test: superadmin.test@test.com / superadmin123');
+        $this->command->info('   Admin: admin1@test.com / admin123');
+        $this->command->info('   Project Owner: projectowner1@test.com / owner123');
+        $this->command->info('   Project Manager: pm1@test.com / pm123');
+        $this->command->info('   Site Supervisor: supervisor1@test.com / supervisor123');
+        $this->command->info('   Accountant: accountant1@test.com / accountant123');
+        $this->command->info('   Client: client1@test.com / client123');
+        $this->command->info('   (Xem thêm trong RBACTestUsersSeeder output)');
         $this->command->newLine();
     }
 }

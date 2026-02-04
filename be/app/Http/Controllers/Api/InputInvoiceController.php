@@ -127,7 +127,7 @@ class InputInvoiceController extends Controller
             if (!empty($request->attachment_ids)) {
                 foreach ($request->attachment_ids as $attachmentId) {
                     $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->owner === true)) {
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
                         $attachment->update([
                             'attachable_type' => InputInvoice::class,
                             'attachable_id' => $invoice->id,
@@ -266,7 +266,7 @@ class InputInvoiceController extends Controller
                 // Thêm các attachments mới
                 foreach ($newAttachmentIds as $attachmentId) {
                     $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->owner === true)) {
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
                         $attachment->update([
                             'attachable_type' => InputInvoice::class,
                             'attachable_id' => $invoice->id,

@@ -22,8 +22,8 @@ class ProjectPolicy
      */
     public function view(User $user, Project $project): bool
     {
-        // Super admin can view all
-        if ($user->role === 'admin' && $user->owner === true) {
+        // User with settings.manage permission can view all
+        if ($user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE)) {
             return true;
         }
 
@@ -50,8 +50,8 @@ class ProjectPolicy
      */
     public function create(User $user): bool
     {
-        // Super admin can always create
-        if ($user->role === 'admin' && $user->owner === true) {
+        // User with settings.manage permission can always create
+        if ($user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE)) {
             return true;
         }
 
@@ -64,8 +64,8 @@ class ProjectPolicy
      */
     public function update(User $user, Project $project): bool
     {
-        // Super admin can always update
-        if ($user->role === 'admin' && $user->owner === true) {
+        // User with settings.manage permission can always update
+        if ($user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE)) {
             return true;
         }
 
@@ -92,8 +92,8 @@ class ProjectPolicy
      */
     public function delete(User $user, Project $project): bool
     {
-        // Super admin can always delete
-        if ($user->role === 'admin' && $user->owner === true) {
+        // User with settings.manage permission can always delete
+        if ($user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE)) {
             return true;
         }
 
@@ -106,8 +106,8 @@ class ProjectPolicy
      */
     public function approve(User $user, Project $project): bool
     {
-        // Super admin can always approve
-        if ($user->role === 'admin' && $user->owner === true) {
+        // User with settings.manage permission can always approve
+        if ($user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE)) {
             return true;
         }
 

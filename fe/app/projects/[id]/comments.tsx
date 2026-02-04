@@ -20,14 +20,14 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
 import { Permissions } from "@/constants/Permissions";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 export default function ProjectCommentsScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const tabBarHeight = useTabBarHeight();
     const user = useSelector((state: RootState) => state.user);
-    const { hasPermission, permissions, loading: permissionsLoading, refresh: refreshPermissions } = usePermissions();
+    const { hasPermission, permissions, loading: permissionsLoading, refresh: refreshPermissions } = useProjectPermissions(id);
 
     const [comments, setComments] = useState<ProjectComment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -39,6 +39,8 @@ export default function ProjectCommentsScreen() {
     const [expandedReplies, setExpandedReplies] = useState<Set<number>>(new Set());
     const [editingComment, setEditingComment] = useState<number | null>(null);
     const [editText, setEditText] = useState("");
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [permissionMessage, setPermissionMessage] = useState("");
     const lastLoadTimeRef = React.useRef<number>(0);
     const loadCommentsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -57,6 +59,8 @@ export default function ProjectCommentsScreen() {
 
         try {
             setLoading(true);
+            setPermissionDenied(false);
+            setPermissionMessage("");
             const response = await projectCommentApi.getComments(id!, { per_page: 100 });
             if (response.success) {
                 setComments(response.data || []);
@@ -69,9 +73,9 @@ export default function ProjectCommentsScreen() {
             const errorMessage = error.response?.data?.message || "Không thể tải bình luận";
 
             if (error.response?.status === 403) {
-                Alert.alert("Không có quyền", errorMessage, [
-                    { text: "OK", onPress: () => router.back() }
-                ]);
+                setPermissionDenied(true);
+                setPermissionMessage(errorMessage);
+                setComments([]);
             } else if (error.response?.status === 429) {
                 // Rate limiting: Retry sau 2 giây
                 const retryAfter = error.response?.headers?.['retry-after'] || 2;
@@ -372,7 +376,7 @@ export default function ProjectCommentsScreen() {
                 )}
                 {!isReply && (
                     <View style={styles.commentActions}>
-                        <PermissionGuard permission={Permissions.PROJECT_COMMENT_CREATE}>
+                        <PermissionGuard permission={Permissions.PROJECT_COMMENT_CREATE} projectId={id}>
                             <TouchableOpacity
                                 style={styles.replyButton}
                                 onPress={() => {
@@ -471,6 +475,25 @@ export default function ProjectCommentsScreen() {
         );
     }
 
+    // Hiển thị thông báo RBAC nếu không có quyền
+    if (permissionDenied) {
+        return (
+            <View style={styles.container}>
+                <ScreenHeader title="Bình Luận Dự Án" showBackButton />
+                <View style={styles.permissionDeniedContainer}>
+                    <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
+                    <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
+                    <Text style={styles.permissionDeniedMessage}>
+                        {permissionMessage || "Bạn không có quyền xem bình luận của dự án này."}
+                    </Text>
+                    <Text style={styles.permissionDeniedSubtext}>
+                        Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
+                    </Text>
+                </View>
+            </View>
+        );
+    }
+
     return (
         <KeyboardAvoidingView
             style={styles.container}
@@ -478,21 +501,23 @@ export default function ProjectCommentsScreen() {
             keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
         >
             <ScreenHeader title="Bình Luận Dự Án" showBackButton />
-            <FlatList
-                data={rootComments}
-                renderItem={({ item }) => renderComment(item)}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 100 }]}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="chatbubbles-outline" size={64} color="#D1D5DB" />
-                        <Text style={styles.emptyText}>Chưa có bình luận nào</Text>
-                        <Text style={styles.emptySubtext}>Hãy là người đầu tiên bình luận!</Text>
-                    </View>
-                }
-            />
-            <PermissionGuard permission={Permissions.PROJECT_COMMENT_CREATE}>
+            <PermissionGuard permission={Permissions.PROJECT_COMMENT_VIEW} projectId={id}>
+                <FlatList
+                    data={rootComments}
+                    renderItem={({ item }) => renderComment(item)}
+                    keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 100 }]}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="chatbubbles-outline" size={64} color="#D1D5DB" />
+                            <Text style={styles.emptyText}>Chưa có bình luận nào</Text>
+                            <Text style={styles.emptySubtext}>Hãy là người đầu tiên bình luận!</Text>
+                        </View>
+                    }
+                />
+            </PermissionGuard>
+            <PermissionGuard permission={Permissions.PROJECT_COMMENT_CREATE} projectId={id}>
                 <View style={styles.inputContainer}>
                     <View style={styles.inputWrapper}>
                         <TextInput
@@ -769,5 +794,32 @@ const styles = StyleSheet.create({
         marginTop: 12,
         fontSize: 14,
         color: "#6B7280",
+    },
+    permissionDeniedContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 32,
+    },
+    permissionDeniedTitle: {
+        fontSize: 20,
+        fontWeight: "600",
+        color: "#1F2937",
+        marginTop: 24,
+        marginBottom: 8,
+    },
+    permissionDeniedMessage: {
+        fontSize: 16,
+        color: "#6B7280",
+        textAlign: "center",
+        marginBottom: 8,
+        lineHeight: 24,
+    },
+    permissionDeniedSubtext: {
+        fontSize: 14,
+        color: "#9CA3AF",
+        textAlign: "center",
+        marginTop: 8,
+        lineHeight: 20,
     },
 });

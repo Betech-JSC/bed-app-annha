@@ -49,6 +49,8 @@ export default function PaymentsScreen() {
   const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
   const [markPaidAttachmentIds, setMarkPaidAttachmentIds] = useState<number[]>([]);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   // Form state
   const [formData, setFormData] = useState<CreatePaymentData>({
@@ -92,6 +94,8 @@ export default function PaymentsScreen() {
   const loadPayments = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const response = await paymentApi.getPayments(id!);
       if (response.success) {
         setPayments(response.data || []);
@@ -101,8 +105,14 @@ export default function PaymentsScreen() {
           : 0;
         setFormData(prev => ({ ...prev, payment_number: maxPaymentNumber + 1 }));
       }
-    } catch (error) {
-      console.error("Error loading payments:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem thanh toán của dự án này.");
+        setPayments([]);
+      } else {
+        console.error("Error loading payments:", error);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -487,8 +497,30 @@ export default function PaymentsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Thanh Toán" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  // Hiển thị thông báo RBAC nếu không có quyền
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Thanh Toán" showBackButton />
+        <View style={styles.permissionDeniedContainer}>
+          <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
+          <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
+          <Text style={styles.permissionDeniedMessage}>
+            {permissionMessage || "Bạn không có quyền xem thanh toán của dự án này."}
+          </Text>
+          <Text style={styles.permissionDeniedSubtext}>
+            Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -513,32 +545,34 @@ export default function PaymentsScreen() {
         }
       />
 
-      <FlatList
-        data={payments}
-        renderItem={renderPaymentItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="cash-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>Chưa có đợt thanh toán nào</Text>
-            {hasPermission("payments.create") && (
-              <TouchableOpacity
-                style={styles.emptyButton}
-                onPress={() => {
-                  resetForm();
-                  setShowCreateModal(true);
-                }}
-              >
-                <Text style={styles.emptyButtonText}>Thêm đợt thanh toán</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        }
-      />
+      <PermissionGuard permission={Permissions.PAYMENT_VIEW} projectId={id}>
+        <FlatList
+          data={payments}
+          renderItem={renderPaymentItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="cash-outline" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyText}>Chưa có đợt thanh toán nào</Text>
+              <PermissionGuard permission={Permissions.PAYMENT_CREATE} projectId={id}>
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={() => {
+                    resetForm();
+                    setShowCreateModal(true);
+                  }}
+                >
+                  <Text style={styles.emptyButtonText}>Thêm đợt thanh toán</Text>
+                </TouchableOpacity>
+              </PermissionGuard>
+            </View>
+          }
+        />
+      </PermissionGuard>
 
       {/* Create Payment Modal */}
       <Modal
@@ -550,7 +584,7 @@ export default function PaymentsScreen() {
           resetForm();
         }}
       >
-        <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Thêm Đợt Thanh Toán</Text>
             <TouchableOpacity
@@ -563,7 +597,11 @@ export default function PaymentsScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalScrollView}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, tabBarHeight) + 16 }}
+            showsVerticalScrollIndicator={true}
+          >
             {project?.contract && (
               <View style={styles.infoCard}>
                 <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
@@ -602,9 +640,9 @@ export default function PaymentsScreen() {
 
             <CurrencyInput
               label={
-                <>
+                <Text>
                   Số tiền <Text style={styles.required}>*</Text>
-                </>
+                </Text>
               }
               value={formData.amount}
               onChangeText={(amount) =>
@@ -671,7 +709,7 @@ export default function PaymentsScreen() {
               </TouchableOpacity>
             </View>
           </ScrollView>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* Confirm Payment Modal */}
@@ -1223,11 +1261,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#1F2937",
   },
+  modalScrollView: {
+    flex: 1,
+    padding: 16,
+  },
   modalActions: {
     flexDirection: "row",
     gap: 12,
     marginTop: 24,
-    marginBottom: 32,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    backgroundColor: "#FFFFFF",
   },
   modalButton: {
     flex: 1,
@@ -1310,10 +1354,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1F2937",
   },
-  modalScrollView: {
-    flexGrow: 1,
-    minHeight: 0,
-  },
   modalSubtitle: {
     fontSize: 14,
     color: "#6B7280",
@@ -1321,5 +1361,32 @@ const styles = StyleSheet.create({
   },
   rejectButton: {
     backgroundColor: "#EF4444",
+  },
+  permissionDeniedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  permissionDeniedTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  permissionDeniedMessage: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 8,
+    lineHeight: 24,
+  },
+  permissionDeniedSubtext: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 20,
   },
 });

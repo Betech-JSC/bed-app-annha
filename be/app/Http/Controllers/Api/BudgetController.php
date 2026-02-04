@@ -37,7 +37,7 @@ class BudgetController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('budgets.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem ngân sách.'
@@ -60,7 +60,7 @@ class BudgetController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('budgets.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo ngân sách.'
@@ -145,7 +145,7 @@ class BudgetController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('budgets.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem ngân sách.'
@@ -172,7 +172,7 @@ class BudgetController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('budgets.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem so sánh ngân sách.'
@@ -212,7 +212,7 @@ class BudgetController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('budgets.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật ngân sách.'
@@ -263,7 +263,7 @@ class BudgetController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('budgets.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa ngân sách.'
@@ -294,7 +294,7 @@ class BudgetController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('budgets.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền đồng bộ ngân sách.'

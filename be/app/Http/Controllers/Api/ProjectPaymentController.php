@@ -5,17 +5,35 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectPayment;
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProjectPaymentController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách thanh toán
      */
     public function index(string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::PAYMENT_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem danh sách thanh toán của dự án này.'
+            ], 403);
+        }
+
         $payments = $project->payments()
             ->with(['confirmer', 'customerApprover', 'attachments'])
             ->orderBy('payment_number')
@@ -35,11 +53,11 @@ class ProjectPaymentController extends Controller
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        // Check permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_CREATE)) {
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::PAYMENT_CREATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền tạo đợt thanh toán. Cần quyền: ' . \App\Constants\Permissions::PAYMENT_CREATE
+                'message' => 'Bạn không có quyền tạo đợt thanh toán cho dự án này.'
             ], 403);
         }
 
@@ -96,6 +114,16 @@ class ProjectPaymentController extends Controller
     {
         $payment = ProjectPayment::where('project_id', $projectId)
             ->findOrFail($id);
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::PAYMENT_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật thanh toán của dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'amount' => 'sometimes|numeric|min:0',
@@ -121,13 +149,16 @@ class ProjectPaymentController extends Controller
         $payment = ProjectPayment::where('project_id', $projectId)
             ->findOrFail($id);
 
+        $payment = ProjectPayment::where('project_id', $projectId)
+            ->findOrFail($id);
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        // Check permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_CONFIRM)) {
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::PAYMENT_CONFIRM, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xác nhận thanh toán. Cần quyền: ' . \App\Constants\Permissions::PAYMENT_CONFIRM
+                'message' => 'Bạn không có quyền xác nhận thanh toán của dự án này.'
             ], 403);
         }
 
@@ -174,7 +205,7 @@ class ProjectPaymentController extends Controller
             $attached = [];
             foreach ($validated['attachment_ids'] as $attachmentId) {
                 $attachment = \App\Models\Attachment::find($attachmentId);
-                if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
                     $attachment->update([
                         'attachable_type' => ProjectPayment::class,
                         'attachable_id' => $payment->id,
@@ -186,7 +217,7 @@ class ProjectPaymentController extends Controller
             // Đánh dấu đã upload hình xác nhận
             if (count($attached) > 0) {
                 $payment->markPaymentProofUploaded();
-                
+
                 // Gửi thông báo cho khách hàng
                 $this->notifyCustomerForApproval($payment);
             }
@@ -218,11 +249,13 @@ class ProjectPaymentController extends Controller
 
         $user = auth()->user();
 
-        // Check RBAC permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER)) {
+        $project = Project::findOrFail($projectId);
+
+        // Check RBAC permission với project context
+        if (!$this->authService->can($user, Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền đánh dấu đã thanh toán. Cần quyền: ' . \App\Constants\Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER
+                'message' => 'Bạn không có quyền đánh dấu đã thanh toán cho dự án này.'
             ], 403);
         }
 
@@ -247,7 +280,7 @@ class ProjectPaymentController extends Controller
             if (!empty($validated['attachment_ids'])) {
                 foreach ($validated['attachment_ids'] as $attachmentId) {
                     $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
                         $attachment->update([
                             'attachable_type' => ProjectPayment::class,
                             'attachable_id' => $payment->id,
@@ -294,11 +327,13 @@ class ProjectPaymentController extends Controller
         $user = auth()->user();
         $project = $payment->project;
 
-        // Check RBAC permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_APPROVE)) {
+        $project = Project::findOrFail($projectId);
+
+        // Check RBAC permission với project context
+        if (!$this->authService->can($user, Permissions::PAYMENT_APPROVE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền duyệt thanh toán.'
+                'message' => 'Bạn không có quyền duyệt thanh toán của dự án này.'
             ], 403);
         }
 
@@ -333,7 +368,7 @@ class ProjectPaymentController extends Controller
         $project = $payment->project;
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::PAYMENT_APPROVE)) {
+        if (!$user->hasPermission(Permissions::PAYMENT_APPROVE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền từ chối thanh toán.'

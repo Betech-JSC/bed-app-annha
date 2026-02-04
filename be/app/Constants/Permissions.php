@@ -105,44 +105,6 @@ class Permissions
     public const EQUIPMENT_DELETE = 'equipment.delete';
     public const EQUIPMENT_APPROVE = 'equipment.approve';
 
-    // ===================================================================
-    // HR MODULE - TIME TRACKING
-    // ===================================================================
-    public const HR_TIME_TRACKING_VIEW = 'hr.time_tracking.view';
-    public const HR_TIME_TRACKING_CREATE = 'hr.time_tracking.create';
-    public const HR_TIME_TRACKING_UPDATE = 'hr.time_tracking.update';
-    public const HR_TIME_TRACKING_DELETE = 'hr.time_tracking.delete';
-    public const HR_TIME_TRACKING_APPROVE = 'hr.time_tracking.approve';
-    public const HR_TIME_TRACKING_REJECT = 'hr.time_tracking.reject';
-    public const HR_TIME_TRACKING_CHECK_IN = 'hr.time_tracking.check_in';
-    public const HR_TIME_TRACKING_CHECK_OUT = 'hr.time_tracking.check_out';
-
-    // ===================================================================
-    // HR MODULE - PAYROLL
-    // ===================================================================
-    public const HR_PAYROLL_VIEW = 'hr.payroll.view';
-    public const HR_PAYROLL_CALCULATE = 'hr.payroll.calculate';
-    public const HR_PAYROLL_APPROVE = 'hr.payroll.approve';
-    public const HR_PAYROLL_PAY = 'hr.payroll.pay';
-    public const HR_PAYROLL_EXPORT = 'hr.payroll.export';
-
-    // ===================================================================
-    // HR MODULE - BONUSES
-    // ===================================================================
-    public const HR_BONUS_VIEW = 'hr.bonus.view';
-    public const HR_BONUS_CREATE = 'hr.bonus.create';
-    public const HR_BONUS_UPDATE = 'hr.bonus.update';
-    public const HR_BONUS_DELETE = 'hr.bonus.delete';
-    public const HR_BONUS_APPROVE = 'hr.bonus.approve';
-    public const HR_BONUS_PAY = 'hr.bonus.pay';
-
-    // ===================================================================
-    // HR MODULE - EMPLOYEES
-    // ===================================================================
-    public const HR_EMPLOYEE_VIEW = 'hr.employee.view';
-    public const HR_EMPLOYEE_CREATE = 'hr.employee.create';
-    public const HR_EMPLOYEE_UPDATE = 'hr.employee.update';
-    public const HR_EMPLOYEE_DELETE = 'hr.employee.delete';
 
     // ===================================================================
     // REPORT MODULE
@@ -151,7 +113,6 @@ class Permissions
     public const REPORT_EXPORT = 'report.export';
     public const REPORT_FINANCIAL = 'report.financial';
     public const REPORT_PROGRESS = 'report.progress';
-    public const REPORT_HR = 'report.hr';
 
     // ===================================================================
     // INVOICE MODULE (Output - Hóa đơn đầu ra cho khách hàng)
@@ -435,43 +396,12 @@ class Permissions
             self::EQUIPMENT_DELETE,
             self::EQUIPMENT_APPROVE,
 
-            // HR - Time Tracking
-            self::HR_TIME_TRACKING_VIEW,
-            self::HR_TIME_TRACKING_CREATE,
-            self::HR_TIME_TRACKING_UPDATE,
-            self::HR_TIME_TRACKING_DELETE,
-            self::HR_TIME_TRACKING_APPROVE,
-            self::HR_TIME_TRACKING_REJECT,
-            self::HR_TIME_TRACKING_CHECK_IN,
-            self::HR_TIME_TRACKING_CHECK_OUT,
-
-            // HR - Payroll
-            self::HR_PAYROLL_VIEW,
-            self::HR_PAYROLL_CALCULATE,
-            self::HR_PAYROLL_APPROVE,
-            self::HR_PAYROLL_PAY,
-            self::HR_PAYROLL_EXPORT,
-
-            // HR - Bonus
-            self::HR_BONUS_VIEW,
-            self::HR_BONUS_CREATE,
-            self::HR_BONUS_UPDATE,
-            self::HR_BONUS_DELETE,
-            self::HR_BONUS_APPROVE,
-            self::HR_BONUS_PAY,
-
-            // HR - Employee
-            self::HR_EMPLOYEE_VIEW,
-            self::HR_EMPLOYEE_CREATE,
-            self::HR_EMPLOYEE_UPDATE,
-            self::HR_EMPLOYEE_DELETE,
 
             // Report
             self::REPORT_VIEW,
             self::REPORT_EXPORT,
             self::REPORT_FINANCIAL,
             self::REPORT_PROGRESS,
-            self::REPORT_HR,
 
             // Invoice
             self::INVOICE_VIEW,
@@ -696,41 +626,12 @@ class Permissions
                 self::EQUIPMENT_DELETE,
                 self::EQUIPMENT_APPROVE,
             ],
-            'hr' => [
-                // Time Tracking
-                self::HR_TIME_TRACKING_VIEW,
-                self::HR_TIME_TRACKING_CREATE,
-                self::HR_TIME_TRACKING_UPDATE,
-                self::HR_TIME_TRACKING_DELETE,
-                self::HR_TIME_TRACKING_APPROVE,
-                self::HR_TIME_TRACKING_REJECT,
-                self::HR_TIME_TRACKING_CHECK_IN,
-                self::HR_TIME_TRACKING_CHECK_OUT,
-                // Payroll
-                self::HR_PAYROLL_VIEW,
-                self::HR_PAYROLL_CALCULATE,
-                self::HR_PAYROLL_APPROVE,
-                self::HR_PAYROLL_PAY,
-                self::HR_PAYROLL_EXPORT,
-                // Bonus
-                self::HR_BONUS_VIEW,
-                self::HR_BONUS_CREATE,
-                self::HR_BONUS_UPDATE,
-                self::HR_BONUS_DELETE,
-                self::HR_BONUS_APPROVE,
-                self::HR_BONUS_PAY,
-                // Employee
-                self::HR_EMPLOYEE_VIEW,
-                self::HR_EMPLOYEE_CREATE,
-                self::HR_EMPLOYEE_UPDATE,
-                self::HR_EMPLOYEE_DELETE,
-            ],
+            'hr' => [],
             'report' => [
                 self::REPORT_VIEW,
                 self::REPORT_EXPORT,
                 self::REPORT_FINANCIAL,
                 self::REPORT_PROGRESS,
-                self::REPORT_HR,
             ],
             'invoice' => [
                 self::INVOICE_VIEW,

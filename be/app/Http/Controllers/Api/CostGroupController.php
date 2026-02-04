@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CostGroup;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -17,10 +18,11 @@ class CostGroupController extends Controller
     {
         $user = auth()->user();
 
-        // Check permission: allow users with costs.view, costs.create, or settings.manage
+        // Check permission: allow users with costs.view, costs.create, material.create (cho form vật liệu), or settings.manage
         if (!$user->owner && $user->role !== 'admin' && 
             !$user->hasPermission('costs.view') && 
             !$user->hasPermission('costs.create') && 
+            !$user->hasPermission(Permissions::MATERIAL_CREATE) &&
             !$user->hasPermission('settings.manage')) {
             return response()->json([
                 'success' => false,
@@ -122,10 +124,11 @@ class CostGroupController extends Controller
     {
         $user = auth()->user();
 
-        // Check permission: allow users with costs.view, costs.create, or settings.manage
+        // Check permission: allow users with costs.view, costs.create, material.create, or settings.manage
         if (!$user->owner && $user->role !== 'admin' && 
             !$user->hasPermission('costs.view') && 
             !$user->hasPermission('costs.create') && 
+            !$user->hasPermission(Permissions::MATERIAL_CREATE) &&
             !$user->hasPermission('settings.manage')) {
             return response()->json([
                 'success' => false,

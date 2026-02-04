@@ -18,7 +18,7 @@ class SubcontractorContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem hợp đồng thầu phụ.'
@@ -54,7 +54,7 @@ class SubcontractorContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo hợp đồng thầu phụ.'
@@ -115,7 +115,7 @@ class SubcontractorContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem hợp đồng.'
@@ -144,7 +144,7 @@ class SubcontractorContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật hợp đồng.'
@@ -212,7 +212,7 @@ class SubcontractorContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa hợp đồng.'
@@ -244,7 +244,7 @@ class SubcontractorContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.approve') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.approve')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền ký hợp đồng.'

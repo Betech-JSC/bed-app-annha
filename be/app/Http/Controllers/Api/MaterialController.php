@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Material;
 use App\Models\MaterialTransaction;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -14,7 +15,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem danh sách vật liệu.'
@@ -60,7 +61,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo vật liệu.'
@@ -132,7 +133,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem vật liệu.'
@@ -155,7 +156,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem tồn kho.'
@@ -185,7 +186,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem giao dịch.'
@@ -218,7 +219,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_VIEW)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem vật liệu dự án.'
@@ -274,7 +275,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_UPDATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật vật liệu.'
@@ -331,7 +332,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_DELETE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa vật liệu.'
@@ -365,7 +366,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo giao dịch vật liệu.'
@@ -378,6 +379,8 @@ class MaterialController extends Controller
             'quantity' => 'required|numeric|min:0.01',
             'transaction_date' => 'required|date',
             'notes' => 'nullable|string',
+            'cost_group_id' => 'required_if:type,out|nullable|exists:cost_groups,id',
+            'amount' => 'required_if:type,out|nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -401,7 +404,7 @@ class MaterialController extends Controller
             }
         }
 
-        // Sử dụng MaterialInventoryService để tạo transaction xuất kho
+        // Sử dụng MaterialInventoryService để tạo transaction xuất kho và đẩy qua chi phí dự án
         if ($request->type === 'out') {
             try {
                 $inventoryService = app(\App\Services\MaterialInventoryService::class);
@@ -410,7 +413,10 @@ class MaterialController extends Controller
                     $projectId,
                     $request->quantity,
                     $request->notes ?? '',
-                    $user->id
+                    $user->id,
+                    $request->transaction_date,
+                    $request->cost_group_id,
+                    $request->amount
                 );
 
                 return response()->json([
@@ -458,7 +464,7 @@ class MaterialController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('materials.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(Permissions::MATERIAL_UPDATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền điều chỉnh tồn kho.'

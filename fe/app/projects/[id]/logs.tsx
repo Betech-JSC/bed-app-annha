@@ -12,6 +12,7 @@ import {
   ScrollView,
   Image,
   Platform,
+  PanResponder,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { constructionLogApi, ConstructionLog } from "@/api/constructionLogApi";
@@ -26,6 +27,7 @@ import { Permissions } from "@/constants/Permissions";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 
 const DAYS_OF_WEEK = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+const WEATHER_OPTIONS = ["Nắng", "Mưa"];
 const MONTHS = [
   "Tháng 1",
   "Tháng 2",
@@ -56,6 +58,7 @@ export default function ConstructionLogsScreen() {
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
+  const [showWeatherPicker, setShowWeatherPicker] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Partial<ProjectTask> | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -75,6 +78,33 @@ export default function ConstructionLogsScreen() {
   const lastLoadTimeRef = React.useRef<number>(0);
   const loadLogsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const isLoadingRef = React.useRef<boolean>(false);
+  const sliderTrackWidthRef = React.useRef<number>(0);
+
+  // PanResponder for slider: touch/drag on track to set completion %
+  const sliderPanResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          const width = sliderTrackWidthRef.current;
+          if (width <= 0) return;
+          const locationX = evt.nativeEvent.locationX;
+          const ratio = Math.max(0, Math.min(1, locationX / width));
+          const value = minCompletionPercentage + ratio * (100 - minCompletionPercentage);
+          setFormData((prev) => ({ ...prev, completion_percentage: Math.round(value) }));
+        },
+        onPanResponderMove: (evt) => {
+          const width = sliderTrackWidthRef.current;
+          if (width <= 0) return;
+          const locationX = evt.nativeEvent.locationX;
+          const ratio = Math.max(0, Math.min(1, locationX / width));
+          const value = minCompletionPercentage + ratio * (100 - minCompletionPercentage);
+          setFormData((prev) => ({ ...prev, completion_percentage: Math.round(value) }));
+        },
+      }),
+    [minCompletionPercentage]
+  );
 
   // Helper function to ensure completion_percentage is always a valid number
   const getCompletionPercentage = (value: any): number => {
@@ -854,19 +884,28 @@ export default function ConstructionLogsScreen() {
                 </View>
                 {/* BUSINESS RULE: Use slider input, value can ONLY increase, minimum = last recorded %} */}
                 <View style={styles.sliderContainer}>
-                  <View style={styles.sliderTrack}>
-                    <View
-                      style={[
-                        styles.sliderFill,
-                        { width: `${((getCompletionPercentage(formData.completion_percentage) - minCompletionPercentage) / (100 - minCompletionPercentage)) * 100}%` }
-                      ]}
-                    />
-                    <View
-                      style={[
-                        styles.sliderThumb,
-                        { left: `${((getCompletionPercentage(formData.completion_percentage) - minCompletionPercentage) / (100 - minCompletionPercentage)) * 100}%` }
-                      ]}
-                    />
+                  <View
+                    style={styles.sliderTrackTouchable}
+                    onLayout={(e) => {
+                      const { width } = e.nativeEvent.layout;
+                      sliderTrackWidthRef.current = width;
+                    }}
+                    {...sliderPanResponder.panHandlers}
+                  >
+                    <View style={styles.sliderTrack}>
+                      <View
+                        style={[
+                          styles.sliderFill,
+                          { width: `${((getCompletionPercentage(formData.completion_percentage) - minCompletionPercentage) / (100 - minCompletionPercentage)) * 100}%` }
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.sliderThumb,
+                          { left: `${((getCompletionPercentage(formData.completion_percentage) - minCompletionPercentage) / (100 - minCompletionPercentage)) * 100}%` }
+                        ]}
+                      />
+                    </View>
                   </View>
                   <View style={styles.sliderInputContainer}>
                     <TouchableOpacity
@@ -927,14 +966,27 @@ export default function ConstructionLogsScreen() {
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>Thời tiết</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.weather}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, weather: text })
-                }
-                placeholder="Ví dụ: Nắng, Mưa..."
-              />
+              <TouchableOpacity
+                style={styles.selectButton}
+                onPress={() => setShowWeatherPicker(true)}
+              >
+                <Text style={[
+                  styles.selectButtonText,
+                  !formData.weather && styles.selectButtonTextPlaceholder
+                ]}>
+                  {formData.weather || "Chọn thời tiết"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              </TouchableOpacity>
+              {formData.weather ? (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => setFormData({ ...formData, weather: "" })}
+                >
+                  <Ionicons name="close-circle" size={16} color="#EF4444" />
+                  <Text style={styles.clearButtonText}>Xóa lựa chọn</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
 
             <View style={styles.formGroup}>
@@ -1070,6 +1122,45 @@ export default function ConstructionLogsScreen() {
                     }
                   />
                 )}
+              </View>
+            </View>
+          )}
+
+          {/* Weather Picker */}
+          {showWeatherPicker && (
+            <View style={styles.pickerModalOverlay}>
+              <View style={styles.pickerModalContainer}>
+                <View style={styles.pickerModalHeader}>
+                  <Text style={styles.pickerModalTitle}>Chọn thời tiết</Text>
+                  <TouchableOpacity onPress={() => setShowWeatherPicker(false)}>
+                    <Ionicons name="close" size={24} color="#1F2937" />
+                  </TouchableOpacity>
+                </View>
+                {WEATHER_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.taskItem,
+                      formData.weather === option && styles.taskItemActive,
+                    ]}
+                    onPress={() => {
+                      setFormData({ ...formData, weather: option });
+                      setShowWeatherPicker(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.taskItemName,
+                        formData.weather === option && styles.taskItemNameActive,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                    {formData.weather === option && (
+                      <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                    )}
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
           )}
@@ -1899,12 +1990,15 @@ const styles = StyleSheet.create({
   sliderContainer: {
     marginVertical: 8,
   },
+  sliderTrackTouchable: {
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
   sliderTrack: {
     height: 8,
     backgroundColor: "#E5E7EB",
     borderRadius: 4,
     position: "relative",
-    marginBottom: 16,
   },
   sliderFill: {
     height: "100%",

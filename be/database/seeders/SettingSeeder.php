@@ -9,7 +9,7 @@ class SettingSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('settings')->insert([
+        $settings = [
             [
                 'key' => 'base_rate_per_km',
                 'value' => '5000',
@@ -38,6 +38,15 @@ class SettingSeeder extends Seeder
                 'group' => 'system',
                 'description' => 'Đơn vị tiền tệ mặc định',
             ],
-        ]);
+        ];
+
+        foreach ($settings as $setting) {
+            DB::table('settings')->updateOrInsert(
+                ['key' => $setting['key']], // Where condition
+                $setting // Data to insert/update
+            );
+        }
+
+        $this->command->info('✅ Settings seeded successfully');
     }
 }

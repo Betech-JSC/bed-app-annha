@@ -53,6 +53,8 @@ export default function CostsScreen() {
   const [filterAmountMin, setFilterAmountMin] = useState<number | null>(null);
   const [filterAmountMax, setFilterAmountMax] = useState<number | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   // Form state - chỉ cần các trường cơ bản cho chi phí "Khác"
   const [formData, setFormData] = useState({
@@ -78,6 +80,8 @@ export default function CostsScreen() {
   const loadCosts = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const response = await costApi.getCosts(id!, {
         status: filterStatus || undefined,
         category: filterCategory || undefined,
@@ -109,8 +113,14 @@ export default function CostsScreen() {
 
         setCosts(costsData);
       }
-    } catch (error) {
-      console.error("Error loading costs:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem chi phí của dự án này.");
+        setCosts([]);
+      } else {
+        console.error("Error loading costs:", error);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -415,8 +425,30 @@ export default function CostsScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Chi Phí Dự Án" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  // Hiển thị thông báo RBAC nếu không có quyền
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Chi Phí Dự Án" showBackButton />
+        <View style={styles.permissionDeniedContainer}>
+          <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
+          <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
+          <Text style={styles.permissionDeniedMessage}>
+            {permissionMessage || "Bạn không có quyền xem chi phí của dự án này."}
+          </Text>
+          <Text style={styles.permissionDeniedSubtext}>
+            Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -1630,5 +1662,32 @@ const styles = StyleSheet.create({
     color: "#78350F",
     lineHeight: 18,
     marginBottom: 8,
+  },
+  permissionDeniedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  permissionDeniedTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  permissionDeniedMessage: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 8,
+    lineHeight: 24,
+  },
+  permissionDeniedSubtext: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 20,
   },
 });

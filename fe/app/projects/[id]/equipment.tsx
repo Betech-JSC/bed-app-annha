@@ -17,15 +17,34 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { equipmentApi, Equipment } from "@/api/equipmentApi";
 import { optionsApi, Option } from "@/api/optionsApi";
-import { employeesApi } from "@/api/employeesApi";
+import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput, PermissionGuard } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { useProjectPermissions } from "@/hooks/usePermissions";
+import { Permissions } from "@/constants/Permissions";
+
+// Đồng bộ với BE OptionsController - trạng thái thiết bị
+const EQUIPMENT_STATUS_LABELS: Record<string, string> = {
+    available: "Sẵn sàng",
+    in_use: "Đã trả",
+    maintenance: "Bảo trì",
+    retired: "Ngừng sử dụng",
+    damaged: "Hư hỏng",
+};
+const EQUIPMENT_STATUS_COLORS: Record<string, string> = {
+    available: "#10B981",
+    in_use: "#3B82F6",
+    maintenance: "#F59E0B",
+    retired: "#6B7280",
+    damaged: "#EF4444",
+};
 
 export default function ProjectEquipmentScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const tabBarHeight = useTabBarHeight();
+    const { hasPermission } = useProjectPermissions(id);
     const [equipment, setEquipment] = useState<Equipment[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -40,7 +59,7 @@ export default function ProjectEquipmentScreen() {
         start_date: new Date(),
         end_date: undefined as Date | undefined,
         notes: "",
-        // Cho MUA (buy):
+        // Cho có sẵn (buy):
         manager_id: null as number | null,
         handover_date: undefined as Date | undefined,
         return_date: undefined as Date | undefined,
@@ -57,6 +76,8 @@ export default function ProjectEquipmentScreen() {
     const [submitting, setSubmitting] = useState(false);
     const [equipmentStatuses, setEquipmentStatuses] = useState<Option[]>([]);
     const [equipmentTypes, setEquipmentTypes] = useState<Option[]>([]);
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [permissionMessage, setPermissionMessage] = useState("");
 
     useEffect(() => {
         loadEquipment();
@@ -79,6 +100,8 @@ export default function ProjectEquipmentScreen() {
     const loadEquipment = async () => {
         try {
             setLoading(true);
+            setPermissionDenied(false);
+            setPermissionMessage("");
             const response = await equipmentApi.getEquipmentByProject(id!, {
                 search: searchQuery || undefined,
             });
@@ -86,8 +109,14 @@ export default function ProjectEquipmentScreen() {
                 setEquipment(response.data.data || []);
             }
         } catch (error: any) {
-            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải danh sách thiết bị";
-            Alert.alert("Lỗi", errorMessage);
+            if (error.response?.status === 403) {
+                setPermissionDenied(true);
+                setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem thiết bị của dự án này.");
+                setEquipment([]);
+            } else {
+                const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải danh sách thiết bị";
+                Alert.alert("Lỗi", errorMessage);
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -140,7 +169,7 @@ export default function ProjectEquipmentScreen() {
     const loadUsers = async () => {
         try {
             setLoadingUsers(true);
-            const response = await employeesApi.getEmployees({ per_page: 100 });
+            const response = await projectApi.getAllUsers();
             if (response.success) {
                 setUsers(response.data || []);
             }
@@ -177,7 +206,7 @@ export default function ProjectEquipmentScreen() {
             return;
         }
 
-        // Validation cho MUA
+        // Validation cho có sẵn
         if (allocationData.allocation_type === "buy" && !allocationData.manager_id) {
             Alert.alert("Lỗi", "Vui lòng chọn người quản lý thiết bị");
             return;
@@ -186,7 +215,7 @@ export default function ProjectEquipmentScreen() {
         // Validation cho THUÊ
         if (allocationData.allocation_type === "rent") {
             const dailyRate = allocationData.daily_rate > 0
-                ? allocationData.daily_rate 
+                ? allocationData.daily_rate
                 : selectedEquipment.rental_rate_per_day;
             if (!dailyRate || dailyRate <= 0) {
                 Alert.alert("Lỗi", "Vui lòng nhập giá thuê/ngày");
@@ -196,7 +225,7 @@ export default function ProjectEquipmentScreen() {
 
         try {
             setSubmitting(true);
-            
+
             const requestData: any = {
                 equipment_id: selectedEquipment.id,
                 allocation_type: allocationData.allocation_type,
@@ -206,10 +235,10 @@ export default function ProjectEquipmentScreen() {
                 notes: allocationData.notes || undefined,
             };
 
-            // Cho MUA (buy)
+            // Cho có sẵn (buy)
             if (allocationData.allocation_type === "buy") {
                 requestData.manager_id = allocationData.manager_id!;
-                requestData.handover_date = allocationData.handover_date?.toISOString().split("T")[0] 
+                requestData.handover_date = allocationData.handover_date?.toISOString().split("T")[0]
                     || allocationData.start_date.toISOString().split("T")[0];
                 requestData.return_date = allocationData.return_date?.toISOString().split("T")[0];
             }
@@ -217,10 +246,10 @@ export default function ProjectEquipmentScreen() {
             // Cho THUÊ (rent)
             if (allocationData.allocation_type === "rent") {
                 requestData.daily_rate = allocationData.daily_rate > 0
-                    ? allocationData.daily_rate 
+                    ? allocationData.daily_rate
                     : selectedEquipment.rental_rate_per_day;
                 requestData.rental_fee = allocationData.rental_fee > 0
-                    ? allocationData.rental_fee 
+                    ? allocationData.rental_fee
                     : undefined;
                 requestData.billing_start_date = allocationData.billing_start_date?.toISOString().split("T")[0]
                     || allocationData.start_date.toISOString().split("T")[0];
@@ -231,9 +260,9 @@ export default function ProjectEquipmentScreen() {
             const response = await equipmentApi.createAllocation(id!, requestData);
 
             if (response.success) {
-                Alert.alert("Thành công", 
-                    allocationData.allocation_type === "buy" 
-                        ? "Đã phân bổ thiết bị (Mua) cho dự án" 
+                Alert.alert("Thành công",
+                    allocationData.allocation_type === "buy"
+                        ? "Đã phân bổ thiết bị (Có sẵn) cho dự án"
                         : "Đã tạo phân bổ thiết bị (Thuê) cho dự án"
                 );
                 setShowAddModal(false);
@@ -247,8 +276,8 @@ export default function ProjectEquipmentScreen() {
                     manager_id: null,
                     handover_date: undefined,
                     return_date: undefined,
-                    daily_rate: "",
-                    rental_fee: "",
+                    daily_rate: 0,
+                    rental_fee: 0,
                     billing_start_date: undefined,
                     billing_end_date: undefined,
                 });
@@ -279,8 +308,7 @@ export default function ProjectEquipmentScreen() {
     };
 
     const getStatusLabel = (status: string): string => {
-        const option = equipmentStatuses.find(s => s.value === status);
-        return option?.label || status;
+        return EQUIPMENT_STATUS_LABELS[status] || equipmentStatuses.find(s => s.value === status)?.label || status;
     };
 
     const getTypeLabel = (type: string): string => {
@@ -289,8 +317,7 @@ export default function ProjectEquipmentScreen() {
     };
 
     const getStatusColor = (status: string) => {
-        const option = equipmentStatuses.find(s => s.value === status);
-        return option?.color || "#6B7280";
+        return EQUIPMENT_STATUS_COLORS[status] || equipmentStatuses.find(s => s.value === status)?.color || "#6B7280";
     };
 
     const renderItem = ({ item }: { item: Equipment }) => {
@@ -355,7 +382,7 @@ export default function ProjectEquipmentScreen() {
                                         </Text>
                                     ) : (
                                         <Text style={[styles.allocationText, styles.allocationActive]}>
-                                            Đang sử dụng
+                                            Đã trả
                                         </Text>
                                     )}
                                     {projectAllocation.daily_rate && (
@@ -384,8 +411,30 @@ export default function ProjectEquipmentScreen() {
 
     if (loading && !refreshing) {
         return (
-            <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color="#3B82F6" />
+            <View style={styles.container}>
+                <ScreenHeader title="Thiết Bị Dự Án" showBackButton />
+                <View style={styles.centerContainer}>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                </View>
+            </View>
+        );
+    }
+
+    // Hiển thị thông báo RBAC nếu không có quyền
+    if (permissionDenied) {
+        return (
+            <View style={styles.container}>
+                <ScreenHeader title="Thiết Bị Dự Án" showBackButton />
+                <View style={styles.permissionDeniedContainer}>
+                    <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
+                    <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
+                    <Text style={styles.permissionDeniedMessage}>
+                        {permissionMessage || "Bạn không có quyền xem thiết bị của dự án này."}
+                    </Text>
+                    <Text style={styles.permissionDeniedSubtext}>
+                        Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
+                    </Text>
+                </View>
             </View>
         );
     }
@@ -396,31 +445,35 @@ export default function ProjectEquipmentScreen() {
                 title="Thiết Bị Dự Án"
                 showBackButton
                 rightComponent={
-                    <TouchableOpacity onPress={handleOpenAddModal} style={styles.addButton}>
-                        <Ionicons name="add" size={24} color="#3B82F6" />
-                    </TouchableOpacity>
+                    <PermissionGuard permission={Permissions.EQUIPMENT_CREATE} projectId={id}>
+                        <TouchableOpacity onPress={handleOpenAddModal} style={styles.addButton}>
+                            <Ionicons name="add" size={24} color="#3B82F6" />
+                        </TouchableOpacity>
+                    </PermissionGuard>
                 }
             />
 
-            <FlatList
-                data={equipment}
-                renderItem={renderItem}
-                keyExtractor={(item) => item.id.toString()}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-                contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="build-outline" size={64} color="#9CA3AF" />
-                        <Text style={styles.emptyText}>
-                            {searchQuery
-                                ? "Không tìm thấy thiết bị phù hợp"
-                                : "Chưa có thiết bị nào được phân bổ cho dự án này"}
-                        </Text>
-                    </View>
-                }
-            />
+            <PermissionGuard permission={Permissions.EQUIPMENT_VIEW} projectId={id}>
+                <FlatList
+                    data={equipment}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => item.id.toString()}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                    }
+                    contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="build-outline" size={64} color="#9CA3AF" />
+                            <Text style={styles.emptyText}>
+                                {searchQuery
+                                    ? "Không tìm thấy thiết bị phù hợp"
+                                    : "Chưa có thiết bị nào được phân bổ cho dự án này"}
+                            </Text>
+                        </View>
+                    }
+                />
+            </PermissionGuard>
 
             {/* Add Equipment Modal */}
             <Modal
@@ -511,7 +564,7 @@ export default function ProjectEquipmentScreen() {
 
                             <Text style={styles.sectionTitle}>Thông tin phân bổ</Text>
 
-                            {/* Allocation Type: Mua/Thuê */}
+                            {/* Allocation Type: Có sẵn/Thuê */}
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Loại phân bổ *</Text>
                                 <View style={styles.typeSelector}>
@@ -522,10 +575,10 @@ export default function ProjectEquipmentScreen() {
                                         ]}
                                         onPress={() => setAllocationData({ ...allocationData, allocation_type: "rent" })}
                                     >
-                                        <Ionicons 
-                                            name="calendar-outline" 
-                                            size={20} 
-                                            color={allocationData.allocation_type === "rent" ? "#3B82F6" : "#6B7280"} 
+                                        <Ionicons
+                                            name="calendar-outline"
+                                            size={20}
+                                            color={allocationData.allocation_type === "rent" ? "#3B82F6" : "#6B7280"}
                                         />
                                         <Text style={[
                                             styles.typeOptionText,
@@ -541,16 +594,16 @@ export default function ProjectEquipmentScreen() {
                                         ]}
                                         onPress={() => setAllocationData({ ...allocationData, allocation_type: "buy" })}
                                     >
-                                        <Ionicons 
-                                            name="cube-outline" 
-                                            size={20} 
-                                            color={allocationData.allocation_type === "buy" ? "#3B82F6" : "#6B7280"} 
+                                        <Ionicons
+                                            name="cube-outline"
+                                            size={20}
+                                            color={allocationData.allocation_type === "buy" ? "#3B82F6" : "#6B7280"}
                                         />
                                         <Text style={[
                                             styles.typeOptionText,
                                             allocationData.allocation_type === "buy" && styles.typeOptionTextActive,
                                         ]}>
-                                            Mua
+                                            Có sẵn
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -608,7 +661,6 @@ export default function ProjectEquipmentScreen() {
                                         placeholder={selectedEquipment.rental_rate_per_day
                                             ? `Mặc định: ${formatCurrency(selectedEquipment.rental_rate_per_day)}`
                                             : "Nhập giá thuê"}
-                                        required
                                     />
 
                                     <CurrencyInput
@@ -642,7 +694,7 @@ export default function ProjectEquipmentScreen() {
                                 </>
                             )}
 
-                            {/* Fields for MUA (buy) */}
+                            {/* Fields for có sẵn (buy) */}
                             {allocationData.allocation_type === "buy" && (
                                 <>
                                     <View style={styles.formGroup}>
@@ -1195,5 +1247,32 @@ const styles = StyleSheet.create({
         color: "#FFFFFF",
         fontSize: 16,
         fontWeight: "600",
+    },
+    permissionDeniedContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 32,
+    },
+    permissionDeniedTitle: {
+        fontSize: 20,
+        fontWeight: "600",
+        color: "#1F2937",
+        marginTop: 24,
+        marginBottom: 8,
+    },
+    permissionDeniedMessage: {
+        fontSize: 16,
+        color: "#6B7280",
+        textAlign: "center",
+        marginBottom: 8,
+        lineHeight: 24,
+    },
+    permissionDeniedSubtext: {
+        fontSize: 14,
+        color: "#9CA3AF",
+        textAlign: "center",
+        marginTop: 8,
+        lineHeight: 20,
     },
 });

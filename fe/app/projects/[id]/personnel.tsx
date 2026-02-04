@@ -13,13 +13,14 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { personnelApi, ProjectPersonnel, CreatePersonnelData } from "@/api/personnelApi";
-import { employeesApi, Employee } from "@/api/employeesApi";
+import { projectApi } from "@/api/projectApi";
 import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { Permissions } from "@/constants/Permissions";
 
 export default function PersonnelScreen() {
   const router = useRouter();
@@ -29,13 +30,15 @@ export default function PersonnelScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [selectedUser, setSelectedUser] = useState<number | null>(null);
-  const [selectedRole, setSelectedRole] = useState<string>("");
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [personnelRoles, setPersonnelRoles] = useState<Option[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
   const { hasPermission } = useProjectPermissions(id!);
 
   useEffect(() => {
@@ -65,12 +68,20 @@ export default function PersonnelScreen() {
   const loadPersonnel = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const response = await personnelApi.getPersonnel(id!);
       if (response.success) {
         setPersonnel(response.data || []);
       }
-    } catch (error) {
-      console.error("Error loading personnel:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem nhân sự của dự án này.");
+        setPersonnel([]);
+      } else {
+        console.error("Error loading personnel:", error);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -85,12 +96,12 @@ export default function PersonnelScreen() {
   const loadEmployees = async () => {
     try {
       setLoadingEmployees(true);
-      const response = await employeesApi.getEmployees({ per_page: 100 });
+      const response = await projectApi.getAllUsers();
       if (response.success) {
         // Filter out employees already in project
         const assignedUserIds = personnel.map((p) => p.user_id);
         const availableEmployees = (response.data || []).filter(
-          (emp: Employee) => !assignedUserIds.includes(emp.id)
+          (emp: any) => !assignedUserIds.includes(emp.id)
         );
         setEmployees(availableEmployees);
       }
@@ -105,12 +116,12 @@ export default function PersonnelScreen() {
   const handleOpenAddModal = () => {
     setShowAddModal(true);
     setSelectedUser(null);
-    setSelectedRole("");
+    setSelectedRoleId(null);
     loadEmployees();
   };
 
   const handleAddPersonnel = async () => {
-    if (!selectedUser || !selectedRole) {
+    if (!selectedUser || !selectedRoleId) {
       Alert.alert("Lỗi", "Vui lòng chọn nhân viên và vai trò");
       return;
     }
@@ -119,7 +130,7 @@ export default function PersonnelScreen() {
       setSubmitting(true);
       const data: CreatePersonnelData = {
         user_id: selectedUser,
-        role: selectedRole as any,
+        role_id: selectedRoleId,
       };
 
       const response = await personnelApi.addPersonnel(id!, data);
@@ -127,7 +138,7 @@ export default function PersonnelScreen() {
         Alert.alert("Thành công", "Đã thêm nhân sự vào dự án");
         setShowAddModal(false);
         setSelectedUser(null);
-        setSelectedRole("");
+        setSelectedRoleId(null);
         loadPersonnel();
       } else {
         Alert.alert("Lỗi", response.message || "Không thể thêm nhân sự");
@@ -172,14 +183,24 @@ export default function PersonnelScreen() {
     );
   };
 
-  const getRoleText = (role: string) => {
-    const roleOption = personnelRoles.find(r => r.value === role);
-    return roleOption?.label || role;
+  const getRoleText = (item: ProjectPersonnel) => {
+    // Use personnelRole from backend if available
+    if (item.personnelRole) {
+      return item.personnelRole.name;
+    }
+    // Fallback to role code if available
+    if (item.role) {
+      const roleOption = personnelRoles.find(r => r.value === item.role);
+      return roleOption?.label || item.role;
+    }
+    return "N/A";
   };
 
-  const getRoleLabel = (role: string) => {
-    const roleOption = personnelRoles.find(r => r.value === role);
-    return roleOption?.label || role;
+  const getRoleCode = (item: ProjectPersonnel): string => {
+    if (item.personnelRole) {
+      return item.personnelRole.code;
+    }
+    return item.role || "";
   };
 
   // Legacy function - keeping for backward compatibility
@@ -200,8 +221,8 @@ export default function PersonnelScreen() {
     return roleMap[role] || role;
   };
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
+  const getRoleColor = (roleCode: string) => {
+    switch (roleCode) {
       case "project_manager":
         return "#3B82F6";
       case "supervisor":
@@ -227,17 +248,17 @@ export default function PersonnelScreen() {
         <View
           style={[
             styles.roleBadge,
-            { backgroundColor: getRoleColor(item.role) + "20" },
+            { backgroundColor: getRoleColor(getRoleCode(item)) + "20" },
           ]}
         >
           <Text
-            style={[styles.roleText, { color: getRoleColor(item.role) }]}
+            style={[styles.roleText, { color: getRoleColor(getRoleCode(item)) }]}
           >
-            {getRoleText(item.role)}
+            {getRoleText(item)}
           </Text>
         </View>
       </View>
-      {hasPermission("personnel.remove") && (
+      <PermissionGuard permission={Permissions.PERSONNEL_REMOVE} projectId={id}>
         <TouchableOpacity
           style={styles.removeButton}
           onPress={() => handleRemovePersonnel(item.id)}
@@ -245,14 +266,36 @@ export default function PersonnelScreen() {
           <Ionicons name="trash-outline" size={18} color="#EF4444" />
           <Text style={styles.removeButtonText}>Xóa</Text>
         </TouchableOpacity>
-      )}
+      </PermissionGuard>
     </View>
   );
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Nhân Sự Tham Gia" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  // Hiển thị thông báo RBAC nếu không có quyền
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Nhân Sự Tham Gia" showBackButton />
+        <View style={styles.permissionDeniedContainer}>
+          <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
+          <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
+          <Text style={styles.permissionDeniedMessage}>
+            {permissionMessage || "Bạn không có quyền xem nhân sự của dự án này."}
+          </Text>
+          <Text style={styles.permissionDeniedSubtext}>
+            Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -263,7 +306,7 @@ export default function PersonnelScreen() {
         title="Nhân Sự Tham Gia"
         showBackButton
         rightComponent={
-          <PermissionGuard permission="personnel.assign" projectId={id}>
+          <PermissionGuard permission={Permissions.PERSONNEL_ASSIGN} projectId={id}>
             <TouchableOpacity
               style={styles.addButton}
               onPress={handleOpenAddModal}
@@ -274,32 +317,34 @@ export default function PersonnelScreen() {
         }
       />
 
-      <FlatList
-        data={personnel}
-        renderItem={renderPersonnelItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="people-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>Chưa có nhân sự nào</Text>
-            <PermissionGuard permission="personnel.assign" projectId={id}>
-              <TouchableOpacity
-                style={styles.emptyAddButton}
-                onPress={handleOpenAddModal}
-              >
-                <Ionicons name="add-circle" size={20} color="#3B82F6" />
-                <Text style={styles.emptyAddButtonText}>
-                  Thêm nhân sự đầu tiên
-                </Text>
-              </TouchableOpacity>
-            </PermissionGuard>
-          </View>
-        }
-      />
+      <PermissionGuard permission={Permissions.PERSONNEL_VIEW} projectId={id}>
+        <FlatList
+          data={personnel}
+          renderItem={renderPersonnelItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="people-outline" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyText}>Chưa có nhân sự nào</Text>
+              <PermissionGuard permission={Permissions.PERSONNEL_ASSIGN} projectId={id}>
+                <TouchableOpacity
+                  style={styles.emptyAddButton}
+                  onPress={handleOpenAddModal}
+                >
+                  <Ionicons name="add-circle" size={20} color="#3B82F6" />
+                  <Text style={styles.emptyAddButtonText}>
+                    Thêm nhân sự đầu tiên
+                  </Text>
+                </TouchableOpacity>
+              </PermissionGuard>
+            </View>
+          }
+        />
+      </PermissionGuard>
 
       {/* Add Personnel Modal */}
       <Modal
@@ -315,7 +360,7 @@ export default function PersonnelScreen() {
               onPress={() => {
                 setShowAddModal(false);
                 setSelectedUser(null);
-                setSelectedRole("");
+                setSelectedRoleId(null);
               }}
             >
               <Ionicons name="close" size={24} color="#1F2937" />
@@ -394,14 +439,14 @@ export default function PersonnelScreen() {
                     key={role.value}
                     style={[
                       styles.roleChip,
-                      selectedRole === role.value && styles.roleChipSelected,
+                      selectedRoleId === role.id && styles.roleChipSelected,
                     ]}
-                    onPress={() => setSelectedRole(role.value)}
+                    onPress={() => setSelectedRoleId(role.id || null)}
                   >
                     <Text
                       style={[
                         styles.roleChipText,
-                        selectedRole === role.value &&
+                        selectedRoleId === role.id &&
                         styles.roleChipTextSelected,
                       ]}
                     >
@@ -419,7 +464,7 @@ export default function PersonnelScreen() {
               onPress={() => {
                 setShowAddModal(false);
                 setSelectedUser(null);
-                setSelectedRole("");
+                setSelectedRoleId(null);
               }}
             >
               <Text style={styles.cancelButtonText}>Hủy</Text>
@@ -428,11 +473,11 @@ export default function PersonnelScreen() {
               style={[
                 styles.modalButton,
                 styles.saveButton,
-                (!selectedUser || !selectedRole || submitting) &&
+                (!selectedUser || !selectedRoleId || submitting) &&
                 styles.saveButtonDisabled,
               ]}
               onPress={handleAddPersonnel}
-              disabled={!selectedUser || !selectedRole || submitting}
+              disabled={!selectedUser || !selectedRoleId || submitting}
             >
               {submitting ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
@@ -689,5 +734,32 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  permissionDeniedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  permissionDeniedTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  permissionDeniedMessage: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 8,
+    lineHeight: 24,
+  },
+  permissionDeniedSubtext: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 20,
   },
 });

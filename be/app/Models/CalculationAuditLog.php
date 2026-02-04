@@ -36,10 +36,7 @@ class CalculationAuditLog extends Model
         return $this->belongsTo(Project::class);
     }
 
-    public function payroll(): BelongsTo
-    {
-        return $this->belongsTo(Payroll::class);
-    }
+    // Payroll relationship removed - HR module deleted
 
     public function calculator(): BelongsTo
     {

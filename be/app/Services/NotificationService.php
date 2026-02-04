@@ -264,8 +264,8 @@ class NotificationService
     {
         $title = "Cảnh báo tiến độ dự án";
         $body = "Dự án '{$project->name}' chậm tiến độ {$progressGap}% so với kế hoạch";
-        
-        $priority = match($severity) {
+
+        $priority = match ($severity) {
             'critical' => Notification::PRIORITY_URGENT,
             'high' => Notification::PRIORITY_HIGH,
             default => Notification::PRIORITY_MEDIUM,
@@ -296,7 +296,7 @@ class NotificationService
     {
         $title = "Cảnh báo vượt ngân sách";
         $body = "Dự án '{$project->name}' đã vượt ngân sách " . number_format($overrunPercentage, 1) . "%";
-        
+
         $this->sendToProjectTeam(
             $project->id,
             Notification::TYPE_PROJECT_PERFORMANCE,
@@ -322,9 +322,9 @@ class NotificationService
     {
         $title = "Deadline sắp đến";
         $body = "Dự án '{$project->name}' còn {$daysRemaining} ngày nữa đến deadline";
-        
+
         $priority = $daysRemaining <= 3 ? Notification::PRIORITY_URGENT : Notification::PRIORITY_HIGH;
-        
+
         $this->sendToProjectTeam(
             $project->id,
             Notification::TYPE_PROJECT_PERFORMANCE,
@@ -350,7 +350,7 @@ class NotificationService
     {
         $title = "Nhiệm vụ quá hạn";
         $body = "Nhiệm vụ '{$task->name}' đã quá hạn {$overdueDays} ngày";
-        
+
         $this->sendToUser(
             $task->assigned_to ?? $task->project->project_manager_id,
             Notification::TYPE_PROJECT_PERFORMANCE,
@@ -375,11 +375,11 @@ class NotificationService
     /**
      * Tạo notification cho user được assign vào project
      */
-    public function notifyUserAssigned(int $userId, Project $project, string $role): void
+    public function notifyUserAssigned(int $userId, Project $project): void
     {
         $title = "Bạn đã được gán vào dự án";
-        $body = "Bạn đã được gán vào dự án '{$project->name}' với vai trò {$role}";
-        
+        $body = "Bạn đã được gán vào dự án '{$project->name}' với vai trò";
+
         $this->sendToUser(
             $userId,
             Notification::TYPE_ASSIGNMENT,
@@ -389,7 +389,6 @@ class NotificationService
             [
                 'project_id' => $project->id,
                 'project_name' => $project->name,
-                'role' => $role,
             ],
             Notification::PRIORITY_MEDIUM,
             "/projects/{$project->id}",
@@ -406,9 +405,9 @@ class NotificationService
     {
         $title = "Yêu cầu duyệt";
         $body = "Bạn có yêu cầu duyệt {$workflowType}: {$itemName}";
-        
+
         $actionUrl = $projectId ? "/projects/{$projectId}" : null;
-        
+
         $this->sendToUser(
             $userId,
             Notification::TYPE_WORKFLOW,

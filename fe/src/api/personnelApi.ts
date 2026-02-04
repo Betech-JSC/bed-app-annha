@@ -1,42 +1,31 @@
 import api from "./api";
 
+export interface PersonnelRole {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
 export interface ProjectPersonnel {
   id: number;
   project_id: number;
   user_id: number;
-  role:
-  | "project_manager"
-  | "supervisor"
-  | "accountant"
-  | "viewer"
-  | "editor"
-  | "management"
-  | "team_leader"
-  | "worker"
-  | "guest"
-  | "supervisor_guest"
-  | "designer";
+  role_id: number;
+  role?: string; // Backward compatibility - get from personnelRole.code
   permissions?: string[];
   assigned_by: number;
   assigned_at: string;
   user?: any;
   assigner?: any;
+  personnelRole?: PersonnelRole;
 }
 
 export interface CreatePersonnelData {
   user_id: number;
-  role:
-  | "project_manager"
-  | "supervisor"
-  | "accountant"
-  | "viewer"
-  | "editor"
-  | "management"
-  | "team_leader"
-  | "worker"
-  | "guest"
-  | "supervisor_guest"
-  | "designer";
+  role_id: number;
   permissions?: string[];
 }
 

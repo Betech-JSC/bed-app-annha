@@ -77,7 +77,7 @@ class AdditionalCostController extends Controller
             if (!empty($attachmentIds)) {
                 foreach ($attachmentIds as $attachmentId) {
                     $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
                         $attachment->update([
                             'attachable_type' => AdditionalCost::class,
                             'attachable_id' => $cost->id,
@@ -142,7 +142,7 @@ class AdditionalCostController extends Controller
             if (!empty($validated['attachment_ids'])) {
                 foreach ($validated['attachment_ids'] as $attachmentId) {
                     $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
                         $attachment->update([
                             'attachable_type' => AdditionalCost::class,
                             'attachable_id' => $cost->id,
@@ -339,7 +339,7 @@ class AdditionalCostController extends Controller
             $attached = [];
             foreach ($validated['attachment_ids'] as $attachmentId) {
                 $attachment = \App\Models\Attachment::find($attachmentId);
-                if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
                     $attachment->update([
                         'attachable_type' => AdditionalCost::class,
                         'attachable_id' => $cost->id,

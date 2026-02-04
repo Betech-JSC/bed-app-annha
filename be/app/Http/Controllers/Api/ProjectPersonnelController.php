@@ -5,19 +5,38 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectPersonnel;
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProjectPersonnelController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
+
     /**
      * Danh sách nhân sự
      */
     public function index(string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::PERSONNEL_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem danh sách nhân sự của dự án này.'
+            ], 403);
+        }
+
         $personnel = $project->personnel()
-            ->with(['user', 'assigner'])
+            ->with(['user', 'assigner', 'personnelRole'])
             ->get();
 
         return response()->json([
@@ -34,24 +53,17 @@ class ProjectPersonnelController extends Controller
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        // Check permission
-        $canAssign = $project->customer_id === $user->id
-            || $project->project_manager_id === $user->id
-            || $project->personnel()->where('user_id', $user->id)->whereIn('role', ['project_manager', 'supervisor'])->exists();
-
-        if (!$canAssign) {
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::PERSONNEL_ASSIGN, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền gán nhân sự.'
+                'message' => 'Bạn không có quyền gán nhân sự vào dự án này.'
             ], 403);
         }
 
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'role' => [
-                'required',
-                'in:project_manager,supervisor,accountant,viewer,editor,management,team_leader,worker,guest,supervisor_guest,designer'
-            ],
+            'role_id' => 'required|exists:personnel_roles,id',
             'permissions' => 'nullable|array',
         ]);
 
@@ -81,7 +93,7 @@ class ProjectPersonnelController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Nhân sự đã được thêm vào dự án.',
-                'data' => $personnel->load(['user', 'assigner'])
+                'data' => $personnel->load(['user', 'assigner', 'personnelRole'])
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -102,23 +114,12 @@ class ProjectPersonnelController extends Controller
         $personnel = ProjectPersonnel::where('project_id', $project->id)->findOrFail($id);
         $user = auth()->user();
 
-        // Check permission
-        $canRemove = $project->customer_id === $user->id
-            || $project->project_manager_id === $user->id;
-
-        if (!$canRemove) {
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::PERSONNEL_REMOVE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xóa nhân sự.'
+                'message' => 'Bạn không có quyền xóa nhân sự khỏi dự án này.'
             ], 403);
-        }
-
-        // Cannot remove customer or project manager
-        if ($personnel->user_id === $project->customer_id || $personnel->user_id === $project->project_manager_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể xóa chủ dự án hoặc quản lý dự án.'
-            ], 400);
         }
 
         $personnel->delete();

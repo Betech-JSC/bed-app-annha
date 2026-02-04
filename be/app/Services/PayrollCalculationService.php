@@ -6,8 +6,7 @@ use App\Models\User;
 use App\Models\Payroll;
 use App\Models\TimeTracking;
 use App\Models\EmployeeSalaryConfig;
-use App\Models\Bonus;
-use App\Models\EmployeeProfile;
+// Bonus and EmployeeProfile removed - HR module deleted
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -56,17 +55,8 @@ class PayrollCalculationService
         // Calculate overtime
         $overtimeData = $this->calculateOvertime($config, $timeTrackings);
 
-        // Get bonuses for the period
-        $bonusAmount = Bonus::forUser($user->id)
-            ->where('status', 'approved')
-            ->where(function ($q) use ($periodStart, $periodEnd) {
-                $q->whereNull('period_start')
-                    ->orWhere(function ($q2) use ($periodStart, $periodEnd) {
-                        $q2->whereBetween('period_start', [$periodStart, $periodEnd])
-                            ->orWhereBetween('period_end', [$periodStart, $periodEnd]);
-                    });
-            })
-            ->sum('amount');
+        // Bonuses removed - HR module deleted
+        $bonusAmount = 0;
 
         // Calculate gross salary
         $grossSalary = $baseSalary + $overtimeData['overtime_amount'] + $bonusAmount;
@@ -152,14 +142,14 @@ class PayrollCalculationService
         // Validate calculation
         $validationService = app(\App\Services\CalculationValidationService::class);
         $validation = $validationService->validatePayrollCalculation($payroll);
-        
+
         if (!empty($validation['warnings'])) {
             Log::warning("Payroll calculation warnings for payroll {$payroll->id}", [
                 'payroll_id' => $payroll->id,
                 'warnings' => $validation['warnings'],
             ]);
         }
-        
+
         if (!empty($validation['errors'])) {
             Log::error("Payroll calculation errors for payroll {$payroll->id}", [
                 'payroll_id' => $payroll->id,

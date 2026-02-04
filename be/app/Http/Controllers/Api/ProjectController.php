@@ -366,9 +366,8 @@ class ProjectController extends Controller
         $project = Project::findOrFail($id);
         $user = auth()->user();
 
-        // Check permission (super admin bypass)
-        $isSuperAdmin = $user->isAdmin();
-        if (!$isSuperAdmin && !$user->hasPermission(\App\Constants\Permissions::PROJECT_UPDATE)) {
+        // Check permission
+        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_UPDATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền cập nhật dự án này.'

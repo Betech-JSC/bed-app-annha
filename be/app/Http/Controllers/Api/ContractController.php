@@ -6,17 +6,35 @@ use App\Http\Controllers\Controller;
 use App\Models\Attachment;
 use App\Models\Contract;
 use App\Models\Project;
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ContractController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Xem hợp đồng của dự án
      */
     public function show(string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::CONTRACT_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem hợp đồng của dự án này.'
+            ], 403);
+        }
+
         $contract = $project->contract()->with(['attachments', 'approver'])->first();
 
         // Trả về 200 với data null nếu chưa có contract (không phải lỗi)
@@ -34,6 +52,17 @@ class ContractController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        // Check permission - use CREATE if contract doesn't exist, UPDATE if it does
+        $contract = $project->contract;
+        $permission = $contract ? Permissions::CONTRACT_UPDATE : Permissions::CONTRACT_CREATE;
+
+        if (!$this->authService->can($user, $permission, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền ' . ($contract ? 'cập nhật' : 'tạo') . ' hợp đồng cho dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'contract_value' => 'required|numeric|min:0|max:99999999999999999.99',
@@ -76,12 +105,21 @@ class ContractController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $contract = $project->contract;
+        $user = auth()->user();
 
         if (!$contract) {
             return response()->json([
                 'success' => false,
                 'message' => 'Hợp đồng chưa được tạo.'
             ], 404);
+        }
+
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::CONTRACT_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật hợp đồng của dự án này.'
+            ], 403);
         }
 
         $validated = $request->validate([
@@ -121,12 +159,12 @@ class ContractController extends Controller
         }
 
         $user = auth()->user();
-        
-        // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::CONTRACT_APPROVE_LEVEL_1)) {
+
+        // Check RBAC permission với project context
+        if (!$this->authService->can($user, Permissions::CONTRACT_APPROVE_LEVEL_1, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền duyệt hợp đồng.'
+                'message' => 'Bạn không có quyền duyệt hợp đồng của dự án này.'
             ], 403);
         }
 
@@ -167,7 +205,7 @@ class ContractController extends Controller
             $attached = [];
             foreach ($validated['attachment_ids'] as $attachmentId) {
                 $attachment = Attachment::find($attachmentId);
-                if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
                     $attachment->update([
                         'attachable_type' => Contract::class,
                         'attachable_id' => $contract->id,

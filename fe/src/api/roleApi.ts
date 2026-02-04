@@ -20,31 +20,37 @@ export interface CreateRoleData {
 export const roleApi = {
   // Get all roles
   getRoles: async () => {
-    const response = await api.get("/hr/roles");
+    const response = await api.get("/settings/roles");
+    return response.data;
+  },
+
+  // Get roles with usage count
+  getRolesWithUsage: async () => {
+    const response = await api.get("/settings/roles");
     return response.data;
   },
 
   // Get role by ID
   getRole: async (id: number) => {
-    const response = await api.get(`/hr/roles/${id}`);
+    const response = await api.get(`/settings/roles/${id}`);
     return response.data;
   },
 
   // Create role
   createRole: async (data: CreateRoleData) => {
-    const response = await api.post("/hr/roles", data);
+    const response = await api.post("/settings/roles", data);
     return response.data;
   },
 
   // Update role
   updateRole: async (id: number, data: Partial<CreateRoleData>) => {
-    const response = await api.put(`/hr/roles/${id}`, data);
+    const response = await api.put(`/settings/roles/${id}`, data);
     return response.data;
   },
 
   // Delete role
   deleteRole: async (id: number) => {
-    const response = await api.delete(`/hr/roles/${id}`);
+    const response = await api.delete(`/settings/roles/${id}`);
     return response.data;
   },
 };

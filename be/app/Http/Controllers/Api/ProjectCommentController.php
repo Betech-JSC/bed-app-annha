@@ -6,11 +6,18 @@ use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectComment;
+use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class ProjectCommentController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Lấy danh sách comments của project
      */
@@ -19,17 +26,14 @@ class ProjectCommentController extends Controller
         $user = auth()->user();
         $project = Project::findOrFail($projectId);
 
-        // Kiểm tra quyền xem comments
+        // Check permission với project context
+        // Cho phép customer và project manager xem (business logic)
         $canView = false;
-        if ($project->customer_id === $user->id) {
-            $canView = true; // Customer có thể xem
-        } elseif ($project->project_manager_id === $user->id) {
-            $canView = true; // Project manager có thể xem
-        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_VIEW) || 
-                  $user->hasPermission(Permissions::PROJECT_VIEW) ||
-                  $user->owner || 
-                  $user->role === 'admin') {
-            $canView = true; // Có quyền xem comment hoặc xem project
+        if ($project->customer_id === $user->id || $project->project_manager_id === $user->id) {
+            $canView = true;
+        } elseif ($this->authService->can($user, Permissions::PROJECT_COMMENT_VIEW, $project) ||
+                  $this->authService->can($user, Permissions::PROJECT_VIEW, $project)) {
+            $canView = true;
         }
 
         if (!$canView) {
@@ -98,16 +102,13 @@ class ProjectCommentController extends Controller
 
         $project = Project::findOrFail($projectId);
 
-        // Kiểm tra quyền tạo comment
+        // Check permission với project context
+        // Cho phép customer và project manager comment (business logic)
         $canComment = false;
-        if ($project->customer_id === $user->id) {
-            $canComment = true; // Customer có thể comment
-        } elseif ($project->project_manager_id === $user->id) {
-            $canComment = true; // Project manager có thể comment
-        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_CREATE) || 
-                  $user->owner || 
-                  $user->role === 'admin') {
-            $canComment = true; // Có quyền tạo comment hoặc admin
+        if ($project->customer_id === $user->id || $project->project_manager_id === $user->id) {
+            $canComment = true;
+        } elseif ($this->authService->can($user, Permissions::PROJECT_COMMENT_CREATE, $project)) {
+            $canComment = true;
         }
 
         if (!$canComment) {
@@ -142,14 +143,15 @@ class ProjectCommentController extends Controller
         $comment = ProjectComment::where('project_id', $projectId)
             ->findOrFail($id);
 
-        // Kiểm tra quyền sửa comment
+        $project = Project::findOrFail($projectId);
+
+        // Check permission với project context
+        // Cho phép người tạo comment sửa (business logic)
         $canUpdate = false;
         if ($comment->user_id === $user->id) {
-            $canUpdate = true; // Người tạo comment có thể sửa
-        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_UPDATE) || 
-                  $user->owner || 
-                  $user->role === 'admin') {
-            $canUpdate = true; // Có quyền update hoặc admin/owner
+            $canUpdate = true;
+        } elseif ($this->authService->can($user, Permissions::PROJECT_COMMENT_UPDATE, $project)) {
+            $canUpdate = true;
         }
 
         if (!$canUpdate) {
@@ -193,14 +195,15 @@ class ProjectCommentController extends Controller
         $comment = ProjectComment::where('project_id', $projectId)
             ->findOrFail($id);
 
-        // Kiểm tra quyền xóa comment
+        $project = Project::findOrFail($projectId);
+
+        // Check permission với project context
+        // Cho phép người tạo comment xóa (business logic)
         $canDelete = false;
         if ($comment->user_id === $user->id) {
-            $canDelete = true; // Người tạo comment có thể xóa
-        } elseif ($user->hasPermission(Permissions::PROJECT_COMMENT_DELETE) || 
-                  $user->owner || 
-                  $user->role === 'admin') {
-            $canDelete = true; // Có quyền delete hoặc admin/owner
+            $canDelete = true;
+        } elseif ($this->authService->can($user, Permissions::PROJECT_COMMENT_DELETE, $project)) {
+            $canDelete = true;
         }
 
         if (!$canDelete) {

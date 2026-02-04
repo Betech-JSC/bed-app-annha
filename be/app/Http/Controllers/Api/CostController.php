@@ -55,9 +55,8 @@ class CostController extends Controller
         $project = Project::findOrFail($projectId);
         $user = $request->user();
 
-        // Check permission - Chỉ Super Admin được sửa chi phí
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && !$user->hasPermission('costs.create')) {
+        // Check permission
+        if (!$user->hasPermission(\App\Constants\Permissions::COST_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền tạo chi phí. Chỉ Super Admin mới có quyền này.'
@@ -143,7 +142,7 @@ class CostController extends Controller
             if (!empty($attachmentIds)) {
                 foreach ($attachmentIds as $attachmentId) {
                     $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->role === 'admin' || $user->owner === true)) {
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
                         $attachment->update([
                             'attachable_type' => Cost::class,
                             'attachable_id' => $cost->id,
@@ -194,9 +193,8 @@ class CostController extends Controller
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check permission - Chỉ Super Admin được sửa chi phí
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && !$user->hasPermission('costs.update')) {
+        // Check permission
+        if (!$user->hasPermission(\App\Constants\Permissions::COST_UPDATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền cập nhật chi phí. Chỉ Super Admin mới có quyền này.'
@@ -411,9 +409,8 @@ class CostController extends Controller
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
         $user = request()->user();
 
-        // Check permission - Chỉ Super Admin được xóa chi phí
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && !$user->hasPermission('costs.delete')) {
+        // Check permission
+        if (!$user->hasPermission(\App\Constants\Permissions::COST_DELETE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xóa chi phí. Chỉ Super Admin mới có quyền này.'

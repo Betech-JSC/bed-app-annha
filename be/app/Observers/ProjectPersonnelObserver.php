@@ -25,7 +25,6 @@ class ProjectPersonnelObserver
             $this->notificationService->notifyUserAssigned(
                 $projectPersonnel->user_id,
                 $projectPersonnel->project,
-                $projectPersonnel->role
             );
         }
     }

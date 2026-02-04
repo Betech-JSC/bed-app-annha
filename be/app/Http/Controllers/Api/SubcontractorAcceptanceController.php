@@ -18,7 +18,7 @@ class SubcontractorAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem nghiệm thu thầu phụ.'
@@ -54,7 +54,7 @@ class SubcontractorAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo nghiệm thu.'
@@ -106,7 +106,7 @@ class SubcontractorAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem nghiệm thu.'
@@ -135,7 +135,7 @@ class SubcontractorAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật nghiệm thu.'
@@ -188,7 +188,7 @@ class SubcontractorAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa nghiệm thu.'
@@ -220,7 +220,7 @@ class SubcontractorAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.approve') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.approve')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền duyệt nghiệm thu.'
@@ -253,7 +253,7 @@ class SubcontractorAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.approve') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('subcontractors.approve')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền từ chối nghiệm thu.'

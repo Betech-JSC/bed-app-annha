@@ -450,7 +450,7 @@ export default function AcceptanceChecklist({
                     <View style={styles.stageText}>
                       <View style={styles.stageNameRow}>
                         <Text style={styles.stageName}>{stage.name}</Text>
-                        {/* BUSINESS RULE: Acceptability Status Indicator */}
+                        {/* BUSINESS RULE: Trạng thái đạt / chưa đạt mỗi giai đoạn nghiệm thu */}
                         <View style={[
                           styles.acceptabilityIndicator,
                           { backgroundColor: acceptabilityStatus === "acceptable" ? "#10B98120" : "#EF444420" }
@@ -463,7 +463,7 @@ export default function AcceptanceChecklist({
                             styles.acceptabilityText,
                             { color: acceptabilityStatus === "acceptable" ? "#10B981" : "#EF4444" }
                           ]}>
-                            {acceptabilityStatus === "acceptable" ? "nghiệm thu" : "Chưa thể nghiệm thu"}
+                            {acceptabilityStatus === "acceptable" ? "Đạt" : "Chưa đạt"}
                           </Text>
                         </View>
                       </View>
@@ -1590,16 +1590,17 @@ export default function AcceptanceChecklist({
           </Modal>
         )}
 
-        {/* Acceptance Template Picker Modal */}
+        {/* Acceptance Template Picker Modal - Full screen */}
         {showAcceptanceTemplatePicker && (
           <Modal
             visible={showAcceptanceTemplatePicker}
-            transparent={true}
+            transparent={false}
             animationType="slide"
+            presentationStyle="fullScreen"
             onRequestClose={() => setShowAcceptanceTemplatePicker(false)}
           >
-            <View style={styles.pickerModalOverlay}>
-              <View style={styles.pickerModalContent}>
+            <View style={[styles.fullScreenPickerOverlay, { paddingTop: insets.top }]}>
+              <View style={styles.fullScreenPickerContent}>
                 <View style={styles.pickerModalHeader}>
                   <Text style={styles.pickerModalTitle}>Chọn bộ tài liệu nghiệm thu</Text>
                   <TouchableOpacity onPress={() => setShowAcceptanceTemplatePicker(false)}>
@@ -2118,6 +2119,13 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "80%",
+  },
+  fullScreenPickerOverlay: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  fullScreenPickerContent: {
+    flex: 1,
   },
   pickerModalHeader: {
     flexDirection: "row",

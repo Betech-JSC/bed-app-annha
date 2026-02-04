@@ -96,8 +96,13 @@ api.interceptors.response.use(
         }
         // Xử lý lỗi 403 (Forbidden) - Không có quyền
         else if (status === 403) {
-            console.warn('403 Forbidden - Insufficient permissions');
+            // Không log error để tránh hiển thị toast notification tự động
+            // Chỉ log warning để debug
+            console.warn('403 Forbidden - Insufficient permissions:', error.config?.url);
             error.userMessage = message || 'Bạn không có quyền thực hiện thao tác này.';
+            // Đánh dấu không hiển thị toast cho lỗi này
+            error.suppressToast = true;
+            error.suppressErrorLog = true;
         }
         // Xử lý lỗi 404 (Not Found)
         else if (status === 404) {

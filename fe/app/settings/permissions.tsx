@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { permissionApi, Permission, CreatePermissionData } from "@/api/permissionApi";
-import { personnelRoleApi } from "@/api/personnelRoleApi";
+import { roleApi } from "@/api/roleApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -47,7 +47,7 @@ export default function PermissionsScreen() {
       setLoading(true);
       const [permissionsResponse, rolesResponse, allPermissionsResponse] = await Promise.all([
         permissionApi.getMyPermissions(),
-        personnelRoleApi.getRolesWithUsage(),
+        roleApi.getRolesWithUsage(),
         hasPermission(Permissions.SETTINGS_MANAGE) ? permissionApi.getAllPermissions() : Promise.resolve({ success: false }),
       ]);
 
@@ -352,9 +352,10 @@ export default function PermissionsScreen() {
                 )}
                 <TouchableOpacity
                   style={styles.viewDetailsButton}
-                  onPress={() =>
-                    router.push(`/hr/personnel-roles` as any)
-                  }
+                  onPress={() => {
+                    // Navigate to role details if needed
+                    // router.push(`/settings/roles/${role.id}` as any)
+                  }}
                 >
                   <Text style={styles.viewDetailsText}>Xem chi tiết</Text>
                   <Ionicons name="chevron-forward" size={16} color="#3B82F6" />

@@ -49,7 +49,7 @@ class ConstructionLogController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::LOG_CREATE) && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission(\App\Constants\Permissions::LOG_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền tạo nhật ký công trình. Cần quyền: ' . \App\Constants\Permissions::LOG_CREATE
@@ -78,12 +78,12 @@ class ConstructionLogController extends Controller
                     'message' => 'Công việc không thuộc dự án này.',
                 ], 422);
             }
-            
+
             // Check if task has children (is a parent task)
             $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
                 ->whereNull('deleted_at')
                 ->exists();
-            
+
             if ($hasChildren) {
                 return response()->json([
                     'success' => false,
@@ -100,7 +100,7 @@ class ConstructionLogController extends Controller
                 ->orderBy('log_date', 'desc')
                 ->orderBy('created_at', 'desc')
                 ->first();
-            
+
             if ($lastLog && $validated['completion_percentage'] < $lastLog->completion_percentage) {
                 return response()->json([
                     'success' => false,
@@ -217,12 +217,12 @@ class ConstructionLogController extends Controller
                         'message' => 'Công việc không thuộc dự án này.'
                     ], 422);
                 }
-                
+
                 // Check if task has children (is a parent task)
                 $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
                     ->whereNull('deleted_at')
                     ->exists();
-                
+
                 if ($hasChildren) {
                     return response()->json([
                         'success' => false,
@@ -242,12 +242,12 @@ class ConstructionLogController extends Controller
                         ->orderBy('log_date', 'desc')
                         ->orderBy('created_at', 'desc')
                         ->first();
-                    
+
                     // Use current log's percentage as minimum if no other logs exist
-                    $minPercentage = $lastLog 
-                        ? $lastLog->completion_percentage 
+                    $minPercentage = $lastLog
+                        ? $lastLog->completion_percentage
                         : ($log->completion_percentage ?? 0);
-                    
+
                     if ($validated['completion_percentage'] < $minPercentage) {
                         return response()->json([
                             'success' => false,

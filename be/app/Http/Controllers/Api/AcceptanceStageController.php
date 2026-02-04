@@ -341,8 +341,7 @@ class AcceptanceStageController extends Controller
         $user = $request->user();
 
         // Check permission
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && !$user->hasPermission('acceptance.create')) {
+        if (!$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền tạo giai đoạn nghiệm thu.'
@@ -416,8 +415,7 @@ class AcceptanceStageController extends Controller
         $user = $request->user();
 
         // Check permission
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && !$user->hasPermission('acceptance.update')) {
+        if (!$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_UPDATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền cập nhật giai đoạn nghiệm thu này.'
@@ -477,8 +475,7 @@ class AcceptanceStageController extends Controller
         $user = $request->user();
 
         // Check permission
-        $isSuperAdmin = $user->role === 'admin' && $user->owner === true;
-        if (!$isSuperAdmin && !$user->hasPermission('acceptance.delete')) {
+        if (!$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_DELETE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xóa giai đoạn nghiệm thu này.'

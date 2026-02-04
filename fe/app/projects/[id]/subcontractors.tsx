@@ -68,6 +68,8 @@ export default function SubcontractorsScreen() {
     reference_number: "",
     description: "",
   });
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadSubcontractors();
@@ -146,6 +148,8 @@ export default function SubcontractorsScreen() {
   const loadSubcontractors = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const response = await subcontractorApi.getSubcontractors(id!);
       if (response.success) {
         const data = response.data || [];
@@ -167,8 +171,14 @@ export default function SubcontractorsScreen() {
         );
         setSubcontractors(subcontractorsWithPayments);
       }
-    } catch (error) {
-      console.error("Error loading subcontractors:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem nhà thầu phụ của dự án này.");
+        setSubcontractors([]);
+      } else {
+        console.error("Error loading subcontractors:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -417,8 +427,30 @@ export default function SubcontractorsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Nhà Thầu Phụ" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  // Hiển thị thông báo RBAC nếu không có quyền
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Nhà Thầu Phụ" showBackButton />
+        <View style={styles.permissionDeniedContainer}>
+          <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
+          <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
+          <Text style={styles.permissionDeniedMessage}>
+            {permissionMessage || "Bạn không có quyền xem nhà thầu phụ của dự án này."}
+          </Text>
+          <Text style={styles.permissionDeniedSubtext}>
+            Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -1957,5 +1989,32 @@ const styles = StyleSheet.create({
   attachmentType: {
     fontSize: 12,
     color: "#6B7280",
+  },
+  permissionDeniedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  permissionDeniedTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  permissionDeniedMessage: {
+    fontSize: 16,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 8,
+    lineHeight: 24,
+  },
+  permissionDeniedSubtext: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 20,
   },
 });

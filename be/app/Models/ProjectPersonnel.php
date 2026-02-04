@@ -12,7 +12,7 @@ class ProjectPersonnel extends Model
     protected $fillable = [
         'project_id',
         'user_id',
-        'role',
+        'role_id',
         'permissions',
         'assigned_by',
         'assigned_at',
@@ -42,6 +42,11 @@ class ProjectPersonnel extends Model
         return $this->belongsTo(User::class, 'assigned_by');
     }
 
+    public function personnelRole(): BelongsTo
+    {
+        return $this->belongsTo(PersonnelRole::class, 'role_id');
+    }
+
     // ==================================================================
     // METHODS
     // ==================================================================
@@ -54,9 +59,22 @@ class ProjectPersonnel extends Model
         return in_array($permission, $this->permissions);
     }
 
+    /**
+     * Get role code (backward compatibility)
+     */
+    public function getRoleAttribute(): ?string
+    {
+        return $this->personnelRole?->code;
+    }
+
     public function canView(): bool
     {
-        return in_array($this->role, [
+        $roleCode = $this->personnelRole?->code;
+        if (!$roleCode) {
+            return false;
+        }
+        
+        return in_array($roleCode, [
             'project_manager',
             'supervisor',
             'accountant',
@@ -73,7 +91,12 @@ class ProjectPersonnel extends Model
 
     public function canEdit(): bool
     {
-        return in_array($this->role, [
+        $roleCode = $this->personnelRole?->code;
+        if (!$roleCode) {
+            return false;
+        }
+        
+        return in_array($roleCode, [
             'project_manager',
             'supervisor',
             'editor',
@@ -85,7 +108,12 @@ class ProjectPersonnel extends Model
 
     public function canApprove(): bool
     {
-        return in_array($this->role, [
+        $roleCode = $this->personnelRole?->code;
+        if (!$roleCode) {
+            return false;
+        }
+        
+        return in_array($roleCode, [
             'project_manager',
             'supervisor',
             'management',
@@ -95,7 +123,12 @@ class ProjectPersonnel extends Model
 
     public function canViewFinancial(): bool
     {
-        return in_array($this->role, [
+        $roleCode = $this->personnelRole?->code;
+        if (!$roleCode) {
+            return false;
+        }
+        
+        return in_array($roleCode, [
             'project_manager',
             'accountant',
             'management',
@@ -104,7 +137,12 @@ class ProjectPersonnel extends Model
 
     public function canApproveFinancial(): bool
     {
-        return in_array($this->role, [
+        $roleCode = $this->personnelRole?->code;
+        if (!$roleCode) {
+            return false;
+        }
+        
+        return in_array($roleCode, [
             'project_manager',
             'accountant',
             'management',
@@ -120,8 +158,10 @@ class ProjectPersonnel extends Model
         return $query->where('user_id', $userId);
     }
 
-    public function scopeByRole($query, $role)
+    public function scopeByRole($query, $roleCode)
     {
-        return $query->where('role', $role);
+        return $query->whereHas('personnelRole', function ($q) use ($roleCode) {
+            $q->where('code', $roleCode);
+        });
     }
 }

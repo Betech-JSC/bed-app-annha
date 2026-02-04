@@ -24,8 +24,7 @@ class Kernel extends ConsoleKernel
         // Tính lương hàng tháng vào ngày 1 mỗi tháng lúc 8:00
         $schedule->command('hr:calculate-monthly-payroll')->monthlyOn(1, '08:00');
 
-        // Tính thưởng từ dự án mỗi ngày lúc 22:00
-        $schedule->command('hr:calculate-project-bonuses')->dailyAt('22:00');
+        // HR bonus calculation command removed - HR module deleted
 
         // Gửi reminders mỗi giờ
         $schedule->command('reminders:send')->hourly();

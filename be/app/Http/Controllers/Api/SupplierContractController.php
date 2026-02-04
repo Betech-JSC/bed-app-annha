@@ -18,7 +18,7 @@ class SupplierContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem hợp đồng NCC.'
@@ -54,7 +54,7 @@ class SupplierContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo hợp đồng NCC.'
@@ -107,7 +107,7 @@ class SupplierContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem hợp đồng.'
@@ -134,7 +134,7 @@ class SupplierContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật hợp đồng.'
@@ -189,7 +189,7 @@ class SupplierContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa hợp đồng.'
@@ -220,7 +220,7 @@ class SupplierContractController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.approve') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.approve')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền ký hợp đồng.'

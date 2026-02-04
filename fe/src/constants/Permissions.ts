@@ -137,7 +137,6 @@ export const Permissions = {
     REPORT_EXPORT: 'report.export',
     REPORT_FINANCIAL: 'report.financial',
     REPORT_PROGRESS: 'report.progress',
-    REPORT_HR: 'report.hr',
 
     // ===================================================================
     // INVOICE MODULE (Output - Hóa đơn đầu ra cho khách hàng)

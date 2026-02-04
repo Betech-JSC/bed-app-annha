@@ -41,8 +41,8 @@ class MaterialInventoryService
             }
 
             // Tính toán unit_price từ amount và quantity
-            $unitPrice = $cost->quantity > 0 
-                ? $cost->amount / $cost->quantity 
+            $unitPrice = $cost->quantity > 0
+                ? $cost->amount / $cost->quantity
                 : $cost->amount;
 
             // Tạo transaction type "in" (nhập kho) khi Cost được approved
@@ -102,13 +102,16 @@ class MaterialInventoryService
     }
 
     /**
-     * Tạo transaction xuất kho cho dự án
-     * 
+     * Tạo transaction xuất kho cho dự án và đẩy qua chi phí dự án
+     *
      * @param int $materialId
      * @param int $projectId
      * @param float $quantity
      * @param string $notes
      * @param int $createdBy
+     * @param string|null $transactionDate
+     * @param int|null $costGroupId
+     * @param float|null $amount
      * @return MaterialTransaction|null
      */
     public function createOutTransaction(
@@ -116,11 +119,14 @@ class MaterialInventoryService
         int $projectId,
         float $quantity,
         string $notes = '',
-        int $createdBy
+        int $createdBy,
+        ?string $transactionDate = null,
+        ?int $costGroupId = null,
+        ?float $amount = null
     ): ?MaterialTransaction {
         try {
             $material = Material::findOrFail($materialId);
-            
+
             // Kiểm tra tồn kho
             $currentStock = $material->current_stock;
             if ($currentStock < $quantity) {
@@ -129,79 +135,61 @@ class MaterialInventoryService
 
             DB::beginTransaction();
 
-            // Lấy unit_price từ material hoặc từ transaction nhập gần nhất
-            $lastInTransaction = MaterialTransaction::where('material_id', $materialId)
-                ->where('type', 'in')
-                ->where('status', 'approved')
-                ->orderBy('transaction_date', 'desc')
-                ->first();
+            $transactionDateStr = $transactionDate ? \Carbon\Carbon::parse($transactionDate)->toDateString() : now()->toDateString();
 
-            $unitPrice = $lastInTransaction?->unit_price ?? $material->unit_price ?? 0;
-            $totalAmount = $quantity * $unitPrice;
+            // Lấy unit_price từ amount/quantity nếu có amount, else từ material hoặc transaction nhập gần nhất
+            $unitPrice = 0;
+            $totalAmount = 0;
 
-            // Kiểm tra xem đã có Cost nào với material_id cho dự án này chưa
-            // Nếu chưa có, tạo Cost mới khi xuất kho (vật liệu từ kho chung)
-            $existingCost = Cost::where('project_id', $projectId)
-                ->where('material_id', $materialId)
-                ->where('status', 'approved')
-                ->first();
-
-            $costId = null;
-            if (!$existingCost) {
-                // Tạo Cost mới cho vật liệu xuất kho từ kho chung
-                $costGroup = \App\Models\CostGroup::where('code', 'material')
-                    ->orWhere('name', 'like', '%vật liệu%')
-                    ->orWhere('name', 'like', '%material%')
-                    ->where('is_active', true)
+            if ($amount !== null && $amount > 0) {
+                $totalAmount = (float) $amount;
+                $unitPrice = $quantity > 0 ? $totalAmount / $quantity : 0;
+            } else {
+                $lastInTransaction = MaterialTransaction::where('material_id', $materialId)
+                    ->where('type', 'in')
+                    ->where('status', 'approved')
+                    ->orderBy('transaction_date', 'desc')
                     ->first();
+                $unitPrice = $lastInTransaction?->unit_price ?? $material->unit_price ?? 0;
+                $totalAmount = $quantity * $unitPrice;
+            }
 
-                if ($costGroup) {
+            // Tạo Cost mới khi có cost_group_id và amount - đẩy qua chi phí dự án
+            $costId = null;
+            if ($costGroupId && $totalAmount > 0) {
+                $costGroup = CostGroup::find($costGroupId);
+                if ($costGroup && $costGroup->is_active) {
+                    // Trạng thái draft - theo quy trình duyệt của module chi phí dự án (draft → pending_management → pending_accountant → approved)
                     $cost = Cost::create([
                         'project_id' => $projectId,
-                        'cost_group_id' => $costGroup->id,
+                        'cost_group_id' => $costGroupId,
                         'material_id' => $materialId,
                         'name' => "Sử dụng vật liệu: {$material->name}",
                         'amount' => $totalAmount,
                         'quantity' => $quantity,
                         'description' => "Xuất kho sử dụng cho dự án" . ($notes ? ": {$notes}" : ""),
-                        'cost_date' => now()->toDateString(),
-                        'status' => 'approved', // Tự động approved vì đã được approve khi xuất kho
+                        'cost_date' => $transactionDateStr,
+                        'status' => 'draft',
                         'created_by' => $createdBy,
-                        'accountant_approved_by' => $createdBy,
-                        'accountant_approved_at' => now(),
                     ]);
                     $costId = $cost->id;
-                    
-                    // Sync với budget
+
                     $syncService = app(\App\Services\BudgetSyncService::class);
                     $syncService->syncProjectBudgets($projectId);
-                    
+
                     Log::info("Đã tạo Cost {$cost->id} từ MaterialTransaction xuất kho cho Material {$materialId}");
-                }
-            } else {
-                // Nếu đã có Cost, liên kết với transaction nhập kho gần nhất
-                $lastInTransaction = MaterialTransaction::where('material_id', $materialId)
-                    ->where('project_id', $projectId)
-                    ->where('type', 'in')
-                    ->where('status', 'approved')
-                    ->whereNotNull('cost_id')
-                    ->orderBy('transaction_date', 'desc')
-                    ->first();
-                
-                if ($lastInTransaction && $lastInTransaction->cost_id) {
-                    $costId = $lastInTransaction->cost_id;
                 }
             }
 
             $transaction = MaterialTransaction::create([
                 'material_id' => $materialId,
                 'project_id' => $projectId,
-                'cost_id' => $costId, // Liên kết với Cost nếu có
-                'type' => 'out', // Xuất kho
+                'cost_id' => $costId,
+                'type' => 'out',
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
                 'total_amount' => $totalAmount,
-                'transaction_date' => now()->toDateString(),
+                'transaction_date' => $transactionDateStr,
                 'notes' => $notes ?: "Xuất kho cho dự án",
                 'status' => 'approved',
                 'created_by' => $createdBy,
@@ -221,7 +209,3 @@ class MaterialInventoryService
         }
     }
 }
-
-
-
-

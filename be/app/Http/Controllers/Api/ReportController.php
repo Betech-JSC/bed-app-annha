@@ -36,7 +36,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('reports.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('reports.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem báo cáo.'
@@ -145,7 +145,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('reports.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('reports.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem báo cáo.'
@@ -276,7 +276,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('reports.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('reports.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem báo cáo.'
@@ -385,7 +385,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('reports.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('reports.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem báo cáo.'
@@ -461,7 +461,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('reports.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('reports.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem báo cáo.'
@@ -628,7 +628,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('reports.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('reports.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem báo cáo.'
@@ -725,7 +725,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('reports.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('reports.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem báo cáo.'
@@ -788,7 +788,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('reports.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('reports.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem báo cáo.'

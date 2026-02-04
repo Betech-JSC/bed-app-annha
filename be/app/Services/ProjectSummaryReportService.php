@@ -115,14 +115,9 @@ class ProjectSummaryReportService
             ->where('status', 'approved')
             ->sum('amount');
 
-        $payrollCostsFromPayroll = (float) $project->payrolls()
-            ->where('status', 'approved')
-            ->sum('net_salary');
-
-        // Ưu tiên Cost nếu có, nếu không thì dùng Payroll
-        $salaryCosts = $payrollCostsFromCosts > 0 
-            ? $payrollCostsFromCosts 
-            : $payrollCostsFromPayroll;
+        // Payroll costs removed - HR module deleted
+        // Only use costs from costs table with payroll_id
+        $salaryCosts = $payrollCostsFromCosts;
 
         return [
             'material_costs' => $materialCosts,

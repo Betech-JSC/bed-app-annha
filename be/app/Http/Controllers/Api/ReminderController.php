@@ -55,7 +55,7 @@ class ReminderController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('reminders.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('reminders.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo nhắc nhở.'
@@ -121,7 +121,7 @@ class ReminderController extends Controller
         $reminder = Reminder::with(['remindable', 'user', 'creator'])->findOrFail($id);
 
         // Kiểm tra quyền
-        if ($reminder->user_id !== $user->id && !$user->owner && $user->role !== 'admin' && !$user->hasPermission('reminders.view')) {
+        if ($reminder->user_id !== $user->id && !$user->hasPermission('reminders.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem nhắc nhở này.'
@@ -141,7 +141,7 @@ class ReminderController extends Controller
         $reminder = Reminder::findOrFail($id);
 
         // Kiểm tra quyền
-        if ($reminder->user_id !== $user->id && !$user->owner && $user->role !== 'admin' && !$user->hasPermission('reminders.update')) {
+        if ($reminder->user_id !== $user->id && !$user->hasPermission('reminders.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật nhắc nhở này.'
@@ -196,7 +196,7 @@ class ReminderController extends Controller
         $reminder = Reminder::findOrFail($id);
 
         // Kiểm tra quyền
-        if ($reminder->user_id !== $user->id && !$user->owner && $user->role !== 'admin' && !$user->hasPermission('reminders.delete')) {
+        if ($reminder->user_id !== $user->id && !$user->hasPermission('reminders.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa nhắc nhở này.'

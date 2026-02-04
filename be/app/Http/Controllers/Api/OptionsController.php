@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Role;
+use App\Models\PersonnelRole;
 use Illuminate\Http\Request;
 
 class OptionsController extends Controller
@@ -75,7 +75,7 @@ class OptionsController extends Controller
     {
         $statuses = [
             ['value' => 'available', 'label' => 'Sẵn sàng', 'color' => '#10B981'],
-            ['value' => 'in_use', 'label' => 'Đang sử dụng', 'color' => '#3B82F6'],
+            ['value' => 'in_use', 'label' => 'Đã trả', 'color' => '#3B82F6'],
             ['value' => 'maintenance', 'label' => 'Bảo trì', 'color' => '#F59E0B'],
             ['value' => 'retired', 'label' => 'Ngừng sử dụng', 'color' => '#6B7280'],
             ['value' => 'damaged', 'label' => 'Hư hỏng', 'color' => '#EF4444'],
@@ -108,21 +108,21 @@ class OptionsController extends Controller
      */
     private function getPersonnelRoles()
     {
-        // Lấy từ database nếu có Role model, nếu không thì dùng default
         try {
-            $roles = Role::where('is_active', true)
-                ->orderBy('name')
+            $roles = PersonnelRole::where('is_active', true)
+                ->orderBy('sort_order')
                 ->get()
                 ->map(function ($role) {
                     return [
-                        'value' => $role->code ?? strtolower(str_replace(' ', '_', $role->name)),
+                        'id' => $role->id,
+                        'value' => $role->code,
                         'label' => $role->name,
-                        'description' => $role->description ?? null,
+                        'description' => $role->description,
                     ];
                 })
                 ->toArray();
 
-            // Nếu không có roles trong DB, dùng default
+            // Nếu không có roles trong DB, dùng default (fallback)
             if (empty($roles)) {
                 $roles = $this->getDefaultPersonnelRoles();
             }
@@ -138,7 +138,7 @@ class OptionsController extends Controller
     }
 
     /**
-     * Vai trò mặc định (fallback)
+     * Vai trò mặc định (fallback - chỉ dùng khi DB chưa có data)
      */
     private function getDefaultPersonnelRoles()
     {
@@ -176,4 +176,3 @@ class OptionsController extends Controller
         ]);
     }
 }
-

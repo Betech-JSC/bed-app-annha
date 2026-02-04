@@ -18,7 +18,7 @@ class SupplierAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem nghiệm thu NCC.'
@@ -54,7 +54,7 @@ class SupplierAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo nghiệm thu.'
@@ -106,7 +106,7 @@ class SupplierAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem nghiệm thu.'
@@ -135,7 +135,7 @@ class SupplierAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật nghiệm thu.'
@@ -187,7 +187,7 @@ class SupplierAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa nghiệm thu.'
@@ -218,7 +218,7 @@ class SupplierAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.approve') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.approve')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền duyệt nghiệm thu.'
@@ -255,7 +255,7 @@ class SupplierAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('suppliers.approve') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('suppliers.approve')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền từ chối nghiệm thu.'

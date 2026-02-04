@@ -1,6 +1,7 @@
 import api from "./api";
 
 export interface Option {
+  id?: number; // For personnel roles
   value: string;
   label: string;
   color?: string;

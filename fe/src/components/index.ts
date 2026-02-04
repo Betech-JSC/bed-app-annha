@@ -28,13 +28,6 @@ export { ScreenHeader } from "./ScreenHeader";
 export { PermissionGuard } from "./PermissionGuard";
 export { default as CustomTabBar } from "./CustomTabBar";
 
-// Export HR management components
-export { default as CheckInOutButton } from "./CheckInOutButton";
-export { default as PayrollCard } from "./PayrollCard";
-export { default as BonusForm } from "./BonusForm";
-export { default as CalendarView } from "./CalendarView";
-export { default as SalaryConfigForm } from "./SalaryConfigForm";
-export { default as ExportButtons } from "./ExportButtons";
 export { default as LogoutButton } from "./LogoutButton";
 export { default as GanttChart } from "./GanttChart";
 export { default as GanttTaskBar } from "./GanttTaskBar";

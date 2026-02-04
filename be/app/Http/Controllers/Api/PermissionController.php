@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Permission;
 use App\Models\ProjectPersonnel;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class PermissionController extends Controller
@@ -58,6 +59,10 @@ class PermissionController extends Controller
 
     /**
      * Kiểm tra permissions của user trong một project cụ thể
+     * 
+     * Logic mới:
+     * - Nếu user đã được assign vào project → CHỈ check project-specific permissions
+     * - Nếu user chưa được assign → check global permissions
      */
     public function checkProjectPermission(Request $request, string $projectId, string $permission)
     {
@@ -71,43 +76,33 @@ class PermissionController extends Controller
             ], 401);
         }
 
-        // Super admin có toàn quyền
-        if ($user->role === 'admin' && $user->owner === true) {
-            return response()->json([
-                'success' => true,
-                'has_permission' => true,
-                'permission' => $permission,
-                'source' => 'super_admin',
-            ]);
+        $authService = app(\App\Services\AuthorizationService::class);
+        $hasPermission = $authService->can($user, $permission, $projectId);
+
+        // Determine source
+        $source = 'none';
+        if ($authService->isSuperAdmin($user)) {
+            $source = 'super_admin';
+        } elseif ($authService->isAssignedToProject($user, $projectId)) {
+            $source = 'project_personnel';
+        } elseif ($user->hasPermission($permission)) {
+            $source = 'global_role';
         }
-
-        // Check qua ProjectPersonnel
-        $personnel = ProjectPersonnel::where('project_id', $projectId)
-            ->where('user_id', $user->id)
-            ->first();
-
-        if ($personnel && $personnel->hasPermission($permission)) {
-            return response()->json([
-                'success' => true,
-                'has_permission' => true,
-                'permission' => $permission,
-                'source' => 'project_personnel',
-            ]);
-        }
-
-        // Check qua global roles
-        $hasPermission = $user->hasPermission($permission);
 
         return response()->json([
             'success' => true,
             'has_permission' => $hasPermission,
             'permission' => $permission,
-            'source' => $hasPermission ? 'global_role' : 'none',
+            'source' => $source,
         ]);
     }
 
     /**
      * Lấy permissions của user trong một project
+     * 
+     * Logic mới:
+     * - Nếu user đã được assign vào project → CHỈ trả về project-specific permissions
+     * - Nếu user chưa được assign → trả về global permissions
      */
     public function projectPermissions(Request $request, string $projectId)
     {
@@ -120,39 +115,16 @@ class PermissionController extends Controller
             ], 401);
         }
 
-        $permissions = [];
+        $authService = app(\App\Services\AuthorizationService::class);
+        $permissions = $authService->getProjectPermissions($user, $projectId);
 
-        // Super admin có toàn quyền
-        if ($user->role === 'admin' && $user->owner === true) {
-            $permissions = ['*']; // All permissions
-        } else {
-            // Get permissions từ ProjectPersonnel
-            $personnel = ProjectPersonnel::where('project_id', $projectId)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if ($personnel && $personnel->permissions) {
-                $permissions = array_merge($permissions, $personnel->permissions);
-            }
-
-            // Get permissions từ global roles (thông qua roles + trực tiếp)
-            $rolePermissions = $user->roles()
-                ->with('permissions')
-                ->get()
-                ->pluck('permissions')
-                ->flatten()
-                ->pluck('name')
-                ->toArray();
-            
-            $directPermissions = $user->directPermissions()
-                ->pluck('name')
-                ->toArray();
-            
-            $globalPermissions = array_merge($rolePermissions, $directPermissions);
-            $permissions = array_merge($permissions, $globalPermissions);
-        }
-
-        $permissions = array_unique($permissions);
+        \Log::info("[PermissionController] Final permissions for project", [
+            'user_id' => $user->id,
+            'project_id' => $projectId,
+            'permissions_count' => count($permissions),
+            'permissions' => $permissions,
+            'is_assigned' => $authService->isAssignedToProject($user, $projectId),
+        ]);
 
         return response()->json([
             'success' => true,

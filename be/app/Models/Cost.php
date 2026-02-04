@@ -88,10 +88,7 @@ class Cost extends Model
         return $this->belongsTo(TimeTracking::class, 'time_tracking_id');
     }
 
-    public function payroll(): BelongsTo
-    {
-        return $this->belongsTo(Payroll::class, 'payroll_id');
-    }
+    // Payroll relationship removed - HR module deleted
 
     public function subcontractor(): BelongsTo
     {

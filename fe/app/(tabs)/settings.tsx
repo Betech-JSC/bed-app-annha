@@ -14,7 +14,6 @@ import { useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
 import type { RootState } from "@/reducers/index";
 import { userApi } from "@/api/userApi";
-import { personnelRoleApi } from "@/api/personnelRoleApi";
 import { Ionicons } from "@expo/vector-icons";
 import LogoutButton from "@/components/LogoutButton";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -28,42 +27,31 @@ export default function SettingsScreen() {
   const dispatch = useDispatch();
   const tabBarHeight = useTabBarHeight();
   const user = useSelector((state: RootState) => state.user);
-  const { permissions, loading: permissionsLoading } = usePermissions();
-  const [roles, setRoles] = useState<any[]>([]);
+  const { permissions, loading: permissionsLoading, hasPermission: checkPermission } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    loadRoles();
-  }, []);
-
-  const loadRoles = async () => {
-    try {
-      setLoading(true);
-      const response = await personnelRoleApi.getRolesWithUsage();
-      if (response.success) {
-        setRoles(response.data || []);
-      }
-    } catch (error) {
-      console.error("Error loading roles:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadRoles();
-  };
-
-  const { hasPermission: checkPermission } = usePermissions();
-
   const hasPermission = (permission: string): boolean => {
     // Use permission-based check instead of role check
     return checkPermission(permission);
+  };
+
+  useEffect(() => {
+    // Set loading to false once permissions are loaded
+    if (!permissionsLoading) {
+      setLoading(false);
+    }
+  }, [permissionsLoading]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Refresh permissions
+    // The usePermissions hook will handle the refresh
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
   };
 
   const handleDeleteAccount = async () => {
@@ -156,10 +144,17 @@ export default function SettingsScreen() {
       description: "Quản lý hóa đơn đầu vào từ nhà cung cấp (chỉ theo dõi, không ảnh hưởng chi phí dự án)",
     },
     {
+      title: "Phân Quyền Hệ Thống",
+      icon: "shield-checkmark-outline",
+      route: "/settings/permissions",
+      permission: null, // Always accessible to view own permissions
+      description: "Xem quyền của bạn và quản lý phân quyền hệ thống",
+    },
+    {
       title: "Cấu Hình Vai Trò",
       icon: "people-circle-outline",
       route: "/settings/roles",
-      permission: "hr.roles.view",
+      permission: "settings.manage",
       description: "Quản lý các vai trò và phân quyền trong hệ thống",
     },
     {

@@ -16,7 +16,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('invoices.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem hóa đơn.'
@@ -39,7 +39,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.create') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('invoices.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo hóa đơn.'
@@ -98,7 +98,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.view') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('invoices.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem hóa đơn.'
@@ -119,7 +119,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('invoices.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền gửi hóa đơn.'
@@ -166,11 +166,11 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        // Chỉ kế toán mới được đánh dấu đã thanh toán
-        if (!$user->hasPermission('invoices.update') && $user->role !== 'accountant' && !$user->owner && $user->role !== 'admin') {
+        // Check permission để đánh dấu đã thanh toán
+        if (!$user->hasPermission('invoices.update')) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ kế toán mới được đánh dấu hóa đơn đã thanh toán.'
+                'message' => 'Không có quyền đánh dấu hóa đơn đã thanh toán.'
             ], 403);
         }
 
@@ -213,7 +213,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.update') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('invoices.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật hóa đơn.'
@@ -274,7 +274,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.delete') && !$user->owner && $user->role !== 'admin') {
+        if (!$user->hasPermission('invoices.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa hóa đơn.'

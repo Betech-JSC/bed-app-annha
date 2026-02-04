@@ -42,8 +42,8 @@ class SuperAdminSeeder extends Seeder
             ]);
         }
 
-        // Gán role "Super Admin" hoặc "Admin" từ hệ thống role-permission nếu có
-        $superAdminRole = Role::where('name', 'Super Admin')->orWhere('name', 'Admin')->first();
+        // Gán role "super_admin" từ hệ thống role-permission (có tất cả permissions)
+        $superAdminRole = Role::where('name', \App\Constants\Roles::SUPER_ADMIN)->first();
         if ($superAdminRole) {
             // Kiểm tra xem đã có trong bảng role_user chưa
             $exists = DB::table('role_user')
@@ -59,6 +59,8 @@ class SuperAdminSeeder extends Seeder
                     'updated_at' => now(),
                 ]);
             }
+        } else {
+            $this->command->warn("⚠️  Role 'super_admin' not found. Run RoleSeeder first.");
         }
 
         // Tạo thêm HR Admin (có quyền HR nhưng không phải super admin)

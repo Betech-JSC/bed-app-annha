@@ -26,8 +26,8 @@ class EnsureAdminIsAuthenticated
         $user = $request->user('sanctum');
 
         // Kiểm tra xem có phải Admin không
-        // Admin là user có role='admin' hoặc owner=true
-        $isAdmin = ($user->role === 'admin') || ($user->owner === true);
+        // Admin là user có settings.manage permission
+        $isAdmin = $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE);
         
         if (!$isAdmin) {
             return response()->json([

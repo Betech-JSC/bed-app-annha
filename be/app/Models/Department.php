@@ -51,14 +51,7 @@ class Department extends Model
         return $this->hasMany(User::class, 'department_id');
     }
 
-    /**
-     * Lấy danh sách Payroll của nhân viên trong phòng ban
-     */
-    public function getPayrolls()
-    {
-        $employeeIds = $this->employees()->pluck('id');
-        return Payroll::whereIn('user_id', $employeeIds);
-    }
+    // Payrolls method removed - HR module deleted
 
     /**
      * Lấy danh sách Leave Requests của nhân viên trong phòng ban

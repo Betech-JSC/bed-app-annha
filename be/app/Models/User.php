@@ -247,44 +247,46 @@ class User extends Authenticatable
     }
 
     /**
+     * Lấy danh sách permission names (array of strings)
+     */
+    public function getPermissionsArray(): array
+    {
+        return $this->permissions()->pluck('name')->toArray();
+    }
+
+    /**
      * Kiểm tra user có permission không
      */
     public function hasPermission(string $permission): bool
     {
-        // Super admin có toàn quyền
-        if ($this->role === 'admin' && $this->owner === true) {
-            return true;
-        }
+        $permissions = $this->getPermissionsArray();
+        return in_array($permission, $permissions);
+    }
 
-        // Check permissions từ roles
-        $hasFromRoles = $this->roles()
-            ->whereHas('permissions', function ($query) use ($permission) {
-                $query->where('permissions.name', $permission);
-            })
-            ->exists();
+    /**
+     * Kiểm tra user có phải super admin không
+     * Super admin là user có tất cả permissions (được gán qua role)
+     * @deprecated Sử dụng hasPermission() thay vì check này
+     */
+    public function isSuperAdmin(): bool
+    {
+        // Check nếu user có tất cả permissions (thông qua role hoặc direct)
+        // Có thể check bằng cách so sánh số lượng permissions với tổng số permissions trong hệ thống
+        $allPermissions = \App\Models\Permission::count();
+        $userPermissions = count($this->getPermissionsArray());
 
-        if ($hasFromRoles) {
-            return true;
-        }
-
-        // Check permissions trực tiếp
-        return $this->directPermissions()
-            ->where('permissions.name', $permission)
-            ->exists();
+        // Nếu user có >= 90% permissions → coi như super admin
+        // Hoặc có thể check permission cụ thể như 'settings.manage'
+        return $userPermissions >= ($allPermissions * 0.9)
+            || $this->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE);
     }
 
     /**
      * Kiểm tra user có phải admin không (dựa trên permissions)
-     * Admin là user có super admin permission hoặc có settings.manage permission
+     * Admin là user có settings.manage permission
      */
     public function isAdmin(): bool
     {
-        // Super admin (backward compatible)
-        if ($this->role === 'admin' && $this->owner === true) {
-            return true;
-        }
-
-        // Check từ permissions - admin thường có settings.manage permission
         return $this->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE);
     }
 
