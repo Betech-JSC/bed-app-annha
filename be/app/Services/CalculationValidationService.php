@@ -25,26 +25,7 @@ class CalculationValidationService
             ->where('status', 'approved')
             ->sum('amount');
 
-        // 2. Kiểm tra double counting TimeTracking
-        $timeTrackingCount = $project->timeTrackings()
-            ->where('status', 'approved')
-            ->count();
 
-        $timeTrackingCostsCount = $project->costs()
-            ->whereNotNull('time_tracking_id')
-            ->where('status', 'approved')
-            ->count();
-
-        if ($timeTrackingCount > 0 && $timeTrackingCostsCount < $timeTrackingCount) {
-            $missingCount = $timeTrackingCount - $timeTrackingCostsCount;
-            $warnings[] = [
-                'type' => 'missing_time_tracking_costs',
-                'message' => "Có {$missingCount} TimeTracking records chưa có Cost record tương ứng.",
-                'time_tracking_count' => $timeTrackingCount,
-                'cost_records_count' => $timeTrackingCostsCount,
-                'missing_count' => $missingCount,
-            ];
-        }
 
         // 3. Kiểm tra tính nhất quán: Tổng chi phí từ các nguồn
         $totalCostsFromSources =
@@ -53,12 +34,6 @@ class CalculationValidationService
             // Bonuses removed - HR module deleted
             $project->costs()
             ->where('status', 'approved')
-            ->where(function ($q) {
-                $q->whereNotNull('time_tracking_id')
-                    ->orWhere(function ($q2) {
-                        $q2->whereNull('time_tracking_id');
-                    });
-            })
             ->sum('amount');
 
         $totalCostsFromCostsTable = $project->costs()

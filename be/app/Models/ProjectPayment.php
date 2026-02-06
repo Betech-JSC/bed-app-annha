@@ -84,7 +84,7 @@ class ProjectPayment extends Model
 
     public function getIsPaidAttribute(): bool
     {
-        return in_array($this->status, ['confirmed', 'paid']); // Backward compatible
+        return in_array($this->status, ['customer_paid', 'confirmed', 'paid']); // customer_paid = đã thanh toán, chờ kế toán xác nhận
     }
 
     // ==================================================================

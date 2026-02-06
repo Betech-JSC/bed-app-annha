@@ -148,6 +148,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Payments
         Route::get('/{projectId}/payments', [ProjectPaymentController::class, 'index']);
+        Route::get('/{projectId}/payments/{id}', [ProjectPaymentController::class, 'show']);
         Route::post('/{projectId}/payments', [ProjectPaymentController::class, 'store']);
         Route::put('/{projectId}/payments/{id}', [ProjectPaymentController::class, 'update']);
         Route::post('/{projectId}/payments/{id}/upload-proof', [ProjectPaymentController::class, 'uploadPaymentProof']);
@@ -232,12 +233,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/equipment/allocations', [EquipmentController::class, 'createAllocation']);
 
         // Invoices (Output - gửi cho khách hàng)
+        Route::get('/{projectId}/invoices/summary-by-cost-group', [InvoiceController::class, 'summaryByCostGroup'])->name('invoices.summaryByCostGroup');
         Route::get('/{projectId}/invoices', [InvoiceController::class, 'index']);
         Route::post('/{projectId}/invoices', [InvoiceController::class, 'store']);
         Route::get('/{projectId}/invoices/{id}', [InvoiceController::class, 'show']);
-        Route::post('/{projectId}/invoices/{id}/send', [InvoiceController::class, 'send']);
-        Route::post('/{projectId}/invoices/{id}/mark-paid', [InvoiceController::class, 'markPaid']);
         Route::put('/{projectId}/invoices/{id}', [InvoiceController::class, 'update']);
+        Route::delete('/{projectId}/invoices/{id}', [InvoiceController::class, 'destroy']);
 
         // Input Invoices (Đầu vào - từ nhà cung cấp, chỉ kế toán, có thể gắn với project)
         Route::get('/{projectId}/input-invoices', [InputInvoiceController::class, 'index']);
@@ -245,7 +246,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/input-invoices/{id}', [InputInvoiceController::class, 'show']);
         Route::put('/{projectId}/input-invoices/{id}', [InputInvoiceController::class, 'update']);
         Route::delete('/{projectId}/input-invoices/{id}', [InputInvoiceController::class, 'destroy']);
-        Route::delete('/{projectId}/invoices/{id}', [InvoiceController::class, 'destroy']);
 
         // Acceptance Stages
         Route::get('/{projectId}/acceptance', [AcceptanceStageController::class, 'index']);
@@ -378,14 +378,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/labor-standards/{id}', [LaborStandardController::class, 'show']);
         Route::put('/{projectId}/labor-standards/{id}', [LaborStandardController::class, 'update']);
         Route::delete('/{projectId}/labor-standards/{id}', [LaborStandardController::class, 'destroy']);
-
-        // Work Volumes
-        Route::get('/{projectId}/work-volumes', [WorkVolumeController::class, 'index']);
-        Route::post('/{projectId}/work-volumes', [WorkVolumeController::class, 'store']);
-        Route::get('/{projectId}/work-volumes/{id}', [WorkVolumeController::class, 'show']);
-        Route::put('/{projectId}/work-volumes/{id}', [WorkVolumeController::class, 'update']);
-        Route::delete('/{projectId}/work-volumes/{id}', [WorkVolumeController::class, 'destroy']);
-        Route::post('/{projectId}/work-volumes/{id}/verify', [WorkVolumeController::class, 'verify']);
 
         // Subcontractor Payments
         Route::get('/{projectId}/subcontractor-payments', [SubcontractorPaymentController::class, 'index']);

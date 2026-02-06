@@ -16,7 +16,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.view')) {
+        if (!$user->hasPermission('invoice.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem hóa đơn.'
@@ -25,7 +25,7 @@ class InvoiceController extends Controller
 
         $project = Project::findOrFail($projectId);
         $invoices = $project->invoices()
-            ->with(['customer', 'creator'])
+            ->with(['customer', 'creator', 'costGroup', 'attachments'])
             ->orderBy('invoice_date', 'desc')
             ->paginate(20);
 
@@ -39,7 +39,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.create')) {
+        if (!$user->hasPermission('invoice.create')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền tạo hóa đơn.'
@@ -50,12 +50,14 @@ class InvoiceController extends Controller
 
         $validator = Validator::make($request->all(), [
             'invoice_date' => 'required|date',
-            'due_date' => 'nullable|date|after_or_equal:invoice_date',
+            'cost_group_id' => 'required|exists:cost_groups,id',
             'subtotal' => 'required|numeric|min:0',
             'tax_amount' => 'nullable|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
             'description' => 'nullable|string|max:2000',
             'notes' => 'nullable|string|max:2000',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'integer|exists:attachments,id',
         ]);
 
         if ($validator->fails()) {
@@ -72,8 +74,8 @@ class InvoiceController extends Controller
 
         $invoice = Invoice::create([
             'project_id' => $project->id,
+            'cost_group_id' => $request->cost_group_id,
             'invoice_date' => $request->invoice_date,
-            'due_date' => $request->due_date,
             'customer_id' => $project->customer_id,
             'subtotal' => $request->subtotal,
             'tax_amount' => $request->tax_amount ?? 0,
@@ -81,11 +83,23 @@ class InvoiceController extends Controller
             'total_amount' => $totalAmount,
             'description' => $request->description,
             'notes' => $request->notes,
-            'status' => 'draft',
             'created_by' => $user->id,
         ]);
 
-        $invoice->load(['customer', 'creator']);
+        // Attach files if provided
+        if (!empty($request->attachment_ids)) {
+            foreach ($request->attachment_ids as $attachmentId) {
+                $attachment = \App\Models\Attachment::find($attachmentId);
+                if ($attachment && $attachment->uploaded_by === $user->id) {
+                    $attachment->update([
+                        'attachable_type' => Invoice::class,
+                        'attachable_id' => $invoice->id,
+                    ]);
+                }
+            }
+        }
+
+        $invoice->load(['customer', 'creator', 'costGroup', 'attachments']);
 
         return response()->json([
             'success' => true,
@@ -98,7 +112,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.view')) {
+        if (!$user->hasPermission('invoice.view')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xem hóa đơn.'
@@ -106,7 +120,7 @@ class InvoiceController extends Controller
         }
 
         $invoice = Invoice::where('project_id', $projectId)
-            ->with(['customer', 'project', 'creator'])
+            ->with(['customer', 'project', 'creator', 'costGroup', 'attachments'])
             ->findOrFail($id);
 
         return response()->json([
@@ -115,105 +129,15 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function send(Request $request, string $projectId, string $id)
-    {
-        $user = auth()->user();
-        
-        if (!$user->hasPermission('invoices.update')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền gửi hóa đơn.'
-            ], 403);
-        }
 
-        $invoice = Invoice::where('project_id', $projectId)
-            ->with(['customer', 'project'])
-            ->findOrFail($id);
 
-        if ($invoice->status !== 'draft') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể gửi hóa đơn ở trạng thái draft.'
-            ], 422);
-        }
 
-        $invoice->update(['status' => 'sent']);
-
-        // Gửi thông báo cho khách hàng
-        if ($invoice->customer && $invoice->customer->fcm_token) {
-            ExpoPushService::sendNotification(
-                $invoice->customer->fcm_token,
-                "Hóa đơn mới: {$invoice->invoice_number}",
-                "Bạn có hóa đơn mới với số tiền: " . number_format($invoice->total_amount, 0, ',', '.') . " VNĐ",
-                [
-                    'type' => 'invoice',
-                    'invoice_id' => $invoice->id,
-                    'project_id' => $invoice->project_id,
-                ]
-            );
-        }
-
-        $invoice->load(['customer', 'creator']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi hóa đơn thành công.',
-            'data' => $invoice
-        ]);
-    }
-
-    public function markPaid(Request $request, string $projectId, string $id)
-    {
-        $user = auth()->user();
-        
-        // Check permission để đánh dấu đã thanh toán
-        if (!$user->hasPermission('invoices.update')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền đánh dấu hóa đơn đã thanh toán.'
-            ], 403);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'paid_date' => 'required|date',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vui lòng chọn ngày thanh toán.',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $invoice = Invoice::where('project_id', $projectId)->findOrFail($id);
-
-        if ($invoice->status === 'paid') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hóa đơn đã được đánh dấu thanh toán.'
-            ], 422);
-        }
-
-        $invoice->update([
-            'status' => 'paid',
-            'paid_date' => $request->paid_date,
-        ]);
-
-        $invoice->load(['customer', 'creator']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã đánh dấu hóa đơn đã thanh toán.',
-            'data' => $invoice
-        ]);
-    }
 
     public function update(Request $request, string $projectId, string $id)
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.update')) {
+        if (!$user->hasPermission('invoice.update')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền cập nhật hóa đơn.'
@@ -222,21 +146,16 @@ class InvoiceController extends Controller
 
         $invoice = Invoice::where('project_id', $projectId)->findOrFail($id);
 
-        if ($invoice->status === 'paid') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể cập nhật hóa đơn đã thanh toán.'
-            ], 422);
-        }
-
         $validator = Validator::make($request->all(), [
             'invoice_date' => 'sometimes|required|date',
-            'due_date' => 'nullable|date|after_or_equal:invoice_date',
+            'cost_group_id' => 'sometimes|required|exists:cost_groups,id',
             'subtotal' => 'sometimes|required|numeric|min:0',
             'tax_amount' => 'nullable|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
             'description' => 'nullable|string|max:2000',
             'notes' => 'nullable|string|max:2000',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'integer|exists:attachments,id',
         ]);
 
         if ($validator->fails()) {
@@ -248,9 +167,22 @@ class InvoiceController extends Controller
         }
 
         $updateData = $request->only([
-            'invoice_date', 'due_date', 'subtotal', 'tax_amount', 
+            'invoice_date', 'cost_group_id', 'subtotal', 'tax_amount', 
             'discount_amount', 'description', 'notes'
         ]);
+
+        // Handle file attachments if provided
+        if ($request->has('attachment_ids')) {
+            foreach ($request->attachment_ids as $attachmentId) {
+                $attachment = \App\Models\Attachment::find($attachmentId);
+                if ($attachment && $attachment->uploaded_by === $user->id) {
+                    $attachment->update([
+                        'attachable_type' => Invoice::class,
+                        'attachable_id' => $invoice->id,
+                    ]);
+                }
+            }
+        }
 
         // Tính lại total_amount nếu có thay đổi
         if ($request->has('subtotal') || $request->has('tax_amount') || $request->has('discount_amount')) {
@@ -261,7 +193,7 @@ class InvoiceController extends Controller
         }
 
         $invoice->update($updateData);
-        $invoice->load(['customer', 'creator']);
+        $invoice->load(['customer', 'creator', 'costGroup', 'attachments']);
 
         return response()->json([
             'success' => true,
@@ -274,7 +206,7 @@ class InvoiceController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoices.delete')) {
+        if (!$user->hasPermission('invoice.delete')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền xóa hóa đơn.'
@@ -283,18 +215,34 @@ class InvoiceController extends Controller
 
         $invoice = Invoice::where('project_id', $projectId)->findOrFail($id);
 
-        if ($invoice->status === 'paid') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể xóa hóa đơn đã thanh toán.'
-            ], 422);
-        }
-
         $invoice->delete();
 
         return response()->json([
             'success' => true,
             'message' => 'Đã xóa hóa đơn thành công.'
+        ]);
+    }
+
+    public function summaryByCostGroup(string $projectId)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermission('invoice.view')) {
+             return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền xem báo cáo.'
+            ], 403);
+        }
+
+        $summary = Invoice::where('project_id', $projectId)
+            ->whereNotNull('cost_group_id')
+            ->select('cost_group_id', DB::raw('sum(total_amount) as total_amount'))
+            ->groupBy('cost_group_id')
+            ->with('costGroup:id,name')
+            ->get();
+            
+        return response()->json([
+            'success' => true,
+            'data' => $summary
         ]);
     }
 }

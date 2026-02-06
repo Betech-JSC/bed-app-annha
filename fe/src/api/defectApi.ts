@@ -16,8 +16,21 @@ export interface Defect {
   fixed_at?: string;
   verified_by?: number;
   verified_at?: string;
+  rejection_reason?: string;
   attachments?: any[];
   task?: any;
+  acceptanceStage?: any;
+  acceptanceTemplate?: any;
+  violatedCriteria?: {
+    id: number;
+    name: string;
+    acceptance_template_id: number;
+    pivot: {
+      status: "failed" | "passed";
+      verified_at?: string;
+      verified_by?: number;
+    };
+  }[];
   histories?: DefectHistory[];
 }
 
@@ -40,6 +53,9 @@ export interface CreateDefectData {
   description: string;
   severity: "low" | "medium" | "high" | "critical";
   before_image_ids?: number[];
+  defect_type?: "standard_violation" | "other";
+  acceptance_template_id?: number;
+  violated_criteria_ids?: number[];
 }
 
 export const defectApi = {
@@ -68,9 +84,21 @@ export const defectApi = {
   updateDefect: async (
     projectId: string | number,
     defectId: string | number,
-    data: Partial<CreateDefectData & { status?: string; expected_completion_date?: string; after_image_ids?: number[] }>
+    data: Partial<CreateDefectData & { status?: string; expected_completion_date?: string; after_image_ids?: number[]; rejection_reason?: string }>
   ) => {
     const response = await api.put(`/projects/${projectId}/defects/${defectId}`, data);
+    return response.data;
+  },
+
+  // Verify Criteria
+  verifyCriteria: async (
+    projectId: string | number,
+    defectId: string | number,
+    criteria: { id: number; status: "passed" | "failed" }[]
+  ) => {
+    const response = await api.post(`/projects/${projectId}/defects/${defectId}/verify-criteria`, {
+      criteria,
+    });
     return response.data;
   },
 };

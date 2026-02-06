@@ -67,6 +67,11 @@ class AcceptanceTemplate extends Model
         return $this->hasMany(AcceptanceItem::class);
     }
 
+    public function criteria(): HasMany
+    {
+        return $this->hasMany(AcceptanceCriterion::class)->orderBy('order');
+    }
+
     // ==================================================================
     // SCOPE
     // ==================================================================

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
 class Invoice extends Model
@@ -11,9 +12,10 @@ class Invoice extends Model
     protected $fillable = [
         'uuid',
         'project_id',
+        'cost_group_id',
+        'acceptance_stage_id',
         'invoice_number',
         'invoice_date',
-        'due_date',
         'customer_id',
         'subtotal',
         'tax_amount',
@@ -21,15 +23,11 @@ class Invoice extends Model
         'total_amount',
         'description',
         'notes',
-        'status',
-        'paid_date',
         'created_by',
     ];
 
     protected $casts = [
         'invoice_date' => 'date',
-        'due_date' => 'date',
-        'paid_date' => 'date',
         'subtotal' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
@@ -45,6 +43,11 @@ class Invoice extends Model
         return $this->belongsTo(Project::class);
     }
 
+    public function costGroup(): BelongsTo
+    {
+        return $this->belongsTo(CostGroup::class);
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'customer_id');
@@ -53,6 +56,16 @@ class Invoice extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function attachments()
+    {
+        return $this->morphMany(Attachment::class, 'attachable');
+    }
+
+    public function acceptanceStage(): BelongsTo
+    {
+        return $this->belongsTo(AcceptanceStage::class, 'acceptance_stage_id');
     }
 
     // ==================================================================

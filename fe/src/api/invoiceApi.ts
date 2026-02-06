@@ -4,33 +4,47 @@ export interface Invoice {
   id: number;
   uuid: string;
   project_id: number;
+  cost_group_id: number;
+  invoice_number: string;
   invoice_date: string;
-  due_date?: string;
-  customer_id: number;
+  customer_id?: number;
   subtotal: number;
-  tax_amount: number;
-  discount_amount: number;
+  tax_amount?: number;
+  discount_amount?: number;
   total_amount: number;
   description?: string;
   notes?: string;
-  status: "draft" | "sent" | "paid" | "partially_paid" | "overdue" | "cancelled";
-  paid_date?: string;
   created_by: number;
   created_at: string;
   updated_at: string;
   project?: any;
   customer?: any;
   creator?: any;
+  cost_group?: {
+    id: number;
+    name: string;
+    code: string;
+    description?: string;
+  };
+  attachments?: Array<{
+    id: number;
+    attachment_id: number;
+    file_url: string;
+    original_name: string;
+    file_name: string;
+    mime_type: string;
+  }>;
 }
 
 export interface CreateInvoiceData {
   invoice_date: string;
-  due_date?: string;
+  cost_group_id: number;
   subtotal: number;
   tax_amount?: number;
   discount_amount?: number;
   description?: string;
   notes?: string;
+  attachment_ids?: number[];
 }
 
 export const invoiceApi = {
@@ -51,18 +65,6 @@ export const invoiceApi = {
     return response.data;
   },
 
-  sendInvoice: async (projectId: number, id: number) => {
-    const response = await api.post(`/projects/${projectId}/invoices/${id}/send`);
-    return response.data;
-  },
-
-  markPaid: async (projectId: number, id: number, paidDate: string) => {
-    const response = await api.post(`/projects/${projectId}/invoices/${id}/mark-paid`, {
-      paid_date: paidDate,
-    });
-    return response.data;
-  },
-
   updateInvoice: async (projectId: number, id: number, data: Partial<CreateInvoiceData>) => {
     const response = await api.put(`/projects/${projectId}/invoices/${id}`, data);
     return response.data;
@@ -72,5 +74,21 @@ export const invoiceApi = {
     const response = await api.delete(`/projects/${projectId}/invoices/${id}`);
     return response.data;
   },
+
+  getSummaryByCostGroup: async (projectId: number) => {
+    const response = await api.get(`/projects/${projectId}/invoices/summary-by-cost-group`);
+    return response.data;
+  },
 };
+
+export interface CostGroupSummary {
+  cost_group_id: number;
+  total_amount: number;
+  cost_group: {
+    id: number;
+    name: string;
+  };
+}
+
+
 

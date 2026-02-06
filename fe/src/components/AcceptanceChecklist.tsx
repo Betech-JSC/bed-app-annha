@@ -1153,7 +1153,20 @@ export default function AcceptanceChecklist({
               {/* 2. Chọn + Tạo lỗi */}
               <View style={styles.formGroup}>
                 <View style={styles.defectsHeader}>
-                  <Text style={styles.label}>Lỗi ghi nhận</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Lỗi ghi nhận</Text>
+                    {selectedDefects.length > 0 && (() => {
+                      const verifiedCount = selectedDefects.filter(d => d.status === 'verified').length;
+                      const unverifiedCount = selectedDefects.length - verifiedCount;
+                      return (
+                        <Text style={styles.defectSummaryText}>
+                          {verifiedCount > 0 && <Text style={{ color: '#10B981' }}>✓ {verifiedCount} đã xử lý</Text>}
+                          {verifiedCount > 0 && unverifiedCount > 0 && <Text> • </Text>}
+                          {unverifiedCount > 0 && <Text style={{ color: '#EF4444' }}>⚠ {unverifiedCount} chưa xử lý</Text>}
+                        </Text>
+                      );
+                    })()}
+                  </View>
                   <TouchableOpacity
                     style={styles.addDefectButton}
                     onPress={() => {
@@ -1192,26 +1205,66 @@ export default function AcceptanceChecklist({
                 {/* Hiển thị các lỗi đã chọn */}
                 {selectedDefects.length > 0 && (
                   <View style={styles.selectedDefectsContainer}>
-                    {selectedDefects.map((defect) => (
-                      <View key={defect.id} style={styles.selectedDefectItem}>
-                        <View style={styles.selectedDefectContent}>
-                          <Text style={styles.selectedDefectText} numberOfLines={2}>
-                            {defect.description}
-                          </Text>
-                          {defect.attachments && defect.attachments.length > 0 && (
-                            <Text style={styles.defectImagesCount}>
-                              {defect.attachments.length} ảnh
-                            </Text>
-                          )}
+                    {selectedDefects.map((defect) => {
+                      // Determine status label and color
+                      const getStatusInfo = (status: string) => {
+                        switch (status) {
+                          case 'verified':
+                            return { label: 'Đã xử lý', color: '#10B981', bgColor: '#10B98120' };
+                          case 'fixed':
+                            return { label: 'Đã sửa', color: '#3B82F6', bgColor: '#3B82F620' };
+                          case 'in_progress':
+                            return { label: 'Đang xử lý', color: '#F59E0B', bgColor: '#F59E0B20' };
+                          case 'open':
+                          default:
+                            return { label: 'Chưa xử lý', color: '#EF4444', bgColor: '#EF444420' };
+                        }
+                      };
+
+                      const statusInfo = getStatusInfo(defect.status);
+
+                      return (
+                        <View key={defect.id} style={styles.selectedDefectItem}>
+                          <View style={styles.selectedDefectContent}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                              <Text style={styles.selectedDefectText} numberOfLines={2}>
+                                {defect.description}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <View style={[styles.defectStatusBadge, { backgroundColor: statusInfo.bgColor }]}>
+                                <Text style={[styles.defectStatusText, { color: statusInfo.color }]}>
+                                  {statusInfo.label}
+                                </Text>
+                              </View>
+                              {defect.attachments && defect.attachments.length > 0 && (
+                                <Text style={styles.defectImagesCount}>
+                                  {defect.attachments.length} ảnh
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                // Navigate to defects screen with this defect selected
+                                const router = require('expo-router').router;
+                                router.push(`/projects/${projectId}/defects?defectId=${defect.id}`);
+                              }}
+                              style={styles.viewDefectButton}
+                            >
+                              <Ionicons name="eye-outline" size={18} color="#3B82F6" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => toggleDefectSelection(defect)}
+                              style={styles.removeDefectButton}
+                            >
+                              <Ionicons name="close-circle" size={20} color="#EF4444" />
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                        <TouchableOpacity
-                          onPress={() => toggleDefectSelection(defect)}
-                          style={styles.removeDefectButton}
-                        >
-                          <Ionicons name="close-circle" size={20} color="#EF4444" />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 )}
               </View>
@@ -1352,6 +1405,18 @@ export default function AcceptanceChecklist({
                       ]}
                       onPress={async () => {
                         if (!projectId || !acceptingStage) return;
+
+                        // Check for unverified defects before attempting approval
+                        const unverifiedDefects = acceptingStage.defects?.filter((d: any) => d.status !== "verified") || [];
+                        if (unverifiedDefects.length > 0) {
+                          Alert.alert(
+                            "Không thể duyệt",
+                            `Còn ${unverifiedDefects.length} lỗi chưa được xử lý hoàn toàn. Vui lòng kiểm tra và xác nhận tất cả lỗi trước khi duyệt nghiệm thu.`,
+                            [{ text: "Đã hiểu" }]
+                          );
+                          return;
+                        }
+
                         try {
                           const response = await acceptanceApi.customerApproveStage(projectId, acceptingStage.id);
                           if (response.success) {
@@ -1451,6 +1516,32 @@ export default function AcceptanceChecklist({
                               {item.description}
                             </Text>
                             <View style={styles.defectOptionMeta}>
+                              {/* Status Badge */}
+                              {(() => {
+                                const getStatusInfo = (status: string) => {
+                                  switch (status) {
+                                    case 'verified':
+                                      return { label: 'Đã xử lý', color: '#10B981', bgColor: '#10B98120' };
+                                    case 'fixed':
+                                      return { label: 'Đã sửa', color: '#3B82F6', bgColor: '#3B82F620' };
+                                    case 'in_progress':
+                                      return { label: 'Đang xử lý', color: '#F59E0B', bgColor: '#F59E0B20' };
+                                    case 'open':
+                                    default:
+                                      return { label: 'Chưa xử lý', color: '#EF4444', bgColor: '#EF444420' };
+                                  }
+                                };
+                                const statusInfo = getStatusInfo(item.status);
+                                return (
+                                  <View style={[styles.defectStatusBadge, { backgroundColor: statusInfo.bgColor }]}>
+                                    <Text style={[styles.defectStatusText, { color: statusInfo.color }]}>
+                                      {statusInfo.label}
+                                    </Text>
+                                  </View>
+                                );
+                              })()}
+
+                              {/* Severity Badge */}
                               <View style={[
                                 styles.severityBadge,
                                 { backgroundColor: item.severity === "high" || item.severity === "critical" ? "#EF444420" : "#F59E0B20" }
@@ -2268,6 +2359,16 @@ const styles = StyleSheet.create({
     padding: 4,
     marginLeft: 8,
   },
+  viewDefectButton: {
+    padding: 4,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 6,
+  },
+  defectSummaryText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 4,
+  },
   statusButtonsContainer: {
     flexDirection: "row",
     gap: 12,
@@ -2430,5 +2531,14 @@ const styles = StyleSheet.create({
   },
   approvalButtonTextCompleted: {
     color: "#10B981",
+  },
+  defectStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  defectStatusText: {
+    fontSize: 11,
+    fontWeight: "600",
   },
 });

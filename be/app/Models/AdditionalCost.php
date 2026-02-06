@@ -12,6 +12,8 @@ class AdditionalCost extends Model
     protected $fillable = [
         'uuid',
         'project_id',
+        'defect_id',
+        'task_id',
         'amount',
         'description',
         'status',
@@ -60,9 +62,29 @@ class AdditionalCost extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function customerPaidBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'customer_paid_by');
+    }
+
+    public function confirmer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'confirmed_by');
+    }
+
     public function attachments(): MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable');
+    }
+
+    public function defect(): BelongsTo
+    {
+        return $this->belongsTo(Defect::class, 'defect_id');
+    }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(ProjectTask::class, 'task_id');
     }
 
     // ==================================================================

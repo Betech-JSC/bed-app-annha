@@ -219,7 +219,7 @@ class CostController extends Controller
             'quantity' => 'nullable|numeric|min:0.01|required_with:material_id',
             'unit' => 'nullable|string|max:20|required_with:material_id',
             'subcontractor_id' => 'nullable|exists:subcontractors,id',
-            'time_tracking_id' => 'nullable|exists:time_trackings,id',
+
             'payroll_id' => 'nullable|exists:payrolls,id',
             'equipment_allocation_id' => 'nullable|exists:equipment_allocations,id',
         ]);
@@ -231,7 +231,7 @@ class CostController extends Controller
         $costData = array_merge([
             'material_id' => $cost->material_id,
             'subcontractor_id' => $cost->subcontractor_id,
-            'time_tracking_id' => $cost->time_tracking_id,
+
             'payroll_id' => $cost->payroll_id,
             'equipment_allocation_id' => $cost->equipment_allocation_id,
         ], $validated);
@@ -354,13 +354,45 @@ class CostController extends Controller
             ], 400);
         }
 
-        $cost->approveByAccountant($user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Chi phí đã được Kế toán xác nhận.',
-            'data' => $cost->fresh(),
+        // Validate attachment_ids if provided
+        $validated = $request->validate([
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Đính kèm files nếu có
+            if (!empty($validated['attachment_ids'])) {
+                foreach ($validated['attachment_ids'] as $attachmentId) {
+                    $attachment = \App\Models\Attachment::find($attachmentId);
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
+                        $attachment->update([
+                            'attachable_type' => Cost::class,
+                            'attachable_id' => $cost->id,
+                        ]);
+                    }
+                }
+            }
+
+            $cost->approveByAccountant($user);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Chi phí đã được Kế toán xác nhận.',
+                'data' => $cost->fresh(['attachments']),
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

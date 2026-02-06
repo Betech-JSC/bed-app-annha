@@ -163,7 +163,7 @@ export default function MarkPaidAdditionalCostScreen() {
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Ngày thanh toán *</Text>
                   <DatePickerInput
-                    date={markPaidDate}
+                    value={markPaidDate}
                     onDateChange={(date) => setMarkPaidDate(date)}
                     placeholder="Chọn ngày thanh toán"
                     maximumDate={new Date()}

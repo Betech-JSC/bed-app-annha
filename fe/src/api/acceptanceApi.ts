@@ -46,6 +46,17 @@ export interface AcceptanceItem {
   attachments?: any[];
 }
 
+export interface AcceptanceCriterion {
+  id: number;
+  acceptance_template_id: number;
+  name: string;
+  description?: string;
+  is_critical: boolean;
+  order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface AcceptanceTemplate {
   id: number;
   name: string;
@@ -56,6 +67,7 @@ export interface AcceptanceTemplate {
   attachments?: any[]; // Backward compatible
   images?: any[]; // Minh họa (hình ảnh)
   documents?: any[]; // Nội dung chính (PDF, Word, Excel)
+  criteria?: AcceptanceCriterion[];
 }
 
 export interface AcceptanceStage {

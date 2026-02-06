@@ -19,7 +19,7 @@ class SubcontractorPaymentController extends Controller
         $project = Project::findOrFail($projectId);
         
         $query = SubcontractorPayment::where('project_id', $project->id)
-            ->with(['subcontractor', 'creator', 'approver', 'payer', 'workVolume']);
+            ->with(['subcontractor', 'creator', 'approver', 'payer']);
 
         // Filter by subcontractor
         if ($request->has('subcontractor_id')) {
@@ -45,7 +45,7 @@ class SubcontractorPaymentController extends Controller
     public function show(string $projectId, string $id)
     {
         $payment = SubcontractorPayment::where('project_id', $projectId)
-            ->with(['subcontractor', 'project', 'creator', 'approver', 'payer', 'workVolume'])
+            ->with(['subcontractor', 'project', 'creator', 'approver', 'payer'])
             ->findOrFail($id);
 
         return response()->json([
@@ -64,7 +64,6 @@ class SubcontractorPaymentController extends Controller
 
         $validated = $request->validate([
             'subcontractor_id' => 'required|exists:subcontractors,id',
-            'work_volume_id' => 'nullable|exists:work_volumes,id',
             'payment_stage' => 'nullable|string|max:255',
             'amount' => 'required|numeric|min:0',
             'accepted_volume' => 'nullable|numeric|min:0',

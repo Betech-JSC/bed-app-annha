@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { defectApi, Defect } from "@/api/defectApi";
-import { acceptanceApi } from "@/api/acceptanceApi";
+import { acceptanceApi, AcceptanceTemplate } from "@/api/acceptanceApi";
 import { DefectItem, UniversalFileUploader, ScreenHeader, DatePickerInput } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
@@ -42,10 +42,15 @@ export default function DefectsScreen() {
     task_id: "",
     acceptance_stage_id: acceptance_stage_id ? parseInt(acceptance_stage_id) : undefined,
     before_image_ids: [] as number[],
+    defect_type: "standard_violation" as "standard_violation" | "other",
+    acceptance_template_id: undefined as number | undefined,
+    violated_criteria_ids: [] as number[],
   });
   const [beforeImages, setBeforeImages] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<AcceptanceTemplate[]>([]);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
   // In progress modal
   const [inProgressModalVisible, setInProgressModalVisible] = useState(false);
@@ -63,9 +68,16 @@ export default function DefectsScreen() {
   const [selectedDefect, setSelectedDefect] = useState<Defect | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  const [showStandardsModal, setShowStandardsModal] = useState(false);
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  const canVerify = hasPermission(Permissions.DEFECT_VERIFY);
+
   useEffect(() => {
     loadDefects();
     loadTasks();
+    loadTemplates();
     if (acceptance_stage_id) {
       loadAcceptanceStage();
     }
@@ -93,6 +105,17 @@ export default function DefectsScreen() {
       }
     } catch (error) {
       console.error("Error loading acceptance stage:", error);
+    }
+  };
+
+  const loadTemplates = async () => {
+    try {
+      const response = await acceptanceApi.getTemplates(false);
+      if (response.success) {
+        setTemplates(response.data || []);
+      }
+    } catch (error) {
+      console.error("Error loading templates:", error);
     }
   };
 
@@ -144,8 +167,11 @@ export default function DefectsScreen() {
         description: formData.description,
         severity: formData.severity,
         task_id: formData.task_id ? parseInt(formData.task_id) : undefined,
-        acceptance_stage_id: formData.acceptance_stage_id, // BUSINESS RULE: Auto-link from Acceptance
+        acceptance_stage_id: formData.acceptance_stage_id,
         before_image_ids: formData.before_image_ids.length > 0 ? formData.before_image_ids : undefined,
+        defect_type: formData.defect_type,
+        acceptance_template_id: formData.acceptance_template_id,
+        violated_criteria_ids: formData.violated_criteria_ids.length > 0 ? formData.violated_criteria_ids : undefined,
       });
 
       if (response.success) {
@@ -154,9 +180,12 @@ export default function DefectsScreen() {
         setFormData({
           description: "",
           severity: "medium",
-          task_id: "",
-          acceptance_stage_id: acceptance_stage_id ? parseInt(acceptance_stage_id) : undefined,
+          task_id: acceptanceStage?.task_id?.toString() || "",
+          acceptance_stage_id: acceptanceStage ? acceptanceStage.id : undefined,
           before_image_ids: [],
+          defect_type: "standard_violation",
+          acceptance_template_id: undefined,
+          violated_criteria_ids: [],
         });
         setBeforeImages([]);
         loadDefects();
@@ -235,11 +264,39 @@ export default function DefectsScreen() {
     }
   };
 
+  const handleReject = async () => {
+    if (!selectedDefectId) return;
+
+    if (!rejectionReason.trim()) {
+      Alert.alert("Lỗi", "Vui lòng nhập lý do từ chối");
+      return;
+    }
+
+    try {
+      const response = await defectApi.updateDefect(id!, selectedDefectId, {
+        status: "in_progress",
+        rejection_reason: rejectionReason,
+      });
+
+      if (response.success) {
+        Alert.alert("Thành công", "Đã từ chối kết quả xử lý.");
+        setRejectModalVisible(false);
+        setSelectedDefectId(null);
+        setRejectionReason("");
+        setDetailModalVisible(false);
+        loadDefects();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
+    }
+  };
+
   const handleUpdate = async (defectId: number, status: string) => {
     const defect = defects.find(d => d.id === defectId);
     if (!defect) return;
 
-    if (status === "in_progress") {
+    if (status === "in_progress" && defect.status !== "fixed" && defect.status !== "verified") {
+      // Normal start progress
       setSelectedDefectForProgress(defect);
       setInProgressModalVisible(true);
       return;
@@ -251,10 +308,19 @@ export default function DefectsScreen() {
       return;
     }
 
+    if (status === "rejected") { // Custom status for frontend trigger
+      setSelectedDefectId(defectId);
+      setRejectModalVisible(true);
+      return;
+    }
+
     try {
-      const response = await defectApi.updateDefect(id!, defectId, { status });
+      const response = await defectApi.updateDefect(id!, defectId, { status: status as any });
       if (response.success) {
         Alert.alert("Thành công", "Trạng thái lỗi đã được cập nhật.");
+        if (status === "verified") {
+          setDetailModalVisible(false);
+        }
         loadDefects();
       }
     } catch (error: any) {
@@ -309,14 +375,23 @@ export default function DefectsScreen() {
         title="Lỗi Ghi Nhận"
         showBackButton
         rightComponent={
-          <PermissionGuard permission={Permissions.DEFECT_CREATE} projectId={id}>
+          <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setModalVisible(true)}
+              style={styles.settingsButton}
+              onPress={() => setShowStandardsModal(true)}
             >
-              <Ionicons name="add" size={24} color="#3B82F6" />
+              <Ionicons name="book-outline" size={24} color="#4B5563" />
             </TouchableOpacity>
-          </PermissionGuard>
+
+            <PermissionGuard permission={Permissions.DEFECT_CREATE} projectId={id}>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => setModalVisible(true)}
+              >
+                <Ionicons name="add" size={24} color="#3B82F6" />
+              </TouchableOpacity>
+            </PermissionGuard>
+          </View>
         }
       />
 
@@ -373,6 +448,9 @@ export default function DefectsScreen() {
                       task_id: "",
                       acceptance_stage_id: acceptance_stage_id ? parseInt(acceptance_stage_id) : undefined,
                       before_image_ids: [],
+                      defect_type: "standard_violation",
+                      acceptance_template_id: undefined,
+                      violated_criteria_ids: [],
                     });
                     setBeforeImages([]);
                     setShowTaskPicker(false);
@@ -407,6 +485,225 @@ export default function DefectsScreen() {
                     <Text style={styles.acceptanceStageHelper}>
                       Lỗi này sẽ được liên kết với giai đoạn nghiệm thu và công việc trên
                     </Text>
+                  </View>
+                )}
+
+                {/* Loại lỗi */}
+                <View style={[styles.formGroup, { marginTop: 10 }]}>
+                  <Text style={styles.label}>Loại lỗi</Text>
+                  <View style={styles.defectTypeContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.defectTypeButton,
+                        formData.defect_type === "standard_violation" &&
+                        styles.defectTypeButtonActive,
+                      ]}
+                      onPress={() =>
+                        setFormData({ ...formData, defect_type: "standard_violation" })
+                      }
+                    >
+                      <Ionicons
+                        name="list-outline"
+                        size={20}
+                        color={
+                          formData.defect_type === "standard_violation"
+                            ? "#3B82F6"
+                            : "#6B7280"
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.defectTypeText,
+                          formData.defect_type === "standard_violation" &&
+                          styles.defectTypeTextActive,
+                        ]}
+                      >
+                        Vi phạm tiêu chuẩn
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.defectTypeButton,
+                        formData.defect_type === "other" &&
+                        styles.defectTypeButtonActive,
+                      ]}
+                      onPress={() =>
+                        setFormData({ ...formData, defect_type: "other" })
+                      }
+                    >
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={20}
+                        color={
+                          formData.defect_type === "other" ? "#3B82F6" : "#6B7280"
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.defectTypeText,
+                          formData.defect_type === "other" &&
+                          styles.defectTypeTextActive,
+                        ]}
+                      >
+                        Lỗi khác
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Template Picker - Only if standard_violation */}
+                {formData.defect_type === "standard_violation" && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>
+                      Bộ tiêu chuẩn nghiệm thu <Text style={styles.required}>*</Text>
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.taskSelectButton}
+                      onPress={() => setShowTemplatePicker(true)}
+                    >
+                      <Text
+                        style={[
+                          styles.taskSelectText,
+                          !formData.acceptance_template_id &&
+                          styles.placeholderText,
+                        ]}
+                      >
+                        {formData.acceptance_template_id
+                          ? templates.find(
+                            (t) => t.id === formData.acceptance_template_id
+                          )?.name || "Chọn tiêu chuẩn"
+                          : "Chọn bộ tiêu chuẩn"}
+                      </Text>
+                      <Ionicons
+                        name="chevron-down"
+                        size={20}
+                        color="#6B7280"
+                      />
+                    </TouchableOpacity>
+
+                    {/* Criteria Checkboxes */}
+                    {formData.acceptance_template_id && (
+                      <View style={styles.criteriaContainer}>
+                        <Text style={[styles.label, { marginTop: 12 }]}>
+                          Tiêu chí vi phạm:
+                        </Text>
+                        {templates
+                          .find((t) => t.id === formData.acceptance_template_id)
+                          ?.criteria?.map((criterion) => (
+                            <TouchableOpacity
+                              key={criterion.id}
+                              style={styles.criterionItem}
+                              onPress={() => {
+                                let ids = [
+                                  ...(formData.violated_criteria_ids || []),
+                                ];
+                                if (ids.includes(criterion.id)) {
+                                  ids = ids.filter((id) => id !== criterion.id);
+                                } else {
+                                  ids.push(criterion.id);
+                                }
+                                setFormData({
+                                  ...formData,
+                                  violated_criteria_ids: ids,
+                                });
+                              }}
+                            >
+                              <Ionicons
+                                name={
+                                  formData.violated_criteria_ids?.includes(
+                                    criterion.id
+                                  )
+                                    ? "checkbox"
+                                    : "square-outline"
+                                }
+                                size={24}
+                                color={
+                                  formData.violated_criteria_ids?.includes(
+                                    criterion.id
+                                  )
+                                    ? "#EF4444"
+                                    : "#9CA3AF"
+                                }
+                              />
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.criterionName}>
+                                  {criterion.name}
+                                </Text>
+                                {criterion.is_critical && (
+                                  <Text style={styles.criterionCritical}>
+                                    (Bắt buộc)
+                                  </Text>
+                                )}
+                              </View>
+                            </TouchableOpacity>
+                          ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Template Picker - Inside Modal */}
+                {showTemplatePicker && (
+                  <View style={styles.pickerModalOverlay}>
+                    <TouchableOpacity
+                      style={styles.pickerModalOverlayBackdrop}
+                      activeOpacity={1}
+                      onPress={() => setShowTemplatePicker(false)}
+                    />
+                    <View
+                      style={styles.pickerModalContainer}
+                      onStartShouldSetResponder={() => true}
+                    >
+                      <View style={styles.pickerHeader}>
+                        <Text style={styles.pickerTitle}>Chọn tiêu chuẩn</Text>
+                        <TouchableOpacity onPress={() => setShowTemplatePicker(false)}>
+                          <Ionicons name="close" size={24} color="#1F2937" />
+                        </TouchableOpacity>
+                      </View>
+                      <ScrollView style={styles.pickerList}>
+                        <TouchableOpacity
+                          style={styles.pickerOption}
+                          onPress={() => {
+                            setFormData({
+                              ...formData,
+                              acceptance_template_id: undefined,
+                              violated_criteria_ids: [],
+                            });
+                            setShowTemplatePicker(false);
+                          }}
+                        >
+                          <Text style={styles.pickerOptionText}>Không chọn</Text>
+                        </TouchableOpacity>
+                        {templates.map((template) => (
+                          <TouchableOpacity
+                            key={template.id}
+                            style={[
+                              styles.pickerOption,
+                              formData.acceptance_template_id === template.id &&
+                              styles.pickerOptionActive,
+                            ]}
+                            onPress={() => {
+                              setFormData({
+                                ...formData,
+                                acceptance_template_id: template.id,
+                                violated_criteria_ids: [], // Reset criteria when changing template
+                              });
+                              setShowTemplatePicker(false);
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.pickerOptionText,
+                                formData.acceptance_template_id === template.id &&
+                                styles.pickerOptionTextActive,
+                              ]}
+                            >
+                              {template.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
                   </View>
                 )}
 
@@ -574,6 +871,9 @@ export default function DefectsScreen() {
                       task_id: "",
                       acceptance_stage_id: acceptance_stage_id ? parseInt(acceptance_stage_id) : undefined,
                       before_image_ids: [],
+                      defect_type: "standard_violation",
+                      acceptance_template_id: undefined,
+                      violated_criteria_ids: [],
                     });
                     setBeforeImages([]);
                   }}
@@ -789,7 +1089,7 @@ export default function DefectsScreen() {
           onPress={() => setDetailModalVisible(false)}
         >
           <TouchableOpacity
-            style={[styles.modalContent, { maxHeight: "95%", paddingBottom: insets.bottom }]}
+            style={[styles.modalContent, { maxHeight: "95%" }]}
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
           >
@@ -940,7 +1240,109 @@ export default function DefectsScreen() {
                 </>
               )}
             </ScrollView>
+
+            {/* Action Buttons for Fixed Defects */}
+            {selectedDefect && selectedDefect.status === 'fixed' && canVerify && (
+              <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, 20), paddingTop: 10 }]}>
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: '#EF4444', marginRight: 8 }]}
+                  onPress={() => handleUpdate(selectedDefect.id, 'rejected')}
+                >
+                  <Text style={styles.submitButtonText}>Từ chối</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: '#10B981', marginLeft: 8 }]}
+                  onPress={() => handleUpdate(selectedDefect.id, 'verified')}
+                >
+                  <Text style={styles.submitButtonText}>Duyệt</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Reject Modal */}
+      <Modal
+        visible={rejectModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setRejectModalVisible(false);
+          setSelectedDefectId(null);
+          setRejectionReason("");
+        }}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setRejectModalVisible(false);
+            setSelectedDefectId(null);
+            setRejectionReason("");
+          }}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+          >
+            <View style={[styles.modalContent, { maxHeight: "90%" }]}>
+              <View style={[styles.modalHeader, { paddingTop: insets.top + 20 }]}>
+                <Text style={styles.modalTitle}>Từ chối kết quả</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setRejectModalVisible(false);
+                    setSelectedDefectId(null);
+                    setRejectionReason("");
+                  }}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color="#1F2937" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.modalBody}>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>
+                    Lý do từ chối <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    value={rejectionReason}
+                    onChangeText={setRejectionReason}
+                    placeholder="Nhập lý do từ chối..."
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                    numberOfLines={4}
+                  />
+                </View>
+              </View>
+              <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setRejectModalVisible(false);
+                    setSelectedDefectId(null);
+                    setRejectionReason("");
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.submitButton,
+                    { backgroundColor: '#EF4444' },
+                    !rejectionReason.trim() && styles.submitButtonDisabled,
+                  ]}
+                  onPress={handleReject}
+                  disabled={!rejectionReason.trim()}
+                >
+                  <Text style={styles.submitButtonText}>Xác nhận từ chối</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
 
@@ -958,11 +1360,21 @@ export default function DefectsScreen() {
         >
           <View style={styles.imagePreviewContainer}>
             {previewImage && (
-              <Image
-                source={{ uri: previewImage }}
-                style={styles.previewImage}
-                resizeMode="contain"
-              />
+              <ScrollView
+                maximumZoomScale={3}
+                minimumZoomScale={1}
+                centerContent={true}
+                showsHorizontalScrollIndicator={false}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+                style={{ flex: 1, width: '100%' }}
+              >
+                <Image
+                  source={{ uri: previewImage }}
+                  style={[styles.previewImage, { width: '100%', height: '100%' }]}
+                  resizeMode="contain"
+                />
+              </ScrollView>
             )}
             <TouchableOpacity
               style={styles.closePreviewButton}
@@ -973,7 +1385,136 @@ export default function DefectsScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Standards/Acceptance Templates Modal */}
+      <AcceptanceStandardsModal
+        visible={showStandardsModal}
+        onClose={() => setShowStandardsModal(false)}
+      />
     </View >
+  );
+}
+
+function AcceptanceStandardsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      loadTemplates();
+    }
+  }, [visible]);
+
+  const loadTemplates = async () => {
+    try {
+      setLoading(true);
+      const response = await acceptanceApi.getTemplates(true);
+      if (response.success) {
+        setTemplates(response.data || []);
+      }
+    } catch (error) {
+      console.error("Error loading templates:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, styles.fullScreenModal]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Bộ Tiêu Chuẩn Nghiệm Thu</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+          </View>
+
+          {loading ? (
+            <ActivityIndicator size="large" color="#3B82F6" style={{ marginTop: 40 }} />
+          ) : (
+            <FlatList
+              data={templates}
+              keyExtractor={(item) => item.id.toString()}
+              contentContainerStyle={{ padding: 16 }}
+              renderItem={({ item }) => (
+                <View style={styles.standardItem}>
+                  <TouchableOpacity
+                    style={styles.standardHeader}
+                    onPress={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.standardName}>{item.name}</Text>
+                      {item.description && (
+                        <Text style={styles.standardDesc} numberOfLines={expandedId === item.id ? 0 : 1}>
+                          {item.description}
+                        </Text>
+                      )}
+                    </View>
+                    <Ionicons
+                      name={expandedId === item.id ? "chevron-up" : "chevron-down"}
+                      size={20}
+                      color="#6B7280"
+                    />
+                  </TouchableOpacity>
+
+                  {expandedId === item.id && (
+                    <View style={styles.standardBody}>
+                      {item.standard && (
+                        <View style={styles.standardSection}>
+                          <Text style={styles.standardLabel}>Tiêu chuẩn:</Text>
+                          <Text style={styles.standardText}>{item.standard}</Text>
+                        </View>
+                      )}
+
+                      {/* Documents */}
+                      {(item.documents?.length > 0 || item.attachments?.length > 0) && (
+                        <View style={styles.standardSection}>
+                          <Text style={styles.standardLabel}>Tài liệu đính kèm:</Text>
+                          {(item.documents || item.attachments).map((doc: any, index: number) => (
+                            <TouchableOpacity key={index} style={styles.docItem}>
+                              <Ionicons name="document-text-outline" size={20} color="#3B82F6" />
+                              <Text style={styles.docName}>{doc.file_name || doc.name}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+
+                      {/* Images */}
+                      {item.images?.length > 0 && (
+                        <View style={styles.standardSection}>
+                          <Text style={styles.standardLabel}>Hình ảnh minh họa:</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            {item.images.map((img: any, index: number) => (
+                              <Image
+                                key={index}
+                                source={{ uri: img.url }}
+                                style={styles.standardImage}
+                              />
+                            ))}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>Chưa có bộ tiêu chuẩn nào</Text>
+                </View>
+              }
+            />
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -990,6 +1531,11 @@ const styles = StyleSheet.create({
   },
   addButton: {
     padding: 4,
+  },
+  settingsButton: {
+    padding: 4,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
   },
   listContent: {
     padding: 16,
@@ -1014,7 +1560,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    flex: 1,
+    // flex: 1, // Removed to allow content to determine height up to maxHeight
     position: "absolute",
     bottom: 0,
     left: 0,
@@ -1383,4 +1929,131 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontStyle: "italic",
   },
+  fullScreenModal: {
+    height: "100%",
+    borderRadius: 0,
+    marginTop: 0,
+  },
+  standardItem: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    overflow: "hidden",
+  },
+  standardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    backgroundColor: "#F9FAFB",
+  },
+  standardName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  standardDesc: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  standardBody: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  standardSection: {
+    marginBottom: 16,
+  },
+  standardLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  standardText: {
+    fontSize: 14,
+    color: "#4B5563",
+    lineHeight: 20,
+  },
+  docItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 8,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  docName: {
+    fontSize: 13,
+    color: "#2563EB",
+    flex: 1,
+  },
+  standardImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: "#E5E7EB",
+  },
+  defectTypeContainer: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  defectTypeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#FFFFFF",
+  },
+  defectTypeButtonActive: {
+    borderColor: "#3B82F6",
+    backgroundColor: "#EFF6FF",
+  },
+  defectTypeText: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
+  defectTypeTextActive: {
+    color: "#3B82F6",
+    fontWeight: "600",
+  },
+  criteriaContainer: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  criterionItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  criterionName: {
+    fontSize: 14,
+    color: "#374151",
+    flex: 1,
+  },
+  criterionCritical: {
+    fontSize: 12,
+    color: "#EF4444",
+    marginTop: 2,
+    fontWeight: "500",
+  },
 });
+

@@ -46,6 +46,32 @@ class ProjectPaymentController extends Controller
     }
 
     /**
+     * Chi tiết thanh toán
+     */
+    public function show(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::PAYMENT_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem thanh toán của dự án này.'
+            ], 403);
+        }
+
+        $payment = ProjectPayment::where('project_id', $projectId)
+            ->with(['confirmer', 'customerApprover', 'attachments'])
+            ->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $payment
+        ]);
+    }
+
+    /**
      * Tạo đợt thanh toán
      */
     public function store(Request $request, string $projectId)

@@ -22,20 +22,34 @@ export default function ProgressChart({
     if (!logs || logs.length === 0) {
       return null;
     }
-    const percentages = logs.map((log) => log.completion_percentage);
+
+    // Safely parse percentages
+    const percentages = logs
+      .map((log) => {
+        const val = parseFloat(String(log.completion_percentage));
+        return isNaN(val) ? 0 : val;
+      });
+
+    if (percentages.length === 0) return null;
+
+    const sum = percentages.reduce((acc, val) => acc + val, 0);
+    const avg = percentages.length > 0 ? sum / percentages.length : 0;
+
+    const latest = percentages[percentages.length - 1];
+    const previous = percentages.length > 1 ? percentages[percentages.length - 2] : latest;
+
     return {
       min: Math.min(...percentages),
       max: Math.max(...percentages),
-      average: Math.round(
-        percentages.reduce((sum, val) => sum + val, 0) / percentages.length
-      ),
-      current: percentages[percentages.length - 1],
+      average: Math.round(avg),
+      current: latest,
       trend:
         percentages.length > 1
-          ? percentages[percentages.length - 1] >
-            percentages[percentages.length - 2]
+          ? latest > previous
             ? "up"
-            : "down"
+            : latest < previous
+              ? "down"
+              : "stable"
           : "stable",
     };
   }, [logs]);
@@ -76,12 +90,12 @@ export default function ProgressChart({
             <View
               style={[
                 styles.progressFill,
-                { width: `${progress.overall_percentage}%` },
+                { width: `${isNaN(Number(progress.overall_percentage)) ? 0 : Number(progress.overall_percentage)}%` },
               ]}
             />
           </View>
           <Text style={styles.progressText}>
-            {progress.overall_percentage}%
+            {isNaN(Number(progress.overall_percentage)) ? 0 : Number(progress.overall_percentage)}%
           </Text>
           <Text style={styles.progressMethod}>
             Tính từ: {progress.calculated_from}
@@ -276,7 +290,6 @@ export default function ProgressChart({
                 yAxisLabel=""
                 yAxisSuffix="%"
                 withInnerLines={true}
-                withOuterLines={true}
                 withVerticalLabels={true}
                 withHorizontalLabels={true}
                 showValuesOnTopOfBars={true}

@@ -26,6 +26,8 @@ class DefectController extends Controller
                 'verifier',
                 'task',
                 'acceptanceStage',
+                'acceptanceStage',
+                'violatedCriteria',
                 'attachments' => function ($q) {
                     $q->orderBy('description')->orderBy('created_at');
                 }
@@ -63,7 +65,13 @@ class DefectController extends Controller
             'description' => 'required|string|max:2000',
             'severity' => ['required', 'in:low,medium,high,critical'],
             'before_image_ids' => 'nullable|array',
+            'severity' => ['required', 'in:low,medium,high,critical'],
+            'before_image_ids' => 'nullable|array',
             'before_image_ids.*' => 'required|integer|exists:attachments,id',
+            'acceptance_template_id' => 'nullable|exists:acceptance_templates,id',
+            'defect_type' => 'nullable|in:standard_violation,other',
+            'violated_criteria_ids' => 'nullable|array',
+            'violated_criteria_ids.*' => 'required|integer|exists:acceptance_criteria,id',
         ]);
 
         // BUSINESS RULE: Auto-link task_id from acceptance_stage if provided
@@ -83,10 +91,18 @@ class DefectController extends Controller
                 'task_id' => $taskId, // BUSINESS RULE: Auto-linked from acceptance_stage or provided
                 'reported_by' => $user->id,
                 'acceptance_stage_id' => $validated['acceptance_stage_id'] ?? null,
+                'acceptance_stage_id' => $validated['acceptance_stage_id'] ?? null,
+                'acceptance_template_id' => $validated['acceptance_template_id'] ?? null,
+                'defect_type' => $validated['defect_type'] ?? 'other',
                 'description' => $validated['description'],
                 'severity' => $validated['severity'],
                 'status' => 'open',
             ]);
+
+            // Sync violated criteria if provided
+            if (isset($validated['violated_criteria_ids']) && is_array($validated['violated_criteria_ids'])) {
+                $defect->violatedCriteria()->sync($validated['violated_criteria_ids']);
+            }
 
             // Create history record
             DefectHistory::create([
@@ -115,7 +131,8 @@ class DefectController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Lỗi đã được ghi nhận.',
-                'data' => $defect->fresh(['reporter', 'acceptanceStage', 'attachments'])
+                'message' => 'Lỗi đã được ghi nhận.',
+                'data' => $defect->fresh(['reporter', 'acceptanceStage', 'attachments', 'violatedCriteria'])
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -141,7 +158,10 @@ class DefectController extends Controller
             'status' => ['sometimes', 'in:open,in_progress,fixed,verified'],
             'expected_completion_date' => 'nullable|date',
             'after_image_ids' => 'nullable|array',
+            'after_image_ids' => 'nullable|array',
             'after_image_ids.*' => 'required|integer|exists:attachments,id',
+            'violated_criteria_ids' => 'nullable|array',
+            'violated_criteria_ids.*' => 'required|integer|exists:acceptance_criteria,id',
         ]);
 
         $oldStatus = $defect->status;
@@ -150,11 +170,15 @@ class DefectController extends Controller
         if (isset($validated['status'])) {
             switch ($validated['status']) {
                 case 'in_progress':
-                    $defect->markAsInProgress($user);
-                    // Update expected_completion_date if provided
-                    if (isset($validated['expected_completion_date'])) {
-                        $defect->expected_completion_date = $validated['expected_completion_date'];
-                        $defect->save();
+                    // If moving back to in_progress from fixed/verified loops (Rejection)
+                    if ($request->has('rejection_reason')) {
+                        $defect->markAsRejected($user, $request->input('rejection_reason'));
+                    } else {
+                        $defect->markAsInProgress($user);
+                        if (isset($validated['expected_completion_date'])) {
+                            $defect->expected_completion_date = $validated['expected_completion_date'];
+                            $defect->save();
+                        }
                     }
                     break;
                 case 'fixed':
@@ -167,6 +191,7 @@ class DefectController extends Controller
                     }
                     $defect->markAsFixed($user);
                     // Attach after images when marking as fixed
+                    if (isset($validated['after_image_ids']) && is_array($validated['after_image_ids'])) {
                         foreach ($validated['after_image_ids'] as $attachmentId) {
                             $attachment = Attachment::find($attachmentId);
                             if ($attachment && $attachment->uploaded_by === $user->id) {
@@ -175,6 +200,7 @@ class DefectController extends Controller
                                     'attachable_id' => $defect->id,
                                     'description' => 'after', // Mark as after image
                                 ]);
+                            }
                         }
                     }
                     break;
@@ -213,10 +239,16 @@ class DefectController extends Controller
             $defect->update($validated);
         }
 
+        // Sync violated criteria if provided
+        if (isset($validated['violated_criteria_ids']) && is_array($validated['violated_criteria_ids'])) {
+            $defect->violatedCriteria()->sync($validated['violated_criteria_ids']);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Lỗi đã được cập nhật.',
-            'data' => $defect->fresh(['reporter', 'fixer', 'verifier', 'task', 'acceptanceStage', 'attachments'])
+            'message' => 'Lỗi đã được cập nhật.',
+            'data' => $defect->fresh(['reporter', 'fixer', 'verifier', 'task', 'acceptanceStage', 'attachments', 'violatedCriteria'])
         ]);
     }
 
@@ -245,5 +277,51 @@ class DefectController extends Controller
             'success' => true,
             'data' => $defect
         ]);
+    }
+
+    /**
+     * Xác nhận tiêu chí nghiệm thu (Verify Criteria)
+     */
+    public function verifyCriteria(Request $request, string $projectId, string $id)
+    {
+        $defect = Defect::where('project_id', $projectId)->findOrFail($id);
+        $user = auth()->user();
+
+        $validated = $request->validate([
+            'criteria' => 'required|array',
+            'criteria.*.id' => 'required|exists:acceptance_criteria,id',
+            'criteria.*.status' => 'required|in:passed,failed',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            foreach ($validated['criteria'] as $item) {
+                // Check if criterio exists in defect
+                $exists = $defect->violatedCriteria()->where('acceptance_criterion_id', $item['id'])->exists();
+                if ($exists) {
+                    $defect->violatedCriteria()->updateExistingPivot($item['id'], [
+                        'status' => $item['status'],
+                        'verified_at' => now(),
+                        'verified_by' => $user->id,
+                    ]);
+                }
+            }
+            
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã cập nhật trạng thái tiêu chí.',
+                'data' => $defect->fresh(['violatedCriteria'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

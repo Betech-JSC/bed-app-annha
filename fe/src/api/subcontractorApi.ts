@@ -20,7 +20,6 @@ export interface SubcontractorPayment {
   uuid: string;
   subcontractor_id: number;
   project_id: number;
-  work_volume_id?: number;
   payment_number: string;
   payment_stage?: string;
   amount: number;
@@ -213,7 +212,6 @@ export const subcontractorApi = {
     projectId: string | number,
     data: {
       subcontractor_id: number;
-      work_volume_id?: number;
       payment_stage?: string;
       amount: number;
       accepted_volume?: number;

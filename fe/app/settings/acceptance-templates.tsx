@@ -15,7 +15,7 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { acceptanceApi, AcceptanceTemplate } from "@/api/acceptanceApi";
+import { acceptanceApi, AcceptanceTemplate, AcceptanceCriterion } from "@/api/acceptanceApi";
 import { Ionicons } from "@expo/vector-icons";
 import { UniversalFileUploader, ScreenHeader } from "@/components";
 
@@ -37,6 +37,7 @@ export default function AcceptanceTemplatesScreen() {
   const [uploadedImages, setUploadedImages] = useState<any[]>([]);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [criteria, setCriteria] = useState<Partial<AcceptanceCriterion>[]>([]);
 
   useEffect(() => {
     loadTemplates();
@@ -71,6 +72,7 @@ export default function AcceptanceTemplatesScreen() {
       setUploadedDocuments(template.documents || []);
       setImageIds(template.images?.map((a: any) => a.id || a.attachment_id) || []);
       setDocumentIds(template.documents?.map((a: any) => a.id || a.attachment_id) || []);
+      setCriteria(template.criteria || []);
     } else {
       setEditingTemplate(null);
       setFormData({
@@ -84,6 +86,7 @@ export default function AcceptanceTemplatesScreen() {
       setUploadedDocuments([]);
       setImageIds([]);
       setDocumentIds([]);
+      setCriteria([]);
     }
     setModalVisible(true);
   };
@@ -102,6 +105,7 @@ export default function AcceptanceTemplatesScreen() {
     setUploadedDocuments([]);
     setImageIds([]);
     setDocumentIds([]);
+    setCriteria([]);
   };
 
   const handleImagesUpload = (files: any[]) => {
@@ -132,6 +136,7 @@ export default function AcceptanceTemplatesScreen() {
         ...formData,
         image_ids: imageIds.length > 0 ? imageIds : undefined,
         document_ids: documentIds.length > 0 ? documentIds : undefined,
+        criteria,
       };
 
       if (editingTemplate) {
@@ -392,6 +397,66 @@ export default function AcceptanceTemplatesScreen() {
                   keyboardType="numeric"
                 />
               </View>
+
+              <View style={styles.sectionHeader}>
+                <Text style={styles.label}>Tiêu chí nghiệm thu chi tiết</Text>
+                <TouchableOpacity
+                  style={styles.addCriterionButton}
+                  onPress={() => {
+                    setCriteria([
+                      ...criteria,
+                      { name: "", is_critical: true, order: criteria.length },
+                    ]);
+                  }}
+                >
+                  <Ionicons name="add-circle" size={20} color="#3B82F6" />
+                  <Text style={styles.addCriterionText}>Thêm tiêu chí</Text>
+                </TouchableOpacity>
+              </View>
+
+              {criteria.map((item, index) => (
+                <View key={index} style={styles.criteriaItem}>
+                  <View style={styles.criteriaHeader}>
+                    <Text style={styles.criteriaIndex}>#{index + 1}</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const newCriteria = [...criteria];
+                        newCriteria.splice(index, 1);
+                        setCriteria(newCriteria);
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={[styles.input, styles.criteriaInput]}
+                    placeholder="Nội dung tiêu chí (Ví dụ: Bề mặt phẳng, không gồ ghề)"
+                    value={item.name}
+                    onChangeText={(text) => {
+                      const newCriteria = [...criteria];
+                      newCriteria[index].name = text;
+                      setCriteria(newCriteria);
+                    }}
+                  />
+                  <View style={styles.criteriaOptions}>
+                    <TouchableOpacity
+                      style={styles.checkboxContainer}
+                      onPress={() => {
+                        const newCriteria = [...criteria];
+                        newCriteria[index].is_critical = !newCriteria[index].is_critical;
+                        setCriteria(newCriteria);
+                      }}
+                    >
+                      <Ionicons
+                        name={item.is_critical ? "checkbox" : "square-outline"}
+                        size={20}
+                        color={item.is_critical ? "#3B82F6" : "#9CA3AF"}
+                      />
+                      <Text style={styles.checkboxLabel}>Bắt buộc (Critical)</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
 
               <TouchableOpacity
                 style={styles.toggleContainer}
@@ -688,5 +753,57 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#FFFFFF",
   },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  addCriterionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  addCriterionText: {
+    color: "#3B82F6",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  criteriaItem: {
+    backgroundColor: "#F9FAFB",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  criteriaHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  criteriaIndex: {
+    fontWeight: "600",
+    color: "#6B7280",
+    fontSize: 12,
+  },
+  criteriaInput: {
+    marginBottom: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  criteriaOptions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: "#4B5563",
+  },
 });
-

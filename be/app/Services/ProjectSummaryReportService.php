@@ -102,11 +102,8 @@ class ProjectSummaryReportService
             ->where('status', 'approved')
             ->sum('amount');
 
-        // 4. Nhân công khoán = Chi phí công trình (Cost từ TimeTracking)
-        $laborContractCosts = (float) Cost::where('project_id', $project->id)
-            ->whereNotNull('time_tracking_id')
-            ->where('status', 'approved')
-            ->sum('amount');
+        // 4. Nhân công khoán (Removed)
+        $laborContractCosts = 0;
 
         // 5. Lương = Chi phí công ty (KHÔNG tính vào dự án)
         // Lấy từ Payroll (nếu chưa tạo Cost) hoặc từ Cost có payroll_id
@@ -139,7 +136,7 @@ class ProjectSummaryReportService
     {
         $query = Cost::where('project_id', $project->id)
             ->where('status', 'approved')
-            ->with(['material', 'subcontractor', 'timeTracking']);
+            ->with(['material', 'subcontractor']);
 
         switch ($type) {
             case 'material':
@@ -157,10 +154,7 @@ class ProjectSummaryReportService
                 $query->whereNotNull('subcontractor_id')
                     ->with('subcontractor');
                 break;
-            case 'labor':
-                $query->whereNotNull('time_tracking_id')
-                    ->with('timeTracking.user');
-                break;
+
             default:
                 return [];
         }
@@ -202,16 +196,7 @@ class ProjectSummaryReportService
                         'name' => $cost->subcontractor->name,
                     ] : null;
                     break;
-                case 'labor':
-                    $item['time_tracking'] = $cost->timeTracking ? [
-                        'id' => $cost->timeTracking->id,
-                        'user' => $cost->timeTracking->user ? [
-                            'id' => $cost->timeTracking->user->id,
-                            'name' => $cost->timeTracking->user->name,
-                        ] : null,
-                        'check_in_at' => $cost->timeTracking->check_in_at?->format('Y-m-d H:i'),
-                    ] : null;
-                    break;
+
             }
 
             return $item;

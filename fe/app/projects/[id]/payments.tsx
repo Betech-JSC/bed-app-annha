@@ -219,7 +219,11 @@ export default function PaymentsScreen() {
   };
 
   const renderPaymentItem = ({ item }: { item: ProjectPayment }) => (
-    <View style={styles.paymentCard}>
+    <TouchableOpacity
+      style={styles.paymentCard}
+      onPress={() => router.push(`/projects/${id}/payments/${item.id}` as any)}
+      activeOpacity={0.7}
+    >
       <View style={styles.paymentHeader}>
         <View>
           <Text style={styles.paymentNumber}>
@@ -306,31 +310,62 @@ export default function PaymentsScreen() {
             style={styles.markPaidButton}
             onPress={() => handleMarkAsPaid(item)}
           >
-            <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.markPaidButtonText}>Đã thanh toán</Text>
+            <Ionicons name="card-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.markPaidButtonText}>Đánh dấu đã thanh toán</Text>
           </TouchableOpacity>
         </PermissionGuard>
       )}
 
-      {/* Kế toán xác nhận đã nhận tiền */}
+      {/* Kế toán xác nhận/từ chối thanh toán */}
       {item.status === "customer_paid" && (
         <PermissionGuard permission={Permissions.PAYMENT_CONFIRM} projectId={id}>
-          <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={() => handleConfirmPayment(item)}
-          >
-            <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.confirmButtonText}>Xác nhận đã nhận tiền</Text>
-          </TouchableOpacity>
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.confirmButton]}
+              onPress={() => handleConfirmPayment(item)}
+            >
+              <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+              <Text style={styles.confirmButtonText}>Xác nhận</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.rejectButton]}
+              onPress={() => handleRejectPayment(item)}
+            >
+              <Ionicons name="close-circle" size={20} color="#FFFFFF" />
+              <Text style={styles.rejectButtonText}>Từ chối</Text>
+            </TouchableOpacity>
+          </View>
         </PermissionGuard>
       )}
-    </View>
+    </TouchableOpacity>
   );
 
   const handleConfirmPayment = (payment: ProjectPayment) => {
     setSelectedPayment(payment);
     setConfirmPaidDate(new Date().toISOString().split("T")[0]);
     setShowConfirmModal(true);
+  };
+
+  const handleRejectPayment = (payment: ProjectPayment) => {
+    Alert.alert(
+      "Từ chối thanh toán",
+      `Bạn có chắc muốn từ chối thanh toán Đợt ${payment.payment_number}?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Từ chối",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // TODO: Implement reject payment API
+              Alert.alert("Thông báo", "Chức năng đang phát triển");
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể từ chối thanh toán");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleMarkAsPaid = (payment: ProjectPayment) => {
@@ -435,6 +470,11 @@ export default function PaymentsScreen() {
   const submitMarkAsPaid = async () => {
     if (!selectedPayment || !markPaidDate) {
       Alert.alert("Lỗi", "Vui lòng chọn ngày thanh toán");
+      return;
+    }
+
+    if (markPaidAttachmentIds.length === 0) {
+      Alert.alert("Lỗi", "Vui lòng upload ít nhất một chứng từ chuyển khoản");
       return;
     }
 
@@ -860,8 +900,7 @@ export default function PaymentsScreen() {
       <Modal
         visible={showMarkPaidModal}
         animationType="slide"
-        transparent={true}
-        presentationStyle="overFullScreen"
+        presentationStyle="pageSheet"
         onRequestClose={() => {
           setShowMarkPaidModal(false);
           setMarkPaidFiles([]);
@@ -869,97 +908,97 @@ export default function PaymentsScreen() {
           setActualAmount("");
         }}
       >
-        <SafeAreaView style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, tabBarHeight) + 16 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Đánh Dấu Đã Thanh Toán</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowMarkPaidModal(false);
-                  setMarkPaidFiles([]);
-                  setMarkPaidAttachmentIds([]);
-                  setActualAmount("");
-                }}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              style={styles.modalScrollView}
-              contentContainerStyle={{ paddingBottom: 16 }}
-              showsVerticalScrollIndicator={true}
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Đánh Dấu Đã Thanh Toán</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setShowMarkPaidModal(false);
+                setMarkPaidFiles([]);
+                setMarkPaidAttachmentIds([]);
+                setActualAmount("");
+              }}
             >
-              {selectedPayment && (
-                <View>
-                  <View style={styles.confirmInfoCard}>
-                    <Text style={styles.confirmInfoLabel}>Đợt thanh toán</Text>
-                    <Text style={styles.confirmInfoValue}>
-                      Đợt {selectedPayment.payment_number}
-                    </Text>
-                  </View>
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+          </View>
 
-                  <View style={styles.confirmInfoCard}>
-                    <Text style={styles.confirmInfoLabel}>Số tiền yêu cầu</Text>
-                    <Text style={styles.confirmInfoValue}>
-                      {formatCurrency(selectedPayment.amount)}
-                    </Text>
-                  </View>
-
-                  <DatePickerInput
-                    label="Ngày thanh toán *"
-                    value={markPaidDate ? new Date(markPaidDate) : null}
-                    onChange={(date) => {
-                      if (date) {
-                        setMarkPaidDate(date.toISOString().split("T")[0]);
-                      }
-                    }}
-                    placeholder="Chọn ngày thanh toán"
-                    required
-                    maximumDate={new Date()}
-                  />
-
-                  <CurrencyInput
-                    label="Số tiền thực tế (nếu khác)"
-                    value={actualAmount ? parseFloat(actualAmount) : 0}
-                    onChangeText={(amount) => setActualAmount(amount > 0 ? amount.toString() : "")}
-                    placeholder="Nhập số tiền thực tế (tùy chọn)"
-                    helperText="Để trống nếu số tiền thực tế bằng số tiền yêu cầu"
-                  />
-
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>Chứng từ chuyển khoản *</Text>
-                    <UniversalFileUploader
-                      onUploadComplete={handleMarkPaidFilesUpload}
-                      multiple={true}
-                      accept="image"
-                      maxFiles={10}
-                      initialFiles={markPaidFiles}
-                      showPreview={true}
-                      label="Chọn hình ảnh chứng từ chuyển khoản"
-                    />
-                  </View>
+          <ScrollView
+            style={styles.modalScrollView}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, tabBarHeight) + 16 }}
+            showsVerticalScrollIndicator={true}
+          >
+            {selectedPayment && (
+              <View>
+                <View style={styles.confirmInfoCard}>
+                  <Text style={styles.confirmInfoLabel}>Đợt thanh toán</Text>
+                  <Text style={styles.confirmInfoValue}>
+                    Đợt {selectedPayment.payment_number}
+                  </Text>
                 </View>
-              )}
-            </ScrollView>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowMarkPaidModal(false);
-                  setMarkPaidFiles([]);
-                  setMarkPaidAttachmentIds([]);
-                  setActualAmount("");
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={submitMarkAsPaid}
-              >
-                <Text style={styles.saveButtonText}>Xác Nhận</Text>
-              </TouchableOpacity>
-            </View>
+
+                <View style={styles.confirmInfoCard}>
+                  <Text style={styles.confirmInfoLabel}>Số tiền yêu cầu</Text>
+                  <Text style={styles.confirmInfoValue}>
+                    {formatCurrency(selectedPayment.amount)}
+                  </Text>
+                </View>
+
+                <DatePickerInput
+                  label="Ngày thanh toán *"
+                  value={markPaidDate ? new Date(markPaidDate) : null}
+                  onChange={(date) => {
+                    if (date) {
+                      setMarkPaidDate(date.toISOString().split("T")[0]);
+                    }
+                  }}
+                  placeholder="Chọn ngày thanh toán"
+                  required
+                  maximumDate={new Date()}
+                />
+
+                <CurrencyInput
+                  label="Số tiền thực tế (nếu khác)"
+                  value={actualAmount ? parseFloat(actualAmount) : 0}
+                  onChangeText={(amount) => setActualAmount(amount > 0 ? amount.toString() : "")}
+                  placeholder="Nhập số tiền thực tế (tùy chọn)"
+                  helperText="Để trống nếu số tiền thực tế bằng số tiền yêu cầu"
+                />
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Chứng từ chuyển khoản *</Text>
+                  <UniversalFileUploader
+                    onUploadComplete={handleMarkPaidFilesUpload}
+                    multiple={true}
+                    accept="image"
+                    maxFiles={10}
+                    initialFiles={markPaidFiles}
+                    showPreview={true}
+                    label="Chọn hình ảnh chứng từ chuyển khoản"
+                  />
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => {
+                setShowMarkPaidModal(false);
+                setMarkPaidFiles([]);
+                setMarkPaidAttachmentIds([]);
+                setActualAmount("");
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.saveButton]}
+              onPress={submitMarkAsPaid}
+            >
+              <Text style={styles.saveButtonText}>Xác Nhận</Text>
+            </TouchableOpacity>
           </View>
         </SafeAreaView>
       </Modal>
@@ -1119,30 +1158,56 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    marginTop: 12,
-    padding: 12,
+    marginTop: 16,
+    padding: 14,
     backgroundColor: "#3B82F6",
-    borderRadius: 8,
+    borderRadius: 10,
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   markPaidButtonText: {
     color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 14,
+    fontWeight: "700",
+    fontSize: 15,
   },
-  confirmButton: {
+  actionButtonsContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  actionButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    marginTop: 12,
-    padding: 12,
+    gap: 6,
+    padding: 14,
+    borderRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  confirmButton: {
     backgroundColor: "#10B981",
-    borderRadius: 8,
+    shadowColor: "#10B981",
   },
   confirmButtonText: {
     color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 14,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  rejectButton: {
+    backgroundColor: "#EF4444",
+    shadowColor: "#EF4444",
+  },
+  rejectButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 15,
   },
   emptyContainer: {
     flex: 1,
@@ -1358,9 +1423,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
     marginBottom: 16,
-  },
-  rejectButton: {
-    backgroundColor: "#EF4444",
   },
   permissionDeniedContainer: {
     flex: 1,

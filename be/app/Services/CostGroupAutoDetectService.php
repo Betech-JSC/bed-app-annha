@@ -10,7 +10,7 @@ class CostGroupAutoDetectService
     /**
      * Tự động xác định cost_group_id dựa trên nguồn phát sinh chi phí
      * 
-     * @param array $costData Dữ liệu cost (có thể chứa material_id, subcontractor_id, time_tracking_id, payroll_id, equipment_allocation_id)
+     * @param array $costData Dữ liệu cost (có thể chứa material_id, subcontractor_id, payroll_id, equipment_allocation_id)
      * @return int|null
      */
     public function detectCostGroup(array $costData): ?int
@@ -33,7 +33,7 @@ class CostGroupAutoDetectService
         }
 
         // 3. Nhân công (Labor - TimeTracking hoặc Payroll)
-        if (!empty($costData['time_tracking_id']) || !empty($costData['payroll_id'])) {
+        if (!empty($costData['payroll_id'])) {
             return $this->findCostGroupByCode('labor');
         }
 
@@ -147,7 +147,7 @@ class CostGroupAutoDetectService
             return 'subcontractor';
         }
 
-        if (!empty($costData['time_tracking_id']) || !empty($costData['payroll_id'])) {
+        if (!empty($costData['payroll_id'])) {
             return 'labor';
         }
 

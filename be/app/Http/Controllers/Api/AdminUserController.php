@@ -142,9 +142,7 @@ class AdminUserController extends Controller
                 if (class_exists(\App\Models\ProjectPersonnel::class)) {
                     $projectsCount = \App\Models\ProjectPersonnel::where('user_id', $user->id)->distinct('project_id')->count();
                 }
-                if (class_exists(\App\Models\TimeTracking::class)) {
-                    $timeTrackingsCount = \App\Models\TimeTracking::where('user_id', $user->id)->count();
-                }
+
                 // Payroll stats removed - HR module deleted
                 $payrollsCount = 0;
             } catch (\Exception $e) {
@@ -314,19 +312,13 @@ class AdminUserController extends Controller
         $endDate = now();
         $startDate = now()->subMonths($months - 1)->startOfMonth();
 
-        // 1. Biểu đồ số giờ làm việc theo tháng
+        // 1. Biểu đồ số giờ làm việc theo tháng (Removed TimeTracking)
         $monthlyHours = [];
         $currentDate = $startDate->copy();
         while ($currentDate <= $endDate) {
-            $monthKey = $currentDate->format('Y-m');
-            $hours = \App\Models\TimeTracking::whereYear('check_in_at', $currentDate->year)
-                ->whereMonth('check_in_at', $currentDate->month)
-                ->where('status', 'approved')
-                ->sum('total_hours') ?? 0;
-
             $monthlyHours[] = [
                 'month' => $currentDate->format('M/Y'),
-                'hours' => round($hours, 2),
+                'hours' => 0,
             ];
 
             $currentDate->addMonth();
@@ -375,25 +367,25 @@ class AdminUserController extends Controller
             $currentDate->addMonth();
         }
 
-        // 5. Biểu đồ trạng thái chấm công
+        // 5. Biểu đồ trạng thái chấm công (Removed TimeTracking)
         $timeTrackingStatus = [
             [
                 'status' => 'Đã duyệt',
-                'count' => \App\Models\TimeTracking::where('status', 'approved')->count(),
+                'count' => 0,
             ],
             [
                 'status' => 'Chờ duyệt',
-                'count' => \App\Models\TimeTracking::where('status', 'pending')->count(),
+                'count' => 0,
             ],
             [
                 'status' => 'Từ chối',
-                'count' => \App\Models\TimeTracking::where('status', 'rejected')->count(),
+                'count' => 0,
             ],
         ];
 
         // Stats tổng quan
         $stats = [
-            'pending_time_tracking' => \App\Models\TimeTracking::where('status', 'pending')->count(),
+            'pending_time_tracking' => 0,
             'pending_payroll' => 0, // Payroll removed - HR module deleted
             'pending_bonuses' => 0, // Bonuses removed - HR module deleted
             'total_employees' => User::whereNull('deleted_at')->count(),
@@ -424,15 +416,9 @@ class AdminUserController extends Controller
         $month = $request->get('month', date('m'));
         $year = $request->get('year', date('Y'));
 
-        // Get time tracking stats
-        $timeTrackings = \App\Models\TimeTracking::where('user_id', $user->id)
-            ->whereYear('check_in_at', $year)
-            ->whereMonth('check_in_at', $month)
-            ->where('status', 'approved')
-            ->get();
-
-        $totalHours = $timeTrackings->sum('total_hours') ?? 0;
-        $totalDays = $timeTrackings->count();
+        // Get time tracking stats (Removed)
+        $totalHours = 0;
+        $totalDays = 0;
 
         // Payroll stats removed - HR module deleted
         $totalSalary = 0;

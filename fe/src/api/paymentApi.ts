@@ -51,6 +51,12 @@ export const paymentApi = {
     return response.data;
   },
 
+  // Get single payment by ID
+  getPaymentById: async (projectId: string | number, paymentId: string | number) => {
+    const response = await api.get(`/projects/${projectId}/payments/${paymentId}`);
+    return response.data;
+  },
+
   // Create payment
   createPayment: async (projectId: string | number, data: CreatePaymentData) => {
     const response = await api.post(`/projects/${projectId}/payments`, data);

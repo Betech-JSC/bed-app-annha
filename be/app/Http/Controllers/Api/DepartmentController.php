@@ -227,12 +227,7 @@ class DepartmentController extends Controller
                 ->where('status', 'approved')->count(),
         ];
 
-        // Thống kê Time Tracking
-        $timeTrackingStats = [
-            'total' => TimeTracking::whereIn('user_id', $department->employees()->pluck('id'))->count(),
-            'total_hours' => TimeTracking::whereIn('user_id', $department->employees()->pluck('id'))
-                ->where('status', 'approved')->sum('total_hours'),
-        ];
+
 
         // Thống kê Costs
         $costStats = [
@@ -260,7 +255,7 @@ class DepartmentController extends Controller
                     'employees' => $employeeCount,
                     'payroll' => $payrollStats,
                     'leave_requests' => $leaveStats,
-                    'time_tracking' => $timeTrackingStats,
+
                     'costs' => $costStats,
                     'projects' => $projectStats,
                 ],

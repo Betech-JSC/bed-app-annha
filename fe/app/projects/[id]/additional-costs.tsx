@@ -72,6 +72,35 @@ export default function AdditionalCostsScreen() {
     }
   };
 
+  const handleMarkPaid = async (costId: number) => {
+    Alert.alert(
+      "Xác nhận thanh toán",
+      "Bạn có chắc chắn đã thanh toán chi phí này?",
+      [
+        {
+          text: "Hủy",
+          style: "cancel"
+        },
+        {
+          text: "Xác nhận",
+          onPress: async () => {
+            try {
+              const response = await additionalCostApi.markAsPaidByCustomer(id!, costId, {
+                paid_date: new Date().toISOString().split("T")[0],
+              });
+              if (response.success) {
+                Alert.alert("Thành công", "Đã đánh dấu thanh toán. Đang chờ kế toán xác nhận.");
+                loadCosts();
+              }
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
@@ -159,7 +188,7 @@ export default function AdditionalCostsScreen() {
             style={styles.markPaidButton}
             onPress={(e) => {
               e.stopPropagation();
-              router.push(`/projects/${id}/additional-costs/${item.id}/mark-paid`);
+              handleMarkPaid(item.id);
             }}
           >
             <Text style={styles.markPaidButtonText}>Đã thanh toán</Text>

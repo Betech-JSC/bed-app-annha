@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Cost;
 use App\Models\Receipt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -142,6 +143,28 @@ class ReceiptController extends Controller
             'verified_by' => $user->id,
             'verified_at' => now(),
         ]);
+
+        // TỰ ĐỘNG TẠO BẢN GHI CHI PHÍ (COST) NẾU CHƯA CÓ
+        // Nếu chứng từ này chưa được gán vào một Cost nào, ta tạo Cost mới để đồng bộ dòng tiền
+        if (!$receipt->cost_id && $receipt->project_id) {
+            $cost = Cost::create([
+                'project_id' => $receipt->project_id,
+                'receipt_id' => $receipt->id,
+                'name' => "Chứng từ thanh toán: " . ($receipt->description ?: 'N/A'),
+                'amount' => $receipt->amount,
+                'cost_date' => $receipt->receipt_date ?: now(),
+                'category' => 'other',
+                'cost_group_id' => 7, // Chi phí khác
+                'description' => $receipt->notes ?: "Tự động tạo từ chứng từ " . $receipt->receipt_number,
+                'status' => 'approved',
+                'created_by' => $receipt->created_by,
+                'accountant_approved_by' => $user->id,
+                'accountant_approved_at' => now(),
+            ]);
+
+            // Cập nhật ngược lại receipt_id (optional but good for tracking)
+            $receipt->update(['cost_id' => $cost->id]);
+        }
 
         $receipt->load(['project', 'supplier', 'cost', 'creator', 'verifier']);
 

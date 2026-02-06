@@ -127,6 +127,22 @@ class AcceptanceStage extends Model
         return $this->belongsTo(AcceptanceTemplate::class, 'acceptance_template_id');
     }
 
+    /**
+     * Costs linked to this acceptance stage
+     */
+    public function costs(): HasMany
+    {
+        return $this->hasMany(Cost::class, 'acceptance_stage_id');
+    }
+
+    /**
+     * Invoices linked to this acceptance stage (milestone billing)
+     */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class, 'acceptance_stage_id');
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================
@@ -139,7 +155,9 @@ class AcceptanceStage extends Model
 
     public function getHasOpenDefectsAttribute(): bool
     {
-        return $this->defects()->whereIn('status', ['open', 'in_progress'])->exists();
+        // BUSINESS RULE: Block approval if any defect is not verified
+        // This includes: open, in_progress, and fixed (waiting for verification)
+        return $this->defects()->where('status', '!=', 'verified')->exists();
     }
 
     public function getIsCompletedAttribute(): bool

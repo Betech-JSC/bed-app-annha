@@ -61,7 +61,6 @@ class TeamController extends Controller
             'subcontractor',
             'members',
             'contracts',
-            'workVolumes'
         ])->findOrFail($id);
 
         return response()->json([

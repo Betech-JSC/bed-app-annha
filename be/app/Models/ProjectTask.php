@@ -111,6 +111,22 @@ class ProjectTask extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
+    /**
+     * Costs linked to this task
+     */
+    public function costs(): HasMany
+    {
+        return $this->hasMany(Cost::class, 'task_id');
+    }
+
+    /**
+     * Additional costs linked to this task
+     */
+    public function additionalCosts(): HasMany
+    {
+        return $this->hasMany(AdditionalCost::class, 'task_id');
+    }
+
     // ==================================================================
     // METHODS
     // ==================================================================

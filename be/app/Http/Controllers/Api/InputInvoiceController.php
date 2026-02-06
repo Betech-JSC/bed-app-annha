@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Constants\Permissions;
 use App\Http\Controllers\Controller;
+use App\Models\Cost;
 use App\Models\InputInvoice;
 use App\Models\Project;
 use Illuminate\Http\Request;
@@ -135,6 +136,23 @@ class InputInvoiceController extends Controller
                     }
                 }
             }
+
+            // TỰ ĐỘNG TẠO BẢN GHI CHI PHÍ (COST) ĐỂ ĐỒNG BỘ DÒNG TIỀN
+            // Mặc định gán vào nhóm "Vật liệu xây dựng" (ID 1)
+            Cost::create([
+                'project_id' => $finalProjectId,
+                'input_invoice_id' => $invoice->id,
+                'name' => "Hóa đơn đầu vào: " . ($request->supplier_name ?? 'N/A') . " (#" . ($request->invoice_number ?? 'N/A') . ")",
+                'amount' => $totalAmount,
+                'cost_date' => $request->issue_date ?: now(),
+                'category' => 'construction_materials',
+                'cost_group_id' => 1, // Vật liệu xây dựng
+                'description' => $request->description ?: "Tự động tạo từ hóa đơn đầu vào " . ($request->invoice_number ?? ''),
+                'status' => 'approved', // Hóa đơn đầu vào thường được coi là chi phí đã xác nhận
+                'created_by' => $user->id,
+                'accountant_approved_by' => $user->id,
+                'accountant_approved_at' => now(),
+            ]);
 
             DB::commit();
 

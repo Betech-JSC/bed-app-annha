@@ -608,7 +608,7 @@ class ReportController extends Controller
                         'additional_costs' => (float) ($costs['additional_costs'] ?? 0),
                         'subcontractor_costs' => (float) ($costs['subcontractor_costs'] ?? 0),
                         'payroll_costs' => (float) ($costs['payroll_costs'] ?? 0),
-                        'time_tracking_costs' => (float) ($costs['time_tracking_costs'] ?? 0),
+
                         'bonus_costs' => (float) ($costs['bonus_costs'] ?? 0),
                         'other_costs' => (float) ($costs['other_costs'] ?? 0),
                     ],

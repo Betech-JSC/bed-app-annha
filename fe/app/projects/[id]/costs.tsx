@@ -56,6 +56,11 @@ export default function CostsScreen() {
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
 
+  // Accountant confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [selectedCostForConfirm, setSelectedCostForConfirm] = useState<Cost | null>(null);
+  const [confirmUploadedFiles, setConfirmUploadedFiles] = useState<UploadedFile[]>([]);
+
   // Form state - chỉ cần các trường cơ bản cho chi phí "Khác"
   const [formData, setFormData] = useState({
     name: "",
@@ -205,11 +210,38 @@ export default function CostsScreen() {
     }
   };
 
-  const handleApproveAccountant = async (costId: number) => {
+  const handleApproveAccountant = (costId: number) => {
+    const cost = costs.find(c => c.id === costId);
+    if (cost) {
+      setSelectedCostForConfirm(cost);
+      setConfirmUploadedFiles([]);
+      setShowConfirmModal(true);
+    }
+  };
+
+  const submitAccountantConfirmation = async () => {
+    if (!selectedCostForConfirm) return;
+
+    // Validate: require at least one file
+    if (confirmUploadedFiles.length === 0) {
+      Alert.alert("Lỗi", "Vui lòng upload ít nhất một chứng từ thanh toán");
+      return;
+    }
+
     try {
-      const response = await costApi.approveByAccountant(id!, costId);
+      const attachmentIds = confirmUploadedFiles
+        .filter(f => f.attachment_id || f.id)
+        .map(f => f.attachment_id || f.id!);
+
+      const response = await costApi.approveByAccountant(id!, selectedCostForConfirm.id, {
+        attachment_ids: attachmentIds
+      });
+
       if (response.success) {
-        Alert.alert("Thành công", "Đã xác nhận (Kế toán)");
+        Alert.alert("Thành công", "Đã xác nhận thanh toán (Kế toán)");
+        setShowConfirmModal(false);
+        setSelectedCostForConfirm(null);
+        setConfirmUploadedFiles([]);
         loadCosts();
         loadSummary();
       }
@@ -824,6 +856,95 @@ export default function CostsScreen() {
         </View>
       </Modal>
 
+      {/* Accountant Confirmation Modal */}
+      <Modal
+        visible={showConfirmModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowConfirmModal(false);
+          setSelectedCostForConfirm(null);
+          setConfirmUploadedFiles([]);
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <ScreenHeader
+            title="Xác Nhận Thanh Toán"
+            showBackButton
+            onBackPress={() => {
+              setShowConfirmModal(false);
+              setSelectedCostForConfirm(null);
+              setConfirmUploadedFiles([]);
+            }}
+          />
+
+          <ScrollView
+            style={styles.modalContent}
+            contentContainerStyle={styles.modalBodyContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+          >
+            {selectedCostForConfirm && (
+              <>
+                {/* Cost Information */}
+                <View style={styles.infoBox}>
+                  <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
+                  <View style={styles.infoBoxContent}>
+                    <Text style={styles.infoBoxTitle}>Thông tin chi phí</Text>
+                    <Text style={styles.infoBoxText}>
+                      {selectedCostForConfirm.name}
+                    </Text>
+                    <Text style={styles.costAmount}>
+                      {formatCurrency(selectedCostForConfirm.amount)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* File Upload Section */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Chứng từ thanh toán *</Text>
+                  <Text style={styles.helperText}>
+                    Vui lòng upload chứng từ thanh toán (hóa đơn, biên lai, chuyển khoản...)
+                  </Text>
+                  <UniversalFileUploader
+                    onUploadComplete={(files) => setConfirmUploadedFiles(files)}
+                    multiple={true}
+                    accept="all"
+                    maxFiles={10}
+                    initialFiles={confirmUploadedFiles}
+                    label="Chọn file chứng từ"
+                  />
+                  {confirmUploadedFiles.length === 0 && (
+                    <Text style={styles.errorText}>
+                      * Bắt buộc phải upload ít nhất 1 file
+                    </Text>
+                  )}
+                </View>
+              </>
+            )}
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => {
+                setShowConfirmModal(false);
+                setSelectedCostForConfirm(null);
+                setConfirmUploadedFiles([]);
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.saveButton]}
+              onPress={submitAccountantConfirmation}
+            >
+              <Text style={styles.saveButtonText}>Xác Nhận</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Advanced Filter Modal */}
       <Modal
         visible={showAdvancedFilter}
@@ -1278,6 +1399,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1F2937",
     marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    color: "#EF4444",
+    marginTop: 4,
+    fontStyle: "italic",
   },
   categoryGrid: {
     flexDirection: "row",

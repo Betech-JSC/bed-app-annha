@@ -13,11 +13,15 @@ class Cost extends Model
     protected $fillable = [
         'uuid',
         'project_id',
+        'task_id',
+        'acceptance_stage_id',
         'category',
         'cost_group_id',
-        'time_tracking_id',
         'payroll_id',
         'subcontractor_id',
+        'subcontractor_payment_id',
+        'input_invoice_id',
+        'receipt_id',
         'material_id',
         'equipment_allocation_id',
         'quantity',
@@ -83,11 +87,6 @@ class Cost extends Model
         return $this->belongsTo(CostGroup::class, 'cost_group_id');
     }
 
-    public function timeTracking(): BelongsTo
-    {
-        return $this->belongsTo(TimeTracking::class, 'time_tracking_id');
-    }
-
     // Payroll relationship removed - HR module deleted
 
     public function subcontractor(): BelongsTo
@@ -108,6 +107,16 @@ class Cost extends Model
     public function equipmentAllocation(): BelongsTo
     {
         return $this->belongsTo(EquipmentAllocation::class, 'equipment_allocation_id');
+    }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(ProjectTask::class, 'task_id');
+    }
+
+    public function acceptanceStage(): BelongsTo
+    {
+        return $this->belongsTo(AcceptanceStage::class, 'acceptance_stage_id');
     }
 
     // ==================================================================

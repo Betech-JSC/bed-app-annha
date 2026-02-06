@@ -252,10 +252,12 @@ export const costApi = {
   // Kế toán xác nhận
   approveByAccountant: async (
     projectId: string | number,
-    costId: string | number
+    costId: string | number,
+    data?: { attachment_ids?: number[] }
   ) => {
     const response = await api.post(
-      `/projects/${projectId}/costs/${costId}/approve-accountant`
+      `/projects/${projectId}/costs/${costId}/approve-accountant`,
+      data || {}
     );
     return response.data;
   },

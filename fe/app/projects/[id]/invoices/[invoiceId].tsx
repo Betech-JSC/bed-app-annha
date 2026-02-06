@@ -17,7 +17,10 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { invoiceApi, Invoice, CreateInvoiceData } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
 import BackButton from "@/components/BackButton";
-import { CurrencyInput, DatePickerInput } from "@/components";
+import { CurrencyInput, DatePickerInput, UniversalFileUploader } from "@/components";
+import api from "@/api/api";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 export default function InvoiceDetailScreen() {
     const router = useRouter();
@@ -26,66 +29,106 @@ export default function InvoiceDetailScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
     const [formData, setFormData] = useState<Partial<CreateInvoiceData>>({
         invoice_date: "",
-        due_date: "",
+        cost_group_id: undefined,
         subtotal: 0,
         tax_amount: 0,
         discount_amount: 0,
         description: "",
         notes: "",
+        attachment_ids: [],
     });
-    const [paidDate, setPaidDate] = useState(new Date().toISOString().split("T")[0]);
+    const [costGroups, setCostGroups] = useState<any[]>([]);
+    const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [focusedField, setFocusedField] = useState<string | null>(null);
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [permissionMessage, setPermissionMessage] = useState("");
 
     useEffect(() => {
         loadInvoice();
+        loadCostGroups();
     }, [id, invoiceId]);
 
     const loadInvoice = async () => {
         try {
             setLoading(true);
+            setPermissionDenied(false);
             const response = await invoiceApi.getInvoice(Number(id), Number(invoiceId));
             if (response.success) {
                 setInvoice(response.data);
+
+                // Map attachments to uploadedFiles format for FileUploader if needed
+                const existingAttachments = response.data.attachments?.map((att: any) => ({
+                    id: att.id, // ID in attachments table
+                    attachment_id: att.id,
+                    name: att.original_name,
+                    uri: att.file_url,
+                    type: att.mime_type
+                })) || [];
+
+                setUploadedFiles(existingAttachments);
+
                 setFormData({
                     invoice_date: response.data.invoice_date,
-                    due_date: response.data.due_date || "",
+                    cost_group_id: response.data.cost_group_id,
                     subtotal: response.data.subtotal,
                     tax_amount: response.data.tax_amount || 0,
                     discount_amount: response.data.discount_amount || 0,
                     description: response.data.description || "",
                     notes: response.data.notes || "",
+                    attachment_ids: [], // Reset new attachments
                 });
             }
         } catch (error: any) {
-            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải hóa đơn";
-            Alert.alert("Lỗi", errorMessage);
+            if (error.response?.status === 403) {
+                setPermissionDenied(true);
+                setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem hóa đơn này.");
+            } else {
+                const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải hóa đơn";
+                Alert.alert("Lỗi", errorMessage);
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     };
 
+    const loadCostGroups = async () => {
+        try {
+            const response = await api.get("/settings/cost-groups");
+            if (response.data.success) {
+                setCostGroups(response.data.data || []);
+            }
+        } catch (error) {
+            console.error("Error loading cost groups:", error);
+        }
+    };
+
     const onRefresh = () => {
         setRefreshing(true);
         loadInvoice();
+        loadCostGroups();
     };
 
     const validateForm = () => {
         const newErrors: Record<string, string> = {};
-        
+
         if (!formData.invoice_date) {
             newErrors.invoice_date = "Ngày hóa đơn là bắt buộc";
         }
-        
+
+        if (!formData.cost_group_id) {
+            Alert.alert("Lỗi", "Vui lòng chọn danh mục chi phí");
+            return false;
+        }
+
         if (!formData.subtotal || formData.subtotal <= 0) {
             newErrors.subtotal = "Tổng tiền phải lớn hơn 0";
         }
-        
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -97,7 +140,21 @@ export default function InvoiceDetailScreen() {
 
         try {
             setSubmitting(true);
-            const response = await invoiceApi.updateInvoice(Number(id), Number(invoiceId), formData as CreateInvoiceData);
+
+            // Filter to get IDs of attachments.
+            // Note: The backend logic likely expects IDs of existing attachments OR new attachments.
+            // Depending on how backend is implemented, it might simple attach these IDs.
+            // For now, consistent with create logic.
+            const attachmentIds = uploadedFiles
+                .filter(f => f.attachment_id || f.id)
+                .map(f => f.attachment_id || f.id);
+
+            const dataToSubmit = {
+                ...formData,
+                attachment_ids: attachmentIds
+            };
+
+            const response = await invoiceApi.updateInvoice(Number(id), Number(invoiceId), dataToSubmit as CreateInvoiceData);
             if (response.success) {
                 Alert.alert("Thành công", "Đã cập nhật hóa đơn");
                 setShowEditModal(false);
@@ -138,72 +195,43 @@ export default function InvoiceDetailScreen() {
         );
     };
 
-    const handleSend = async () => {
+    const handleDownload = async (attachment: any) => {
         try {
-            const response = await invoiceApi.sendInvoice(Number(id), Number(invoiceId));
-            if (response.success) {
-                Alert.alert("Thành công", "Đã gửi hóa đơn");
-                loadInvoice();
-            }
-        } catch (error: any) {
-            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể gửi hóa đơn";
-            Alert.alert("Lỗi", errorMessage);
-        }
-    };
+            if (!attachment.file_url) return;
 
-    const handleMarkPaid = async () => {
-        try {
-            setSubmitting(true);
-            const response = await invoiceApi.markPaid(Number(id), Number(invoiceId), paidDate);
-            if (response.success) {
-                Alert.alert("Thành công", "Đã đánh dấu hóa đơn đã thanh toán");
-                setShowMarkPaidModal(false);
-                loadInvoice();
+            const callback = (downloadProgress: any) => {
+                const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+            };
+
+            const documentDirectory = FileSystem.documentDirectory || "";
+            if (!documentDirectory) {
+                Alert.alert("Lỗi", "Không tìm thấy thư mục lưu trữ");
+                return;
             }
-        } catch (error: any) {
-            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể đánh dấu đã thanh toán";
-            Alert.alert("Lỗi", errorMessage);
-        } finally {
-            setSubmitting(false);
+
+            const downloadResumable = FileSystem.createDownloadResumable(
+                attachment.file_url,
+                documentDirectory + attachment.original_name,
+                {},
+                callback
+            );
+
+            const result = await downloadResumable.downloadAsync();
+            if (result && result.uri) {
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(result.uri);
+                } else {
+                    Alert.alert("Đã tải xuống", `File đã được lưu tại: ${result.uri}`);
+                }
+            }
+        } catch (e) {
+            console.error(e);
+            Alert.alert("Lỗi", "Không thể tải file");
         }
     };
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("vi-VN").format(amount) + " VNĐ";
-    };
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case "paid":
-                return "#10B981";
-            case "sent":
-                return "#3B82F6";
-            case "overdue":
-                return "#EF4444";
-            case "partially_paid":
-                return "#F59E0B";
-            case "cancelled":
-                return "#6B7280";
-            default:
-                return "#F59E0B";
-        }
-    };
-
-    const getStatusLabel = (status: string) => {
-        switch (status) {
-            case "paid":
-                return "Đã thanh toán";
-            case "sent":
-                return "Đã gửi";
-            case "overdue":
-                return "Quá hạn";
-            case "partially_paid":
-                return "Thanh toán một phần";
-            case "cancelled":
-                return "Đã hủy";
-            default:
-                return "Nháp";
-        }
     };
 
     if (loading) {
@@ -216,6 +244,28 @@ export default function InvoiceDetailScreen() {
                 </View>
                 <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color="#3B82F6" />
+                </View>
+            </View>
+        );
+    }
+
+    if (permissionDenied) {
+        return (
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <BackButton />
+                    <Text style={styles.headerTitle}>Chi Tiết Hóa Đơn</Text>
+                    <View style={{ width: 24 }} />
+                </View>
+                <View style={styles.permissionDeniedContainer}>
+                    <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
+                    <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
+                    <Text style={styles.permissionDeniedMessage}>
+                        {permissionMessage || "Bạn không có quyền xem hóa đơn của dự án này."}
+                    </Text>
+                    <Text style={styles.permissionDeniedSubtext}>
+                        Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
+                    </Text>
                 </View>
             </View>
         );
@@ -243,14 +293,12 @@ export default function InvoiceDetailScreen() {
                 <BackButton />
                 <Text style={styles.headerTitle}>Chi Tiết Hóa Đơn</Text>
                 <View style={styles.headerActions}>
-                    {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-                        <TouchableOpacity
-                            style={styles.headerButton}
-                            onPress={() => setShowEditModal(true)}
-                        >
-                            <Ionicons name="pencil" size={20} color="#3B82F6" />
-                        </TouchableOpacity>
-                    )}
+                    <TouchableOpacity
+                        style={styles.headerButton}
+                        onPress={() => setShowEditModal(true)}
+                    >
+                        <Ionicons name="pencil" size={20} color="#3B82F6" />
+                    </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.headerButton}
                         onPress={handleDelete}
@@ -272,63 +320,84 @@ export default function InvoiceDetailScreen() {
                         <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
                         <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
                     </View>
-                    
+
                     <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Số hóa đơn:</Text>
-                        <Text style={styles.infoValue}>#{invoice.id}</Text>
+                        <Text style={styles.infoValue}>{invoice.invoice_number || `#${invoice.id}`}</Text>
                     </View>
-                    
+
                     <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Ngày hóa đơn:</Text>
                         <Text style={styles.infoValue}>
                             {new Date(invoice.invoice_date).toLocaleDateString("vi-VN")}
                         </Text>
                     </View>
-                    
-                    {invoice.due_date && (
+
+                    {invoice.cost_group && (
                         <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Ngày đến hạn:</Text>
-                            <Text style={styles.infoValue}>
-                                {new Date(invoice.due_date).toLocaleDateString("vi-VN")}
-                            </Text>
+                            <Text style={styles.infoLabel}>Danh mục:</Text>
+                            <View style={styles.categoryBadge}>
+                                <Text style={styles.categoryText}>{invoice.cost_group.name}</Text>
+                            </View>
                         </View>
                     )}
-                    
-                    <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Trạng thái:</Text>
-                        <View
-                            style={[
-                                styles.statusBadge,
-                                { backgroundColor: getStatusColor(invoice.status) + "20" },
-                            ]}
-                        >
-                            <Text style={[styles.statusText, { color: getStatusColor(invoice.status) }]}>
-                                {getStatusLabel(invoice.status)}
-                            </Text>
-                        </View>
-                    </View>
-                    
-                    {invoice.paid_date && (
+
+                    {invoice.customer && (
                         <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Ngày thanh toán:</Text>
-                            <Text style={styles.infoValue}>
-                                {new Date(invoice.paid_date).toLocaleDateString("vi-VN")}
-                            </Text>
+                            <Text style={styles.infoLabel}>Khách hàng:</Text>
+                            <Text style={styles.infoValue}>{invoice.customer.name}</Text>
                         </View>
                     )}
-                    
+
                     {invoice.description && (
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Mô tả:</Text>
                             <Text style={styles.infoValue}>{invoice.description}</Text>
                         </View>
                     )}
-                    
+
                     {invoice.notes && (
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Ghi chú:</Text>
                             <Text style={styles.infoValue}>{invoice.notes}</Text>
                         </View>
+                    )}
+                </View>
+
+                {/* File đính kèm */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Ionicons name="attach-outline" size={20} color="#3B82F6" />
+                        <Text style={styles.sectionTitle}>Chứng từ đính kèm</Text>
+                        {invoice.attachments && invoice.attachments.length > 0 && (
+                            <View style={styles.countBadge}>
+                                <Text style={styles.countText}>{invoice.attachments.length}</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {invoice.attachments && invoice.attachments.length > 0 ? (
+                        <View style={styles.attachmentsList}>
+                            {invoice.attachments.map((file: any) => (
+                                <View key={file.id} style={styles.attachmentCard}>
+                                    <View style={styles.attachmentIcon}>
+                                        <Ionicons name="document-text" size={24} color="#6B7280" />
+                                    </View>
+                                    <View style={styles.attachmentInfo}>
+                                        <Text style={styles.attachmentName} numberOfLines={1}>
+                                            {file.original_name}
+                                        </Text>
+                                        <TouchableOpacity
+                                            onPress={() => handleDownload(file)}
+                                        >
+                                            <Text style={styles.downloadLink}>Tải xuống</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
+                    ) : (
+                        <Text style={styles.emptyText}>Chưa có file đính kèm</Text>
                     )}
                 </View>
 
@@ -338,65 +407,33 @@ export default function InvoiceDetailScreen() {
                         <Ionicons name="cash-outline" size={20} color="#3B82F6" />
                         <Text style={styles.sectionTitle}>Thông tin tài chính</Text>
                     </View>
-                    
+
                     <View style={styles.summaryCard}>
                         <View style={styles.summaryItem}>
                             <Text style={styles.summaryLabel}>Tổng tiền trước thuế:</Text>
                             <Text style={styles.summaryValue}>{formatCurrency(invoice.subtotal)}</Text>
                         </View>
-                        
+
                         {invoice.tax_amount > 0 && (
                             <View style={styles.summaryItem}>
                                 <Text style={styles.summaryLabel}>Thuế VAT:</Text>
                                 <Text style={styles.summaryValue}>{formatCurrency(invoice.tax_amount)}</Text>
                             </View>
                         )}
-                        
+
                         {invoice.discount_amount > 0 && (
                             <View style={styles.summaryItem}>
                                 <Text style={styles.summaryLabel}>Giảm giá:</Text>
                                 <Text style={styles.summaryValue}>-{formatCurrency(invoice.discount_amount)}</Text>
                             </View>
                         )}
-                        
+
                         <View style={[styles.summaryItem, styles.summaryTotal]}>
                             <Text style={styles.summaryTotalLabel}>Tổng cộng:</Text>
                             <Text style={styles.summaryTotalValue}>{formatCurrency(invoice.total_amount)}</Text>
                         </View>
                     </View>
                 </View>
-
-                {/* Actions */}
-                {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Ionicons name="settings-outline" size={20} color="#3B82F6" />
-                            <Text style={styles.sectionTitle}>Thao tác</Text>
-                        </View>
-                        
-                        <View style={styles.actionsContainer}>
-                            {invoice.status === "draft" && (
-                                <TouchableOpacity
-                                    style={styles.actionButton}
-                                    onPress={handleSend}
-                                >
-                                    <Ionicons name="send" size={20} color="#FFFFFF" />
-                                    <Text style={styles.actionButtonText}>Gửi Hóa Đơn</Text>
-                                </TouchableOpacity>
-                            )}
-                            
-                            {invoice.status !== "paid" && (
-                                <TouchableOpacity
-                                    style={[styles.actionButton, styles.actionButtonSuccess]}
-                                    onPress={() => setShowMarkPaidModal(true)}
-                                >
-                                    <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                                    <Text style={styles.actionButtonText}>Đánh Dấu Đã Thanh Toán</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-                )}
             </ScrollView>
 
             {/* Edit Modal */}
@@ -429,7 +466,7 @@ export default function InvoiceDetailScreen() {
                                     <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
                                     <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
                                 </View>
-                                
+
                                 <DatePickerInput
                                     label={
                                         <Text>
@@ -448,18 +485,28 @@ export default function InvoiceDetailScreen() {
                                     error={errors.invoice_date}
                                 />
 
-                                <DatePickerInput
-                                    label="Ngày đến hạn"
-                                    value={formData.due_date}
-                                    onDateChange={(date) => {
-                                        setFormData({
-                                            ...formData,
-                                            due_date: date,
-                                        });
-                                    }}
-                                    placeholder="Chọn ngày"
-                                    minimumDate={formData.invoice_date ? new Date(formData.invoice_date) : undefined}
-                                />
+                                {/* Cost Group Selector */}
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Danh mục chi phí <Text style={styles.required}>*</Text></Text>
+                                    <TouchableOpacity
+                                        style={[styles.input, styles.dateInput]}
+                                        onPress={() => {
+                                            const buttons = costGroups.map(cg => ({
+                                                text: cg.name,
+                                                onPress: () => setFormData({ ...formData, cost_group_id: cg.id })
+                                            }));
+                                            buttons.push({ text: "Hủy", style: "cancel" });
+                                            Alert.alert("Chọn danh mục", "", buttons);
+                                        }}
+                                    >
+                                        <Text style={formData.cost_group_id ? { color: "#1F2937" } : styles.placeholderText}>
+                                            {formData.cost_group_id
+                                                ? costGroups.find(cg => cg.id === formData.cost_group_id)?.name
+                                                : "Chọn danh mục"}
+                                        </Text>
+                                        <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                                    </TouchableOpacity>
+                                </View>
 
                                 <View style={styles.formGroup}>
                                     <Text style={styles.label}>Mô tả</Text>
@@ -504,10 +551,26 @@ export default function InvoiceDetailScreen() {
 
                             <View style={styles.formSection}>
                                 <View style={styles.sectionHeader}>
+                                    <Ionicons name="attach-outline" size={20} color="#3B82F6" />
+                                    <Text style={styles.sectionTitle}>Chứng từ</Text>
+                                </View>
+
+                                <UniversalFileUploader
+                                    onUploadComplete={(files) => setUploadedFiles(files)}
+                                    multiple={true}
+                                    accept="all"
+                                    maxFiles={10}
+                                    initialFiles={uploadedFiles}
+                                    label="Thêm chứng từ"
+                                />
+                            </View>
+
+                            <View style={styles.formSection}>
+                                <View style={styles.sectionHeader}>
                                     <Ionicons name="cash-outline" size={20} color="#3B82F6" />
                                     <Text style={styles.sectionTitle}>Thông tin tài chính</Text>
                                 </View>
-                                
+
                                 <CurrencyInput
                                     label={
                                         <>
@@ -546,9 +609,9 @@ export default function InvoiceDetailScreen() {
                                         <Text style={styles.summaryLabel}>Tổng cộng:</Text>
                                         <Text style={styles.summaryValue}>
                                             {formatCurrency(
-                                                (formData.subtotal || 0) +
-                                                (formData.tax_amount || 0) -
-                                                (formData.discount_amount || 0)
+                                                (Number(formData.subtotal) || 0) +
+                                                (Number(formData.tax_amount) || 0) -
+                                                (Number(formData.discount_amount) || 0)
                                             )}
                                         </Text>
                                     </View>
@@ -571,64 +634,6 @@ export default function InvoiceDetailScreen() {
                                         <View style={styles.buttonContent}>
                                             <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
                                             <Text style={styles.submitButtonText}>Cập Nhật</Text>
-                                        </View>
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        </ScrollView>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
-
-            {/* Mark Paid Modal */}
-            <Modal
-                visible={showMarkPaidModal}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setShowMarkPaidModal(false)}
-            >
-                <KeyboardAvoidingView
-                    style={styles.modalOverlay}
-                    behavior={Platform.OS === "ios" ? "padding" : "height"}
-                    keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-                >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Đánh Dấu Đã Thanh Toán</Text>
-                            <TouchableOpacity onPress={() => setShowMarkPaidModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView
-                            style={styles.modalBody}
-                            contentContainerStyle={styles.modalBodyContent}
-                            keyboardShouldPersistTaps="handled"
-                        >
-                            <DatePickerInput
-                                label="Ngày thanh toán"
-                                value={paidDate}
-                                onDateChange={(date) => setPaidDate(date)}
-                                placeholder="Chọn ngày"
-                                maximumDate={new Date()}
-                            />
-
-                            <View style={styles.buttonContainer}>
-                                <TouchableOpacity
-                                    style={[styles.submitButton, styles.actionButtonSuccess, submitting && styles.submitButtonDisabled]}
-                                    onPress={handleMarkPaid}
-                                    disabled={submitting}
-                                    activeOpacity={0.8}
-                                >
-                                    {submitting ? (
-                                        <View style={styles.buttonContent}>
-                                            <ActivityIndicator color="#FFFFFF" size="small" />
-                                            <Text style={styles.submitButtonText}>Đang xử lý...</Text>
-                                        </View>
-                                    ) : (
-                                        <View style={styles.buttonContent}>
-                                            <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                                            <Text style={styles.submitButtonText}>Xác Nhận</Text>
                                         </View>
                                     )}
                                 </TouchableOpacity>
@@ -722,15 +727,6 @@ const styles = StyleSheet.create({
         flex: 1,
         textAlign: "right",
     },
-    statusBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    statusText: {
-        fontSize: 12,
-        fontWeight: "600",
-    },
     summaryCard: {
         backgroundColor: "#F9FAFB",
         borderRadius: 10,
@@ -766,32 +762,6 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: "700",
         color: "#3B82F6",
-    },
-    actionsContainer: {
-        gap: 12,
-    },
-    actionButton: {
-        backgroundColor: "#3B82F6",
-        borderRadius: 12,
-        padding: 16,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        shadowColor: "#3B82F6",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    actionButtonSuccess: {
-        backgroundColor: "#10B981",
-        shadowColor: "#10B981",
-    },
-    actionButtonText: {
-        color: "#FFFFFF",
-        fontSize: 16,
-        fontWeight: "700",
     },
     emptyText: {
         fontSize: 16,
@@ -837,12 +807,6 @@ const styles = StyleSheet.create({
     formGroup: {
         marginBottom: 16,
     },
-    labelContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginBottom: 8,
-        gap: 4,
-    },
     label: {
         fontSize: 14,
         fontWeight: "600",
@@ -872,10 +836,6 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 2,
     },
-    inputError: {
-        borderColor: "#EF4444",
-        backgroundColor: "#FEF2F2",
-    },
     textArea: {
         minHeight: 100,
         textAlignVertical: "top",
@@ -894,17 +854,6 @@ const styles = StyleSheet.create({
     },
     placeholderText: {
         color: "#9CA3AF",
-    },
-    errorContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginTop: 6,
-        gap: 6,
-    },
-    errorText: {
-        fontSize: 12,
-        color: "#EF4444",
-        flex: 1,
     },
     buttonContainer: {
         marginTop: 8,
@@ -936,5 +885,85 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "700",
     },
+    permissionDeniedContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 24,
+    },
+    permissionDeniedTitle: {
+        fontSize: 20,
+        fontWeight: "700",
+        color: "#1F2937",
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    permissionDeniedMessage: {
+        fontSize: 16,
+        color: "#4B5563",
+        textAlign: "center",
+        marginBottom: 8,
+    },
+    permissionDeniedSubtext: {
+        fontSize: 14,
+        color: "#9CA3AF",
+        textAlign: "center",
+    },
+    categoryBadge: {
+        backgroundColor: "#E0F2FE",
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    categoryText: {
+        color: "#0369A1",
+        fontSize: 13,
+        fontWeight: "600",
+    },
+    countBadge: {
+        backgroundColor: "#E5E7EB",
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 12,
+    },
+    countText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#4B5563",
+    },
+    attachmentsList: {
+        gap: 12,
+    },
+    attachmentCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#F9FAFB",
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#F3F4F6",
+    },
+    attachmentIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        backgroundColor: "#E5E7EB",
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: 12,
+    },
+    attachmentInfo: {
+        flex: 1,
+    },
+    attachmentName: {
+        fontSize: 14,
+        fontWeight: "500",
+        color: "#1F2937",
+        marginBottom: 4,
+    },
+    downloadLink: {
+        fontSize: 13,
+        color: "#3B82F6",
+        fontWeight: "500",
+    },
 });
-

@@ -45,29 +45,7 @@ This document provides a quick reference table of all permissions organized by m
 | | `equipment.update` | Update equipment |
 | | `equipment.delete` | Delete equipment |
 | | `equipment.approve` | Approve equipment |
-| **HR - Time Tracking** | `hr.time_tracking.view` | View time tracking |
-| | `hr.time_tracking.create` | Create time tracking |
-| | `hr.time_tracking.update` | Update time tracking |
-| | `hr.time_tracking.delete` | Delete time tracking |
-| | `hr.time_tracking.approve` | Approve time tracking |
-| | `hr.time_tracking.reject` | Reject time tracking |
-| | `hr.time_tracking.check_in` | Check in |
-| | `hr.time_tracking.check_out` | Check out |
-| **HR - Payroll** | `hr.payroll.view` | View payroll |
-| | `hr.payroll.calculate` | Calculate payroll |
-| | `hr.payroll.approve` | Approve payroll |
-| | `hr.payroll.pay` | Mark payroll as paid |
-| | `hr.payroll.export` | Export payroll |
-| **HR - Bonus** | `hr.bonus.view` | View bonuses |
-| | `hr.bonus.create` | Create bonuses |
-| | `hr.bonus.update` | Update bonuses |
-| | `hr.bonus.delete` | Delete bonuses |
-| | `hr.bonus.approve` | Approve bonuses |
-| | `hr.bonus.pay` | Mark bonus as paid |
-| **HR - Employee** | `hr.employee.view` | View employees |
-| | `hr.employee.create` | Create employees |
-| | `hr.employee.update` | Update employees |
-| | `hr.employee.delete` | Delete employees |
+
 | **Report** | `report.view` | View reports |
 | | `report.export` | Export reports |
 | | `report.financial` | Financial reports |

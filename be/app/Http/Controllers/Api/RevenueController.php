@@ -122,7 +122,7 @@ class RevenueController extends Controller
                         'additional_costs' => (float) $costs['additional_costs'],
                         'subcontractor_costs' => (float) $costs['subcontractor_costs'],
                         'payroll_costs' => (float) $costs['payroll_costs'],
-                        'time_tracking_costs' => (float) $costs['time_tracking_costs'],
+
                         'bonus_costs' => (float) $costs['bonus_costs'],
                         'other_costs' => (float) $costs['other_costs'],
                     ],

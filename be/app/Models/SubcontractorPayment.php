@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Cost;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -15,7 +16,6 @@ class SubcontractorPayment extends Model
         'uuid',
         'subcontractor_id',
         'project_id',
-        'work_volume_id',
         'payment_number',
         'payment_stage',
         'amount',
@@ -61,11 +61,6 @@ class SubcontractorPayment extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
-    }
-
-    public function workVolume(): BelongsTo
-    {
-        return $this->belongsTo(WorkVolume::class);
     }
 
     public function creator(): BelongsTo
@@ -147,6 +142,24 @@ class SubcontractorPayment extends Model
         
         // Cập nhật tổng thanh toán cho subcontractor
         $this->subcontractor->recordPayment($this->amount);
+        
+        // TỰ ĐỘNG TẠO BẢN GHI CHI PHÍ (COST) ĐỂ ĐỒNG BỘ DÒNG TIỀN
+        // Điều này giúp báo cáo thu chi/dòng tiền lấy được dữ liệu thanh toán thầu phụ
+        Cost::create([
+            'project_id' => $this->project_id,
+            'subcontractor_id' => $this->subcontractor_id,
+            'subcontractor_payment_id' => $this->id,
+            'name' => "Thanh toán thầu phụ: " . ($this->subcontractor->name ?? 'N/A') . " - Đợt: " . ($this->payment_stage ?? 'N/A'),
+            'amount' => $this->amount,
+            'cost_date' => $this->payment_date ?: now(),
+            'category' => 'other', // Fallback
+            'cost_group_id' => 5, // ID 5 là "Nhà thầu phụ" theo database hiện tại
+            'description' => $this->description ?: "Tự động tạo từ phiếu chi thầu phụ " . $this->payment_number,
+            'status' => 'approved', // Đã thanh toán nên mặc định là approved
+            'created_by' => $this->paid_by ?: $this->created_by,
+            'accountant_approved_by' => $this->paid_by,
+            'accountant_approved_at' => now(),
+        ]);
         
         return $this->save();
     }

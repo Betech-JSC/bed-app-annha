@@ -35,7 +35,7 @@ class AcceptanceTemplateController extends Controller
      */
     public function show(string $id)
     {
-        $template = AcceptanceTemplate::with(['images', 'documents'])
+        $template = AcceptanceTemplate::with(['images', 'documents', 'criteria'])
             ->findOrFail($id);
 
         return response()->json([
@@ -74,6 +74,18 @@ class AcceptanceTemplateController extends Controller
                 'is_active' => $validated['is_active'] ?? true,
                 'order' => $validated['order'] ?? 0,
             ]);
+
+            // Create criteria if provided
+            if (isset($request->criteria) && is_array($request->criteria)) {
+                foreach ($request->criteria as $criterion) {
+                    $template->criteria()->create([
+                        'name' => $criterion['name'],
+                        'description' => $criterion['description'] ?? null,
+                        'is_critical' => $criterion['is_critical'] ?? true,
+                        'order' => $criterion['order'] ?? 0,
+                    ]);
+                }
+            }
 
             // Attach images (minh họa) if provided
             $imageIds = $validated['image_ids'] ?? ($validated['attachment_ids'] ?? []);
@@ -126,7 +138,7 @@ class AcceptanceTemplateController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Bộ tài liệu nghiệm thu đã được tạo thành công.',
-                'data' => $template->fresh()->load(['images', 'documents'])
+                'data' => $template->fresh()->load(['images', 'documents', 'criteria'])
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -170,6 +182,39 @@ class AcceptanceTemplateController extends Controller
                 'is_active' => $validated['is_active'] ?? $template->is_active,
                 'order' => $validated['order'] ?? $template->order,
             ]);
+
+            // Update criteria if provided
+            if ($request->has('criteria')) {
+                // Get IDs of criterias to keep
+                $keepIds = [];
+                foreach ($request->criteria as $criterionData) {
+                    if (isset($criterionData['id'])) {
+                        $keepIds[] = $criterionData['id'];
+                        // Update existing
+                        $criterion = \App\Models\AcceptanceCriterion::find($criterionData['id']);
+                        if ($criterion && $criterion->acceptance_template_id == $template->id) {
+                            $criterion->update([
+                                'name' => $criterionData['name'],
+                                'description' => $criterionData['description'] ?? null,
+                                'is_critical' => $criterionData['is_critical'] ?? true,
+                                'order' => $criterionData['order'] ?? 0,
+                            ]);
+                        }
+                    } else {
+                        // Create new
+                        $newCriterion = $template->criteria()->create([
+                            'name' => $criterionData['name'],
+                            'description' => $criterionData['description'] ?? null,
+                            'is_critical' => $criterionData['is_critical'] ?? true,
+                            'order' => $criterionData['order'] ?? 0,
+                        ]);
+                        $keepIds[] = $newCriterion->id;
+                    }
+                }
+                
+                // Delete removed criteria
+                $template->criteria()->whereNotIn('id', $keepIds)->delete();
+            }
 
             // Update images (minh họa) if provided
             if (isset($validated['image_ids']) || isset($validated['attachment_ids'])) {
@@ -232,7 +277,7 @@ class AcceptanceTemplateController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Bộ tài liệu nghiệm thu đã được cập nhật thành công.',
-                'data' => $template->fresh()->load(['images', 'documents'])
+                'data' => $template->fresh()->load(['images', 'documents', 'criteria'])
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

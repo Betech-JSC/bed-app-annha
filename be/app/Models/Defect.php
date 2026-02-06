@@ -25,6 +25,9 @@ class Defect extends Model
         'fixed_at',
         'verified_by',
         'verified_at',
+        'defect_type',
+        'acceptance_template_id',
+        'rejection_reason',
     ];
 
     protected $casts = [
@@ -58,6 +61,18 @@ class Defect extends Model
         return $this->belongsTo(AcceptanceStage::class);
     }
 
+    public function acceptanceTemplate(): BelongsTo
+    {
+        return $this->belongsTo(AcceptanceTemplate::class);
+    }
+
+    public function violatedCriteria(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(AcceptanceCriterion::class, 'defect_acceptance_criteria')
+            ->withPivot('status', 'verified_at', 'verified_by')
+            ->withTimestamps();
+    }
+
     public function reporter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reported_by');
@@ -81,6 +96,14 @@ class Defect extends Model
     public function histories(): HasMany
     {
         return $this->hasMany(DefectHistory::class);
+    }
+
+    /**
+     * Additional costs caused by this defect
+     */
+    public function additionalCosts(): HasMany
+    {
+        return $this->hasMany(AdditionalCost::class, 'defect_id');
     }
 
     // ==================================================================
@@ -141,6 +164,17 @@ class Defect extends Model
         }
         
         return $saved;
+    }
+
+    public function markAsRejected(?User $user = null, ?string $reason = null): bool
+    {
+        $this->status = 'in_progress';
+        $this->rejection_reason = $reason;
+        // Reset fixed info since it's rejected
+        $this->fixed_by = null;
+        $this->fixed_at = null;
+        
+        return $this->save();
     }
 
     /**

@@ -94,14 +94,7 @@ class FinancialCalculationService
         }
         $payrollCosts = $payrollCostsQuery->sum('amount');
 
-        // Chi phí nhân công từ TimeTracking (đã tạo Cost record)
-        $timeTrackingCostsQuery = $project->costs()
-            ->whereNotNull('time_tracking_id')
-            ->where('status', 'approved');
-        if ($startDate && $endDate) {
-            $timeTrackingCostsQuery->whereBetween('cost_date', [$startDate, $endDate]);
-        }
-        $timeTrackingCosts = $timeTrackingCostsQuery->sum('amount');
+
 
         // Chi phí từ Payroll đã tạo Cost record (tránh double counting)
         $payrollCostsFromCostsQuery = $project->costs()
@@ -130,10 +123,10 @@ class FinancialCalculationService
         // Bonuses removed - HR module deleted
         $bonusCosts = 0;
 
-        // Chi phí khác từ Cost (không phải từ Payroll hoặc TimeTracking)
+        // Chi phí khác từ Cost (không phải từ Payroll, Subcontractor hoặc các module chuyên biệt khác)
         $otherCostsQuery = $project->costs()
-            ->whereNull('time_tracking_id')
             ->whereNull('payroll_id')
+            ->whereNull('subcontractor_id')
             ->where('status', 'approved');
         if ($startDate && $endDate) {
             $otherCostsQuery->whereBetween('cost_date', [$startDate, $endDate]);
@@ -144,7 +137,6 @@ class FinancialCalculationService
         $totalCosts = $additionalCosts 
             + $subcontractorCosts 
             + $actualPayrollCosts 
-            + $timeTrackingCosts 
             + $bonusCosts
             + $otherCosts;
 
@@ -153,7 +145,7 @@ class FinancialCalculationService
             'additional_costs' => $additionalCosts,
             'subcontractor_costs' => $subcontractorCosts,
             'payroll_costs' => $actualPayrollCosts,
-            'time_tracking_costs' => $timeTrackingCosts,
+
             'bonus_costs' => $bonusCosts,
             'other_costs' => $otherCosts,
             'total' => $contractValue + $totalCosts, // Tổng bao gồm contract_value
@@ -188,7 +180,6 @@ class FinancialCalculationService
         $totalCosts = $costs['additional_costs'] 
             + $costs['subcontractor_costs']
             + $costs['payroll_costs']
-            + $costs['time_tracking_costs']
             + $costs['bonus_costs']
             + $costs['other_costs'];
 
@@ -205,7 +196,7 @@ class FinancialCalculationService
                 'additional_costs' => $costs['additional_costs'],
                 'subcontractor_costs' => $costs['subcontractor_costs'],
                 'payroll_costs' => $costs['payroll_costs'],
-                'time_tracking_costs' => $costs['time_tracking_costs'],
+
                 'bonus_costs' => $costs['bonus_costs'],
                 'other_costs' => $costs['other_costs'],
             ],
@@ -237,24 +228,7 @@ class FinancialCalculationService
         // Payroll double counting check removed - HR module deleted
         // No longer needed since payrolls() relationship doesn't exist
 
-        // Kiểm tra double counting TimeTracking
-        $timeTrackingCount = $project->timeTrackings()
-            ->where('status', 'approved')
-            ->count();
-        
-        $timeTrackingCostsCount = $project->costs()
-            ->whereNotNull('time_tracking_id')
-            ->where('status', 'approved')
-            ->count();
 
-        if ($timeTrackingCount > 0 && $timeTrackingCostsCount < $timeTrackingCount) {
-            $warnings[] = [
-                'type' => 'missing_cost_records',
-                'message' => 'Some TimeTracking records may not have corresponding Cost records.',
-                'time_tracking_count' => $timeTrackingCount,
-                'cost_records_count' => $timeTrackingCostsCount,
-            ];
-        }
 
         // Kiểm tra tính nhất quán: Doanh thu từ contract = tổng payment schedule
         $contract = $project->contract;
