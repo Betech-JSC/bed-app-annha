@@ -12,7 +12,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { revenueApi, RevenueSummary, RevenueDashboard } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
 import { LineChart, BarChart, PieChart, StackedBarChart } from "react-native-chart-kit";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Dimensions } from "react-native";
 
@@ -28,6 +28,8 @@ export default function RevenueScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"summary" | "dashboard">("summary");
   const [period, setPeriod] = useState<"all" | "month" | "quarter" | "year">("all");
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadData();
@@ -36,6 +38,7 @@ export default function RevenueScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
       if (activeTab === "summary") {
         const response = await revenueApi.getProjectSummary(id!);
         if (response.success) {
@@ -47,8 +50,13 @@ export default function RevenueScreen() {
           setDashboard(response.data);
         }
       }
-    } catch (error) {
-      console.error("Error loading revenue:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem báo cáo tài chính của dự án này.");
+      } else {
+        console.error("Error loading revenue:", error);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -67,6 +75,15 @@ export default function RevenueScreen() {
     }).format(amount);
   };
 
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Báo Cáo Tổng Hợp" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -159,7 +176,7 @@ export default function RevenueScreen() {
                   {(summary.revenue.remaining_payment || 0) === 0 && (
                     <Text style={styles.completedBadge}>Dự án hoàn thành</Text>
                   )}
-              </View>
+                </View>
               </View>
             </View>
           </View>
@@ -172,8 +189,8 @@ export default function RevenueScreen() {
                 <Text style={styles.summaryLabel}>Tổng doanh thu</Text>
                 <Text style={[styles.summaryValue, styles.revenueValue]}>
                   {formatCurrency(summary.revenue.total_revenue)}
-                    </Text>
-                  </View>
+                </Text>
+              </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Tổng chi phí</Text>
                 <Text style={[styles.summaryValue, styles.costTotal]}>

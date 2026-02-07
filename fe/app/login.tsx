@@ -24,14 +24,25 @@ import { setPermissions } from "@/reducers/permissionsSlice";
 export default function LoginScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  const [email, setEmail] = useState("superadmin@skysend.com");
+  const [email, setEmail] = useState("superadmin.test@test.com");
   const [password, setPassword] = useState("superadmin123");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [emailError, setEmailError] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
 
   const handleLogin = async () => {
+    // Clear previous errors
+    setErrorMessage("");
+    setEmailError(false);
+    setPasswordError(false);
+
+    // Validate inputs
     if (!email || !password) {
-      Alert.alert("Lỗi", "Vui lòng nhập đầy đủ email và mật khẩu");
+      setErrorMessage("Vui lòng nhập đầy đủ email và mật khẩu");
+      if (!email) setEmailError(true);
+      if (!password) setPasswordError(true);
       return;
     }
 
@@ -91,13 +102,35 @@ export default function LoginScreen() {
           router.replace("/(tabs)/projects");
         }
       } else {
-        Alert.alert("Lỗi", response.data.message || "Đăng nhập thất bại");
+        setErrorMessage(response.data.message || "Đăng nhập thất bại");
+        setEmailError(true);
+        setPasswordError(true);
       }
     } catch (error: any) {
-      Alert.alert(
-        "Lỗi",
-        error.response?.data?.message || "Đăng nhập thất bại. Vui lòng thử lại."
-      );
+      // Parse error and provide specific feedback
+      const errorMsg = error.response?.data?.message;
+
+      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
+        setErrorMessage("Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.");
+      } else if (errorMsg) {
+        // Ưu tiên hiển thị message từ backend
+        setErrorMessage(errorMsg);
+        // Đánh dấu field error nếu là lỗi authentication
+        if (error.response?.status === 401) {
+          setEmailError(true);
+          setPasswordError(true);
+        }
+      } else if (error.response?.status === 401) {
+        setErrorMessage("Email hoặc mật khẩu không đúng. Vui lòng thử lại.");
+        setEmailError(true);
+        setPasswordError(true);
+      } else if (error.response?.status === 403) {
+        setErrorMessage("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.");
+      } else if (error.response?.status >= 500) {
+        setErrorMessage("Lỗi hệ thống. Vui lòng thử lại sau.");
+      } else {
+        setErrorMessage("Đăng nhập thất bại. Vui lòng thử lại.");
+      }
     } finally {
       setLoading(false);
     }
@@ -128,18 +161,22 @@ export default function LoginScreen() {
           <View style={styles.form}>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, emailError && styles.inputError]}>
                 <Ionicons
                   name="mail-outline"
                   size={20}
-                  color="#6B7280"
+                  color={emailError ? "#EF4444" : "#6B7280"}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Nhập email của bạn"
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    setEmailError(false);
+                    setErrorMessage("");
+                  }}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoComplete="email"
@@ -149,18 +186,22 @@ export default function LoginScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Mật khẩu</Text>
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, passwordError && styles.inputError]}>
                 <Ionicons
                   name="lock-closed-outline"
                   size={20}
-                  color="#6B7280"
+                  color={passwordError ? "#EF4444" : "#6B7280"}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Nhập mật khẩu"
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setPasswordError(false);
+                    setErrorMessage("");
+                  }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                 />
@@ -176,6 +217,13 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {errorMessage ? (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={20} color="#EF4444" />
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={styles.forgotPassword}
@@ -298,5 +346,24 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  inputError: {
+    borderColor: "#EF4444",
+    borderWidth: 2,
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    flex: 1,
+    color: "#DC2626",
+    fontSize: 14,
+    fontWeight: "500",
   },
 });

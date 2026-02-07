@@ -14,7 +14,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { additionalCostApi, AdditionalCost } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
@@ -27,6 +27,8 @@ export default function AdditionalCostDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadCostDetail();
@@ -44,13 +46,20 @@ export default function AdditionalCostDetailScreen() {
   const loadCostDetail = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const response = await additionalCostApi.getAdditionalCost(id!, costId!);
       if (response.success) {
         setCost(response.data);
       }
-    } catch (error) {
-      console.error("Error loading cost detail:", error);
-      Alert.alert("Lỗi", "Không thể tải chi tiết chi phí phát sinh");
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem chi phí phát sinh này.");
+      } else {
+        console.error("Error loading cost detail:", error);
+        Alert.alert("Lỗi", "Không thể tải chi tiết chi phí phát sinh");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -58,6 +67,7 @@ export default function AdditionalCostDetailScreen() {
   };
 
   const onRefresh = () => {
+
     setRefreshing(true);
     loadCostDetail();
   };
@@ -184,7 +194,17 @@ export default function AdditionalCostDetailScreen() {
     );
   }
 
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Chi Tiết Chi Phí Phát Sinh" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
+
   if (!cost) {
+
     return (
       <View style={styles.container}>
         <ScreenHeader title="Chi Tiết Chi Phí Phát Sinh" showBackButton />

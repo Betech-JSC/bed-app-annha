@@ -17,7 +17,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { defectApi, Defect } from "@/api/defectApi";
 import { acceptanceApi, AcceptanceTemplate } from "@/api/acceptanceApi";
-import { DefectItem, UniversalFileUploader, ScreenHeader, DatePickerInput } from "@/components";
+import { DefectItem, UniversalFileUploader, ScreenHeader, DatePickerInput, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -71,6 +71,8 @@ export default function DefectsScreen() {
   const [showStandardsModal, setShowStandardsModal] = useState(false);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   const canVerify = hasPermission(Permissions.DEFECT_VERIFY);
 
@@ -133,6 +135,8 @@ export default function DefectsScreen() {
   const loadDefects = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       // BUSINESS RULE: Filter by acceptance_stage_id if provided
       const params: any = {};
       if (acceptance_stage_id) {
@@ -142,8 +146,13 @@ export default function DefectsScreen() {
       if (response.success) {
         setDefects(response.data || []);
       }
-    } catch (error) {
-      console.error("Error loading defects:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem danh sách lỗi của dự án này.");
+      } else {
+        console.error("Error loading defects:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -361,6 +370,15 @@ export default function DefectsScreen() {
     return labels[action] || action;
   };
 
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Lỗi Ghi Nhận" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -376,13 +394,6 @@ export default function DefectsScreen() {
         showBackButton
         rightComponent={
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <TouchableOpacity
-              style={styles.settingsButton}
-              onPress={() => setShowStandardsModal(true)}
-            >
-              <Ionicons name="book-outline" size={24} color="#4B5563" />
-            </TouchableOpacity>
-
             <PermissionGuard permission={Permissions.DEFECT_CREATE} projectId={id}>
               <TouchableOpacity
                 style={styles.addButton}

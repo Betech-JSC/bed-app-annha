@@ -14,7 +14,7 @@ import { contractApi, Contract } from "@/api/contractApi";
 import { monitoringApi, ProjectMonitoringData } from "@/api/monitoringApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 
@@ -28,6 +28,8 @@ export default function ProjectDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingContract, setLoadingContract] = useState(false);
   const [loadingMonitoring, setLoadingMonitoring] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadProject();
@@ -42,8 +44,13 @@ export default function ProjectDetailScreen() {
       if (response.success) {
         setProject(response.data);
       }
-    } catch (error) {
-      console.error("Error loading project:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem thông tin dự án này.");
+      } else {
+        console.error("Error loading project:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -60,7 +67,7 @@ export default function ProjectDetailScreen() {
       }
     } catch (error: any) {
       // 404 is expected if contract doesn't exist
-      if (error.response?.status !== 404) {
+      if (error.response?.status !== 404 && error.response?.status !== 403) {
         console.error("Error loading contract:", error);
       }
       setContract(null);
@@ -76,8 +83,10 @@ export default function ProjectDetailScreen() {
       if (response.success) {
         setMonitoringData(response.data);
       }
-    } catch (error) {
-      console.error("Error loading monitoring data:", error);
+    } catch (error: any) {
+      if (error.response?.status !== 403) {
+        console.error("Error loading monitoring data:", error);
+      }
     } finally {
       setLoadingMonitoring(false);
     }
@@ -266,6 +275,15 @@ export default function ProjectDetailScreen() {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Chi Tiết Dự Án" showBackButton />
+        <PermissionDenied message={permissionMessage} />
       </View>
     );
   }

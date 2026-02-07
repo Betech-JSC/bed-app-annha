@@ -13,7 +13,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { costApi, Cost } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function CostDetailScreen() {
@@ -22,6 +22,8 @@ export default function CostDetailScreen() {
   const tabBarHeight = useTabBarHeight();
   const [cost, setCost] = useState<Cost | null>(null);
   const [loading, setLoading] = useState(true);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadCost();
@@ -30,14 +32,21 @@ export default function CostDetailScreen() {
   const loadCost = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const response = await costApi.getCost(id!, costId!);
       if (response.success) {
         setCost(response.data);
       }
     } catch (error: any) {
-      console.error("Error loading cost:", error);
-      Alert.alert("Lỗi", "Không thể tải thông tin chi phí");
-      router.back();
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem chi phí này.");
+      } else {
+        console.error("Error loading cost:", error);
+        Alert.alert("Lỗi", "Không thể tải thông tin chi phí");
+        router.back();
+      }
     } finally {
       setLoading(false);
     }
@@ -96,7 +105,17 @@ export default function CostDetailScreen() {
     );
   }
 
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Chi Tiết Chi Phí" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
+
   if (!cost) {
+
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.errorText}>Không tìm thấy chi phí</Text>
@@ -183,8 +202,8 @@ export default function CostDetailScreen() {
             <Text style={styles.sectionTitle}>Tài Liệu Đính Kèm</Text>
             <View style={styles.card}>
               {cost.attachments.map((attachment, index) => {
-                const imageUrl = attachment.file_url || attachment.url || attachment.location;
-                const isImage = attachment.type === "image" || 
+                const imageUrl = attachment.file_url;
+                const isImage = attachment.type === "image" ||
                   (imageUrl && /\.(jpg|jpeg|png|gif|webp)$/i.test(imageUrl));
 
                 return (

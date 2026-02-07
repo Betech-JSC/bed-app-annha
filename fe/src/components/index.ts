@@ -26,6 +26,7 @@ export type { MediaItem } from "./MultiMediaUploader";
 
 export { ScreenHeader } from "./ScreenHeader";
 export { PermissionGuard } from "./PermissionGuard";
+export { default as PermissionDenied } from "./PermissionDenied";
 export { default as CustomTabBar } from "./CustomTabBar";
 
 export { default as LogoutButton } from "./LogoutButton";

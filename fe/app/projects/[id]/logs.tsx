@@ -20,7 +20,7 @@ import { ganttApi } from "@/api/ganttApi";
 import { ProjectTask } from "@/types/ganttTypes";
 import { Ionicons } from "@expo/vector-icons";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
-import { ScreenHeader, DatePickerInput } from "@/components";
+import { ScreenHeader, DatePickerInput, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
@@ -63,6 +63,8 @@ export default function ConstructionLogsScreen() {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
   // BUSINESS RULE: Date is auto-set to current day and NOT editable
   const today = new Date().toISOString().split("T")[0];
   const [formData, setFormData] = useState({
@@ -153,7 +155,12 @@ export default function ConstructionLogsScreen() {
         setLogs(response.data.data || []);
       }
     } catch (error: any) {
-      console.error("Error loading logs:", error);
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem nhật ký công trình của dự án này.");
+      } else {
+        console.error("Error loading logs:", error);
+      }
 
       // Retry logic for 429 errors
       if (error.response?.status === 429) {
@@ -520,8 +527,20 @@ export default function ConstructionLogsScreen() {
 
   if (loading && logs.length === 0) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Nhật Ký Công Trình" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Nhật Ký Công Trình" showBackButton />
+        <PermissionDenied message={permissionMessage} />
       </View>
     );
   }

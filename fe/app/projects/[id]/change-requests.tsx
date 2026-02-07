@@ -12,7 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { changeRequestApi, ChangeRequest } from "@/api/changeRequestApi";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function ChangeRequestsScreen() {
@@ -23,6 +23,8 @@ export default function ChangeRequestsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadData();
@@ -31,6 +33,7 @@ export default function ChangeRequestsScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
       const params: any = {};
       if (filter === "pending") {
         params.pending_only = true;
@@ -42,7 +45,12 @@ export default function ChangeRequestsScreen() {
         setChangeRequests(response.data);
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách yêu cầu thay đổi");
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem yêu cầu thay đổi của dự án này.");
+      } else {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách yêu cầu thay đổi");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -106,6 +114,15 @@ export default function ChangeRequestsScreen() {
     }
   };
 
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Yêu Cầu Thay Đổi" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
+
   if (loading && changeRequests.length === 0) {
     return (
       <View style={styles.container}>
@@ -130,7 +147,7 @@ export default function ChangeRequestsScreen() {
       <ScreenHeader
         title="Yêu Cầu Thay Đổi"
         showBackButton
-        rightAction={
+        rightComponent={
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => router.push(`/projects/${id}/change-requests/create`)}

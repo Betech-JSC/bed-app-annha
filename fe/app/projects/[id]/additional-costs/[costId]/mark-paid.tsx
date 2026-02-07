@@ -14,7 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { additionalCostApi } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
@@ -33,6 +33,8 @@ export default function MarkPaidAdditionalCostScreen() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadCost();
@@ -41,6 +43,8 @@ export default function MarkPaidAdditionalCostScreen() {
   const loadCost = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const response = await additionalCostApi.getAdditionalCost(id!, costId!);
       if (response.success) {
         setCost(response.data);
@@ -57,8 +61,13 @@ export default function MarkPaidAdditionalCostScreen() {
         setAttachmentIds(response.data.attachments?.map((att: any) => att.id) || []);
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải chi phí phát sinh");
-      router.back();
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền thực hiện thao tác này.");
+      } else {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải chi phí phát sinh");
+        router.back();
+      }
     } finally {
       setLoading(false);
     }
@@ -118,6 +127,14 @@ export default function MarkPaidAdditionalCostScreen() {
     );
   }
 
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Đánh Dấu Đã Thanh Toán" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
   return (
     <PermissionGuard permission={Permissions.ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER} projectId={id}>
       <View style={styles.container}>

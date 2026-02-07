@@ -14,10 +14,11 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { issueRecordApi, IssueRecord, CreateIssueRecordData } from "@/api/issueRecordApi";
 import { acceptanceApi, AcceptanceStage, AcceptanceItem } from "@/api/acceptanceApi";
-import { ganttApi, ProjectTask } from "@/api/ganttApi";
+import { ganttApi } from "@/api/ganttApi";
+import { ProjectTask } from "@/types/ganttTypes";
 
 export default function IssueRecordsScreen() {
   const router = useRouter();
@@ -31,6 +32,8 @@ export default function IssueRecordsScreen() {
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
   const [filterStageId, setFilterStageId] = useState<number | undefined>(undefined);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   // Form state
   const [formData, setFormData] = useState<CreateIssueRecordData>({
@@ -59,8 +62,13 @@ export default function IssueRecordsScreen() {
       if (response.success) {
         setIssueRecords(response.data || []);
       }
-    } catch (error) {
-      console.error("Error loading issue records:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem lỗi nghiệm thu của dự án này.");
+      } else {
+        console.error("Error loading issue records:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -241,8 +249,20 @@ export default function IssueRecordsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Lỗi Nghiệm Thu (IssueRecord)" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Lỗi Nghiệm Thu (IssueRecord)" showBackButton />
+        <PermissionDenied message={permissionMessage} />
       </View>
     );
   }

@@ -14,7 +14,7 @@ import { acceptanceApi, AcceptanceStage } from "@/api/acceptanceApi";
 import { projectApi, Project } from "@/api/projectApi";
 import { personnelApi } from "@/api/personnelApi";
 import { Ionicons } from "@expo/vector-icons";
-import { AcceptanceChecklist, ScreenHeader } from "@/components";
+import { AcceptanceChecklist, ScreenHeader, PermissionDenied } from "@/components";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Permissions } from "@/constants/Permissions";
 
@@ -26,6 +26,8 @@ export default function AcceptanceScreen() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSupervisor, setIsSupervisor] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadProject();
@@ -56,12 +58,18 @@ export default function AcceptanceScreen() {
   const loadStages = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
       const response = await acceptanceApi.getStages(id!);
       if (response.success) {
         setStages(response.data || []);
       }
-    } catch (error) {
-      console.error("Error loading stages:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem thông tin nghiệm thu của dự án này.");
+      } else {
+        console.error("Error loading stages:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -89,7 +97,7 @@ export default function AcceptanceScreen() {
   const isProjectManager = project?.project_manager_id?.toString() === user?.id?.toString();
   const isCustomer = project?.customer_id?.toString() === user?.id?.toString();
   const { permissions } = useSelector((state: RootState) => state.permissions);
-  
+
   // Use permission-based checks instead of role checks
   const { hasPermission } = usePermissions();
   const isAdmin = hasPermission("*"); // Super admin has all permissions
@@ -97,6 +105,15 @@ export default function AcceptanceScreen() {
   const canApproveLevel2 = hasPermission(Permissions.ACCEPTANCE_APPROVE_LEVEL_2);
   const canApproveLevel3 = hasPermission(Permissions.ACCEPTANCE_APPROVE_LEVEL_3);
 
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Nghiệm Thu" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
 
   if (loading) {
     return (

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useFocusEffect } from "expo-router";
 import { notificationApi, Notification, NotificationFilters } from "@/api/notificationApi";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 interface UseNotificationsOptions {
   autoRefresh?: boolean;
@@ -10,7 +12,14 @@ interface UseNotificationsOptions {
 }
 
 export function useNotifications(options: UseNotificationsOptions = {}) {
-  const { autoRefresh = true, refreshInterval = 30000, filters = {} } = options;
+  const {
+    autoRefresh = true,
+    refreshInterval = 30000,
+    filters = {},
+    loadNotifications: shouldLoadNotifications = true
+  } = options;
+
+  const token = useSelector((state: RootState) => state.user.token);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -19,6 +28,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   const [error, setError] = useState<Error | null>(null);
 
   const loadNotifications = useCallback(async () => {
+    if (!token) return;
     try {
       setLoading(true);
       setError(null);
@@ -33,9 +43,10 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filters]);
+  }, [filters, token]);
 
   const loadUnreadCount = useCallback(async () => {
+    if (!token) return;
     try {
       const response = await notificationApi.getUnreadCount();
       if (response.success) {
@@ -44,7 +55,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     } catch (err) {
       console.error("Error loading unread count:", err);
     }
-  }, []);
+  }, [token]);
 
   const refresh = useCallback(() => {
     setRefreshing(true);
@@ -53,6 +64,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   }, [loadNotifications, loadUnreadCount]);
 
   const markAsRead = useCallback(async (notificationId: number) => {
+    if (!token) return;
     try {
       await notificationApi.markAsRead(notificationId);
       setNotifications((prev) =>
@@ -67,9 +79,10 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       console.error("Error marking as read:", err);
       throw err;
     }
-  }, []);
+  }, [token]);
 
   const markAllAsRead = useCallback(async () => {
+    if (!token) return;
     try {
       await notificationApi.markAllAsRead();
       setNotifications((prev) =>
@@ -80,9 +93,10 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       console.error("Error marking all as read:", err);
       throw err;
     }
-  }, []);
+  }, [token]);
 
   const deleteNotification = useCallback(async (notificationId: number) => {
+    if (!token) return;
     try {
       await notificationApi.delete(notificationId);
       const deleted = notifications.find((n) => n.id === notificationId);
@@ -94,7 +108,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       console.error("Error deleting notification:", err);
       throw err;
     }
-  }, [notifications]);
+  }, [notifications, token]);
 
   // Load on mount - chỉ load nếu được yêu cầu
   useEffect(() => {

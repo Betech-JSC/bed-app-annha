@@ -11,7 +11,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { additionalCostApi, AdditionalCost } from "@/api/additionalCostApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, PermissionGuard } from "@/components";
+import { ScreenHeader, PermissionGuard, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 
@@ -21,6 +21,8 @@ export default function AdditionalCostsScreen() {
   const tabBarHeight = useTabBarHeight();
   const [costs, setCosts] = useState<AdditionalCost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadCosts();
@@ -36,12 +38,18 @@ export default function AdditionalCostsScreen() {
   const loadCosts = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
       const response = await additionalCostApi.getAdditionalCosts(id!);
       if (response.success) {
         setCosts(response.data || []);
       }
-    } catch (error) {
-      console.error("Error loading costs:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem chi phí phát sinh của dự án này.");
+      } else {
+        console.error("Error loading costs:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -227,6 +235,15 @@ export default function AdditionalCostsScreen() {
       )}
     </TouchableOpacity>
   );
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Phát Sinh Ngoài Báo Giá" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
 
   if (loading) {
     return (

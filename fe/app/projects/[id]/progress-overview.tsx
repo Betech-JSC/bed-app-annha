@@ -12,7 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { ganttApi } from "@/api/ganttApi";
 import { ProjectPhase, ProjectTask } from "@/types/ganttTypes";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -36,6 +36,8 @@ export default function ProgressOverviewScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
   const [viewMode, setViewMode] = useState<"day" | "week" | "month" | "year">("month");
   const timelineScrollRef = useRef<ScrollView>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -58,8 +60,13 @@ export default function ProgressOverviewScreen() {
       if (tasksResponse.success) {
         setTasks(tasksResponse.data || []);
       }
-    } catch (error) {
-      console.error("Error loading data:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem tổng quan tiến độ của dự án này.");
+      } else {
+        console.error("Error loading data:", error);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -439,8 +446,20 @@ export default function ProgressOverviewScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Tổng Quan Tiến Độ" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Tổng Quan Tiến Độ" showBackButton />
+        <PermissionDenied message={permissionMessage} />
       </View>
     );
   }

@@ -87,6 +87,110 @@ class ProjectPersonnelSeeder extends Seeder
 
         $superAdmin = User::where('email', 'superadmin@test.com')->first();
 
+        $this->command->info('Đang gán personnel vào các dự án...');
+
+        // Lấy danh sách personnel roles để map code -> id
+        $roles = \App\Models\PersonnelRole::all()->pluck('id', 'code');
+
+        foreach ($projects as $project) {
+            // 1. Assign Project Manager (1 PM per project)
+            $pm = $projectManagers->random();
+            ProjectPersonnel::firstOrCreate([
+                'project_id' => $project->id,
+                'user_id' => $pm->id,
+            ], [
+                'role_id' => $roles['project_manager'] ?? null,
+                'permissions' => ['*'], // PM has full access within project
+                'assigned_by' => $superAdmin->id ?? $pm->id,
+                'assigned_at' => now(),
+            ]);
+
+            // 2. Assign Site Supervisor (1-2 per project)
+            $selectedSupervisors = $supervisors->random(min(2, $supervisors->count()));
+            foreach ($selectedSupervisors as $supervisor) {
+                ProjectPersonnel::firstOrCreate([
+                    'project_id' => $project->id,
+                    'user_id' => $supervisor->id,
+                ], [
+                    'role_id' => $roles['supervisor'] ?? null,
+                    'permissions' => [
+                        'project.view',
+                        'progress.view',
+                        'progress.update',
+                        'acceptance.view',
+                        'acceptance.create',
+                        'acceptance.update',
+                        'acceptance.approve.level_1',
+                        'log.view',
+                        'log.create',
+                        'log.update',
+                        'defect.view',
+                        'defect.create',
+                        'defect.update',
+                    ],
+                    'assigned_by' => $superAdmin->id ?? $pm->id,
+                    'assigned_at' => now(),
+                ]);
+            }
+
+            // 3. Assign Customer (link back to project customer_id if exists)
+            if ($project->customer_id) {
+                ProjectPersonnel::firstOrCreate([
+                    'project_id' => $project->id,
+                    'user_id' => $project->customer_id,
+                ], [
+                    'role_id' => $roles['guest'] ?? null,
+                    'permissions' => [
+                        'project.view',
+                        'progress.view',
+                        'acceptance.view',
+                        'acceptance.approve.level_3', // Final approval for customer
+                        'payment.view',
+                        'payment.mark_paid_by_customer',
+                        'defect.view',
+                        'report.view',
+                    ],
+                    'assigned_by' => $superAdmin->id ?? $pm->id,
+                    'assigned_at' => now(),
+                ]);
+            }
+
+            // 4. Assign Accountant (1 per project)
+            $accountant = $accountants->random();
+            ProjectPersonnel::firstOrCreate([
+                'project_id' => $project->id,
+                'user_id' => $accountant->id,
+            ], [
+                'role_id' => $roles['accountant'] ?? null,
+                'permissions' => [
+                    'project.view',
+                    'cost.view',
+                    'cost.approve.accountant',
+                    'payment.view',
+                    'payment.confirm',
+                    'subcontractor_payment.view',
+                    'subcontractor_payment.mark_paid',
+                    'report.financial',
+                ],
+                'assigned_by' => $superAdmin->id ?? $pm->id,
+                'assigned_at' => now(),
+            ]);
+
+            // 5. Assign some workers & team leaders
+            $selectedTeamLeaders = $teamLeaders->random(min(2, $teamLeaders->count()));
+            foreach ($selectedTeamLeaders as $tl) {
+                ProjectPersonnel::firstOrCreate([
+                    'project_id' => $project->id,
+                    'user_id' => $tl->id,
+                ], [
+                    'role_id' => $roles['team_leader'] ?? null,
+                    'permissions' => ['project.view', 'progress.view', 'log.create'],
+                    'assigned_by' => $superAdmin->id ?? $pm->id,
+                    'assigned_at' => now(),
+                ]);
+            }
+        }
+
         $this->command->newLine();
         $this->command->info('═══════════════════════════════════════════════════');
         $this->command->info('✅ Đã gán personnel cho ' . $projects->count() . ' dự án!');

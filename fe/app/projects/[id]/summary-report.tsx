@@ -17,7 +17,7 @@ import {
   CostDetailItem,
 } from "@/api/projectSummaryReportApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { PermissionGuard } from "@/components/PermissionGuard";
 
@@ -35,6 +35,8 @@ export default function ProjectSummaryReportScreen() {
   >("material");
   const [costDetails, setCostDetails] = useState<CostDetailItem[]>([]);
   const [loadingCostDetails, setLoadingCostDetails] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadReport();
@@ -43,12 +45,19 @@ export default function ProjectSummaryReportScreen() {
   const loadReport = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const response = await projectSummaryReportApi.getSummaryReport(id!);
       if (response.success) {
         setReport(response.data);
       }
-    } catch (error) {
-      console.error("Error loading summary report:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem báo cáo tổng hợp này.");
+      } else {
+        console.error("Error loading summary report:", error);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -115,7 +124,17 @@ export default function ProjectSummaryReportScreen() {
     );
   }
 
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Báo Cáo Tổng Hợp" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
+
   if (!report) {
+
     return (
       <View style={styles.container}>
         <ScreenHeader title="Báo Cáo Tổng Hợp" showBackButton />

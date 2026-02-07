@@ -17,7 +17,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { materialApi, Material } from "@/api/materialApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, PermissionGuard, CurrencyInput } from "@/components";
+import { ScreenHeader, PermissionGuard, CurrencyInput, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { DatePickerInput } from "@/components";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
@@ -286,16 +286,7 @@ export default function ProjectMaterialsScreen() {
         return (
             <View style={styles.container}>
                 <ScreenHeader title="Vật Liệu Dự Án" showBackButton />
-                <View style={styles.permissionDeniedContainer}>
-                    <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
-                    <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
-                    <Text style={styles.permissionDeniedMessage}>
-                        {permissionMessage || "Bạn không có quyền xem vật liệu của dự án này."}
-                    </Text>
-                    <Text style={styles.permissionDeniedSubtext}>
-                        Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
-                    </Text>
-                </View>
+                <PermissionDenied message={permissionMessage} />
             </View>
         );
     }

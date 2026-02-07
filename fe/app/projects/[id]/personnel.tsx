@@ -18,7 +18,7 @@ import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 
@@ -281,21 +281,11 @@ export default function PersonnelScreen() {
     );
   }
 
-  // Hiển thị thông báo RBAC nếu không có quyền
   if (permissionDenied) {
     return (
       <View style={styles.container}>
         <ScreenHeader title="Nhân Sự Tham Gia" showBackButton />
-        <View style={styles.permissionDeniedContainer}>
-          <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
-          <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
-          <Text style={styles.permissionDeniedMessage}>
-            {permissionMessage || "Bạn không có quyền xem nhân sự của dự án này."}
-          </Text>
-          <Text style={styles.permissionDeniedSubtext}>
-            Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
-          </Text>
-        </View>
+        <PermissionDenied message={permissionMessage} />
       </View>
     );
   }

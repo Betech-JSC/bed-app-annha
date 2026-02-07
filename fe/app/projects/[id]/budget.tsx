@@ -17,7 +17,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { budgetApi, ProjectBudget, CreateBudgetData } from "@/api/budgetApi";
 import { revenueApi } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
@@ -36,6 +36,8 @@ export default function BudgetScreen() {
     const [debouncedSearchText, setDebouncedSearchText] = useState("");
     const [filterStatus, setFilterStatus] = useState<string | null>(null);
     const [showFilterModal, setShowFilterModal] = useState(false);
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [permissionMessage, setPermissionMessage] = useState("");
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
@@ -69,12 +71,20 @@ export default function BudgetScreen() {
     const loadBudgets = async () => {
         try {
             setLoading(true);
+            setPermissionDenied(false);
+            setPermissionMessage("");
             const response = await budgetApi.getBudgets(Number(id));
             if (response.success) {
                 setBudgets(response.data.data || []);
             }
-        } catch (error) {
-            console.error("Error loading budgets:", error);
+        } catch (error: any) {
+            if (error.response?.status === 403) {
+                setPermissionDenied(true);
+                setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem ngân sách của dự án này.");
+                setBudgets([]);
+            } else {
+                console.error("Error loading budgets:", error);
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -203,7 +213,7 @@ export default function BudgetScreen() {
                 <View style={styles.cardHeader}>
                     <View style={styles.cardHeaderLeft}>
                         <Text style={styles.cardTitle}>{item.name}</Text>
-                        {item.version && <Text style={styles.cardVersion}>v{item.version}</Text>}
+                        {!!item.version && <Text style={styles.cardVersion}>v{item.version}</Text>}
                     </View>
                     <View style={styles.cardHeaderRight}>
                         <View
@@ -248,7 +258,7 @@ export default function BudgetScreen() {
                         <TouchableOpacity
                             style={styles.duplicateButton}
                             onPress={(e) => {
-                                if (!hasPermission(Permissions.COST_CREATE)) {
+                                if (!hasPermission(Permissions.BUDGET_CREATE)) {
                                     Alert.alert("Lỗi", "Bạn không có quyền sao chép ngân sách");
                                     return;
                                 }
@@ -349,7 +359,7 @@ export default function BudgetScreen() {
                                 color={filterStatus ? "#3B82F6" : "#6B7280"}
                             />
                         </TouchableOpacity>
-                        <PermissionGuard permission={Permissions.COST_CREATE} projectId={id}>
+                        <PermissionGuard permission={Permissions.BUDGET_CREATE} projectId={id}>
                             <TouchableOpacity
                                 style={styles.addButton}
                                 onPress={() => {
@@ -363,111 +373,119 @@ export default function BudgetScreen() {
                 }
             />
 
-            {/* Summary Card */}
-            {!loading && budgets.length > 0 && (
-                <View style={styles.summaryCard}>
-                    <View style={styles.summaryRow}>
-                        <View style={styles.summaryItem}>
-                            <Text style={styles.summaryLabel}>Tổng ngân sách</Text>
-                            <Text style={styles.summaryValue}>
-                                {formatCurrency(summaryStats.totalBudget)}
-                            </Text>
-                        </View>
-                        <View style={styles.summaryItem}>
-                            <Text style={styles.summaryLabel}>Đã sử dụng</Text>
-                            <Text style={[styles.summaryValue, { color: "#3B82F6" }]}>
-                                {formatCurrency(summaryStats.totalUsed)}
-                            </Text>
-                        </View>
-                    </View>
-                    <View style={styles.summaryRow}>
-                        <View style={styles.summaryItem}>
-                            <Text style={styles.summaryLabel}>Còn lại</Text>
-                            <Text style={[
-                                styles.summaryValue,
-                                { color: summaryStats.totalRemaining >= 0 ? "#10B981" : "#EF4444" }
-                            ]}>
-                                {formatCurrency(summaryStats.totalRemaining)}
-                            </Text>
-                        </View>
-                        <View style={styles.summaryItem}>
-                            <Text style={styles.summaryLabel}>Sử dụng</Text>
-                            <Text style={[
-                                styles.summaryValue,
-                                {
-                                    color: summaryStats.utilization > 100
-                                        ? "#EF4444"
-                                        : summaryStats.utilization > 80
-                                            ? "#F59E0B"
-                                            : "#10B981"
-                                }
-                            ]}>
-                                {summaryStats.utilization.toFixed(1)}%
-                            </Text>
-                        </View>
-                    </View>
-                    {summaryStats.variance !== 0 && (
-                        <View style={styles.varianceRow}>
-                            <Ionicons
-                                name={summaryStats.variance > 0 ? "arrow-up" : "arrow-down"}
-                                size={16}
-                                color={summaryStats.variance > 0 ? "#EF4444" : "#10B981"}
-                            />
-                            <Text style={[
-                                styles.varianceText,
-                                { color: summaryStats.variance > 0 ? "#EF4444" : "#10B981" }
-                            ]}>
-                                {summaryStats.variance > 0 ? "Vượt" : "Tiết kiệm"} {formatCurrency(Math.abs(summaryStats.variance))} so với ngân sách
-                            </Text>
+            {permissionDenied ? (
+                <PermissionDenied
+                    message={permissionMessage}
+                />
+            ) : (
+                <>
+                    {/* Summary Card */}
+                    {!loading && budgets.length > 0 && (
+                        <View style={styles.summaryCard}>
+                            <View style={styles.summaryRow}>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>Tổng ngân sách</Text>
+                                    <Text style={styles.summaryValue}>
+                                        {formatCurrency(summaryStats.totalBudget)}
+                                    </Text>
+                                </View>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>Đã sử dụng</Text>
+                                    <Text style={[styles.summaryValue, { color: "#3B82F6" }]}>
+                                        {formatCurrency(summaryStats.totalUsed)}
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={styles.summaryRow}>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>Còn lại</Text>
+                                    <Text style={[
+                                        styles.summaryValue,
+                                        { color: summaryStats.totalRemaining >= 0 ? "#10B981" : "#EF4444" }
+                                    ]}>
+                                        {formatCurrency(summaryStats.totalRemaining)}
+                                    </Text>
+                                </View>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>Sử dụng</Text>
+                                    <Text style={[
+                                        styles.summaryValue,
+                                        {
+                                            color: summaryStats.utilization > 100
+                                                ? "#EF4444"
+                                                : summaryStats.utilization > 80
+                                                    ? "#F59E0B"
+                                                    : "#10B981"
+                                        }
+                                    ]}>
+                                        {summaryStats.utilization.toFixed(1)}%
+                                    </Text>
+                                </View>
+                            </View>
+                            {summaryStats.variance !== 0 && (
+                                <View style={styles.varianceRow}>
+                                    <Ionicons
+                                        name={summaryStats.variance > 0 ? "arrow-up" : "arrow-down"}
+                                        size={16}
+                                        color={summaryStats.variance > 0 ? "#EF4444" : "#10B981"}
+                                    />
+                                    <Text style={[
+                                        styles.varianceText,
+                                        { color: summaryStats.variance > 0 ? "#EF4444" : "#10B981" }
+                                    ]}>
+                                        {summaryStats.variance > 0 ? "Vượt" : "Tiết kiệm"} {formatCurrency(Math.abs(summaryStats.variance))} so với ngân sách
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     )}
-                </View>
-            )}
 
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-                <Ionicons name="search-outline" size={20} color="#6B7280" style={styles.searchIcon} />
-                <TextInput
-                    style={styles.searchInput}
-                    placeholder="Tìm kiếm ngân sách..."
-                    placeholderTextColor="#9CA3AF"
-                    value={searchText}
-                    onChangeText={setSearchText}
-                />
-                {searchText.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearSearchButton}>
-                        <Ionicons name="close-circle" size={20} color="#6B7280" />
-                    </TouchableOpacity>
-                )}
-            </View>
+                    {/* Search Bar */}
+                    <View style={styles.searchContainer}>
+                        <Ionicons name="search-outline" size={20} color="#6B7280" style={styles.searchIcon} />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Tìm kiếm ngân sách..."
+                            placeholderTextColor="#9CA3AF"
+                            value={searchText}
+                            onChangeText={setSearchText}
+                        />
+                        {searchText.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearSearchButton}>
+                                <Ionicons name="close-circle" size={20} color="#6B7280" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
-            {loading ? (
-                <View style={styles.centerContainer}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                </View>
-            ) : (
-                <FlatList
-                    data={filteredBudgets}
-                    renderItem={renderItem}
-                    keyExtractor={(item) => item.id.toString()}
-                    contentContainerStyle={{ paddingBottom: tabBarHeight }}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                    }
-                    removeClippedSubviews={true}
-                    maxToRenderPerBatch={10}
-                    updateCellsBatchingPeriod={50}
-                    initialNumToRender={10}
-                    windowSize={10}
-                    ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Ionicons name="wallet-outline" size={64} color="#9CA3AF" />
-                            <Text style={styles.emptyText}>
-                                {debouncedSearchText || filterStatus ? "Không tìm thấy ngân sách phù hợp" : "Chưa có ngân sách"}
-                            </Text>
+                    {loading ? (
+                        <View style={styles.centerContainer}>
+                            <ActivityIndicator size="large" color="#3B82F6" />
                         </View>
-                    }
-                />
+                    ) : (
+                        <FlatList
+                            data={filteredBudgets}
+                            renderItem={renderItem}
+                            keyExtractor={(item) => item.id.toString()}
+                            contentContainerStyle={{ paddingBottom: tabBarHeight }}
+                            refreshControl={
+                                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                            }
+                            removeClippedSubviews={true}
+                            maxToRenderPerBatch={10}
+                            updateCellsBatchingPeriod={50}
+                            initialNumToRender={10}
+                            windowSize={10}
+                            ListEmptyComponent={
+                                <View style={styles.emptyContainer}>
+                                    <Ionicons name="wallet-outline" size={64} color="#9CA3AF" />
+                                    <Text style={styles.emptyText}>
+                                        {debouncedSearchText || filterStatus ? "Không tìm thấy ngân sách phù hợp" : "Chưa có ngân sách"}
+                                    </Text>
+                                </View>
+                            }
+                        />
+                    )}
+                </>
             )}
 
             {/* Filter Modal */}
@@ -545,11 +563,9 @@ export default function BudgetScreen() {
                     </View>
                 </Modal>
             )}
-
         </View>
     );
 }
-
 
 const styles = StyleSheet.create({
     container: {

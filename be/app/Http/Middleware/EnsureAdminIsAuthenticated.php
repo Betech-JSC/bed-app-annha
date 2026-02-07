@@ -19,7 +19,7 @@ class EnsureAdminIsAuthenticated
         if (!$request->user('sanctum')) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized. Please login first.'
+                'message' => 'Không có quyền truy cập. Vui lòng đăng nhập trước.'
             ], 401);
         }
 
@@ -32,7 +32,7 @@ class EnsureAdminIsAuthenticated
         if (!$isAdmin) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized. Admin access required.'
+                'message' => 'Không có quyền truy cập. Yêu cầu quyền quản trị viên.'
             ], 403);
         }
 

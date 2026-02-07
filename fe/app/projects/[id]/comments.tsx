@@ -15,7 +15,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { projectCommentApi, ProjectComment, CreateProjectCommentData } from "@/api/projectCommentApi";
-import { ScreenHeader, PermissionGuard } from "@/components";
+import { ScreenHeader, PermissionGuard, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
@@ -480,16 +480,7 @@ export default function ProjectCommentsScreen() {
         return (
             <View style={styles.container}>
                 <ScreenHeader title="Bình Luận Dự Án" showBackButton />
-                <View style={styles.permissionDeniedContainer}>
-                    <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
-                    <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
-                    <Text style={styles.permissionDeniedMessage}>
-                        {permissionMessage || "Bạn không có quyền xem bình luận của dự án này."}
-                    </Text>
-                    <Text style={styles.permissionDeniedSubtext}>
-                        Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
-                    </Text>
-                </View>
+                <PermissionDenied message={permissionMessage} />
             </View>
         );
     }

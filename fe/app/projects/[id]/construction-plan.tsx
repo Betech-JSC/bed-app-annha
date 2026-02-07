@@ -16,7 +16,7 @@ import { ganttApi } from "@/api/ganttApi";
 import { acceptanceApi } from "@/api/acceptanceApi";
 import { projectApi, Project } from "@/api/projectApi";
 import { ProjectTask, CreateTaskData } from "@/types/ganttTypes";
-import { GanttChart } from "@/components";
+import { GanttChart, ScreenHeader, PermissionDenied } from "@/components";
 import TaskFormModal from "@/components/TaskFormModal";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { Permissions } from "@/constants/Permissions";
@@ -34,6 +34,8 @@ export default function ConstructionPlanScreen() {
   const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null);
   const [viewMode, setViewMode] = useState<"gantt" | "list">("gantt");
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadData();
@@ -53,10 +55,18 @@ export default function ConstructionPlanScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const [tasksResponse, stagesResponse, projectResponse] = await Promise.all([
         ganttApi.getTasks(id!),
-        acceptanceApi.getStages(id!).catch(() => ({ success: false, data: [] })), // Load acceptance stages
-        projectApi.getProject(id!).catch(() => ({ success: false, data: null })), // Load project info
+        acceptanceApi.getStages(id!).catch((err) => {
+          if (err.response?.status === 403) throw err;
+          return { success: false, data: [] };
+        }), // Load acceptance stages
+        projectApi.getProject(id!).catch((err) => {
+          if (err.response?.status === 403) throw err;
+          return { success: false, data: null };
+        }), // Load project info
       ]);
 
       if (tasksResponse.success) {
@@ -68,9 +78,14 @@ export default function ConstructionPlanScreen() {
       if (projectResponse.success && projectResponse.data) {
         setProject(projectResponse.data);
       }
-    } catch (error) {
-      console.error("Error loading data:", error);
-      Alert.alert("Lỗi", "Không thể tải dữ liệu");
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem kế hoạch thi công của dự án này.");
+      } else {
+        console.error("Error loading data:", error);
+        Alert.alert("Lỗi", "Không thể tải dữ liệu");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -310,6 +325,15 @@ export default function ConstructionPlanScreen() {
     );
   };
 
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Kế hoạch thi công" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
 
   if (loading) {
     return (

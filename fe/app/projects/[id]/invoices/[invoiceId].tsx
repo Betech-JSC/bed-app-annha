@@ -12,12 +12,13 @@ import {
     KeyboardAvoidingView,
     Platform,
     RefreshControl,
+    AlertButton,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { invoiceApi, Invoice, CreateInvoiceData } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
 import BackButton from "@/components/BackButton";
-import { CurrencyInput, DatePickerInput, UniversalFileUploader } from "@/components";
+import { CurrencyInput, DatePickerInput, UniversalFileUploader, PermissionDenied } from "@/components";
 import api from "@/api/api";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -203,7 +204,7 @@ export default function InvoiceDetailScreen() {
                 const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
             };
 
-            const documentDirectory = FileSystem.documentDirectory || "";
+            const documentDirectory = (FileSystem as any).documentDirectory || "";
             if (!documentDirectory) {
                 Alert.alert("Lỗi", "Không tìm thấy thư mục lưu trữ");
                 return;
@@ -257,16 +258,7 @@ export default function InvoiceDetailScreen() {
                     <Text style={styles.headerTitle}>Chi Tiết Hóa Đơn</Text>
                     <View style={{ width: 24 }} />
                 </View>
-                <View style={styles.permissionDeniedContainer}>
-                    <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
-                    <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
-                    <Text style={styles.permissionDeniedMessage}>
-                        {permissionMessage || "Bạn không có quyền xem hóa đơn của dự án này."}
-                    </Text>
-                    <Text style={styles.permissionDeniedSubtext}>
-                        Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
-                    </Text>
-                </View>
+                <PermissionDenied message={permissionMessage} />
             </View>
         );
     }
@@ -494,8 +486,8 @@ export default function InvoiceDetailScreen() {
                                             const buttons = costGroups.map(cg => ({
                                                 text: cg.name,
                                                 onPress: () => setFormData({ ...formData, cost_group_id: cg.id })
-                                            }));
-                                            buttons.push({ text: "Hủy", style: "cancel" });
+                                            } as any));
+                                            buttons.push({ text: "Hủy", onPress: () => { }, style: "cancel" });
                                             Alert.alert("Chọn danh mục", "", buttons);
                                         }}
                                     >

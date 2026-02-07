@@ -15,6 +15,8 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { notificationApi, Notification, NotificationFilters } from "@/api/notificationApi";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
@@ -23,6 +25,7 @@ type TabType = "all" | "unread";
 export default function NotificationsScreen() {
     const router = useRouter();
     const tabBarHeight = useTabBarHeight();
+    const token = useSelector((state: RootState) => state.user.token);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +46,7 @@ export default function NotificationsScreen() {
     });
 
     const loadNotifications = useCallback(async (pageNum: number = 1, append: boolean = false) => {
+        if (!token) return;
         try {
             if (pageNum === 1) {
                 setLoading(true);
@@ -83,9 +87,10 @@ export default function NotificationsScreen() {
             setRefreshing(false);
             setLoadingMore(false);
         }
-    }, [filters, activeTab, searchText]);
+    }, [filters, activeTab, searchText, token]);
 
     const loadUnreadCount = useCallback(async () => {
+        if (!token) return;
         try {
             const response = await notificationApi.getUnreadCount();
             if (response.success) {
@@ -94,7 +99,7 @@ export default function NotificationsScreen() {
         } catch (error) {
             console.error("Error loading unread count:", error);
         }
-    }, []);
+    }, [token]);
 
     useFocusEffect(
         useCallback(() => {

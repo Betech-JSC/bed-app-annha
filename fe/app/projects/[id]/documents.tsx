@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { documentApi, ProjectDocument } from "@/api/documentApi";
-import { UniversalFileUploader, ScreenHeader } from "@/components";
+import { UniversalFileUploader, ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -30,6 +30,8 @@ export default function DocumentsScreen() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<ProjectDocument | null>(null);
   const [editingDescription, setEditingDescription] = useState("");
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadDocuments();
@@ -42,8 +44,13 @@ export default function DocumentsScreen() {
       if (response.success) {
         setDocuments(response.data || []);
       }
-    } catch (error) {
-      console.error("Error loading documents:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem tài liệu của dự án này.");
+      } else {
+        console.error("Error loading documents:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -121,8 +128,20 @@ export default function DocumentsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Hồ Sơ & Tài Liệu" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Hồ Sơ & Tài Liệu" showBackButton />
+        <PermissionDenied message={permissionMessage} />
       </View>
     );
   }

@@ -11,7 +11,7 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { predictiveAnalyticsApi, PredictiveAnalysis } from "@/api/predictiveAnalyticsApi";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function PredictionsScreen() {
@@ -20,6 +20,8 @@ export default function PredictionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [analysis, setAnalysis] = useState<PredictiveAnalysis | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadData();
@@ -33,7 +35,12 @@ export default function PredictionsScreen() {
         setAnalysis(response.data);
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải phân tích dự đoán");
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem phân tích dự đoán của dự án này.");
+      } else {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải phân tích dự đoán");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -84,6 +91,15 @@ export default function PredictionsScreen() {
     );
   }
 
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Dự Đoán & Phân Tích" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
+
   if (!analysis) {
     return (
       <View style={styles.container}>
@@ -121,8 +137,8 @@ export default function PredictionsScreen() {
             >
               Rủi ro tổng thể: {analysis.overall_risk_level === 'critical' ? 'Rất Cao' :
                 analysis.overall_risk_level === 'high' ? 'Cao' :
-                analysis.overall_risk_level === 'medium' ? 'Trung Bình' :
-                analysis.overall_risk_level === 'low' ? 'Thấp' : 'Không xác định'}
+                  analysis.overall_risk_level === 'medium' ? 'Trung Bình' :
+                    analysis.overall_risk_level === 'low' ? 'Thấp' : 'Không xác định'}
             </Text>
           </View>
           <Text style={styles.riskScore}>Điểm Rủi Ro: {analysis.overall_risk_score}/100</Text>
@@ -156,8 +172,8 @@ export default function PredictionsScreen() {
                 ]}
               >
                 {analysis.completion_prediction.delay_days > 0 ? "+" : ""}
-                {typeof analysis.completion_prediction.delay_days === 'number' 
-                  ? analysis.completion_prediction.delay_days.toFixed(2) 
+                {typeof analysis.completion_prediction.delay_days === 'number'
+                  ? analysis.completion_prediction.delay_days.toFixed(2)
                   : analysis.completion_prediction.delay_days} ngày
               </Text>
             </View>
@@ -200,8 +216,8 @@ export default function PredictionsScreen() {
             </View>
             <View style={styles.predictionRow}>
               <Text style={styles.predictionLabel}>Vượt ngân sách</Text>
-              {analysis.cost_prediction.overrun_percentage != null && 
-               analysis.cost_prediction.overrun_amount != null ? (
+              {analysis.cost_prediction.overrun_percentage != null &&
+                analysis.cost_prediction.overrun_amount != null ? (
                 <Text
                   style={[
                     styles.predictionValue,
@@ -253,15 +269,15 @@ export default function PredictionsScreen() {
                 >
                   {analysis.delay_risk.risk_level === 'critical' ? 'Rất Cao' :
                     analysis.delay_risk.risk_level === 'high' ? 'Cao' :
-                    analysis.delay_risk.risk_level === 'medium' ? 'Trung Bình' :
-                    analysis.delay_risk.risk_level === 'low' ? 'Thấp' : 'Không xác định'}
+                      analysis.delay_risk.risk_level === 'medium' ? 'Trung Bình' :
+                        analysis.delay_risk.risk_level === 'low' ? 'Thấp' : 'Không xác định'}
                 </Text>
               </View>
               <Text style={styles.riskScoreText}>Điểm: {analysis.delay_risk.risk_score}/100</Text>
             </View>
             <Text style={styles.riskDetailText}>
-              Chậm tiến độ: {typeof analysis.delay_risk.delay_days === 'number' 
-                ? analysis.delay_risk.delay_days.toFixed(2) 
+              Chậm tiến độ: {typeof analysis.delay_risk.delay_days === 'number'
+                ? analysis.delay_risk.delay_days.toFixed(2)
                 : analysis.delay_risk.delay_days} ngày
             </Text>
             <Text style={styles.riskDetailText}>
@@ -305,9 +321,9 @@ export default function PredictionsScreen() {
                 >
                   {analysis.cost_risk.risk_level === 'critical' ? 'Rất Cao' :
                     analysis.cost_risk.risk_level === 'high' ? 'Cao' :
-                    analysis.cost_risk.risk_level === 'medium' ? 'Trung Bình' :
-                    analysis.cost_risk.risk_level === 'low' ? 'Thấp' :
-                    analysis.cost_risk.risk_level === 'unknown' ? 'Không xác định' : 'Không xác định'}
+                      analysis.cost_risk.risk_level === 'medium' ? 'Trung Bình' :
+                        analysis.cost_risk.risk_level === 'low' ? 'Thấp' :
+                          analysis.cost_risk.risk_level === 'unknown' ? 'Không xác định' : 'Không xác định'}
                 </Text>
               </View>
               <Text style={styles.riskScoreText}>Điểm: {analysis.cost_risk.risk_score}/100</Text>

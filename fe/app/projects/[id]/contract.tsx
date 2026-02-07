@@ -16,7 +16,7 @@ import {
   CreateContractData,
 } from "@/api/contractApi";
 import { attachmentApi, Attachment } from "@/api/attachmentApi";
-import { UniversalFileUploader, ScreenHeader, DatePickerInput } from "@/components";
+import { UniversalFileUploader, ScreenHeader, DatePickerInput, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
@@ -297,218 +297,205 @@ export default function ContractScreen() {
     );
   }
 
-  // Hiển thị thông báo RBAC nếu không có quyền
   if (permissionDenied) {
     return (
       <View style={styles.container}>
         <ScreenHeader title="Giá Trị Hợp Đồng" showBackButton />
-        <View style={styles.permissionDeniedContainer}>
-          <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
-          <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
-          <Text style={styles.permissionDeniedMessage}>
-            {permissionMessage || "Bạn không có quyền xem hợp đồng của dự án này."}
-          </Text>
-          <Text style={styles.permissionDeniedSubtext}>
-            Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
-          </Text>
-        </View>
+        <PermissionDenied message={permissionMessage} />
       </View>
     );
   }
 
   return (
-    <PermissionGuard permission={Permissions.CONTRACT_VIEW} projectId={id}>
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: tabBarHeight }}>
-        <ScreenHeader
-          title="Giá Trị Hợp Đồng"
-          showBackButton
-          rightComponent={
-            <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-              {!permissionsLoading && projectPermissions.length === 0 && (
-                <TouchableOpacity
-                  style={styles.refreshButton}
-                  onPress={() => {
-                    console.log("[Contract] Force refreshing permissions...");
-                    refreshPermissions();
-                  }}
-                >
-                  <Ionicons name="refresh" size={20} color="#3B82F6" />
-                </TouchableOpacity>
-              )}
-              {contract && !editing ? (
-                <PermissionGuard permission={Permissions.CONTRACT_UPDATE} projectId={id}>
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => setEditing(true)}
-                  >
-                    <Ionicons name="create-outline" size={24} color="#3B82F6" />
-                  </TouchableOpacity>
-                </PermissionGuard>
-              ) : null}
-            </View>
-          }
-        />
-
-        {contract && (
-          <View style={styles.statusCard}>
-            <Text style={styles.statusLabel}>Trạng thái</Text>
-            <View
-              style={[
-                styles.statusBadge,
-                { backgroundColor: getStatusColor(contract.status) + "20" },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  { color: getStatusColor(contract.status) },
-                ]}
-              >
-                {getStatusText(contract.status)}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {!contract && !loading && (
-          <View style={styles.emptyCard}>
-            <Ionicons name="document-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>Chưa có hợp đồng</Text>
-            <Text style={styles.emptyText}>
-              Hãy tạo hợp đồng mới bằng cách điền thông tin bên dưới
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.form}>
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Giá trị hợp đồng (VNĐ)</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.contract_value ? formatCurrency(formData.contract_value) + " VNĐ" : ""}
-              onChangeText={(text) => {
-                // Remove " VNĐ" suffix and format
-                const cleaned = text.replace(/[^0-9]/g, "");
-                setFormData({ ...formData, contract_value: cleaned });
-              }}
-              placeholder="Nhập giá trị hợp đồng"
-              keyboardType="numeric"
-              editable={editing || !contract}
-            />
-          </View>
-
-          <DatePickerInput
-            label="Ngày ký hợp đồng"
-            value={signedDate}
-            onChange={(date) => {
-              if (date) {
-                setSignedDate(date);
-                setFormData({
-                  ...formData,
-                  signed_date: date.toISOString().split("T")[0],
-                });
-              }
-            }}
-            placeholder="Chọn ngày ký hợp đồng"
-            disabled={!editing && !!contract}
-          />
-
-          {/* File Upload Section - Show when editing or when contract doesn't exist */}
-          {(editing || !contract) && (
-            <View style={styles.attachmentsSection}>
-              <Text style={styles.sectionTitle}>Đính kèm file hợp đồng</Text>
-              <Text style={styles.helperText}>
-                Hỗ trợ PDF, DOC, DOCX, ảnh. Tối đa 10 file.
-              </Text>
-              <UniversalFileUploader
-                onUploadComplete={handleFileUploadComplete}
-                multiple={true}
-                accept="all"
-                maxFiles={10}
-                initialFiles={uploadedFiles}
-                label="Đính kèm file hợp đồng (PDF, DOC, ảnh)"
-              />
-              {uploadingFiles && (
-                <View style={styles.uploadingIndicator}>
-                  <ActivityIndicator size="small" color="#3B82F6" />
-                  <Text style={styles.uploadingText}>Đang đính kèm file...</Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Display attached files - Show when contract exists and not editing */}
-          {contract && contract.attachments && contract.attachments.length > 0 && !editing && (
-            <View style={styles.attachmentsSection}>
-              <Text style={styles.sectionTitle}>File đính kèm</Text>
-              {contract.attachments.map((attachment: any, index: number) => (
-                <TouchableOpacity key={attachment.id || index} style={styles.attachmentItem}>
-                  <Ionicons
-                    name={getFileIcon(attachment.type || "document") as any}
-                    size={24}
-                    color="#3B82F6"
-                  />
-                  <View style={styles.attachmentInfo}>
-                    <Text style={styles.attachmentName} numberOfLines={1}>
-                      {attachment.original_name || attachment.file_name}
-                    </Text>
-                    {attachment.file_size && (
-                      <Text style={styles.attachmentSize}>
-                        {(attachment.file_size / 1024).toFixed(2)} KB
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {editing ? (
-            <View style={styles.buttonRow}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: tabBarHeight }}>
+      <ScreenHeader
+        title="Giá Trị Hợp Đồng"
+        showBackButton
+        rightComponent={
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            {!permissionsLoading && projectPermissions.length === 0 && (
               <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
+                style={styles.refreshButton}
                 onPress={() => {
-                  setEditing(false);
-                  loadContract();
+                  console.log("[Contract] Force refreshing permissions...");
+                  refreshPermissions();
                 }}
               >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
+                <Ionicons name="refresh" size={20} color="#3B82F6" />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, styles.saveButton]}
-                onPress={handleSave}
-              >
-                <Text style={styles.saveButtonText}>Lưu</Text>
+            )}
+            {contract && !editing ? (
+              <PermissionGuard permission={Permissions.CONTRACT_UPDATE} projectId={id}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => setEditing(true)}
+                >
+                  <Ionicons name="create-outline" size={24} color="#3B82F6" />
+                </TouchableOpacity>
+              </PermissionGuard>
+            ) : null}
+          </View>
+        }
+      />
+
+      {contract && (
+        <View style={styles.statusCard}>
+          <Text style={styles.statusLabel}>Trạng thái</Text>
+          <View
+            style={[
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(contract.status) + "20" },
+            ]}
+          >
+            <Text
+              style={[
+                styles.statusText,
+                { color: getStatusColor(contract.status) },
+              ]}
+            >
+              {getStatusText(contract.status)}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {!contract && !loading && (
+        <View style={styles.emptyCard}>
+          <Ionicons name="document-outline" size={48} color="#9CA3AF" />
+          <Text style={styles.emptyTitle}>Chưa có hợp đồng</Text>
+          <Text style={styles.emptyText}>
+            Hãy tạo hợp đồng mới bằng cách điền thông tin bên dưới
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.form}>
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Giá trị hợp đồng (VNĐ)</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.contract_value ? formatCurrency(formData.contract_value) + " VNĐ" : ""}
+            onChangeText={(text) => {
+              const cleaned = text.replace(/[^0-9]/g, "");
+              setFormData({ ...formData, contract_value: cleaned });
+            }}
+            placeholder="Nhập giá trị hợp đồng"
+            keyboardType="numeric"
+            editable={editing || !contract}
+          />
+        </View>
+
+        <DatePickerInput
+          label="Ngày ký hợp đồng"
+          value={signedDate}
+          onChange={(date) => {
+            if (date) {
+              setSignedDate(date);
+              setFormData({
+                ...formData,
+                signed_date: date.toISOString().split("T")[0],
+              });
+            }
+          }}
+          placeholder="Chọn ngày ký hợp đồng"
+          disabled={!editing && !!contract}
+        />
+
+        {/* File Upload Section - Show when editing or when contract doesn't exist */}
+        {(editing || !contract) && (
+          <View style={styles.attachmentsSection}>
+            <Text style={styles.sectionTitle}>Đính kèm file hợp đồng</Text>
+            <Text style={styles.helperText}>
+              Hỗ trợ PDF, DOC, DOCX, ảnh. Tối đa 10 file.
+            </Text>
+            <UniversalFileUploader
+              onUploadComplete={handleFileUploadComplete}
+              multiple={true}
+              accept="all"
+              maxFiles={10}
+              initialFiles={uploadedFiles}
+              label="Đính kèm file hợp đồng (PDF, DOC, ảnh)"
+            />
+            {uploadingFiles && (
+              <View style={styles.uploadingIndicator}>
+                <ActivityIndicator size="small" color="#3B82F6" />
+                <Text style={styles.uploadingText}>Đang đính kèm file...</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Display attached files - Show when contract exists and not editing */}
+        {contract && contract.attachments && contract.attachments.length > 0 && !editing && (
+          <View style={styles.attachmentsSection}>
+            <Text style={styles.sectionTitle}>File đính kèm</Text>
+            {contract.attachments.map((attachment: any, index: number) => (
+              <TouchableOpacity key={attachment.id || index} style={styles.attachmentItem}>
+                <Ionicons
+                  name={getFileIcon(attachment.type || "document") as any}
+                  size={24}
+                  color="#3B82F6"
+                />
+                <View style={styles.attachmentInfo}>
+                  <Text style={styles.attachmentName} numberOfLines={1}>
+                    {attachment.original_name || attachment.file_name}
+                  </Text>
+                  {!!attachment.file_size && (
+                    <Text style={styles.attachmentSize}>
+                      {(attachment.file_size / 1024).toFixed(2)} KB
+                    </Text>
+                  )}
+                </View>
               </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              {!contract && (
-                <PermissionGuard permission={Permissions.CONTRACT_CREATE} projectId={id}>
+            ))}
+          </View>
+        )}
+
+        {editing ? (
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton]}
+              onPress={() => {
+                setEditing(false);
+                loadContract();
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, styles.saveButton]}
+              onPress={handleSave}
+            >
+              <Text style={styles.saveButtonText}>Lưu</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {!contract && (
+              <PermissionGuard permission={Permissions.CONTRACT_CREATE} projectId={id}>
+                <TouchableOpacity
+                  style={[styles.button, styles.saveButton]}
+                  onPress={handleSave}
+                >
+                  <Text style={styles.saveButtonText}>Tạo hợp đồng</Text>
+                </TouchableOpacity>
+              </PermissionGuard>
+            )}
+            {contract &&
+              contract.status === "pending_customer_approval" && (
+                <PermissionGuard permission={Permissions.CONTRACT_APPROVE_LEVEL_1} projectId={id}>
                   <TouchableOpacity
-                    style={[styles.button, styles.saveButton]}
-                    onPress={handleSave}
+                    style={[styles.button, styles.approveButton]}
+                    onPress={handleApprove}
                   >
-                    <Text style={styles.saveButtonText}>Tạo hợp đồng</Text>
+                    <Text style={styles.approveButtonText}>Duyệt hợp đồng</Text>
                   </TouchableOpacity>
                 </PermissionGuard>
               )}
-              {contract &&
-                contract.status === "pending_customer_approval" && (
-                  <PermissionGuard permission={Permissions.CONTRACT_APPROVE_LEVEL_1} projectId={id}>
-                    <TouchableOpacity
-                      style={[styles.button, styles.approveButton]}
-                      onPress={handleApprove}
-                    >
-                      <Text style={styles.approveButtonText}>Duyệt hợp đồng</Text>
-                    </TouchableOpacity>
-                  </PermissionGuard>
-                )}
-            </>
-          )}
-        </View>
-      </ScrollView>
-    </PermissionGuard>
+          </>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 

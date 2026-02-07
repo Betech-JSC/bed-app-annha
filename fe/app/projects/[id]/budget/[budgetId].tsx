@@ -19,7 +19,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { budgetApi, ProjectBudget, CreateBudgetData, BudgetItem } from "@/api/budgetApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput } from "@/components";
+import { ScreenHeader, DatePickerInput, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import * as FileSystem from "expo-file-system";
@@ -39,6 +39,8 @@ export default function BudgetDetailScreen() {
     const [comparisonData, setComparisonData] = useState<any>(null);
     const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
     const [activeTab, setActiveTab] = useState<"overview" | "items">("overview");
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [permissionMessage, setPermissionMessage] = useState("");
 
     useEffect(() => {
         loadBudget();
@@ -69,13 +71,20 @@ export default function BudgetDetailScreen() {
     const loadBudget = async () => {
         try {
             setLoading(true);
+            setPermissionDenied(false);
+            setPermissionMessage("");
             const response = await budgetApi.getBudget(Number(id), Number(budgetId));
             if (response.success) {
                 setBudget(response.data);
             }
         } catch (error: any) {
-            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải ngân sách";
-            Alert.alert("Lỗi", errorMessage);
+            if (error.response?.status === 403) {
+                setPermissionDenied(true);
+                setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem chi tiết ngân sách này.");
+            } else {
+                const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải ngân sách";
+                Alert.alert("Lỗi", errorMessage);
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -231,12 +240,12 @@ export default function BudgetDetailScreen() {
             report += `Ngày xuất báo cáo: ${new Date().toLocaleDateString("vi-VN")} ${new Date().toLocaleTimeString("vi-VN")}\n`;
 
             // Save to file
-            const directory = FileSystem.cacheDirectory || FileSystem.documentDirectory || "";
+            const directory = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory || "";
             const fileName = `budget_report_${budget.name.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}.txt`;
             const fileUri = `${directory}${fileName}`;
 
             await FileSystem.writeAsStringAsync(fileUri, report, {
-                encoding: FileSystem.EncodingType.UTF8,
+                encoding: (FileSystem as any).EncodingType.UTF8,
             });
 
             // Share file
@@ -277,6 +286,15 @@ export default function BudgetDetailScreen() {
                 <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color="#3B82F6" />
                 </View>
+            </View>
+        );
+    }
+
+    if (permissionDenied) {
+        return (
+            <View style={styles.container}>
+                <ScreenHeader title="Chi Tiết Ngân Sách" />
+                <PermissionDenied message={permissionMessage} />
             </View>
         );
     }

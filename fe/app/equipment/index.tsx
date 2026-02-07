@@ -17,7 +17,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { equipmentApi, Equipment, CreateEquipmentData } from "@/api/equipmentApi";
-import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
@@ -62,6 +62,8 @@ export default function EquipmentScreen() {
     const [searchQuery, setSearchQuery] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [focusedField, setFocusedField] = useState<string | null>(null);
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [permissionMessage, setPermissionMessage] = useState("");
 
     useEffect(() => {
         loadEquipment();
@@ -70,6 +72,8 @@ export default function EquipmentScreen() {
     const loadEquipment = async () => {
         try {
             setLoading(true);
+            setPermissionDenied(false);
+            setPermissionMessage("");
             const response = await equipmentApi.getEquipment({
                 search: searchQuery || undefined,
                 active_only: true,
@@ -77,8 +81,13 @@ export default function EquipmentScreen() {
             if (response.success) {
                 setEquipment(response.data.data || []);
             }
-        } catch (error) {
-            console.error("Error loading equipment:", error);
+        } catch (error: any) {
+            if (error.response?.status === 403) {
+                setPermissionDenied(true);
+                setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem danh sách thiết bị.");
+            } else {
+                console.error("Error loading equipment:", error);
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -328,7 +337,9 @@ export default function EquipmentScreen() {
                 />
             </View>
 
-            {loading ? (
+            {permissionDenied ? (
+                <PermissionDenied message={permissionMessage} />
+            ) : loading ? (
                 <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color="#3B82F6" />
                 </View>

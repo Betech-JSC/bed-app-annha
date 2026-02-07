@@ -17,7 +17,8 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { departmentApi, Department, CreateDepartmentData } from "@/api/departmentApi";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied, PermissionGuard } from "@/components";
+import { Permissions } from "@/constants/Permissions";
 
 export default function DepartmentsScreen() {
   const router = useRouter();
@@ -33,6 +34,8 @@ export default function DepartmentsScreen() {
     status: "active",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadDepartments();
@@ -41,12 +44,18 @@ export default function DepartmentsScreen() {
   const loadDepartments = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
+      setPermissionMessage("");
       const response = await departmentApi.getDepartments();
       if (response.success) {
         setDepartments(response.data.data || []);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading departments:", error);
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem danh sách phòng ban.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -168,20 +177,24 @@ export default function DepartmentsScreen() {
           <Ionicons name="stats-chart" size={20} color="#10B981" />
           <Text style={[styles.actionText, { color: "#10B981" }]}>Thống kê</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleEdit(item)}
-        >
-          <Ionicons name="pencil" size={20} color="#3B82F6" />
-          <Text style={styles.actionText}>Sửa</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => handleDelete(item)}
-        >
-          <Ionicons name="trash" size={20} color="#EF4444" />
-          <Text style={[styles.actionText, styles.deleteText]}>Xóa</Text>
-        </TouchableOpacity>
+        <PermissionGuard permission={Permissions.SETTINGS_MANAGE}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleEdit(item)}
+          >
+            <Ionicons name="pencil" size={20} color="#3B82F6" />
+            <Text style={styles.actionText}>Sửa</Text>
+          </TouchableOpacity>
+        </PermissionGuard>
+        <PermissionGuard permission={Permissions.SETTINGS_MANAGE}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => handleDelete(item)}
+          >
+            <Ionicons name="trash" size={20} color="#EF4444" />
+            <Text style={[styles.actionText, styles.deleteText]}>Xóa</Text>
+          </TouchableOpacity>
+        </PermissionGuard>
       </View>
     </View>
   );
@@ -192,19 +205,23 @@ export default function DepartmentsScreen() {
         title="Phòng Ban"
         showBackButton
         rightComponent={
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => {
-              resetForm();
-              setShowCreateModal(true);
-            }}
-          >
-            <Ionicons name="add" size={24} color="#3B82F6" />
-          </TouchableOpacity>
+          <PermissionGuard permission={Permissions.SETTINGS_MANAGE}>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => {
+                resetForm();
+                setShowCreateModal(true);
+              }}
+            >
+              <Ionicons name="add" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          </PermissionGuard>
         }
       />
 
-      {loading ? (
+      {permissionDenied ? (
+        <PermissionDenied message={permissionMessage} />
+      ) : loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>

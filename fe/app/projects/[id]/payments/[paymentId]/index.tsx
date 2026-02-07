@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { paymentApi, ProjectPayment } from "@/api/paymentApi";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { Permissions } from "@/constants/Permissions";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,6 +24,8 @@ export default function PaymentDetailScreen() {
     const [payment, setPayment] = useState<ProjectPayment | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [permissionMessage, setPermissionMessage] = useState("");
 
     useEffect(() => {
         console.log('[PaymentDetail] Loading payment:', { id, paymentId });
@@ -34,6 +36,8 @@ export default function PaymentDetailScreen() {
         try {
             setLoading(true);
             setError(null);
+            setPermissionDenied(false);
+            setPermissionMessage("");
             console.log('[PaymentDetail] Fetching payment:', { id, paymentId });
             const response = await paymentApi.getPaymentById(Number(id), Number(paymentId));
             console.log('[PaymentDetail] Response:', response);
@@ -47,10 +51,15 @@ export default function PaymentDetailScreen() {
                 setError(errorMsg);
             }
         } catch (error: any) {
-            console.error('[PaymentDetail] Error loading payment detail:', error);
-            console.error('[PaymentDetail] Error response:', error.response);
-            const errorMsg = error.response?.data?.message || "Không thể tải thông tin thanh toán";
-            setError(errorMsg);
+            if (error.response?.status === 403) {
+                setPermissionDenied(true);
+                setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem chi tiết thanh toán này.");
+            } else {
+                console.error('[PaymentDetail] Error loading payment detail:', error);
+                console.error('[PaymentDetail] Error response:', error.response);
+                const errorMsg = error.response?.data?.message || "Không thể tải thông tin thanh toán";
+                setError(errorMsg);
+            }
         } finally {
             setLoading(false);
         }
@@ -139,6 +148,15 @@ export default function PaymentDetailScreen() {
         );
     }
 
+    if (permissionDenied) {
+        return (
+            <View style={styles.container}>
+                <ScreenHeader title="Chi tiết thanh toán" showBackButton />
+                <PermissionDenied message={permissionMessage} />
+            </View>
+        );
+    }
+
     if (error) {
         return (
             <View style={styles.container}>
@@ -158,6 +176,7 @@ export default function PaymentDetailScreen() {
             </View>
         );
     }
+
 
     if (!payment) {
         return (

@@ -104,14 +104,14 @@ class AuthorizationService
             ->first();
 
         if ($personnel) {
-            // User đã được assign → check project-specific permissions
-            if ($personnel->permissions && is_array($personnel->permissions) && count($personnel->permissions) > 0) {
-                // Có project-specific permissions → trả về chúng
-                return $personnel->permissions;
-            }
-            // Nếu không có project-specific permissions → fallback về global permissions
-            // (Super admin hoặc users với global permissions vẫn có thể xem)
-            return $globalPermissions;
+            // User đã được assign → lấy project-specific permissions
+            $projectPermissions = ($personnel->permissions && is_array($personnel->permissions)) 
+                ? $personnel->permissions 
+                : [];
+            
+            // Trả về hợp của global permissions và project-specific permissions
+            // Điều này đảm bảo Admin/Super Admin không bị mất quyền khi được assign vào project
+            return array_unique(array_merge($globalPermissions, $projectPermissions));
         } else {
             // User chưa được assign → trả về global permissions
             return $globalPermissions;

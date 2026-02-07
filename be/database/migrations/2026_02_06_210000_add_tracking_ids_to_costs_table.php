@@ -14,21 +14,18 @@ return new class extends Migration
         Schema::table('costs', function (Blueprint $table) {
             $table->foreignId('subcontractor_payment_id')
                 ->nullable()
-                ->after('subcontractor_id')
                 ->constrained('subcontractor_payments')
                 ->onDelete('set null')
                 ->comment('Liên kết với phiếu chi thầu phụ');
 
             $table->foreignId('input_invoice_id')
                 ->nullable()
-                ->after('acceptance_stage_id')
                 ->constrained('input_invoices')
                 ->onDelete('set null')
                 ->comment('Liên kết với hóa đơn đầu vào');
                 
             $table->foreignId('receipt_id')
                 ->nullable()
-                ->after('input_invoice_id')
                 ->constrained('receipts')
                 ->onDelete('set null')
                 ->comment('Liên kết với chứng từ thanh toán/thu chi lẻ');

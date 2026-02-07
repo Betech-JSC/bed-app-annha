@@ -12,7 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { monitoringApi, ProjectMonitoringData } from "@/api/monitoringApi";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function ProjectMonitoringScreen() {
@@ -22,6 +22,8 @@ export default function ProjectMonitoringScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [monitoringData, setMonitoringData] = useState<ProjectMonitoringData | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadData();
@@ -30,12 +32,18 @@ export default function ProjectMonitoringScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
       const response = await monitoringApi.getProjectMonitoring(id!);
       if (response.success) {
         setMonitoringData(response.data);
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải dữ liệu giám sát");
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem thông tin giám sát của dự án này.");
+      } else {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải dữ liệu giám sát");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -103,6 +111,15 @@ export default function ProjectMonitoringScreen() {
         break;
     }
   };
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Giám Sát Dự Án" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
 
   if (loading && !monitoringData) {
     return (

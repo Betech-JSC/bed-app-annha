@@ -11,7 +11,7 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { evmApi, EvmAnalysis } from "@/api/evmApi";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function ProjectEvmScreen() {
@@ -20,6 +20,8 @@ export default function ProjectEvmScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [analysis, setAnalysis] = useState<EvmAnalysis | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadData();
@@ -33,7 +35,12 @@ export default function ProjectEvmScreen() {
         setAnalysis(response.data);
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải dữ liệu EVM");
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem phân tích EVM của dự án này.");
+      } else {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải dữ liệu EVM");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -82,6 +89,15 @@ export default function ProjectEvmScreen() {
     );
   }
 
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Phân Tích EVM" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
+
   if (!analysis) {
     return (
       <View style={styles.container}>
@@ -108,8 +124,8 @@ export default function ProjectEvmScreen() {
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(analysis.status) + "20" }]}>
             <Ionicons name="pulse-outline" size={24} color={getStatusColor(analysis.status)} />
             <Text style={[styles.statusText, { color: getStatusColor(analysis.status) }]}>
-              {analysis.status === "on_track" ? "Đúng tiến độ" : 
-               analysis.status === "at_risk" ? "Có rủi ro" : "Chậm tiến độ"}
+              {analysis.status === "on_track" ? "Đúng tiến độ" :
+                analysis.status === "at_risk" ? "Có rủi ro" : "Chậm tiến độ"}
             </Text>
           </View>
         </View>
@@ -117,7 +133,7 @@ export default function ProjectEvmScreen() {
         {/* Key Metrics */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chỉ số Hiệu suất</Text>
-          
+
           <View style={styles.metricRow}>
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>CPI (Chỉ Số Hiệu Suất Chi Phí)</Text>
@@ -127,8 +143,8 @@ export default function ProjectEvmScreen() {
                     {metric.cost_performance_index.toFixed(3)}
                   </Text>
                   <Text style={styles.metricDescription}>
-                    {metric.cost_performance_index >= 1 
-                      ? "Đang trong ngân sách" 
+                    {metric.cost_performance_index >= 1
+                      ? "Đang trong ngân sách"
                       : metric.cost_performance_index === 0
                         ? "Chưa có tiến độ"
                         : "Vượt ngân sách"}
@@ -156,8 +172,8 @@ export default function ProjectEvmScreen() {
                     {metric.schedule_performance_index.toFixed(3)}
                   </Text>
                   <Text style={styles.metricDescription}>
-                    {metric.schedule_performance_index >= 1 
-                      ? "Đúng tiến độ" 
+                    {metric.schedule_performance_index >= 1
+                      ? "Đúng tiến độ"
                       : metric.schedule_performance_index === 0
                         ? "Chưa có tiến độ"
                         : "Chậm tiến độ"}
@@ -182,7 +198,7 @@ export default function ProjectEvmScreen() {
         {/* Values */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Giá trị EVM</Text>
-          
+
           <View style={styles.valueCard}>
             <View style={styles.valueRow}>
               <Text style={styles.valueLabel}>Giá Trị Kế Hoạch (PV)</Text>
@@ -202,7 +218,7 @@ export default function ProjectEvmScreen() {
         {/* Variances */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chênh lệch</Text>
-          
+
           <View style={styles.varianceCard}>
             <View style={styles.varianceRow}>
               <Text style={styles.varianceLabel}>Chênh Lệch Chi Phí (CV)</Text>
@@ -222,7 +238,7 @@ export default function ProjectEvmScreen() {
         {/* Estimates */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Dự đoán</Text>
-          
+
           <View style={styles.estimateCard}>
             <View style={styles.estimateRow}>
               <Text style={styles.estimateLabel}>Ngân Sách Hoàn Thành (BAC)</Text>
@@ -255,15 +271,15 @@ export default function ProjectEvmScreen() {
                 : "0%"}
             </Text>
             <View style={styles.progressBar}>
-              <View 
+              <View
                 style={[
-                  styles.progressFill, 
-                  { 
+                  styles.progressFill,
+                  {
                     width: `${metric.progress_percentage != null && typeof metric.progress_percentage === 'number'
                       ? Math.max(0, Math.min(100, metric.progress_percentage))
-                      : 0}%` 
+                      : 0}%`
                   }
-                ]} 
+                ]}
               />
             </View>
             {metric.progress_percentage == null && (

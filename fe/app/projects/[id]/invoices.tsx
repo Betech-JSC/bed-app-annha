@@ -13,11 +13,12 @@ import {
     RefreshControl,
     KeyboardAvoidingView,
     Platform,
+    AlertButton,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { invoiceApi, Invoice, CreateInvoiceData, CostGroupSummary } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput, CurrencyInput, UniversalFileUploader } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput, UniversalFileUploader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import api from "@/api/api";
 
@@ -211,21 +212,11 @@ export default function InvoicesScreen() {
         );
     }
 
-    // Hiển thị thông báo RBAC nếu không có quyền
     if (permissionDenied) {
         return (
             <View style={styles.container}>
                 <ScreenHeader title="Hóa Đơn" showBackButton />
-                <View style={styles.permissionDeniedContainer}>
-                    <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
-                    <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
-                    <Text style={styles.permissionDeniedMessage}>
-                        {permissionMessage || "Bạn không có quyền xem hóa đơn của dự án này."}
-                    </Text>
-                    <Text style={styles.permissionDeniedSubtext}>
-                        Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
-                    </Text>
-                </View>
+                <PermissionDenied message={permissionMessage} />
             </View>
         );
     }
@@ -331,7 +322,7 @@ export default function InvoicesScreen() {
                                                 costGroups.map(cg => ({
                                                     text: cg.name,
                                                     onPress: () => setFormData({ ...formData, cost_group_id: cg.id })
-                                                })).concat([{ text: "Hủy", style: "cancel" }])
+                                                } as any)).concat([{ text: "Hủy", onPress: () => { }, style: "cancel" }])
                                             );
                                         }}
                                     >

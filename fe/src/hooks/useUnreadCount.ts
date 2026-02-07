@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { notificationApi } from "@/api/notificationApi";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 interface UseUnreadCountOptions {
   autoRefresh?: boolean;
@@ -14,8 +16,13 @@ export function useUnreadCount(options: UseUnreadCountOptions = {}) {
 
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const token = useSelector((state: RootState) => state.user.token);
 
   const loadUnreadCount = useCallback(async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     try {
       const response = await notificationApi.getUnreadCount();
       if (response.success) {
@@ -26,7 +33,7 @@ export function useUnreadCount(options: UseUnreadCountOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   // Load on mount
   useEffect(() => {

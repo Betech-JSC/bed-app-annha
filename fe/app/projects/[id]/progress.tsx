@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { progressApi } from "@/api/progressApi";
-import { ProgressChart, ScreenHeader } from "@/components";
+import { ProgressChart, ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { ganttApi } from "@/api/ganttApi";
 import { ProjectPhase, ProjectTask } from "@/types/ganttTypes";
@@ -43,6 +43,8 @@ export default function ProgressScreen() {
   const [viewMode, setViewMode] = useState<"structure" | "report">("structure");
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadAllData();
@@ -63,8 +65,13 @@ export default function ProgressScreen() {
         loadPhasesAndTasks(),
         loadLogs(),
       ]);
-    } catch (error) {
-      console.error("Error loading data:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem tiến độ dự án này.");
+      } else {
+        console.error("Error loading data:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -535,8 +542,20 @@ export default function ProgressScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Tiến Độ Thi Công" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Tiến Độ Thi Công" showBackButton />
+        <PermissionDenied message={permissionMessage} />
       </View>
     );
   }

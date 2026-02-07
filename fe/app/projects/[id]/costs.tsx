@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
-import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 
@@ -466,21 +466,11 @@ export default function CostsScreen() {
     );
   }
 
-  // Hiển thị thông báo RBAC nếu không có quyền
   if (permissionDenied) {
     return (
       <View style={styles.container}>
         <ScreenHeader title="Chi Phí Dự Án" showBackButton />
-        <View style={styles.permissionDeniedContainer}>
-          <Ionicons name="lock-closed" size={64} color="#9CA3AF" />
-          <Text style={styles.permissionDeniedTitle}>Không có quyền truy cập</Text>
-          <Text style={styles.permissionDeniedMessage}>
-            {permissionMessage || "Bạn không có quyền xem chi phí của dự án này."}
-          </Text>
-          <Text style={styles.permissionDeniedSubtext}>
-            Vui lòng liên hệ quản trị viên để được cấp quyền truy cập.
-          </Text>
-        </View>
+        <PermissionDenied message={permissionMessage} />
       </View>
     );
   }

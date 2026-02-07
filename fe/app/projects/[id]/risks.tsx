@@ -14,7 +14,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { projectRiskApi, ProjectRisk, CreateProjectRiskData } from "@/api/projectRiskApi";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function ProjectRisksScreen() {
@@ -26,6 +26,8 @@ export default function ProjectRisksScreen() {
   const [risks, setRisks] = useState<ProjectRisk[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedRisk, setSelectedRisk] = useState<ProjectRisk | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState("");
 
   useEffect(() => {
     loadData();
@@ -34,12 +36,18 @@ export default function ProjectRisksScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setPermissionDenied(false);
       const response = await projectRiskApi.getRisks(id!, { active_only: true });
       if (response.success) {
         setRisks(response.data);
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách rủi ro");
+      if (error.response?.status === 403) {
+        setPermissionDenied(true);
+        setPermissionMessage(error.response?.data?.message || "Bạn không có quyền xem thông tin rủi ro của dự án này.");
+      } else {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách rủi ro");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -104,6 +112,15 @@ export default function ProjectRisksScreen() {
     }
   };
 
+  if (permissionDenied) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Quản lý Rủi ro" showBackButton />
+        <PermissionDenied message={permissionMessage} />
+      </View>
+    );
+  }
+
   if (loading && risks.length === 0) {
     return (
       <View style={styles.container}>
@@ -123,10 +140,10 @@ export default function ProjectRisksScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader 
+      <ScreenHeader
         title="Quản lý Rủi ro"
         showBackButton
-        rightAction={
+        rightComponent={
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => router.push(`/projects/${id}/risks/create`)}
