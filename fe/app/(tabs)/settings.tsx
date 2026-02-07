@@ -88,6 +88,20 @@ export default function SettingsScreen() {
       description: "Quản lý các nhóm chi phí áp dụng cho toàn bộ dự án",
     },
     {
+      title: "Chi Phí Công Ty",
+      icon: "wallet-outline",
+      route: "/company-costs",
+      permission: "cost.view",
+      description: "Quản lý chi phí hoạt động chung của công ty (không gắn với dự án cụ thể)",
+    },
+    {
+      title: "Báo Cáo Tài Chính Công Ty",
+      icon: "analytics-outline",
+      route: "/company-financial",
+      permission: "cost.view",
+      description: "Xem báo cáo tài chính tổng hợp, P&L, xu hướng và so sánh hiệu suất",
+    },
+    {
       title: "Nhà Cung Cấp (NCC)",
       icon: "storefront-outline",
       route: "/settings/suppliers",

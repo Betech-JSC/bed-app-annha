@@ -25,7 +25,8 @@ class DefectObserver
         $title = "Lỗi mới được ghi nhận";
         $body = "Có lỗi mới được ghi nhận trong dự án '{$projectName}'";
 
-        $this->notificationService->sendToProjectTeam(
+        $this->notificationService->sendToPermissionUsers(
+            \App\Constants\Permissions::DEFECT_UPDATE,
             $defect->project_id,
             Notification::TYPE_PROJECT_PERFORMANCE,
             Notification::CATEGORY_HIGH_DEFECTS,

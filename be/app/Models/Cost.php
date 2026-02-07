@@ -13,6 +13,7 @@ class Cost extends Model
     protected $fillable = [
         'uuid',
         'project_id',
+        'supplier_id', // Nhà cung cấp
         'task_id',
         'acceptance_stage_id',
         'category',
@@ -60,6 +61,22 @@ class Cost extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Check if this is a company cost (not tied to any project)
+     */
+    public function isCompanyCost(): bool
+    {
+        return $this->project_id === null;
+    }
+
+    /**
+     * Check if this is a project cost
+     */
+    public function isProjectCost(): bool
+    {
+        return $this->project_id !== null;
     }
 
     public function creator(): BelongsTo
@@ -117,6 +134,16 @@ class Cost extends Model
     public function acceptanceStage(): BelongsTo
     {
         return $this->belongsTo(AcceptanceStage::class, 'acceptance_stage_id');
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id');
+    }
+
+    public function inputInvoice(): BelongsTo
+    {
+        return $this->belongsTo(InputInvoice::class, 'input_invoice_id');
     }
 
     // ==================================================================
@@ -361,6 +388,22 @@ class Cost extends Model
     public function scopeDraft($query)
     {
         return $query->where('status', 'draft');
+    }
+
+    /**
+     * Scope for company costs (costs not tied to any project)
+     */
+    public function scopeCompanyCosts($query)
+    {
+        return $query->whereNull('project_id');
+    }
+
+    /**
+     * Scope for project costs (costs tied to a project)
+     */
+    public function scopeProjectCosts($query)
+    {
+        return $query->whereNotNull('project_id');
     }
 
     // ==================================================================

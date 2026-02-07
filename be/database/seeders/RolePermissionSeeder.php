@@ -330,7 +330,6 @@ class RolePermissionSeeder extends Seeder
 
         $permissions = [
             // Project - Full management
-            Permissions::PROJECT_VIEW,
             Permissions::PROJECT_CREATE,
             Permissions::PROJECT_UPDATE,
             Permissions::PROJECT_MANAGE,
@@ -354,6 +353,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::COST_DELETE,
             Permissions::COST_SUBMIT,
             Permissions::COST_APPROVE_MANAGEMENT,
+            Permissions::COST_REJECT,
 
             // Additional Cost
             Permissions::ADDITIONAL_COST_VIEW,
@@ -471,7 +471,6 @@ class RolePermissionSeeder extends Seeder
 
         $permissions = [
             // Project
-            Permissions::PROJECT_VIEW,
             Permissions::PROJECT_UPDATE,
 
             // Progress
@@ -565,6 +564,7 @@ class RolePermissionSeeder extends Seeder
             // Cost - View and accountant approval
             Permissions::COST_VIEW,
             Permissions::COST_APPROVE_ACCOUNTANT,
+            Permissions::COST_REJECT,
 
             // Additional Cost
             Permissions::ADDITIONAL_COST_VIEW,
@@ -630,9 +630,6 @@ class RolePermissionSeeder extends Seeder
         }
 
         $permissions = [
-            // Project
-            Permissions::PROJECT_VIEW,
-
             // Progress
             Permissions::PROGRESS_VIEW,
 

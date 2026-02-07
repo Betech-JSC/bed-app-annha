@@ -47,5 +47,11 @@ export const userApi = {
     const response = await api.delete("/user/account");
     return response.data;
   },
+
+  // Save expo push token
+  savePushToken: async (userId: number, token: string) => {
+    const response = await api.post("/users/save-token", { user_id: userId, token });
+    return response.data;
+  },
 };
 

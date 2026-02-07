@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Notification;
 use App\Models\User;
 use App\Models\Project;
+use App\Models\ProjectPersonnel;
 use App\Services\ExpoPushService;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -142,6 +143,71 @@ class NotificationService
     }
 
     /**
+     * Gửi notification cho những users có quyền cụ thể (global hoặc trong project)
+     */
+    public function sendToPermissionUsers(
+        string $permission,
+        ?int $projectId,
+        string $type,
+        string $category,
+        string $title,
+        string $body,
+        array $data = [],
+        string $priority = Notification::PRIORITY_MEDIUM,
+        ?string $actionUrl = null,
+        bool $sendPush = true,
+        ?array $excludeUserIds = null
+    ): array {
+        // 1. Tìm users có quyền global (Admin, accountant, etc.) thông qua roles
+        $globalUserIds = User::whereHas('roles.permissions', function ($q) use ($permission) {
+            $q->where('name', $permission);
+        })->orWhereHas('directPermissions', function ($q) use ($permission) {
+            $q->where('name', $permission);
+        })->pluck('id')->toArray();
+
+        $userIds = $globalUserIds;
+
+        // 2. Tìm users có quyền cụ thể trong project (ProjectPersonnel)
+        if ($projectId) {
+            $projectUserIds = ProjectPersonnel::where('project_id', $projectId)
+                ->where(function ($q) use ($permission) {
+                    $q->whereJsonContains('permissions', $permission)
+                        ->orWhereJsonContains('permissions', '*');
+                })
+                ->pluck('user_id')
+                ->toArray();
+            
+            $userIds = array_merge($userIds, $projectUserIds);
+
+            // Luôn thêm Project Manager của dự án đó
+            $project = Project::find($projectId);
+            if ($project && $project->project_manager_id) {
+                $userIds[] = $project->project_manager_id;
+            }
+        }
+
+        // Loại bỏ duplicate và excluded users
+        $userIds = array_filter(array_unique($userIds));
+        if ($excludeUserIds) {
+            $userIds = array_diff($userIds, $excludeUserIds);
+        }
+
+        return $this->sendToUsers(
+            $userIds,
+            $type,
+            $category,
+            $title,
+            $body,
+            $data,
+            $priority,
+            $actionUrl,
+            $projectId ? Project::class : null,
+            $projectId,
+            $sendPush
+        );
+    }
+
+    /**
      * Gửi notification cho team của project
      */
     public function sendToProjectTeam(
@@ -271,7 +337,8 @@ class NotificationService
             default => Notification::PRIORITY_MEDIUM,
         };
 
-        $this->sendToProjectTeam(
+        $this->sendToPermissionUsers(
+            Permissions::PROJECT_MANAGE,
             $project->id,
             Notification::TYPE_PROJECT_PERFORMANCE,
             Notification::CATEGORY_DELAY_RISK,
@@ -297,7 +364,8 @@ class NotificationService
         $title = "Cảnh báo vượt ngân sách";
         $body = "Dự án '{$project->name}' đã vượt ngân sách " . number_format($overrunPercentage, 1) . "%";
 
-        $this->sendToProjectTeam(
+        $this->sendToPermissionUsers(
+            Permissions::COST_APPROVE_MANAGEMENT,
             $project->id,
             Notification::TYPE_PROJECT_PERFORMANCE,
             Notification::CATEGORY_BUDGET_OVERRUN,
@@ -325,7 +393,8 @@ class NotificationService
 
         $priority = $daysRemaining <= 3 ? Notification::PRIORITY_URGENT : Notification::PRIORITY_HIGH;
 
-        $this->sendToProjectTeam(
+        $this->sendToPermissionUsers(
+            Permissions::PROJECT_MANAGE,
             $project->id,
             Notification::TYPE_PROJECT_PERFORMANCE,
             Notification::CATEGORY_DEADLINE,

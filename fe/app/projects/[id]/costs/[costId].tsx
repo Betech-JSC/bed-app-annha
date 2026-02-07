@@ -9,11 +9,18 @@ import {
   Alert,
   Image,
   Linking,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { costApi, Cost } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, PermissionDenied } from "@/components";
+import { ScreenHeader, PermissionDenied, PermissionGuard } from "@/components";
+import { Permissions } from "@/constants/Permissions";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function CostDetailScreen() {
@@ -24,6 +31,11 @@ export default function CostDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
+
+  // Workflow State
+  const [actionLoading, setActionLoading] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
     loadCost();
@@ -51,6 +63,101 @@ export default function CostDetailScreen() {
       setLoading(false);
     }
   };
+
+  const handleSubmit = async () => {
+    try {
+      setActionLoading(true);
+      const response = await costApi.submitCost(id!, costId!);
+      if (response.success) {
+        Alert.alert("Thành công", "Đã gửi duyệt chi phí");
+        loadCost();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể gửi duyệt");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleApproveByManagement = async () => {
+    try {
+      setActionLoading(true);
+      const response = await costApi.approveByManagement(id!, costId!);
+      if (response.success) {
+        Alert.alert("Thành công", "Đã duyệt chi phí (BĐH)");
+        loadCost();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể duyệt");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleApproveByAccountant = async () => {
+    try {
+      setActionLoading(true);
+      const response = await costApi.approveByAccountant(id!, costId!);
+      if (response.success) {
+        Alert.alert("Thành công", "Đã xác nhận chi phí (Kế toán)");
+        loadCost();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể xác nhận");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectReason.trim()) {
+      Alert.alert("Lỗi", "Vui lòng nhập lý do từ chối");
+      return;
+    }
+    try {
+      setActionLoading(true);
+      const response = await costApi.rejectCost(id!, costId!, rejectReason);
+      if (response.success) {
+        Alert.alert("Thành công", "Đã từ chối chi phí");
+        setShowRejectModal(false);
+        setRejectReason("");
+        loadCost();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể từ chối");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Xác nhận xóa",
+      "Bạn có chắc chắn muốn xóa chi phí này không? Hành động này không thể hoàn tác.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              const response = await costApi.deleteCost(id!, costId!);
+              if (response.success) {
+                Alert.alert("Thành công", "Đã xóa chi phí");
+                router.back();
+              }
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa chi phí");
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("vi-VN", {
@@ -324,6 +431,143 @@ export default function CostDetailScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Action Buttons */}
+      <View style={styles.actionBar}>
+        {cost.status === "draft" && (
+          <PermissionGuard permission={Permissions.COST_SUBMIT}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.submitButton]}
+              onPress={handleSubmit}
+              disabled={actionLoading}
+            >
+              <Text style={styles.actionButtonText}>Gửi Duyệt</Text>
+            </TouchableOpacity>
+          </PermissionGuard>
+        )}
+
+        {cost.status === "pending_management_approval" && (
+          <PermissionGuard permission={Permissions.COST_APPROVE_MANAGEMENT}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={handleApproveByManagement}
+              disabled={actionLoading}
+            >
+              <Text style={styles.actionButtonText}>Duyệt (BĐH)</Text>
+            </TouchableOpacity>
+          </PermissionGuard>
+        )}
+
+        {cost.status === "pending_accountant_approval" && (
+          <PermissionGuard permission={Permissions.COST_APPROVE_ACCOUNTANT}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={handleApproveByAccountant}
+              disabled={actionLoading}
+            >
+              <Text style={styles.actionButtonText}>Xác Nhận (KT)</Text>
+            </TouchableOpacity>
+          </PermissionGuard>
+        )}
+
+        {(cost.status === "pending_management_approval" ||
+          cost.status === "pending_accountant_approval") && (
+            <PermissionGuard permission={Permissions.COST_REJECT}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => setShowRejectModal(true)}
+                disabled={actionLoading}
+              >
+                <Text style={styles.actionButtonText}>Từ Chối</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
+          )}
+
+        {cost.status === "draft" && (
+          <PermissionGuard permission={Permissions.COST_DELETE}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={handleDelete}
+              disabled={actionLoading}
+            >
+              <Text style={styles.actionButtonText}>Xóa</Text>
+            </TouchableOpacity>
+          </PermissionGuard>
+        )}
+      </View>
+
+      {/* Updated Reject Modal with Enhanced UX */}
+      <Modal
+        visible={showRejectModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRejectModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalContentContainer}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalIconContainer}>
+                    <Ionicons name="alert-circle" size={32} color="#EF4444" />
+                  </View>
+                  <Text style={styles.modalTitle}>Từ chối chi phí</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Vui lòng nhập lý do từ chối để người tạo có thể chỉnh sửa lại.
+                  </Text>
+                </View>
+
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Nhập lý do từ chối (bắt buộc)..."
+                  placeholderTextColor="#9CA3AF"
+                  value={rejectReason}
+                  onChangeText={setRejectReason}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  autoFocus
+                />
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalCancelButton]}
+                    onPress={() => {
+                      setShowRejectModal(false);
+                      setRejectReason("");
+                    }}
+                    disabled={actionLoading}
+                  >
+                    <Text style={styles.modalCancelText}>Hủy bỏ</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.modalButton,
+                      styles.modalConfirmButton,
+                      (!rejectReason.trim() || actionLoading) &&
+                      styles.modalButtonDisabled,
+                    ]}
+                    onPress={handleReject}
+                    disabled={!rejectReason.trim() || actionLoading}
+                  >
+                    {actionLoading ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={styles.modalConfirmText}>
+                        Xác nhận từ chối
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -446,6 +690,126 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: "#EF4444",
+  },
+  // Workflow Actions
+  actionBar: {
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    flexDirection: "row",
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  submitButton: {
+    backgroundColor: "#3B82F6",
+  },
+  approveButton: {
+    backgroundColor: "#10B981",
+  },
+  rejectButton: {
+    backgroundColor: "#EF4444",
+    flex: 0.5,
+  },
+  deleteButton: {
+    backgroundColor: "#6B7280",
+    flex: 0.5,
+  },
+  actionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  modalContentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 20,
+    width: "100%",
+    maxWidth: 400,
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FEE2E2",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    height: 100,
+    textAlignVertical: "top",
+    marginBottom: 16,
+    backgroundColor: "#F9FAFB",
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalCancelButton: {
+    backgroundColor: "#F3F4F6",
+  },
+  modalConfirmButton: {
+    backgroundColor: "#EF4444",
+  },
+  modalButtonDisabled: {
+    opacity: 0.5,
+  },
+  modalCancelText: {
+    color: "#6B7280",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalConfirmText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
 

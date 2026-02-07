@@ -164,13 +164,13 @@ export default function UniversalFileUploader({
             return;
         }
 
-        // Validate file size (3MB limit)
-        const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB in bytes
+        // Validate file size (5MB limit)
+        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
         const oversizedFiles: string[] = [];
-        
+
         for (const file of files) {
             let fileSize = file.size || file.fileSize || 0;
-            
+
             // If fileSize is not available, try to get it from FileSystem
             if (fileSize === 0 && file.uri) {
                 try {
@@ -182,7 +182,7 @@ export default function UniversalFileUploader({
                     console.warn("Could not get file size:", error);
                 }
             }
-            
+
             if (fileSize > MAX_FILE_SIZE) {
                 const fileName = file.name || file.fileName || "file";
                 const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
@@ -193,7 +193,7 @@ export default function UniversalFileUploader({
         if (oversizedFiles.length > 0) {
             Alert.alert(
                 "Lỗi",
-                `Các file sau vượt quá giới hạn 3MB:\n${oversizedFiles.join("\n")}\n\nVui lòng chọn file nhỏ hơn 3MB.`
+                `Các file sau vượt quá giới hạn 5MB:\n${oversizedFiles.join("\n")}\n\nVui lòng chọn file nhỏ hơn 5MB.`
             );
             return;
         }
@@ -212,7 +212,7 @@ export default function UniversalFileUploader({
                 }
 
                 const fileName = file.name || file.fileName || `file_${Date.now()}_${index}`;
-                
+
                 // Extract extension from filename or URI
                 let extension = fileName.split(".").pop()?.toLowerCase() || "";
                 if (!extension && uri) {
@@ -293,7 +293,7 @@ export default function UniversalFileUploader({
 
             // Extract detailed error message
             let errorMessage = "Upload thất bại. Vui lòng thử lại.";
-            
+
             if (error.response?.data) {
                 // Check for validation errors
                 if (error.response.data.errors) {

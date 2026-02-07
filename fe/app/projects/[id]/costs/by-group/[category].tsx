@@ -16,9 +16,12 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function CostGroupDetailScreen() {
   const router = useRouter();
-  const { id, category } = useLocalSearchParams<{ id: string; category: string }>();
+  const { id, category, label } = useLocalSearchParams<{ id: string; category: string; label?: string }>();
+  const categoryParam = Array.isArray(category) ? category[0] : category;
+  const labelParam = label ? (Array.isArray(label) ? label[0] : label) : undefined;
   const tabBarHeight = useTabBarHeight();
   const [costs, setCosts] = useState<Cost[]>([]);
+  const [serverTotalAmount, setServerTotalAmount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -32,10 +35,14 @@ export default function CostGroupDetailScreen() {
     try {
       setLoading(true);
       const response = await costApi.getCosts(id!, {
-        category: category || undefined,
-      });
+        category: categoryParam || undefined,
+        limit: 50,
+      } as any);
       if (response.success) {
         setCosts(response.data.data || []);
+        if (response.meta?.total_amount !== undefined) {
+          setServerTotalAmount(response.meta.total_amount);
+        }
       }
     } catch (error: any) {
       console.error("Error loading costs:", error);
@@ -164,18 +171,20 @@ export default function CostGroupDetailScreen() {
     );
   }
 
-  const totalAmount = costs.reduce((sum, cost) => sum + cost.amount, 0);
+  const displayTotalAmount = serverTotalAmount !== null
+    ? serverTotalAmount
+    : costs.reduce((sum, cost) => sum + cost.amount, 0);
 
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title={getCategoryLabel(category || "")}
+        title={labelParam || getCategoryLabel(categoryParam || "")}
         showBackButton
       />
       <View style={styles.summaryCard}>
         <Text style={styles.summaryLabel}>Tổng chi phí</Text>
-        <Text style={styles.summaryAmount}>{formatCurrency(totalAmount)}</Text>
-        <Text style={styles.summaryCount}>{costs.length} mục</Text>
+        <Text style={styles.summaryAmount}>{formatCurrency(displayTotalAmount)}</Text>
+        <Text style={styles.summaryCount}>{costs.length} mục hiển thị</Text>
       </View>
       <FlatList
         data={costs}

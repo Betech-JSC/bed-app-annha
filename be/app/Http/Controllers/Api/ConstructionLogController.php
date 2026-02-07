@@ -11,14 +11,32 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
+
 class ConstructionLogController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách nhật ký công trình
      */
     public function index(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, Permissions::LOG_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem nhật ký dự án này.'
+            ], 403);
+        }
 
         $query = $project->constructionLogs()
             ->with(['creator', 'attachments', 'task'])
@@ -49,10 +67,10 @@ class ConstructionLogController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::LOG_CREATE)) {
+        if (!$this->authService->can($user, Permissions::LOG_CREATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền tạo nhật ký công trình. Cần quyền: ' . \App\Constants\Permissions::LOG_CREATE
+                'message' => 'Bạn không có quyền tạo nhật ký cho dự án này.'
             ], 403);
         }
 
@@ -184,8 +202,8 @@ class ConstructionLogController extends Controller
         $log = ConstructionLog::where('project_id', $project->id)->findOrFail($id);
         $user = auth()->user();
 
-        // Chỉ cho phép người tạo hoặc project manager cập nhật
-        if ($log->created_by !== $user->id && $project->project_manager_id !== $user->id) {
+        // Chỉ cho phép người tạo hoặc project manager cập nhật (hoặc người có quyền LOG_UPDATE cho project này)
+        if ($log->created_by !== $user->id && !$this->authService->can($user, Permissions::LOG_UPDATE, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền cập nhật nhật ký này.'
@@ -316,8 +334,8 @@ class ConstructionLogController extends Controller
         $log = ConstructionLog::where('project_id', $project->id)->findOrFail($id);
         $user = auth()->user();
 
-        // Chỉ cho phép người tạo hoặc project manager xóa
-        if ($log->created_by !== $user->id && $project->project_manager_id !== $user->id) {
+        // Chỉ cho phép người tạo hoặc project manager xóa (hoặc người có quyền LOG_DELETE cho project này)
+        if ($log->created_by !== $user->id && !$this->authService->can($user, Permissions::LOG_DELETE, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xóa nhật ký này.'

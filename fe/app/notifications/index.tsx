@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
     View,
     Text,
-    FlatList,
     StyleSheet,
     TouchableOpacity,
     ActivityIndicator,
@@ -11,38 +10,46 @@ import {
     TextInput,
     Modal,
     ScrollView,
+    SectionList,
+    Platform,
 } from "react-native";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { notificationApi, Notification, NotificationFilters } from "@/api/notificationApi";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { useNotifications } from "@/hooks/useNotifications";
+import { format, isToday, isYesterday, parseISO } from "date-fns";
+import { vi } from "date-fns/locale";
 
 type TabType = "all" | "unread";
+
+interface Section {
+    title: string;
+    data: Notification[];
+}
 
 export default function NotificationsScreen() {
     const router = useRouter();
     const tabBarHeight = useTabBarHeight();
     const token = useSelector((state: RootState) => state.user.token);
-    const [notifications, setNotifications] = useState<Notification[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [unreadCount, setUnreadCount] = useState(0);
+
     const [activeTab, setActiveTab] = useState<TabType>("all");
     const [searchText, setSearchText] = useState("");
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [filters, setFilters] = useState<NotificationFilters>({});
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [allNotifications, setAllNotifications] = useState<Notification[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
 
-    // Filter form state
-    const [filterFormData, setFilterFormData] = useState<NotificationFilters>({
-        type: undefined,
-        category: undefined,
-        priority: undefined,
+    const { unreadCount, markAsRead, markAllAsRead, deleteNotification, refresh: refreshGlobal } = useNotifications({
+        autoRefresh: false,
+        loadNotifications: false
     });
 
     const loadNotifications = useCallback(async (pageNum: number = 1, append: boolean = false) => {
@@ -64,17 +71,13 @@ export default function NotificationsScreen() {
                 params.unread_only = true;
             }
 
-            if (searchText) {
-                params.search = searchText;
-            }
-
             const response = await notificationApi.getAll(params);
             const data = response.data || [];
 
             if (append) {
-                setNotifications((prev) => [...prev, ...data]);
+                setAllNotifications((prev) => [...prev, ...data]);
             } else {
-                setNotifications(data);
+                setAllNotifications(data);
             }
 
             setHasMore(data.length === 20);
@@ -87,28 +90,8 @@ export default function NotificationsScreen() {
             setRefreshing(false);
             setLoadingMore(false);
         }
-    }, [filters, activeTab, searchText, token]);
+    }, [filters, activeTab, token]);
 
-    const loadUnreadCount = useCallback(async () => {
-        if (!token) return;
-        try {
-            const response = await notificationApi.getUnreadCount();
-            if (response.success) {
-                setUnreadCount(response.unread_count || 0);
-            }
-        } catch (error) {
-            console.error("Error loading unread count:", error);
-        }
-    }, [token]);
-
-    useFocusEffect(
-        useCallback(() => {
-            loadNotifications(1, false);
-            loadUnreadCount();
-        }, [loadNotifications, loadUnreadCount])
-    );
-
-    // Reload khi filters hoặc activeTab thay đổi
     useEffect(() => {
         loadNotifications(1, false);
     }, [filters, activeTab, loadNotifications]);
@@ -117,99 +100,17 @@ export default function NotificationsScreen() {
         setRefreshing(true);
         setPage(1);
         loadNotifications(1, false);
-        loadUnreadCount();
+        refreshGlobal();
     };
 
     const handleLoadMore = () => {
-        if (!loadingMore && hasMore) {
+        if (!loadingMore && hasMore && !searchText) {
             loadNotifications(page + 1, true);
         }
     };
 
-    const handleMarkAsRead = async (notification: Notification) => {
-        if (notification.status === "read") return;
-
-        try {
-            await notificationApi.markAsRead(notification.id);
-            setNotifications((prev) =>
-                prev.map((n) =>
-                    n.id === notification.id ? { ...n, status: "read" as const, read_at: new Date().toISOString() } : n
-                )
-            );
-            setUnreadCount((prev) => Math.max(0, prev - 1));
-        } catch (error) {
-            console.error("Error marking as read:", error);
-            Alert.alert("Lỗi", "Không thể đánh dấu đã đọc");
-        }
-    };
-
-    const handleMarkAllAsRead = async () => {
-        try {
-            await notificationApi.markAllAsRead();
-            setNotifications((prev) =>
-                prev.map((n) => ({ ...n, status: "read" as const, read_at: new Date().toISOString() }))
-            );
-            setUnreadCount(0);
-            Alert.alert("Thành công", "Đã đánh dấu tất cả thông báo là đã đọc");
-        } catch (error) {
-            console.error("Error marking all as read:", error);
-            Alert.alert("Lỗi", "Không thể đánh dấu tất cả đã đọc");
-        }
-    };
-
-    const handleDelete = async (notification: Notification) => {
-        Alert.alert(
-            "Xác nhận",
-            "Bạn có chắc chắn muốn xóa thông báo này?",
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Xóa",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            await notificationApi.delete(notification.id);
-                            setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
-                            if (notification.status === "unread") {
-                                setUnreadCount((prev) => Math.max(0, prev - 1));
-                            }
-                        } catch (error) {
-                            console.error("Error deleting notification:", error);
-                            Alert.alert("Lỗi", "Không thể xóa thông báo");
-                        }
-                    },
-                },
-            ]
-        );
-    };
-
-    const handleNotificationPress = (notification: Notification) => {
-        if (notification.status === "unread") {
-            handleMarkAsRead(notification);
-        }
-
-        if (notification.action_url) {
-            router.push(notification.action_url as any);
-        }
-    };
-
-    const handleApplyFilters = () => {
-        setFilters(filterFormData);
-        setShowFilterModal(false);
-        setPage(1);
-        loadNotifications(1, false);
-    };
-
-    const handleClearFilters = () => {
-        setFilterFormData({});
-        setFilters({});
-        setShowFilterModal(false);
-        setPage(1);
-        loadNotifications(1, false);
-    };
-
-    const filteredNotifications = useMemo(() => {
-        let filtered = notifications;
+    const sections = useMemo(() => {
+        let filtered = allNotifications;
 
         if (searchText) {
             const searchLower = searchText.toLowerCase();
@@ -221,39 +122,119 @@ export default function NotificationsScreen() {
             );
         }
 
-        return filtered;
-    }, [notifications, searchText]);
+        const grouped: { [key: string]: Notification[] } = {};
 
-    const getPriorityColor = (priority: string) => {
-        switch (priority) {
-            case "urgent":
-                return "#EF4444";
-            case "high":
-                return "#F59E0B";
-            case "medium":
-                return "#3B82F6";
-            case "low":
-                return "#6B7280";
-            default:
-                return "#6B7280";
+        filtered.forEach((noti) => {
+            const date = parseISO(noti.created_at);
+            let title = "";
+            if (isToday(date)) {
+                title = "Hôm nay";
+            } else if (isYesterday(date)) {
+                title = "Hôm qua";
+            } else {
+                title = format(date, "eeee, dd/MM", { locale: vi });
+            }
+
+            if (!grouped[title]) {
+                grouped[title] = [];
+            }
+            grouped[title].push(noti);
+        });
+
+        return Object.keys(grouped).map((title) => ({
+            title,
+            data: grouped[title],
+        }));
+    }, [allNotifications, searchText]);
+
+    const handleNotificationPress = async (notification: Notification) => {
+        if (notification.status === "unread") {
+            try {
+                await markAsRead(notification.id);
+                setAllNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, status: 'read' as const } : n));
+            } catch (e) { }
+        }
+
+        const { type, data, action_url } = notification;
+
+        try {
+            switch (type) {
+                case 'project_cost':
+                    if (data?.project_id && data?.cost_id) {
+                        router.push(`/projects/${data.project_id}/costs/${data.cost_id}`);
+                    } else if (data?.project_id) {
+                        router.push(`/projects/${data.project_id}/costs`);
+                    } else if (action_url) {
+                        router.push(action_url as any);
+                    }
+                    break;
+                case 'project_invoice':
+                    if (data?.project_id && data?.invoice_id) {
+                        router.push(`/projects/${data.project_id}/invoices/${data.invoice_id}`);
+                    } else if (data?.project_id) {
+                        router.push(`/projects/${data.project_id}/invoices`);
+                    } else if (action_url) {
+                        router.push(action_url as any);
+                    }
+                    break;
+                case 'project_comment':
+                    if (data?.project_id) {
+                        router.push(`/projects/${data.project_id}/comments`);
+                    } else if (action_url) {
+                        router.push(action_url as any);
+                    }
+                    break;
+                case 'project_update':
+                case 'assignment':
+                    if (data?.project_id) {
+                        router.push(`/projects/${data.project_id}`);
+                    } else if (action_url) {
+                        router.push(action_url as any);
+                    }
+                    break;
+                case 'chat_message':
+                    if (data?.chat_id) {
+                        router.push(`/chat/${data.chat_id}`);
+                    } else if (action_url) {
+                        router.push(action_url as any);
+                    }
+                    break;
+                case 'system':
+                default:
+                    if (action_url) {
+                        router.push(action_url as any);
+                    } else {
+                        // Fallback or just stay on the screen if it's already a system notification
+                    }
+                    break;
+            }
+        } catch (error) {
+            console.error('Navigation error:', error);
+            // If smart navigation fails, try the action_url if it exists
+            if (action_url) {
+                try {
+                    router.push(action_url as any);
+                } catch (err) {
+                    console.error('Final navigation fallback error:', err);
+                }
+            }
         }
     };
 
-    const getTypeLabel = (type: string) => {
-        const labels: Record<string, string> = {
-            project_performance: "Hiệu suất dự án",
-            system: "Hệ thống",
-            workflow: "Workflow",
-            assignment: "Phân công",
-            mention: "Đề cập",
-            file_upload: "Tải file",
-        };
-        return labels[type] || type;
+    const getTypeIcon = (type: string) => {
+        switch (type) {
+            case 'project_cost': return { name: 'cash-outline', color: '#10B981' };
+            case 'project_invoice': return { name: 'receipt-outline', color: '#3B82F6' };
+            case 'project_comment': return { name: 'chatbubble-ellipses-outline', color: '#8B5CF6' };
+            case 'assignment': return { name: 'person-add-outline', color: '#F59E0B' };
+            case 'system': return { name: 'settings-outline', color: '#6B7280' };
+            default: return { name: 'notifications-outline', color: '#3B82F6' };
+        }
     };
 
     const renderNotificationItem = ({ item }: { item: Notification }) => {
         const isUnread = item.status === "unread";
-        const priorityColor = getPriorityColor(item.priority);
+        const icon = getTypeIcon(item.type);
 
         return (
             <TouchableOpacity
@@ -261,54 +242,56 @@ export default function NotificationsScreen() {
                 onPress={() => handleNotificationPress(item)}
                 activeOpacity={0.7}
             >
+                <View style={[styles.iconContainer, { backgroundColor: icon.color + '15' }]}>
+                    <Ionicons name={icon.name as any} size={22} color={icon.color} />
+                </View>
+
                 <View style={styles.notificationContent}>
                     <View style={styles.notificationHeader}>
-                        <View style={styles.notificationHeaderLeft}>
-                            {isUnread && <View style={[styles.unreadDot, { backgroundColor: priorityColor }]} />}
-                            <Text style={styles.notificationTitle} numberOfLines={1}>
-                                {item.title || item.message || "Thông báo"}
-                            </Text>
-                        </View>
-                        <View style={styles.notificationActions}>
-                            {isUnread && (
-                                <TouchableOpacity
-                                    onPress={() => handleMarkAsRead(item)}
-                                    style={styles.actionButton}
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                >
-                                    <Ionicons name="checkmark-circle-outline" size={20} color="#3B82F6" />
-                                </TouchableOpacity>
-                            )}
-                            <TouchableOpacity
-                                onPress={() => handleDelete(item)}
-                                style={styles.actionButton}
-                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            >
-                                <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                            </TouchableOpacity>
-                        </View>
+                        <Text style={[styles.notificationTitle, isUnread && styles.notificationTitleUnread]} numberOfLines={1}>
+                            {item.title || item.message || "Thông báo"}
+                        </Text>
+                        <Text style={styles.notificationTime}>
+                            {format(parseISO(item.created_at), "HH:mm")}
+                        </Text>
                     </View>
+
                     <Text style={styles.notificationBody} numberOfLines={2}>
                         {item.body || item.message || ""}
                     </Text>
-                    <View style={styles.notificationFooter}>
-                        <View style={styles.notificationMeta}>
-                            <Text style={styles.notificationType}>{getTypeLabel(item.type || "system")}</Text>
-                            <View style={[styles.priorityBadge, { backgroundColor: priorityColor + "20" }]}>
-                                <Text style={[styles.priorityText, { color: priorityColor }]}>
-                                    {item.priority === "urgent" ? "Khẩn cấp" : item.priority === "high" ? "Cao" : item.priority === "medium" ? "Trung bình" : "Thấp"}
-                                </Text>
-                            </View>
+
+                    <View style={styles.itemFooter}>
+                        {isUnread && <View style={styles.unreadBadge}><Text style={styles.unreadBadgeText}>Mới</Text></View>}
+                        <View style={styles.itemActions}>
+                            {isUnread && (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        markAsRead(item.id);
+                                        setAllNotifications(prev => prev.map(n => n.id === item.id ? { ...n, status: 'read' as const } : n));
+                                    }}
+                                    style={styles.actionBtn}
+                                >
+                                    <Ionicons name="checkmark-done" size={16} color="#3B82F6" />
+                                    <Text style={styles.actionBtnText}>Đã đọc</Text>
+                                </TouchableOpacity>
+                            )}
+                            <TouchableOpacity
+                                onPress={() => {
+                                    Alert.alert("Xác nhận", "Xóa thông báo này?", [
+                                        { text: "Hủy", style: "cancel" },
+                                        {
+                                            text: "Xóa", style: "destructive", onPress: () => {
+                                                deleteNotification(item.id);
+                                                setAllNotifications(prev => prev.filter(n => n.id !== item.id));
+                                            }
+                                        }
+                                    ]);
+                                }}
+                                style={styles.actionBtn}
+                            >
+                                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                            </TouchableOpacity>
                         </View>
-                        <Text style={styles.notificationTime}>
-                            {new Date(item.created_at).toLocaleString("vi-VN", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                            })}
-                        </Text>
                     </View>
                 </View>
             </TouchableOpacity>
@@ -316,20 +299,17 @@ export default function NotificationsScreen() {
     };
 
     const renderEmptyComponent = () => {
-        if (loading) {
-            return (
-                <View style={styles.emptyContainer}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                    <Text style={styles.emptyText}>Đang tải thông báo...</Text>
-                </View>
-            );
-        }
-
+        if (loading) return null;
         return (
             <View style={styles.emptyContainer}>
-                <Ionicons name="notifications-outline" size={64} color="#9CA3AF" />
+                <View style={styles.emptyIconContainer}>
+                    <Ionicons name="notifications-off-outline" size={64} color="#D1D5DB" />
+                </View>
                 <Text style={styles.emptyText}>
-                    {activeTab === "unread" ? "Không có thông báo chưa đọc" : "Không có thông báo nào"}
+                    {activeTab === "unread" ? "Bạn đã đọc hết thông báo rồi!" : "Chưa có thông báo nào"}
+                </Text>
+                <Text style={styles.emptySubText}>
+                    Các cập nhật mới nhất sẽ xuất hiện ở đây.
                 </Text>
             </View>
         );
@@ -342,169 +322,158 @@ export default function NotificationsScreen() {
                 rightComponent={
                     <View style={styles.headerActions}>
                         <TouchableOpacity
-                            style={styles.filterButton}
+                            style={styles.headerIconBtn}
                             onPress={() => setShowFilterModal(true)}
                         >
-                            <Ionicons name="filter-outline" size={20} color="#3B82F6" />
+                            <Ionicons name="filter" size={20} color={Object.keys(filters).length > 0 ? "#3B82F6" : "#6B7280"} />
                         </TouchableOpacity>
                         {unreadCount > 0 && (
                             <TouchableOpacity
-                                style={styles.markAllButton}
-                                onPress={handleMarkAllAsRead}
+                                style={styles.headerIconBtn}
+                                onPress={() => {
+                                    Alert.alert("Xác nhận", "Đánh dấu tất cả là đã đọc?", [
+                                        { text: "Hủy", style: "cancel" },
+                                        {
+                                            text: "Đồng ý", onPress: () => {
+                                                markAllAsRead();
+                                                setAllNotifications(prev => prev.map(n => ({ ...n, status: 'read' as const })));
+                                            }
+                                        }
+                                    ]);
+                                }}
                             >
-                                <Text style={styles.markAllText}>Đánh dấu tất cả</Text>
+                                <Ionicons name="checkmark-done-circle-outline" size={24} color="#3B82F6" />
                             </TouchableOpacity>
                         )}
                     </View>
                 }
             />
 
-            {/* Tabs */}
             <View style={styles.tabsContainer}>
                 <TouchableOpacity
                     style={[styles.tab, activeTab === "all" && styles.tabActive]}
-                    onPress={() => {
-                        setActiveTab("all");
-                        setPage(1);
-                    }}
+                    onPress={() => setActiveTab("all")}
                 >
                     <Text style={[styles.tabText, activeTab === "all" && styles.tabTextActive]}>Tất cả</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.tab, activeTab === "unread" && styles.tabActive]}
-                    onPress={() => {
-                        setActiveTab("unread");
-                        setPage(1);
-                    }}
+                    onPress={() => setActiveTab("unread")}
                 >
-                    <Text style={[styles.tabText, activeTab === "unread" && styles.tabTextActive]}>
-                        Chưa đọc {unreadCount > 0 && `(${unreadCount})`}
-                    </Text>
+                    <View style={styles.tabWithLabel}>
+                        <Text style={[styles.tabText, activeTab === "unread" && styles.tabTextActive]}>Chưa đọc</Text>
+                        {unreadCount > 0 && (
+                            <View style={styles.unreadCountBadge}>
+                                <Text style={styles.unreadCountText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                            </View>
+                        )}
+                    </View>
                 </TouchableOpacity>
             </View>
 
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-                <Ionicons name="search-outline" size={20} color="#9CA3AF" style={styles.searchIcon} />
-                <TextInput
-                    style={styles.searchInput}
-                    placeholder="Tìm kiếm thông báo..."
-                    value={searchText}
-                    onChangeText={setSearchText}
-                    placeholderTextColor="#9CA3AF"
-                />
-                {searchText.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearButton}>
-                        <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-                    </TouchableOpacity>
-                )}
+            <View style={styles.searchWrapper}>
+                <View style={styles.searchContainer}>
+                    <Ionicons name="search" size={18} color="#9CA3AF" />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Tìm kiếm thông báo..."
+                        value={searchText}
+                        onChangeText={setSearchText}
+                        placeholderTextColor="#9CA3AF"
+                    />
+                    {searchText.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchText("")}>
+                            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
 
-            {/* Notifications List */}
-            <FlatList
-                data={filteredNotifications}
-                renderItem={renderNotificationItem}
+            <SectionList
+                sections={sections}
                 keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 16 }]}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+                renderItem={renderNotificationItem}
+                renderSectionHeader={({ section: { title } }) => (
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>{title}</Text>
+                    </View>
+                )}
+                contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 20 }]}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3B82F6" />}
                 onEndReached={handleLoadMore}
                 onEndReachedThreshold={0.5}
                 ListEmptyComponent={renderEmptyComponent}
+                stickySectionHeadersEnabled={false}
                 ListFooterComponent={
                     loadingMore ? (
-                        <View style={styles.loadMoreContainer}>
-                            <ActivityIndicator size="small" color="#3B82F6" />
-                        </View>
+                        <ActivityIndicator style={styles.loader} color="#3B82F6" />
+                    ) : loading ? (
+                        <View style={{ marginTop: 40 }}><ActivityIndicator size="large" color="#3B82F6" /></View>
                     ) : null
                 }
             />
 
-            {/* Filter Modal */}
-            <Modal
-                visible={showFilterModal}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setShowFilterModal(false)}
-            >
+            <Modal visible={showFilterModal} animationType="fade" transparent onRequestClose={() => setShowFilterModal(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Bộ lọc</Text>
+                            <Text style={styles.modalTitle}>Bộ lọc thông báo</Text>
                             <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-                                <Ionicons name="close" size={24} color="#374151" />
+                                <Ionicons name="close" size={24} color="#1F2937" />
                             </TouchableOpacity>
                         </View>
+
                         <ScrollView style={styles.modalBody}>
-                            {/* Type Filter */}
-                            <View style={styles.filterSection}>
-                                <Text style={styles.filterLabel}>Loại thông báo</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                    {[
-                                        { value: undefined, label: "Tất cả" },
-                                        { value: "project_performance", label: "Hiệu suất dự án" },
-                                        { value: "system", label: "Hệ thống" },
-                                        { value: "workflow", label: "Workflow" },
-                                        { value: "assignment", label: "Phân công" },
-                                    ].map((option) => (
-                                        <TouchableOpacity
-                                            key={option.value || "all"}
-                                            style={[
-                                                styles.filterChip,
-                                                filterFormData.type === option.value && styles.filterChipActive,
-                                            ]}
-                                            onPress={() => setFilterFormData({ ...filterFormData, type: option.value })}
-                                        >
-                                            <Text
-                                                style={[
-                                                    styles.filterChipText,
-                                                    filterFormData.type === option.value && styles.filterChipTextActive,
-                                                ]}
-                                            >
-                                                {option.label}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
+                            <Text style={styles.filterLabel}>Độ ưu tiên</Text>
+                            <View style={styles.filterGrid}>
+                                {[
+                                    { id: undefined, label: 'Tất cả' },
+                                    { id: 'urgent', label: 'Khẩn cấp', color: '#EF4444' },
+                                    { id: 'high', label: 'Cao', color: '#F59E0B' },
+                                    { id: 'medium', label: 'Trung bình', color: '#3B82F6' },
+                                ].map(p => (
+                                    <TouchableOpacity
+                                        key={p.id || 'all'}
+                                        style={[styles.filterChip, filters.priority === p.id && styles.filterChipActive]}
+                                        onPress={() => setFilters({ ...filters, priority: p.id as any })}
+                                    >
+                                        <Text style={[styles.filterChipText, filters.priority === p.id && styles.filterChipTextActive]}>{p.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
 
-                            {/* Priority Filter */}
-                            <View style={styles.filterSection}>
-                                <Text style={styles.filterLabel}>Độ ưu tiên</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                    {[
-                                        { value: undefined, label: "Tất cả" },
-                                        { value: "urgent", label: "Khẩn cấp" },
-                                        { value: "high", label: "Cao" },
-                                        { value: "medium", label: "Trung bình" },
-                                        { value: "low", label: "Thấp" },
-                                    ].map((option) => (
-                                        <TouchableOpacity
-                                            key={option.value || "all"}
-                                            style={[
-                                                styles.filterChip,
-                                                filterFormData.priority === option.value && styles.filterChipActive,
-                                            ]}
-                                            onPress={() => setFilterFormData({ ...filterFormData, priority: option.value as "low" | "medium" | "high" | "urgent" | undefined })}
-                                        >
-                                            <Text
-                                                style={[
-                                                    styles.filterChipText,
-                                                    filterFormData.priority === option.value && styles.filterChipTextActive,
-                                                ]}
-                                            >
-                                                {option.label}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
+                            <Text style={[styles.filterLabel, { marginTop: 20 }]}>Loại thông báo</Text>
+                            <View style={styles.filterGrid}>
+                                {[
+                                    { id: undefined, label: 'Tất cả' },
+                                    { id: 'project_cost', label: 'Chi phí' },
+                                    { id: 'project_invoice', label: 'Hóa đơn' },
+                                    { id: 'project_comment', label: 'Bình luận' },
+                                    { id: 'assignment', label: 'Giao việc' },
+                                ].map(t => (
+                                    <TouchableOpacity
+                                        key={t.id || 'all'}
+                                        style={[styles.filterChip, filters.type === t.id && styles.filterChipActive]}
+                                        onPress={() => setFilters({ ...filters, type: t.id as any })}
+                                    >
+                                        <Text style={[styles.filterChipText, filters.type === t.id && styles.filterChipTextActive]}>{t.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
                         </ScrollView>
+
                         <View style={styles.modalFooter}>
-                            <TouchableOpacity style={styles.modalButtonSecondary} onPress={handleClearFilters}>
-                                <Text style={styles.modalButtonTextSecondary}>Xóa bộ lọc</Text>
+                            <TouchableOpacity
+                                style={styles.resetBtn}
+                                onPress={() => { setFilters({}); setShowFilterModal(false); }}
+                            >
+                                <Text style={styles.resetBtnText}>Thiết lập lại</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleApplyFilters}>
-                                <Text style={styles.modalButtonTextPrimary}>Áp dụng</Text>
+                            <TouchableOpacity
+                                style={styles.applyBtn}
+                                onPress={() => setShowFilterModal(false)}
+                            >
+                                <Text style={styles.applyBtnText}>Áp dụng</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -515,263 +484,107 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: "#F9FAFB",
-    },
-    headerActions: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-    },
-    filterButton: {
-        padding: 8,
-    },
-    markAllButton: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        backgroundColor: "#3B82F6",
-        borderRadius: 6,
-    },
-    markAllText: {
-        color: "#FFFFFF",
-        fontSize: 12,
-        fontWeight: "600",
-    },
+    container: { flex: 1, backgroundColor: "#F3F4F6" },
+    headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+    headerIconBtn: { padding: 6 },
     tabsContainer: {
         flexDirection: "row",
         backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
+        paddingHorizontal: 16,
+        paddingTop: 8,
     },
     tab: {
-        flex: 1,
         paddingVertical: 12,
-        alignItems: "center",
-        borderBottomWidth: 2,
+        marginRight: 24,
+        borderBottomWidth: 3,
         borderBottomColor: "transparent",
     },
-    tabActive: {
-        borderBottomColor: "#3B82F6",
+    tabActive: { borderBottomColor: "#3B82F6" },
+    tabText: { fontSize: 15, color: "#6B7280", fontWeight: "600" },
+    tabTextActive: { color: "#3B82F6" },
+    tabWithLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    unreadCountBadge: {
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 10,
+        minWidth: 20,
+        alignItems: 'center',
     },
-    tabText: {
-        fontSize: 14,
-        color: "#6B7280",
-        fontWeight: "500",
-    },
-    tabTextActive: {
-        color: "#3B82F6",
-        fontWeight: "600",
+    unreadCountText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
+    searchWrapper: {
+        backgroundColor: '#FFF',
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        paddingTop: 8,
     },
     searchContainer: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#FFFFFF",
-        marginHorizontal: 16,
-        marginTop: 12,
-        marginBottom: 8,
+        backgroundColor: "#F9FAFB",
         paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderRadius: 8,
+        paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: "#E5E7EB",
     },
-    searchIcon: {
-        marginRight: 8,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 14,
-        color: "#374151",
-    },
-    clearButton: {
-        marginLeft: 8,
-    },
-    listContent: {
-        padding: 16,
-    },
+    searchInput: { flex: 1, fontSize: 14, color: "#1F2937", marginLeft: 8 },
+    listContent: { padding: 16 },
+    sectionHeader: { marginTop: 16, marginBottom: 8 },
+    sectionTitle: { fontSize: 13, fontWeight: "700", color: "#9CA3AF", textTransform: 'uppercase', letterSpacing: 0.5 },
     notificationItem: {
         backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 10,
+        flexDirection: 'row',
+        gap: 14,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    notificationItemUnread: { backgroundColor: "#FFFFFF", borderLeftWidth: 4, borderLeftColor: "#3B82F6" },
+    iconContainer: {
+        width: 44,
+        height: 44,
         borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: "#E5E7EB",
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    notificationItemUnread: {
-        borderLeftWidth: 4,
-        borderLeftColor: "#3B82F6",
-        backgroundColor: "#EFF6FF",
-    },
-    notificationContent: {
-        flex: 1,
-    },
-    notificationHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        marginBottom: 8,
-    },
-    notificationHeaderLeft: {
-        flex: 1,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    unreadDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-    },
-    notificationTitle: {
-        flex: 1,
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#111827",
-    },
-    notificationActions: {
-        flexDirection: "row",
-        gap: 8,
-    },
-    actionButton: {
-        padding: 4,
-    },
-    notificationBody: {
-        fontSize: 14,
-        color: "#6B7280",
-        marginBottom: 12,
-        lineHeight: 20,
-    },
-    notificationFooter: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-    },
-    notificationMeta: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    notificationType: {
-        fontSize: 12,
-        color: "#6B7280",
-        backgroundColor: "#F3F4F6",
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-    },
-    priorityBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-    },
-    priorityText: {
-        fontSize: 12,
-        fontWeight: "600",
-    },
-    notificationTime: {
-        fontSize: 12,
-        color: "#9CA3AF",
-    },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        paddingVertical: 64,
-    },
-    emptyText: {
-        marginTop: 16,
-        fontSize: 16,
-        color: "#6B7280",
-        textAlign: "center",
-    },
-    loadMoreContainer: {
-        paddingVertical: 16,
-        alignItems: "center",
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "flex-end",
-    },
-    modalContent: {
-        backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: "80%",
-    },
-    modalHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#111827",
-    },
-    modalBody: {
-        padding: 16,
-    },
-    filterSection: {
-        marginBottom: 24,
-    },
-    filterLabel: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#374151",
-        marginBottom: 12,
-    },
-    filterChip: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: "#F3F4F6",
-        marginRight: 8,
-    },
-    filterChipActive: {
-        backgroundColor: "#3B82F6",
-    },
-    filterChipText: {
-        fontSize: 14,
-        color: "#374151",
-        fontWeight: "500",
-    },
-    filterChipTextActive: {
-        color: "#FFFFFF",
-    },
-    modalFooter: {
-        flexDirection: "row",
-        padding: 16,
-        borderTopWidth: 1,
-        borderTopColor: "#E5E7EB",
-        gap: 12,
-    },
-    modalButtonSecondary: {
-        flex: 1,
-        paddingVertical: 12,
-        borderRadius: 8,
-        backgroundColor: "#F3F4F6",
-        alignItems: "center",
-    },
-    modalButtonTextSecondary: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#374151",
-    },
-    modalButtonPrimary: {
-        flex: 1,
-        paddingVertical: 12,
-        borderRadius: 8,
-        backgroundColor: "#3B82F6",
-        alignItems: "center",
-    },
-    modalButtonTextPrimary: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#FFFFFF",
-    },
+    notificationContent: { flex: 1 },
+    notificationHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 },
+    notificationTitle: { flex: 1, fontSize: 15, color: "#4B5563", fontWeight: "500" },
+    notificationTitleUnread: { color: "#111827", fontWeight: "700" },
+    notificationTime: { fontSize: 12, color: "#9CA3AF" },
+    notificationBody: { fontSize: 14, color: "#6B7280", lineHeight: 20, marginBottom: 10 },
+    itemFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    unreadBadge: { backgroundColor: '#3B82F6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+    unreadBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
+    itemActions: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    actionBtnText: { fontSize: 12, color: '#3B82F6', fontWeight: '600' },
+    emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
+    emptyIconContainer: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', marginBottom: 20, elevation: 2 },
+    emptyText: { fontSize: 18, fontWeight: '700', color: '#374151', marginBottom: 8 },
+    emptySubText: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', paddingHorizontal: 40 },
+    loader: { paddingVertical: 20 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+    modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%' },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+    modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+    modalBody: { padding: 20 },
+    filterLabel: { fontSize: 14, fontWeight: '700', color: '#4B5563', marginBottom: 12 },
+    filterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' },
+    filterChipActive: { backgroundColor: '#3B82F620', borderColor: '#3B82F6' },
+    filterChipText: { fontSize: 14, color: '#4B5563', fontWeight: '500' },
+    filterChipTextActive: { color: '#3B82F6', fontWeight: '700' },
+    modalFooter: { flexDirection: 'row', gap: 12, padding: 20, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+    resetBtn: { flex: 1, paddingVertical: 14, alignItems: 'center' },
+    resetBtnText: { fontSize: 16, color: '#6B7280', fontWeight: '600' },
+    applyBtn: { flex: 1, backgroundColor: '#3B82F6', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+    applyBtnText: { fontSize: 16, color: '#FFF', fontWeight: '700' },
 });
+

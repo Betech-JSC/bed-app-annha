@@ -146,9 +146,13 @@ class RevenueController extends Controller
         $query = Cost::where('project_id', $project->id)
             ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments']);
 
-        // Filter theo category
+        // Filter theo category hoặc cost_group_id
         if ($category = $request->query('category')) {
-            $query->where('category', $category);
+            if (str_starts_with($category, 'group_')) {
+                $query->where('cost_group_id', substr($category, 6));
+            } else {
+                $query->where('category', $category);
+            }
         }
 
         // Filter theo status
@@ -164,11 +168,40 @@ class RevenueController extends Controller
         $costs = $query->orderByDesc('cost_date')->get();
 
         // Group by category
-        $grouped = $costs->groupBy('category')->map(function ($items, $category) {
+        // Group by cost_group_id if available, otherwise category
+        $groupedRaw = $costs->groupBy(function ($cost) {
+            if ($cost->cost_group_id) {
+                return 'group_' . $cost->cost_group_id;
+            }
+            return $cost->category ?? 'other';
+        });
+
+        // Map to standard format
+        $grouped = $groupedRaw->map(function ($items, $key) {
+            $firstItem = $items->first();
+            
+            if (str_starts_with($key, 'group_')) {
+                // Cost Group
+                $categoryLabel = $firstItem->costGroup ? $firstItem->costGroup->name : 'Nhóm đã xóa';
+                $categoryCode = $key; // "group_123" parameter for filtering
+            } else {
+                // Legacy Category
+                $categoryLabel = $firstItem->category_label ?? match($firstItem->category) {
+                    'construction_materials' => 'Vật liệu xây dựng',
+                    'labor' => 'Nhân công',
+                    'equipment' => 'Thiết bị',
+                    'subcontractor' => 'Thầu phụ',
+                    'transportation' => 'Vận chuyển',
+                    'other' => 'Chi phí khác',
+                    default => 'Khác',
+                };
+                $categoryCode = $firstItem->category ?? 'other';
+            }
+
             return [
-                'category' => $category,
-                'category_label' => $items->first()->category_label ?? '',
-                'total' => $items->sum('amount'),
+                'category' => $categoryCode,
+                'category_label' => $categoryLabel,
+                'total' => (float) $items->sum('amount'),
                 'count' => $items->count(),
                 'items' => $items,
             ];
@@ -179,7 +212,7 @@ class RevenueController extends Controller
             'data' => [
                 'grouped' => $grouped->values(),
                 'summary' => [
-                    'total_amount' => $costs->sum('amount'),
+                    'total_amount' => (float) $costs->sum('amount'),
                     'total_count' => $costs->count(),
                 ],
             ],

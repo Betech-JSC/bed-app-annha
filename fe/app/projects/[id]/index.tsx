@@ -17,6 +17,7 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 
 export default function ProjectDetailScreen() {
   const router = useRouter();
@@ -136,142 +137,168 @@ export default function ProjectDetailScreen() {
     );
   };
 
+  const { hasPermission, loading: loadingPermissions } = useProjectPermissions(id!);
+
   const menuItems = [
     {
       title: "Báo Cáo Tổng Hợp",
       icon: "document-text-outline",
       route: `/projects/${id}/summary-report`,
       color: "#10B981",
+      permission: Permissions.PROJECT_SUMMARY_REPORT_VIEW,
     },
     {
       title: "Giá Trị Hợp Đồng",
       icon: "document-text-outline",
       route: `/projects/${id}/contract`,
       color: "#3B82F6",
+      permission: Permissions.CONTRACT_VIEW,
     },
     {
       title: "Đã Thanh Toán",
       icon: "cash-outline",
       route: `/projects/${id}/payments`,
       color: "#10B981",
+      permission: Permissions.PAYMENT_VIEW,
     },
     {
       title: "Phát Sinh Ngoài Báo Giá",
       icon: "add-circle-outline",
       route: `/projects/${id}/additional-costs`,
       color: "#F59E0B",
+      permission: Permissions.ADDITIONAL_COST_VIEW,
     },
     {
       title: "Chi Phí Dự Án",
       icon: "calculator-outline",
       route: `/projects/${id}/costs`,
       color: "#8B5CF6",
+      permission: Permissions.COST_VIEW,
     },
     {
       title: "Ngân Sách Dự Án",
       icon: "wallet-outline",
       route: `/projects/${id}/budget`,
       color: "#10B981",
+      permission: Permissions.BUDGET_VIEW,
     },
     {
       title: "Hóa Đơn",
       icon: "receipt-outline",
       route: `/projects/${id}/invoices`,
       color: "#3B82F6",
+      permission: Permissions.INVOICE_VIEW,
     },
     {
       title: "Nhân Sự Tham Gia",
       icon: "people-outline",
       route: `/projects/${id}/personnel`,
       color: "#EC4899",
+      permission: Permissions.PERSONNEL_VIEW,
     },
     {
       title: "Nhà Thầu Phụ",
       icon: "business-outline",
       route: `/projects/${id}/subcontractors`,
       color: "#06B6D4",
+      permission: Permissions.SUBCONTRACTOR_VIEW,
     },
     {
       title: "Vật Liệu",
       icon: "cube-outline",
       route: `/projects/${id}/materials`,
       color: "#F59E0B",
+      permission: Permissions.MATERIAL_VIEW,
     },
     {
       title: "Thiết Bị",
       icon: "build-outline",
       route: `/projects/${id}/equipment`,
       color: "#8B5CF6",
+      permission: Permissions.EQUIPMENT_VIEW,
     },
     {
       title: "Hồ Sơ & Tài Liệu",
       icon: "folder-outline",
       route: `/projects/${id}/documents`,
       color: "#6366F1",
+      permission: Permissions.DOCUMENT_VIEW,
     },
     {
       title: "Nhật Ký Công Trình",
       icon: "calendar-outline",
       route: `/projects/${id}/logs`,
       color: "#14B8A6",
+      permission: Permissions.LOG_VIEW,
     },
     {
       title: "Nghiệm Thu",
       icon: "checkmark-circle-outline",
       route: `/projects/${id}/acceptance`,
       color: "#22C55E",
+      permission: Permissions.ACCEPTANCE_VIEW,
     },
     {
       title: "Lỗi Ghi Nhận",
       icon: "warning-outline",
       route: `/projects/${id}/defects`,
       color: "#EF4444",
+      permission: Permissions.DEFECT_VIEW,
     },
     {
       title: "Tiến Độ Thi Công",
       icon: "trending-up-outline",
       route: `/projects/${id}/progress`,
       color: "#F97316",
+      permission: Permissions.PROGRESS_VIEW,
     },
     {
       title: "Giám Sát Dự Án",
       icon: "eye-outline",
       route: `/projects/${id}/monitoring`,
       color: "#8B5CF6",
+      permission: Permissions.PROJECT_MONITORING_VIEW,
     },
     {
       title: "EVM Analysis",
       icon: "analytics-outline",
       route: `/projects/${id}/evm`,
       color: "#06B6D4",
+      permission: Permissions.REPORT_VIEW,
     },
     {
       title: "Dự Đoán & Phân Tích",
       icon: "trending-up-outline",
       route: `/projects/${id}/predictions`,
       color: "#F59E0B",
+      permission: Permissions.REPORT_VIEW,
     },
     {
       title: "Quản Lý Rủi Ro",
       icon: "shield-outline",
       route: `/projects/${id}/risks`,
       color: "#EF4444",
+      permission: Permissions.PROJECT_RISK_VIEW,
     },
     {
       title: "Yêu Cầu Thay Đổi",
       icon: "document-text-outline",
       route: `/projects/${id}/change-requests`,
       color: "#6366F1",
+      permission: Permissions.CHANGE_REQUEST_VIEW,
     },
     {
       title: "Bình Luận",
       icon: "chatbubbles-outline",
       route: `/projects/${id}/comments`,
       color: "#3B82F6",
+      permission: Permissions.PROJECT_COMMENT_CREATE, // Or view
     },
   ];
 
-  if (loading) {
+  const visibleMenuItems = menuItems.filter(item => hasPermission(item.permission));
+
+  if (loading || loadingPermissions) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
@@ -493,7 +520,7 @@ export default function ProjectDetailScreen() {
 
       <View style={styles.menuSection}>
         <Text style={styles.sectionTitle}>Quản Lý Dự Án</Text>
-        {menuItems.map((item, index) => (
+        {visibleMenuItems.map((item, index) => (
           <TouchableOpacity
             key={index}
             style={styles.menuItem}

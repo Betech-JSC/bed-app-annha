@@ -10,14 +10,32 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
+
 class ProjectTaskController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách tasks của dự án
      */
     public function index(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, Permissions::PROJECT_TASK_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem công việc của dự án này.'
+            ], 403);
+        }
 
         $query = $project->tasks()
             ->with([
@@ -81,10 +99,10 @@ class ProjectTaskController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_CREATE)) {
+        if (!$this->authService->can($user, Permissions::PROJECT_TASK_CREATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền tạo công việc. Cần quyền: ' . \App\Constants\Permissions::PROJECT_TASK_CREATE
+                'message' => 'Bạn không có quyền tạo công việc cho dự án này.'
             ], 403);
         }
 
@@ -188,7 +206,18 @@ class ProjectTaskController extends Controller
      */
     public function show(string $projectId, string $id)
     {
-        $task = ProjectTask::where('project_id', $projectId)
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, Permissions::PROJECT_TASK_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem công việc của dự án này.'
+            ], 403);
+        }
+
+        $task = ProjectTask::where('project_id', $project->id)
             ->with([
                 'parent',
                 'children',
@@ -217,10 +246,10 @@ class ProjectTaskController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_UPDATE)) {
+        if (!$this->authService->can($user, Permissions::PROJECT_TASK_UPDATE, $task->project_id)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền cập nhật công việc. Cần quyền: ' . \App\Constants\Permissions::PROJECT_TASK_UPDATE
+                'message' => 'Bạn không có quyền cập nhật công việc của dự án này.'
             ], 403);
         }
 
@@ -324,10 +353,10 @@ class ProjectTaskController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::PROJECT_TASK_DELETE)) {
+        if (!$this->authService->can($user, Permissions::PROJECT_TASK_DELETE, $task->project_id)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xóa công việc. Cần quyền: ' . \App\Constants\Permissions::PROJECT_TASK_DELETE
+                'message' => 'Bạn không có quyền xóa công việc của dự án này.'
             ], 403);
         }
 

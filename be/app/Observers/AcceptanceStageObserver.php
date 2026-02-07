@@ -27,7 +27,8 @@ class AcceptanceStageObserver
             $body = "Có giai đoạn nghiệm thu mới '{$acceptanceStage->name}' cần duyệt trong dự án '{$projectName}'";
 
             // Notify supervisors
-            $this->notificationService->sendToProjectTeam(
+            $this->notificationService->sendToPermissionUsers(
+                \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_1,
                 $acceptanceStage->project_id,
                 Notification::TYPE_WORKFLOW,
                 Notification::CATEGORY_WORKFLOW_APPROVAL,

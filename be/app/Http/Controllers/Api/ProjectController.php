@@ -9,8 +9,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
+
 class ProjectController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách dự án
      */
@@ -30,31 +39,21 @@ class ProjectController extends Controller
             'progress',
         ]);
 
-        // Super admin, admin, or users with PROJECT_VIEW/PROJECT_MANAGE permission can see all projects
-        // If user can view all projects, ignore my_projects filter
-        if (!$canViewAllProjects) {
-            // Filter: Customer sees their projects, personnel sees assigned projects
-            // Only apply my_projects filter if user doesn't have permission to view all
-            if ($request->has('my_projects') && $request->my_projects) {
-                $query->where(function ($q) use ($user) {
-                    $q->where('customer_id', $user->id)
-                        ->orWhere('project_manager_id', $user->id)
-                        ->orWhereHas('personnel', function ($q) use ($user) {
-                            $q->where('user_id', $user->id);
-                        });
-                });
-            } else {
-                // Regular users can only see projects they're related to
-                $query->where(function ($q) use ($user) {
-                    $q->where('customer_id', $user->id)
-                        ->orWhere('project_manager_id', $user->id)
-                        ->orWhereHas('personnel', function ($q) use ($user) {
-                            $q->where('user_id', $user->id);
-                        });
-                });
-            }
+        // Lọc dự án:
+        // 1. Đối với người dùng có quyền Xem tất cả (Admin): Mặc định thấy hết, trừ khi yêu cầu 'my_projects=true'
+        // 2. Đối với người dùng bị hạn chế: LUÔN LUÔN chỉ thấy dự án được gán
+        $mustFilter = !$canViewAllProjects;
+        $optionalFilter = $request->boolean('my_projects');
+
+        if ($mustFilter || $optionalFilter) {
+            $query->where(function ($q) use ($user) {
+                $q->where('customer_id', $user->id)
+                    ->orWhere('project_manager_id', $user->id)
+                    ->orWhereHas('personnel', function ($pq) use ($user) {
+                        $pq->where('user_id', $user->id);
+                    });
+            });
         }
-        // If canViewAllProjects is true, no filter is applied - user sees all projects
 
         // Filter by status
         if ($status = $request->query('status')) {
@@ -305,9 +304,10 @@ class ProjectController extends Controller
 
             // Add creator to personnel if not customer
             if ($project->customer_id !== $user->id) {
+                $pmRole = \App\Models\PersonnelRole::where('code', 'project_manager')->first();
                 $project->personnel()->create([
                     'user_id' => $user->id,
-                    'role' => 'project_manager',
+                    'role_id' => $pmRole ? $pmRole->id : null,
                     'assigned_by' => $user->id,
                 ]);
             }
@@ -341,6 +341,7 @@ class ProjectController extends Controller
             'payments',
             'additionalCosts',
             'personnel.user',
+            'personnel.personnelRole',
             'subcontractors',
             'constructionLogs' => function ($q) {
                 $q->latest('log_date')->limit(10);
@@ -351,6 +352,23 @@ class ProjectController extends Controller
             },
             'progress',
         ])->findOrFail($id);
+
+        $user = auth()->user();
+
+        // Check permission
+        $canView = $user->isAdmin()
+            || $user->hasPermission(Permissions::PROJECT_VIEW)
+            || $user->hasPermission(Permissions::PROJECT_MANAGE)
+            || $project->customer_id === $user->id
+            || $project->project_manager_id === $user->id
+            || $this->authService->isAssignedToProject($user, $project);
+
+        if (!$canView) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem thông tin dự án này.'
+            ], 403);
+        }
 
         return response()->json([
             'success' => true,

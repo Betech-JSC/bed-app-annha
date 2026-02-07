@@ -39,6 +39,8 @@ interface AcceptanceChecklistProps {
   canApproveLevel3?: boolean;
   canCreate?: boolean;
   canUpdate?: boolean;
+  canDelete?: boolean;
+  canCreateDefect?: boolean;
   onRefresh?: () => void;
   onNavigateToDefects?: (stageId?: number) => void;
 }
@@ -55,6 +57,8 @@ export default function AcceptanceChecklist({
   canApproveLevel3 = false,
   canCreate = false,
   canUpdate = false,
+  canDelete = false,
+  canCreateDefect = false,
   onRefresh,
   onNavigateToDefects,
 }: AcceptanceChecklistProps) {
@@ -403,7 +407,7 @@ export default function AcceptanceChecklist({
         {/* Header với nút thêm mới */}
         {projectId && (
           <View style={styles.headerActions}>
-            <PermissionGuard permission={Permissions.ACCEPTANCE_CREATE} projectId={projectId}>
+            {canCreate && (
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={openCreateModal}
@@ -411,7 +415,7 @@ export default function AcceptanceChecklist({
                 <Ionicons name="add-circle" size={20} color="#FFFFFF" />
                 <Text style={styles.addButtonText}>Thêm giai đoạn</Text>
               </TouchableOpacity>
-            </PermissionGuard>
+            )}
           </View>
         )}
 
@@ -483,22 +487,22 @@ export default function AcceptanceChecklist({
                   {/* Action buttons */}
                   {stage.status !== "owner_approved" && (
                     <View style={styles.stageActions}>
-                      <PermissionGuard permission="acceptance.update">
+                      {canUpdate && (
                         <TouchableOpacity
                           style={styles.actionButton}
                           onPress={() => openEditModal(stage)}
                         >
                           <Ionicons name="create-outline" size={18} color="#3B82F6" />
                         </TouchableOpacity>
-                      </PermissionGuard>
-                      <PermissionGuard permission="acceptance.delete">
+                      )}
+                      {canDelete && (
                         <TouchableOpacity
                           style={styles.actionButton}
                           onPress={() => handleDelete(stage)}
                         >
                           <Ionicons name="trash-outline" size={18} color="#EF4444" />
                         </TouchableOpacity>
-                      </PermissionGuard>
+                      )}
                     </View>
                   )}
                 </View>
@@ -567,14 +571,24 @@ export default function AcceptanceChecklist({
                   </View>
                 )}
 
-                {/* Click vào card để nghiệm thu giai đoạn */}
+                {/* Click vào card để nghiệm thu giai đoạn hoặc xem chi tiết */}
                 <TouchableOpacity
                   style={styles.acceptanceButton}
                   onPress={() => openAcceptanceModal(stage)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="checkmark-circle-outline" size={20} color="#3B82F6" />
-                  <Text style={styles.acceptanceButtonText}>Nghiệm thu giai đoạn</Text>
+                  <Ionicons
+                    name={(canUpdate || canCreateDefect || canApproveLevel1 || canApproveLevel2 || canApproveLevel3 || isAdmin)
+                      ? "checkmark-circle-outline"
+                      : "information-circle-outline"}
+                    size={20}
+                    color="#3B82F6"
+                  />
+                  <Text style={styles.acceptanceButtonText}>
+                    {(canUpdate || canCreateDefect || canApproveLevel1 || canApproveLevel2 || canApproveLevel3 || isAdmin)
+                      ? "Nghiệm thu giai đoạn"
+                      : "Xem chi tiết nghiệm thu"}
+                  </Text>
                   <Ionicons name="chevron-forward" size={20} color="#3B82F6" />
                 </TouchableOpacity>
 
@@ -1108,8 +1122,9 @@ export default function AcceptanceChecklist({
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Bộ tài liệu nghiệm thu</Text>
                 <TouchableOpacity
-                  style={styles.taskSelectButton}
-                  onPress={() => setShowAcceptanceTemplatePicker(true)}
+                  style={[styles.taskSelectButton, !canUpdate && styles.disabledButton]}
+                  onPress={() => canUpdate && setShowAcceptanceTemplatePicker(true)}
+                  disabled={!canUpdate}
                 >
                   <Text style={[
                     styles.taskSelectText,
@@ -1119,7 +1134,7 @@ export default function AcceptanceChecklist({
                       ? acceptanceTemplates.find(t => t.id === selectedTemplateId)?.name || "Chọn bộ tài liệu"
                       : "Chọn bộ tài liệu nghiệm thu từ cài đặt"}
                   </Text>
-                  <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                  {canUpdate && <Ionicons name="chevron-down" size={20} color="#6B7280" />}
                 </TouchableOpacity>
                 {selectedTemplateId && (
                   <View style={styles.selectedTemplateInfo}>
@@ -1167,38 +1182,41 @@ export default function AcceptanceChecklist({
                       );
                     })()}
                   </View>
-                  <TouchableOpacity
-                    style={styles.addDefectButton}
-                    onPress={() => {
-                      if (acceptingStage) {
-                        setNewDefectData({
-                          description: "",
-                          severity: "medium",
-                          acceptance_stage_id: acceptingStage.id,
-                          before_image_ids: [],
-                        });
-                        setNewDefectImages([]);
-                        setShowCreateDefectModal(true);
-                      }
-                    }}
-                  >
-                    <Ionicons name="add-circle" size={20} color="#3B82F6" />
-                    <Text style={styles.addDefectButtonText}>Tạo lỗi</Text>
-                  </TouchableOpacity>
+                  {canCreateDefect && (
+                    <TouchableOpacity
+                      style={styles.addDefectButton}
+                      onPress={() => {
+                        if (acceptingStage) {
+                          setNewDefectData({
+                            description: "",
+                            severity: "medium",
+                            acceptance_stage_id: acceptingStage.id,
+                            before_image_ids: [],
+                          });
+                          setNewDefectImages([]);
+                          setShowCreateDefectModal(true);
+                        }
+                      }}
+                    >
+                      <Ionicons name="add-circle" size={20} color="#3B82F6" />
+                      <Text style={styles.addDefectButtonText}>Tạo lỗi</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {/* Chọn lỗi từ danh sách */}
                 {availableDefects.length > 0 && (
                   <TouchableOpacity
-                    style={styles.defectPickerButton}
-                    onPress={() => setShowDefectPicker(true)}
+                    style={[styles.defectPickerButton, !canUpdate && styles.disabledButton]}
+                    onPress={() => canUpdate && setShowDefectPicker(true)}
+                    disabled={!canUpdate}
                   >
                     <Text style={styles.defectPickerText}>
                       {selectedDefects.length > 0
                         ? `Đã chọn ${selectedDefects.length} lỗi`
                         : "Chọn lỗi từ danh sách"}
                     </Text>
-                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                    {canUpdate && <Ionicons name="chevron-down" size={20} color="#6B7280" />}
                   </TouchableOpacity>
                 )}
 
@@ -1272,13 +1290,14 @@ export default function AcceptanceChecklist({
               {/* 3. Trạng thái: Đạt / Chưa đạt */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Trạng thái nghiệm thu</Text>
-                <View style={styles.statusButtonsContainer}>
+                <View style={[styles.statusButtonsContainer, !canUpdate && { opacity: 0.6 }]}>
                   <TouchableOpacity
                     style={[
                       styles.statusButton,
                       acceptabilityStatus === "acceptable" && styles.statusButtonActive,
                     ]}
-                    onPress={() => setAcceptabilityStatus("acceptable")}
+                    onPress={() => canUpdate && setAcceptabilityStatus("acceptable")}
+                    disabled={!canUpdate}
                   >
                     <Ionicons
                       name={acceptabilityStatus === "acceptable" ? "checkmark-circle" : "ellipse-outline"}
@@ -1299,7 +1318,8 @@ export default function AcceptanceChecklist({
                       styles.statusButton,
                       acceptabilityStatus === "not_acceptable" && styles.statusButtonActiveNotAcceptable,
                     ]}
-                    onPress={() => setAcceptabilityStatus("not_acceptable")}
+                    onPress={() => canUpdate && setAcceptabilityStatus("not_acceptable")}
+                    disabled={!canUpdate}
                   >
                     <Ionicons
                       name={acceptabilityStatus === "not_acceptable" ? "close-circle" : "ellipse-outline"}
@@ -1453,19 +1473,21 @@ export default function AcceptanceChecklist({
                   onPress={() => setAcceptanceModalVisible(false)}
                   disabled={savingAcceptance}
                 >
-                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                  <Text style={styles.cancelButtonText}>{canUpdate ? 'Hủy' : 'Đóng'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.saveButton]}
-                  onPress={handleSaveAcceptance}
-                  disabled={savingAcceptance}
-                >
-                  {savingAcceptance ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.saveButtonText}>Lưu</Text>
-                  )}
-                </TouchableOpacity>
+                {canUpdate && (
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.saveButton]}
+                    onPress={handleSaveAcceptance}
+                    disabled={savingAcceptance}
+                  >
+                    {savingAcceptance ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Lưu</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             </ScrollView>
           </View>
@@ -2540,5 +2562,9 @@ const styles = StyleSheet.create({
   defectStatusText: {
     fontSize: 11,
     fontWeight: "600",
+  },
+  disabledButton: {
+    opacity: 0.5,
+    backgroundColor: "#F3F4F6",
   },
 });

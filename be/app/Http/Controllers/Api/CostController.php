@@ -9,21 +9,43 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
+
 class CostController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách chi phí
      */
     public function index(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, Permissions::COST_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi phí của dự án này.'
+            ], 403);
+        }
 
         $query = Cost::where('project_id', $project->id)
             ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialTransaction']);
 
-        // Filter theo category
+        // Filter theo category hoặc cost_group_id
         if ($category = $request->query('category')) {
-            $query->where('category', $category);
+            if (str_starts_with($category, 'group_')) {
+                $query->where('cost_group_id', substr($category, 6));
+            } else {
+                $query->where('category', $category);
+            }
         }
 
         // Filter theo status
@@ -39,11 +61,18 @@ class CostController extends Controller
             });
         }
 
-        $costs = $query->orderByDesc('cost_date')->paginate(15);
+        // Calculate total amount before pagination
+        $totalAmount = $query->sum('amount');
+
+        $limit = $request->query('limit', 15);
+        $costs = $query->orderByDesc('cost_date')->paginate($limit);
 
         return response()->json([
             'success' => true,
             'data' => $costs,
+            'meta' => [
+                'total_amount' => (float) $totalAmount,
+            ],
         ]);
     }
 
@@ -56,10 +85,10 @@ class CostController extends Controller
         $user = $request->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::COST_CREATE)) {
+        if (!$this->authService->can($user, Permissions::COST_CREATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền tạo chi phí. Chỉ Super Admin mới có quyền này.'
+                'message' => 'Bạn không có quyền tạo chi phí cho dự án này.'
             ], 403);
         }
 
@@ -174,6 +203,16 @@ class CostController extends Controller
     public function show(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, Permissions::COST_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi phí của dự án này.'
+            ], 403);
+        }
+
         $cost = Cost::where('project_id', $project->id)
             ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialTransaction'])
             ->findOrFail($id);
@@ -194,10 +233,10 @@ class CostController extends Controller
         $user = $request->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::COST_UPDATE)) {
+        if (!$this->authService->can($user, Permissions::COST_UPDATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền cập nhật chi phí. Chỉ Super Admin mới có quyền này.'
+                'message' => 'Bạn không có quyền cập nhật chi phí của dự án này.'
             ], 403);
         }
 
@@ -274,7 +313,7 @@ class CostController extends Controller
         $user = $request->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::COST_SUBMIT)) {
+        if (!$this->authService->can($user, Permissions::COST_SUBMIT, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền gửi chi phí để duyệt.'
@@ -307,7 +346,7 @@ class CostController extends Controller
         $user = $request->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::COST_APPROVE_MANAGEMENT)) {
+        if (!$this->authService->can($user, Permissions::COST_APPROVE_MANAGEMENT, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt chi phí (Ban điều hành).'
@@ -340,7 +379,7 @@ class CostController extends Controller
         $user = $request->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::COST_APPROVE_ACCOUNTANT)) {
+        if (!$this->authService->can($user, Permissions::COST_APPROVE_ACCOUNTANT, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xác nhận chi phí (Kế toán).'
@@ -405,7 +444,7 @@ class CostController extends Controller
         $user = $request->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::COST_REJECT)) {
+        if (!$this->authService->can($user, Permissions::COST_REJECT, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền từ chối chi phí.'
@@ -442,10 +481,10 @@ class CostController extends Controller
         $user = request()->user();
 
         // Check permission
-        if (!$user->hasPermission(\App\Constants\Permissions::COST_DELETE)) {
+        if (!$this->authService->can($user, Permissions::COST_DELETE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xóa chi phí. Chỉ Super Admin mới có quyền này.'
+                'message' => 'Bạn không có quyền xóa chi phí của dự án này.'
             ], 403);
         }
 

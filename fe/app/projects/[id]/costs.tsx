@@ -12,6 +12,9 @@ import {
   TextInput,
   RefreshControl,
   Platform,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { costApi, Cost, revenueApi } from "@/api/revenueApi";
@@ -292,7 +295,10 @@ export default function CostsScreen() {
   };
 
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | undefined | null) => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return "0 ₫";
+    }
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
       currency: "VND",
@@ -501,7 +507,10 @@ export default function CostsScreen() {
               <TouchableOpacity
                 key={index}
                 style={styles.summaryCard}
-                onPress={() => router.push(`/projects/${id}/costs/by-group/${group.category}`)}
+                onPress={() => router.push({
+                  pathname: `/projects/${id}/costs/by-group/${group.category}`,
+                  params: { label: group.category_label }
+                })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.summaryCategory}>{group.category_label}</Text>
@@ -784,66 +793,76 @@ export default function CostsScreen() {
       </Modal>
 
       {/* Reject Modal */}
+      {/* Updated Reject Modal with Enhanced UX */}
       <Modal
         visible={showRejectModal}
-        animationType="slide"
-        transparent={true}
+        transparent
+        animationType="fade"
         onRequestClose={() => {
           setShowRejectModal(false);
           setSelectedCostForReject(null);
           setRejectReason("");
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Từ chối chi phí</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowRejectModal(false);
-                  setSelectedCostForReject(null);
-                  setRejectReason("");
-                }}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalContentContainer}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeaderEnhanced}>
+                  <View style={styles.modalIconContainer}>
+                    <Ionicons name="alert-circle" size={32} color="#EF4444" />
+                  </View>
+                  <Text style={styles.modalTitleEnhanced}>Từ chối chi phí</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Vui lòng nhập lý do từ chối để người tạo có thể chỉnh sửa lại.
+                  </Text>
+                </View>
 
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Lý do từ chối *</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Nhập lý do từ chối..."
+                  style={styles.modalInputEnhanced}
+                  placeholder="Nhập lý do từ chối (bắt buộc)..."
+                  placeholderTextColor="#9CA3AF"
                   value={rejectReason}
                   onChangeText={setRejectReason}
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
+                  autoFocus
                 />
-              </View>
-            </ScrollView>
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowRejectModal(false);
-                  setSelectedCostForReject(null);
-                  setRejectReason("");
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.rejectButton]}
-                onPress={submitReject}
-              >
-                <Text style={styles.submitButtonText}>Xác nhận từ chối</Text>
-              </TouchableOpacity>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalCancelButton]}
+                    onPress={() => {
+                      setShowRejectModal(false);
+                      setSelectedCostForReject(null);
+                      setRejectReason("");
+                    }}
+                  >
+                    <Text style={styles.modalCancelText}>Hủy bỏ</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.modalButton,
+                      styles.modalConfirmButton,
+                      !rejectReason.trim() && styles.modalButtonDisabled,
+                    ]}
+                    onPress={submitReject}
+                    disabled={!rejectReason.trim()}
+                  >
+                    <Text style={styles.modalConfirmText}>
+                      Xác nhận từ chối
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Accountant Confirmation Modal */}
@@ -1801,10 +1820,71 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   permissionDeniedSubtext: {
-    fontSize: 14,
-    color: "#9CA3AF",
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20,
+  },
+  // New Styles for Enhanced Reject Modal
+  modalContentContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    padding: 16,
+  },
+  modalHeaderEnhanced: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalTitleEnhanced: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FEE2E2",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  modalInputEnhanced: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    height: 100,
+    textAlignVertical: "top",
+    marginBottom: 16,
+    backgroundColor: "#F9FAFB",
+  },
+  modalCancelButton: {
+    backgroundColor: "#F3F4F6",
+  },
+  modalConfirmButton: {
+    backgroundColor: "#EF4444",
+  },
+  modalButtonDisabled: {
+    opacity: 0.5,
+  },
+  modalCancelText: {
+    color: "#6B7280",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalConfirmText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

@@ -17,8 +17,9 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { invoiceApi, Invoice, CreateInvoiceData } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
-import { CurrencyInput, DatePickerInput, UniversalFileUploader, PermissionDenied } from "@/components";
+import { ScreenHeader, CurrencyInput, DatePickerInput, UniversalFileUploader, PermissionDenied } from "@/components";
+import { useProjectPermissions } from "@/hooks/usePermissions";
+import { Permissions } from "@/constants/Permissions";
 import api from "@/api/api";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -48,10 +49,17 @@ export default function InvoiceDetailScreen() {
     const [permissionDenied, setPermissionDenied] = useState(false);
     const [permissionMessage, setPermissionMessage] = useState("");
 
+    const { hasPermission, loading: loadingPermissions } = useProjectPermissions(id!);
+    const canUpdate = hasPermission(Permissions.INVOICE_UPDATE);
+    const canDelete = hasPermission(Permissions.INVOICE_DELETE);
+    const canView = hasPermission(Permissions.INVOICE_VIEW);
+
     useEffect(() => {
         loadInvoice();
-        loadCostGroups();
-    }, [id, invoiceId]);
+        if (canUpdate) {
+            loadCostGroups();
+        }
+    }, [id, invoiceId, canUpdate]);
 
     const loadInvoice = async () => {
         try {
@@ -99,19 +107,26 @@ export default function InvoiceDetailScreen() {
 
     const loadCostGroups = async () => {
         try {
-            const response = await api.get("/settings/cost-groups");
+            const response = await api.get("/settings/cost-groups?active_only=true");
             if (response.data.success) {
-                setCostGroups(response.data.data || []);
+                const data = response.data.data;
+                // Handle both paginated and non-paginated responses
+                setCostGroups(Array.isArray(data) ? data : (data?.data || []));
             }
-        } catch (error) {
-            console.error("Error loading cost groups:", error);
+        } catch (error: any) {
+            // Silence 403 errors as they are expected for some users
+            if (error.response?.status !== 403) {
+                console.error("Error loading cost groups:", error);
+            }
         }
     };
 
     const onRefresh = () => {
         setRefreshing(true);
         loadInvoice();
-        loadCostGroups();
+        if (canUpdate) {
+            loadCostGroups();
+        }
     };
 
     const validateForm = () => {
@@ -231,18 +246,18 @@ export default function InvoiceDetailScreen() {
         }
     };
 
-    const formatCurrency = (amount: number) => {
+    const formatCurrency = (amount: number | undefined | null) => {
+        if (amount === undefined || amount === null || isNaN(amount)) {
+            return "0 VNĐ";
+        }
         return new Intl.NumberFormat("vi-VN").format(amount) + " VNĐ";
     };
 
-    if (loading) {
+
+    if (loading || loadingPermissions) {
         return (
             <View style={styles.container}>
-                <View style={styles.header}>
-                    <BackButton />
-                    <Text style={styles.headerTitle}>Chi Tiết Hóa Đơn</Text>
-                    <View style={{ width: 24 }} />
-                </View>
+                <ScreenHeader title="Chi Tiết Hóa Đơn" showBackButton />
                 <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color="#3B82F6" />
                 </View>
@@ -250,15 +265,11 @@ export default function InvoiceDetailScreen() {
         );
     }
 
-    if (permissionDenied) {
+    if (!canView || permissionDenied) {
         return (
             <View style={styles.container}>
-                <View style={styles.header}>
-                    <BackButton />
-                    <Text style={styles.headerTitle}>Chi Tiết Hóa Đơn</Text>
-                    <View style={{ width: 24 }} />
-                </View>
-                <PermissionDenied message={permissionMessage} />
+                <ScreenHeader title="Chi Tiết Hóa Đơn" showBackButton />
+                <PermissionDenied message={permissionMessage || "Bạn không có quyền xem hóa đơn này."} />
             </View>
         );
     }
@@ -266,11 +277,7 @@ export default function InvoiceDetailScreen() {
     if (!invoice) {
         return (
             <View style={styles.container}>
-                <View style={styles.header}>
-                    <BackButton />
-                    <Text style={styles.headerTitle}>Chi Tiết Hóa Đơn</Text>
-                    <View style={{ width: 24 }} />
-                </View>
+                <ScreenHeader title="Chi Tiết Hóa Đơn" showBackButton />
                 <View style={styles.centerContainer}>
                     <Ionicons name="alert-circle-outline" size={64} color="#9CA3AF" />
                     <Text style={styles.emptyText}>Không tìm thấy hóa đơn</Text>
@@ -281,24 +288,30 @@ export default function InvoiceDetailScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <BackButton />
-                <Text style={styles.headerTitle}>Chi Tiết Hóa Đơn</Text>
-                <View style={styles.headerActions}>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={() => setShowEditModal(true)}
-                    >
-                        <Ionicons name="pencil" size={20} color="#3B82F6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.headerButton}
-                        onPress={handleDelete}
-                    >
-                        <Ionicons name="trash" size={20} color="#EF4444" />
-                    </TouchableOpacity>
-                </View>
-            </View>
+            <ScreenHeader
+                title="Chi Tiết Hóa Đơn"
+                showBackButton
+                rightComponent={
+                    <View style={styles.headerActions}>
+                        {canUpdate && (
+                            <TouchableOpacity
+                                style={styles.headerButton}
+                                onPress={() => setShowEditModal(true)}
+                            >
+                                <Ionicons name="pencil" size={20} color="#3B82F6" />
+                            </TouchableOpacity>
+                        )}
+                        {canDelete && (
+                            <TouchableOpacity
+                                style={styles.headerButton}
+                                onPress={handleDelete}
+                            >
+                                <Ionicons name="trash" size={20} color="#EF4444" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                }
+            />
 
             <ScrollView
                 style={styles.content}
@@ -642,22 +655,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: "#F9FAFB",
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: 16,
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1F2937",
-        flex: 1,
-        textAlign: "center",
     },
     headerActions: {
         flexDirection: "row",

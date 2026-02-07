@@ -171,6 +171,9 @@ class ProjectMonitoringService
             ];
         }
 
+        // Company Costs Summary (Chi phí công ty)
+        $companyCostsSummary = $this->getCompanyCostsSummary();
+
         return [
             'total_projects' => $projects->count(),
             'active_projects' => $projects->where('status', 'in_progress')->count(),
@@ -180,11 +183,46 @@ class ProjectMonitoringService
             'overdue_tasks' => $overdueTasks,
             'budget_alerts' => $budgetAlerts,
             'progress_overview' => $progressOverview,
+            'company_costs_summary' => $companyCostsSummary,
             'summary' => [
                 'critical_alerts' => count(array_filter($alerts, fn($a) => $a['severity'] === 'critical')),
                 'high_alerts' => count(array_filter($alerts, fn($a) => $a['severity'] === 'high')),
                 'medium_alerts' => count(array_filter($alerts, fn($a) => $a['severity'] === 'medium')),
             ],
+        ];
+    }
+
+    /**
+     * Lấy tóm tắt chi phí công ty
+     */
+    protected function getCompanyCostsSummary(): array
+    {
+        $currentMonth = Carbon::now()->startOfMonth();
+        $currentMonthEnd = Carbon::now()->endOfMonth();
+
+        // Chi phí công ty tháng này
+        $currentMonthCosts = \App\Models\Cost::whereNull('project_id')
+            ->where('status', 'approved')
+            ->whereBetween('cost_date', [$currentMonth, $currentMonthEnd])
+            ->sum('amount');
+
+        // Chi phí công ty năm nay
+        $yearStart = Carbon::now()->startOfYear();
+        $yearEnd = Carbon::now()->endOfYear();
+        $yearCosts = \App\Models\Cost::whereNull('project_id')
+            ->where('status', 'approved')
+            ->whereBetween('cost_date', [$yearStart, $yearEnd])
+            ->sum('amount');
+
+        // Số lượng chi phí chờ duyệt
+        $pendingCosts = \App\Models\Cost::whereNull('project_id')
+            ->whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])
+            ->count();
+
+        return [
+            'current_month' => (float) $currentMonthCosts,
+            'current_year' => (float) $yearCosts,
+            'pending_approval' => $pendingCosts,
         ];
     }
 

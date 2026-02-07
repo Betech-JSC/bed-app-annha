@@ -15,7 +15,7 @@ import { projectApi, Project } from "@/api/projectApi";
 import { personnelApi } from "@/api/personnelApi";
 import { Ionicons } from "@expo/vector-icons";
 import { AcceptanceChecklist, ScreenHeader, PermissionDenied } from "@/components";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 import { Permissions } from "@/constants/Permissions";
 
 export default function AcceptanceScreen() {
@@ -96,29 +96,29 @@ export default function AcceptanceScreen() {
   // Xác định role của user (for display purposes only, not for authorization)
   const isProjectManager = project?.project_manager_id?.toString() === user?.id?.toString();
   const isCustomer = project?.customer_id?.toString() === user?.id?.toString();
-  const { permissions } = useSelector((state: RootState) => state.permissions);
-
-  // Use permission-based checks instead of role checks
-  const { hasPermission } = usePermissions();
-  const isAdmin = hasPermission("*"); // Super admin has all permissions
+  // Use project-specific permission checks
+  const { hasPermission, loading: loadingPermissions } = useProjectPermissions(id);
+  const isAdmin = hasPermission("*");
+  const canView = hasPermission(Permissions.ACCEPTANCE_VIEW);
+  const canCreate = hasPermission(Permissions.ACCEPTANCE_CREATE);
+  const canUpdate = hasPermission(Permissions.ACCEPTANCE_UPDATE);
   const canApproveLevel1 = hasPermission(Permissions.ACCEPTANCE_APPROVE_LEVEL_1);
   const canApproveLevel2 = hasPermission(Permissions.ACCEPTANCE_APPROVE_LEVEL_2);
   const canApproveLevel3 = hasPermission(Permissions.ACCEPTANCE_APPROVE_LEVEL_3);
 
-
-  if (permissionDenied) {
+  if (loading || loadingPermissions) {
     return (
-      <View style={styles.container}>
-        <ScreenHeader title="Nghiệm Thu" showBackButton />
-        <PermissionDenied message={permissionMessage} />
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
   }
 
-  if (loading) {
+  if (!canView || permissionDenied) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Nghiệm Thu" showBackButton />
+        <PermissionDenied message={permissionMessage || "Bạn không có quyền xem thông tin nghiệm thu của dự án này."} />
       </View>
     );
   }
@@ -137,8 +137,10 @@ export default function AcceptanceScreen() {
         canApproveLevel1={canApproveLevel1}
         canApproveLevel2={canApproveLevel2}
         canApproveLevel3={canApproveLevel3}
-        canCreate={hasPermission(Permissions.ACCEPTANCE_CREATE)}
-        canUpdate={hasPermission(Permissions.ACCEPTANCE_UPDATE)}
+        canCreate={canCreate}
+        canUpdate={canUpdate}
+        canDelete={hasPermission(Permissions.ACCEPTANCE_DELETE)}
+        canCreateDefect={hasPermission(Permissions.DEFECT_CREATE)}
         onRefresh={loadStages}
         onNavigateToDefects={(stageId?: number) => {
           if (stageId) {

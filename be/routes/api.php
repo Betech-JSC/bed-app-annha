@@ -119,6 +119,28 @@ Route::middleware('auth:sanctum')->group(function () {
     // Monitoring Dashboard (tổng quan tất cả projects)
     Route::get('monitoring/dashboard', [ProjectMonitoringController::class, 'dashboard']);
 
+    // Company Costs (Chi phí công ty - không gắn với dự án cụ thể)
+    Route::prefix('company-costs')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\CompanyCostController::class, 'index']);
+        Route::get('/summary', [\App\Http\Controllers\Api\CompanyCostController::class, 'summary']);
+        Route::post('/', [\App\Http\Controllers\Api\CompanyCostController::class, 'store']);
+        Route::get('/{id}', [\App\Http\Controllers\Api\CompanyCostController::class, 'show']);
+        Route::put('/{id}', [\App\Http\Controllers\Api\CompanyCostController::class, 'update']);
+        Route::delete('/{id}', [\App\Http\Controllers\Api\CompanyCostController::class, 'destroy']);
+        Route::post('/{id}/submit', [\App\Http\Controllers\Api\CompanyCostController::class, 'submit']);
+        Route::post('/{id}/approve-management', [\App\Http\Controllers\Api\CompanyCostController::class, 'approveByManagement']);
+        Route::post('/{id}/approve-accountant', [\App\Http\Controllers\Api\CompanyCostController::class, 'approveByAccountant']);
+        Route::post('/{id}/reject', [\App\Http\Controllers\Api\CompanyCostController::class, 'reject']);
+    });
+
+    // Company Financial Reports (Báo cáo tài chính toàn công ty)
+    Route::prefix('company-financial-reports')->group(function () {
+        Route::get('/summary', [\App\Http\Controllers\Api\CompanyFinancialReportController::class, 'summary']);
+        Route::get('/profit-loss', [\App\Http\Controllers\Api\CompanyFinancialReportController::class, 'profitLoss']);
+        Route::get('/trend', [\App\Http\Controllers\Api\CompanyFinancialReportController::class, 'trend']);
+        Route::get('/compare', [\App\Http\Controllers\Api\CompanyFinancialReportController::class, 'compare']);
+    });
+
     // Input Invoices (Global - không cần project, chỉ kế toán)
     Route::prefix('accounting')->group(function () {
         Route::get('/input-invoices', [InputInvoiceController::class, 'index']);

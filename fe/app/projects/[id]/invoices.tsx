@@ -18,8 +18,10 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { invoiceApi, Invoice, CreateInvoiceData, CostGroupSummary } from "@/api/invoiceApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput, CurrencyInput, UniversalFileUploader, PermissionDenied } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput, UniversalFileUploader, PermissionDenied, PermissionGuard } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { useProjectPermissions } from "@/hooks/usePermissions";
+import { Permissions } from "@/constants/Permissions";
 import api from "@/api/api";
 
 export default function InvoicesScreen() {
@@ -49,10 +51,16 @@ export default function InvoicesScreen() {
     const [reportData, setReportData] = useState<CostGroupSummary[]>([]);
     const [loadingReport, setLoadingReport] = useState(false);
 
+    const { hasPermission, loading: loadingPermissions } = useProjectPermissions(id!);
+    const canCreate = hasPermission(Permissions.INVOICE_CREATE);
+    const canView = hasPermission(Permissions.INVOICE_VIEW);
+
     useEffect(() => {
         loadInvoices();
-        loadCostGroups();
-    }, [id]);
+        if (canCreate) {
+            loadCostGroups();
+        }
+    }, [id, canCreate]);
 
     // Reload data when screen comes into focus
     useFocusEffect(
@@ -86,12 +94,17 @@ export default function InvoicesScreen() {
 
     const loadCostGroups = async () => {
         try {
-            const response = await api.get("/settings/cost-groups");
+            const response = await api.get("/settings/cost-groups?active_only=true");
             if (response.data.success) {
-                setCostGroups(response.data.data || []);
+                const data = response.data.data;
+                // Handle both paginated and non-paginated responses
+                setCostGroups(Array.isArray(data) ? data : (data?.data || []));
             }
-        } catch (error) {
-            console.error("Error loading cost groups:", error);
+        } catch (error: any) {
+            // Silence 403 errors as they are expected for some users
+            if (error.response?.status !== 403) {
+                console.error("Error loading cost groups:", error);
+            }
         }
     };
 
@@ -164,7 +177,10 @@ export default function InvoicesScreen() {
         setUploadedFiles([]);
     };
 
-    const formatCurrency = (amount: number) => {
+    const formatCurrency = (amount: number | undefined | null) => {
+        if (amount === undefined || amount === null || isNaN(amount)) {
+            return "0 VNĐ";
+        }
         return new Intl.NumberFormat("vi-VN").format(amount) + " VNĐ";
     };
 
@@ -201,7 +217,7 @@ export default function InvoicesScreen() {
         </TouchableOpacity>
     );
 
-    if (loading) {
+    if (loading || loadingPermissions) {
         return (
             <View style={styles.container}>
                 <ScreenHeader title="Hóa Đơn" showBackButton />
@@ -212,11 +228,13 @@ export default function InvoicesScreen() {
         );
     }
 
-    if (permissionDenied) {
+    if (!canView || permissionDenied) {
         return (
             <View style={styles.container}>
                 <ScreenHeader title="Hóa Đơn" showBackButton />
-                <PermissionDenied message={permissionMessage} />
+                <PermissionDenied
+                    message={permissionMessage || "Bạn không có quyền xem hóa đơn của dự án này."}
+                />
             </View>
         );
     }
@@ -234,175 +252,174 @@ export default function InvoicesScreen() {
                         >
                             <Ionicons name="stats-chart" size={24} color="#3B82F6" />
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.addButton}
-                            onPress={() => {
-                                resetForm();
-                                setShowCreateModal(true);
-                            }}
-                        >
-                            <Ionicons name="add" size={24} color="#3B82F6" />
-                        </TouchableOpacity>
+
+                        {canCreate && (
+                            <TouchableOpacity
+                                style={styles.addButton}
+                                onPress={() => {
+                                    resetForm();
+                                    setShowCreateModal(true);
+                                }}
+                            >
+                                <Ionicons name="add" size={24} color="#3B82F6" />
+                            </TouchableOpacity>
+                        )}
                     </View>
                 }
             />
 
-            {loading ? (
-                <View style={styles.centerContainer}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                </View>
-            ) : (
-                <FlatList
-                    data={invoices}
-                    renderItem={renderItem}
-                    keyExtractor={(item) => item.id.toString()}
-                    contentContainerStyle={{ paddingBottom: tabBarHeight }}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                    }
-                    ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Ionicons name="receipt-outline" size={64} color="#9CA3AF" />
-                            <Text style={styles.emptyText}>Chưa có hóa đơn</Text>
-                        </View>
-                    }
-                />
-            )}
-
-            {/* Create Invoice Modal */}
-            <Modal
-                visible={showCreateModal}
-                animationType="slide"
-                presentationStyle="pageSheet"
-                onRequestClose={() => setShowCreateModal(false)}
-            >
-                <KeyboardAvoidingView
-                    style={styles.modalContainer}
-                    behavior={Platform.OS === "ios" ? "padding" : "height"}
-                    keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-                >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Tạo Hóa Đơn</Text>
-                            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView
-                            style={styles.modalBody}
-                            contentContainerStyle={styles.modalBodyContent}
-                            keyboardShouldPersistTaps="handled"
-                            showsVerticalScrollIndicator={true}
-                            nestedScrollEnabled={true}
-                        >
-                            <DatePickerInput
-                                label="Ngày hóa đơn *"
-                                value={formData.invoice_date}
-                                onDateChange={(date) => {
-                                    setFormData({
-                                        ...formData,
-                                        invoice_date: date,
-                                    });
-                                }}
-                                placeholder="Chọn ngày"
-                                required
-                            />
-
-                            {/* Cost Group Selector */}
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Danh mục chi phí *</Text>
-                                <View style={styles.pickerContainer}>
-                                    <TouchableOpacity
-                                        style={styles.pickerButton}
-                                        onPress={() => {
-                                            Alert.alert(
-                                                "Chọn danh mục",
-                                                "",
-                                                costGroups.map(cg => ({
-                                                    text: cg.name,
-                                                    onPress: () => setFormData({ ...formData, cost_group_id: cg.id })
-                                                } as any)).concat([{ text: "Hủy", onPress: () => { }, style: "cancel" }])
-                                            );
-                                        }}
-                                    >
-                                        <Text style={formData.cost_group_id ? styles.pickerText : styles.pickerPlaceholder}>
-                                            {formData.cost_group_id
-                                                ? costGroups.find(cg => cg.id === formData.cost_group_id)?.name
-                                                : "Chọn danh mục"}
-                                        </Text>
-                                        <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            <CurrencyInput
-                                label="Tổng tiền (chưa VAT) *"
-                                value={formData.subtotal || 0}
-                                onChangeText={(amount) =>
-                                    setFormData({ ...formData, subtotal: amount })
-                                }
-                                placeholder="0"
-                            />
-
-                            <CurrencyInput
-                                label="VAT"
-                                value={formData.tax_amount || 0}
-                                onChangeText={(amount) =>
-                                    setFormData({ ...formData, tax_amount: amount })
-                                }
-                                placeholder="0"
-                            />
-
-                            <CurrencyInput
-                                label="Giảm giá"
-                                value={formData.discount_amount || 0}
-                                onChangeText={(amount) =>
-                                    setFormData({ ...formData, discount_amount: amount })
-                                }
-                                placeholder="0"
-                            />
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Mô tả</Text>
-                                <TextInput
-                                    style={[styles.input, styles.textArea]}
-                                    placeholder="Nhập mô tả"
-                                    value={formData.description}
-                                    onChangeText={(text) => setFormData({ ...formData, description: text })}
-                                    multiline
-                                    numberOfLines={3}
-                                />
-                            </View>
-
-                            {/* File Upload */}
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Chứng từ đính kèm</Text>
-                                <UniversalFileUploader
-                                    onUploadComplete={(files) => setUploadedFiles(files)}
-                                    multiple={true}
-                                    accept="all"
-                                    maxFiles={10}
-                                    initialFiles={uploadedFiles}
-                                    label="Chọn file chứng từ"
-                                />
-                            </View>
-
-                            <TouchableOpacity
-                                style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-                                onPress={handleCreate}
-                                disabled={submitting}
-                            >
-                                {submitting ? (
-                                    <ActivityIndicator color="#FFFFFF" />
-                                ) : (
-                                    <Text style={styles.submitButtonText}>Tạo Hóa Đơn</Text>
-                                )}
-                            </TouchableOpacity>
-                        </ScrollView>
+            <FlatList
+                data={invoices}
+                renderItem={renderItem}
+                keyExtractor={(item) => item.id.toString()}
+                contentContainerStyle={{ paddingBottom: tabBarHeight }}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                }
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        <Ionicons name="receipt-outline" size={64} color="#9CA3AF" />
+                        <Text style={styles.emptyText}>Chưa có hóa đơn</Text>
                     </View>
-                </KeyboardAvoidingView>
-            </Modal>
+                }
+            />
+
+            {/* Create Invoice Modal - only accessible if canCreate is true */}
+            {canCreate && (
+                <Modal
+                    visible={showCreateModal}
+                    animationType="slide"
+                    presentationStyle="pageSheet"
+                    onRequestClose={() => setShowCreateModal(false)}
+                >
+                    <KeyboardAvoidingView
+                        style={styles.modalContainer}
+                        behavior={Platform.OS === "ios" ? "padding" : "height"}
+                        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+                    >
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>Tạo Hóa Đơn</Text>
+                                <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+                                    <Ionicons name="close" size={24} color="#1F2937" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView
+                                style={styles.modalBody}
+                                contentContainerStyle={styles.modalBodyContent}
+                                keyboardShouldPersistTaps="handled"
+                                showsVerticalScrollIndicator={true}
+                                nestedScrollEnabled={true}
+                            >
+                                <DatePickerInput
+                                    label="Ngày hóa đơn *"
+                                    value={formData.invoice_date}
+                                    onDateChange={(date) => {
+                                        setFormData({
+                                            ...formData,
+                                            invoice_date: date,
+                                        });
+                                    }}
+                                    placeholder="Chọn ngày"
+                                    required
+                                />
+
+                                {/* Cost Group Selector */}
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Danh mục chi phí *</Text>
+                                    <View style={styles.pickerContainer}>
+                                        <TouchableOpacity
+                                            style={styles.pickerButton}
+                                            onPress={() => {
+                                                Alert.alert(
+                                                    "Chọn danh mục",
+                                                    "",
+                                                    costGroups.map(cg => ({
+                                                        text: cg.name,
+                                                        onPress: () => setFormData({ ...formData, cost_group_id: cg.id })
+                                                    } as any)).concat([{ text: "Hủy", onPress: () => { }, style: "cancel" }])
+                                                );
+                                            }}
+                                        >
+                                            <Text style={formData.cost_group_id ? styles.pickerText : styles.pickerPlaceholder}>
+                                                {formData.cost_group_id
+                                                    ? costGroups.find(cg => cg.id === formData.cost_group_id)?.name
+                                                    : "Chọn danh mục"}
+                                            </Text>
+                                            <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                <CurrencyInput
+                                    label="Tổng tiền (chưa VAT) *"
+                                    value={formData.subtotal || 0}
+                                    onChangeText={(amount) =>
+                                        setFormData({ ...formData, subtotal: amount })
+                                    }
+                                    placeholder="0"
+                                />
+
+                                <CurrencyInput
+                                    label="VAT"
+                                    value={formData.tax_amount || 0}
+                                    onChangeText={(amount) =>
+                                        setFormData({ ...formData, tax_amount: amount })
+                                    }
+                                    placeholder="0"
+                                />
+
+                                <CurrencyInput
+                                    label="Giảm giá"
+                                    value={formData.discount_amount || 0}
+                                    onChangeText={(amount) =>
+                                        setFormData({ ...formData, discount_amount: amount })
+                                    }
+                                    placeholder="0"
+                                />
+
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Mô tả</Text>
+                                    <TextInput
+                                        style={[styles.input, styles.textArea]}
+                                        placeholder="Nhập mô tả"
+                                        value={formData.description}
+                                        onChangeText={(text) => setFormData({ ...formData, description: text })}
+                                        multiline
+                                        numberOfLines={3}
+                                    />
+                                </View>
+
+                                {/* File Upload */}
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.label}>Chứng từ đính kèm</Text>
+                                    <UniversalFileUploader
+                                        onUploadComplete={(files) => setUploadedFiles(files)}
+                                        multiple={true}
+                                        accept="all"
+                                        maxFiles={10}
+                                        initialFiles={uploadedFiles}
+                                        label="Chọn file chứng từ"
+                                    />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+                                    onPress={handleCreate}
+                                    disabled={submitting}
+                                >
+                                    {submitting ? (
+                                        <ActivityIndicator color="#FFFFFF" />
+                                    ) : (
+                                        <Text style={styles.submitButtonText}>Tạo Hóa Đơn</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </ScrollView>
+                        </View>
+                    </KeyboardAvoidingView>
+                </Modal>
+            )}
 
             {/* Report Modal */}
             <Modal

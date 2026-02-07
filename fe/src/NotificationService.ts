@@ -54,9 +54,9 @@ export class NotificationService {
 
     // Hàm gửi notification qua Expo
     static async sendPushNotification(
-        expoPushToken: string, 
-        title: string, 
-        body: string, 
+        expoPushToken: string,
+        title: string,
+        body: string,
         data?: Record<string, any>
     ) {
         if (!expoPushToken) return;
@@ -83,6 +83,19 @@ export class NotificationService {
             }
         } catch (error) {
             console.error("Error sending push notification:", error);
+        }
+    }
+
+    static async getExpoPushToken() {
+        try {
+            const { status } = await Notifications.requestPermissionsAsync();
+            if (status !== 'granted') return null;
+
+            const token = (await Notifications.getExpoPushTokenAsync()).data;
+            return token;
+        } catch (error) {
+            console.error('Error getting expo push token:', error);
+            return null;
         }
     }
 }

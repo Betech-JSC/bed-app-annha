@@ -10,20 +10,28 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
+
 class InvoiceController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     public function index(string $projectId)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoice.view')) {
+        if (!$this->authService->can($user, Permissions::INVOICE_VIEW, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền xem hóa đơn.'
+                'message' => 'Bạn không có quyền xem hóa đơn của dự án này.'
             ], 403);
         }
-
-        $project = Project::findOrFail($projectId);
         $invoices = $project->invoices()
             ->with(['customer', 'creator', 'costGroup', 'attachments'])
             ->orderBy('invoice_date', 'desc')
@@ -37,16 +45,15 @@ class InvoiceController extends Controller
 
     public function store(Request $request, string $projectId)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoice.create')) {
+        if (!$this->authService->can($user, Permissions::INVOICE_CREATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền tạo hóa đơn.'
+                'message' => 'Không có quyền tạo hóa đơn cho dự án này.'
             ], 403);
         }
-
-        $project = Project::findOrFail($projectId);
 
         $validator = Validator::make($request->all(), [
             'invoice_date' => 'required|date',
@@ -110,12 +117,13 @@ class InvoiceController extends Controller
 
     public function show(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoice.view')) {
+        if (!$this->authService->can($user, Permissions::INVOICE_VIEW, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền xem hóa đơn.'
+                'message' => 'Không có quyền xem hóa đơn của dự án này.'
             ], 403);
         }
 
@@ -135,12 +143,13 @@ class InvoiceController extends Controller
 
     public function update(Request $request, string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoice.update')) {
+        if (!$this->authService->can($user, Permissions::INVOICE_UPDATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền cập nhật hóa đơn.'
+                'message' => 'Không có quyền cập nhật hóa đơn của dự án này.'
             ], 403);
         }
 
@@ -204,12 +213,13 @@ class InvoiceController extends Controller
 
     public function destroy(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('invoice.delete')) {
+        if (!$this->authService->can($user, Permissions::INVOICE_DELETE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền xóa hóa đơn.'
+                'message' => 'Không có quyền xóa hóa đơn của dự án này.'
             ], 403);
         }
 
@@ -225,11 +235,13 @@ class InvoiceController extends Controller
 
     public function summaryByCostGroup(string $projectId)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        if (!$user->hasPermission('invoice.view')) {
+        
+        if (!$this->authService->can($user, Permissions::INVOICE_VIEW, $project)) {
              return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền xem báo cáo.'
+                'message' => 'Không có quyền xem báo cáo của dự án này.'
             ], 403);
         }
 

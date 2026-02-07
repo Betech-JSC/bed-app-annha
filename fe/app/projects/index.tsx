@@ -42,7 +42,7 @@ export default function ProjectsListScreen() {
   const [showYearFilter, setShowYearFilter] = useState(false);
   const [showStatusFilter, setShowStatusFilter] = useState(false);
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
-  
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage] = useState(3);
@@ -72,7 +72,7 @@ export default function ProjectsListScreen() {
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const response = await projectApi.getProjects({ my_projects: true });
+      const response = await projectApi.getProjects();
       if (response.success) {
         const projectsList = response.data?.data || response.data || [];
         setProjects(projectsList);
@@ -122,10 +122,10 @@ export default function ProjectsListScreen() {
 
   const loadMonitoringData = async (projectsList: Project[]) => {
     const now = Date.now();
-    
+
     // Chỉ load lại nếu cache đã hết hạn
-    if (now - monitoringCache.current.timestamp < CACHE_DURATION && 
-        Object.keys(monitoringCache.current.data).length > 0) {
+    if (now - monitoringCache.current.timestamp < CACHE_DURATION &&
+      Object.keys(monitoringCache.current.data).length > 0) {
       setMonitoringData(monitoringCache.current.data);
       setPredictions(monitoringCache.current.predictions);
       return;
@@ -133,7 +133,7 @@ export default function ProjectsListScreen() {
 
     // Chỉ load cho 10 projects đầu tiên để tránh quá tải
     const projectsToLoad = projectsList.slice(0, 10);
-    
+
     // Batch requests: chỉ gọi 3 requests cùng lúc
     const BATCH_SIZE = 3;
     const monitoringMap: Record<number, ProjectMonitoringData> = {};
@@ -141,7 +141,7 @@ export default function ProjectsListScreen() {
 
     for (let i = 0; i < projectsToLoad.length; i += BATCH_SIZE) {
       const batch = projectsToLoad.slice(i, i + BATCH_SIZE);
-      
+
       const batchPromises = batch.map(async (project) => {
         try {
           const [monitoringResponse, predictionResponse] = await Promise.all([
@@ -168,7 +168,7 @@ export default function ProjectsListScreen() {
       });
 
       const batchResults = await Promise.all(batchPromises);
-      
+
       batchResults.forEach((result) => {
         if (result.monitoring) {
           monitoringMap[result.projectId] = result.monitoring;
