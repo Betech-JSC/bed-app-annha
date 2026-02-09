@@ -7,14 +7,27 @@ use App\Models\Attachment;
 use App\Models\Project;
 use Illuminate\Http\Request;
 
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
+
 class ProjectDocumentController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
+
     /**
      * Danh sách tài liệu
      */
     public function index(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+
+        // Check permission
+        $this->authService->require($request->user(), Permissions::PROJECT_DOCUMENT_VIEW, $project);
 
         $query = $project->attachments();
 
@@ -39,6 +52,9 @@ class ProjectDocumentController extends Controller
     public function store(Request $request, string $projectId)
     {
         $project = Project::findOrFail($projectId);
+
+        // Check permission
+        $this->authService->require($request->user(), Permissions::PROJECT_DOCUMENT_UPLOAD, $project);
 
         $validated = $request->validate([
             'attachment_id' => 'required|exists:attachments,id',
@@ -67,6 +83,9 @@ class ProjectDocumentController extends Controller
     public function update(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
+
+        // Check permission (using UPLOAD permission for editing description)
+        $this->authService->require($request->user(), Permissions::PROJECT_DOCUMENT_UPLOAD, $project);
         
         $attachment = Attachment::where('attachable_type', Project::class)
             ->where('attachable_id', $project->id)
@@ -84,6 +103,29 @@ class ProjectDocumentController extends Controller
             'success' => true,
             'message' => 'Đã cập nhật mô tả tài liệu.',
             'data' => $attachment
+        ]);
+    }
+
+    /**
+     * Xóa tài liệu khỏi dự án
+     * Note: Thực chất là xóa attachment (soft delete nếu model support hoặc hard delete)
+     */
+    public function destroy(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+
+        // Check permission
+        $this->authService->require($request->user(), Permissions::PROJECT_DOCUMENT_DELETE, $project);
+
+        $attachment = Attachment::where('attachable_type', Project::class)
+            ->where('attachable_id', $project->id)
+            ->findOrFail($id);
+
+        $attachment->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tài liệu đã được xóa khỏi dự án.'
         ]);
     }
 }

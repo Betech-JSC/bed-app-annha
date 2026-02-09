@@ -16,7 +16,9 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { projectApi, CreateProjectData, Project } from "@/api/projectApi";
 import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput } from "@/components";
+import { ScreenHeader, DatePickerInput, PermissionDenied } from "@/components";
+import { useProjectPermissions } from "@/hooks/usePermissions";
+import { Permissions } from "@/constants/Permissions";
 
 interface User {
   id: number;
@@ -41,6 +43,9 @@ export default function EditProjectScreen() {
   const [managerSearch, setManagerSearch] = useState("");
   const [projectStatuses, setProjectStatuses] = useState<Option[]>([]);
   const [loadingStatuses, setLoadingStatuses] = useState(false);
+
+  const { hasPermission, loading: loadingPermissions } = useProjectPermissions(id!);
+  const canUpdate = hasPermission(Permissions.PROJECT_UPDATE);
 
   const [formData, setFormData] = useState<CreateProjectData>({
     name: "",
@@ -213,10 +218,22 @@ export default function EditProjectScreen() {
       manager.email.toLowerCase().includes(managerSearch.toLowerCase())
   );
 
-  if (loading) {
+  if (loading || loadingPermissions) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Chỉnh Sửa Dự Án" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  if (!canUpdate) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Chỉnh Sửa Dự Án" showBackButton />
+        <PermissionDenied message="Bạn không có quyền chỉnh sửa dự án này." />
       </View>
     );
   }
@@ -306,26 +323,6 @@ export default function EditProjectScreen() {
                   {selectedCustomer
                     ? `${selectedCustomer.name} (${selectedCustomer.email})`
                     : "Chọn khách hàng"}
-                </Text>
-                <Ionicons name="chevron-down" size={20} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Quản lý dự án</Text>
-              <TouchableOpacity
-                style={styles.selectButton}
-                onPress={() => setShowManagerModal(true)}
-              >
-                <Text
-                  style={[
-                    styles.selectButtonText,
-                    !selectedManager && styles.placeholderText,
-                  ]}
-                >
-                  {selectedManager
-                    ? `${selectedManager.name} (${selectedManager.email})`
-                    : "Chọn quản lý dự án (tùy chọn)"}
                 </Text>
                 <Ionicons name="chevron-down" size={20} color="#6B7280" />
               </TouchableOpacity>
@@ -439,116 +436,77 @@ export default function EditProjectScreen() {
       <Modal
         visible={showCustomerModal}
         animationType="slide"
-        transparent={true}
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowCustomerModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chọn khách hàng</Text>
-              <TouchableOpacity
-                onPress={() => setShowCustomerModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Tìm kiếm khách hàng..."
-              value={customerSearch}
-              onChangeText={setCustomerSearch}
-            />
-            {loadingCustomers ? (
-              <ActivityIndicator style={styles.modalLoading} />
-            ) : (
-              <FlatList
-                data={filteredCustomers}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => handleSelectCustomer(item)}
-                  >
-                    <View style={styles.modalItemInfo}>
-                      <Text style={styles.modalItemName}>{item.name}</Text>
-                      <Text style={styles.modalItemEmail}>{item.email}</Text>
-                      {item.phone && (
-                        <Text style={styles.modalItemPhone}>{item.phone}</Text>
-                      )}
-                    </View>
-                    {selectedCustomer?.id === item.id && (
-                      <Ionicons name="checkmark" size={24} color="#3B82F6" />
-                    )}
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                  <Text style={styles.modalEmptyText}>
-                    Không tìm thấy khách hàng
-                  </Text>
-                }
-              />
-            )}
-          </View>
-        </View>
-      </Modal>
+        <ScreenHeader
+          title="Chọn khách hàng"
+          showBackButton={true}
+          onBackPress={() => setShowCustomerModal(false)}
+        />
 
-      {/* Manager Modal */}
-      <Modal
-        visible={showManagerModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowManagerModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chọn quản lý dự án</Text>
-              <TouchableOpacity
-                onPress={() => setShowManagerModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Tìm kiếm quản lý dự án..."
-              value={managerSearch}
-              onChangeText={setManagerSearch}
-            />
-            {loadingManagers ? (
-              <ActivityIndicator style={styles.modalLoading} />
-            ) : (
-              <FlatList
-                data={filteredManagers}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => handleSelectManager(item)}
-                  >
-                    <View style={styles.modalItemInfo}>
-                      <Text style={styles.modalItemName}>{item.name}</Text>
-                      <Text style={styles.modalItemEmail}>{item.email}</Text>
-                      {item.phone && (
-                        <Text style={styles.modalItemPhone}>{item.phone}</Text>
-                      )}
-                    </View>
-                    {selectedManager?.id === item.id && (
-                      <Ionicons name="checkmark" size={24} color="#3B82F6" />
-                    )}
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                  <Text style={styles.modalEmptyText}>
-                    Không tìm thấy quản lý dự án
-                  </Text>
-                }
-              />
-            )}
-          </View>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#6B7280" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm khách hàng..."
+            value={customerSearch}
+            onChangeText={setCustomerSearch}
+            placeholderTextColor="#9CA3AF"
+            autoFocus={true}
+          />
+          {customerSearch.length > 0 && (
+            <TouchableOpacity onPress={() => setCustomerSearch("")}>
+              <Ionicons name="close-circle" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          )}
         </View>
+
+        {loadingCustomers ? (
+          <View style={styles.modalLoadingContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredCustomers}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.userItem,
+                  selectedCustomer?.id === item.id && styles.userItemSelected,
+                ]}
+                onPress={() => handleSelectCustomer(item)}
+              >
+                <View style={styles.userItemContent}>
+                  <View style={styles.userAvatar}>
+                    <Ionicons name="person" size={24} color="#3B82F6" />
+                  </View>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{item.name}</Text>
+                    <Text style={styles.userEmail}>{item.email}</Text>
+                    {item.phone && (
+                      <Text style={styles.userPhone}>{item.phone}</Text>
+                    )}
+                  </View>
+                  {selectedCustomer?.id === item.id && (
+                    <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <View style={styles.modalEmptyContainer}>
+                <Ionicons name="people-outline" size={48} color="#9CA3AF" />
+                <Text style={styles.modalEmptyText}>
+                  {customerSearch
+                    ? "Không tìm thấy khách hàng"
+                    : "Không có khách hàng nào"}
+                </Text>
+              </View>
+            }
+          />
+        )}
       </Modal>
     </View>
   );
@@ -703,23 +661,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
-    paddingBottom: 32,
+    backgroundColor: "#F9FAFB",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     padding: 16,
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
@@ -728,51 +679,79 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1F2937",
   },
-  modalCloseButton: {
-    padding: 4,
-  },
-  searchInput: {
-    backgroundColor: "#F9FAFB",
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    margin: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    borderRadius: 8,
-    padding: 12,
-    margin: 16,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
     fontSize: 16,
+    color: "#1F2937",
   },
-  modalLoading: {
-    padding: 32,
-  },
-  modalItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  modalLoadingContainer: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
+  },
+  userItem: {
+    backgroundColor: "#FFFFFF",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: "#E5E7EB",
   },
-  modalItemInfo: {
+  userItemSelected: {
+    backgroundColor: "#EFF6FF",
+  },
+  userItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  userAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  userInfo: {
     flex: 1,
   },
-  modalItemName: {
+  userName: {
     fontSize: 16,
     fontWeight: "600",
     color: "#1F2937",
     marginBottom: 4,
   },
-  modalItemEmail: {
+  userEmail: {
     fontSize: 14,
     color: "#6B7280",
     marginBottom: 2,
   },
-  modalItemPhone: {
-    fontSize: 14,
-    color: "#6B7280",
+  userPhone: {
+    fontSize: 12,
+    color: "#9CA3AF",
+  },
+  modalEmptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 64,
   },
   modalEmptyText: {
-    textAlign: "center",
-    padding: 32,
+    fontSize: 16,
     color: "#6B7280",
+    marginTop: 16,
   },
 });
 

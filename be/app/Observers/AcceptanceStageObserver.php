@@ -69,6 +69,26 @@ class AcceptanceStageObserver
                         $acceptanceStage->project_id
                     );
                 }
+
+                // Notify Project Team (Informational) - Supervisor has approved
+                $teamTitle = "Giám sát đã duyệt nghiệm thu";
+                $teamBody = "Giai đoạn nghiệm thu '{$acceptanceStage->name}' đã được giám sát duyệt.";
+                $this->notificationService->sendToProjectTeam(
+                    $acceptanceStage->project_id,
+                    Notification::TYPE_SYSTEM,
+                    Notification::CATEGORY_STATUS_CHANGE,
+                    $teamTitle,
+                    $teamBody,
+                    [
+                        'stage_id' => $acceptanceStage->id,
+                        'stage_name' => $acceptanceStage->name,
+                        'project_id' => $acceptanceStage->project_id,
+                        'new_status' => 'supervisor_approved'
+                    ],
+                    Notification::PRIORITY_MEDIUM,
+                    "/projects/{$acceptanceStage->project_id}/acceptance",
+                    true
+                );
             }
 
             // Khi project manager approve, notify customer
@@ -84,6 +104,26 @@ class AcceptanceStageObserver
                         $acceptanceStage->project_id
                     );
                 }
+
+                // Notify Project Team (Informational) - PM has approved
+                $teamTitle = "Quản lý dự án đã duyệt nghiệm thu";
+                $teamBody = "Giai đoạn nghiệm thu '{$acceptanceStage->name}' đã được quản lý dự án duyệt.";
+                $this->notificationService->sendToProjectTeam(
+                    $acceptanceStage->project_id,
+                    Notification::TYPE_SYSTEM,
+                    Notification::CATEGORY_STATUS_CHANGE,
+                    $teamTitle,
+                    $teamBody,
+                    [
+                        'stage_id' => $acceptanceStage->id,
+                        'stage_name' => $acceptanceStage->name,
+                        'project_id' => $acceptanceStage->project_id,
+                        'new_status' => 'project_manager_approved'
+                    ],
+                    Notification::PRIORITY_MEDIUM,
+                    "/projects/{$acceptanceStage->project_id}/acceptance",
+                    true
+                );
             }
 
             // Notify team khi được customer approve

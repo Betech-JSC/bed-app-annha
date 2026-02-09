@@ -314,7 +314,7 @@ export default function PersonnelScreen() {
       <Modal
         visible={showAddModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowAddModal(false)}
       >
         <View style={styles.modalFullContainer}>

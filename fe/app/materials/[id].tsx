@@ -464,7 +464,7 @@ export default function MaterialDetailScreen() {
             <Modal
                 visible={showEditModal}
                 animationType="slide"
-                presentationStyle="pageSheet"
+                presentationStyle="fullScreen"
                 onRequestClose={() => {
                     setShowEditModal(false);
                     setErrors({});
@@ -718,7 +718,7 @@ export default function MaterialDetailScreen() {
             <Modal
                 visible={showAdjustStockModal}
                 animationType="slide"
-                presentationStyle="pageSheet"
+                presentationStyle="fullScreen"
                 onRequestClose={() => setShowAdjustStockModal(false)}
             >
                 <KeyboardAvoidingView
@@ -1026,6 +1026,7 @@ const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
         backgroundColor: "#F9FAFB",
+        paddingTop: 40,
     },
     modalHeader: {
         flexDirection: "row",

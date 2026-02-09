@@ -12,6 +12,7 @@ import {
   ScrollView,
   RefreshControl,
   SafeAreaView,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
@@ -51,6 +52,8 @@ export default function PaymentsScreen() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailPayment, setDetailPayment] = useState<ProjectPayment | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<CreatePaymentData>({
@@ -95,7 +98,6 @@ export default function PaymentsScreen() {
     try {
       setLoading(true);
       setPermissionDenied(false);
-      setPermissionMessage("");
       const response = await paymentApi.getPayments(id!);
       if (response.success) {
         setPayments(response.data || []);
@@ -221,7 +223,10 @@ export default function PaymentsScreen() {
   const renderPaymentItem = ({ item }: { item: ProjectPayment }) => (
     <TouchableOpacity
       style={styles.paymentCard}
-      onPress={() => router.push(`/projects/${id}/payments/${item.id}` as any)}
+      onPress={() => {
+        setDetailPayment(item);
+        setShowDetailModal(true);
+      }}
       activeOpacity={0.7}
     >
       <View style={styles.paymentHeader}>
@@ -303,15 +308,14 @@ export default function PaymentsScreen() {
         </View>
       )}
 
-      {/* Khách hàng đánh dấu đã thanh toán */}
       {item.status === "pending" && (
-        <PermissionGuard permission={Permissions.PAYMENT_MARK_AS_PAID_BY_CUSTOMER} projectId={id}>
+        <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
           <TouchableOpacity
             style={styles.markPaidButton}
             onPress={() => handleMarkAsPaid(item)}
           >
             <Ionicons name="card-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.markPaidButtonText}>Đánh dấu đã thanh toán</Text>
+            <Text style={styles.markPaidButtonText}>Thanh toán</Text>
           </TouchableOpacity>
         </PermissionGuard>
       )}
@@ -346,26 +350,35 @@ export default function PaymentsScreen() {
     setShowConfirmModal(true);
   };
 
+  const [showRejectModal, setShowRejectModal] = useState(false);
+
   const handleRejectPayment = (payment: ProjectPayment) => {
-    Alert.alert(
-      "Từ chối thanh toán",
-      `Bạn có chắc muốn từ chối thanh toán Đợt ${payment.payment_number}?`,
-      [
-        { text: "Hủy", style: "cancel" },
-        {
-          text: "Từ chối",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // TODO: Implement reject payment API
-              Alert.alert("Thông báo", "Chức năng đang phát triển");
-            } catch (error: any) {
-              Alert.alert("Lỗi", error.response?.data?.message || "Không thể từ chối thanh toán");
-            }
-          },
-        },
-      ]
-    );
+    setSelectedPayment(payment);
+    setRejectionReason("");
+    setShowRejectModal(true);
+  };
+
+  const submitRejectPayment = async () => {
+    if (!selectedPayment || !rejectionReason.trim()) {
+      Alert.alert("Lỗi", "Vui lòng nhập lý do từ chối");
+      return;
+    }
+
+    try {
+      const response = await paymentApi.rejectPayment(
+        id!,
+        selectedPayment.id,
+        rejectionReason
+      );
+      if (response.success) {
+        Alert.alert("Thành công", "Đã từ chối thanh toán");
+        setShowRejectModal(false);
+        setRejectionReason("");
+        loadPayments();
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể từ chối thanh toán");
+    }
   };
 
   const handleMarkAsPaid = (payment: ProjectPayment) => {
@@ -599,16 +612,276 @@ export default function PaymentsScreen() {
                   <Text style={styles.emptyButtonText}>Thêm đợt thanh toán</Text>
                 </TouchableOpacity>
               </PermissionGuard>
+
             </View>
           }
         />
       </PermissionGuard>
 
+      {/* Detail Payment Modal */}
+      <Modal
+        visible={showDetailModal}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => {
+          setShowDetailModal(false);
+          setDetailPayment(null);
+        }}
+      >
+        <SafeAreaView style={styles.detailModalContainer}>
+          <View style={styles.detailModalHeader}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowDetailModal(false);
+                setDetailPayment(null);
+              }}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="#1F2937" />
+            </TouchableOpacity>
+            <Text style={styles.detailModalTitle}>Chi tiết thanh toán</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {detailPayment ? (
+            <ScrollView
+              style={styles.detailScrollView}
+              contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, tabBarHeight) + 16 }}
+            >
+              {/* Status Card */}
+              <View style={styles.statusCard}>
+                <View style={styles.statusHeader}>
+                  <Ionicons
+                    name={
+                      (detailPayment.status === "confirmed" || detailPayment.status === "paid"
+                        ? "checkmark-circle"
+                        : detailPayment.status === "customer_paid"
+                          ? "card"
+                          : detailPayment.status === "customer_pending_approval"
+                            ? "time"
+                            : detailPayment.status === "customer_approved"
+                              ? "thumbs-up"
+                              : detailPayment.status === "overdue"
+                                ? "alert-circle"
+                                : "ellipse") as any
+                    }
+                    size={48}
+                    color={getStatusColor(detailPayment.status, detailPayment.due_date)}
+                  />
+                  <View style={styles.statusInfo}>
+                    <Text style={styles.statusLabel}>Trạng thái</Text>
+                    <View
+                      style={[
+                        styles.detailStatusBadge,
+                        {
+                          backgroundColor:
+                            getStatusColor(detailPayment.status, detailPayment.due_date) + "20",
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.detailStatusText,
+                          { color: getStatusColor(detailPayment.status, detailPayment.due_date) },
+                        ]}
+                      >
+                        {getStatusText(detailPayment.status)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Payment Info Card */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Thông tin thanh toán</Text>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Đợt thanh toán</Text>
+                  <Text style={styles.infoValue}>Đợt {detailPayment.payment_number}</Text>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Số tiền</Text>
+                  <Text style={[styles.infoValue, styles.amountText]}>
+                    {formatCurrency(detailPayment.amount)}
+                  </Text>
+                </View>
+
+                {detailPayment.notes && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Nội dung</Text>
+                    <Text style={styles.infoValueMultiline}>{detailPayment.notes}</Text>
+                  </View>
+                )}
+
+                <View style={styles.divider} />
+
+                <View style={styles.infoRow}>
+                  <View style={styles.iconLabel}>
+                    <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                    <Text style={styles.infoLabel}>Hạn thanh toán</Text>
+                  </View>
+                  <Text style={styles.infoValue}>{formatDate(detailPayment.due_date)}</Text>
+                </View>
+
+                {detailPayment.paid_date && (
+                  <View style={styles.infoRow}>
+                    <View style={styles.iconLabel}>
+                      <Ionicons name="checkmark-circle-outline" size={16} color="#10B981" />
+                      <Text style={styles.infoLabel}>Ngày thanh toán</Text>
+                    </View>
+                    <Text style={styles.infoValue}>{formatDate(detailPayment.paid_date)}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Approval Info Card */}
+              {(detailPayment.customer_approved_at ||
+                detailPayment.payment_proof_uploaded_at ||
+                detailPayment.confirmed_at) && (
+                  <View style={styles.card}>
+                    <Text style={styles.cardTitle}>Lịch sử duyệt</Text>
+
+                    {detailPayment.payment_proof_uploaded_at && (
+                      <View style={styles.timelineItem}>
+                        <View style={styles.timelineDot} />
+                        <View style={styles.timelineContent}>
+                          <View style={styles.timelineHeader}>
+                            <Ionicons name="image-outline" size={20} color="#F59E0B" />
+                            <Text style={styles.timelineTitle}>Upload chứng từ</Text>
+                          </View>
+                          <Text style={styles.timelineDate}>
+                            {new Date(detailPayment.payment_proof_uploaded_at).toLocaleString("vi-VN")}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {detailPayment.customer_approved_at && (
+                      <View style={styles.timelineItem}>
+                        <View style={styles.timelineDot} />
+                        <View style={styles.timelineContent}>
+                          <View style={styles.timelineHeader}>
+                            <Ionicons name="person-outline" size={20} color="#8B5CF6" />
+                            <Text style={styles.timelineTitle}>Khách hàng xác nhận</Text>
+                          </View>
+                          <Text style={styles.timelineDate}>
+                            {new Date(detailPayment.customer_approved_at).toLocaleString("vi-VN")}
+                          </Text>
+                          {detailPayment.customer_approver && (
+                            <Text style={styles.timelineUser}>
+                              Bởi: {detailPayment.customer_approver.name}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {detailPayment.confirmed_at && (
+                      <View style={styles.timelineItem}>
+                        <View style={[styles.timelineDot, { backgroundColor: "#10B981" }]} />
+                        <View style={styles.timelineContent}>
+                          <View style={styles.timelineHeader}>
+                            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                            <Text style={styles.timelineTitle}>Kế toán xác nhận</Text>
+                          </View>
+                          <Text style={styles.timelineDate}>
+                            {new Date(detailPayment.confirmed_at).toLocaleString("vi-VN")}
+                          </Text>
+                          {detailPayment.confirmer && (
+                            <Text style={styles.timelineUser}>
+                              Bởi: {detailPayment.confirmer.name}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+              {/* Attachments Card */}
+              {detailPayment.attachments && detailPayment.attachments.length > 0 && (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>
+                    Chứng từ đính kèm ({detailPayment.attachments.length})
+                  </Text>
+
+                  <View style={styles.attachmentsGrid}>
+                    {detailPayment.attachments.map((attachment, index) => (
+                      <TouchableOpacity
+                        key={attachment.id || index}
+                        style={styles.attachmentCard}
+                      >
+                        {attachment.mime_type?.startsWith("image/") ? (
+                          <Image
+                            source={{ uri: attachment.file_url }}
+                            style={styles.attachmentImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.attachmentPlaceholder}>
+                            <Ionicons name="document-text-outline" size={32} color="#3B82F6" />
+                          </View>
+                        )}
+                        <Text style={styles.attachmentName} numberOfLines={2}>
+                          {attachment.original_name || attachment.file_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Actions */}
+              {detailPayment.status === "pending" && (
+                <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
+                  <TouchableOpacity
+                    style={styles.detailActionButton}
+                    onPress={() => {
+                      handleMarkAsPaid(detailPayment);
+                    }}
+                  >
+                    <Ionicons name="card-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.detailActionButtonText}>Thanh toán</Text>
+                  </TouchableOpacity>
+                </PermissionGuard>
+              )}
+
+              {detailPayment.status === "customer_paid" && (
+                <PermissionGuard permission={Permissions.PAYMENT_CONFIRM} projectId={id}>
+                  <View style={styles.actionButtonsRow}>
+                    <TouchableOpacity
+                      style={[styles.detailActionButton, styles.confirmButton]}
+                      onPress={() => handleConfirmPayment(detailPayment)}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                      <Text style={styles.detailActionButtonText}>Xác nhận</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.detailActionButton, styles.rejectButton]}
+                      onPress={() => handleRejectPayment(detailPayment)}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#FFFFFF" />
+                      <Text style={styles.detailActionButtonText}>Từ chối</Text>
+                    </TouchableOpacity>
+                  </View>
+                </PermissionGuard>
+              )}
+            </ScrollView>
+          ) : (
+            <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color="#3B82F6" />
+            </View>
+          )}
+        </SafeAreaView>
+      </Modal>
+
       {/* Create Payment Modal */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowCreateModal(false);
           resetForm();
@@ -890,7 +1163,7 @@ export default function PaymentsScreen() {
       <Modal
         visible={showMarkPaidModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowMarkPaidModal(false);
           setMarkPaidFiles([]);
@@ -900,7 +1173,7 @@ export default function PaymentsScreen() {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Đánh Dấu Đã Thanh Toán</Text>
+            <Text style={styles.modalTitle}>Đã Thanh Toán</Text>
             <TouchableOpacity
               onPress={() => {
                 setShowMarkPaidModal(false);
@@ -1041,6 +1314,62 @@ export default function PaymentsScreen() {
               <TouchableOpacity
                 style={[styles.modalButton, styles.rejectButton]}
                 onPress={submitCustomerReject}
+              >
+                <Text style={[styles.saveButtonText, { color: "#FFFFFF" }]}>Từ Chối</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Modal Kế toán từ chối (Accountant Reject Modal) */}
+      <Modal
+        visible={showRejectModal}
+        animationType="slide"
+        transparent={true}
+        presentationStyle="overFullScreen"
+        onRequestClose={() => {
+          setShowRejectModal(false);
+          setRejectionReason("");
+        }}
+      >
+        <SafeAreaView style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, tabBarHeight) + 16 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Từ Chối Thanh Toán</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowRejectModal(false);
+                  setRejectionReason("");
+                }}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              Vui lòng nhập lý do từ chối:
+            </Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={rejectionReason}
+              onChangeText={setRejectionReason}
+              placeholder="Nhập lý do từ chối..."
+              multiline
+              numberOfLines={4}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowRejectModal(false);
+                  setRejectionReason("");
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.rejectButton]}
+                onPress={submitRejectPayment}
               >
                 <Text style={[styles.saveButtonText, { color: "#FFFFFF" }]}>Từ Chối</Text>
               </TouchableOpacity>
@@ -1225,6 +1554,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: "#F9FAFB",
+    paddingTop: 40,
   },
   modalHeader: {
     flexDirection: "row",
@@ -1239,6 +1569,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     color: "#1F2937",
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: "#6B7280",
+    marginBottom: 8,
   },
   modalContent: {
     backgroundColor: "#FFFFFF",
@@ -1409,11 +1744,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1F2937",
   },
-  modalSubtitle: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginBottom: 16,
-  },
+
   permissionDeniedContainer: {
     flex: 1,
     justifyContent: "center",
@@ -1440,5 +1771,195 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20,
+  },
+  detailModalContainer: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+  detailModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  detailModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  closeButton: {
+    padding: 4,
+  },
+  detailScrollView: {
+    flex: 1,
+  },
+  statusCard: {
+    backgroundColor: "#FFFFFF",
+    padding: 20,
+    marginBottom: 12,
+  },
+  statusHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  statusInfo: {
+    flex: 1,
+  },
+  statusLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 8,
+  },
+  detailStatusBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    alignSelf: "flex-start",
+  },
+  detailStatusText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    padding: 20,
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 16,
+  },
+  infoRow: {
+    marginBottom: 16,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  infoValueMultiline: {
+    fontSize: 15,
+    color: "#1F2937",
+    lineHeight: 22,
+  },
+  amountText: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#3B82F6",
+  },
+  iconLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 16,
+  },
+  timelineItem: {
+    flexDirection: "row",
+    marginBottom: 20,
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#3B82F6",
+    marginTop: 4,
+    marginRight: 12,
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  timelineTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  timelineDate: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 2,
+  },
+  timelineUser: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    fontStyle: "italic",
+  },
+  attachmentsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  attachmentCard: {
+    width: "48%",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  attachmentImage: {
+    width: "100%",
+    height: 120,
+    backgroundColor: "#E5E7EB",
+  },
+  attachmentPlaceholder: {
+    width: "100%",
+    height: 120,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  attachmentName: {
+    padding: 8,
+    fontSize: 12,
+    color: "#1F2937",
+  },
+  detailActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#3B82F6",
+    padding: 16,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  detailActionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  actionButtonsRow: {
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
   },
 });

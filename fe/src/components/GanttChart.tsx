@@ -16,6 +16,7 @@ interface GanttChartProps {
   onTaskPress?: (task: ProjectTask) => void;
   projectName?: string;
   projectStartDate?: string;
+  readonly?: boolean;
 }
 
 type ViewMode = "day" | "week" | "month";
@@ -33,6 +34,7 @@ export default function GanttChart({
   onTaskPress,
   projectName,
   projectStartDate,
+  readonly = false,
 }: GanttChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -556,12 +558,14 @@ export default function GanttChart({
                             </Text>
                           )}
                         </View>
-                        <TouchableOpacity
-                          onPress={() => onTaskPress?.(parentTask)}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        >
-                          <Ionicons name="create-outline" size={18} color="#3B82F6" />
-                        </TouchableOpacity>
+                        {!readonly && (
+                          <TouchableOpacity
+                            onPress={() => onTaskPress?.(parentTask)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                          </TouchableOpacity>
+                        )}
                       </TouchableOpacity>
                       <View style={styles.tasksRow}>
                         {/* Parent task bar */}

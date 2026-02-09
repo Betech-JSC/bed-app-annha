@@ -41,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\AcceptanceStage::observe(\App\Observers\AcceptanceStageObserver::class);
         \App\Models\ChangeRequest::observe(\App\Observers\ChangeRequestObserver::class);
         \App\Models\ProjectPersonnel::observe(\App\Observers\ProjectPersonnelObserver::class);
+        \App\Models\AdditionalCost::observe(\App\Observers\AdditionalCostObserver::class);
 
         $this->bootRoute();
     }

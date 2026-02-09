@@ -16,7 +16,9 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { projectApi, CreateProjectData } from "@/api/projectApi";
 import { optionsApi, Option } from "@/api/optionsApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput } from "@/components";
+import { ScreenHeader, DatePickerInput, PermissionDenied } from "@/components";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Permissions } from "@/constants/Permissions";
 
 interface User {
   id: number;
@@ -35,6 +37,9 @@ export default function CreateProjectScreen() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [projectStatuses, setProjectStatuses] = useState<Option[]>([]);
   const [loadingStatuses, setLoadingStatuses] = useState(false);
+
+  const { hasPermission, loading: loadingPermissions } = usePermissions();
+  const canCreate = hasPermission(Permissions.PROJECT_CREATE);
 
   const [formData, setFormData] = useState<CreateProjectData>({
     name: "",
@@ -191,6 +196,26 @@ export default function CreateProjectScreen() {
       setLoading(false);
     }
   };
+
+  if (loading || loadingPermissions) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Tạo Dự Án Mới" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      </View>
+    );
+  }
+
+  if (!canCreate) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Tạo Dự Án Mới" showBackButton />
+        <PermissionDenied message="Bạn không có quyền tạo dự án mới." />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -403,91 +428,84 @@ export default function CreateProjectScreen() {
       <Modal
         visible={showCustomerModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowCustomerModal(false);
           setCustomerSearch("");
         }}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Chọn Khách Hàng</Text>
-            <TouchableOpacity
-              onPress={() => {
-                setShowCustomerModal(false);
-                setCustomerSearch("");
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="close" size={24} color="#1F2937" />
+        <ScreenHeader
+          title="Chọn Khách Hàng"
+          showBackButton={true}
+          onBackPress={() => {
+            setShowCustomerModal(false);
+            setCustomerSearch("");
+          }}
+        />
+
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#6B7280" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm khách hàng..."
+            value={customerSearch}
+            onChangeText={setCustomerSearch}
+            placeholderTextColor="#9CA3AF"
+            autoFocus={true}
+          />
+          {customerSearch.length > 0 && (
+            <TouchableOpacity onPress={() => setCustomerSearch("")}>
+              <Ionicons name="close-circle" size={20} color="#6B7280" />
             </TouchableOpacity>
-          </View>
-
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color="#6B7280" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Tìm kiếm khách hàng..."
-              value={customerSearch}
-              onChangeText={setCustomerSearch}
-              placeholderTextColor="#9CA3AF"
-            />
-            {customerSearch.length > 0 && (
-              <TouchableOpacity onPress={() => setCustomerSearch("")}>
-                <Ionicons name="close-circle" size={20} color="#6B7280" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {loadingCustomers ? (
-            <View style={styles.modalLoadingContainer}>
-              <ActivityIndicator size="large" color="#3B82F6" />
-            </View>
-          ) : (
-            <FlatList
-              data={filteredCustomers}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.userItem,
-                    selectedCustomer?.id === item.id && styles.userItemSelected,
-                  ]}
-                  onPress={() => handleSelectCustomer(item)}
-                >
-                  <View style={styles.userItemContent}>
-                    <View style={styles.userAvatar}>
-                      <Ionicons name="person" size={24} color="#3B82F6" />
-                    </View>
-                    <View style={styles.userInfo}>
-                      <Text style={styles.userName}>{item.name}</Text>
-                      <Text style={styles.userEmail}>{item.email}</Text>
-                      {item.phone && (
-                        <Text style={styles.userPhone}>{item.phone}</Text>
-                      )}
-                    </View>
-                    {selectedCustomer?.id === item.id && (
-                      <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={styles.modalEmptyContainer}>
-                  <Ionicons name="people-outline" size={48} color="#9CA3AF" />
-                  <Text style={styles.modalEmptyText}>
-                    {customerSearch
-                      ? "Không tìm thấy khách hàng"
-                      : "Không có khách hàng nào"}
-                  </Text>
-                </View>
-              }
-            />
           )}
         </View>
+
+        {loadingCustomers ? (
+          <View style={styles.modalLoadingContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredCustomers}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.userItem,
+                  selectedCustomer?.id === item.id && styles.userItemSelected,
+                ]}
+                onPress={() => handleSelectCustomer(item)}
+              >
+                <View style={styles.userItemContent}>
+                  <View style={styles.userAvatar}>
+                    <Ionicons name="person" size={24} color="#3B82F6" />
+                  </View>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{item.name}</Text>
+                    <Text style={styles.userEmail}>{item.email}</Text>
+                    {item.phone && (
+                      <Text style={styles.userPhone}>{item.phone}</Text>
+                    )}
+                  </View>
+                  {selectedCustomer?.id === item.id && (
+                    <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                  )}
+                </View>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <View style={styles.modalEmptyContainer}>
+                <Ionicons name="people-outline" size={48} color="#9CA3AF" />
+                <Text style={styles.modalEmptyText}>
+                  {customerSearch
+                    ? "Không tìm thấy khách hàng"
+                    : "Không có khách hàng nào"}
+                </Text>
+              </View>
+            }
+          />
+        )}
       </Modal>
-
-
     </View>
   );
 }
@@ -496,6 +514,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F9FAFB",
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   content: {
     flex: 1,

@@ -15,6 +15,8 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { documentApi, ProjectDocument } from "@/api/documentApi";
 import { UniversalFileUploader, ScreenHeader, PermissionDenied } from "@/components";
+import { PermissionGuard } from "@/components/PermissionGuard";
+import { Permissions } from "@/constants/Permissions";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -89,6 +91,37 @@ export default function DocumentsScreen() {
     setShowDetailModal(true);
   };
 
+  const handleDeleteDocument = async () => {
+    if (!selectedDocument) return;
+
+    Alert.alert(
+      "Xác nhận xóa",
+      "Bạn có chắc chắn muốn xóa tài liệu này không?",
+      [
+        {
+          text: "Hủy",
+          style: "cancel",
+        },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await documentApi.deleteDocument(id!, selectedDocument.id);
+              setShowDetailModal(false);
+              setSelectedDocument(null);
+              loadDocuments();
+              Alert.alert("Thành công", "Đã xóa tài liệu");
+            } catch (error: any) {
+              console.error("Error deleting document:", error);
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa tài liệu");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + " KB";
@@ -150,14 +183,16 @@ export default function DocumentsScreen() {
     <View style={styles.container}>
       <ScreenHeader title="Hồ Sơ & Tài Liệu" showBackButton />
 
-      <View style={styles.uploadSection}>
-        <UniversalFileUploader
-          onUploadComplete={handleUploadComplete}
-          multiple={true}
-          accept="all"
-          maxFiles={10}
-        />
-      </View>
+      <PermissionGuard permission={Permissions.PROJECT_DOCUMENT_UPLOAD} projectId={id}>
+        <View style={styles.uploadSection}>
+          <UniversalFileUploader
+            onUploadComplete={handleUploadComplete}
+            multiple={true}
+            accept="all"
+            maxFiles={10}
+          />
+        </View>
+      </PermissionGuard>
 
       <FlatList
         data={documents}
@@ -292,47 +327,65 @@ export default function DocumentsScreen() {
                   </View>
                   <View style={styles.detailSection}>
                     <Text style={styles.detailLabel}>Mô tả</Text>
-                    <TextInput
-                      style={[styles.descriptionInput, styles.detailDescription]}
-                      placeholder="Nhập mô tả tài liệu..."
-                      placeholderTextColor="#9CA3AF"
-                      value={editingDescription}
-                      onChangeText={setEditingDescription}
-                      multiline
-                      numberOfLines={4}
-                    />
+                    <PermissionGuard
+                      permission={Permissions.PROJECT_DOCUMENT_UPLOAD}
+                      projectId={id}
+                      fallback={
+                        <Text style={styles.detailValue}>{editingDescription || "Không có mô tả"}</Text>
+                      }
+                    >
+                      <TextInput
+                        style={[styles.descriptionInput, styles.detailDescription]}
+                        placeholder="Nhập mô tả tài liệu..."
+                        placeholderTextColor="#9CA3AF"
+                        value={editingDescription}
+                        onChangeText={setEditingDescription}
+                        multiline
+                        numberOfLines={4}
+                      />
+                    </PermissionGuard>
                   </View>
                 </>
               )}
             </ScrollView>
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowDetailModal(false);
-                  setSelectedDocument(null);
-                }}
+              <PermissionGuard
+                permission={Permissions.PROJECT_DOCUMENT_DELETE}
+                projectId={id}
+                style={{ flex: 1 }}
               >
-                <Text style={styles.cancelButtonText}>Đóng</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={async () => {
-                  if (selectedDocument) {
-                    try {
-                      await documentApi.updateDocument(id!, selectedDocument.id, editingDescription || undefined);
-                      Alert.alert("Thành công", "Đã cập nhật mô tả");
-                      setShowDetailModal(false);
-                      setSelectedDocument(null);
-                      loadDocuments();
-                    } catch (error: any) {
-                      Alert.alert("Lỗi", error.response?.data?.message || "Không thể cập nhật mô tả");
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.deleteButton]}
+                  onPress={handleDeleteDocument}
+                >
+                  <Text style={styles.deleteButtonText}>Xóa</Text>
+                </TouchableOpacity>
+              </PermissionGuard>
+
+              <PermissionGuard
+                permission={Permissions.PROJECT_DOCUMENT_UPLOAD}
+                projectId={id}
+                style={{ flex: 1 }}
+              >
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton]}
+                  onPress={async () => {
+                    if (selectedDocument) {
+                      try {
+                        await documentApi.updateDocument(id!, selectedDocument.id, editingDescription || undefined);
+                        Alert.alert("Thành công", "Đã cập nhật mô tả");
+                        setShowDetailModal(false);
+                        setSelectedDocument(null);
+                        loadDocuments();
+                      } catch (error: any) {
+                        Alert.alert("Lỗi", error.response?.data?.message || "Không thể cập nhật mô tả");
+                      }
                     }
-                  }
-                }}
-              >
-                <Text style={styles.saveButtonText}>Lưu</Text>
-              </TouchableOpacity>
+                  }}
+                >
+                  <Text style={styles.saveButtonText}>Lưu</Text>
+                </TouchableOpacity>
+              </PermissionGuard>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -527,5 +580,13 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: 16,
     color: "#1F2937",
+  },
+  deleteButton: {
+    backgroundColor: "#FEE2E2",
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#EF4444",
   },
 });

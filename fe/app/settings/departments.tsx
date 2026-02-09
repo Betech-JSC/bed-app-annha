@@ -246,7 +246,7 @@ export default function DepartmentsScreen() {
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowCreateModal(false)}
       >
         <KeyboardAvoidingView

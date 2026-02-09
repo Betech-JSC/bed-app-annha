@@ -289,7 +289,7 @@ export default function InvoicesScreen() {
                 <Modal
                     visible={showCreateModal}
                     animationType="slide"
-                    presentationStyle="pageSheet"
+                    presentationStyle="fullScreen"
                     onRequestClose={() => setShowCreateModal(false)}
                 >
                     <KeyboardAvoidingView
@@ -425,41 +425,91 @@ export default function InvoicesScreen() {
             <Modal
                 visible={showReportModal}
                 animationType="slide"
-                transparent={true}
+                presentationStyle="fullScreen"
                 onRequestClose={() => setShowReportModal(false)}
             >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Thống kê chi phí</Text>
-                            <TouchableOpacity onPress={() => setShowReportModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
+                <View style={styles.reportModalContainer}>
+                    <ScreenHeader
+                        title="Thống Kê Chi Phí"
+                        showBackButton={true}
+                        onBackPress={() => setShowReportModal(false)}
+                    />
 
-                        {loadingReport ? (
-                            <ActivityIndicator size="large" color="#3B82F6" style={{ marginVertical: 20 }} />
-                        ) : reportData.length > 0 ? (
-                            <ScrollView style={{ maxHeight: 400 }}>
-                                <View style={styles.section}>
-                                    {reportData.map((item) => (
-                                        <View key={item.cost_group_id} style={styles.infoRow}>
-                                            <Text style={styles.infoLabel}>{item.cost_group?.name || "Khác"}</Text>
-                                            <Text style={styles.infoValue}>{formatCurrency(Number(item.total_amount))}</Text>
-                                        </View>
-                                    ))}
-                                    <View style={[styles.infoRow, styles.summaryTotal]}>
-                                        <Text style={styles.summaryTotalLabel}>Tổng cộng</Text>
-                                        <Text style={styles.summaryTotalValue}>
+                    {loadingReport ? (
+                        <View style={styles.reportLoadingContainer}>
+                            <ActivityIndicator size="large" color="#3B82F6" />
+                            <Text style={styles.loadingText}>Đang tổng hợp dữ liệu...</Text>
+                        </View>
+                    ) : reportData.length > 0 ? (
+                        <ScrollView
+                            style={styles.reportScrollView}
+                            contentContainerStyle={{ paddingBottom: tabBarHeight + 32 }}
+                        >
+                            {/* Summary Card */}
+                            <View style={styles.reportSummaryCard}>
+                                <View style={styles.reportSummaryHeader}>
+                                    <View style={styles.reportSummaryIcon}>
+                                        <Ionicons name="calculator" size={24} color="#3B82F6" />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.reportSummaryLabel}>Tổng chi phí hóa đơn</Text>
+                                        <Text style={styles.reportSummaryValue}>
                                             {formatCurrency(reportData.reduce((sum, item) => sum + Number(item.total_amount), 0))}
                                         </Text>
                                     </View>
                                 </View>
-                            </ScrollView>
-                        ) : (
-                            <Text style={styles.emptyText}>Chưa có dữ liệu thống kê</Text>
-                        )}
-                    </View>
+                                <Text style={styles.reportSummarySubtext}>
+                                    Dựa trên {reportData.reduce((sum, item) => sum + Number(item.invoice_count || 0), 0)} hóa đơn đã ghi nhận
+                                </Text>
+                            </View>
+
+                            <Text style={styles.reportSectionTitle}>Chi phí theo danh mục</Text>
+
+                            <View style={styles.reportList}>
+                                {(() => {
+                                    const total = reportData.reduce((sum, item) => sum + Number(item.total_amount), 0);
+                                    return reportData.map((item, index) => {
+                                        const amount = Number(item.total_amount);
+                                        const percentage = total > 0 ? (amount / total) * 100 : 0;
+                                        // Generate a color based on index for variety
+                                        const colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
+                                        const color = colors[index % colors.length];
+
+                                        return (
+                                            <View key={item.cost_group_id || index} style={styles.reportItem}>
+                                                <View style={styles.reportItemHeader}>
+                                                    <View style={styles.reportItemLabelGroup}>
+                                                        <View style={[styles.reportColorDot, { backgroundColor: color }]} />
+                                                        <Text style={styles.reportItemLabel} numberOfLines={1}>
+                                                            {item.cost_group?.name || "Chưa phân loại"}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={styles.reportItemValue}>{formatCurrency(amount)}</Text>
+                                                </View>
+                                                <View style={styles.progressBarBg}>
+                                                    <View
+                                                        style={[
+                                                            styles.progressBarFill,
+                                                            { width: `${percentage}%`, backgroundColor: color }
+                                                        ]}
+                                                    />
+                                                </View>
+                                                <View style={styles.reportItemFooter}>
+                                                    <Text style={styles.reportItemPercentage}>{percentage.toFixed(1)}%</Text>
+                                                    <Text style={styles.reportItemCount}>{item.invoice_count || 0} hóa đơn</Text>
+                                                </View>
+                                            </View>
+                                        );
+                                    });
+                                })()}
+                            </View>
+                        </ScrollView>
+                    ) : (
+                        <View style={styles.reportEmptyContainer}>
+                            <Ionicons name="bar-chart-outline" size={64} color="#D1D5DB" />
+                            <Text style={styles.reportEmptyText}>Chưa có dữ liệu thống kê chi phí cho dự án này</Text>
+                        </View>
+                    )}
                 </View>
             </Modal>
         </View>
@@ -563,6 +613,7 @@ const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
         backgroundColor: "#F9FAFB",
+        paddingTop: 40,
     },
     modalContent: {
         flex: 1,
@@ -617,43 +668,151 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         padding: 20,
     },
-    section: {
-        marginBottom: 16,
+    reportModalContainer: {
+        flex: 1,
+        backgroundColor: "#F9FAFB",
     },
-    infoRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: "#F3F4F6",
+    reportLoadingContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        gap: 12,
     },
-    infoLabel: {
+    loadingText: {
         fontSize: 14,
         color: "#6B7280",
+    },
+    reportScrollView: {
         flex: 1,
     },
-    infoValue: {
+    reportSummaryCard: {
+        backgroundColor: "#FFFFFF",
+        margin: 16,
+        padding: 20,
+        borderRadius: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    reportSummaryHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 16,
+    },
+    reportSummaryIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: "#EFF6FF",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    reportSummaryLabel: {
         fontSize: 14,
-        fontWeight: "600",
+        color: "#6B7280",
+        marginBottom: 4,
+    },
+    reportSummaryValue: {
+        fontSize: 22,
+        fontWeight: "800",
         color: "#1F2937",
-        flex: 1,
-        textAlign: "right",
     },
-    summaryTotal: {
-        borderTopWidth: 2,
-        borderTopColor: "#E5E7EB",
-        marginTop: 8,
-        paddingTop: 16,
+    reportSummarySubtext: {
+        fontSize: 12,
+        color: "#9CA3AF",
+        marginTop: 16,
+        fontStyle: "italic",
     },
-    summaryTotalLabel: {
+    reportSectionTitle: {
         fontSize: 16,
         fontWeight: "700",
         color: "#1F2937",
+        marginHorizontal: 16,
+        marginBottom: 12,
+        marginTop: 8,
     },
-    summaryTotalValue: {
-        fontSize: 18,
+    reportList: {
+        backgroundColor: "#FFFFFF",
+        marginHorizontal: 16,
+        borderRadius: 16,
+        padding: 4,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    reportItem: {
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F3F4F6",
+    },
+    reportItemHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12,
+    },
+    reportItemLabelGroup: {
+        flexDirection: "row",
+        alignItems: "center",
+        flex: 1,
+        marginRight: 12,
+    },
+    reportColorDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        marginRight: 8,
+    },
+    reportItemLabel: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: "#374151",
+    },
+    reportItemValue: {
+        fontSize: 15,
         fontWeight: "700",
-        color: "#3B82F6",
+        color: "#1F2937",
+    },
+    reportItemFooter: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        marginTop: 8,
+    },
+    reportItemPercentage: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#6B7280",
+    },
+    reportItemCount: {
+        fontSize: 12,
+        color: "#9CA3AF",
+    },
+    progressBarBg: {
+        height: 8,
+        backgroundColor: "#F3F4F6",
+        borderRadius: 4,
+        overflow: "hidden",
+    },
+    progressBarFill: {
+        height: "100%",
+        borderRadius: 4,
+    },
+    reportEmptyContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 32,
+    },
+    reportEmptyText: {
+        fontSize: 16,
+        color: "#6B7280",
+        textAlign: "center",
+        marginTop: 16,
+        lineHeight: 24,
     },
 
     dateInput: {

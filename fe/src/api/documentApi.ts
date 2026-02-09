@@ -37,4 +37,10 @@ export const documentApi = {
     });
     return response.data;
   },
+
+  // Delete document from project
+  deleteDocument: async (projectId: string | number, documentId: number) => {
+    const response = await api.delete(`/projects/${projectId}/documents/${documentId}`);
+    return response.data;
+  },
 };

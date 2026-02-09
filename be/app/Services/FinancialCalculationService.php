@@ -8,14 +8,6 @@ use Illuminate\Support\Facades\Log;
 
 class FinancialCalculationService
 {
-    /**
-     * Tính doanh thu của dự án
-     * 
-     * @param Project $project
-     * @param Carbon|null $startDate
-     * @param Carbon|null $endDate
-     * @return array
-     */
     public function calculateRevenue(Project $project, ?Carbon $startDate = null, ?Carbon $endDate = null): array
     {
         $contract = $project->contract;
@@ -23,8 +15,19 @@ class FinancialCalculationService
             ? $contract->contract_value
             : 0;
 
-        // Doanh thu từ thanh toán đã xác nhận
-        $paidPaymentsQuery = $project->payments()->where('status', 'paid');
+        // Doanh thu phát sinh (từ additional_costs table)
+        // Đây là phần khách hàng trả thêm
+        $additionalRevenueQuery = $project->additionalCosts()
+            ->whereIn('status', ['approved', 'confirmed', 'customer_paid']);
+        
+        if ($startDate && $endDate) {
+            $additionalRevenueQuery->whereBetween('created_at', [$startDate, $endDate]);
+        }
+        $additionalRevenue = $additionalRevenueQuery->sum('amount');
+
+        // Doanh thu từ thanh toán đã xác nhận (đã thực thu)
+        $paidPaymentsQuery = $project->payments()
+            ->whereIn('status', ['paid', 'confirmed', 'customer_paid']);
         
         if ($startDate && $endDate) {
             $paidPaymentsQuery->whereBetween('paid_date', [$startDate, $endDate]);
@@ -32,11 +35,12 @@ class FinancialCalculationService
         
         $paidPayments = $paidPaymentsQuery->sum('amount');
 
-        // Tổng doanh thu (theo contract value hoặc paid payments)
-        $totalRevenue = $contractValue;
+        // Tổng doanh thu = Giá trị hợp đồng + Phát sinh
+        $totalRevenue = $contractValue + $additionalRevenue;
 
         return [
             'contract_value' => (float) $contractValue,
+            'additional_costs' => (float) $additionalRevenue,
             'paid_payments' => (float) $paidPayments,
             'total_revenue' => (float) $totalRevenue,
         ];
@@ -58,72 +62,32 @@ class FinancialCalculationService
             'end_date' => $endDate?->toDateString(),
         ]);
 
-        $contractValue = $project->contract?->contract_value ?? 0;
-
-        // Chi phí phát sinh
-        $additionalCostsQuery = $project->additionalCosts()->where('status', 'approved');
-        if ($startDate && $endDate) {
-            $additionalCostsQuery->whereBetween('created_at', [$startDate, $endDate]);
-        }
-        $additionalCosts = $additionalCostsQuery->sum('amount');
-
-        // Chi phí nhà thầu phụ - Ưu tiên từ Cost records (nếu đã tạo Cost)
-        $subcontractorCostsFromCostsQuery = $project->costs()
+        // Chi phí nhà thầu phụ - Ưu tiên từ Cost records
+        $subcontractorCostsQuery = $project->costs()
             ->whereNotNull('subcontractor_id')
             ->where('status', 'approved');
         if ($startDate && $endDate) {
-            $subcontractorCostsFromCostsQuery->whereBetween('cost_date', [$startDate, $endDate]);
+            $subcontractorCostsQuery->whereBetween('cost_date', [$startDate, $endDate]);
         }
-        $subcontractorCostsFromCosts = $subcontractorCostsFromCostsQuery->sum('amount');
+        $subcontractorCostsFromCosts = $subcontractorCostsQuery->sum('amount');
 
-        // Nếu chưa có Cost record, tính từ total_quote (backward compatible)
+        // Nếu chưa có Cost record, tính từ total_quote (fallback)
         $subcontractorCostsFromQuote = $project->subcontractors()->sum('total_quote');
         
-        // Ưu tiên Cost records, nếu không có thì dùng quote
         $subcontractorCosts = $subcontractorCostsFromCosts > 0 
             ? $subcontractorCostsFromCosts 
             : $subcontractorCostsFromQuote;
 
-        // Chi phí nhân công từ Payroll (removed - HR module deleted)
-        // Only use costs from costs table with payroll_id
+        // Chi phí lương/payroll
         $payrollCostsQuery = $project->costs()
             ->whereNotNull('payroll_id')
             ->where('status', 'approved');
         if ($startDate && $endDate) {
-            $payrollCostsQuery->whereBetween('created_at', [$startDate, $endDate]);
+            $payrollCostsQuery->whereBetween('cost_date', [$startDate, $endDate]);
         }
         $payrollCosts = $payrollCostsQuery->sum('amount');
 
-
-
-        // Chi phí từ Payroll đã tạo Cost record (tránh double counting)
-        $payrollCostsFromCostsQuery = $project->costs()
-            ->whereNotNull('payroll_id')
-            ->where('status', 'approved');
-        if ($startDate && $endDate) {
-            $payrollCostsFromCostsQuery->whereBetween('cost_date', [$startDate, $endDate]);
-        }
-        $payrollCostsFromCosts = $payrollCostsFromCostsQuery->sum('amount');
-
-        // Validation: Nếu Payroll đã tạo Cost, thì chỉ tính Cost, không tính Payroll nữa
-        $actualPayrollCosts = $payrollCostsFromCosts > 0 
-            ? $payrollCostsFromCosts 
-            : $payrollCosts;
-
-        // Log để track double counting
-        if ($payrollCostsFromCosts > 0 && $payrollCosts > 0) {
-            Log::warning("Potential double counting detected for payroll costs", [
-                'project_id' => $project->id,
-                'payroll_costs' => $payrollCosts,
-                'payroll_costs_from_costs' => $payrollCostsFromCosts,
-                'using' => 'payroll_costs_from_costs',
-            ]);
-        }
-
-        // Bonuses removed - HR module deleted
-        $bonusCosts = 0;
-
-        // Chi phí khác từ Cost (không phải từ Payroll, Subcontractor hoặc các module chuyên biệt khác)
+        // Chi phí khác từ Cost (Vật liệu, Thiết bị, Vận chuyển, v.v.)
         $otherCostsQuery = $project->costs()
             ->whereNull('payroll_id')
             ->whereNull('subcontractor_id')
@@ -133,23 +97,15 @@ class FinancialCalculationService
         }
         $otherCosts = $otherCostsQuery->sum('amount');
 
-        // Tính tổng chi phí (không bao gồm contract_value vì đó là doanh thu)
-        $totalCosts = $additionalCosts 
-            + $subcontractorCosts 
-            + $actualPayrollCosts 
-            + $bonusCosts
-            + $otherCosts;
+        // Tổng chi phí công trình (Subcontractor + Other costs)
+        // Lưu ý: Payroll được tính riêng (là chi phí công ty)
+        $totalCosts = $subcontractorCosts + $otherCosts;
 
         $result = [
-            'contract_value' => $contractValue,
-            'additional_costs' => $additionalCosts,
-            'subcontractor_costs' => $subcontractorCosts,
-            'payroll_costs' => $actualPayrollCosts,
-
-            'bonus_costs' => $bonusCosts,
-            'other_costs' => $otherCosts,
-            'total' => $contractValue + $totalCosts, // Tổng bao gồm contract_value
-            'total_costs' => $totalCosts, // Tổng chi phí không bao gồm contract_value
+            'subcontractor_costs' => (float) $subcontractorCosts,
+            'payroll_costs' => (float) $payrollCosts,
+            'other_costs' => (float) $otherCosts,
+            'total_costs' => (float) $totalCosts,
         ];
 
         Log::info("Total costs calculated for project {$project->id}", $result);
@@ -167,43 +123,30 @@ class FinancialCalculationService
      */
     public function calculateProfit(Project $project, ?Carbon $startDate = null, ?Carbon $endDate = null): array
     {
-        $revenue = $this->calculateRevenue($project, $startDate, $endDate);
-        $costs = $this->calculateTotalCosts($project, $startDate, $endDate);
+        $revenueData = $this->calculateRevenue($project, $startDate, $endDate);
+        $costsData = $this->calculateTotalCosts($project, $startDate, $endDate);
         
-        $totalPaidQuery = $project->payments()->where('status', 'paid');
-        if ($startDate && $endDate) {
-            $totalPaidQuery->whereBetween('paid_date', [$startDate, $endDate]);
-        }
-        $totalPaid = $totalPaidQuery->sum('amount');
+        $totalRevenue = $revenueData['total_revenue'];
+        $totalCosts = $costsData['total_costs'];
 
-        // Tính tổng chi phí (không bao gồm contract_value vì đó là doanh thu)
-        $totalCosts = $costs['additional_costs'] 
-            + $costs['subcontractor_costs']
-            + $costs['payroll_costs']
-            + $costs['bonus_costs']
-            + $costs['other_costs'];
-
-        // Lợi nhuận = Doanh thu - Tổng chi phí
-        $profit = $revenue['total_revenue'] - $totalCosts;
-        $profitMargin = $revenue['total_revenue'] > 0
-            ? ($profit / $revenue['total_revenue']) * 100
+        // Lợi nhuận = Doanh thu - Chi phí
+        $profit = $totalRevenue - $totalCosts;
+        $profitMargin = $totalRevenue > 0
+            ? ($profit / $totalRevenue) * 100
             : 0;
 
         return [
-            'revenue' => $revenue['total_revenue'],
-            'total_costs' => $totalCosts,
+            'revenue' => (float) $totalRevenue,
+            'total_costs' => (float) $totalCosts,
             'cost_breakdown' => [
-                'additional_costs' => $costs['additional_costs'],
-                'subcontractor_costs' => $costs['subcontractor_costs'],
-                'payroll_costs' => $costs['payroll_costs'],
-
-                'bonus_costs' => $costs['bonus_costs'],
-                'other_costs' => $costs['other_costs'],
+                'subcontractor_costs' => $costsData['subcontractor_costs'],
+                'payroll_costs' => $costsData['payroll_costs'],
+                'other_costs' => $costsData['other_costs'],
             ],
-            'profit' => $profit,
+            'profit' => (float) $profit,
             'profit_margin' => round($profitMargin, 2),
-            'total_paid' => $totalPaid,
-            'remaining' => $revenue['total_revenue'] - $totalPaid,
+            'total_paid' => (float) $revenueData['paid_payments'],
+            'remaining' => (float) ($totalRevenue - $revenueData['paid_payments']),
         ];
     }
 

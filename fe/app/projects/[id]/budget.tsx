@@ -793,6 +793,7 @@ const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
         backgroundColor: "#F9FAFB",
+        paddingTop: 40,
     },
     modalContent: {
         flex: 1,

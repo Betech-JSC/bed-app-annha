@@ -116,4 +116,12 @@ export const paymentApi = {
     const response = await api.post(`/projects/${projectId}/payments/${paymentId}/mark-paid-by-customer`, data);
     return response.data;
   },
+
+  // Reject payment (Accountant/Admin reject)
+  rejectPayment: async (projectId: string | number, paymentId: string | number, reason: string) => {
+    const response = await api.post(`/projects/${projectId}/payments/${paymentId}/reject`, {
+      reason: reason,
+    });
+    return response.data;
+  },
 };

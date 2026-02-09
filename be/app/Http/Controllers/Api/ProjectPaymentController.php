@@ -7,16 +7,20 @@ use App\Models\Project;
 use App\Models\ProjectPayment;
 use App\Constants\Permissions;
 use App\Services\AuthorizationService;
+use App\Services\NotificationService;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProjectPaymentController extends Controller
 {
     protected $authService;
+    protected $notificationService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(AuthorizationService $authService, NotificationService $notificationService)
     {
         $this->authService = $authService;
+        $this->notificationService = $notificationService;
     }
     /**
      * Danh sách thanh toán
@@ -202,6 +206,9 @@ class ProjectPaymentController extends Controller
         $payment->markAsPaid($user);
         $payment->update(['paid_date' => $validated['paid_date']]);
 
+        // Thông báo cho khách hàng
+        $this->notificationService->notifyPaymentConfirmed($payment);
+
         return response()->json([
             'success' => true,
             'message' => 'Thanh toán đã được xác nhận.',
@@ -245,7 +252,21 @@ class ProjectPaymentController extends Controller
                 $payment->markPaymentProofUploaded();
 
                 // Gửi thông báo cho khách hàng
-                $this->notifyCustomerForApproval($payment);
+                if ($payment->project->customer_id) {
+                    $this->notificationService->sendToUser(
+                        $payment->project->customer_id,
+                        Notification::TYPE_WORKFLOW,
+                        Notification::CATEGORY_WORKFLOW_APPROVAL,
+                        "Yêu cầu duyệt thanh toán",
+                        "Bạn có một yêu cầu duyệt hình ảnh thanh toán cho đợt #{$payment->payment_number} của dự án '{$payment->project->name}'.",
+                        [
+                            'project_id' => $payment->project->id,
+                            'payment_id' => $payment->id,
+                        ],
+                        Notification::PRIORITY_HIGH,
+                        "/projects/{$payment->project->id}/payments"
+                    );
+                }
             }
 
             DB::commit();
@@ -323,7 +344,20 @@ class ProjectPaymentController extends Controller
             );
 
             // Gửi thông báo cho kế toán
-            $this->notifyAccountantForConfirmation($payment);
+            $this->notificationService->sendToPermissionUsers(
+                Permissions::PAYMENT_CONFIRM,
+                $project->id,
+                Notification::TYPE_WORKFLOW,
+                Notification::CATEGORY_WORKFLOW_APPROVAL,
+                "Khách hàng đã thanh toán",
+                "Khách hàng đã đánh dấu thanh toán và upload chứng từ cho đợt #{$payment->payment_number} của dự án '{$project->name}'.",
+                [
+                    'project_id' => $project->id,
+                    'payment_id' => $payment->id,
+                ],
+                Notification::PRIORITY_HIGH,
+                "/projects/{$project->id}/payments"
+            );
 
             DB::commit();
 
@@ -373,7 +407,20 @@ class ProjectPaymentController extends Controller
         $payment->approveByCustomer($user);
 
         // Gửi thông báo cho kế toán
-        $this->notifyAccountantForConfirmation($payment);
+        $this->notificationService->sendToPermissionUsers(
+            Permissions::PAYMENT_CONFIRM,
+            $project->id,
+            Notification::TYPE_WORKFLOW,
+            Notification::CATEGORY_WORKFLOW_APPROVAL,
+            "Khách hàng đã duyệt thanh toán",
+            "Khách hàng đã duyệt đợt thanh toán #{$payment->payment_number} của dự án '{$project->name}'.",
+            [
+                'project_id' => $project->id,
+                'payment_id' => $payment->id,
+            ],
+            Notification::PRIORITY_MEDIUM,
+            "/projects/{$project->id}/payments"
+        );
 
         return response()->json([
             'success' => true,
@@ -425,29 +472,63 @@ class ProjectPaymentController extends Controller
     }
 
     /**
-     * Gửi thông báo cho khách hàng khi có hình xác nhận cần duyệt
+     * Từ chối thanh toán (Kế toán/Admin)
      */
-    private function notifyCustomerForApproval(ProjectPayment $payment): void
+    public function reject(Request $request, string $projectId, string $id)
     {
-        $project = $payment->project;
-        $customer = $project->customer;
+        $payment = ProjectPayment::where('project_id', $projectId)
+            ->findOrFail($id);
 
-        if (!$customer) {
-            return;
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission với project context
+        if (!$this->authService->can($user, Permissions::PAYMENT_CONFIRM, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền từ chối thanh toán của dự án này.'
+            ], 403);
         }
 
-        // TODO: Implement notification service
-        // Có thể gửi email, push notification, hoặc in-app notification
-        \Log::info("Thông báo cho khách hàng {$customer->id}: Có hình xác nhận thanh toán cần duyệt - Payment #{$payment->payment_number}");
-    }
+        $validated = $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
 
-    /**
-     * Gửi thông báo cho kế toán khi khách hàng đã duyệt
-     */
-    private function notifyAccountantForConfirmation(ProjectPayment $payment): void
-    {
-        // TODO: Implement notification service
-        // Gửi thông báo cho kế toán để xác nhận thanh toán
-        \Log::info("Thông báo cho kế toán: Khách hàng đã duyệt thanh toán - Payment #{$payment->payment_number}");
+        if ($payment->status !== 'customer_paid') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể từ chối thanh toán khi khách hàng đã đánh dấu thanh toán.'
+            ], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $payment->update([
+                'status' => 'pending',
+                'notes' => ($payment->notes ? $payment->notes . "\n\n" : '') . "Kế toán từ chối - Lý do: " . $validated['reason'],
+            ]);
+
+            // Thông báo cho khách hàng
+            $this->notificationService->notifyPaymentRejected($payment, $validated['reason']);
+
+            // Optional: Xóa các attachment là proof nếu muốn bắt khách upload lại
+            // $payment->attachments()->where('type', 'image')->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã từ chối thanh toán.',
+                'data' => $payment->fresh(['confirmer', 'customerApprover', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi từ chối thanh toán.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

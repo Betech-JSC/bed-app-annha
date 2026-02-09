@@ -353,7 +353,7 @@ export default function SystemUsersScreen() {
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowCreateModal(false)}
       >
         <KeyboardAvoidingView
@@ -485,7 +485,7 @@ export default function SystemUsersScreen() {
       <Modal
         visible={showEditModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowEditModal(false)}
       >
         <KeyboardAvoidingView
@@ -582,7 +582,7 @@ export default function SystemUsersScreen() {
       <Modal
         visible={showRolesModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowRolesModal(false)}
       >
         <View style={styles.modalContainer}>

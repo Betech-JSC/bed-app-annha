@@ -6,11 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\AcceptanceStage;
 use App\Models\Project;
 use App\Models\Attachment;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AcceptanceStageController extends Controller
 {
+    protected $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     /**
      * Danh sách giai đoạn nghiệm thu
      */
@@ -94,6 +102,8 @@ class AcceptanceStageController extends Controller
             ], 400);
         }
 
+        $this->notificationService->notifyAcceptanceStageApproved($stage, "Giám sát");
+
         return response()->json([
             'success' => true,
             'message' => 'Đã duyệt thành công.',
@@ -135,6 +145,8 @@ class AcceptanceStageController extends Controller
                 'message' => 'Không thể duyệt giai đoạn này.'
             ], 400);
         }
+
+        $this->notificationService->notifyAcceptanceStageApproved($stage, "Quản lý dự án");
 
         return response()->json([
             'success' => true,
@@ -185,6 +197,8 @@ class AcceptanceStageController extends Controller
                 'message' => 'Không thể duyệt giai đoạn này.'
             ], 400);
         }
+
+        $this->notificationService->notifyAcceptanceStageApproved($stage, "Khách hàng");
 
         return response()->json([
             'success' => true,

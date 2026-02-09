@@ -189,9 +189,8 @@ export default function AdditionalCostsScreen() {
         </View>
       )}
 
-      {/* Khách hàng đánh dấu đã thanh toán */}
       {item.status === "pending" && (
-        <PermissionGuard permission={Permissions.ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER} projectId={id}>
+        <PermissionGuard permission={Permissions.ADDITIONAL_COST_UPDATE} projectId={id}>
           <TouchableOpacity
             style={styles.markPaidButton}
             onPress={(e) => {
@@ -247,8 +246,11 @@ export default function AdditionalCostsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Phát Sinh Ngoài Báo Giá" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
       </View>
     );
   }

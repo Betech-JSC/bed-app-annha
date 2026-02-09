@@ -36,11 +36,11 @@ function PermissionGuard({
       console.log(`[PermissionGuard] Permissions includes "${permission}":`, perms.permissions?.includes(permission));
     }
 
-    // If still loading, show by default to avoid flickering
-    // This allows UI to render while permissions are being fetched
+    // If still loading, return false to prevent flash of unauthorized content
+    // This effectively hides the UI until permissions are loaded
     if (perms.loading) {
-      console.log(`[PermissionGuard] Still loading, showing UI by default`);
-      return true;
+      console.log(`[PermissionGuard] Still loading, hiding UI by default`);
+      return false;
     }
 
     if (permission) {

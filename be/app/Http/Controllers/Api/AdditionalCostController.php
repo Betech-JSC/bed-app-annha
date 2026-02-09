@@ -5,11 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AdditionalCost;
 use App\Models\Project;
+use App\Constants\Permissions;
+use App\Services\NotificationService;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AdditionalCostController extends Controller
 {
+    protected $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     /**
      * Danh sách chi phí phát sinh
      */
@@ -88,6 +98,22 @@ class AdditionalCostController extends Controller
 
             DB::commit();
 
+            // Notify accountants/managers about new additional cost
+            $this->notificationService->sendToPermissionUsers(
+                Permissions::ADDITIONAL_COST_CONFIRM,
+                $project->id,
+                Notification::TYPE_WORKFLOW,
+                Notification::CATEGORY_WORKFLOW_APPROVAL,
+                "Yêu cầu chi phí phát sinh mới",
+                "Có một yêu cầu chi phí phát sinh mới cho dự án '{$project->name}' với số tiền " . number_format($cost->amount) . " VND.",
+                [
+                    'project_id' => $project->id,
+                    'cost_id' => $cost->id,
+                ],
+                Notification::PRIORITY_MEDIUM,
+                "/projects/{$project->id}/costs"
+            );
+
             return response()->json([
                 'success' => true,
                 'message' => 'Chi phí phát sinh đã được đề xuất.',
@@ -158,7 +184,21 @@ class AdditionalCostController extends Controller
                 $validated['actual_amount'] ?? null
             );
 
-            DB::commit();
+            // Notify accountants
+            $this->notificationService->sendToPermissionUsers(
+                Permissions::ADDITIONAL_COST_CONFIRM,
+                $project->id,
+                Notification::TYPE_WORKFLOW,
+                Notification::CATEGORY_WORKFLOW_APPROVAL,
+                "Khách hàng đã thanh toán chi phí phát sinh",
+                "Khách hàng đã đánh dấu thanh toán chi phí phát sinh cho dự án '{$project->name}'.",
+                [
+                    'project_id' => $project->id,
+                    'cost_id' => $cost->id,
+                ],
+                Notification::PRIORITY_HIGH,
+                "/projects/{$project->id}/costs"
+            );
 
             return response()->json([
                 'success' => true,
@@ -201,6 +241,9 @@ class AdditionalCostController extends Controller
         }
 
         $cost->confirm($user);
+
+        // Notify proposer and customer
+        $this->notificationService->notifyCostConfirmed($cost);
 
         return response()->json([
             'success' => true,
@@ -277,6 +320,9 @@ class AdditionalCostController extends Controller
         ]);
 
         $cost->reject($validated['rejected_reason']);
+
+        // Notify proposer and customer
+        $this->notificationService->notifyCostRejected($cost, $validated['rejected_reason']);
 
         return response()->json([
             'success' => true,

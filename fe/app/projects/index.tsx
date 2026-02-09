@@ -18,7 +18,7 @@ import { predictiveAnalyticsApi } from "@/api/predictiveAnalyticsApi";
 import { projectCommentApi } from "@/api/projectCommentApi";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
-import { ScreenHeader } from "@/components";
+import { ScreenHeader, DatePickerInput } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 import { NotificationBadge } from "@/components";
@@ -667,8 +667,11 @@ export default function ProjectsListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Danh Sách Dự Án" />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
       </View>
     );
   }
@@ -920,24 +923,31 @@ export default function ProjectsListScreen() {
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Ngày bắt đầu</Text>
                 <View style={styles.dateInputContainer}>
-                  <View style={styles.dateInput}>
-                    <Text style={styles.dateLabel}>Từ:</Text>
-                    <TextInput
-                      style={styles.dateInputField}
-                      placeholder="YYYY-MM-DD"
-                      value={startDateFrom}
-                      onChangeText={setStartDateFrom}
-                    />
-                  </View>
-                  <View style={styles.dateInput}>
-                    <Text style={styles.dateLabel}>Đến:</Text>
-                    <TextInput
-                      style={styles.dateInputField}
-                      placeholder="YYYY-MM-DD"
-                      value={startDateTo}
-                      onChangeText={setStartDateTo}
-                    />
-                  </View>
+                  <DatePickerInput
+                    label="Từ:"
+                    value={startDateFrom ? new Date(startDateFrom) : undefined}
+                    onChange={(date) => {
+                      if (date) {
+                        setStartDateFrom(date.toISOString().split('T')[0]);
+                      } else {
+                        setStartDateFrom("");
+                      }
+                    }}
+                    placeholder="Chọn ngày"
+                    containerStyle={{ marginBottom: 12 }}
+                  />
+                  <DatePickerInput
+                    label="Đến:"
+                    value={startDateTo ? new Date(startDateTo) : undefined}
+                    onChange={(date) => {
+                      if (date) {
+                        setStartDateTo(date.toISOString().split('T')[0]);
+                      } else {
+                        setStartDateTo("");
+                      }
+                    }}
+                    placeholder="Chọn ngày"
+                  />
                 </View>
               </View>
 
@@ -945,24 +955,31 @@ export default function ProjectsListScreen() {
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Ngày kết thúc</Text>
                 <View style={styles.dateInputContainer}>
-                  <View style={styles.dateInput}>
-                    <Text style={styles.dateLabel}>Từ:</Text>
-                    <TextInput
-                      style={styles.dateInputField}
-                      placeholder="YYYY-MM-DD"
-                      value={endDateFrom}
-                      onChangeText={setEndDateFrom}
-                    />
-                  </View>
-                  <View style={styles.dateInput}>
-                    <Text style={styles.dateLabel}>Đến:</Text>
-                    <TextInput
-                      style={styles.dateInputField}
-                      placeholder="YYYY-MM-DD"
-                      value={endDateTo}
-                      onChangeText={setEndDateTo}
-                    />
-                  </View>
+                  <DatePickerInput
+                    label="Từ:"
+                    value={endDateFrom ? new Date(endDateFrom) : undefined}
+                    onChange={(date) => {
+                      if (date) {
+                        setEndDateFrom(date.toISOString().split('T')[0]);
+                      } else {
+                        setEndDateFrom("");
+                      }
+                    }}
+                    placeholder="Chọn ngày"
+                    containerStyle={{ marginBottom: 12 }}
+                  />
+                  <DatePickerInput
+                    label="Đến:"
+                    value={endDateTo ? new Date(endDateTo) : undefined}
+                    onChange={(date) => {
+                      if (date) {
+                        setEndDateTo(date.toISOString().split('T')[0]);
+                      } else {
+                        setEndDateTo("");
+                      }
+                    }}
+                    placeholder="Chọn ngày"
+                  />
                 </View>
               </View>
 

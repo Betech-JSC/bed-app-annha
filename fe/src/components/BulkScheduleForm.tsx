@@ -13,8 +13,15 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { employeesApi, Employee } from "@/api/employeesApi";
+import { DatePickerInput } from "./";
+
 import { projectApi } from "@/api/projectApi";
+
+interface Employee {
+  id: number;
+  name: string;
+  email: string;
+}
 
 interface BulkScheduleFormProps {
   onSubmit: (data: {
@@ -55,8 +62,6 @@ export default function BulkScheduleForm({
   const [projects, setProjects] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
@@ -68,7 +73,7 @@ export default function BulkScheduleForm({
   const loadUsers = async () => {
     try {
       setLoadingUsers(true);
-      const response = await employeesApi.getEmployees({ per_page: 100 });
+      const response = await projectApi.getAllUsers();
       if (response.success) {
         setUsers(response.data || []);
       }
@@ -198,31 +203,26 @@ export default function BulkScheduleForm({
       </View>
 
       {/* Date Range */}
-      <View style={styles.section}>
-        <Text style={styles.label}>Từ ngày *</Text>
-        <TouchableOpacity
-          style={styles.selectButton}
-          onPress={() => setShowStartDatePicker(true)}
-        >
-          <Text style={styles.selectButtonText}>
-            {formData.start_date.toLocaleDateString("vi-VN")}
-          </Text>
-          <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-        </TouchableOpacity>
-      </View>
+      <DatePickerInput
+        label="Từ ngày *"
+        value={formData.start_date}
+        onChange={(date) => {
+          if (date) setFormData({ ...formData, start_date: date });
+        }}
+        placeholder="Chọn ngày bắt đầu"
+        containerStyle={styles.section}
+      />
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Đến ngày *</Text>
-        <TouchableOpacity
-          style={styles.selectButton}
-          onPress={() => setShowEndDatePicker(true)}
-        >
-          <Text style={styles.selectButtonText}>
-            {formData.end_date.toLocaleDateString("vi-VN")}
-          </Text>
-          <Ionicons name="calendar-outline" size={20} color="#6B7280" />
-        </TouchableOpacity>
-      </View>
+      <DatePickerInput
+        label="Đến ngày *"
+        value={formData.end_date}
+        onChange={(date) => {
+          if (date) setFormData({ ...formData, end_date: date });
+        }}
+        placeholder="Chọn ngày kết thúc"
+        minimumDate={formData.start_date}
+        containerStyle={styles.section}
+      />
 
       {/* Time */}
       <View style={styles.section}>
@@ -450,32 +450,6 @@ export default function BulkScheduleForm({
       </Modal>
 
       {/* Date/Time Pickers */}
-      {showStartDatePicker && (
-        <DateTimePicker
-          value={formData.start_date}
-          mode="date"
-          display="default"
-          onChange={(event, date) => {
-            setShowStartDatePicker(false);
-            if (date) {
-              setFormData({ ...formData, start_date: date });
-            }
-          }}
-        />
-      )}
-      {showEndDatePicker && (
-        <DateTimePicker
-          value={formData.end_date}
-          mode="date"
-          display="default"
-          onChange={(event, date) => {
-            setShowEndDatePicker(false);
-            if (date) {
-              setFormData({ ...formData, end_date: date });
-            }
-          }}
-        />
-      )}
       {showStartTimePicker && (
         <DateTimePicker
           value={formData.start_time}

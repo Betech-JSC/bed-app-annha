@@ -178,6 +178,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/payments/{id}/approve-by-customer', [ProjectPaymentController::class, 'approveByCustomer']);
         Route::post('/{projectId}/payments/{id}/reject-by-customer', [ProjectPaymentController::class, 'rejectByCustomer']);
         Route::post('/{projectId}/payments/{id}/confirm', [ProjectPaymentController::class, 'confirm']);
+        Route::post('/{projectId}/payments/{id}/reject', [ProjectPaymentController::class, 'reject']);
 
         // Additional Costs
         Route::get('/{projectId}/additional-costs', [AdditionalCostController::class, 'index']);
@@ -229,6 +230,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/documents', [ProjectDocumentController::class, 'index']);
         Route::post('/{projectId}/documents', [ProjectDocumentController::class, 'store']);
         Route::put('/{projectId}/documents/{id}', [ProjectDocumentController::class, 'update']);
+        Route::delete('/{projectId}/documents/{id}', [ProjectDocumentController::class, 'destroy']);
 
         // Construction Logs
         Route::get('/{projectId}/logs', [ConstructionLogController::class, 'index']);

@@ -8,6 +8,9 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Modal,
+  Image,
+  Linking,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import {
@@ -15,6 +18,7 @@ import {
   Contract,
   CreateContractData,
 } from "@/api/contractApi";
+import { projectApi, Project } from "@/api/projectApi"; // Import projectApi
 import { attachmentApi, Attachment } from "@/api/attachmentApi";
 import { UniversalFileUploader, ScreenHeader, DatePickerInput, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -29,20 +33,23 @@ export default function ContractScreen() {
   const tabBarHeight = useTabBarHeight();
   const { permissions: projectPermissions, loading: permissionsLoading, refresh: refreshPermissions } = useProjectPermissions(id);
   const [contract, setContract] = useState<Contract | null>(null);
+  const [project, setProject] = useState<Project | null>(null); // State for project
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [signedDate, setSignedDate] = useState(new Date());
   const [formData, setFormData] = useState({
     contract_value: "",
-    signed_date: "",
+    signed_date: new Date().toISOString().split("T")[0],
   });
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     loadContract();
+    loadProject(); // Load project info
   }, [id]);
 
 
@@ -50,8 +57,20 @@ export default function ContractScreen() {
   useFocusEffect(
     React.useCallback(() => {
       loadContract();
+      loadProject();
     }, [id])
   );
+
+  const loadProject = async () => {
+    try {
+      const response = await projectApi.getProject(id!);
+      if (response.success) {
+        setProject(response.data);
+      }
+    } catch (error) {
+      console.error("Error loading project:", error);
+    }
+  };
 
   const loadContract = async () => {
     try {
@@ -77,17 +96,21 @@ export default function ContractScreen() {
         } else {
           // Không có contract - hiển thị form tạo mới (đây là trạng thái bình thường)
           setContract(null);
+          const today = new Date();
+          setSignedDate(today);
           setFormData({
             contract_value: "",
-            signed_date: "",
+            signed_date: today.toISOString().split("T")[0],
           });
         }
       } else {
         // Response không thành công
         setContract(null);
+        const today = new Date();
+        setSignedDate(today);
         setFormData({
           contract_value: "",
-          signed_date: "",
+          signed_date: today.toISOString().split("T")[0],
         });
       }
     } catch (error: any) {
@@ -107,9 +130,11 @@ export default function ContractScreen() {
         if (error.response?.status === 404) {
           // Vẫn xử lý 404 để tương thích với code cũ
           setContract(null);
+          const today = new Date();
+          setSignedDate(today);
           setFormData({
             contract_value: "",
-            signed_date: "",
+            signed_date: today.toISOString().split("T")[0],
           });
         } else {
           Alert.alert(
@@ -258,31 +283,59 @@ export default function ContractScreen() {
     return "document-outline";
   };
 
+  const handleFilePress = async (file: any) => {
+    const fileUrl = file.file_url || file.url || file.location;
+    if (!fileUrl) {
+      Alert.alert("Lỗi", "Không tìm thấy đường dẫn file");
+      return;
+    }
+
+    const isImage = file.type === "image" || (fileUrl && fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+
+    if (isImage) {
+      setPreviewImage(fileUrl);
+    } else {
+      try {
+        const supported = await Linking.canOpenURL(fileUrl);
+        if (supported) {
+          await Linking.openURL(fileUrl);
+        } else {
+          Alert.alert("Thông báo", "Không thể mở file này trên thiết bị của bạn");
+        }
+      } catch (error) {
+        console.error("Error opening URL:", error);
+        Alert.alert("Lỗi", "Không thể mở file");
+      }
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "approved":
-        return "#10B981";
-      case "pending_customer_approval":
-        return "#F59E0B";
-      case "rejected":
-        return "#EF4444";
+      case "planning":
+        return "#6B7280"; // Gray
+      case "in_progress": // Đang thi công
+        return "#3B82F6"; // Blue
+      case "completed":
+        return "#10B981"; // Green
+      case "cancelled":
+        return "#EF4444"; // Red
       default:
-        return "#6B7280";
+        return "#6B7280"; // Default Gray
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case "draft":
-        return "Bản nháp";
-      case "pending_customer_approval":
-        return "Chờ khách hàng duyệt";
-      case "approved":
-        return "Đã duyệt";
-      case "rejected":
-        return "Đã từ chối";
+      case "planning":
+        return "Lập kế hoạch";
+      case "in_progress":
+        return "Đang thi công";
+      case "completed":
+        return "Hoàn thành";
+      case "cancelled":
+        return "Đã hủy";
       default:
-        return status;
+        return "Chưa xác định";
     }
   };
 
@@ -338,22 +391,22 @@ export default function ContractScreen() {
         }
       />
 
-      {contract && (
+      {contract && project && (
         <View style={styles.statusCard}>
           <Text style={styles.statusLabel}>Trạng thái</Text>
           <View
             style={[
               styles.statusBadge,
-              { backgroundColor: getStatusColor(contract.status) + "20" },
+              { backgroundColor: getStatusColor(project.status) + "20" },
             ]}
           >
             <Text
               style={[
                 styles.statusText,
-                { color: getStatusColor(contract.status) },
+                { color: getStatusColor(project.status) },
               ]}
             >
-              {getStatusText(contract.status)}
+              {getStatusText(project.status)}
             </Text>
           </View>
         </View>
@@ -430,7 +483,11 @@ export default function ContractScreen() {
           <View style={styles.attachmentsSection}>
             <Text style={styles.sectionTitle}>File đính kèm</Text>
             {contract.attachments.map((attachment: any, index: number) => (
-              <TouchableOpacity key={attachment.id || index} style={styles.attachmentItem}>
+              <TouchableOpacity
+                key={attachment.id || index}
+                style={styles.attachmentItem}
+                onPress={() => handleFilePress(attachment)}
+              >
                 <Ionicons
                   name={getFileIcon(attachment.type || "document") as any}
                   size={24}
@@ -495,6 +552,36 @@ export default function ContractScreen() {
           </>
         )}
       </View>
+
+      {/* Fullscreen image preview modal */}
+      <Modal
+        visible={previewImage !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
+        <TouchableOpacity
+          style={styles.previewOverlay}
+          activeOpacity={1}
+          onPress={() => setPreviewImage(null)}
+        >
+          <View style={styles.previewContainer}>
+            {previewImage && (
+              <Image
+                source={{ uri: previewImage }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            )}
+            <TouchableOpacity
+              style={styles.closePreviewButton}
+              onPress={() => setPreviewImage(null)}
+            >
+              <Ionicons name="close" size={32} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -711,5 +798,29 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20,
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewContainer: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewImage: {
+    width: "95%",
+    height: "95%",
+  },
+  closePreviewButton: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    padding: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 20,
   },
 });

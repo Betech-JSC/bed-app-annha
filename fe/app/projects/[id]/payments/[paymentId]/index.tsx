@@ -7,6 +7,9 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     Alert,
+    Modal,
+    TextInput,
+    SafeAreaView,
     Image,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -16,16 +19,20 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { Permissions } from "@/constants/Permissions";
 import { Ionicons } from "@expo/vector-icons";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function PaymentDetailScreen() {
     const router = useRouter();
     const { id, paymentId } = useLocalSearchParams<{ id: string; paymentId: string }>();
     const tabBarHeight = useTabBarHeight();
+    const insets = useSafeAreaInsets();
     const [payment, setPayment] = useState<ProjectPayment | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [permissionDenied, setPermissionDenied] = useState(false);
     const [permissionMessage, setPermissionMessage] = useState("");
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [rejectionReason, setRejectionReason] = useState("");
 
     useEffect(() => {
         console.log('[PaymentDetail] Loading payment:', { id, paymentId });
@@ -374,9 +381,8 @@ export default function PaymentDetailScreen() {
                         </View>
                     )}
 
-                    {/* Actions */}
                     {payment.status === "pending" && (
-                        <PermissionGuard permission={Permissions.PAYMENT_MARK_AS_PAID_BY_CUSTOMER} projectId={id}>
+                        <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
                             <TouchableOpacity
                                 style={styles.actionButton}
                                 onPress={() => {
@@ -384,7 +390,7 @@ export default function PaymentDetailScreen() {
                                 }}
                             >
                                 <Ionicons name="card-outline" size={20} color="#FFFFFF" />
-                                <Text style={styles.actionButtonText}>Đánh dấu đã thanh toán</Text>
+                                <Text style={styles.actionButtonText}>Đã Thanh Toán</Text>
                             </TouchableOpacity>
                         </PermissionGuard>
                     )}
@@ -405,7 +411,8 @@ export default function PaymentDetailScreen() {
                                 <TouchableOpacity
                                     style={[styles.actionButton, styles.rejectButton]}
                                     onPress={() => {
-                                        Alert.alert("Thông báo", "Chức năng đang phát triển");
+                                        setRejectionReason("");
+                                        setShowRejectModal(true);
                                     }}
                                 >
                                     <Ionicons name="close-circle" size={20} color="#FFFFFF" />
@@ -415,6 +422,77 @@ export default function PaymentDetailScreen() {
                         </PermissionGuard>
                     )}
                 </ScrollView>
+
+                {/* Reject Modal */}
+                <Modal
+                    visible={showRejectModal}
+                    animationType="slide"
+                    transparent={true}
+                    presentationStyle="overFullScreen"
+                    onRequestClose={() => {
+                        setShowRejectModal(false);
+                        setRejectionReason("");
+                    }}
+                >
+                    <SafeAreaView style={styles.modalOverlay}>
+                        <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, tabBarHeight) + 16 }]}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>Từ Chối Thanh Toán</Text>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setShowRejectModal(false);
+                                        setRejectionReason("");
+                                    }}
+                                >
+                                    <Ionicons name="close" size={24} color="#1F2937" />
+                                </TouchableOpacity>
+                            </View>
+                            <Text style={styles.modalSubtitle}>
+                                Vui lòng nhập lý do từ chối:
+                            </Text>
+                            <TextInput
+                                style={[styles.input, styles.textArea]}
+                                value={rejectionReason}
+                                onChangeText={setRejectionReason}
+                                placeholder="Nhập lý do từ chối..."
+                                multiline
+                                numberOfLines={4}
+                            />
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.cancelButton]}
+                                    onPress={() => {
+                                        setShowRejectModal(false);
+                                        setRejectionReason("");
+                                    }}
+                                >
+                                    <Text style={styles.cancelButtonText}>Hủy</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.modalButton, styles.rejectButton]}
+                                    onPress={async () => {
+                                        if (!rejectionReason.trim()) {
+                                            Alert.alert("Lỗi", "Vui lòng nhập lý do từ chối");
+                                            return;
+                                        }
+                                        try {
+                                            const response = await paymentApi.rejectPayment(id!, paymentId, rejectionReason);
+                                            if (response.success) {
+                                                Alert.alert("Thành công", "Đã từ chối thanh toán");
+                                                setShowRejectModal(false);
+                                                loadPaymentDetail();
+                                            }
+                                        } catch (error: any) {
+                                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể từ chối thanh toán");
+                                        }
+                                    }}
+                                >
+                                    <Text style={[styles.saveButtonText, { color: "#FFFFFF" }]}>Từ Chối</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </SafeAreaView>
+                </Modal>
             </View>
         </PermissionGuard>
     );
@@ -652,5 +730,73 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: "#EF4444",
         shadowColor: "#EF4444",
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    modalContent: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 12,
+        width: "90%",
+        maxWidth: 400,
+        maxHeight: "80%",
+        padding: 16,
+    },
+    modalHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 16,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: "700",
+        color: "#1F2937",
+    },
+    modalSubtitle: {
+        fontSize: 14,
+        color: "#6B7280",
+        marginBottom: 8,
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: "#D1D5DB",
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 14,
+        color: "#1F2937",
+        backgroundColor: "#FFFFFF",
+    },
+    textArea: {
+        height: 100,
+        textAlignVertical: "top",
+    },
+    modalActions: {
+        flexDirection: "row",
+        gap: 12,
+        marginTop: 16,
+    },
+    modalButton: {
+        flex: 1,
+        padding: 12,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    cancelButton: {
+        backgroundColor: "#F3F4F6",
+    },
+    cancelButtonText: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#4B5563",
+    },
+    saveButtonText: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#FFFFFF",
     },
 });

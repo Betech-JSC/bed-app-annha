@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Permissions } from "@/constants/Permissions";
+import { getModuleLabel as getTranslatedModuleLabel, getPermissionDetail } from "@/utils/permissionTranslation";
 
 export default function PermissionsScreen() {
   const router = useRouter();
@@ -91,24 +92,7 @@ export default function PermissionsScreen() {
   };
 
   const getModuleLabel = (module: string) => {
-    const labels: Record<string, string> = {
-      projects: "Quản Lý Dự Án",
-      contracts: "Hợp Đồng",
-      payments: "Thanh Toán",
-      costs: "Chi Phí",
-      additional_costs: "Chi Phí Phát Sinh",
-      revenue: "Doanh Thu",
-      personnel: "Nhân Sự",
-      hr: "Quản Lý Nhân Sự",
-      documents: "Tài Liệu",
-      defects: "Lỗi",
-      acceptance: "Nghiệm Thu",
-      logs: "Nhật Ký",
-      permissions: "Phân Quyền",
-      project: "Quản Lý Dự Án",
-      settings: "Cài Đặt",
-    };
-    return labels[module] || module;
+    return getTranslatedModuleLabel(module);
   };
 
   const handleCreate = async () => {
@@ -317,16 +301,25 @@ export default function PermissionsScreen() {
                       <Text style={styles.moduleCount}>{perms.length}</Text>
                     </View>
                     <View style={styles.permissionsList}>
-                      {perms.map((perm, index) => (
-                        <View key={index} style={styles.permissionItem}>
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={16}
-                            color="#10B981"
-                          />
-                          <Text style={styles.permissionText}>{perm}</Text>
-                        </View>
-                      ))}
+                      {perms.map((perm, index) => {
+                        const detail = getPermissionDetail(perm);
+                        return (
+                          <View key={index} style={styles.permissionItem}>
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={16}
+                              color="#10B981"
+                              style={{ marginTop: 2 }}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.permissionText}>{detail.label}</Text>
+                              {detail.description ? (
+                                <Text style={styles.permissionDescText}>{detail.description}</Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        );
+                      })}
                     </View>
                   </View>
                 ))}
@@ -387,11 +380,14 @@ export default function PermissionsScreen() {
                     <View key={perm.id} style={styles.permissionItemManage}>
                       <View style={styles.permissionInfoManage}>
                         <Text style={styles.permissionNameManage}>
-                          {perm.name}
+                          {getPermissionDetail(perm.name).label}
                         </Text>
-                        {perm.description && (
+                        <Text style={styles.permissionCodeManage}>
+                          Code: {perm.name}
+                        </Text>
+                        {(perm.description || getPermissionDetail(perm.name).description) && (
                           <Text style={styles.permissionDescriptionManage}>
-                            {perm.description}
+                            {perm.description || getPermissionDetail(perm.name).description}
                           </Text>
                         )}
                       </View>
@@ -433,7 +429,7 @@ export default function PermissionsScreen() {
       <Modal
         visible={showCreateModal || editingPermission !== null}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowCreateModal(false);
           setEditingPermission(null);
@@ -668,8 +664,14 @@ const styles = StyleSheet.create({
   },
   permissionText: {
     fontSize: 14,
-    color: "#6B7280",
+    fontWeight: "600",
+    color: "#1F2937",
     flex: 1,
+  },
+  permissionDescText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
   },
   roleCard: {
     backgroundColor: "#FFFFFF",
@@ -731,6 +733,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#1F2937",
+    marginBottom: 2,
+  },
+  permissionCodeManage: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
     marginBottom: 4,
   },
   permissionDescriptionManage: {

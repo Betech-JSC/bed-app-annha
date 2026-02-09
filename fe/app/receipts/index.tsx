@@ -352,7 +352,7 @@ export default function ReceiptsScreen() {
             <Modal
                 visible={showCreateModal}
                 animationType="slide"
-                presentationStyle="pageSheet"
+                presentationStyle="fullScreen"
                 onRequestClose={() => setShowCreateModal(false)}
             >
                 <KeyboardAvoidingView

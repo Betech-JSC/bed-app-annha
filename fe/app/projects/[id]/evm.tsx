@@ -7,18 +7,22 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { evmApi, EvmAnalysis } from "@/api/evmApi";
 import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { format } from "date-fns";
+import { vi } from "date-fns/locale";
 
 export default function ProjectEvmScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const tabBarHeight = useTabBarHeight();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
   const [analysis, setAnalysis] = useState<EvmAnalysis | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
@@ -47,9 +51,25 @@ export default function ProjectEvmScreen() {
     }
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadData();
+    await handleRecalculate();
+    setRefreshing(false);
+  };
+
+  const handleRecalculate = async () => {
+    try {
+      setRecalculating(true);
+      // Trigger recalculation
+      await evmApi.calculateEvm(id!);
+      // Reload analysis data
+      await loadData();
+    } catch (error) {
+      console.error("Error recalculating EVM:", error);
+      Alert.alert("Lỗi", "Không thể tính toán lại EVM");
+    } finally {
+      setRecalculating(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -128,6 +148,25 @@ export default function ProjectEvmScreen() {
                 analysis.status === "at_risk" ? "Có rủi ro" : "Chậm tiến độ"}
             </Text>
           </View>
+          {metric.calculation_date && (
+            <Text style={styles.calculationDate}>
+              Cập nhật lúc: {format(new Date(metric.calculation_date), "HH:mm dd/MM/yyyy", { locale: vi })}
+            </Text>
+          )}
+          <TouchableOpacity
+            style={styles.recalculateButton}
+            onPress={handleRecalculate}
+            disabled={recalculating}
+          >
+            {recalculating ? (
+              <ActivityIndicator size="small" color="#3B82F6" />
+            ) : (
+              <>
+                <Ionicons name="refresh-outline" size={16} color="#3B82F6" />
+                <Text style={styles.recalculateText}>Tính toán lại</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Key Metrics */}
@@ -353,6 +392,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignSelf: "center",
+    marginBottom: 12,
   },
   statusText: {
     fontSize: 16,
@@ -539,6 +579,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#065F46",
     lineHeight: 20,
+  },
+  calculationDate: {
+    textAlign: "center",
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 12,
+  },
+  recalculateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: 8,
+    alignSelf: "center",
+  },
+  recalculateText: {
+    fontSize: 14,
+    color: "#3B82F6",
+    fontWeight: "500",
   },
 });
 

@@ -13,6 +13,7 @@ import {
   Image,
   Platform,
   PanResponder,
+  Animated,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { constructionLogApi, ConstructionLog } from "@/api/constructionLogApi";
@@ -52,11 +53,12 @@ export default function ConstructionLogsScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
-  const [selectedDateLog, setSelectedDateLog] = useState<ConstructionLog | null>(null);
+  const [selectedDateLogs, setSelectedDateLogs] = useState<ConstructionLog[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingLog, setEditingLog] = useState<ConstructionLog | null>(null);
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [showWeatherPicker, setShowWeatherPicker] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Partial<ProjectTask> | null>(null);
@@ -81,6 +83,24 @@ export default function ConstructionLogsScreen() {
   const loadLogsTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const isLoadingRef = React.useRef<boolean>(false);
   const sliderTrackWidthRef = React.useRef<number>(0);
+  const sliderTrackXRef = React.useRef<number>(0);
+  const animatedCompletion = React.useRef(new Animated.Value(0)).current;
+  const sliderTrackRef = React.useRef<View>(null);
+
+  // Sync animated value with state
+  useEffect(() => {
+    const currentValue = getCompletionPercentage(formData.completion_percentage);
+    const ratio = (currentValue - minCompletionPercentage) / (100 - minCompletionPercentage);
+    const targetValue = isNaN(ratio) ? 0 : ratio;
+
+    // Use spring for external updates (like text input or initial load)
+    Animated.spring(animatedCompletion, {
+      toValue: targetValue,
+      useNativeDriver: false,
+      friction: 8,
+      tension: 50,
+    }).start();
+  }, [formData.completion_percentage, minCompletionPercentage]);
 
   // PanResponder for slider: touch/drag on track to set completion %
   const sliderPanResponder = React.useMemo(
@@ -89,23 +109,33 @@ export default function ConstructionLogsScreen() {
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (evt) => {
-          const width = sliderTrackWidthRef.current;
-          if (width <= 0) return;
-          const locationX = evt.nativeEvent.locationX;
-          const ratio = Math.max(0, Math.min(1, locationX / width));
+          if (sliderTrackWidthRef.current <= 0) return;
+          const pageX = evt.nativeEvent.pageX;
+          const x = pageX - sliderTrackXRef.current;
+          const ratio = Math.max(0, Math.min(1, x / sliderTrackWidthRef.current));
           const value = minCompletionPercentage + ratio * (100 - minCompletionPercentage);
+
+          // Update state immediately for feedback
           setFormData((prev) => ({ ...prev, completion_percentage: Math.round(value) }));
+          // Update animated value immediately for smoothness
+          animatedCompletion.setValue(ratio);
         },
         onPanResponderMove: (evt) => {
-          const width = sliderTrackWidthRef.current;
-          if (width <= 0) return;
-          const locationX = evt.nativeEvent.locationX;
-          const ratio = Math.max(0, Math.min(1, locationX / width));
+          if (sliderTrackWidthRef.current <= 0) return;
+          const pageX = evt.nativeEvent.pageX;
+          const x = pageX - sliderTrackXRef.current;
+          const ratio = Math.max(0, Math.min(1, x / sliderTrackWidthRef.current));
           const value = minCompletionPercentage + ratio * (100 - minCompletionPercentage);
-          setFormData((prev) => ({ ...prev, completion_percentage: Math.round(value) }));
+
+          const roundedValue = Math.round(value);
+          if (roundedValue !== formData.completion_percentage) {
+            setFormData((prev) => ({ ...prev, completion_percentage: roundedValue }));
+          }
+          // Always update animated value for fluid movement even if rounded value hasn't changed
+          animatedCompletion.setValue(ratio);
         },
       }),
-    [minCompletionPercentage]
+    [minCompletionPercentage, formData.completion_percentage]
   );
 
   // Helper function to ensure completion_percentage is always a valid number
@@ -346,6 +376,11 @@ export default function ConstructionLogsScreen() {
       return;
     }
 
+    if (!formData.task_id) {
+      Alert.alert("Lỗi", "Vui lòng chọn hạng mục tiến độ công việc");
+      return;
+    }
+
     try {
       const attachmentIds = uploadedFiles
         .filter(f => f.attachment_id || f.id)
@@ -396,6 +431,7 @@ export default function ConstructionLogsScreen() {
     setModalVisible(false);
     setEditingLog(null);
     setSelectedTask(null);
+    setSelectedDateLogs([]);
     setFormData({
       log_date: today, // Default to today for new logs
       task_id: null,
@@ -409,14 +445,17 @@ export default function ConstructionLogsScreen() {
   };
 
   const handleDateClick = (dateString: string) => {
-    // Normalize dateString và tìm log với log_date đã normalize
-    const log = logs.find(l => {
+    // Normalize dateString và tìm tất cả logs với log_date đã normalize
+    const dateLogs = logs.filter(l => {
       const normalizedLogDate = l.log_date.split('T')[0].split(' ')[0];
       return normalizedLogDate === dateString;
     });
-    if (log) {
-      // If log exists, open edit modal (can edit date to past dates)
-      openEditModal(log);
+
+    if (dateLogs.length > 0) {
+      // If logs exist, open detail modal with list
+      setSelectedDateLogs(dateLogs);
+      setSelectedDate(dateLogs[0].log_date);
+      setDetailModalVisible(true);
     } else {
       // BUSINESS RULE: Allow creating logs for today or past dates, but not future
       const clickedDate = new Date(dateString);
@@ -425,12 +464,16 @@ export default function ConstructionLogsScreen() {
       clickedDate.setHours(0, 0, 0, 0);
 
       if (clickedDate.getTime() <= todayDate.getTime()) {
-        // Allow creating log for today or past dates
-        setFormData(prev => ({ ...prev, log_date: dateString }));
-        setSelectedDate(dateString);
-        setMinCompletionPercentage(0);
-        setEditingLog(null); // New log
-        setModalVisible(true);
+        // Check permission before creating
+        if (hasPermission(Permissions.LOG_CREATE)) {
+          setFormData(prev => ({ ...prev, log_date: dateString }));
+          setSelectedDate(dateString);
+          setMinCompletionPercentage(0);
+          setEditingLog(null); // New log
+          setModalVisible(true);
+        } else {
+          Alert.alert("Thông báo", "Bạn không có quyền tạo nhật ký.");
+        }
       } else {
         // Cannot create logs for future dates
         Alert.alert(
@@ -467,11 +510,14 @@ export default function ConstructionLogsScreen() {
 
   // Tạo map các ngày có log
   const logsByDate = useMemo(() => {
-    const map: Record<string, ConstructionLog> = {};
+    const map: Record<string, ConstructionLog[]> = {};
     logs.forEach(log => {
       // Normalize log_date to YYYY-MM-DD format (remove time part if exists)
       const normalizedDate = log.log_date.split('T')[0].split(' ')[0];
-      map[normalizedDate] = log;
+      if (!map[normalizedDate]) {
+        map[normalizedDate] = [];
+      }
+      map[normalizedDate].push(log);
     });
     return map;
   }, [logs]);
@@ -511,7 +557,7 @@ export default function ConstructionLogsScreen() {
     for (let i = 1; i <= daysInMonth; i++) {
       const dateString = `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
       const isToday = dateString === todayString;
-      const hasLog = !!logsByDate[dateString];
+      const hasLog = !!logsByDate[dateString] && logsByDate[dateString].length > 0;
 
       days.push({
         date: i,
@@ -678,7 +724,7 @@ export default function ConstructionLogsScreen() {
             <TouchableOpacity
               style={styles.logCard}
               onPress={() => {
-                setSelectedDateLog(item);
+                setSelectedDateLogs([item]);
                 setSelectedDate(item.log_date);
                 setDetailModalVisible(true);
               }}
@@ -690,15 +736,23 @@ export default function ConstructionLogsScreen() {
                     {item.attachments.slice(0, 2).map((attachment: any, index: number) => (
                       <View key={attachment.id || index} style={styles.logCardAttachmentItem}>
                         {attachment.mime_type?.startsWith("image/") ? (
-                          <Image
-                            source={{
-                              uri: attachment.file_path
+                          <TouchableOpacity
+                            onPress={() => setPreviewImage(
+                              attachment.file_path
                                 ? `http://localhost:8000/storage/${attachment.file_path}`
                                 : attachment.file_url
-                            }}
-                            style={styles.logCardAttachmentImage}
-                            resizeMode="cover"
-                          />
+                            )}
+                          >
+                            <Image
+                              source={{
+                                uri: attachment.file_path
+                                  ? `http://localhost:8000/storage/${attachment.file_path}`
+                                  : attachment.file_url
+                              }}
+                              style={styles.logCardAttachmentImage}
+                              resizeMode="cover"
+                            />
+                          </TouchableOpacity>
                         ) : (
                           <View style={styles.logCardAttachmentFile}>
                             <Ionicons name="document-outline" size={16} color="#3B82F6" />
@@ -716,88 +770,94 @@ export default function ConstructionLogsScreen() {
                   </View>
                 )}
 
-                {/* Nội dung bên phải - Compact */}
+                {/* Nội dung bên phải - Optimized Layout */}
                 <View style={styles.logCardRight}>
-                  {/* Header với ngày và actions */}
+                  {/* Header: Date & Progress */}
                   <View style={styles.logHeader}>
-                    <View style={styles.logHeaderLeft}>
-                      <Text style={styles.logDate} numberOfLines={1}>
+                    <View style={styles.dateBadge}>
+                      <Ionicons name="calendar-outline" size={14} color="#FFFFFF" />
+                      <Text style={styles.dateBadgeText}>
                         {new Date(item.log_date).toLocaleDateString("vi-VN", {
                           day: "2-digit",
                           month: "2-digit",
-                          year: "numeric",
+                          year: "numeric"
                         })}
                       </Text>
-                      {item.completion_percentage > 0 && (
-                        <View style={styles.progressBadge}>
-                          <Text style={styles.progressText}>
-                            {item.completion_percentage}%
-                          </Text>
-                        </View>
-                      )}
                     </View>
+
                     <View style={styles.logActions}>
-                      <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          openEditModal(item);
-                        }}
-                      >
-                        <Ionicons name="create-outline" size={18} color="#3B82F6" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleDelete(item);
-                        }}
-                      >
-                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                      </TouchableOpacity>
+                      <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
+                        <TouchableOpacity
+                          style={styles.actionIconBtn}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            openEditModal(item);
+                          }}
+                        >
+                          <Ionicons name="create-outline" size={18} color="#6B7280" />
+                        </TouchableOpacity>
+                      </PermissionGuard>
+                      <PermissionGuard permission={Permissions.LOG_DELETE} projectId={id}>
+                        <TouchableOpacity
+                          style={styles.actionIconBtn}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleDelete(item);
+                          }}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                        </TouchableOpacity>
+                      </PermissionGuard>
                     </View>
                   </View>
 
-                  {/* Task name - Compact */}
+                  {/* Task Name */}
                   {item.task && (
-                    <View style={styles.taskInfo}>
-                      <Ionicons name="checkmark-circle-outline" size={14} color="#3B82F6" />
-                      <Text style={styles.taskName} numberOfLines={1}>
-                        {item.task.name}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Details - Inline compact */}
-                  {(item.weather || item.personnel_count) && (
-                    <View style={styles.logDetails}>
-                      {item.weather && (
-                        <View style={styles.detailRow}>
-                          <Ionicons name="partly-sunny-outline" size={14} color="#6B7280" />
-                          <Text style={styles.detailText} numberOfLines={1}>
-                            {item.weather}
-                          </Text>
-                        </View>
-                      )}
-                      {item.personnel_count && (
-                        <View style={styles.detailRow}>
-                          <Ionicons name="people-outline" size={14} color="#6B7280" />
-                          <Text style={styles.detailText}>
-                            {item.personnel_count} người
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
-
-                  {/* Notes - Compact */}
-                  {item.notes && (
-                    <Text style={styles.notes} numberOfLines={1}>
-                      {item.notes}
+                    <Text style={styles.taskNameHighlighted} numberOfLines={2}>
+                      {item.task.name}
                     </Text>
                   )}
 
-                  {/* Attachments count - Compact */}
+                  {/* Progress Bar */}
+                  {item.completion_percentage !== undefined && (
+                    <View style={styles.progressContainer}>
+                      <View style={styles.progressBarBg}>
+                        <View
+                          style={[
+                            styles.progressBarFill,
+                            { width: `${item.completion_percentage}%` }
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.progressLabel}>{item.completion_percentage}%</Text>
+                    </View>
+                  )}
+
+                  {/* Info Chips: Weather & Personnel */}
+                  <View style={styles.chipContainer}>
+                    {item.weather && (
+                      <View style={[styles.infoChip, { backgroundColor: '#FFF7ED' }]}>
+                        <Ionicons name={item.weather.toLowerCase().includes('mưa') ? "rainy-outline" : "sunny-outline"} size={14} color="#EA580C" />
+                        <Text style={[styles.infoChipText, { color: '#C2410C' }]}>{item.weather}</Text>
+                      </View>
+                    )}
+                    {item.personnel_count && (
+                      <View style={[styles.infoChip, { backgroundColor: '#EFF6FF' }]}>
+                        <Ionicons name="people-outline" size={14} color="#2563EB" />
+                        <Text style={[styles.infoChipText, { color: '#1D4ED8' }]}>{item.personnel_count} nhân sự</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Notes */}
+                  {item.notes && (
+                    <View style={styles.noteContainer}>
+                      <Ionicons name="document-text-outline" size={14} color="#6B7280" style={{ marginTop: 2 }} />
+                      <Text style={styles.noteText} numberOfLines={2}>
+                        {item.notes}
+                      </Text>
+                    </View>
+                  )}
                   {item.attachments && item.attachments.length > 0 && (
                     <View style={styles.attachmentsCountRow}>
                       <Ionicons name="images-outline" size={12} color="#6B7280" />
@@ -809,14 +869,15 @@ export default function ConstructionLogsScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-          )}
+          )
+          }
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
+            < View style={styles.emptyContainer} >
               <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
               <Text style={styles.emptyText}>Chưa có nhật ký nào</Text>
-            </View>
+            </View >
           }
         />
       )}
@@ -825,19 +886,15 @@ export default function ConstructionLogsScreen() {
       <Modal
         visible={modalVisible}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={handleCloseModal}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={handleCloseModal}>
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>
-              {editingLog ? "Chỉnh Sửa Nhật Ký" : "Thêm Nhật Ký"}
-            </Text>
-            <View style={{ width: 24 }} />
-          </View>
+          <ScreenHeader
+            title={editingLog ? "Chỉnh Sửa Nhật Ký" : "Thêm Nhật Ký"}
+            showBackButton={true}
+            onBackPress={handleCloseModal}
+          />
 
           <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={true}>
             <View style={styles.formGroup}>
@@ -863,7 +920,7 @@ export default function ConstructionLogsScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Tiến độ công việc</Text>
+              <Text style={styles.label}>Tiến độ công việc <Text style={styles.required}>*</Text></Text>
               <TouchableOpacity
                 style={styles.selectButton}
                 onPress={() => {
@@ -879,18 +936,6 @@ export default function ConstructionLogsScreen() {
                 </Text>
                 <Ionicons name="chevron-down" size={20} color="#6B7280" />
               </TouchableOpacity>
-              {selectedTask && (
-                <TouchableOpacity
-                  style={styles.clearButton}
-                  onPress={() => {
-                    setSelectedTask(null);
-                    setFormData({ ...formData, task_id: null });
-                  }}
-                >
-                  <Ionicons name="close-circle" size={16} color="#EF4444" />
-                  <Text style={styles.clearButtonText}>Xóa lựa chọn</Text>
-                </TouchableOpacity>
-              )}
             </View>
 
             {selectedTask && (
@@ -904,24 +949,37 @@ export default function ConstructionLogsScreen() {
                 {/* BUSINESS RULE: Use slider input, value can ONLY increase, minimum = last recorded %} */}
                 <View style={styles.sliderContainer}>
                   <View
+                    ref={sliderTrackRef}
                     style={styles.sliderTrackTouchable}
-                    onLayout={(e) => {
-                      const { width } = e.nativeEvent.layout;
-                      sliderTrackWidthRef.current = width;
+                    onLayout={() => {
+                      sliderTrackRef.current?.measure((_x, _y, width, _height, pageX) => {
+                        sliderTrackWidthRef.current = width;
+                        sliderTrackXRef.current = pageX;
+                      });
                     }}
                     {...sliderPanResponder.panHandlers}
                   >
                     <View style={styles.sliderTrack}>
-                      <View
+                      <Animated.View
                         style={[
                           styles.sliderFill,
-                          { width: `${((getCompletionPercentage(formData.completion_percentage) - minCompletionPercentage) / (100 - minCompletionPercentage)) * 100}%` }
+                          {
+                            width: animatedCompletion.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: ["0%", "100%"],
+                            }),
+                          }
                         ]}
                       />
-                      <View
+                      <Animated.View
                         style={[
                           styles.sliderThumb,
-                          { left: `${((getCompletionPercentage(formData.completion_percentage) - minCompletionPercentage) / (100 - minCompletionPercentage)) * 100}%` }
+                          {
+                            left: animatedCompletion.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: ["0%", "100%"],
+                            }),
+                          }
                         ]}
                       />
                     </View>
@@ -1190,139 +1248,162 @@ export default function ConstructionLogsScreen() {
       <Modal
         visible={detailModalVisible}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => {
           setDetailModalVisible(false);
-          setSelectedDateLog(null);
+          setSelectedDateLogs([]);
           setSelectedDate(null);
         }}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity
-              onPress={() => {
-                setDetailModalVisible(false);
-                setSelectedDateLog(null);
-                setSelectedDate(null);
-              }}
-            >
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>
-              {selectedDate ? new Date(selectedDate).toLocaleDateString("vi-VN") : "Chi tiết nhật ký"}
-            </Text>
-            <View style={{ width: 24 }} />
-          </View>
+          <ScreenHeader
+            title={selectedDate ? new Date(selectedDate).toLocaleDateString("vi-VN") : "Chi tiết nhật ký"}
+            showBackButton={true}
+            onBackPress={() => {
+              setDetailModalVisible(false);
+              setSelectedDateLogs([]);
+              setSelectedDate(null);
+            }}
+          />
 
           <ScrollView style={styles.modalScroll}>
-            {selectedDateLog ? (
-              <>
-                {selectedDateLog.task && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Tiến độ công việc</Text>
-                    <Text style={styles.detailValue}>{selectedDateLog.task.name}</Text>
-                    {selectedDateLog.task.progress_percentage !== undefined && (
-                      <Text style={styles.detailLabel}>
-                        Tiến độ: {selectedDateLog.task.progress_percentage}%
-                      </Text>
+            <View style={styles.detailLogsHeader}>
+              <Text style={styles.detailHeaderTitle}>
+                {selectedDateLogs.length} nhật ký
+              </Text>
+              {/* Nút thêm nhanh cho ngày này */}
+              {selectedDate && new Date(selectedDate).getTime() <= new Date().getTime() && (
+                <PermissionGuard permission={Permissions.LOG_CREATE} projectId={id}>
+                  <TouchableOpacity
+                    style={styles.addMoreButton}
+                    onPress={() => {
+                      setDetailModalVisible(false);
+                      setFormData(prev => ({ ...prev, log_date: selectedDate.split('T')[0].split(' ')[0] }));
+                      setMinCompletionPercentage(0);
+                      setEditingLog(null);
+                      setModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="add-circle-outline" size={20} color="#3B82F6" />
+                    <Text style={styles.addMoreButtonText}>Thêm mới</Text>
+                  </TouchableOpacity>
+                </PermissionGuard>
+              )}
+            </View>
+
+            {selectedDateLogs.length > 0 ? (
+              selectedDateLogs.map((log, logIndex) => (
+                <View key={log.id || logIndex} style={[styles.logDetailItem, logIndex > 0 && styles.logDetailItemSeparator]}>
+                  {log.task && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Tiến độ công việc</Text>
+                      <Text style={styles.detailValue}>{log.task.name}</Text>
+                      {log.task.progress_percentage !== undefined && (
+                        <Text style={styles.detailLabel}>
+                          Tiến độ: {log.task.progress_percentage}%
+                        </Text>
+                      )}
+                    </View>
+                  )}
+
+                  {log.completion_percentage > 0 && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>% Hoàn thành</Text>
+                      <Text style={styles.detailValue}>{log.completion_percentage}%</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.detailRowGrid}>
+                    {log.weather && (
+                      <View style={[styles.detailSection, { flex: 1 }]}>
+                        <Text style={styles.detailSectionTitle}>Thời tiết</Text>
+                        <Text style={styles.detailValue}>{log.weather}</Text>
+                      </View>
+                    )}
+
+                    {log.personnel_count && (
+                      <View style={[styles.detailSection, { flex: 1 }]}>
+                        <Text style={styles.detailSectionTitle}>Số nhân sự</Text>
+                        <Text style={styles.detailValue}>{log.personnel_count} người</Text>
+                      </View>
                     )}
                   </View>
-                )}
 
-                {selectedDateLog.completion_percentage > 0 && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>% Hoàn thành</Text>
-                    <Text style={styles.detailValue}>{selectedDateLog.completion_percentage}%</Text>
-                  </View>
-                )}
-
-                {selectedDateLog.weather && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Thời tiết</Text>
-                    <Text style={styles.detailValue}>{selectedDateLog.weather}</Text>
-                  </View>
-                )}
-
-                {selectedDateLog.personnel_count && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Số nhân sự</Text>
-                    <Text style={styles.detailValue}>{selectedDateLog.personnel_count} người</Text>
-                  </View>
-                )}
-
-                {selectedDateLog.notes && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Ghi chú</Text>
-                    <Text style={styles.detailValue}>{selectedDateLog.notes}</Text>
-                  </View>
-                )}
-
-                {selectedDateLog.attachments && selectedDateLog.attachments.length > 0 && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Hình ảnh thực tế</Text>
-                    <View style={styles.imagesGrid}>
-                      {selectedDateLog.attachments.map((attachment: any, index: number) => (
-                        <View key={attachment.id || index} style={styles.imageItem}>
-                          {attachment.mime_type?.startsWith("image/") ? (
-                            <Image
-                              source={{ uri: attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : attachment.file_url }}
-                              style={styles.detailImage}
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <View style={styles.detailFile}>
-                              <Ionicons name="document-outline" size={32} color="#3B82F6" />
-                              <Text style={styles.detailFileName} numberOfLines={2}>
-                                {attachment.file_name || "File"}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      ))}
+                  {log.notes && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Ghi chú</Text>
+                      <Text style={styles.detailValue}>{log.notes}</Text>
                     </View>
-                  </View>
-                )}
+                  )}
 
-                <View style={styles.detailActions}>
-                  <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
-                    <TouchableOpacity
-                      style={[styles.detailActionButton, styles.editButton]}
-                      onPress={() => {
-                        setDetailModalVisible(false);
-                        openEditModal(selectedDateLog);
-                      }}
-                    >
-                      <Ionicons name="create-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.detailActionButtonText}>Chỉnh sửa</Text>
-                    </TouchableOpacity>
-                  </PermissionGuard>
-                  <PermissionGuard permission={Permissions.LOG_DELETE} projectId={id}>
-                    <TouchableOpacity
-                      style={[styles.detailActionButton, styles.deleteButton]}
-                      onPress={() => {
-                        setDetailModalVisible(false);
-                        handleDelete(selectedDateLog);
-                      }}
-                    >
-                      <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.detailActionButtonText}>Xóa</Text>
-                    </TouchableOpacity>
-                  </PermissionGuard>
+                  {log.attachments && log.attachments.length > 0 && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Hình ảnh thực tế ({log.attachments.length})</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalImages}>
+                        {log.attachments.map((attachment: any, index: number) => (
+                          <View key={attachment.id || index} style={styles.imageItem}>
+                            {attachment.mime_type?.startsWith("image/") ? (
+                              <Image
+                                source={{ uri: attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : attachment.file_url }}
+                                style={styles.detailImage}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View style={styles.detailFile}>
+                                <Ionicons name="document-outline" size={32} color="#3B82F6" />
+                                <Text style={styles.detailFileName} numberOfLines={2}>
+                                  {attachment.file_name || "File"}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  <View style={styles.detailActions}>
+                    <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
+                      <TouchableOpacity
+                        style={[styles.detailActionButton, styles.editButton]}
+                        onPress={() => {
+                          setDetailModalVisible(false);
+                          openEditModal(log);
+                        }}
+                      >
+                        <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.detailActionButtonTextCompact}>Sửa</Text>
+                      </TouchableOpacity>
+                    </PermissionGuard>
+                    <PermissionGuard permission={Permissions.LOG_DELETE} projectId={id}>
+                      <TouchableOpacity
+                        style={[styles.detailActionButton, styles.deleteButton]}
+                        onPress={() => {
+                          setDetailModalVisible(false);
+                          handleDelete(log);
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.detailActionButtonTextCompact}>Xóa</Text>
+                      </TouchableOpacity>
+                    </PermissionGuard>
+                  </View>
                 </View>
-              </>
+              ))
             ) : (
               <View style={styles.emptyContainer}>
                 <Ionicons name="document-outline" size={64} color="#D1D5DB" />
                 <Text style={styles.emptyText}>Chưa có nhật ký cho ngày này</Text>
-                {/* BUSINESS RULE: Only allow creating logs for today */}
-                {selectedDate === today && (
+                {/* BUSINESS RULE: Allow creating logs for today or past */}
+                {selectedDate && new Date(selectedDate).getTime() <= new Date().getTime() && (
                   <PermissionGuard permission={Permissions.LOG_CREATE} projectId={id}>
                     <TouchableOpacity
                       style={styles.createButton}
                       onPress={() => {
                         setDetailModalVisible(false);
-                        setFormData(prev => ({ ...prev, log_date: today }));
+                        setFormData(prev => ({ ...prev, log_date: selectedDate.split('T')[0].split(' ')[0] }));
                         setMinCompletionPercentage(0);
+                        setEditingLog(null);
                         setModalVisible(true);
                       }}
                     >
@@ -1331,17 +1412,36 @@ export default function ConstructionLogsScreen() {
                     </TouchableOpacity>
                   </PermissionGuard>
                 )}
-                {selectedDate !== today && (
-                  <Text style={styles.helperText}>
-                    Chỉ có thể tạo nhật ký cho ngày hôm nay
-                  </Text>
-                )}
               </View>
             )}
           </ScrollView>
         </View>
       </Modal>
-    </View>
+
+      {/* Image Preview Modal */}
+      <Modal
+        visible={!!previewImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
+        <View style={styles.imagePreviewOverlay}>
+          <TouchableOpacity
+            style={styles.imagePreviewCloseButton}
+            onPress={() => setPreviewImage(null)}
+          >
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+          {previewImage && (
+            <Image
+              source={{ uri: previewImage }}
+              style={styles.imagePreview}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
+    </View >
   );
 }
 
@@ -1718,24 +1818,6 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-    position: "relative",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1F2937",
-    flex: 1,
-    textAlign: "center",
-    marginLeft: -24,
   },
   modalScroll: {
     flex: 1,
@@ -2112,4 +2194,159 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
   },
+  required: {
+    color: "#EF4444",
+  },
+  detailLogsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  detailHeaderTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  addMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  addMoreButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
+  logDetailItem: {
+    marginBottom: 24,
+  },
+  logDetailItemSeparator: {
+    paddingTop: 24,
+    borderTopWidth: 4,
+    borderTopColor: "#F3F4F6",
+  },
+  detailRowGrid: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  horizontalImages: {
+    flexDirection: "row",
+    marginTop: 8,
+  },
+  imagePreviewOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imagePreviewCloseButton: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 1,
+    padding: 10,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 20,
+  },
+  imagePreview: {
+    width: "100%",
+    height: "80%",
+  },
+  detailActionButtonTextCompact: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  // New Styles for Optimized List Item
+  dateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#3B82F6",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  dateBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  actionIconBtn: {
+    padding: 4,
+  },
+  taskNameHighlighted: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  progressContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  progressBarBg: {
+    flex: 1,
+    height: 6,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#10B981",
+    borderRadius: 3,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#10B981",
+    width: 36,
+    textAlign: "right",
+  },
+  chipContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  infoChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  infoChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  noteContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    backgroundColor: "#F9FAFB",
+    padding: 8,
+    borderRadius: 8,
+  },
+  noteText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#4B5563",
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
 });
+

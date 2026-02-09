@@ -232,13 +232,23 @@ export default function NotificationsScreen() {
         }
     };
 
-    const renderNotificationItem = ({ item }: { item: Notification }) => {
+    const renderNotificationItem = ({ item, index, section }: { item: Notification, index: number, section: Section }) => {
         const isUnread = item.status === "unread";
         const icon = getTypeIcon(item.type);
+        const dataLength = section.data.length;
+        const isFirst = index === 0;
+        const isLast = index === dataLength - 1;
+        const isSingle = dataLength === 1;
 
         return (
             <TouchableOpacity
-                style={[styles.notificationItem, isUnread && styles.notificationItemUnread]}
+                style={[
+                    styles.notificationItem,
+                    isFirst && styles.notificationItemFirst,
+                    isLast && styles.notificationItemLast,
+                    !isLast && !isSingle && styles.notificationItemMiddle,
+                    isUnread && styles.notificationItemUnread
+                ]}
                 onPress={() => handleNotificationPress(item)}
                 activeOpacity={0.7}
             >
@@ -534,18 +544,33 @@ const styles = StyleSheet.create({
     sectionTitle: { fontSize: 13, fontWeight: "700", color: "#9CA3AF", textTransform: 'uppercase', letterSpacing: 0.5 },
     notificationItem: {
         backgroundColor: "#FFFFFF",
-        borderRadius: 16,
         padding: 14,
-        marginBottom: 10,
         flexDirection: 'row',
         gap: 14,
+        // Removed global shadow/radius to handle by group
+    },
+    notificationItemFirst: {
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
+        marginTop: 0,
+    },
+    notificationItemLast: {
+        borderBottomLeftRadius: 16,
+        borderBottomRightRadius: 16,
+        marginBottom: 10,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 2,
         elevation: 2,
     },
-    notificationItemUnread: { backgroundColor: "#FFFFFF", borderLeftWidth: 4, borderLeftColor: "#3B82F6" },
+    notificationItemMiddle: {
+        borderBottomWidth: 1,
+        borderBottomColor: "#F3F4F6",
+    },
+    notificationItemUnread: {
+        backgroundColor: "#F0F9FF", // Subtle blue tint for unread
+    },
     iconContainer: {
         width: 44,
         height: 44,

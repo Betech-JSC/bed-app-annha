@@ -338,7 +338,7 @@ export default function MaterialsScreen() {
             <Modal
                 visible={showCreateModal}
                 animationType="slide"
-                presentationStyle="pageSheet"
+                presentationStyle="fullScreen"
                 onRequestClose={() => setShowCreateModal(false)}
             >
                 <KeyboardAvoidingView
@@ -762,6 +762,7 @@ const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
         backgroundColor: "#F9FAFB",
+        paddingTop: 40,
     },
     modalContent: {
         flex: 1,

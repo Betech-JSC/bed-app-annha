@@ -111,22 +111,19 @@ class RevenueController extends Controller
                 ],
                 'revenue' => [
                     'contract_value' => (float) $revenue['contract_value'],
-                    'additional_costs' => (float) $costs['additional_costs'], // Giá trị phát sinh
+                    'additional_costs' => (float) $revenue['additional_costs'], // Giá trị phát sinh (Doanh thu)
                     'paid_payments' => (float) $revenue['paid_payments'],
-                    'remaining_payment' => (float) ($revenue['contract_value'] - $revenue['paid_payments']), // Số tiền còn lại
+                    'remaining_payment' => (float) ($revenue['total_revenue'] - $revenue['paid_payments']), // Số tiền còn lại
                     'total_revenue' => (float) $revenue['total_revenue'],
                 ],
                 'costs' => [
                     'by_group' => $allCostsByGroup->values()->all(), // Chi phí theo nhóm động
                     'breakdown' => [
-                        'additional_costs' => (float) $costs['additional_costs'],
                         'subcontractor_costs' => (float) $costs['subcontractor_costs'],
                         'payroll_costs' => (float) $costs['payroll_costs'],
-
-                        'bonus_costs' => (float) $costs['bonus_costs'],
                         'other_costs' => (float) $costs['other_costs'],
                     ],
-                    'total_costs' => (float) $profit['total_costs'],
+                    'total_costs' => (float) $costs['total_costs'],
                 ],
                 'profit' => [
                     'amount' => (float) $profit['profit'],

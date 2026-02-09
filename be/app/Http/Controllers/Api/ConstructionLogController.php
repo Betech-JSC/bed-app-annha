@@ -130,17 +130,7 @@ class ConstructionLogController extends Controller
         try {
             DB::beginTransaction();
 
-            // Check if log for this date already exists
-            $exists = ConstructionLog::where('project_id', $project->id)
-                ->where('log_date', $validated['log_date'])
-                ->exists();
-
-            if ($exists) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Nhật ký cho ngày này đã tồn tại.'
-                ], 400);
-            }
+            // Removed unique log_date check per project to allow multiple logs per day
 
             $log = ConstructionLog::create([
                 'project_id' => $project->id,

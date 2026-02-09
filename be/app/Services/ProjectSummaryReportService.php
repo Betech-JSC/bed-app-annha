@@ -26,43 +26,48 @@ class ProjectSummaryReportService
         // Tính các loại chi phí
         $costDetails = $this->calculateCostDetails($project);
 
-        // Tổng chi phí công trình (KHÔNG bao gồm lương và nhân công khoán)
-        // Chỉ bao gồm: Chi phí vật liệu + Chi phí thuê thiết bị + Chi phí thầu phụ
+        // Chi phí phát sinh (AdditionalCost đã được approved hoặc confirmed/paid)
+        // Đây là phần doanh thu thêm từ khách hàng
+        $additionalRevenue = (float) AdditionalCost::where('project_id', $project->id)
+            ->whereIn('status', ['approved', 'confirmed', 'customer_paid'])
+            ->sum('amount');
+
+        // Tổng doanh thu = Hợp đồng + Phát sinh
+        $totalRevenue = $contractValue + $additionalRevenue;
+
+        // Tổng chi phí công trình (Tất cả chi phí gắn với dự án, trừ lương/payroll)
         $totalProjectCosts = $costDetails['material_costs']
             + $costDetails['equipment_rental_costs']
-            + $costDetails['subcontractor_costs'];
+            + $costDetails['subcontractor_costs']
+            + $costDetails['other_costs'];
 
-        // Lương (chi phí công ty - KHÔNG tính vào dự án)
+        // Lương (chi phí công ty - KHÔNG tính vào giá thành dự án trực tiếp)
         $salaryCosts = $costDetails['salary_costs'];
 
         // Tổng tất cả chi phí (bao gồm cả lương để tham khảo)
         $totalAllCosts = $totalProjectCosts + $salaryCosts;
 
-        // Chi phí phát sinh (AdditionalCost đã được approved)
-        $additionalCosts = (float) AdditionalCost::where('project_id', $project->id)
-            ->where('status', 'approved')
-            ->sum('amount');
-
-        // Đã thanh toán (ProjectPayment đã được paid)
+        // Đã thanh toán (ProjectPayment đã được paid hoặc confirmed hoặc customer_paid)
         $paidPayments = (float) ProjectPayment::where('project_id', $project->id)
-            ->where('status', 'paid')
+            ->whereIn('status', ['paid', 'confirmed', 'customer_paid'])
             ->sum('amount');
 
         return [
             'project_id' => $project->id,
             'project_name' => $project->name,
             'project_code' => $project->code,
-            'project_status' => $project->status, // Thêm status để frontend kiểm tra
+            'project_status' => $project->status,
             'contract_value' => $contractValue,
+            'additional_costs' => $additionalRevenue, 
+            'total_revenue' => $totalRevenue,
             'cost_details' => $costDetails,
-            'total_project_costs' => $totalProjectCosts, // Chi phí công trình
-            'total_salary_costs' => $salaryCosts, // Chi phí công ty (lương)
-            'total_all_costs' => $totalAllCosts, // Tổng tất cả (tham khảo)
-            'additional_costs' => $additionalCosts, // Chi phí phát sinh
-            'paid_payments' => $paidPayments, // Đã thanh toán
-            'profit' => $contractValue - $totalProjectCosts, // Lợi nhuận = Hợp đồng - Chi phí công trình
-            'profit_margin' => $contractValue > 0 
-                ? (($contractValue - $totalProjectCosts) / $contractValue) * 100 
+            'total_project_costs' => $totalProjectCosts,
+            'total_salary_costs' => $salaryCosts,
+            'total_all_costs' => $totalAllCosts,
+            'paid_payments' => $paidPayments,
+            'profit' => $totalRevenue - $totalProjectCosts, // Lợi nhuận = Tổng doanh thu - Chi phí công trình
+            'profit_margin' => $totalRevenue > 0 
+                ? (($totalRevenue - $totalProjectCosts) / $totalRevenue) * 100 
                 : 0,
         ];
     }
@@ -75,20 +80,33 @@ class ProjectSummaryReportService
      */
     private function calculateCostDetails(Project $project): array
     {
-        // 1. Chi phí vật liệu (Cost có material_id)
-        $materialCosts = (float) Cost::where('project_id', $project->id)
-            ->whereNotNull('material_id')
+        // Lấy tất cả chi phí đã duyệt của dự án
+        $allApprovedCosts = Cost::where('project_id', $project->id)
             ->where('status', 'approved')
-            ->sum('amount');
+            ->get();
 
-        // 2. Chi phí thuê thiết bị (Cost có equipment_allocation_id)
-        // Query trực tiếp từ Cost với equipment_allocation_id để liên kết chặt chẽ
-        $equipmentRentalCosts = (float) Cost::where('project_id', $project->id)
-            ->whereNotNull('equipment_allocation_id')
-            ->where('status', 'approved')
-            ->sum('amount');
+        $materialCosts = 0;
+        $equipmentRentalCosts = 0;
+        $subcontractorCosts = 0;
+        $salaryCosts = 0;
+        $otherCosts = 0;
 
-        // Fallback: Nếu không có Cost, tính từ EquipmentAllocation trực tiếp (backward compatible)
+        foreach ($allApprovedCosts as $cost) {
+            if ($cost->material_id) {
+                $materialCosts += (float) $cost->amount;
+            } elseif ($cost->equipment_allocation_id) {
+                $equipmentRentalCosts += (float) $cost->amount;
+            } elseif ($cost->subcontractor_id) {
+                $subcontractorCosts += (float) $cost->amount;
+            } elseif ($cost->payroll_id) {
+                $salaryCosts += (float) $cost->amount;
+            } else {
+                // Các chi phí khác (vận chuyển, tiếp khách, v.v. gắn với dự án)
+                $otherCosts += (float) $cost->amount;
+            }
+        }
+
+        // Fallback cho Equipment Rental (backward compatible)
         if ($equipmentRentalCosts == 0) {
             $equipmentRentalCosts = (float) $project->equipmentAllocations()
                 ->where('allocation_type', 'rent')
@@ -96,32 +114,12 @@ class ProjectSummaryReportService
                 ->sum('rental_fee');
         }
 
-        // 3. Chi phí thầu phụ (Cost có subcontractor_id)
-        $subcontractorCosts = (float) Cost::where('project_id', $project->id)
-            ->whereNotNull('subcontractor_id')
-            ->where('status', 'approved')
-            ->sum('amount');
-
-        // 4. Nhân công khoán (Removed)
-        $laborContractCosts = 0;
-
-        // 5. Lương = Chi phí công ty (KHÔNG tính vào dự án)
-        // Lấy từ Payroll (nếu chưa tạo Cost) hoặc từ Cost có payroll_id
-        $payrollCostsFromCosts = (float) Cost::where('project_id', $project->id)
-            ->whereNotNull('payroll_id')
-            ->where('status', 'approved')
-            ->sum('amount');
-
-        // Payroll costs removed - HR module deleted
-        // Only use costs from costs table with payroll_id
-        $salaryCosts = $payrollCostsFromCosts;
-
         return [
             'material_costs' => $materialCosts,
             'equipment_rental_costs' => $equipmentRentalCosts,
             'subcontractor_costs' => $subcontractorCosts,
-            'labor_contract_costs' => $laborContractCosts,
-            'salary_costs' => $salaryCosts, // Lương - KHÔNG tính vào dự án
+            'salary_costs' => $salaryCosts,
+            'other_costs' => $otherCosts,
         ];
     }
 

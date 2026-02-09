@@ -30,7 +30,7 @@ export default function CostsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const tabBarHeight = useTabBarHeight();
-  const { hasPermission } = useProjectPermissions(id);
+  const { hasPermission, loading: permissionLoading } = useProjectPermissions(id);
   const [costs, setCosts] = useState<Cost[]>([]);
   const [summary, setSummary] = useState<{
     grouped?: Array<{
@@ -461,7 +461,7 @@ export default function CostsScreen() {
     </TouchableOpacity>
   );
 
-  if (loading && !refreshing) {
+  if ((loading || permissionLoading) && !refreshing) {
     return (
       <View style={styles.container}>
         <ScreenHeader title="Chi Phí Dự Án" showBackButton />
@@ -675,7 +675,7 @@ export default function CostsScreen() {
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowCreateModal(false);
           resetForm();
@@ -869,7 +869,7 @@ export default function CostsScreen() {
       <Modal
         visible={showConfirmModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowConfirmModal(false);
           setSelectedCostForConfirm(null);

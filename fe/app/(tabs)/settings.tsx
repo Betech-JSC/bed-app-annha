@@ -21,6 +21,7 @@ import { setUser } from "@/reducers/userSlice";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { isAdmin } from "@/utils/permissions";
+import { Permissions } from "@/constants/Permissions";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -84,84 +85,84 @@ export default function SettingsScreen() {
       title: "Nhóm Chi Phí Dự Án",
       icon: "folder-outline",
       route: "/settings/cost-groups",
-      permission: "settings.manage",
+      permission: Permissions.SETTINGS_MANAGE,
       description: "Quản lý các nhóm chi phí áp dụng cho toàn bộ dự án",
     },
     {
       title: "Chi Phí Công Ty",
       icon: "wallet-outline",
       route: "/company-costs",
-      permission: "cost.view",
+      permission: Permissions.SETTINGS_MANAGE,
       description: "Quản lý chi phí hoạt động chung của công ty (không gắn với dự án cụ thể)",
     },
     {
       title: "Báo Cáo Tài Chính Công Ty",
       icon: "analytics-outline",
       route: "/company-financial",
-      permission: "cost.view",
+      permission: Permissions.SETTINGS_MANAGE,
       description: "Xem báo cáo tài chính tổng hợp, P&L, xu hướng và so sánh hiệu suất",
     },
     {
       title: "Nhà Cung Cấp (NCC)",
       icon: "storefront-outline",
       route: "/settings/suppliers",
-      permission: "suppliers.view",
+      permission: Permissions.SUPPLIER_VIEW,
       description: "Quản lý danh sách nhà cung cấp, hợp đồng và công nợ",
     },
     {
       title: "Nhà Thầu Phụ",
       icon: "business-outline",
       route: "/settings/subcontractors",
-      permission: "settings.manage",
+      permission: Permissions.SUBCONTRACTOR_VIEW,
       description: "Quản lý danh sách nhà thầu phụ tập trung",
     },
     {
       title: "Vật Liệu",
       icon: "cube-outline",
       route: "/materials",
-      permission: "materials.view",
+      permission: Permissions.MATERIAL_VIEW,
       description: "Quản lý vật liệu và tồn kho",
     },
     {
       title: "Thiết Bị",
       icon: "construct-outline",
       route: "/equipment",
-      permission: "equipment.view",
+      permission: Permissions.EQUIPMENT_VIEW,
       description: "Quản lý thiết bị và bảo trì",
     },
     {
       title: "Bộ Tài Liệu Nghiệm Thu",
       icon: "document-text-outline",
       route: "/settings/acceptance-templates",
-      permission: "settings.manage",
+      permission: Permissions.SETTINGS_MANAGE,
       description: "Quản lý các bộ tài liệu nghiệm thu (tên công việc, mô tả, tiêu chuẩn, hình ảnh mẫu)",
     },
     {
       title: "Tài Khoản Hệ Thống",
       icon: "people-outline",
       route: "/settings/users",
-      permission: "settings.manage",
+      permission: Permissions.SETTINGS_MANAGE,
       description: "Tạo và quản lý tài khoản hệ thống, phân quyền",
     },
     {
       title: "Hóa Đơn Đầu Vào",
       icon: "receipt-outline",
       route: "/accounting/input-invoices",
-      permission: "accounting.manage",
+      permission: Permissions.SETTINGS_MANAGE,
       description: "Quản lý hóa đơn đầu vào từ nhà cung cấp (chỉ theo dõi, không ảnh hưởng chi phí dự án)",
     },
     {
       title: "Phân Quyền Hệ Thống",
       icon: "shield-checkmark-outline",
       route: "/settings/permissions",
-      permission: null, // Always accessible to view own permissions
+      permission: Permissions.SETTINGS_MANAGE,
       description: "Xem quyền của bạn và quản lý phân quyền hệ thống",
     },
     {
       title: "Cấu Hình Vai Trò",
       icon: "people-circle-outline",
       route: "/settings/roles",
-      permission: "settings.manage",
+      permission: Permissions.SETTINGS_MANAGE,
       description: "Quản lý các vai trò và phân quyền trong hệ thống",
     },
     {

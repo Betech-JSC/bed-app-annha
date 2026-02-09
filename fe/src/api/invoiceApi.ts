@@ -84,6 +84,7 @@ export const invoiceApi = {
 export interface CostGroupSummary {
   cost_group_id: number;
   total_amount: number;
+  invoice_count?: number;
   cost_group: {
     id: number;
     name: string;

@@ -188,8 +188,11 @@ export default function AdditionalCostDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Chi Tiết Chi Phí Phát Sinh" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
       </View>
     );
   }
@@ -349,10 +352,9 @@ export default function AdditionalCostDetailScreen() {
           </View>
         )}
 
-        {/* Actions - Khách hàng đánh dấu đã thanh toán */}
         {cost.status === "pending" && (
           <View style={styles.actionsContainer}>
-            <PermissionGuard permission={Permissions.ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER} projectId={id}>
+            <PermissionGuard permission={Permissions.ADDITIONAL_COST_UPDATE} projectId={id}>
               <TouchableOpacity
                 style={[styles.actionButton, styles.markPaidButton]}
                 onPress={() => router.push(`/projects/${id}/additional-costs/${costId}/mark-paid`)}

@@ -87,8 +87,11 @@ export default function RevenueScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Báo Cáo Tổng Hợp" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
       </View>
     );
   }
@@ -452,6 +455,8 @@ export default function RevenueScreen() {
                   barPercentage: 0.7,
                 }}
                 style={styles.chart}
+                yAxisLabel=""
+                yAxisSuffix=""
                 showValuesOnTopOfBars={false}
                 withInnerLines={true}
               />
@@ -499,6 +504,8 @@ export default function RevenueScreen() {
                   barPercentage: 0.6,
                 }}
                 style={styles.chart}
+                yAxisLabel=""
+                yAxisSuffix=""
                 showValuesOnTopOfBars
                 withInnerLines={true}
               />

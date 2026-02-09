@@ -183,8 +183,8 @@ export default function SuppliersScreen() {
                 item.status === "active"
                   ? "#10B98120"
                   : item.status === "blacklisted"
-                  ? "#EF444420"
-                  : "#6B728020",
+                    ? "#EF444420"
+                    : "#6B728020",
             },
           ]}
         >
@@ -196,16 +196,16 @@ export default function SuppliersScreen() {
                   item.status === "active"
                     ? "#10B981"
                     : item.status === "blacklisted"
-                    ? "#EF4444"
-                    : "#6B7280",
+                      ? "#EF4444"
+                      : "#6B7280",
               },
             ]}
           >
             {item.status === "active"
               ? "Hoạt động"
               : item.status === "blacklisted"
-              ? "Đen"
-              : "Ngừng hoạt động"}
+                ? "Đen"
+                : "Ngừng hoạt động"}
           </Text>
         </View>
       </View>
@@ -309,7 +309,7 @@ export default function SuppliersScreen() {
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowCreateModal(false)}
       >
         <KeyboardAvoidingView

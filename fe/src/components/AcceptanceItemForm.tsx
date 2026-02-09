@@ -14,7 +14,7 @@ import {
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DatePickerInput } from "./";
 import { AcceptanceItem, acceptanceApi, AcceptanceTemplate } from "@/api/acceptanceApi";
 import { ganttApi } from "@/api/ganttApi";
 import { UniversalFileUploader } from "@/components";
@@ -51,8 +51,6 @@ export default function AcceptanceItemForm({
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [notes, setNotes] = useState("");
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -328,70 +326,46 @@ export default function AcceptanceItemForm({
             </View>
 
             {/* Start Date */}
-            <View style={styles.field}>
-              <View style={styles.labelRow}>
-                <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-                <Text style={styles.label}>
-                  Ngày bắt đầu <Text style={styles.required}>*</Text>
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowStartDatePicker(true)}
-              >
-                <Text style={styles.dateText}>
-                  {startDate.toLocaleDateString("vi-VN")}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-              </TouchableOpacity>
-              {showStartDatePicker && (
-                <DateTimePicker
-                  value={startDate}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowStartDatePicker(false);
-                    if (date) {
-                      setStartDate(date);
-                      if (date > endDate) {
-                        setEndDate(date);
-                      }
-                    }
-                  }}
-                />
-              )}
-            </View>
+            <DatePickerInput
+              label={
+                <View style={styles.labelRow}>
+                  <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                  <Text style={styles.label}>
+                    Ngày bắt đầu <Text style={styles.required}>*</Text>
+                  </Text>
+                </View>
+              }
+              value={startDate}
+              onChange={(date) => {
+                if (date) {
+                  setStartDate(date);
+                  if (date > endDate) {
+                    setEndDate(date);
+                  }
+                }
+              }}
+              placeholder="Chọn ngày bắt đầu"
+              containerStyle={styles.field}
+            />
 
             {/* End Date */}
-            <View style={styles.field}>
-              <View style={styles.labelRow}>
-                <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-                <Text style={styles.label}>
-                  Ngày kết thúc <Text style={styles.required}>*</Text>
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowEndDatePicker(true)}
-              >
-                <Text style={styles.dateText}>
-                  {endDate.toLocaleDateString("vi-VN")}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color="#3B82F6" />
-              </TouchableOpacity>
-              {showEndDatePicker && (
-                <DateTimePicker
-                  value={endDate}
-                  mode="date"
-                  display="default"
-                  minimumDate={startDate}
-                  onChange={(event, date) => {
-                    setShowEndDatePicker(false);
-                    if (date) setEndDate(date);
-                  }}
-                />
-              )}
-            </View>
+            <DatePickerInput
+              label={
+                <View style={styles.labelRow}>
+                  <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                  <Text style={styles.label}>
+                    Ngày kết thúc <Text style={styles.required}>*</Text>
+                  </Text>
+                </View>
+              }
+              value={endDate}
+              onChange={(date) => {
+                if (date) setEndDate(date);
+              }}
+              placeholder="Chọn ngày kết thúc"
+              minimumDate={startDate}
+              containerStyle={styles.field}
+            />
 
             {/* Notes - Ghi chú cho hồ sơ */}
             <View style={styles.field}>
@@ -772,6 +746,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginBottom: 8,
+    lineHeight: 18,
+  },
+  infoBox: {
+    flexDirection: "row",
+    backgroundColor: "#EFF6FF",
+    padding: 12,
+    borderRadius: 8,
+    gap: 10,
+    marginTop: 16,
+    alignItems: "center",
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#3B82F6",
     lineHeight: 18,
   },
 });

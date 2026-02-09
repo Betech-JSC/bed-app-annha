@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
+import { View, TouchableOpacity, Text, StyleSheet, Platform, ActivityIndicator } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
@@ -8,24 +8,44 @@ import type { RootState } from "@/reducers/index";
 import { NotificationBadge } from "./NotificationBadge";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
 
-const tabs = [
+import { Permissions } from "@/constants/Permissions";
+import { usePermissions } from "@/hooks/usePermissions";
+
+interface TabItem {
+  name: string;
+  route: string;
+  icon: string;
+  iconFocused: string;
+  permission?: string;
+  permissionList?: string[];
+}
+
+const tabs: TabItem[] = [
   {
     name: "Dự Án",
     route: "/(tabs)/projects",
     icon: "folder-outline",
     iconFocused: "folder",
+    permission: Permissions.PROJECT_VIEW,
   },
-  // {
-  //   name: "Nhân Sự",
-  //   route: "/(tabs)/hr",
-  //   icon: "people-outline",
-  //   iconFocused: "people",
-  // },
+  {
+    name: "Nhân Sự",
+    route: "/(tabs)/hr",
+    icon: "people-outline",
+    iconFocused: "people",
+    permissionList: [
+      Permissions.HR_EMPLOYEE_VIEW,
+      Permissions.HR_PAYROLL_VIEW,
+      Permissions.HR_TIME_TRACKING_VIEW,
+      Permissions.HR_BONUS_VIEW,
+    ],
+  },
   {
     name: "Báo Cáo",
     route: "/(tabs)/reports",
     icon: "bar-chart-outline",
     iconFocused: "bar-chart",
+    permission: Permissions.REPORT_VIEW,
   },
   {
     name: "Cấu Hình",
@@ -40,6 +60,7 @@ export default function CustomTabBar() {
   const pathname = usePathname();
   const user = useSelector((state: RootState) => state.user);
   const insets = useSafeAreaInsets();
+  const { hasPermission, hasAnyPermission, loading: permissionsLoading } = usePermissions();
   // Tăng interval lên 60 giây để giảm số lần gọi API
   const { unreadCount } = useUnreadCount({ autoRefresh: true, refreshInterval: 60000 });
 
@@ -55,6 +76,17 @@ export default function CustomTabBar() {
     return null;
   }
 
+  // Filter tabs based on permissions
+  const visibleTabs = tabs.filter((tab) => {
+    if (tab.permission) {
+      return hasPermission(tab.permission);
+    }
+    if (tab.permissionList) {
+      return hasAnyPermission(tab.permissionList);
+    }
+    return true; // Always show if no permission required
+  });
+
   const isActive = (route: string) => {
     if (route === "/(tabs)/projects") {
       return pathname?.startsWith("/projects") || pathname === "/(tabs)/projects";
@@ -63,7 +95,7 @@ export default function CustomTabBar() {
       return pathname?.startsWith("/hr") || pathname === "/(tabs)/hr";
     }
     if (route === "/(tabs)/reports") {
-      return pathname?.startsWith("/(tabs)/reports") || pathname === "/(tabs)/reports";
+      return pathname?.includes("/reports");
     }
     if (route === "/(tabs)/settings") {
       return pathname?.startsWith("/settings") || pathname === "/(tabs)/settings";
@@ -73,9 +105,18 @@ export default function CustomTabBar() {
 
   const isNotificationsActive = pathname?.startsWith("/notifications");
 
+  // Don't render while loading permissions to avoid flickering tabs
+  if (permissionsLoading) {
+    return (
+      <View style={[styles.container, { paddingBottom: insets.bottom, justifyContent: 'center' }]}>
+        <ActivityIndicator size="small" color="#3B82F6" />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      {tabs.map((tab) => {
+      {visibleTabs.map((tab) => {
         const active = isActive(tab.route);
         return (
           <TouchableOpacity

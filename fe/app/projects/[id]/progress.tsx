@@ -11,10 +11,13 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { progressApi } from "@/api/progressApi";
-import { ProgressChart, ScreenHeader, PermissionDenied } from "@/components";
+import { GanttChart, ScreenHeader, PermissionDenied, PermissionGuard } from "@/components"; // Ensure PermissionGuard is imported
+import { Permissions } from "@/constants/Permissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { ganttApi } from "@/api/ganttApi";
-import { ProjectPhase, ProjectTask } from "@/types/ganttTypes";
+import { ProjectPhase, ProjectTask } from "@/types/ganttTypes"; // Keep ProjectTask
+import { projectApi, Project } from "@/api/projectApi"; // Import projectApi
 import { constructionLogApi } from "@/api/constructionLogApi";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -34,13 +37,18 @@ interface TaskWithAlerts extends ProjectTask {
 export default function ProgressScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  // Permission handling
+  const { hasPermission } = useProjectPermissions(id);
+  const canUpdate = hasPermission(Permissions.PROJECT_TASK_UPDATE);
+
   const tabBarHeight = useTabBarHeight();
   const [progressData, setProgressData] = useState<any>(null);
   const [phases, setPhases] = useState<PhaseWithProgress[]>([]);
   const [tasks, setTasks] = useState<TaskWithAlerts[]>([]);
+  const [project, setProject] = useState<Project | null>(null); // State for project info
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"structure" | "report">("structure");
+  const [viewMode, setViewMode] = useState<"structure" | "gantt">("structure"); // Change report to gantt
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -64,6 +72,7 @@ export default function ProgressScreen() {
         loadProgress(),
         loadPhasesAndTasks(),
         loadLogs(),
+        loadProject(), // Load project info
       ]);
     } catch (error: any) {
       if (error.response?.status === 403) {
@@ -168,6 +177,17 @@ export default function ProgressScreen() {
       }
     } catch (error) {
       console.error("Error loading logs:", error);
+    }
+  };
+
+  const loadProject = async () => {
+    try {
+      const response = await projectApi.getProject(id!);
+      if (response.success && response.data) {
+        setProject(response.data);
+      }
+    } catch (error) {
+      console.error("Error loading project:", error);
     }
   };
 
@@ -380,9 +400,9 @@ export default function ProgressScreen() {
         <TouchableOpacity
           style={[styles.treeTaskRow, { paddingLeft: 12 + level * 24 }]}
           onPress={() => {
-            // Navigate to task detail or open modal
+            // Navigate to task edit page
             router.push({
-              pathname: `/projects/${id}/construction-plan`,
+              pathname: `/projects/${id}/task-form`,
               params: { taskId: task.id.toString() },
             });
           }}
@@ -566,13 +586,15 @@ export default function ProgressScreen() {
         title="Tiến Độ Thi Công"
         showBackButton
         rightComponent={
-          <TouchableOpacity
-            style={styles.createButtonHeader}
-            onPress={() => router.push(`/projects/${id}/construction-plan`)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="add" size={24} color="#3B82F6" />
-          </TouchableOpacity>
+          <PermissionGuard permission={Permissions.PROJECT_TASK_CREATE} projectId={id}>
+            <TouchableOpacity
+              style={styles.createButtonHeader}
+              onPress={() => router.push(`/projects/${id}/task-form`)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="add" size={24} color="#3B82F6" />
+            </TouchableOpacity>
+          </PermissionGuard>
         }
       />
 
@@ -588,12 +610,12 @@ export default function ProgressScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.viewModeButton, viewMode === "report" && styles.viewModeButtonActive]}
-          onPress={() => setViewMode("report")}
+          style={[styles.viewModeButton, viewMode === "gantt" && styles.viewModeButtonActive]}
+          onPress={() => setViewMode("gantt")}
         >
-          <Ionicons name="bar-chart-outline" size={20} color={viewMode === "report" ? "#FFFFFF" : "#6B7280"} />
-          <Text style={[styles.viewModeText, viewMode === "report" && styles.viewModeTextActive]}>
-            Báo cáo tiến độ
+          <Ionicons name="calendar-outline" size={20} color={viewMode === "gantt" ? "#FFFFFF" : "#6B7280"} />
+          <Text style={[styles.viewModeText, viewMode === "gantt" && styles.viewModeTextActive]}>
+            Biểu đồ Gantt
           </Text>
         </TouchableOpacity>
       </View>
@@ -661,12 +683,14 @@ export default function ProgressScreen() {
                 <View style={styles.emptyContainer}>
                   <Ionicons name="folder-outline" size={64} color="#D1D5DB" />
                   <Text style={styles.emptyText}>Chưa có hạng mục công việc</Text>
-                  <TouchableOpacity
-                    style={styles.createButton}
-                    onPress={() => router.push(`/projects/${id}/construction-plan`)}
-                  >
-                    <Text style={styles.createButtonText}>Tạo kế hoạch thi công</Text>
-                  </TouchableOpacity>
+                  <PermissionGuard permission={Permissions.PROJECT_TASK_CREATE} projectId={id}>
+                    <TouchableOpacity
+                      style={styles.createButton}
+                      onPress={() => router.push(`/projects/${id}/task-form`)}
+                    >
+                      <Text style={styles.createButtonText}>Tạo kế hoạch thi công</Text>
+                    </TouchableOpacity>
+                  </PermissionGuard>
                 </View>
               ) : (
                 <View style={styles.treeContainer}>
@@ -677,65 +701,21 @@ export default function ProgressScreen() {
           </>
         ) : (
           <>
-            {/* Báo cáo tiến độ */}
-            <View style={styles.reportSection}>
-              <Text style={styles.sectionTitle}>Báo cáo tiến độ</Text>
-
-              {progressData && progressData.progress ? (
-                <>
-                  <View style={styles.chartContainer}>
-                    <ProgressChart
-                      progress={progressData.progress}
-                      logs={progressData.logs || []}
-                      type="progress"
-                    />
-                  </View>
-
-                  {progressData.logs && progressData.logs.length > 0 && (
-                    <View style={styles.chartContainer}>
-                      <ProgressChart
-                        progress={progressData.progress}
-                        logs={progressData.logs}
-                        type="line"
-                      />
-                    </View>
-                  )}
-                </>
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="bar-chart-outline" size={64} color="#D1D5DB" />
-                  <Text style={styles.emptyText}>Chưa có dữ liệu tiến độ</Text>
-                </View>
-              )}
-
-              {/* Tóm tắt cảnh báo */}
-              {(warnings.delayed.length > 0 || warnings.needsUpdate.length > 0) && (
-                <View style={styles.summarySection}>
-                  <Text style={styles.summaryTitle}>Tóm tắt cảnh báo</Text>
-
-                  <View style={styles.summaryCard}>
-                    <View style={styles.summaryRow}>
-                      <View style={[styles.summaryIcon, { backgroundColor: "#EF444420" }]}>
-                        <Ionicons name="warning-outline" size={20} color="#EF4444" />
-                      </View>
-                      <View style={styles.summaryContent}>
-                        <Text style={styles.summaryLabel}>Trễ tiến độ</Text>
-                        <Text style={styles.summaryValue}>{warnings.delayed.length} hạng mục</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.summaryCard}>
-                    <View style={[styles.summaryIcon, { backgroundColor: "#F59E0B20" }]}>
-                      <Ionicons name="time-outline" size={20} color="#F59E0B" />
-                    </View>
-                    <View style={styles.summaryContent}>
-                      <Text style={styles.summaryLabel}>Chưa cập nhật</Text>
-                      <Text style={styles.summaryValue}>{warnings.needsUpdate.length} hạng mục</Text>
-                    </View>
-                  </View>
-                </View>
-              )}
+            {/* Gantt Chart View */}
+            <View style={styles.ganttSection}>
+              <Text style={styles.sectionTitle}>Biểu đồ Gantt</Text>
+              <GanttChart
+                tasks={tasks}
+                onTaskPress={(task) => {
+                  router.push({
+                    pathname: `/projects/${id}/task-form`,
+                    params: { taskId: task.id.toString() },
+                  });
+                }}
+                projectName={project?.name}
+                projectStartDate={project?.start_date}
+                readonly={!canUpdate}
+              />
             </View>
           </>
         )}
@@ -826,6 +806,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
     lineHeight: 20,
+  },
+  ganttSection: {
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    marginBottom: 12,
   },
   structureSection: {
     padding: 16,

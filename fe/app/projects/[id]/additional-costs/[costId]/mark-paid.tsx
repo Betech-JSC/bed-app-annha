@@ -121,8 +121,11 @@ export default function MarkPaidAdditionalCostScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Đã Thanh Toán" showBackButton />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
       </View>
     );
   }
@@ -130,16 +133,16 @@ export default function MarkPaidAdditionalCostScreen() {
   if (permissionDenied) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Đánh Dấu Đã Thanh Toán" showBackButton />
+        <ScreenHeader title="Đã Thanh Toán" showBackButton />
         <PermissionDenied message={permissionMessage} />
       </View>
     );
   }
   return (
-    <PermissionGuard permission={Permissions.ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER} projectId={id}>
+    <PermissionGuard permission={Permissions.ADDITIONAL_COST_UPDATE} projectId={id}>
       <View style={styles.container}>
         <ScreenHeader
-          title="Đánh Dấu Đã Thanh Toán"
+          title="Đã Thanh Toán"
           showBackButton
           rightComponent={
             <TouchableOpacity

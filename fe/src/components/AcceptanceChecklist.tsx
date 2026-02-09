@@ -404,26 +404,12 @@ export default function AcceptanceChecklist({
         style={styles.container}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100, flexGrow: 1 }}
       >
-        {/* Header với nút thêm mới */}
-        {projectId && (
-          <View style={styles.headerActions}>
-            {canCreate && (
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={openCreateModal}
-              >
-                <Ionicons name="add-circle" size={20} color="#FFFFFF" />
-                <Text style={styles.addButtonText}>Thêm giai đoạn</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+
 
         {stages.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="checkmark-circle-outline" size={64} color="#D1D5DB" />
             <Text style={styles.emptyText}>Chưa có giai đoạn nghiệm thu</Text>
-            <Text style={styles.emptySubtext}>Nhấn nút "Thêm giai đoạn" để bắt đầu</Text>
           </View>
         ) : (
           stages.map((stage) => {

@@ -7,10 +7,12 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { predictiveAnalyticsApi, PredictiveAnalysis } from "@/api/predictiveAnalyticsApi";
+import { evmApi } from "@/api/evmApi";
 import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
@@ -19,6 +21,7 @@ export default function PredictionsScreen() {
   const tabBarHeight = useTabBarHeight();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
   const [analysis, setAnalysis] = useState<PredictiveAnalysis | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
@@ -47,9 +50,25 @@ export default function PredictionsScreen() {
     }
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadData();
+    await handleRecalculate();
+    setRefreshing(false);
+  };
+
+  const handleRecalculate = async () => {
+    try {
+      setRecalculating(true);
+      // Recalculate underlying metrics (EVM) which predictions might depend on
+      await evmApi.calculateEvm(id!);
+      // Reload analysis
+      await loadData();
+    } catch (error) {
+      console.error("Error recalculating metrics:", error);
+      Alert.alert("Lỗi", "Không thể cập nhật dữ liệu phân tích");
+    } finally {
+      setRecalculating(false);
+    }
   };
 
   const getRiskLevelColor = (level: string) => {
@@ -142,6 +161,20 @@ export default function PredictionsScreen() {
             </Text>
           </View>
           <Text style={styles.riskScore}>Điểm Rủi Ro: {analysis.overall_risk_score}/100</Text>
+          <TouchableOpacity
+            style={styles.recalculateButton}
+            onPress={handleRecalculate}
+            disabled={recalculating}
+          >
+            {recalculating ? (
+              <ActivityIndicator size="small" color="#3B82F6" />
+            ) : (
+              <>
+                <Ionicons name="refresh-outline" size={16} color="#3B82F6" />
+                <Text style={styles.recalculateText}>Cập nhật phân tích</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Completion Prediction */}
@@ -552,6 +585,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: "#1F2937",
+  },
+  recalculateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: 8,
+    marginTop: 8,
+  },
+  recalculateText: {
+    fontSize: 14,
+    color: "#3B82F6",
+    fontWeight: "500",
   },
 });
 

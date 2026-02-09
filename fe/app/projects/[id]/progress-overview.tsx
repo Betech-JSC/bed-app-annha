@@ -591,7 +591,7 @@ export default function ProgressOverviewScreen() {
             <Text style={styles.emptyText}>Chưa có hạng mục công việc</Text>
             <TouchableOpacity
               style={styles.createButton}
-              onPress={() => router.push(`/projects/${id}/construction-plan`)}
+              onPress={() => router.push(`/projects/${id}/progress`)}
             >
               <Text style={styles.createButtonText}>Tạo kế hoạch thi công</Text>
             </TouchableOpacity>

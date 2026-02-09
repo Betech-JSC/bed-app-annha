@@ -495,4 +495,129 @@ class NotificationService
             true
         );
     }
+
+    /**
+     * Thông báo xác nhận thanh toán
+     */
+    public function notifyPaymentConfirmed(\App\Models\ProjectPayment $payment): void
+    {
+        $project = $payment->project;
+        if (!$project->customer_id) return;
+
+        $this->sendToUser(
+            $project->customer_id,
+            Notification::TYPE_SYSTEM,
+            Notification::CATEGORY_STATUS_CHANGE,
+            "Thanh toán được xác nhận",
+            "Đợt thanh toán #{$payment->payment_number} của dự án '{$project->name}' đã được kế toán xác nhận.",
+            [
+                'project_id' => $project->id,
+                'payment_id' => $payment->id,
+            ],
+            Notification::PRIORITY_MEDIUM,
+            "/projects/{$project->id}/payments"
+        );
+    }
+
+    /**
+     * Thông báo từ chối thanh toán
+     */
+    public function notifyPaymentRejected(\App\Models\ProjectPayment $payment, string $reason): void
+    {
+        $project = $payment->project;
+        if (!$project->customer_id) return;
+
+        $this->sendToUser(
+            $project->customer_id,
+            Notification::TYPE_SYSTEM,
+            Notification::CATEGORY_STATUS_CHANGE,
+            "Thanh toán bị từ chối",
+            "Kế toán đã từ chối xác nhận thanh toán đợt #{$payment->payment_number} của dự án '{$project->name}'. Lý do: {$reason}",
+            [
+                'project_id' => $project->id,
+                'payment_id' => $payment->id,
+                'reason' => $reason,
+            ],
+            Notification::PRIORITY_HIGH,
+            "/projects/{$project->id}/payments"
+        );
+    }
+
+    /**
+     * Thông báo xác nhận chi phí phát sinh
+     */
+    public function notifyCostConfirmed(\App\Models\AdditionalCost $cost): void
+    {
+        $project = $cost->project;
+        $userIds = [$cost->proposed_by];
+        if ($project->customer_id) {
+            $userIds[] = $project->customer_id;
+        }
+        $userIds = array_filter(array_unique($userIds));
+
+        $this->sendToUsers(
+            $userIds,
+            Notification::TYPE_SYSTEM,
+            Notification::CATEGORY_STATUS_CHANGE,
+            "Chi phí phát sinh được xác nhận",
+            "Chi phí phát sinh cho dự án '{$project->name}' đã được kế toán xác nhận thanh toán.",
+            [
+                'project_id' => $project->id,
+                'cost_id' => $cost->id,
+            ],
+            Notification::PRIORITY_MEDIUM,
+            "/projects/{$project->id}/costs"
+        );
+    }
+
+    /**
+     * Thông báo từ chối chi phí phát sinh
+     */
+    public function notifyCostRejected(\App\Models\AdditionalCost $cost, string $reason): void
+    {
+        $project = $cost->project;
+        $userIds = [$cost->proposed_by];
+        if ($project->customer_id) {
+            $userIds[] = $project->customer_id;
+        }
+        $userIds = array_filter(array_unique($userIds));
+
+        $this->sendToUsers(
+            $userIds,
+            Notification::TYPE_SYSTEM,
+            Notification::CATEGORY_STATUS_CHANGE,
+            "Chi phí phát sinh bị từ chối",
+            "Chi phí phát sinh cho dự án '{$project->name}' đã bị từ chối. Lý do: {$reason}",
+            [
+                'project_id' => $project->id,
+                'cost_id' => $cost->id,
+                'reason' => $reason,
+            ],
+            Notification::PRIORITY_HIGH,
+            "/projects/{$project->id}/costs"
+        );
+    }
+
+    /**
+     * Thông báo giai đoạn nghiệm thu được duyệt
+     */
+    public function notifyAcceptanceStageApproved(\App\Models\AcceptanceStage $stage, string $levelName): void
+    {
+        $project = $stage->project;
+        
+        // Notify PM and Team
+        $this->sendToProjectTeam(
+            $project->id,
+            Notification::TYPE_SYSTEM,
+            Notification::CATEGORY_STATUS_CHANGE,
+            "Giai đoạn nghiệm thu được duyệt",
+            "Giai đoạn '{$stage->name}' của dự án '{$project->name}' đã được duyệt bởi {$levelName}.",
+            [
+                'project_id' => $project->id,
+                'stage_id' => $stage->id,
+            ],
+            Notification::PRIORITY_MEDIUM,
+            "/projects/{$project->id}/acceptance"
+        );
+    }
 }

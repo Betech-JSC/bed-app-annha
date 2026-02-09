@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { roleApi } from "@/api/roleApi";
 import { permissionApi } from "@/api/permissionApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
+import { getModuleLabel as getTranslatedModuleLabel, getPermissionDetail } from "@/utils/permissionTranslation";
 
 interface Permission {
   id: number;
@@ -156,22 +158,7 @@ export default function RolePermissionsScreen() {
   };
 
   const getModuleLabel = (module: string) => {
-    const labels: Record<string, string> = {
-      projects: "Quản Lý Dự Án",
-      contracts: "Hợp Đồng",
-      payments: "Thanh Toán",
-      costs: "Chi Phí",
-      additional_costs: "Chi Phí Phát Sinh",
-      revenue: "Doanh Thu",
-      personnel: "Nhân Sự",
-      hr: "Quản Lý Nhân Sự",
-      documents: "Tài Liệu",
-      defects: "Lỗi",
-      acceptance: "Nghiệm Thu",
-      logs: "Nhật Ký",
-      permissions: "Phân Quyền",
-    };
-    return labels[module] || module;
+    return getTranslatedModuleLabel(module);
   };
 
   if (loading) {
@@ -280,11 +267,14 @@ export default function RolePermissionsScreen() {
                     </View>
                     <View style={styles.permissionInfo}>
                       <Text style={styles.permissionName}>
+                        {getPermissionDetail(permission.name).label}
+                      </Text>
+                      <Text style={styles.permissionCode}>
                         {permission.name}
                       </Text>
-                      {permission.description && (
+                      {(permission.description || getPermissionDetail(permission.name).description) && (
                         <Text style={styles.permissionDescription}>
-                          {permission.description}
+                          {permission.description || getPermissionDetail(permission.name).description}
                         </Text>
                       )}
                     </View>
@@ -502,13 +492,19 @@ const styles = StyleSheet.create({
   },
   permissionName: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#1F2937",
+    marginBottom: 2,
+  },
+  permissionCode: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
     marginBottom: 4,
   },
   permissionDescription: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#4B5563",
     lineHeight: 16,
   },
   footer: {

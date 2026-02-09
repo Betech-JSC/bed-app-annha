@@ -241,7 +241,7 @@ export default function PersonnelRolesScreen() {
       <Modal
         visible={showCreateModal || editingRole !== null}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowCreateModal(false);
           setEditingRole(null);

@@ -480,7 +480,7 @@ export default function SubcontractorsScreen() {
       <Modal
         visible={modalVisible}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setModalVisible(false)}
       >
         <KeyboardAvoidingView
@@ -763,7 +763,7 @@ export default function SubcontractorsScreen() {
       <Modal
         visible={showDetailModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowDetailModal(false);
           setSelectedSubcontractorDetail(null);

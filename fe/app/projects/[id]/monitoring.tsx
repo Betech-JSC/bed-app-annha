@@ -99,7 +99,7 @@ export default function ProjectMonitoringScreen() {
         break;
       case "delay":
       case "deadline":
-        router.push(`/projects/${id}/construction-plan`);
+        router.push(`/projects/${id}/progress`);
         break;
       case "budget":
         router.push(`/projects/${id}/budget`);

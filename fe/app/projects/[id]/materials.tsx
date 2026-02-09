@@ -337,7 +337,7 @@ export default function ProjectMaterialsScreen() {
             <Modal
                 visible={showAddModal}
                 animationType="slide"
-                presentationStyle="pageSheet"
+                presentationStyle="fullScreen"
                 onRequestClose={() => setShowAddModal(false)}
             >
                 <KeyboardAvoidingView
