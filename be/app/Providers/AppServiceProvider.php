@@ -53,11 +53,11 @@ class AppServiceProvider extends ServiceProvider
         // For unauthenticated requests, use IP-based limiting (60 per minute)
         RateLimiter::for('api', function (Request $request) {
             if ($request->user()) {
-                // Authenticated users: 120 requests per minute
-                return Limit::perMinute(120)->by($request->user()->id);
+                // Authenticated users: 1000 requests per minute
+                return Limit::perMinute(1000)->by($request->user()->id);
             }
-            // Unauthenticated: 60 requests per minute per IP
-            return Limit::perMinute(60)->by($request->ip());
+            // Unauthenticated: 600 requests per minute per IP
+            return Limit::perMinute(600)->by($request->ip());
         });
     }
 }

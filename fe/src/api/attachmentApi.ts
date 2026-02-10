@@ -21,6 +21,8 @@ export interface UploadResponse {
   file: string;
   location: string;
   attachment_id: number;
+  original_name?: string;
+  file_size?: number;
 }
 
 export const attachmentApi = {

@@ -22,6 +22,7 @@ import { ProjectTask } from "@/types/ganttTypes";
 import { Ionicons } from "@expo/vector-icons";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { ScreenHeader, DatePickerInput, PermissionDenied } from "@/components";
+import ImageViewer from "@/components/ImageViewer";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
@@ -58,8 +59,10 @@ export default function ConstructionLogsScreen() {
   const [editingLog, setEditingLog] = useState<ConstructionLog | null>(null);
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
+  const [viewerImages, setViewerImages] = useState<any[]>([]);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const [showWeatherPicker, setShowWeatherPicker] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Partial<ProjectTask> | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
@@ -737,11 +740,24 @@ export default function ConstructionLogsScreen() {
                       <View key={attachment.id || index} style={styles.logCardAttachmentItem}>
                         {attachment.mime_type?.startsWith("image/") ? (
                           <TouchableOpacity
-                            onPress={() => setPreviewImage(
-                              attachment.file_path
-                                ? `http://localhost:8000/storage/${attachment.file_path}`
-                                : attachment.file_url
-                            )}
+                            onPress={() => {
+                              const images = item.attachments
+                                .filter((a: any) => a.mime_type?.startsWith("image/"))
+                                .map((a: any) => ({
+                                  uri: a.file_path
+                                    ? `http://localhost:8000/storage/${a.file_path}`
+                                    : a.file_url,
+                                  name: a.file_name
+                                }));
+                              const index = images.findIndex((img: any) =>
+                                img.uri === (attachment.file_path
+                                  ? `http://localhost:8000/storage/${attachment.file_path}`
+                                  : attachment.file_url)
+                              );
+                              setViewerImages(images);
+                              setViewerIndex(index >= 0 ? index : 0);
+                              setViewerVisible(true);
+                            }}
                           >
                             <Image
                               source={{
@@ -1293,101 +1309,132 @@ export default function ConstructionLogsScreen() {
 
             {selectedDateLogs.length > 0 ? (
               selectedDateLogs.map((log, logIndex) => (
-                <View key={log.id || logIndex} style={[styles.logDetailItem, logIndex > 0 && styles.logDetailItemSeparator]}>
-                  {log.task && (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Tiến độ công việc</Text>
-                      <Text style={styles.detailValue}>{log.task.name}</Text>
-                      {log.task.progress_percentage !== undefined && (
-                        <Text style={styles.detailLabel}>
-                          Tiến độ: {log.task.progress_percentage}%
-                        </Text>
+                <View key={log.id || logIndex} style={[styles.logDetailCard, logIndex > 0 && styles.logDetailCardMargin]}>
+                  {/* Header: Task & Actions */}
+                  <View style={styles.detailCardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.detailTaskName}>
+                        {log.task?.name || "Công việc khác"}
+                      </Text>
+                      {log.task?.code && (
+                        <Text style={styles.detailTaskCode}>{log.task.code}</Text>
                       )}
                     </View>
-                  )}
+                    <View style={styles.detailCardActions}>
+                      <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
+                        <TouchableOpacity
+                          style={styles.iconActionButton}
+                          onPress={() => {
+                            setDetailModalVisible(false);
+                            openEditModal(log);
+                          }}
+                        >
+                          <Ionicons name="create-outline" size={20} color="#6B7280" />
+                        </TouchableOpacity>
+                      </PermissionGuard>
+                      <PermissionGuard permission={Permissions.LOG_DELETE} projectId={id}>
+                        <TouchableOpacity
+                          style={styles.iconActionButton}
+                          onPress={() => {
+                            setDetailModalVisible(false);
+                            handleDelete(log);
+                          }}
+                        >
+                          <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                      </PermissionGuard>
+                    </View>
+                  </View>
 
-                  {log.completion_percentage > 0 && (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>% Hoàn thành</Text>
-                      <Text style={styles.detailValue}>{log.completion_percentage}%</Text>
+                  {/* Progress Bar */}
+                  {log.completion_percentage !== undefined && (
+                    <View style={styles.detailProgressContainer}>
+                      <View style={styles.detailProgressBar}>
+                        <View
+                          style={[
+                            styles.detailProgressFill,
+                            { width: `${Math.min(100, Math.max(0, log.completion_percentage))}%` }
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.detailProgressText}>{log.completion_percentage}% hoàn thành</Text>
                     </View>
                   )}
 
-                  <View style={styles.detailRowGrid}>
+                  {/* Meta Info: Weather & Personnel */}
+                  <View style={styles.detailMetaRow}>
                     {log.weather && (
-                      <View style={[styles.detailSection, { flex: 1 }]}>
-                        <Text style={styles.detailSectionTitle}>Thời tiết</Text>
-                        <Text style={styles.detailValue}>{log.weather}</Text>
+                      <View style={styles.detailMetaItem}>
+                        <Ionicons name={log.weather.toLowerCase().includes("mưa") ? "rainy-outline" : "sunny-outline"} size={16} color="#6B7280" />
+                        <Text style={styles.detailMetaText}>{log.weather}</Text>
                       </View>
                     )}
-
-                    {log.personnel_count && (
-                      <View style={[styles.detailSection, { flex: 1 }]}>
-                        <Text style={styles.detailSectionTitle}>Số nhân sự</Text>
-                        <Text style={styles.detailValue}>{log.personnel_count} người</Text>
+                    {log.personnel_count !== undefined && (
+                      <View style={styles.detailMetaItem}>
+                        <Ionicons name="people-outline" size={16} color="#6B7280" />
+                        <Text style={styles.detailMetaText}>{log.personnel_count} nhân sự</Text>
                       </View>
                     )}
                   </View>
 
+                  {/* Notes */}
                   {log.notes && (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Ghi chú</Text>
-                      <Text style={styles.detailValue}>{log.notes}</Text>
+                    <View style={styles.detailNotes}>
+                      <Text style={styles.detailNotesText}>{log.notes}</Text>
                     </View>
                   )}
 
+                  {/* Files Grid */}
                   {log.attachments && log.attachments.length > 0 && (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Hình ảnh thực tế ({log.attachments.length})</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalImages}>
+                    <View style={styles.detailFilesSection}>
+                      <Text style={styles.detailFilesTitle}>Hình ảnh & Tài liệu ({log.attachments.length})</Text>
+                      <View style={styles.imagesGrid}>
                         {log.attachments.map((attachment: any, index: number) => (
-                          <View key={attachment.id || index} style={styles.imageItem}>
+                          <View key={attachment.id || index} style={styles.imageGridItem}>
                             {attachment.mime_type?.startsWith("image/") ? (
-                              <Image
-                                source={{ uri: attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : attachment.file_url }}
-                                style={styles.detailImage}
-                                resizeMode="cover"
-                              />
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const images = log.attachments
+                                    .filter((a: any) => a.mime_type?.startsWith("image/"))
+                                    .map((a: any) => ({
+                                      uri: a.file_path
+                                        ? `http://localhost:8000/storage/${a.file_path}`
+                                        : a.file_url,
+                                      name: a.file_name
+                                    }));
+                                  const index = images.findIndex((img: any) =>
+                                    img.uri === (attachment.file_path
+                                      ? `http://localhost:8000/storage/${attachment.file_path}`
+                                      : attachment.file_url)
+                                  );
+                                  setViewerImages(images);
+                                  setViewerIndex(index >= 0 ? index : 0);
+                                  setViewerVisible(true);
+                                }}
+                              >
+                                <Image
+                                  source={{
+                                    uri: attachment.file_path
+                                      ? `http://localhost:8000/storage/${attachment.file_path}`
+                                      : attachment.file_url
+                                  }}
+                                  style={styles.detailImageGrid}
+                                  resizeMode="cover"
+                                />
+                              </TouchableOpacity>
                             ) : (
-                              <View style={styles.detailFile}>
-                                <Ionicons name="document-outline" size={32} color="#3B82F6" />
-                                <Text style={styles.detailFileName} numberOfLines={2}>
+                              <View style={styles.detailFileGrid}>
+                                <Ionicons name="document-outline" size={24} color="#3B82F6" />
+                                <Text style={styles.detailFileName} numberOfLines={1}>
                                   {attachment.file_name || "File"}
                                 </Text>
                               </View>
                             )}
                           </View>
                         ))}
-                      </ScrollView>
+                      </View>
                     </View>
                   )}
-
-                  <View style={styles.detailActions}>
-                    <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
-                      <TouchableOpacity
-                        style={[styles.detailActionButton, styles.editButton]}
-                        onPress={() => {
-                          setDetailModalVisible(false);
-                          openEditModal(log);
-                        }}
-                      >
-                        <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-                        <Text style={styles.detailActionButtonTextCompact}>Sửa</Text>
-                      </TouchableOpacity>
-                    </PermissionGuard>
-                    <PermissionGuard permission={Permissions.LOG_DELETE} projectId={id}>
-                      <TouchableOpacity
-                        style={[styles.detailActionButton, styles.deleteButton]}
-                        onPress={() => {
-                          setDetailModalVisible(false);
-                          handleDelete(log);
-                        }}
-                      >
-                        <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
-                        <Text style={styles.detailActionButtonTextCompact}>Xóa</Text>
-                      </TouchableOpacity>
-                    </PermissionGuard>
-                  </View>
                 </View>
               ))
             ) : (
@@ -1414,33 +1461,18 @@ export default function ConstructionLogsScreen() {
                 )}
               </View>
             )}
+            <View style={{ height: 40 }} />
           </ScrollView>
         </View>
       </Modal>
 
       {/* Image Preview Modal */}
-      <Modal
-        visible={!!previewImage}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setPreviewImage(null)}
-      >
-        <View style={styles.imagePreviewOverlay}>
-          <TouchableOpacity
-            style={styles.imagePreviewCloseButton}
-            onPress={() => setPreviewImage(null)}
-          >
-            <Ionicons name="close" size={28} color="#FFFFFF" />
-          </TouchableOpacity>
-          {previewImage && (
-            <Image
-              source={{ uri: previewImage }}
-              style={styles.imagePreview}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
+      <ImageViewer
+        visible={viewerVisible}
+        images={viewerImages}
+        initialIndex={viewerIndex}
+        onClose={() => setViewerVisible(false)}
+      />
     </View >
   );
 }
@@ -2347,6 +2379,143 @@ const styles = StyleSheet.create({
     color: "#4B5563",
     lineHeight: 18,
     fontStyle: 'italic',
+  },
+  // New Styles for Optimized Detail View
+  logDetailCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  logDetailCardMargin: {
+    marginTop: 16,
+  },
+  detailCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  detailTaskName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 2,
+  },
+  detailTaskCode: {
+    fontSize: 12,
+    color: "#6B7280",
+    backgroundColor: "#F3F4F6",
+    alignSelf: "flex-start",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  detailCardActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  iconActionButton: {
+    padding: 8,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+  },
+  detailProgressContainer: {
+    marginBottom: 12,
+  },
+  detailProgressBar: {
+    height: 8,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
+    marginBottom: 4,
+    overflow: "hidden",
+  },
+  detailProgressFill: {
+    height: "100%",
+    backgroundColor: "#3B82F6",
+    borderRadius: 4,
+  },
+  detailProgressText: {
+    fontSize: 12,
+    color: "#3B82F6",
+    fontWeight: "600",
+    textAlign: "right",
+  },
+  detailMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  detailMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  detailMetaText: {
+    fontSize: 13,
+    color: "#4B5563",
+  },
+  detailNotes: {
+    marginBottom: 12,
+    backgroundColor: "#F9FAFB",
+    padding: 10,
+    borderRadius: 8,
+  },
+  detailNotesText: {
+    fontSize: 14,
+    color: "#374151",
+    lineHeight: 20,
+  },
+  detailFilesSection: {
+    marginTop: 4,
+  },
+  detailFilesTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#4B5563",
+    marginBottom: 8,
+  },
+  imagesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  imageGridItem: {
+    width: "31%", // ~3 items per row with gap
+    aspectRatio: 1,
+  },
+  detailImageGrid: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+  },
+  detailFileGrid: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 4,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  detailFileName: {
+    fontSize: 10,
+    color: "#6B7280",
+    marginTop: 4,
+    textAlign: "center",
   },
 });
 

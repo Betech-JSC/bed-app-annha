@@ -249,6 +249,7 @@ class AttachmentController extends Controller
                         'attachment_id' => $attachment->id,
                         'original_name' => $file->getClientOriginalName(),
                         'type' => $isImage ? 'image' : ($isVideo ? 'video' : 'document'),
+                        'file_size' => $file->getSize(),
                     ];
                 } catch (\Exception $e) {
                     Log::error("Error processing file at index {$index}", [

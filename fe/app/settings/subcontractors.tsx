@@ -265,132 +265,130 @@ export default function SubcontractorsScreen() {
       {/* Create/Edit Modal */}
       <Modal
         visible={modalVisible}
-        transparent={true}
         animationType="slide"
+        presentationStyle="fullScreen"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingSubcontractor ? "Chỉnh Sửa Nhà Thầu Phụ" : "Thêm Nhà Thầu Phụ"}
-              </Text>
+        <View style={styles.modalContent}>
+          <ScreenHeader
+            title={editingSubcontractor ? "Chỉnh Sửa Nhà Thầu Phụ" : "Thêm Nhà Thầu Phụ"}
+            leftComponent={
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
+            }
+          />
+
+          <ScrollView style={styles.modalBody}>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>
+                Tên nhà thầu phụ <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập tên nhà thầu phụ"
+                value={formData.name}
+                onChangeText={(text) => setFormData({ ...formData, name: text })}
+              />
             </View>
 
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>
-                  Tên nhà thầu phụ <Text style={styles.required}>*</Text>
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập tên nhà thầu phụ"
-                  value={formData.name}
-                  onChangeText={(text) => setFormData({ ...formData, name: text })}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Hạng mục</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ví dụ: Xây dựng, Điện, Nước..."
-                  value={formData.category}
-                  onChangeText={(text) => setFormData({ ...formData, category: text })}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Người liên hệ</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Tên người liên hệ"
-                  value={formData.contact_person}
-                  onChangeText={(text) => setFormData({ ...formData, contact_person: text })}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Số điện thoại</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Số điện thoại"
-                  value={formData.phone}
-                  onChangeText={(text) => setFormData({ ...formData, phone: text })}
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email"
-                  value={formData.email}
-                  onChangeText={(text) => setFormData({ ...formData, email: text })}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Địa chỉ</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Địa chỉ"
-                  value={formData.address}
-                  onChangeText={(text) => setFormData({ ...formData, address: text })}
-                  multiline
-                  numberOfLines={2}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Mã số thuế</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Mã số thuế"
-                  value={formData.tax_code}
-                  onChangeText={(text) => setFormData({ ...formData, tax_code: text })}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Mô tả</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Mô tả (tùy chọn)"
-                  value={formData.description}
-                  onChangeText={(text) => setFormData({ ...formData, description: text })}
-                  multiline
-                  numberOfLines={4}
-                />
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-                disabled={saving}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleSave}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.saveButtonText}>Lưu</Text>
-                )}
-              </TouchableOpacity>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Hạng mục</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ví dụ: Xây dựng, Điện, Nước..."
+                value={formData.category}
+                onChangeText={(text) => setFormData({ ...formData, category: text })}
+              />
             </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Người liên hệ</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Tên người liên hệ"
+                value={formData.contact_person}
+                onChangeText={(text) => setFormData({ ...formData, contact_person: text })}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Số điện thoại</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Số điện thoại"
+                value={formData.phone}
+                onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                value={formData.email}
+                onChangeText={(text) => setFormData({ ...formData, email: text })}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Địa chỉ</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Địa chỉ"
+                value={formData.address}
+                onChangeText={(text) => setFormData({ ...formData, address: text })}
+                multiline
+                numberOfLines={2}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Mã số thuế</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Mã số thuế"
+                value={formData.tax_code}
+                onChangeText={(text) => setFormData({ ...formData, tax_code: text })}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Mô tả</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Mô tả (tùy chọn)"
+                value={formData.description}
+                onChangeText={(text) => setFormData({ ...formData, description: text })}
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => setModalVisible(false)}
+              disabled={saving}
+            >
+              <Text style={styles.cancelButtonText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.saveButton]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>Lưu</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -524,29 +522,10 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     marginTop: 8,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
+
   modalContent: {
+    flex: 1,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "90%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1F2937",
   },
   modalBody: {
     padding: 20,

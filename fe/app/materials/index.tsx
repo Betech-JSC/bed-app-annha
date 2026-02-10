@@ -347,14 +347,14 @@ export default function MaterialsScreen() {
                     keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
                 >
                     <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>
-                                {editingMaterial ? "Sửa Vật Liệu" : "Tạo Vật Liệu"}
-                            </Text>
-                            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
+                        <ScreenHeader
+                            title={editingMaterial ? "Sửa Vật Liệu" : "Tạo Vật Liệu"}
+                            leftComponent={
+                                <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+                                    <Ionicons name="close" size={24} color="#1F2937" />
+                                </TouchableOpacity>
+                            }
+                        />
 
                         <ScrollView
                             style={styles.modalBody}
@@ -459,9 +459,9 @@ export default function MaterialsScreen() {
 
                                 <CurrencyInput
                                     label={
-                                        <>
+                                        <Text style={styles.label}>
                                             Đơn giá <Text style={styles.required}>*</Text>
-                                        </>
+                                        </Text>
                                     }
                                     value={formData.unit_price}
                                     onChangeText={(value) => {

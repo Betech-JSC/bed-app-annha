@@ -41,6 +41,7 @@ class Notification extends Model
     const CATEGORY_COMMENT_MENTION = 'comment_mention';
     const CATEGORY_FILE_UPLOAD = 'file_upload';
     const CATEGORY_SYSTEM_UPDATE = 'system_update';
+    const CATEGORY_NEW_ITEM = 'new_item';
 
     // ==================================================================
     // CONSTANTS - Priority

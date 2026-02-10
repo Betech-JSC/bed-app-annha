@@ -10,6 +10,9 @@ export interface GlobalSubcontractor {
   address?: string;
   description?: string;
   tax_code?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +26,9 @@ export interface CreateGlobalSubcontractorData {
   address?: string;
   description?: string;
   tax_code?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
 }
 
 export const globalSubcontractorApi = {

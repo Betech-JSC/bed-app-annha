@@ -11,7 +11,9 @@ import {
   Alert,
   RefreshControl,
   TextInput,
+  Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { personnelApi, ProjectPersonnel, CreatePersonnelData } from "@/api/personnelApi";
 import { projectApi } from "@/api/projectApi";
@@ -24,6 +26,7 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 
 export default function PersonnelScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const tabBarHeight = useTabBarHeight();
@@ -314,15 +317,16 @@ export default function PersonnelScreen() {
       <Modal
         visible={showAddModal}
         animationType="slide"
-        presentationStyle="fullScreen"
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowAddModal(false)}
       >
         <View style={styles.modalFullContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Thêm Nhân Sự</Text>
-            <TouchableOpacity onPress={() => setShowAddModal(false)}>
+          <View style={[styles.modalHeader, Platform.OS === 'android' && { paddingTop: insets.top + 16 }]}>
+            <TouchableOpacity onPress={() => setShowAddModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={24} color="#1F2937" />
             </TouchableOpacity>
+            <Text style={styles.modalTitle}>Thêm Nhân Sự</Text>
+            <View style={{ width: 24 }} />
           </View>
 
           <View style={styles.searchContainer}>

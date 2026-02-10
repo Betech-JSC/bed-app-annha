@@ -51,6 +51,9 @@ export default function SubcontractorsScreen() {
     progress_start_date: null as Date | null,
     progress_end_date: null as Date | null,
     progress_status: "not_started" as "not_started" | "in_progress" | "completed" | "delayed",
+    bank_name: "",
+    bank_account_number: "",
+    bank_account_name: "",
     cost_group_id: null as number | null,
     cost_date: new Date(),
     create_cost: false,
@@ -141,6 +144,9 @@ export default function SubcontractorsScreen() {
       global_subcontractor_id: globalSub.id,
       name: globalSub.name,
       category: globalSub.category || "",
+      bank_name: globalSub.bank_name || "",
+      bank_account_number: globalSub.bank_account_number || "",
+      bank_account_name: globalSub.bank_account_name || "",
     });
     setShowGlobalList(false);
   };
@@ -283,6 +289,22 @@ export default function SubcontractorsScreen() {
       case "pending":
       default:
         return "#EF4444";
+    }
+  };
+
+  const getPaymentItemStatusColor = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "#10B981";
+      case "pending_accountant_confirmation":
+        return "#3B82F6";
+      case "pending_management_approval":
+        return "#F59E0B";
+      case "rejected":
+        return "#EF4444";
+      case "draft":
+      default:
+        return "#6B7280";
     }
   };
 
@@ -488,16 +510,17 @@ export default function SubcontractorsScreen() {
           style={styles.modalContainer}
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
-          <View style={styles.modalHeader}>
-            <TouchableOpacity
-              onPress={() => setModalVisible(false)}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Thêm nhà thầu phụ</Text>
-            <View style={{ width: 24 }} />
-          </View>
+          <ScreenHeader
+            title="Thêm nhà thầu phụ"
+            leftComponent={
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            }
+          />
 
           <ScrollView style={styles.modalBody} nestedScrollEnabled={true}>
             <View>
@@ -529,6 +552,9 @@ export default function SubcontractorsScreen() {
                         global_subcontractor_id: null,
                         name: "",
                         category: "",
+                        bank_name: "",
+                        bank_account_number: "",
+                        bank_account_name: "",
                       });
                     }}
                   >
@@ -548,6 +574,42 @@ export default function SubcontractorsScreen() {
                 placeholder="Nhập tổng báo giá"
               />
 
+
+              {/* Payment Information Section */}
+              <View style={styles.sectionDivider} />
+              <Text style={styles.sectionTitle}>Thông tin thanh toán</Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Tên ngân hàng</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="VD: Vietcombank, Techcombank..."
+                  value={formData.bank_name}
+                  onChangeText={(text) => setFormData({ ...formData, bank_name: text })}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Số tài khoản</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập số tài khoản"
+                  value={formData.bank_account_number}
+                  onChangeText={(text) => setFormData({ ...formData, bank_account_number: text })}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Chủ tài khoản</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nhập tên chủ tài khoản"
+                  value={formData.bank_account_name}
+                  onChangeText={(text) => setFormData({ ...formData, bank_account_name: text })}
+                  autoCapitalize="characters"
+                />
+              </View>
 
               {/* Progress Information Section */}
               <View style={styles.sectionDivider} />
@@ -671,6 +733,9 @@ export default function SubcontractorsScreen() {
                           ? formData.progress_end_date.toISOString().split("T")[0]
                           : undefined,
                         progress_status: formData.progress_status,
+                        bank_name: formData.bank_name || undefined,
+                        bank_account_number: formData.bank_account_number || undefined,
+                        bank_account_name: formData.bank_account_name || undefined,
                         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
                         // Mặc định luôn tạo chi phí dự án
                         cost_group_id: defaultCostGroupId || undefined,
@@ -684,6 +749,9 @@ export default function SubcontractorsScreen() {
                         global_subcontractor_id: null,
                         name: "",
                         category: "",
+                        bank_name: "",
+                        bank_account_number: "",
+                        bank_account_name: "",
                         total_quote: 0,
                         progress_start_date: null,
                         progress_end_date: null,
@@ -770,21 +838,20 @@ export default function SubcontractorsScreen() {
         }}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity
-              onPress={() => {
-                setShowDetailModal(false);
-                setSelectedSubcontractorDetail(null);
-              }}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>
-              {selectedSubcontractorDetail?.name || "Chi tiết nhà thầu phụ"}
-            </Text>
-            <View style={{ width: 24 }} />
-          </View>
+          <ScreenHeader
+            title={selectedSubcontractorDetail?.name || "Chi tiết nhà thầu phụ"}
+            leftComponent={
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDetailModal(false);
+                  setSelectedSubcontractorDetail(null);
+                }}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            }
+          />
 
           <ScrollView style={styles.modalBody} nestedScrollEnabled={true}>
             {selectedSubcontractorDetail && (
@@ -793,27 +860,136 @@ export default function SubcontractorsScreen() {
                 <View style={styles.detailSection}>
                   <Text style={styles.detailSectionTitle}>Thông tin tài chính</Text>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Tổng giá trị hợp đồng:</Text>
+                    <Text style={styles.detailLabel}>Hợp đồng:</Text>
                     <Text style={styles.detailValue}>
                       {formatCurrency(selectedSubcontractorDetail.total_quote)}
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Tổng đã thanh toán:</Text>
-                    <Text style={styles.detailValue}>
+                    <Text style={styles.detailLabel}>Đã thanh toán:</Text>
+                    <Text style={[styles.detailValue, { color: "#10B981" }]}>
                       {formatCurrency(selectedSubcontractorDetail.total_paid)}
                     </Text>
                   </View>
+                  {selectedSubcontractorDetail.approved_amount !== undefined &&
+                    selectedSubcontractorDetail.approved_amount > selectedSubcontractorDetail.total_paid && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Đang chờ chi:</Text>
+                        <Text style={[styles.detailValue, { color: "#3B82F6" }]}>
+                          {formatCurrency(selectedSubcontractorDetail.approved_amount - selectedSubcontractorDetail.total_paid)}
+                        </Text>
+                      </View>
+                    )}
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Còn lại:</Text>
-                    <Text style={styles.detailValue}>
-                      {formatCurrency(
-                        selectedSubcontractorDetail.total_quote -
-                        selectedSubcontractorDetail.total_paid
-                      )}
+                    <Text style={[styles.detailValue, { color: "#EF4444" }]}>
+                      {formatCurrency(selectedSubcontractorDetail.total_quote - selectedSubcontractorDetail.total_paid)}
                     </Text>
                   </View>
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${selectedSubcontractorDetail.total_quote > 0
+                            ? (selectedSubcontractorDetail.total_paid / selectedSubcontractorDetail.total_quote) * 100
+                            : 0}%`,
+                        },
+                      ]}
+                    />
+                  </View>
                 </View>
+
+                {/* Payments History */}
+                {selectedSubcontractorDetail.payments && selectedSubcontractorDetail.payments.length > 0 && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Lịch sử thanh toán</Text>
+                    {selectedSubcontractorDetail.payments.map((payment, idx) => (
+                      <View key={payment.id} style={[
+                        styles.paymentHistoryItem,
+                        idx !== selectedSubcontractorDetail.payments!.length - 1 && styles.borderBottom
+                      ]}>
+                        <View style={styles.paymentHistoryLeft}>
+                          <Text style={styles.paymentHistoryDate}>{formatDate(payment.payment_date)}</Text>
+                          <Text style={styles.paymentHistoryStage}>{payment.payment_stage || "Thanh toán"}</Text>
+                        </View>
+                        <View style={styles.paymentHistoryRight}>
+                          <Text style={styles.paymentHistoryAmount}>{formatCurrency(payment.amount)}</Text>
+                          <Text style={[
+                            styles.paymentHistoryStatus,
+                            { color: getPaymentItemStatusColor(payment.status) }
+                          ]}>{payment.status_label || payment.status}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Payment Schedule (Milestones) */}
+                {selectedSubcontractorDetail.payment_schedule && selectedSubcontractorDetail.payment_schedule.length > 0 && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Tiến độ thanh toán theo kế hoạch</Text>
+                    {selectedSubcontractorDetail.payment_schedule.map((milestone, idx) => (
+                      <View key={idx} style={[
+                        styles.milestoneItem,
+                        idx !== selectedSubcontractorDetail.payment_schedule!.length - 1 && styles.borderBottom
+                      ]}>
+                        <View style={styles.milestoneLeft}>
+                          <Text style={styles.milestoneName}>{milestone.milestone}</Text>
+                          {milestone.due_date && (
+                            <Text style={styles.milestoneDate}>Hạn: {formatDate(milestone.due_date)}</Text>
+                          )}
+                        </View>
+                        <View style={styles.milestoneRight}>
+                          <Text style={styles.milestoneAmount}>
+                            {milestone.amount ? formatCurrency(milestone.amount) : `${milestone.percentage}%`}
+                          </Text>
+                          <Text style={styles.milestonePercentage}>{milestone.percentage}% giá trị</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Payment Information */}
+                {(selectedSubcontractorDetail.bank_name ||
+                  selectedSubcontractorDetail.bank_account_number ||
+                  selectedSubcontractorDetail.bank_account_name) && (
+                    <View style={styles.detailSection}>
+                      <Text style={styles.detailSectionTitle}>Thông tin thanh toán</Text>
+                      {selectedSubcontractorDetail.bank_name && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Ngân hàng:</Text>
+                          <Text style={styles.detailValue}>
+                            {selectedSubcontractorDetail.bank_name}
+                          </Text>
+                        </View>
+                      )}
+                      {selectedSubcontractorDetail.bank_account_number && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Số tài khoản:</Text>
+                          <TouchableOpacity
+                            onPress={() => {
+                              // Optional: Copy to clipboard
+                              Alert.alert("Thông báo", "Đã sao chép số tài khoản");
+                            }}
+                          >
+                            <Text style={[styles.detailValue, { color: "#3B82F6" }]}>
+                              {selectedSubcontractorDetail.bank_account_number}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                      {selectedSubcontractorDetail.bank_account_name && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Chủ tài khoản:</Text>
+                          <Text style={[styles.detailValue, { fontWeight: "700" }]}>
+                            {selectedSubcontractorDetail.bank_account_name}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
 
                 {/* Progress Information */}
                 {(selectedSubcontractorDetail.progress_start_date ||
@@ -2126,5 +2302,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#1F2937",
+  },
+  paymentHistoryItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+  },
+  borderBottom: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  paymentHistoryLeft: {
+    flex: 1,
+  },
+  paymentHistoryDate: {
+    fontSize: 14,
+    color: "#1F2937",
+    fontWeight: "500",
+  },
+  paymentHistoryStage: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  paymentHistoryRight: {
+    alignItems: "flex-end",
+  },
+  paymentHistoryAmount: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  paymentHistoryStatus: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  milestoneItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+  },
+  milestoneLeft: {
+    flex: 1,
+  },
+  milestoneName: {
+    fontSize: 14,
+    color: "#1F2937",
+    fontWeight: "600",
+  },
+  milestoneDate: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  milestoneRight: {
+    alignItems: "flex-end",
+  },
+  milestoneAmount: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  milestonePercentage: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
   },
 });

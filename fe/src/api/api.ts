@@ -16,7 +16,7 @@ const getBaseURL = (): string => {
 
     // Fallback dựa trên __DEV__
     if (__DEV__) {
-        return 'http://localhost:8000/api';
+        return 'https://annha.betech-digital.com/api';
     }
 
     // Production default
@@ -85,7 +85,7 @@ api.interceptors.response.use(
             error.retryAfter = retryAfter;
             error.rateLimitRemaining = remaining;
             error.userMessage = `Quá nhiều yêu cầu. Vui lòng thử lại sau ${retryAfter} giây.`;
-            
+
             // Note: User-friendly alert should be shown in the component that catches this error
             // This prevents showing multiple alerts for the same rate limit event
         }

@@ -93,6 +93,9 @@ class SubcontractorController extends Controller
             'global_subcontractor_id' => 'nullable|exists:global_subcontractors,id',
             'name' => 'required_without:global_subcontractor_id|string|max:255',
             'category' => 'nullable|string|max:255',
+            'bank_name' => 'nullable|string|max:255',
+            'bank_account_number' => 'nullable|string|max:255',
+            'bank_account_name' => 'nullable|string|max:255',
             'total_quote' => 'required|numeric|min:0',
             'progress_start_date' => 'nullable|date',
             'progress_end_date' => 'nullable|date|after_or_equal:progress_start_date',
@@ -102,6 +105,11 @@ class SubcontractorController extends Controller
             'create_cost' => 'nullable|boolean',
             'cost_group_id' => 'nullable|exists:cost_groups,id',
             'cost_date' => 'nullable|date',
+            'payment_schedule' => 'nullable|array',
+            'payment_schedule.*.milestone' => 'required|string',
+            'payment_schedule.*.percentage' => 'required|numeric|min:0|max:100',
+            'payment_schedule.*.amount' => 'nullable|numeric',
+            'payment_schedule.*.due_date' => 'nullable|date',
         ]);
 
         try {
@@ -112,18 +120,26 @@ class SubcontractorController extends Controller
                 $globalSubcontractor = GlobalSubcontractor::findOrFail($validated['global_subcontractor_id']);
                 $validated['name'] = $globalSubcontractor->name;
                 $validated['category'] = $globalSubcontractor->category ?? $validated['category'] ?? null;
+                $validated['bank_name'] = $globalSubcontractor->bank_name ?? $validated['bank_name'] ?? null;
+                $validated['bank_account_number'] = $globalSubcontractor->bank_account_number ?? $validated['bank_account_number'] ?? null;
+                $validated['bank_account_name'] = $globalSubcontractor->bank_account_name ?? $validated['bank_account_name'] ?? null;
             }
 
             $subcontractor = Subcontractor::create([
                 'project_id' => $project->id,
+                'global_subcontractor_id' => $validated['global_subcontractor_id'] ?? null,
                 'name' => $validated['name'],
                 'category' => $validated['category'] ?? null,
+                'bank_name' => $validated['bank_name'] ?? null,
+                'bank_account_number' => $validated['bank_account_number'] ?? null,
+                'bank_account_name' => $validated['bank_account_name'] ?? null,
                 'total_quote' => $validated['total_quote'],
                 'advance_payment' => 0, // Không còn sử dụng, tạm ứng sẽ tạo từ Chi phí dự án
                 'progress_start_date' => $validated['progress_start_date'] ?? null,
                 'progress_end_date' => $validated['progress_end_date'] ?? null,
                 'progress_status' => $validated['progress_status'] ?? 'not_started',
                 'payment_status' => 'pending',
+                'payment_schedule' => $validated['payment_schedule'] ?? null,
                 'created_by' => $request->user()->id,
             ]);
 
@@ -190,10 +206,18 @@ class SubcontractorController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'category' => 'nullable|string|max:255',
+            'bank_name' => 'nullable|string|max:255',
+            'bank_account_number' => 'nullable|string|max:255',
+            'bank_account_name' => 'nullable|string|max:255',
             'total_quote' => 'sometimes|numeric|min:0',
             'progress_start_date' => 'nullable|date',
             'progress_end_date' => 'nullable|date|after_or_equal:progress_start_date',
             'progress_status' => ['sometimes', 'in:not_started,in_progress,completed,delayed'],
+            'payment_schedule' => 'nullable|array',
+            'payment_schedule.*.milestone' => 'required|string',
+            'payment_schedule.*.percentage' => 'required|numeric|min:0|max:100',
+            'payment_schedule.*.amount' => 'nullable|numeric',
+            'payment_schedule.*.due_date' => 'nullable|date',
         ]);
 
         $subcontractor->update([

@@ -8,6 +8,7 @@ import { NotificationBadge } from "./NotificationBadge";
 interface ScreenHeaderProps {
   title: string;
   showBackButton?: boolean;
+  leftComponent?: React.ReactNode;
   rightComponent?: React.ReactNode;
   onBackPress?: () => void;
   backgroundColor?: string;
@@ -18,6 +19,7 @@ interface ScreenHeaderProps {
 export function ScreenHeader({
   title,
   showBackButton = false,
+  leftComponent,
   rightComponent,
   onBackPress,
   backgroundColor = "#FFFFFF",
@@ -47,7 +49,9 @@ export function ScreenHeader({
       ]}
     >
       <View style={styles.headerContent}>
-        {showBackButton && (
+        {leftComponent ? (
+          <View style={styles.leftComponent}>{leftComponent}</View>
+        ) : showBackButton ? (
           <TouchableOpacity
             style={styles.backButton}
             onPress={handleBackPress}
@@ -55,7 +59,7 @@ export function ScreenHeader({
           >
             <Ionicons name="arrow-back" size={24} color="#1F2937" />
           </TouchableOpacity>
-        )}
+        ) : null}
         <Text
           style={[
             styles.headerTitle,
@@ -95,6 +99,9 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 4,
+    marginRight: 12,
+  },
+  leftComponent: {
     marginRight: 12,
   },
   headerTitle: {

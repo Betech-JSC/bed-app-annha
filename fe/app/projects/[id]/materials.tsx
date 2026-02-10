@@ -22,9 +22,11 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { DatePickerInput } from "@/components";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { useProjectPermissions } from "@/hooks/usePermissions";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Permissions } from "@/constants/Permissions";
 
 export default function ProjectMaterialsScreen() {
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const tabBarHeight = useTabBarHeight();
@@ -337,7 +339,7 @@ export default function ProjectMaterialsScreen() {
             <Modal
                 visible={showAddModal}
                 animationType="slide"
-                presentationStyle="fullScreen"
+                presentationStyle="pageSheet"
                 onRequestClose={() => setShowAddModal(false)}
             >
                 <KeyboardAvoidingView
@@ -345,8 +347,11 @@ export default function ProjectMaterialsScreen() {
                     style={styles.modalContainer}
                     keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
                 >
-                    <View style={styles.modalHeader}>
-                        <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                    <View style={[styles.modalHeader, Platform.OS === 'android' && { paddingTop: insets.top + 16 }]}>
+                        <TouchableOpacity
+                            onPress={() => setShowAddModal(false)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
                             <Ionicons name="close" size={24} color="#1F2937" />
                         </TouchableOpacity>
                         <Text style={styles.modalTitle}>Thêm Vật Liệu</Text>

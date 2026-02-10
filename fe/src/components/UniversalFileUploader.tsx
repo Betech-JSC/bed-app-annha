@@ -164,8 +164,8 @@ export default function UniversalFileUploader({
             return;
         }
 
-        // Validate file size (5MB limit)
-        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+        // Validate file size (50MB limit)
+        const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB in bytes
         const oversizedFiles: string[] = [];
 
         for (const file of files) {
@@ -193,7 +193,7 @@ export default function UniversalFileUploader({
         if (oversizedFiles.length > 0) {
             Alert.alert(
                 "Lỗi",
-                `Các file sau vượt quá giới hạn 5MB:\n${oversizedFiles.join("\n")}\n\nVui lòng chọn file nhỏ hơn 5MB.`
+                `Các file sau vượt quá giới hạn 50MB:\n${oversizedFiles.join("\n")}\n\nVui lòng chọn file nhỏ hơn 50MB.`
             );
             return;
         }

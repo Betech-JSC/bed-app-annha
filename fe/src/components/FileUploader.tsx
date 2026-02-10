@@ -87,7 +87,7 @@ export default function FileUploader({
 
           if (!result.canceled && result.assets[0]) {
             photos.push(result.assets[0]);
-            
+
             // Hỏi có muốn chụp thêm không
             if (photos.length < maxFiles - uploadedFiles.length) {
               const shouldContinue = await new Promise<boolean>((resolve) => {
@@ -174,13 +174,13 @@ export default function FileUploader({
       return;
     }
 
-    // Validate file size (2MB limit)
-    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB in bytes
+    // Validate file size (50MB limit)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB in bytes
     const oversizedFiles: string[] = [];
-    
+
     for (const file of files) {
       let fileSize = file.fileSize || file.size || 0;
-      
+
       // If fileSize is not available, try to get it from FileSystem
       if (fileSize === 0 && file.uri) {
         try {
@@ -192,7 +192,7 @@ export default function FileUploader({
           console.warn("Could not get file size:", error);
         }
       }
-      
+
       if (fileSize > MAX_FILE_SIZE) {
         const fileName = file.fileName || file.name || "file";
         const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
@@ -203,7 +203,7 @@ export default function FileUploader({
     if (oversizedFiles.length > 0) {
       Alert.alert(
         "Lỗi",
-        `Các file sau vượt quá giới hạn 2MB:\n${oversizedFiles.join("\n")}\n\nVui lòng chọn file nhỏ hơn 2MB.`
+        `Các file sau vượt quá giới hạn 50MB:\n${oversizedFiles.join("\n")}\n\nVui lòng chọn file nhỏ hơn 50MB.`
       );
       return;
     }

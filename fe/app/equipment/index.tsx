@@ -374,14 +374,14 @@ export default function EquipmentScreen() {
                     keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
                 >
                     <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>
-                                {editingEquipment ? "Sửa Thiết Bị" : "Tạo Thiết Bị"}
-                            </Text>
-                            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
+                        <ScreenHeader
+                            title={editingEquipment ? "Sửa Thiết Bị" : "Tạo Thiết Bị"}
+                            leftComponent={
+                                <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+                                    <Ionicons name="close" size={24} color="#1F2937" />
+                                </TouchableOpacity>
+                            }
+                        />
 
                         <ScrollView
                             style={styles.modalBody}

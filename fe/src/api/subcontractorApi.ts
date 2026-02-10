@@ -58,6 +58,16 @@ export interface Subcontractor {
   progress_end_date?: string;
   progress_status: "not_started" | "in_progress" | "completed" | "delayed";
   payment_status: "pending" | "partial" | "completed";
+  payment_schedule?: Array<{
+    milestone: string;
+    percentage: number;
+    amount?: number;
+    due_date?: string;
+  }>;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
+  global_subcontractor_id?: number;
   approved_by?: number;
   approved_at?: string;
   attachments?: any[];
@@ -65,12 +75,17 @@ export interface Subcontractor {
   payments?: SubcontractorPayment[];
   remaining_amount?: number;
   payment_percentage?: number;
+  approved_amount?: number;
+  pending_amount?: number;
 }
 
 export interface CreateSubcontractorData {
   global_subcontractor_id?: number;
   name: string;
   category?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
   total_quote: number;
   advance_payment?: number;
   progress_start_date?: string;
@@ -78,8 +93,14 @@ export interface CreateSubcontractorData {
   progress_status?: "not_started" | "in_progress" | "completed" | "delayed";
   attachment_ids?: number[];
   create_cost?: boolean;
-  cost_group_id?: number;
+  cost_group_id?: number | null;
   cost_date?: string;
+  payment_schedule?: Array<{
+    milestone: string;
+    percentage: number;
+    amount?: number;
+    due_date?: string;
+  }>;
 }
 
 export const subcontractorApi = {

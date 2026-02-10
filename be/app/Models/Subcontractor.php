@@ -13,8 +13,12 @@ class Subcontractor extends Model
     protected $fillable = [
         'uuid',
         'project_id',
+        'global_subcontractor_id',
         'name',
         'category',
+        'bank_name',
+        'bank_account_number',
+        'bank_account_name',
         'total_quote',
         'advance_payment',
         'total_paid',
@@ -22,6 +26,7 @@ class Subcontractor extends Model
         'progress_end_date',
         'progress_status',
         'payment_status',
+        'payment_schedule',
         'approved_by',
         'approved_at',
         'created_by',
@@ -35,11 +40,14 @@ class Subcontractor extends Model
         'progress_start_date' => 'date',
         'progress_end_date' => 'date',
         'approved_at' => 'datetime',
+        'payment_schedule' => 'array',
     ];
 
     protected $appends = [
         'remaining_amount',
         'payment_percentage',
+        'approved_amount',
+        'pending_amount',
     ];
 
     // ==================================================================
@@ -49,6 +57,11 @@ class Subcontractor extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function globalSubcontractor(): BelongsTo
+    {
+        return $this->belongsTo(GlobalSubcontractor::class);
     }
 
     public function approver(): BelongsTo
@@ -100,6 +113,20 @@ class Subcontractor extends Model
         return $this->total_quote - $this->total_paid;
     }
 
+    public function getApprovedAmountAttribute(): float
+    {
+        return $this->payments()
+            ->whereIn('status', ['pending_accountant_confirmation', 'paid'])
+            ->sum('amount');
+    }
+
+    public function getPendingAmountAttribute(): float
+    {
+        return $this->payments()
+            ->whereIn('status', ['pending_management_approval'])
+            ->sum('amount');
+    }
+
     public function getPaymentPercentageAttribute(): float
     {
         if ($this->total_quote == 0) {
@@ -115,11 +142,35 @@ class Subcontractor extends Model
     public function recordPayment(float $amount): bool
     {
         $this->total_paid += $amount;
-        if ($this->total_paid >= $this->total_quote) {
+        
+        if ($this->total_paid >= $this->total_quote && $this->total_quote > 0) {
             $this->payment_status = 'completed';
         } elseif ($this->total_paid > 0) {
             $this->payment_status = 'partial';
+        } else {
+            $this->payment_status = 'pending';
         }
+        
+        return $this->save();
+    }
+
+    /**
+     * Tính toán lại tổng tiền đã thanh toán từ bảng subcontractor_payments
+     */
+    public function recalculateFinancials(): bool
+    {
+        $this->total_paid = $this->payments()
+            ->where('status', 'paid')
+            ->sum('amount');
+
+        if ($this->total_paid >= $this->total_quote && $this->total_quote > 0) {
+            $this->payment_status = 'completed';
+        } elseif ($this->total_paid > 0) {
+            $this->payment_status = 'partial';
+        } else {
+            $this->payment_status = 'pending';
+        }
+
         return $this->save();
     }
 

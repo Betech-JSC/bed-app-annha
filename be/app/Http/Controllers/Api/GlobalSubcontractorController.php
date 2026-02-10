@@ -54,6 +54,9 @@ class GlobalSubcontractorController extends Controller
             'address' => 'nullable|string',
             'description' => 'nullable|string',
             'tax_code' => 'nullable|string|max:50',
+            'bank_name' => 'nullable|string|max:255',
+            'bank_account_number' => 'nullable|string|max:255',
+            'bank_account_name' => 'nullable|string|max:255',
         ]);
 
         $subcontractor = GlobalSubcontractor::create($validated);
@@ -94,6 +97,9 @@ class GlobalSubcontractorController extends Controller
             'address' => 'nullable|string',
             'description' => 'nullable|string',
             'tax_code' => 'nullable|string|max:50',
+            'bank_name' => 'nullable|string|max:255',
+            'bank_account_number' => 'nullable|string|max:255',
+            'bank_account_name' => 'nullable|string|max:255',
         ]);
 
         $subcontractor->update($validated);

@@ -15,6 +15,9 @@ class GlobalSubcontractor extends Model
         'address',
         'description',
         'tax_code',
+        'bank_name',
+        'bank_account_number',
+        'bank_account_name',
     ];
 
     protected $casts = [

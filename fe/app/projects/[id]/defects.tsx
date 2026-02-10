@@ -158,13 +158,6 @@ export default function DefectsScreen() {
     }
   };
 
-  useEffect(() => {
-    if (acceptance_stage_id) {
-      // Auto-open create modal if coming from acceptance
-      setModalVisible(true);
-    }
-  }, [acceptance_stage_id]);
-
   const handleSubmit = async () => {
     if (!formData.description) {
       Alert.alert("Lỗi", "Vui lòng nhập mô tả lỗi");
