@@ -249,20 +249,20 @@ export default function PersonnelRolesScreen() {
         }}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {editingRole ? "Chỉnh Sửa Vai Trò" : "Tạo Vai Trò Mới"}
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                setShowCreateModal(false);
-                setEditingRole(null);
-                resetForm();
-              }}
-            >
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-          </View>
+          <ScreenHeader
+            title={editingRole ? "Chỉnh Sửa Vai Trò" : "Tạo Vai Trò Mới"}
+            rightComponent={
+              <TouchableOpacity
+                onPress={() => {
+                  setShowCreateModal(false);
+                  setEditingRole(null);
+                  resetForm();
+                }}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            }
+          />
 
           <ScrollView style={styles.modalContent}>
             <View style={styles.formGroup}>

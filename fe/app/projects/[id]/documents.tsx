@@ -24,6 +24,8 @@ import { Permissions } from "@/constants/Permissions";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Ionicons } from "@expo/vector-icons";
 
+import ImageViewer from "@/components/ImageViewer";
+
 export default function DocumentsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,6 +38,8 @@ export default function DocumentsScreen() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<ProjectDocument | null>(null);
   const [editingDescription, setEditingDescription] = useState("");
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [initialImageIndex, setInitialImageIndex] = useState(0);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
 
@@ -135,7 +139,18 @@ export default function DocumentsScreen() {
   const renderDocumentItem = ({ item }: { item: ProjectDocument }) => (
     <TouchableOpacity
       style={styles.documentCard}
-      onPress={() => handleViewDocument(item)}
+      onPress={() => {
+        if (item.type === "image") {
+          const imageDocs = documents.filter((doc) => doc.type === "image");
+          const index = imageDocs.findIndex((doc) => doc.id === item.id);
+          if (index !== -1) {
+            setInitialImageIndex(index);
+            setImageViewerVisible(true);
+          }
+        } else {
+          handleViewDocument(item);
+        }
+      }}
     >
       {item.type === "image" ? (
         <Image source={{ uri: item.file_url }} style={styles.documentThumbnail} />
@@ -318,11 +333,22 @@ export default function DocumentsScreen() {
                   {/* File Preview */}
                   <View style={styles.previewContainer}>
                     {selectedDocument.type === "image" ? (
-                      <Image
-                        source={{ uri: selectedDocument.file_url }}
-                        style={styles.fullscreenPreviewImage}
-                        resizeMode="contain"
-                      />
+                      <TouchableOpacity
+                        onPress={() => {
+                          const imageDocs = documents.filter((doc) => doc.type === "image");
+                          const index = imageDocs.findIndex((doc) => doc.id === selectedDocument.id);
+                          if (index !== -1) {
+                            setInitialImageIndex(index);
+                            setImageViewerVisible(true);
+                          }
+                        }}
+                      >
+                        <Image
+                          source={{ uri: selectedDocument.file_url }}
+                          style={styles.fullscreenPreviewImage}
+                          resizeMode="contain"
+                        />
+                      </TouchableOpacity>
                     ) : (
                       <View style={styles.iconPreview}>
                         <Ionicons name="document-text-outline" size={80} color="#3B82F6" />
@@ -425,6 +451,18 @@ export default function DocumentsScreen() {
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
+      {/* ImageViewer */}
+      <ImageViewer
+        visible={imageViewerVisible}
+        images={documents
+          .filter((doc) => doc.type === "image")
+          .map((doc) => ({
+            uri: doc.file_url,
+            name: doc.original_name,
+          }))}
+        initialIndex={initialImageIndex}
+        onClose={() => setImageViewerVisible(false)}
+      />
     </View>
   );
 }

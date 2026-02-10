@@ -157,6 +157,38 @@ export default function RolePermissionsScreen() {
     return grouped;
   };
 
+  const getModuleIcon = (module: string): any => {
+    const icons: Record<string, string> = {
+      project: "folder-open",
+      progress: "trending-up",
+      acceptance: "checkmark-done",
+      cost: "wallet",
+      additional_cost: "add-circle",
+      revenue: "analytics",
+      hr: "people",
+      material: "cube",
+      equipment: "construct",
+      report: "document-text",
+      invoice: "receipt",
+      input_invoice: "download",
+      contract: "document-attach",
+      payment: "card",
+      subcontractor: "business",
+      subcontractor_payment: "cash",
+      document: "file-tray-full",
+      log: "calendar",
+      defect: "warning",
+      personnel: "people-circle",
+      budgets: "calculator",
+      receipts: "receipt-outline",
+      suppliers: "storefront",
+      change_request: "git-merge",
+      issue: "bug",
+      settings: "settings",
+    };
+    return icons[module] || "options";
+  };
+
   const getModuleLabel = (module: string) => {
     return getTranslatedModuleLabel(module);
   };
@@ -231,57 +263,73 @@ export default function RolePermissionsScreen() {
         </TouchableOpacity>
 
         {/* Permissions by Module */}
-        {Object.entries(groupedPermissions).map(([module, permissions]) => (
+        {Object.entries(groupedPermissions).sort().map(([module, permissions]) => (
           <View key={module} style={styles.moduleSection}>
             <View style={styles.moduleHeader}>
-              <Text style={styles.moduleTitle}>{getModuleLabel(module)}</Text>
-              <Text style={styles.moduleCount}>
-                {permissions.filter((p) =>
-                  selectedPermissionIds.includes(p.id)
-                ).length}{" "}
-                / {permissions.length}
-              </Text>
+              <View style={styles.moduleHeaderLeft}>
+                <View style={styles.moduleIconBox}>
+                  <Ionicons name={getModuleIcon(module)} size={18} color="#3B82F6" />
+                </View>
+                <Text style={styles.moduleTitle}>{getModuleLabel(module)}</Text>
+              </View>
+              <View style={styles.moduleBadge}>
+                <Text style={styles.moduleBadgeText}>
+                  {permissions.filter((p) =>
+                    selectedPermissionIds.includes(p.id)
+                  ).length}{" "}
+                  / {permissions.length}
+                </Text>
+              </View>
             </View>
 
-            {permissions.map((permission) => {
-              const isSelected = selectedPermissionIds.includes(permission.id);
-              return (
-                <TouchableOpacity
-                  key={permission.id}
-                  style={[
-                    styles.permissionItem,
-                    isSelected && styles.permissionItemSelected,
-                  ]}
-                  onPress={() => togglePermission(permission.id)}
-                >
-                  <View style={styles.permissionContent}>
-                    <View
-                      style={[
-                        styles.checkbox,
-                        isSelected && styles.checkboxChecked,
-                      ]}
-                    >
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                      )}
-                    </View>
-                    <View style={styles.permissionInfo}>
-                      <Text style={styles.permissionName}>
-                        {getPermissionDetail(permission.name).label}
-                      </Text>
-                      <Text style={styles.permissionCode}>
-                        {permission.name}
-                      </Text>
-                      {(permission.description || getPermissionDetail(permission.name).description) && (
-                        <Text style={styles.permissionDescription}>
-                          {permission.description || getPermissionDetail(permission.name).description}
+            <View style={styles.permissionsList}>
+              {permissions.map((permission) => {
+                const isSelected = selectedPermissionIds.includes(permission.id);
+                const detail = getPermissionDetail(permission.name);
+                return (
+                  <TouchableOpacity
+                    key={permission.id}
+                    style={[
+                      styles.permissionItem,
+                      isSelected && styles.permissionItemSelected,
+                    ]}
+                    onPress={() => togglePermission(permission.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.permissionContent}>
+                      <View
+                        style={[
+                          styles.checkbox,
+                          isSelected && styles.checkboxChecked,
+                        ]}
+                      >
+                        {isSelected && (
+                          <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <View style={styles.permissionInfo}>
+                        <Text style={[
+                          styles.permissionName,
+                          isSelected && styles.permissionNameSelected
+                        ]}>
+                          {detail.label}
                         </Text>
-                      )}
+                        <View style={styles.codeContainer}>
+                          <Text style={styles.permissionCode}>
+                            {permission.name}
+                          </Text>
+                        </View>
+                        {(permission.description || detail.description) && (
+                          <Text style={styles.permissionDescription}>
+                            {permission.description || detail.description}
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         ))}
       </ScrollView>
@@ -336,83 +384,55 @@ export default function RolePermissionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F3F4F6",
   },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  placeholder: {
-    width: 32,
+    backgroundColor: "#F3F4F6",
   },
   content: {
     flex: 1,
     padding: 16,
   },
   summaryCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: "#3B82F6",
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   summaryLabel: {
     fontSize: 14,
-    color: "#6B7280",
+    color: "rgba(255, 255, 255, 0.8)",
+    fontWeight: "600",
   },
   summaryValue: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#3B82F6",
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
   selectAllButton: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 24,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   selectAllContent: {
     flexDirection: "row",
@@ -421,42 +441,69 @@ const styles = StyleSheet.create({
   },
   selectAllText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#1F2937",
   },
   moduleSection: {
-    marginBottom: 24,
+    marginBottom: 28,
   },
   moduleHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: "#E5E7EB",
+    marginBottom: 14,
+    paddingHorizontal: 4,
+  },
+  moduleHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  moduleIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
   },
   moduleTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#1F2937",
+    letterSpacing: -0.5,
   },
-  moduleCount: {
-    fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "600",
+  moduleBadge: {
+    backgroundColor: "#E5E7EB",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  moduleBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#4B5563",
+  },
+  permissionsList: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   permissionItem: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
-    marginBottom: 8,
+    marginBottom: 4,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "transparent",
   },
   permissionItemSelected: {
-    borderColor: "#3B82F6",
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#F0F9FF",
+    borderColor: "#BAE6FD",
   },
   permissionContent: {
     flexDirection: "row",
@@ -464,8 +511,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   checkbox: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     borderRadius: 6,
     borderWidth: 2,
     borderColor: "#D1D5DB",
@@ -482,7 +529,7 @@ const styles = StyleSheet.create({
     borderColor: "#3B82F6",
   },
   partialIndicator: {
-    width: 12,
+    width: 10,
     height: 2,
     backgroundColor: "#FFFFFF",
     borderRadius: 1,
@@ -491,43 +538,57 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   permissionName: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 4,
+  },
+  permissionNameSelected: {
+    color: "#0369A1",
     fontWeight: "700",
-    color: "#1F2937",
-    marginBottom: 2,
+  },
+  codeContainer: {
+    backgroundColor: "#F9FAFB",
+    alignSelf: "flex-start",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
   },
   permissionCode: {
     fontSize: 11,
     color: "#9CA3AF",
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    marginBottom: 4,
   },
   permissionDescription: {
-    fontSize: 12,
-    color: "#4B5563",
-    lineHeight: 16,
+    fontSize: 13,
+    color: "#6B7280",
+    lineHeight: 18,
   },
   footer: {
     padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
   },
   saveButton: {
-    backgroundColor: "#9CA3AF",
-    borderRadius: 12,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 14,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 10,
   },
   saveButtonActive: {
-    backgroundColor: "#3B82F6",
-    shadowColor: "#3B82F6",
+    backgroundColor: "#1F2937",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
     elevation: 4,
   },
   saveButtonDisabled: {
@@ -536,32 +597,32 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   floatingSaveContainer: {
     position: "absolute",
     bottom: 100,
-    left: 16,
-    right: 16,
+    left: 20,
+    right: 20,
     zIndex: 1000,
   },
   floatingSaveButton: {
     backgroundColor: "#10B981",
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 10,
     shadowColor: "#10B981",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
   },
   floatingSaveButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
   },
 });

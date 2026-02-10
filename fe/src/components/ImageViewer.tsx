@@ -15,14 +15,15 @@ export default function ImageViewer({ images, visible, initialIndex = 0, onClose
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const { width, height } = Dimensions.get("window");
 
-    if (!visible || images.length === 0) return null;
-
-    const currentImage = images[currentIndex];
-
     // Cập nhật index khi initialIndex thay đổi (nếu cần)
     React.useEffect(() => {
         setCurrentIndex(initialIndex);
     }, [initialIndex]);
+
+    if (!visible || !images || images.length === 0) return null;
+
+    const currentImage = images[currentIndex];
+    if (!currentImage) return null;
 
     const handlePrevious = () => {
         if (currentIndex > 0) {

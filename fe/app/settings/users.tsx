@@ -360,13 +360,14 @@ export default function SystemUsersScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalContainer}
         >
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Tạo Tài Khoản</Text>
-            <View style={{ width: 24 }} />
-          </View>
+          <ScreenHeader
+            title="Tạo Tài Khoản"
+            leftComponent={
+              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            }
+          />
 
           <ScrollView style={styles.modalBody}>
             <View style={styles.formGroup}>
@@ -492,13 +493,14 @@ export default function SystemUsersScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalContainer}
         >
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowEditModal(false)}>
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Sửa Tài Khoản</Text>
-            <View style={{ width: 24 }} />
-          </View>
+          <ScreenHeader
+            title="Sửa Tài Khoản"
+            leftComponent={
+              <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            }
+          />
 
           <ScrollView style={styles.modalBody}>
             <View style={styles.formGroup}>
@@ -586,15 +588,14 @@ export default function SystemUsersScreen() {
         onRequestClose={() => setShowRolesModal(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowRolesModal(false)}>
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>
-              Phân Quyền: {selectedUser?.name}
-            </Text>
-            <View style={{ width: 24 }} />
-          </View>
+          <ScreenHeader
+            title={`Phân Quyền: ${selectedUser?.name}`}
+            leftComponent={
+              <TouchableOpacity onPress={() => setShowRolesModal(false)}>
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            }
+          />
 
           <ScrollView style={styles.modalBody}>
             {roles.map((role) => (

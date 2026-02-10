@@ -16,7 +16,7 @@ const getBaseURL = (): string => {
 
     // Fallback dựa trên __DEV__
     if (__DEV__) {
-        return 'https://annha.betech-digital.com/api';
+        return 'http://localhost:8000/api';
     }
 
     // Production default

@@ -98,20 +98,20 @@ class AdditionalCostController extends Controller
 
             DB::commit();
 
-            // Notify accountants/managers about new additional cost
+            // Notify customers (who can mark as paid) about new additional cost
             $this->notificationService->sendToPermissionUsers(
-                Permissions::ADDITIONAL_COST_CONFIRM,
+                Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
                 $project->id,
                 Notification::TYPE_WORKFLOW,
                 Notification::CATEGORY_WORKFLOW_APPROVAL,
-                "Yêu cầu chi phí phát sinh mới",
-                "Có một yêu cầu chi phí phát sinh mới cho dự án '{$project->name}' với số tiền " . number_format($cost->amount) . " VND.",
+                "Yêu cầu thanh toán chi phí phát sinh",
+                "Có một yêu cầu chi phí phát sinh mới cho dự án '{$project->name}' với số tiền " . number_format($cost->amount) . " VND. Vui lòng kiểm tra và thanh toán.",
                 [
                     'project_id' => $project->id,
                     'cost_id' => $cost->id,
                 ],
-                Notification::PRIORITY_MEDIUM,
-                "/projects/{$project->id}/costs"
+                Notification::PRIORITY_HIGH,
+                "/projects/{$project->id}/additional-costs/{$cost->id}"
             );
 
             return response()->json([
@@ -157,14 +157,11 @@ class AdditionalCostController extends Controller
         $validated = $request->validate([
             'paid_date' => 'nullable|date',
             'actual_amount' => 'nullable|numeric|min:0',
-            'attachment_ids' => 'nullable|array',
+            'attachment_ids' => 'required|array|min:1',
             'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
 
-        try {
-            DB::beginTransaction();
-
-            // Đính kèm files nếu có
+          // Đính kèm files nếu có
             if (!empty($validated['attachment_ids'])) {
                 foreach ($validated['attachment_ids'] as $attachmentId) {
                     $attachment = \App\Models\Attachment::find($attachmentId);
@@ -197,7 +194,7 @@ class AdditionalCostController extends Controller
                     'cost_id' => $cost->id,
                 ],
                 Notification::PRIORITY_HIGH,
-                "/projects/{$project->id}/costs"
+                "/projects/{$project->id}/additional-costs/{$cost->id}"
             );
 
             return response()->json([
@@ -205,14 +202,6 @@ class AdditionalCostController extends Controller
                 'message' => 'Đã đánh dấu thanh toán. Đang chờ kế toán xác nhận.',
                 'data' => $cost->fresh(['customerPaidBy', 'attachments'])
             ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
     }
 
     /**

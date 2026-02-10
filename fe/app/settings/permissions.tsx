@@ -210,6 +210,38 @@ export default function PermissionsScreen() {
     return grouped;
   };
 
+  const getModuleIcon = (module: string): any => {
+    const icons: Record<string, string> = {
+      project: "folder-open",
+      progress: "trending-up",
+      acceptance: "checkmark-done",
+      cost: "wallet",
+      additional_cost: "add-circle",
+      revenue: "analytics",
+      hr: "people",
+      material: "cube",
+      equipment: "construct",
+      report: "document-text",
+      invoice: "receipt",
+      input_invoice: "download",
+      contract: "document-attach",
+      payment: "card",
+      subcontractor: "business",
+      subcontractor_payment: "cash",
+      document: "file-tray-full",
+      log: "calendar",
+      defect: "warning",
+      personnel: "people-circle",
+      budgets: "calculator",
+      receipts: "receipt-outline",
+      suppliers: "storefront",
+      change_request: "git-merge",
+      issue: "bug",
+      settings: "settings",
+    };
+    return icons[module] || "options";
+  };
+
   if (loading && !refreshing) {
     return (
       <View style={styles.centerContainer}>
@@ -273,49 +305,66 @@ export default function PermissionsScreen() {
         }
       >
         {activeTab === "my" && (
-          <View>
+          <View style={{ paddingBottom: 40 }}>
             {myPermissions.includes("*") ? (
               <View style={styles.fullAccessCard}>
-                <Ionicons name="shield-checkmark" size={48} color="#10B981" />
-                <Text style={styles.fullAccessTitle}>Toàn Quyền</Text>
+                <View style={styles.fullAccessIconContainer}>
+                  <Ionicons name="shield-checkmark" size={60} color="#10B981" />
+                </View>
+                <Text style={styles.fullAccessTitle}>Toàn Quyền Hệ Thống</Text>
                 <Text style={styles.fullAccessText}>
-                  Bạn có toàn quyền truy cập tất cả các tính năng trong hệ
-                  thống
+                  Bạn đang có quyền cao nhất (Super Admin). Bạn có thể truy cập, sửa đổi và quản lý tất cả dữ liệu trong hệ thống mà không có bất kỳ hạn chế nào.
                 </Text>
               </View>
             ) : (
               <>
                 <View style={styles.summaryCard}>
-                  <Text style={styles.summaryTitle}>Tổng Quan</Text>
-                  <Text style={styles.summaryValue}>
-                    {myPermissions.length} quyền
-                  </Text>
+                  <View style={styles.summaryInfo}>
+                    <Text style={styles.summaryTitle}>Quyền Hạn Của Bạn</Text>
+                    <Text style={styles.summaryValue}>
+                      {myPermissions.length} <Text style={styles.summaryValueLabel}>quyền được cấp</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.summaryIconContainer}>
+                    <Ionicons name="key" size={32} color="#FFFFFF" />
+                  </View>
                 </View>
 
-                {Object.entries(groupedPermissions).map(([module, perms]) => (
+                {Object.entries(groupedPermissions).sort().map(([module, perms]) => (
                   <View key={module} style={styles.moduleCard}>
                     <View style={styles.moduleHeader}>
-                      <Text style={styles.moduleTitle}>
-                        {getModuleLabel(module)}
-                      </Text>
-                      <Text style={styles.moduleCount}>{perms.length}</Text>
+                      <View style={styles.moduleHeaderLeft}>
+                        <View style={styles.moduleIconBox}>
+                          <Ionicons name={getModuleIcon(module)} size={20} color="#3B82F6" />
+                        </View>
+                        <Text style={styles.moduleTitle}>
+                          {getModuleLabel(module)}
+                        </Text>
+                      </View>
+                      <View style={styles.moduleBadge}>
+                        <Text style={styles.moduleBadgeText}>{perms.length}</Text>
+                      </View>
                     </View>
                     <View style={styles.permissionsList}>
                       {perms.map((perm, index) => {
                         const detail = getPermissionDetail(perm);
                         return (
-                          <View key={index} style={styles.permissionItem}>
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={16}
-                              color="#10B981"
-                              style={{ marginTop: 2 }}
-                            />
+                          <View key={index} style={[
+                            styles.permissionItem,
+                            index === perms.length - 1 && { borderBottomWidth: 0 }
+                          ]}>
+                            <View style={styles.checkIconContainer}>
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={18}
+                                color="#10B981"
+                              />
+                            </View>
                             <View style={{ flex: 1 }}>
                               <Text style={styles.permissionText}>{detail.label}</Text>
-                              {detail.description ? (
-                                <Text style={styles.permissionDescText}>{detail.description}</Text>
-                              ) : null}
+                              <Text style={styles.permissionDescText}>
+                                {detail.description || `Cho phép thực hiện hành động ${perm}`}
+                              </Text>
                             </View>
                           </View>
                         );
@@ -367,13 +416,20 @@ export default function PermissionsScreen() {
               </Text>
             </View>
 
-            {Object.entries(groupPermissionObjectsByModule(allPermissions)).map(([module, perms]) => (
+            {Object.entries(groupPermissionObjectsByModule(allPermissions)).sort().map(([module, perms]) => (
               <View key={module} style={styles.moduleCard}>
                 <View style={styles.moduleHeader}>
-                  <Text style={styles.moduleTitle}>
-                    {getModuleLabel(module)}
-                  </Text>
-                  <Text style={styles.moduleCount}>{perms.length}</Text>
+                  <View style={styles.moduleHeaderLeft}>
+                    <View style={styles.moduleIconBox}>
+                      <Ionicons name={getModuleIcon(module)} size={20} color="#3B82F6" />
+                    </View>
+                    <Text style={styles.moduleTitle}>
+                      {getModuleLabel(module)}
+                    </Text>
+                  </View>
+                  <View style={styles.moduleBadge}>
+                    <Text style={styles.moduleBadgeText}>{perms.length}</Text>
+                  </View>
                 </View>
                 <View style={styles.permissionsList}>
                   {perms.map((perm) => (
@@ -440,20 +496,20 @@ export default function PermissionsScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalContainer}
         >
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {editingPermission ? "Chỉnh Sửa Quyền" : "Tạo Quyền Mới"}
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                setShowCreateModal(false);
-                setEditingPermission(null);
-                resetForm();
-              }}
-            >
-              <Ionicons name="close" size={24} color="#1F2937" />
-            </TouchableOpacity>
-          </View>
+          <ScreenHeader
+            title={editingPermission ? "Chỉnh Sửa Quyền" : "Tạo Quyền Mới"}
+            rightComponent={
+              <TouchableOpacity
+                onPress={() => {
+                  setShowCreateModal(false);
+                  setEditingPermission(null);
+                  resetForm();
+                }}
+              >
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            }
+          />
 
           <ScrollView style={styles.modalContent}>
             <View style={styles.formGroup}>
@@ -519,58 +575,38 @@ export default function PermissionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F3F4F6",
   },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1F2937",
-  },
-  placeholder: {
-    width: 32,
+    backgroundColor: "#F3F4F6",
   },
   tabs: {
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
   tab: {
     flex: 1,
-    padding: 16,
+    paddingVertical: 14,
     alignItems: "center",
-    borderBottomWidth: 2,
+    borderBottomWidth: 3,
     borderBottomColor: "transparent",
   },
   tabActive: {
     borderBottomColor: "#3B82F6",
   },
   tabText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#6B7280",
-    fontWeight: "500",
+    fontWeight: "600",
   },
   tabTextActive: {
     color: "#3B82F6",
-    fontWeight: "600",
   },
   content: {
     flex: 1,
@@ -578,104 +614,156 @@ const styles = StyleSheet.create({
   },
   fullAccessCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 32,
+    borderRadius: 20,
+    padding: 30,
     alignItems: "center",
-    marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 10,
+    elevation: 4,
+    marginTop: 10,
+  },
+  fullAccessIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#ECFDF5",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
   },
   fullAccessTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#10B981",
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#065F46",
+    marginBottom: 12,
   },
   fullAccessText: {
-    fontSize: 14,
-    color: "#6B7280",
+    fontSize: 15,
+    color: "#4B5563",
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 22,
   },
   summaryCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: "#3B82F6",
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 20,
+    flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: "space-between",
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  summaryInfo: {
+    flex: 1,
   },
   summaryTitle: {
     fontSize: 14,
-    color: "#6B7280",
-    marginBottom: 8,
+    color: "rgba(255, 255, 255, 0.8)",
+    fontWeight: "600",
+    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   summaryValue: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#3B82F6",
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  summaryValueLabel: {
+    fontSize: 16,
+    fontWeight: "400",
+    color: "rgba(255, 255, 255, 0.9)",
+  },
+  summaryIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   moduleCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    marginBottom: 16,
+    overflow: "hidden",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   moduleHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    padding: 16,
+    backgroundColor: "#F9FAFB",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  moduleHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  moduleIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
   },
   moduleTitle: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#1F2937",
   },
-  moduleCount: {
-    fontSize: 14,
-    color: "#6B7280",
-    backgroundColor: "#F3F4F6",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  moduleBadge: {
+    backgroundColor: "#3B82F6",
+    paddingHorizontal: 10,
+    paddingVertical: 2,
     borderRadius: 12,
   },
+  moduleBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
   permissionsList: {
-    gap: 8,
+    paddingHorizontal: 16,
   },
   permissionItem: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 4,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    gap: 12,
+  },
+  checkIconContainer: {
+    marginTop: 2,
   },
   permissionText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "600",
-    color: "#1F2937",
-    flex: 1,
+    color: "#374151",
+    marginBottom: 2,
   },
   permissionDescText: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#6B7280",
-    marginTop: 2,
+    lineHeight: 18,
   },
   roleCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     shadowColor: "#000",
@@ -692,12 +780,17 @@ const styles = StyleSheet.create({
   },
   roleName: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#1F2937",
   },
   roleCount: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#3B82F6",
+    fontWeight: "600",
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
   roleDescription: {
     fontSize: 14,
@@ -710,6 +803,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     gap: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
   },
   viewDetailsText: {
     fontSize: 14,
@@ -720,26 +816,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 16,
     paddingHorizontal: 12,
     backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 12,
+    marginBottom: 10,
   },
   permissionInfoManage: {
     flex: 1,
   },
   permissionNameManage: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginBottom: 2,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
   },
   permissionCodeManage: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#9CA3AF",
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    marginBottom: 4,
+    backgroundColor: "#FFFFFF",
+    alignSelf: "flex-start",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 6,
   },
   permissionDescriptionManage: {
     fontSize: 12,
@@ -749,95 +851,112 @@ const styles = StyleSheet.create({
   permissionActions: {
     flexDirection: "row",
     gap: 8,
+    marginLeft: 12,
   },
   actionButton: {
-    padding: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   addButton: {
-    backgroundColor: "#3B82F6",
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: "#1F2937",
+    borderRadius: 16,
+    padding: 18,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    marginTop: 16,
-    marginBottom: 32,
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 40,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 4,
   },
   addButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#FFFFFF",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    padding: 20,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: "#F3F4F6",
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#1F2937",
   },
   modalContent: {
-    padding: 16,
+    padding: 24,
   },
   formGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginBottom: 8,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 10,
   },
   required: {
     color: "#EF4444",
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
-    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    color: "#1F2937",
   },
   textArea: {
-    height: 100,
+    height: 120,
     textAlignVertical: "top",
   },
   modalActions: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 24,
-    marginBottom: 32,
+    gap: 16,
+    marginTop: 16,
+    marginBottom: 40,
   },
   modalButton: {
     flex: 1,
-    padding: 16,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
   },
   cancelButton: {
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#F3F4F6",
   },
   cancelButtonText: {
-    color: "#1F2937",
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#4B5563",
   },
   saveButton: {
     backgroundColor: "#3B82F6",
   },
   saveButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
     color: "#FFFFFF",
-    fontWeight: "600",
   },
 });

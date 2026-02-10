@@ -44,13 +44,13 @@ class Roles
     public static function displayNames(): array
     {
         return [
-            self::SUPER_ADMIN => 'Super Admin',
-            self::ADMIN => 'Admin',
-            self::PROJECT_OWNER => 'Project Owner',
-            self::PROJECT_MANAGER => 'Project Manager',
-            self::SITE_SUPERVISOR => 'Site Supervisor',
-            self::ACCOUNTANT => 'Accountant',
-            self::CLIENT => 'Client',
+            self::SUPER_ADMIN => 'Quản trị hệ thống (Super Admin)',
+            self::ADMIN => 'Quản trị viên (Admin)',
+            self::PROJECT_OWNER => 'Chủ đầu tư / Đối tác',
+            self::PROJECT_MANAGER => 'Quản lý dự án (PM)',
+            self::SITE_SUPERVISOR => 'Giám sát công trình',
+            self::ACCOUNTANT => 'Kế toán',
+            self::CLIENT => 'Khách hàng',
         ];
     }
 
@@ -62,13 +62,13 @@ class Roles
     public static function descriptions(): array
     {
         return [
-            self::SUPER_ADMIN => 'Super administrator with full system access',
-            self::ADMIN => 'System administrator with management capabilities',
-            self::PROJECT_OWNER => 'Project owner with full project control',
-            self::PROJECT_MANAGER => 'Manages projects and coordinates resources',
-            self::SITE_SUPERVISOR => 'Supervises construction site operations',
-            self::ACCOUNTANT => 'Handles financial and accounting operations',
-            self::CLIENT => 'Client with view and approval permissions',
+            self::SUPER_ADMIN => 'Quyền cao nhất, quản lý toàn bộ hệ thống',
+            self::ADMIN => 'Quản lý vận hành hệ thống và cấu hình',
+            self::PROJECT_OWNER => 'Chủ đầu tư, có quyền kiểm soát toàn bộ dự án của mình',
+            self::PROJECT_MANAGER => 'Quản lý trực tiếp dự án, điều phối nguồn lực và tiến độ',
+            self::SITE_SUPERVISOR => 'Giám sát trực tiếp tại công trường, ghi nhật ký và nghiệm thu',
+            self::ACCOUNTANT => 'Phụ trách các nghiệp vụ tài chính, thanh toán và kế toán',
+            self::CLIENT => 'Khách hàng, xem thông tin dự án, tiến độ và duyệt thanh toán',
         ];
     }
 }

@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader, PermissionDenied, PermissionGuard } from "@/components";
 import { Permissions } from "@/constants/Permissions";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import ImageViewer from "@/components/ImageViewer";
 
 export default function CostDetailScreen() {
   const router = useRouter();
@@ -36,6 +37,10 @@ export default function CostDetailScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+
+  // Image Viewer State
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [initialImageIndex, setInitialImageIndex] = useState(0);
 
   useEffect(() => {
     loadCost();
@@ -320,7 +325,27 @@ export default function CostDetailScreen() {
                   <TouchableOpacity
                     key={attachment.id || index}
                     style={styles.attachmentItem}
-                    onPress={() => handleOpenFile(imageUrl)}
+                    onPress={() => {
+                      if (isImage) {
+                        const imageList = cost.attachments!.filter((att) =>
+                          att.type === "image" ||
+                          (att.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(att.file_url))
+                        );
+                        // Find index of current attachment in the image list
+                        // Using id for robust matching if available, else fallback to index logic
+                        // But since we filtered, index won't match directly.
+                        const currentImageIndex = imageList.findIndex(
+                          (img) => img.id === attachment.id
+                        );
+
+                        if (currentImageIndex !== -1) {
+                          setInitialImageIndex(currentImageIndex);
+                          setImageViewerVisible(true);
+                        }
+                      } else {
+                        handleOpenFile(imageUrl);
+                      }
+                    }}
                   >
                     {isImage ? (
                       <Image
@@ -571,6 +596,23 @@ export default function CostDetailScreen() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
+      {/* Image Viewer */}
+      {cost && (
+        <ImageViewer
+          visible={imageViewerVisible}
+          images={
+            cost.attachments?.filter((att) =>
+              att.type === "image" ||
+              (att.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(att.file_url))
+            ).map((att) => ({
+              uri: att.file_url,
+              name: att.original_name,
+            })) || []
+          }
+          initialIndex={initialImageIndex}
+          onClose={() => setImageViewerVisible(false)}
+        />
+      )}
     </View>
   );
 }

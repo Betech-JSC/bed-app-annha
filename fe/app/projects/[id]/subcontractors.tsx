@@ -27,6 +27,8 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 
+import ImageViewer from "@/components/ImageViewer";
+
 export default function SubcontractorsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,6 +45,8 @@ export default function SubcontractorsScreen() {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [payments, setPayments] = useState<any[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [initialImageIndex, setInitialImageIndex] = useState(0);
   const [formData, setFormData] = useState({
     global_subcontractor_id: null as number | null,
     name: "",
@@ -436,11 +440,62 @@ export default function SubcontractorsScreen() {
       {item.attachments && item.attachments.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chứng từ lưu trữ</Text>
-          <View style={styles.attachmentsRow}>
-            <Ionicons name="document-outline" size={16} color="#3B82F6" />
-            <Text style={styles.attachmentsText}>
-              {item.attachments.length} chứng từ đã tải lên
-            </Text>
+          <View style={styles.attachmentsList}>
+            {item.attachments.map((attachment: any, index: number) => {
+              const imageUrl = attachment.file_url || attachment.url || attachment.location ||
+                (attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : null);
+              const isImage = attachment.type === "image" ||
+                attachment.mime_type?.startsWith("image/") ||
+                (imageUrl && /\.(jpg|jpeg|png|gif|webp)$/i.test(imageUrl));
+
+              return (
+                <TouchableOpacity
+                  key={attachment.id || index}
+                  style={styles.attachmentItem}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    if (isImage && imageUrl) {
+                      const imageAttachments = item.attachments?.filter((att: any) => {
+                        const attUrl = att.file_url || att.url || att.location ||
+                          (att.file_path ? `http://localhost:8000/storage/${att.file_path}` : null);
+                        return att.type === "image" ||
+                          att.mime_type?.startsWith("image/") ||
+                          (attUrl && /\.(jpg|jpeg|png|gif|webp)$/i.test(attUrl));
+                      }) || [];
+
+                      const index = imageAttachments.findIndex((att: any) => att.id === attachment.id);
+                      if (index !== -1) {
+                        setSelectedSubcontractorDetail(item);
+                        setInitialImageIndex(index);
+                        setImageViewerVisible(true);
+                      }
+                    } else {
+                      handleOpenFile(imageUrl || "", attachment.mime_type);
+                    }
+                  }}
+                >
+                  {isImage && imageUrl ? (
+                    <Image
+                      source={{ uri: imageUrl }}
+                      style={styles.attachmentThumbnail}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.attachmentIconContainer}>
+                      <Ionicons name="document-outline" size={32} color="#3B82F6" />
+                    </View>
+                  )}
+                  <View style={styles.attachmentInfo}>
+                    <Text style={styles.attachmentName} numberOfLines={1}>
+                      {attachment.original_name || attachment.file_name || "File"}
+                    </Text>
+                    <Text style={styles.attachmentType}>
+                      {attachment.type || attachment.mime_type || "Document"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       )}
@@ -1051,52 +1106,6 @@ export default function SubcontractorsScreen() {
                     </View>
                   )}
 
-                {/* Attachments */}
-                {selectedSubcontractorDetail.attachments &&
-                  selectedSubcontractorDetail.attachments.length > 0 && (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Chứng từ đính kèm</Text>
-                      <View style={styles.attachmentsList}>
-                        {selectedSubcontractorDetail.attachments.map((attachment: any, index: number) => {
-                          const imageUrl = attachment.file_url || attachment.url || attachment.location ||
-                            (attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : null);
-                          const isImage = attachment.type === "image" ||
-                            attachment.mime_type?.startsWith("image/") ||
-                            (imageUrl && /\.(jpg|jpeg|png|gif|webp)$/i.test(imageUrl));
-
-                          return (
-                            <TouchableOpacity
-                              key={attachment.id || index}
-                              style={styles.attachmentItem}
-                              onPress={() => handleOpenFile(imageUrl || "", attachment.mime_type)}
-                            >
-                              {isImage && imageUrl ? (
-                                <Image
-                                  source={{ uri: imageUrl }}
-                                  style={styles.attachmentThumbnail}
-                                  resizeMode="cover"
-                                />
-                              ) : (
-                                <View style={styles.attachmentIconContainer}>
-                                  <Ionicons name="document-outline" size={32} color="#3B82F6" />
-                                </View>
-                              )}
-                              <View style={styles.attachmentInfo}>
-                                <Text style={styles.attachmentName} numberOfLines={1}>
-                                  {attachment.original_name || attachment.file_name || "File"}
-                                </Text>
-                                <Text style={styles.attachmentType}>
-                                  {attachment.type || attachment.mime_type || "Document"}
-                                </Text>
-                              </View>
-                              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  )}
-
                 {/* Payment Management Button */}
                 <PermissionGuard permission={Permissions.SUBCONTRACTOR_PAYMENT_CREATE} projectId={id}>
                   <View style={styles.detailSection}>
@@ -1583,7 +1592,31 @@ export default function SubcontractorsScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+
+      {/* ImageViewer */}
+      {
+        selectedSubcontractorDetail && (
+          <ImageViewer
+            visible={imageViewerVisible}
+            images={
+              selectedSubcontractorDetail.attachments?.filter((att: any) => {
+                const attUrl = att.file_url || att.url || att.location ||
+                  (att.file_path ? `http://localhost:8000/storage/${att.file_path}` : null);
+                return att.type === "image" ||
+                  att.mime_type?.startsWith("image/") ||
+                  (attUrl && /\.(jpg|jpeg|png|gif|webp)$/i.test(attUrl));
+              }).map((att: any) => ({
+                uri: att.file_url || att.url || att.location ||
+                  (att.file_path ? `http://localhost:8000/storage/${att.file_path}` : ""),
+                name: att.original_name || att.file_name,
+              })) || []
+            }
+            initialIndex={initialImageIndex}
+            onClose={() => setImageViewerVisible(false)}
+          />
+        )
+      }
+    </View >
   );
 }
 

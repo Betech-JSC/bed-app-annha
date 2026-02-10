@@ -18,15 +18,20 @@ import { ScreenHeader, PermissionDenied } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
+import ImageViewer from "@/components/ImageViewer";
 
 export default function AdditionalCostDetailScreen() {
   const router = useRouter();
   const { id, costId } = useLocalSearchParams<{ id: string; costId: string }>();
   const tabBarHeight = useTabBarHeight();
+  const { hasPermission } = useProjectPermissions(id);
   const [cost, setCost] = useState<AdditionalCost | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [initialImageIndex, setInitialImageIndex] = useState(0);
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
 
@@ -115,6 +120,38 @@ export default function AdditionalCostDetailScreen() {
     }
   };
 
+  const handleMarkPaid = () => {
+    Alert.alert(
+      "Xác nhận thanh toán",
+      "Bạn có chắc chắn đã thanh toán chi phí này?",
+      [
+        {
+          text: "Hủy",
+          style: "cancel"
+        },
+        {
+          text: "Xác nhận",
+          onPress: async () => {
+            try {
+              setProcessingAction('mark_paid');
+              const response = await additionalCostApi.markAsPaidByCustomer(id!, costId!, {
+                paid_date: new Date().toISOString().split("T")[0],
+              });
+              if (response.success) {
+                Alert.alert("Thành công", "Đã đánh dấu thanh toán. Đang chờ kế toán xác nhận.");
+                loadCostDetail();
+              }
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
+            } finally {
+              setProcessingAction(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleConfirm = async () => {
     try {
       const response = await additionalCostApi.confirmAdditionalCost(id!, costId!);
@@ -176,9 +213,22 @@ export default function AdditionalCostDetailScreen() {
     );
   };
 
-  const openFile = (fileUrl: string, mimeType: string) => {
-    if (mimeType?.startsWith("image/")) {
-      setPreviewImage(fileUrl);
+  const openFile = (attachment: any) => {
+    const isImage = attachment.mime_type?.startsWith("image/") ||
+      (attachment.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment.file_url));
+
+    if (isImage) {
+      const imageList = cost?.attachments?.filter((att) =>
+        att.mime_type?.startsWith("image/") ||
+        (att.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(att.file_url))
+      ) || [];
+
+      const index = imageList.findIndex((img) => img.id === attachment.id);
+
+      if (index !== -1) {
+        setInitialImageIndex(index);
+        setImageViewerVisible(true);
+      }
     } else {
       // For documents, you might want to open in a browser or document viewer
       Alert.alert("Mở file", "File sẽ được mở trong trình duyệt");
@@ -329,7 +379,7 @@ export default function AdditionalCostDetailScreen() {
                   <TouchableOpacity
                     key={attachment.id}
                     style={styles.attachmentItem}
-                    onPress={() => openFile(attachment.file_url, attachment.mime_type || "")}
+                    onPress={() => openFile(attachment)}
                   >
                     {isImage ? (
                       <Image
@@ -352,83 +402,27 @@ export default function AdditionalCostDetailScreen() {
           </View>
         )}
 
-        {cost.status === "pending" && (
-          <View style={styles.actionsContainer}>
-            <PermissionGuard permission={Permissions.ADDITIONAL_COST_UPDATE} projectId={id}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.markPaidButton]}
-                onPress={() => router.push(`/projects/${id}/additional-costs/${costId}/mark-paid`)}
-              >
-                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Đã thanh toán</Text>
-              </TouchableOpacity>
-            </PermissionGuard>
-          </View>
-        )}
-
-        {/* Actions - Kế toán xác nhận đã nhận tiền */}
-        {cost.status === "customer_paid" && (
-          <View style={styles.actionsContainer}>
-            <PermissionGuard permission={Permissions.ADDITIONAL_COST_CONFIRM} projectId={id}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.confirmButton]}
-                onPress={handleConfirm}
-              >
-                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Xác nhận đã nhận tiền</Text>
-              </TouchableOpacity>
-            </PermissionGuard>
-          </View>
-        )}
-
-        {/* Actions - Backward compatible: pending_approval → approve/reject */}
-        {cost.status === "pending_approval" && (
-          <View style={styles.actionsContainer}>
-            <PermissionGuard permission={Permissions.ADDITIONAL_COST_APPROVE} projectId={id}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.approveButton]}
-                onPress={handleApprove}
-              >
-                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Duyệt</Text>
-              </TouchableOpacity>
-            </PermissionGuard>
-            <PermissionGuard permission={Permissions.ADDITIONAL_COST_REJECT} projectId={id}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.rejectButton]}
-                onPress={handleReject}
-              >
-                <Ionicons name="close-circle" size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Từ Chối</Text>
-              </TouchableOpacity>
-            </PermissionGuard>
-          </View>
-        )}
+        {/* Note: Action buttons (Approve, Confirm, Mark Paid) have been removed from the detail view as per request. Use the list view for these actions. */}
       </ScrollView>
 
       {/* Image Preview Modal */}
-      <Modal
-        visible={previewImage !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setPreviewImage(null)}
-      >
-        <View style={styles.imagePreviewOverlay}>
-          <TouchableOpacity
-            style={styles.imagePreviewClose}
-            onPress={() => setPreviewImage(null)}
-          >
-            <Ionicons name="close" size={32} color="#FFFFFF" />
-          </TouchableOpacity>
-          {previewImage && (
-            <Image
-              source={{ uri: previewImage }}
-              style={styles.imagePreview}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
+      {/* Image Viewer */}
+      {cost && (
+        <ImageViewer
+          visible={imageViewerVisible}
+          images={
+            cost.attachments?.filter((att) =>
+              att.mime_type?.startsWith("image/") ||
+              (att.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(att.file_url))
+            ).map((att) => ({
+              uri: att.file_url,
+              name: att.original_name || att.file_name,
+            })) || []
+          }
+          initialIndex={initialImageIndex}
+          onClose={() => setImageViewerVisible(false)}
+        />
+      )}
     </View>
   );
 }

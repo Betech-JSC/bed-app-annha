@@ -77,6 +77,11 @@ export function usePermissions() {
 
 // Prevent concurrent calls for the same project
 const projectPermissionsFetching: Record<string, Promise<any> | null> = {};
+const projectPermissionsCache: Record<string, {
+  permissions: string[];
+  timestamp: number;
+}> = {};
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const DEBOUNCE_DELAY = 500; // 500ms debounce để tránh spam API
 
 export function useProjectPermissions(projectId: string | number | null) {
@@ -95,31 +100,16 @@ export function useProjectPermissions(projectId: string | number | null) {
 
     const projectIdStr = String(projectId);
     const now = Date.now();
-    const timeSinceLastLoad = now - lastLoadTimeRef.current;
 
-    // Prevent concurrent calls
-    if (isLoadingRef.current && !force) {
+    // Check global cache first
+    const cached = projectPermissionsCache[projectIdStr];
+    if (cached && (now - cached.timestamp < CACHE_DURATION) && !force) {
+      setPermissions(cached.permissions);
+      setLoading(false);
       return;
     }
 
-    // Debounce if called too soon (chỉ để tránh spam, không cache)
-    if (!force && timeSinceLastLoad < DEBOUNCE_DELAY) {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      timeoutRef.current = setTimeout(() => {
-        loadProjectPermissions(true);
-      }, DEBOUNCE_DELAY - timeSinceLastLoad);
-      return;
-    }
-
-    // Clear timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-
-    // Check if already fetching (chỉ để tránh duplicate calls, không cache)
+    // Check if already fetching
     if (projectPermissionsFetching[projectIdStr] && !force) {
       try {
         const response = await projectPermissionsFetching[projectIdStr];
@@ -132,6 +122,23 @@ export function useProjectPermissions(projectId: string | number | null) {
       } catch (error) {
         // Continue to fetch if previous fetch failed
       }
+    }
+
+    // Debounce if called too soon (chỉ để tránh spam, không cache)
+    if (!force && (now - lastLoadTimeRef.current < DEBOUNCE_DELAY)) {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        loadProjectPermissions(true);
+      }, DEBOUNCE_DELAY - (now - lastLoadTimeRef.current));
+      return;
+    }
+
+    // Clear timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
 
     try {
@@ -147,7 +154,13 @@ export function useProjectPermissions(projectId: string | number | null) {
       if (response.success) {
         const perms = Array.isArray(response.data) ? response.data : [];
         console.log(`[useProjectPermissions] Loaded permissions for project ${projectId}:`, perms);
-        console.log(`[useProjectPermissions] API Response:`, JSON.stringify(response, null, 2));
+
+        // Update cache
+        projectPermissionsCache[projectIdStr] = {
+          permissions: perms,
+          timestamp: Date.now()
+        };
+
         setPermissions(perms);
       } else {
         console.warn(`[useProjectPermissions] Failed to load permissions for project ${projectId}:`, response);
@@ -173,6 +186,9 @@ export function useProjectPermissions(projectId: string | number | null) {
     } finally {
       isLoadingRef.current = false;
       setLoading(false);
+      // Don't clear fetching promise immediately if we want others to reuse it? 
+      // Actually we should clear it so future calls can fetch again if needed (after cache expiry)
+      // But for now, clearing it is fine because cache handles the hits.
       projectPermissionsFetching[projectIdStr] = null;
     }
   }, [projectId]);
@@ -196,24 +212,24 @@ export function useProjectPermissions(projectId: string | number | null) {
 
   const hasPermission = useCallback((permission: string): boolean => {
     console.log(`[useProjectPermissions.hasPermission] Checking: ${permission}, Loading: ${loading}, Permissions:`, permissions);
-    
+
     // If still loading, return false to be safe (but PermissionGuard will handle loading state)
     if (loading) {
       console.log(`[useProjectPermissions.hasPermission] Still loading, returning false`);
       return false;
     }
-    
+
     if (!Array.isArray(permissions) || permissions.length === 0) {
       console.log(`[useProjectPermissions.hasPermission] No permissions available for project ${projectId}. Permission check: ${permission}`);
       return false;
     }
-    
+
     // Check for wildcard first
     if (permissions.includes("*")) {
       console.log(`[useProjectPermissions.hasPermission] Wildcard (*) found, returning true`);
       return true;
     }
-    
+
     const has = permissions.includes(permission);
     console.log(`[useProjectPermissions.hasPermission] Permission ${permission} ${has ? 'GRANTED' : 'DENIED'}`);
     if (!has) {
