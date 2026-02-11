@@ -129,4 +129,10 @@ export const additionalCostApi = {
     );
     return response.data;
   },
+
+  // Delete additional cost
+  deleteAdditionalCost: async (projectId: string | number, costId: string | number) => {
+    const response = await api.delete(`/projects/${projectId}/additional-costs/${costId}`);
+    return response.data;
+  },
 };

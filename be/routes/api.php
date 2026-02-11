@@ -189,6 +189,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/additional-costs/{id}/confirm', [AdditionalCostController::class, 'confirm']);
         Route::post('/{projectId}/additional-costs/{id}/approve', [AdditionalCostController::class, 'approve']);
         Route::post('/{projectId}/additional-costs/{id}/reject', [AdditionalCostController::class, 'reject']);
+        Route::delete('/{projectId}/additional-costs/{id}', [AdditionalCostController::class, 'destroy']);
 
         // Revenue Management
         Route::get('/{projectId}/revenue/summary', [RevenueController::class, 'projectSummary']);

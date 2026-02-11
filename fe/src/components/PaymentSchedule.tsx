@@ -2,27 +2,18 @@ import React from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { ProjectPayment } from "@/api/paymentApi";
 import { Ionicons } from "@expo/vector-icons";
+import { formatVND, formatDate } from "@/utils/format";
 
 interface PaymentScheduleProps {
   payments: ProjectPayment[];
 }
 
 export default function PaymentSchedule({ payments }: PaymentScheduleProps) {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("vi-VN", {
-      style: "currency",
-      currency: "VND",
-    }).format(amount);
-  };
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString("vi-VN");
-  };
-
   const getStatusColor = (status: string, dueDate: string) => {
     if (status === "paid") return "#10B981";
     if (status === "overdue") return "#EF4444";
     const due = new Date(dueDate);
+    if (isNaN(due.getTime())) return "#F59E0B";
     const today = new Date();
     if (due < today) return "#EF4444";
     return "#F59E0B";
@@ -49,7 +40,7 @@ export default function PaymentSchedule({ payments }: PaymentScheduleProps) {
             <View style={styles.paymentInfo}>
               <Text style={styles.paymentNumber}>Đợt {payment.payment_number}</Text>
               <Text style={styles.paymentAmount}>
-                {formatCurrency(payment.amount)}
+                {formatVND(payment.amount)}
               </Text>
             </View>
             <View

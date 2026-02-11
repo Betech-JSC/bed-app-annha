@@ -399,4 +399,56 @@ class AdditionalCostController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Xóa chi phí phát sinh
+     */
+    public function destroy(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
+        $user = auth()->user();
+
+        // Check RBAC permission
+        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_DELETE)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_DELETE
+            ], 403);
+        }
+
+        // Chỉ cho phép xóa nếu đang ở trạng thái pending hoặc rejected
+        if (!in_array($cost->status, ['pending', 'rejected'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể xóa chi phí ở trạng thái chờ thanh toán hoặc đã bị từ chối.'
+            ], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Xóa các đính kèm liên quan (hoặc gỡ liên kết)
+            $cost->attachments()->update([
+                'attachable_id' => null,
+                'attachable_type' => null
+            ]);
+
+            $cost->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã xóa chi phí phát sinh thành công.'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi xóa chi phí phát sinh.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

@@ -112,6 +112,47 @@ export default function AdditionalCostsScreen() {
     }
   };
 
+  const handleDelete = async (costId: number) => {
+    // Prevent double tapping
+    if (processingItems.has(costId)) return;
+
+    Alert.alert(
+      "Xác nhận xóa",
+      "Bạn có chắc chắn muốn xóa chi phí phát sinh này không? Hành động này không thể hoàn tác.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setProcessingItems((prev) => new Set(prev).add(costId));
+              const response = await additionalCostApi.deleteAdditionalCost(
+                id!,
+                costId
+              );
+              if (response.success) {
+                Alert.alert("Thành công", "Đã xóa chi phí phát sinh.");
+                loadCosts(false);
+              }
+            } catch (error: any) {
+              Alert.alert(
+                "Lỗi",
+                error.response?.data?.message || "Không thể xóa chi phí này"
+              );
+            } finally {
+              setProcessingItems((prev) => {
+                const next = new Set(prev);
+                next.delete(costId);
+                return next;
+              });
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleMarkPaid = (costId: number) => {
     setSelectedCostId(costId);
     setUploadedFiles([]);
@@ -199,20 +240,39 @@ export default function AdditionalCostsScreen() {
     >
       <View style={styles.costHeader}>
         <Text style={styles.costAmount}>{formatCurrency(item.amount)}</Text>
-        <View
-          style={[
-            styles.statusBadge,
-            { backgroundColor: getStatusColor(item.status) + "20" },
-          ]}
-        >
-          <Text
+        <View style={styles.headerRight}>
+          <View
             style={[
-              styles.statusText,
-              { color: getStatusColor(item.status) },
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(item.status) + "20" },
             ]}
           >
-            {getStatusText(item.status)}
-          </Text>
+            <Text
+              style={[
+                styles.statusText,
+                { color: getStatusColor(item.status) },
+              ]}
+            >
+              {getStatusText(item.status)}
+            </Text>
+          </View>
+
+          {hasPermission(Permissions.ADDITIONAL_COST_DELETE) && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDelete(item.id);
+              }}
+              disabled={processingItems.has(item.id)}
+            >
+              {processingItems.has(item.id) ? (
+                <ActivityIndicator size="small" color="#EF4444" />
+              ) : (
+                <Ionicons name="trash-outline" size={20} color="#EF4444" />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
       <Text style={styles.costDescription} numberOfLines={2}>
@@ -596,5 +656,15 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: "#93C5FD",
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#FEF2F2",
   },
 });
