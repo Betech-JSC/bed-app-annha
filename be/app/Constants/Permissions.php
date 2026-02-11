@@ -203,6 +203,15 @@ class Permissions
     public const PERSONNEL_REMOVE = 'personnel.remove';
 
     // ===================================================================
+    // KPI MODULE
+    // ===================================================================
+    public const KPI_VIEW = 'kpi.view';
+    public const KPI_CREATE = 'kpi.create';
+    public const KPI_UPDATE = 'kpi.update';
+    public const KPI_DELETE = 'kpi.delete';
+    public const KPI_VERIFY = 'kpi.verify';
+
+    // ===================================================================
     // REVENUE MODULE
     // ===================================================================
     public const REVENUE_VIEW = 'revenue.view';
@@ -470,6 +479,13 @@ class Permissions
             self::PERSONNEL_ASSIGN,
             self::PERSONNEL_REMOVE,
 
+            // KPI
+            self::KPI_VIEW,
+            self::KPI_CREATE,
+            self::KPI_UPDATE,
+            self::KPI_DELETE,
+            self::KPI_VERIFY,
+
             // Revenue
             self::REVENUE_VIEW,
             self::REVENUE_DASHBOARD,
@@ -699,6 +715,13 @@ class Permissions
                 self::PERSONNEL_VIEW,
                 self::PERSONNEL_ASSIGN,
                 self::PERSONNEL_REMOVE,
+            ],
+            'kpi' => [
+                self::KPI_VIEW,
+                self::KPI_CREATE,
+                self::KPI_UPDATE,
+                self::KPI_DELETE,
+                self::KPI_VERIFY,
             ],
             'revenue' => [
                 self::REVENUE_VIEW,

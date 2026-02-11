@@ -227,6 +227,15 @@ export const Permissions = {
     PERSONNEL_REMOVE: 'personnel.remove',
 
     // ===================================================================
+    // KPI MODULE
+    // ===================================================================
+    KPI_VIEW: 'kpi.view',
+    KPI_CREATE: 'kpi.create',
+    KPI_UPDATE: 'kpi.update',
+    KPI_DELETE: 'kpi.delete',
+    KPI_VERIFY: 'kpi.verify',
+
+    // ===================================================================
     // REVENUE MODULE
     // ===================================================================
     REVENUE_VIEW: 'revenue.view',

@@ -60,6 +60,7 @@ use App\Http\Controllers\Api\SubcontractorProgressController;
 use App\Http\Controllers\Api\SupplierAcceptanceController;
 use App\Http\Controllers\Api\SupplierContractController;
 use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\KpiController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -211,6 +212,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/personnel', [ProjectPersonnelController::class, 'index']);
         Route::post('/{projectId}/personnel', [ProjectPersonnelController::class, 'store']);
         Route::delete('/{projectId}/personnel/{id}', [ProjectPersonnelController::class, 'destroy']);
+
+        // KPIs
+        Route::get('/{projectId}/kpis', [KpiController::class, 'index']);
+        Route::post('/{projectId}/kpis', [KpiController::class, 'store']);
+        Route::get('/{projectId}/kpis/{id}', [KpiController::class, 'show']);
+        Route::put('/{projectId}/kpis/{id}', [KpiController::class, 'update']);
+        Route::delete('/{projectId}/kpis/{id}', [KpiController::class, 'destroy']);
+        Route::post('/{projectId}/kpis/{id}/verify', [KpiController::class, 'verify']);
 
         // Subcontractors
         Route::get('/{projectId}/subcontractors', [SubcontractorController::class, 'index']);

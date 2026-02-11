@@ -100,6 +100,7 @@ class PermissionSeeder extends Seeder
             'change_request' => 'Yêu cầu thay đổi',
             'project_risk' => 'Rủi ro dự án',
             'issue' => 'Sự cố/Vấn đề',
+            'kpi' => 'KPI Nhân sự',
             'settings' => 'Cài đặt hệ thống',
         ];
 

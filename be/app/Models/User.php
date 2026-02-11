@@ -316,6 +316,11 @@ class User extends Authenticatable
         return true;
     }
 
+    public function kpis(): HasMany
+    {
+        return $this->hasMany(Kpi::class);
+    }
+
     public function getAvatarUrlAttribute()
     {
         if (!$this->avatar) {

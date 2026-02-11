@@ -196,6 +196,11 @@ class Project extends Model
         return $this->hasMany(ProjectEvmMetric::class);
     }
 
+    public function kpis(): HasMany
+    {
+        return $this->hasMany(Kpi::class);
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================

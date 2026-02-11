@@ -268,11 +268,22 @@ export default function PersonnelScreen() {
         title="Nhân Sự Tham Gia"
         showBackButton
         rightComponent={
-          <PermissionGuard permission={Permissions.PERSONNEL_ASSIGN} projectId={id}>
-            <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>
-              <Ionicons name="add" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </PermissionGuard>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <PermissionGuard permission={Permissions.KPI_VIEW} projectId={id}>
+              <TouchableOpacity
+                style={[styles.addButton, { backgroundColor: "#10B981" }]}
+                onPress={() => router.push(`/projects/${id}/kpis`)}
+              >
+                <Ionicons name="trophy-outline" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </PermissionGuard>
+
+            <PermissionGuard permission={Permissions.PERSONNEL_ASSIGN} projectId={id}>
+              <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>
+                <Ionicons name="add" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </PermissionGuard>
+          </View>
         }
       />
 
