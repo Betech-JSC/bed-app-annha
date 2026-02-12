@@ -33,12 +33,12 @@ const tabs: TabItem[] = [
     route: "/(tabs)/hr",
     icon: "people-outline",
     iconFocused: "people",
-    permissionList: [
+    /* permissionList: [
       Permissions.HR_EMPLOYEE_VIEW,
       Permissions.HR_PAYROLL_VIEW,
       Permissions.HR_TIME_TRACKING_VIEW,
       Permissions.HR_BONUS_VIEW,
-    ],
+    ], */
   },
   {
     name: "Báo Cáo",

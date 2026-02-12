@@ -603,33 +603,57 @@ export default function ProjectsListScreen() {
           )}
         </View>
 
-        {/* Cảnh báo - Hiển thị từng loại riêng biệt với icon và màu phù hợp */}
+
+        {/* Cảnh báo - Tối ưu hiển thị */}
         {(delayDays > 0 || overrunPercentageText || (monitoring?.metrics?.overdue_tasks > 0)) && (
-          <View style={styles.warningsContainer}>
-            {delayDays > 0 && (
-              <View style={[styles.warningItem, styles.warningItemDelay]}>
-                <Ionicons name="time" size={16} color="#DC2626" />
-                <Text style={[styles.warningItemText, { color: "#991B1B" }]}>
-                  Chậm {delayDaysText} ngày
-                </Text>
-              </View>
-            )}
-            {overrunPercentageText && (
-              <View style={[styles.warningItem, styles.warningItemCost]}>
-                <Ionicons name="cash" size={16} color="#D97706" />
-                <Text style={[styles.warningItemText, { color: "#92400E" }]}>
-                  Vượt {overrunPercentageText}%
-                </Text>
-              </View>
-            )}
-            {monitoring && monitoring.metrics && monitoring.metrics.overdue_tasks > 0 && (
-              <View style={[styles.warningItem, styles.warningItemOverdue]}>
-                <Ionicons name="calendar" size={16} color="#EA580C" />
-                <Text style={[styles.warningItemText, { color: "#9A3412" }]}>
-                  {monitoring.metrics.overdue_tasks} việc quá hạn
-                </Text>
-              </View>
-            )}
+          <View style={styles.warningsSection}>
+            <View style={styles.warningsHeader}>
+              <Ionicons name="warning" size={16} color="#DC2626" />
+              <Text style={styles.warningsHeaderText}>
+                Cảnh báo ({[delayDays > 0, overrunPercentageText, monitoring?.metrics?.overdue_tasks > 0].filter(Boolean).length})
+              </Text>
+            </View>
+            <View style={styles.warningsContainer}>
+              {delayDays > 0 && (
+                <View style={[styles.warningItem, styles.warningItemDelay]}>
+                  <View style={[styles.warningIconContainer, { backgroundColor: "#FEE2E2" }]}>
+                    <Ionicons name="time-outline" size={18} color="#DC2626" />
+                  </View>
+                  <View style={styles.warningContent}>
+                    <Text style={[styles.warningLabel, { color: "#991B1B" }]}>Tiến độ chậm</Text>
+                    <Text style={[styles.warningValue, { color: "#7F1D1D" }]}>
+                      {delayDaysText} ngày so với kế hoạch
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {overrunPercentageText && (
+                <View style={[styles.warningItem, styles.warningItemCost]}>
+                  <View style={[styles.warningIconContainer, { backgroundColor: "#FEF3C7" }]}>
+                    <Ionicons name="cash-outline" size={18} color="#D97706" />
+                  </View>
+                  <View style={styles.warningContent}>
+                    <Text style={[styles.warningLabel, { color: "#92400E" }]}>Vượt ngân sách</Text>
+                    <Text style={[styles.warningValue, { color: "#78350F" }]}>
+                      {overrunPercentageText}% so với kế hoạch
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {monitoring && monitoring.metrics && monitoring.metrics.overdue_tasks > 0 && (
+                <View style={[styles.warningItem, styles.warningItemOverdue]}>
+                  <View style={[styles.warningIconContainer, { backgroundColor: "#FFEDD5" }]}>
+                    <Ionicons name="alert-circle-outline" size={18} color="#EA580C" />
+                  </View>
+                  <View style={styles.warningContent}>
+                    <Text style={[styles.warningLabel, { color: "#9A3412" }]}>Công việc quá hạn</Text>
+                    <Text style={[styles.warningValue, { color: "#7C2D12" }]}>
+                      {monitoring.metrics.overdue_tasks} việc cần xử lý
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
           </View>
         )}
 
@@ -1517,36 +1541,72 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#3B82F6",
   },
-  warningsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 12,
+
+  // Warning Section Styles
+  warningsSection: {
+    marginTop: 14,
+    padding: 14,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
   },
-  warningItem: {
+  warningsHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FEE2E2",
+  },
+  warningsHeaderText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#991B1B",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  warningsContainer: {
+    gap: 10,
+  },
+  warningItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  warningIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  warningContent: {
+    flex: 1,
+  },
+  warningLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  warningValue: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   warningItemDelay: {
-    backgroundColor: "#FEE2E2",
     borderColor: "#FCA5A5",
   },
   warningItemCost: {
-    backgroundColor: "#FEF3C7",
     borderColor: "#FCD34D",
   },
   warningItemOverdue: {
-    backgroundColor: "#FFEDD5",
     borderColor: "#FDBA74",
-  },
-  warningItemText: {
-    fontSize: 12,
-    fontWeight: "600",
   },
   commentSection: {
     marginTop: 12,

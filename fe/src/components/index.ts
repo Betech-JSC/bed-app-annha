@@ -39,3 +39,4 @@ export { default as DatePickerInput } from "./DatePickerInput";
 export { default as CurrencyInput } from "./CurrencyInput";
 export { NotificationItem } from "./NotificationItem";
 export { NotificationBadge } from "./NotificationBadge";
+export { KpiStatsChart } from "./charts/KpiStatsChart";

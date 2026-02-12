@@ -61,6 +61,7 @@ use App\Http\Controllers\Api\SupplierAcceptanceController;
 use App\Http\Controllers\Api\SupplierContractController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\KpiController;
+use App\Http\Controllers\Api\OfficeKpiController;
 
 Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
@@ -112,6 +113,20 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
+
+
+
+    // ===================================================================
+    // OFFICE/HR KPI ROUTES (Not tied to specific projects)
+    // ===================================================================
+    Route::prefix('hr/kpis')->group(function () {
+        Route::get('/', [OfficeKpiController::class, 'index']);
+        Route::post('/', [OfficeKpiController::class, 'store']);
+        Route::get('/{id}', [OfficeKpiController::class, 'show']);
+        Route::put('/{id}', [OfficeKpiController::class, 'update']);
+        Route::delete('/{id}', [OfficeKpiController::class, 'destroy']);
+        Route::post('/{id}/verify', [OfficeKpiController::class, 'verify']);
+    });
 
     // ===================================================================
     // PROJECT MANAGEMENT ROUTES
