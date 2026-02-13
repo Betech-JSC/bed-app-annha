@@ -80,7 +80,7 @@ class AdditionalCostController extends Controller
                 'project_id' => $project->id,
                 'proposed_by' => $user->id,
                 ...$validated,
-                'status' => 'pending',
+                'status' => 'pending_approval',
             ]);
 
             // Đính kèm files nếu có
@@ -98,20 +98,20 @@ class AdditionalCostController extends Controller
 
             DB::commit();
 
-            // Notify customers (who can mark as paid) about new additional cost
+            // Notify customers for APPROVAL
             $this->notificationService->sendToPermissionUsers(
-                Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
+                Permissions::ADDITIONAL_COST_APPROVE,
                 $project->id,
                 Notification::TYPE_WORKFLOW,
                 Notification::CATEGORY_WORKFLOW_APPROVAL,
-                "Yêu cầu thanh toán chi phí phát sinh",
-                "Có một yêu cầu chi phí phát sinh mới cho dự án '{$project->name}' với số tiền " . number_format($cost->amount) . " VND. Vui lòng kiểm tra và thanh toán.",
+                "Yêu cầu duyệt chi phí phát sinh",
+                "Có một yêu cầu chi phí phát sinh mới cho dự án '{$project->name}' với số tiền " . number_format($cost->amount) . " VND. Vui lòng kiểm tra và duyệt.",
                 [
                     'project_id' => $project->id,
                     'cost_id' => $cost->id,
                 ],
                 Notification::PRIORITY_HIGH,
-                "/projects/{$project->id}/additional-costs/{$cost->id}"
+                "/projects/{$project->id}/additional-costs"
             );
 
             return response()->json([
@@ -242,7 +242,7 @@ class AdditionalCostController extends Controller
     }
 
     /**
-     * Duyệt chi phí phát sinh (backward compatible - giữ lại cho workflow cũ)
+     * Duyệt chi phí phát sinh -> Cộng vào hợp đồng
      */
     public function approve(Request $request, string $projectId, string $id)
     {
@@ -251,39 +251,70 @@ class AdditionalCostController extends Controller
 
         $user = auth()->user();
 
-        // Check RBAC permission
+        // Check RBAC permission (Khách hàng hoặc người có quyền duyệt)
         if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_APPROVE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền duyệt chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_APPROVE
+                'message' => 'Bạn không có quyền duyệt chi phí phát sinh.'
             ], 403);
         }
 
-        // Nếu đang ở customer_paid, chuyển thành confirm
-        if ($cost->status === 'customer_paid') {
-            $cost->confirm($user);
-            return response()->json([
-                'success' => true,
-                'message' => 'Đã xác nhận đã nhận tiền.',
-                'data' => $cost->fresh(['confirmer', 'customerPaidBy', 'attachments'])
-            ]);
-        }
-
-        // Workflow cũ: pending_approval → approved
-        if ($cost->status !== 'pending_approval') {
+        // Chỉ duyệt khi đang chờ duyệt
+        if ($cost->status !== 'pending_approval' && $cost->status !== 'pending') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chi phí không ở trạng thái chờ duyệt.'
             ], 400);
         }
 
-        $cost->approve($user);
+        try {
+            DB::beginTransaction();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Chi phí phát sinh đã được duyệt.',
-            'data' => $cost->fresh()
-        ]);
+            $cost->status = 'approved';
+            $cost->approved_by = $user->id;
+            $cost->approved_at = now();
+            $cost->save();
+
+            // Cập nhật giá trị hợp đồng
+            $contract = $project->contract;
+            if ($contract) {
+                // Remove formatting if any, ensure it's numeric/decimal
+                // Assuming contract_value is stored as decimal in DB
+                $contract->contract_value += $cost->amount;
+                $contract->save();
+            }
+
+            DB::commit();
+
+            // Notify proposer
+            $this->notificationService->sendToUser(
+                $cost->proposed_by,
+                Notification::TYPE_WORKFLOW,
+                Notification::CATEGORY_WORKFLOW_APPROVAL,
+                "Chi phí phát sinh đã được duyệt",
+                "Chi phí phát sinh " . number_format($cost->amount) . " VND cho dự án '{$project->name}' đã được duyệt và cộng vào hợp đồng.",
+                [
+                    'project_id' => $project->id,
+                    'cost_id' => $cost->id,
+                ],
+                Notification::PRIORITY_MEDIUM,
+                 "/projects/{$project->id}/additional-costs"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Chi phí phát sinh đã được duyệt và cộng vào giá trị hợp đồng.',
+                'data' => $cost->fresh()
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi duyệt chi phí.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

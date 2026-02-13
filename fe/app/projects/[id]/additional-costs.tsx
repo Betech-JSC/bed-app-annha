@@ -91,6 +91,8 @@ export default function AdditionalCostsScreen() {
     }
   };
 
+  /* Mark Paid logic removed as per new requirement */
+
   const handleApprove = async (costId: number) => {
     if (processingItems.has(costId)) return;
 
@@ -98,7 +100,7 @@ export default function AdditionalCostsScreen() {
       setProcessingItems(prev => new Set(prev).add(costId));
       const response = await additionalCostApi.approveAdditionalCost(id!, costId);
       if (response.success) {
-        Alert.alert("Thành công", "Chi phí phát sinh đã được duyệt.");
+        Alert.alert("Thành công", "Chi phí phát sinh đã được duyệt và cộng vào hợp đồng.");
         loadCosts(false);
       }
     } catch (error: any) {
@@ -110,6 +112,42 @@ export default function AdditionalCostsScreen() {
         return next;
       });
     }
+  };
+
+  const handleReject = async (costId: number) => {
+    if (processingItems.has(costId)) return;
+
+    Alert.prompt(
+      "Từ chối chi phí",
+      "Vui lòng nhập lý do từ chối:",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Từ chối",
+          style: "destructive",
+          onPress: async (reason) => {
+            if (!reason) return;
+            try {
+              setProcessingItems(prev => new Set(prev).add(costId));
+              const response = await additionalCostApi.rejectAdditionalCost(id!, costId, reason);
+              if (response.success) {
+                Alert.alert("Thành công", "Đã từ chối chi phí phát sinh.");
+                loadCosts(false);
+              }
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Có lỗi xảy ra");
+            } finally {
+              setProcessingItems(prev => {
+                const next = new Set(prev);
+                next.delete(costId);
+                return next;
+              });
+            }
+          }
+        }
+      ],
+      "plain-text"
+    );
   };
 
   const handleDelete = async (costId: number) => {
@@ -216,14 +254,11 @@ export default function AdditionalCostsScreen() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case "pending":
-        return "Chờ thanh toán";
-      case "customer_paid":
-        return "Khách đã thanh toán";
-      case "confirmed":
-        return "Đã nhận tiền";
+      case "pending": // Helper for backward compat
       case "pending_approval":
         return "Chờ duyệt";
+      case "customer_paid":
+      case "confirmed":
       case "approved":
         return "Đã duyệt";
       case "rejected":
@@ -289,57 +324,35 @@ export default function AdditionalCostsScreen() {
         </View>
       )}
 
-      {item.status === "pending" && hasPermission(Permissions.ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER) && (
-        <TouchableOpacity
-          style={[styles.markPaidButton, processingItems.has(item.id) && { opacity: 0.7 }]}
-          onPress={(e) => {
-            e.stopPropagation();
-            handleMarkPaid(item.id);
-          }}
-          disabled={processingItems.has(item.id)}
-        >
-          {processingItems.has(item.id) ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.markPaidButtonText}>Đã thanh toán</Text>
-          )}
-        </TouchableOpacity>
-      )}
+      {/* Action Buttons Row */}
+      {(item.status === "pending_approval" || item.status === "pending") && hasPermission(Permissions.ADDITIONAL_COST_APPROVE) && (
+        <View style={styles.actionButtonsRow}>
+          <TouchableOpacity
+            style={[styles.approveButton, processingItems.has(item.id) && { opacity: 0.7 }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleApprove(item.id);
+            }}
+            disabled={processingItems.has(item.id)}
+          >
+            {processingItems.has(item.id) ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.approveButtonText}>Duyệt</Text>
+            )}
+          </TouchableOpacity>
 
-      {/* Kế toán xác nhận đã nhận tiền */}
-      {item.status === "customer_paid" && hasPermission(Permissions.ADDITIONAL_COST_CONFIRM) && (
-        <TouchableOpacity
-          style={[styles.confirmButton, processingItems.has(item.id) && { opacity: 0.7 }]}
-          onPress={(e) => {
-            e.stopPropagation();
-            handleConfirm(item.id);
-          }}
-          disabled={processingItems.has(item.id)}
-        >
-          {processingItems.has(item.id) ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.confirmButtonText}>Xác nhận đã nhận tiền</Text>
-          )}
-        </TouchableOpacity>
-      )}
-
-      {/* Backward compatible: pending_approval → approve */}
-      {item.status === "pending_approval" && hasPermission(Permissions.ADDITIONAL_COST_APPROVE) && (
-        <TouchableOpacity
-          style={[styles.approveButton, processingItems.has(item.id) && { opacity: 0.7 }]}
-          onPress={(e) => {
-            e.stopPropagation();
-            handleApprove(item.id);
-          }}
-          disabled={processingItems.has(item.id)}
-        >
-          {processingItems.has(item.id) ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.approveButtonText}>Duyệt</Text>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.rejectButton, processingItems.has(item.id) && { opacity: 0.7 }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleReject(item.id);
+            }}
+            disabled={processingItems.has(item.id)}
+          >
+            <Text style={styles.rejectButtonText}>Từ chối</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -539,18 +552,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
-  approveButton: {
-    backgroundColor: "#10B981",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  approveButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
+
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -666,5 +668,34 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     backgroundColor: "#FEF2F2",
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  approveButton: {
+    flex: 1,
+    backgroundColor: "#10B981",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  approveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  rejectButton: {
+    flex: 1,
+    backgroundColor: "#EF4444",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  rejectButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
