@@ -34,14 +34,12 @@ export default function MaterialsScreen() {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
     const [projects, setProjects] = useState<any[]>([]);
-    const [formData, setFormData] = useState<CreateMaterialData & { initial_stock?: number }>({
+    const [formData, setFormData] = useState<CreateMaterialData>({
         name: "",
         code: "",
         unit: "kg",
         description: "",
         unit_price: 0,
-        min_stock: 0,
-        initial_stock: 0,
         project_id: undefined,
     });
     const [submitting, setSubmitting] = useState(false);
@@ -103,14 +101,6 @@ export default function MaterialsScreen() {
             newErrors.unit_price = "Đơn giá phải lớn hơn hoặc bằng 0";
         }
 
-        if (formData.min_stock !== undefined && formData.min_stock < 0) {
-            newErrors.min_stock = "Mức tồn kho tối thiểu không được âm";
-        }
-
-        if (formData.initial_stock !== undefined && formData.initial_stock < 0) {
-            newErrors.initial_stock = "Tồn kho ban đầu không được âm";
-        }
-
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -123,15 +113,9 @@ export default function MaterialsScreen() {
         try {
             setSubmitting(true);
 
-            // Tách initial_stock ra khỏi formData khi gửi API
-            const { initial_stock, ...materialData } = formData;
-
             const response = editingMaterial
-                ? await materialApi.updateMaterial(editingMaterial.id, materialData)
-                : await materialApi.createMaterial({
-                    ...materialData,
-                    initial_stock: initial_stock || 0, // Gửi initial_stock khi tạo mới
-                });
+                ? await materialApi.updateMaterial(editingMaterial.id, formData)
+                : await materialApi.createMaterial(formData);
 
             if (response.success) {
                 Alert.alert("Thành công", editingMaterial ? "Đã cập nhật vật liệu" : "Đã tạo vật liệu thành công");
@@ -156,8 +140,6 @@ export default function MaterialsScreen() {
             unit: material.unit,
             description: material.description || "",
             unit_price: (material as any).unit_price || 0,
-            min_stock: (material as any).min_stock || material.min_stock_level || 0,
-            initial_stock: material.current_stock || 0, // Hiển thị tồn kho hiện tại khi edit
             project_id: material.project_id,
         });
         setShowCreateModal(true);
@@ -197,23 +179,13 @@ export default function MaterialsScreen() {
             unit: "kg",
             description: "",
             unit_price: 0,
-            min_stock: 0,
-            initial_stock: 0,
             project_id: undefined,
         });
         setErrors({});
         setFocusedField(null);
     };
 
-    const getStockStatus = (material: Material) => {
-        if (material.current_stock <= (material.min_stock_level || 0)) {
-            return { color: "#EF4444", text: "Thiếu" };
-        }
-        return { color: "#10B981", text: "Đủ" };
-    };
-
     const renderItem = ({ item }: { item: Material }) => {
-        const stockStatus = getStockStatus(item);
         return (
             <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -221,27 +193,12 @@ export default function MaterialsScreen() {
                         <Text style={styles.cardTitle}>{item.name}</Text>
                         {item.code && <Text style={styles.cardCode}>Mã: {item.code}</Text>}
                     </View>
-                    <View
-                        style={[
-                            styles.stockBadge,
-                            { backgroundColor: stockStatus.color + "20" },
-                        ]}
-                    >
-                        <Text style={[styles.stockText, { color: stockStatus.color }]}>
-                            {stockStatus.text}
-                        </Text>
-                    </View>
                 </View>
                 <View style={styles.stockInfo}>
-                    <Text style={styles.stockLabel}>Tồn kho:</Text>
+                    <Text style={styles.stockLabel}>Đơn giá mặc định:</Text>
                     <Text style={styles.stockValue}>
-                        {item.current_stock} {item.unit}
+                        {new Intl.NumberFormat("vi-VN").format((item as any).unit_price || 0)} VNĐ / {item.unit}
                     </Text>
-                    {item.min_stock_level > 0 && (
-                        <Text style={styles.minStockText}>
-                            (Tối thiểu: {item.min_stock_level} {item.unit})
-                        </Text>
-                    )}
                 </View>
                 <View style={styles.cardActions}>
                     <TouchableOpacity
@@ -474,100 +431,6 @@ export default function MaterialsScreen() {
                                 />
                             </View>
 
-                            {/* Cài đặt tồn kho */}
-                            <View style={styles.formSection}>
-                                <View style={styles.sectionHeader}>
-                                    <Ionicons name="cube-outline" size={20} color="#3B82F6" />
-                                    <Text style={styles.sectionTitle}>Cài đặt tồn kho</Text>
-                                </View>
-
-                                <View style={styles.formGroup}>
-                                    <View style={styles.labelContainer}>
-                                        <Text style={styles.label}>Tồn kho ban đầu</Text>
-                                        {!editingMaterial && <Text style={styles.required}>*</Text>}
-                                        {editingMaterial && <Text style={styles.optional}>(Chỉ đọc)</Text>}
-                                    </View>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            focusedField === "initial_stock" && styles.inputFocused,
-                                            errors.initial_stock && styles.inputError,
-                                            editingMaterial && styles.inputDisabled,
-                                        ]}
-                                        placeholder="0"
-                                        placeholderTextColor="#9CA3AF"
-                                        value={formData.initial_stock?.toString() || "0"}
-                                        onChangeText={(text) => {
-                                            if (!editingMaterial) {
-                                                const value = parseFloat(text) || 0;
-                                                setFormData({ ...formData, initial_stock: value });
-                                                if (errors.initial_stock) setErrors({ ...errors, initial_stock: "" });
-                                            }
-                                        }}
-                                        keyboardType="numeric"
-                                        editable={!editingMaterial}
-                                        onFocus={() => {
-                                            if (!editingMaterial) {
-                                                setFocusedField("initial_stock");
-                                            }
-                                        }}
-                                        onBlur={() => {
-                                            setFocusedField(null);
-                                            if (!editingMaterial && formData.initial_stock !== undefined && formData.initial_stock < 0) {
-                                                setErrors({ ...errors, initial_stock: "Tồn kho ban đầu không được âm" });
-                                            }
-                                        }}
-                                    />
-                                    {errors.initial_stock && (
-                                        <View style={styles.errorContainer}>
-                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                            <Text style={styles.errorText}>{errors.initial_stock}</Text>
-                                        </View>
-                                    )}
-                                    <Text style={styles.helperText}>
-                                        {editingMaterial
-                                            ? "Tồn kho hiện tại (chỉ đọc). Để thay đổi tồn kho, sử dụng chức năng điều chỉnh tồn kho."
-                                            : "Số lượng tồn kho ban đầu khi tạo vật liệu mới"}
-                                    </Text>
-                                </View>
-
-                                <View style={styles.formGroup}>
-                                    <View style={styles.labelContainer}>
-                                        <Text style={styles.label}>Mức tồn kho tối thiểu</Text>
-                                        <Text style={styles.optional}>(Tùy chọn)</Text>
-                                    </View>
-                                    <TextInput
-                                        style={[
-                                            styles.input,
-                                            focusedField === "min_stock" && styles.inputFocused,
-                                            errors.min_stock && styles.inputError,
-                                        ]}
-                                        placeholder="0"
-                                        placeholderTextColor="#9CA3AF"
-                                        value={formData.min_stock?.toString()}
-                                        onChangeText={(text) => {
-                                            const value = parseFloat(text) || 0;
-                                            setFormData({ ...formData, min_stock: value });
-                                            if (errors.min_stock) setErrors({ ...errors, min_stock: "" });
-                                        }}
-                                        keyboardType="numeric"
-                                        onFocus={() => setFocusedField("min_stock")}
-                                        onBlur={() => {
-                                            setFocusedField(null);
-                                            if (formData.min_stock !== undefined && formData.min_stock < 0) {
-                                                setErrors({ ...errors, min_stock: "Mức tồn kho không được âm" });
-                                            }
-                                        }}
-                                    />
-                                    {errors.min_stock && (
-                                        <View style={styles.errorContainer}>
-                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                            <Text style={styles.errorText}>{errors.min_stock}</Text>
-                                        </View>
-                                    )}
-                                    <Text style={styles.helperText}>Cảnh báo khi tồn kho dưới mức này</Text>
-                                </View>
-                            </View>
 
                             {/* Mô tả */}
                             <View style={styles.formSection}>

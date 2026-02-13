@@ -40,16 +40,7 @@ class MaterialController extends Controller
             $query->where('category', $category);
         }
 
-        $materials = $query->paginate(20);
-
-        // Thêm current_stock và min_stock_level cho mỗi material
-        $materials->getCollection()->transform(function ($material) {
-            // Đảm bảo accessor được gọi để tính current_stock
-            $material->current_stock = $material->current_stock;
-            // Thêm min_stock_level để tương thích với frontend
-            $material->min_stock_level = $material->min_stock ?? 0;
-            return $material;
-        });
+        $materials = $query->paginate(50);
 
         return response()->json([
             'success' => true,
@@ -75,9 +66,6 @@ class MaterialController extends Controller
             'description' => 'nullable|string',
             'category' => 'nullable|string|max:100',
             'unit_price' => 'required|numeric|min:0',
-            'min_stock' => 'nullable|numeric|min:0',
-            'max_stock' => 'nullable|numeric|min:0',
-            'initial_stock' => 'nullable|numeric|min:0', // Tồn kho ban đầu
             'status' => 'in:active,inactive,discontinued',
         ]);
 
@@ -96,31 +84,8 @@ class MaterialController extends Controller
             'description' => $request->description,
             'category' => $request->category,
             'unit_price' => $request->unit_price,
-            'min_stock' => $request->min_stock ?? 0,
-            'max_stock' => $request->max_stock,
             'status' => $request->status ?? 'active',
         ]);
-
-        // Nếu có initial_stock, tạo transaction "adjustment" để set tồn kho ban đầu
-        if ($request->has('initial_stock') && $request->initial_stock > 0) {
-            MaterialTransaction::create([
-                'material_id' => $material->id,
-                'project_id' => null, // Tồn kho ban đầu không gắn với project cụ thể
-                'type' => 'adjustment',
-                'quantity' => $request->initial_stock,
-                'transaction_date' => now()->toDateString(),
-                'notes' => 'Tồn kho ban đầu khi tạo vật liệu',
-                'status' => 'approved', // Tự động approved cho tồn kho ban đầu
-                'created_by' => $user->id,
-                'approved_by' => $user->id,
-                'approved_at' => now(),
-            ]);
-        }
-
-        // Đảm bảo accessor được gọi để tính current_stock
-        $material->current_stock = $material->current_stock;
-        // Thêm min_stock_level để tương thích với frontend
-        $material->min_stock_level = $material->min_stock ?? 0;
 
         return response()->json([
             'success' => true,
@@ -141,10 +106,6 @@ class MaterialController extends Controller
         }
 
         $material = Material::findOrFail($id);
-        // Đảm bảo accessor được gọi để tính current_stock
-        $material->current_stock = $material->current_stock;
-        // Thêm min_stock_level để tương thích với frontend
-        $material->min_stock_level = $material->min_stock ?? 0;
 
         return response()->json([
             'success' => true,
@@ -152,65 +113,6 @@ class MaterialController extends Controller
         ]);
     }
 
-    public function getStock(string $id)
-    {
-        $user = auth()->user();
-
-        if (!$user->hasPermission(Permissions::MATERIAL_VIEW)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền xem tồn kho.'
-            ], 403);
-        }
-
-        $material = Material::findOrFail($id);
-        $currentStock = $material->current_stock;
-        $minStock = $material->min_stock ?? 0;
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'material_id' => $material->id,
-                'material_name' => $material->name,
-                'current_stock' => $currentStock,
-                'min_stock' => $minStock,
-                'min_stock_level' => $minStock, // Tương thích với frontend
-                'max_stock' => $material->max_stock,
-                'unit' => $material->unit,
-                'is_low_stock' => $currentStock <= $minStock,
-            ]
-        ]);
-    }
-
-    public function getTransactions(string $id, Request $request)
-    {
-        $user = auth()->user();
-
-        if (!$user->hasPermission(Permissions::MATERIAL_VIEW)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền xem giao dịch.'
-            ], 403);
-        }
-
-        $query = MaterialTransaction::where('material_id', $id)
-            ->with(['project', 'supplier', 'creator', 'approver']);
-
-        if ($type = $request->query('type')) {
-            $query->where('type', $type);
-        }
-
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        $transactions = $query->orderBy('transaction_date', 'desc')->paginate(20);
-
-        return response()->json([
-            'success' => true,
-            'data' => $transactions
-        ]);
-    }
 
     /**
      * Lấy danh sách materials đã sử dụng trong project (thông qua transactions)
@@ -246,28 +148,36 @@ class MaterialController extends Controller
             $query->where('category', $category);
         }
 
-        $materials = $query->paginate(20);
+        $materials = $query->paginate(50);
+
+        $projectTotalCost = 0;
 
         // Tính toán số lượng đã sử dụng trong project cho mỗi material
-        $materials->getCollection()->transform(function ($material) use ($projectId) {
-            // Đảm bảo accessor được gọi để tính current_stock
-            $material->current_stock = $material->current_stock;
-            // Thêm min_stock_level để tương thích với frontend
-            $material->min_stock_level = $material->min_stock ?? 0;
-
+        $materials->getCollection()->transform(function ($material) use ($projectId, &$projectTotalCost) {
             // Tính tổng số lượng đã sử dụng trong project
             $projectTransactions = $material->transactions->where('project_id', $projectId);
             $totalIn = $projectTransactions->where('type', 'in')->sum('quantity');
             $totalOut = $projectTransactions->where('type', 'out')->sum('quantity');
-            $material->project_usage = $totalOut - $totalIn; // Số lượng đã xuất - đã nhập
+            
+            $amountIn = $projectTransactions->where('type', 'in')->sum('total_amount');
+            $amountOut = $projectTransactions->where('type', 'out')->sum('total_amount');
+
+            $material->project_usage = $totalOut - $totalIn; // Số lượng đã sử dụng
+            $material->project_total_amount = $amountOut - $amountIn; // Tổng chi phí
             $material->project_transactions_count = $projectTransactions->count();
+
+            $projectTotalCost += $material->project_total_amount;
 
             return $material;
         });
 
         return response()->json([
             'success' => true,
-            'data' => $materials
+            'data' => $materials,
+            'summary' => [
+                'total_material_cost' => (float)$projectTotalCost,
+                'total_materials_count' => $materials->total(),
+            ]
         ]);
     }
 
@@ -311,15 +221,8 @@ class MaterialController extends Controller
             'description',
             'category',
             'unit_price',
-            'min_stock',
-            'max_stock',
             'status'
         ]));
-
-        // Đảm bảo accessor được gọi để tính current_stock
-        $material->current_stock = $material->current_stock;
-        // Thêm min_stock_level để tương thích với frontend
-        $material->min_stock_level = $material->min_stock ?? 0;
 
         return response()->json([
             'success' => true,
@@ -391,6 +294,7 @@ class MaterialController extends Controller
             ], 422);
         }
 
+        /*
         // Nếu là transaction xuất kho (out), kiểm tra tồn kho
         if ($request->type === 'out') {
             $material = Material::findOrFail($request->material_id);
@@ -403,6 +307,7 @@ class MaterialController extends Controller
                 ], 422);
             }
         }
+        */
 
         // Sử dụng MaterialInventoryService để tạo transaction xuất kho và đẩy qua chi phí dự án
         if ($request->type === 'out') {
@@ -421,7 +326,7 @@ class MaterialController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Đã tạo phiếu xuất kho thành công.',
+                    'message' => 'Đã ghi nhận sử dụng vật liệu thành công.',
                     'data' => $transaction
                 ], 201);
             } catch (\Exception $e) {
@@ -457,24 +362,27 @@ class MaterialController extends Controller
     }
 
     /**
-     * Điều chỉnh tồn kho vật liệu (không cần project)
-     * Dùng cho form sửa vật liệu
+     * Tạo nhiều giao dịch xuất kho cùng lúc (Batch)
      */
-    public function adjustStock(Request $request, string $id)
+    public function batchTransactions(Request $request, string $projectId)
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission(Permissions::MATERIAL_UPDATE)) {
+        if (!$user->hasPermission(Permissions::MATERIAL_CREATE)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền điều chỉnh tồn kho.'
+                'message' => 'Không có quyền tạo giao dịch vật liệu.'
             ], 403);
         }
 
         $validator = Validator::make($request->all(), [
-            'quantity' => 'required|numeric',
             'transaction_date' => 'required|date',
-            'notes' => 'nullable|string',
+            'cost_group_id' => 'required|exists:cost_groups,id',
+            'items' => 'required|array|min:1',
+            'items.*.material_id' => 'required|exists:materials,id',
+            'items.*.quantity' => 'required|numeric|min:0.01',
+            'items.*.amount' => 'required|numeric|min:0',
+            'items.*.notes' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -485,36 +393,27 @@ class MaterialController extends Controller
             ], 422);
         }
 
-        $material = Material::findOrFail($id);
+        try {
+            $inventoryService = app(\App\Services\MaterialInventoryService::class);
+            $result = $inventoryService->createBatchOutTransaction(
+                $request->items,
+                $projectId,
+                $user->id,
+                $request->transaction_date,
+                $request->cost_group_id
+            );
 
-        // Tạo transaction điều chỉnh (adjustment) - không cần project_id
-        $transaction = MaterialTransaction::create([
-            'material_id' => $material->id,
-            'project_id' => null, // Điều chỉnh tồn kho không gắn với project cụ thể
-            'cost_id' => null,
-            'type' => 'adjustment',
-            'quantity' => $request->quantity, // Có thể là số dương (tăng) hoặc âm (giảm)
-            'transaction_date' => $request->transaction_date,
-            'notes' => $request->notes ?? 'Điều chỉnh tồn kho',
-            'status' => 'approved', // Tự động approved
-            'created_by' => $user->id,
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-
-        // Tính lại tồn kho
-        $material->refresh();
-        $newStock = $material->current_stock;
-
-        $transaction->load(['material', 'creator']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã điều chỉnh tồn kho thành công.',
-            'data' => [
-                'transaction' => $transaction,
-                'new_stock' => $newStock,
-            ]
-        ], 201);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã ghi nhận sử dụng vật liệu tổng hợp và đẩy sang Chi phí dự án.',
+                'data' => $result
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi xử lý batch: ' . $e->getMessage()
+            ], 422);
+        }
     }
+
 }

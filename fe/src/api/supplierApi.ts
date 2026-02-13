@@ -52,6 +52,10 @@ export interface SupplierDebtStatistics {
     remaining_debt: number;
     payment_percentage: number;
   };
+  breakdown?: {
+    acceptance_amount: number;
+    material_bill_amount: number;
+  };
 }
 
 export const supplierApi = {

@@ -15,7 +15,7 @@ import {
     FlatList,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { materialApi, Material, MaterialTransaction, CreateMaterialData } from "@/api/materialApi";
+import { materialApi, Material, CreateMaterialData } from "@/api/materialApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
@@ -25,7 +25,6 @@ export default function MaterialDetailScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const [material, setMaterial] = useState<Material | null>(null);
-    const [transactions, setTransactions] = useState<MaterialTransaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -35,7 +34,6 @@ export default function MaterialDetailScreen() {
         code: "",
         unit: "kg",
         description: "",
-        min_stock_level: 0,
         project_id: undefined,
     });
     const [showProjectPicker, setShowProjectPicker] = useState(false);
@@ -43,14 +41,6 @@ export default function MaterialDetailScreen() {
     const [submitting, setSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [focusedField, setFocusedField] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<"details" | "transactions">("details");
-    const [showAdjustStockModal, setShowAdjustStockModal] = useState(false);
-    const [adjustStockData, setAdjustStockData] = useState({
-        quantity: "",
-        notes: "",
-        transaction_date: new Date().toISOString().split("T")[0],
-    });
-    const [adjustingStock, setAdjustingStock] = useState(false);
 
     useEffect(() => {
         loadMaterial();
@@ -60,34 +50,25 @@ export default function MaterialDetailScreen() {
     const loadMaterial = async () => {
         try {
             setLoading(true);
-            const [materialRes, transactionsRes] = await Promise.all([
-                materialApi.getMaterial(Number(id)),
-                materialApi.getTransactions(Number(id)),
-            ]);
+            const response = await materialApi.getMaterial(Number(id));
 
-            if (materialRes.success) {
-                setMaterial(materialRes.data);
+            if (response.success) {
+                setMaterial(response.data);
                 setFormData({
-                    name: materialRes.data.name,
-                    code: materialRes.data.code || "",
-                    unit: materialRes.data.unit,
-                    description: materialRes.data.description || "",
-                    min_stock_level: materialRes.data.min_stock_level,
-                    project_id: materialRes.data.project_id,
+                    name: response.data.name,
+                    code: response.data.code || "",
+                    unit: response.data.unit,
+                    description: response.data.description || "",
+                    project_id: response.data.project_id,
                 });
 
-                // Set selected project
-                if (materialRes.data.project_id) {
-                    const project = projects.find((p) => p.id === materialRes.data.project_id);
+                // Set selected project if exists
+                if (response.data.project_id) {
+                    const project = projects.find((p) => p.id === response.data.project_id);
                     if (project) {
                         setSelectedProject(project);
                     }
                 }
-            }
-
-            if (transactionsRes.success) {
-                const data = transactionsRes.data?.data || transactionsRes.data || [];
-                setTransactions(Array.isArray(data) ? data : []);
             }
         } catch (error: any) {
             const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải vật liệu";
@@ -125,10 +106,6 @@ export default function MaterialDetailScreen() {
             newErrors.unit = "Đơn vị là bắt buộc";
         }
 
-        if (formData.min_stock_level !== undefined && formData.min_stock_level < 0) {
-            newErrors.min_stock_level = "Mức tồn kho tối thiểu không được âm";
-        }
-
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -152,38 +129,6 @@ export default function MaterialDetailScreen() {
             Alert.alert("Lỗi", errorMessage);
         } finally {
             setSubmitting(false);
-        }
-    };
-
-    const handleAdjustStock = async () => {
-        if (!adjustStockData.quantity || parseFloat(adjustStockData.quantity) === 0) {
-            Alert.alert("Lỗi", "Vui lòng nhập số lượng điều chỉnh (khác 0)");
-            return;
-        }
-
-        try {
-            setAdjustingStock(true);
-            const response = await materialApi.adjustStock(Number(id), {
-                quantity: parseFloat(adjustStockData.quantity),
-                transaction_date: adjustStockData.transaction_date,
-                notes: adjustStockData.notes || undefined,
-            });
-
-            if (response.success) {
-                Alert.alert("Thành công", `Đã điều chỉnh tồn kho. Tồn kho mới: ${response.data.new_stock} ${material?.unit || ""}`);
-                setShowAdjustStockModal(false);
-                setAdjustStockData({
-                    quantity: "",
-                    notes: "",
-                    transaction_date: new Date().toISOString().split("T")[0],
-                });
-                loadMaterial();
-            }
-        } catch (error: any) {
-            const errorMessage = error.userMessage || error.response?.data?.message || "Không thể điều chỉnh tồn kho";
-            Alert.alert("Lỗi", errorMessage);
-        } finally {
-            setAdjustingStock(false);
         }
     };
 
@@ -214,87 +159,11 @@ export default function MaterialDetailScreen() {
         );
     };
 
-    const getStockStatus = (material: Material) => {
-        if (material.current_stock <= 0) {
-            return { color: "#EF4444", text: "Hết hàng" };
-        }
-        if (material.current_stock < material.min_stock_level) {
-            return { color: "#F59E0B", text: "Sắp hết" };
-        }
-        return { color: "#10B981", text: "Đủ" };
-    };
-
-    const getTransactionTypeLabel = (type: string) => {
-        switch (type) {
-            case "in":
-                return "Nhập kho";
-            case "out":
-                return "Xuất kho";
-            case "adjustment":
-                return "Điều chỉnh";
-            default:
-                return type;
-        }
-    };
-
-    const getTransactionTypeColor = (type: string) => {
-        switch (type) {
-            case "in":
-                return "#10B981";
-            case "out":
-                return "#EF4444";
-            case "adjustment":
-                return "#3B82F6";
-            default:
-                return "#6B7280";
-        }
-    };
-
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString("vi-VN", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    };
-
-    const renderTransactionItem = ({ item }: { item: MaterialTransaction }) => (
-        <View style={styles.transactionCard}>
-            <View style={styles.transactionHeader}>
-                <View
-                    style={[
-                        styles.transactionTypeBadge,
-                        { backgroundColor: getTransactionTypeColor(item.type) + "20" },
-                    ]}
-                >
-                    <Text style={[styles.transactionTypeText, { color: getTransactionTypeColor(item.type) }]}>
-                        {getTransactionTypeLabel(item.type)}
-                    </Text>
-                </View>
-                <Text style={styles.transactionDate}>{formatDate(item.created_at)}</Text>
-            </View>
-            <View style={styles.transactionInfo}>
-                <Text style={styles.transactionQuantity}>
-                    {item.type === "in" ? "+" : item.type === "out" ? "-" : ""}
-                    {item.quantity} {material?.unit}
-                </Text>
-                {item.project && (
-                    <Text style={styles.transactionProject}>Dự án: {item.project.name}</Text>
-                )}
-                {item.notes && (
-                    <Text style={styles.transactionNotes}>{item.notes}</Text>
-                )}
-            </View>
-        </View>
-    );
-
     if (loading) {
         return (
             <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color="#3B82F6" />
+                <ScreenHeader title="Chi Tiết Vật Liệu" showBackButton />
+                <ActivityIndicator size="large" color="#3B82F6" style={{ marginTop: 40 }} />
             </View>
         );
     }
@@ -302,6 +171,7 @@ export default function MaterialDetailScreen() {
     if (!material) {
         return (
             <View style={styles.centerContainer}>
+                <ScreenHeader title="Chi Tiết Vật Liệu" showBackButton />
                 <Text style={styles.errorText}>Không tìm thấy vật liệu</Text>
                 <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
                     <Text style={styles.backButtonText}>Quay lại</Text>
@@ -309,8 +179,6 @@ export default function MaterialDetailScreen() {
             </View>
         );
     }
-
-    const stockStatus = getStockStatus(material);
 
     return (
         <View style={styles.container}>
@@ -337,127 +205,42 @@ export default function MaterialDetailScreen() {
 
             <ScrollView
                 style={styles.content}
-                contentContainerStyle={{ paddingBottom: useTabBarHeight() }}
+                contentContainerStyle={{ paddingBottom: useTabBarHeight() + 16 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
-                {/* Stock Status Card */}
-                <View style={styles.stockCard}>
-                    <View style={styles.stockHeader}>
-                        <Ionicons name="cube-outline" size={32} color="#3B82F6" />
-                        <View style={styles.stockInfo}>
-                            <Text style={styles.stockLabel}>Tồn kho hiện tại</Text>
-                            <Text style={styles.stockValue}>
-                                {material.current_stock} {material.unit}
-                            </Text>
+                <View style={styles.detailsSection}>
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Tên vật liệu:</Text>
+                            <Text style={styles.infoValue}>{material.name}</Text>
                         </View>
-                    </View>
-                    <View
-                        style={[
-                            styles.stockStatusBadge,
-                            { backgroundColor: stockStatus.color + "20" },
-                        ]}
-                    >
-                        <Text style={[styles.stockStatusText, { color: stockStatus.color }]}>
-                            {stockStatus.text}
-                        </Text>
-                    </View>
-                    {material.min_stock_level > 0 && (
-                        <Text style={styles.minStockText}>
-                            Mức tối thiểu: {material.min_stock_level} {material.unit}
-                        </Text>
-                    )}
-                </View>
-
-                {/* Tabs */}
-                <View style={styles.tabs}>
-                    <TouchableOpacity
-                        style={[styles.tab, activeTab === "details" && styles.tabActive]}
-                        onPress={() => setActiveTab("details")}
-                    >
-                        <Text style={[styles.tabText, activeTab === "details" && styles.tabTextActive]}>
-                            Thông tin
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.tab, activeTab === "transactions" && styles.tabActive]}
-                        onPress={() => setActiveTab("transactions")}
-                    >
-                        <Text style={[styles.tabText, activeTab === "transactions" && styles.tabTextActive]}>
-                            Lịch sử ({transactions.length})
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Details Tab */}
-                {activeTab === "details" && (
-                    <View style={styles.detailsSection}>
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
+                        {material.code && (
                             <View style={styles.infoRow}>
-                                <Text style={styles.infoLabel}>Tên vật liệu:</Text>
-                                <Text style={styles.infoValue}>{material.name}</Text>
+                                <Text style={styles.infoLabel}>Mã:</Text>
+                                <Text style={styles.infoValue}>{material.code}</Text>
                             </View>
-                            {material.code && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Mã:</Text>
-                                    <Text style={styles.infoValue}>{material.code}</Text>
-                                </View>
-                            )}
-                            <View style={styles.infoRow}>
-                                <Text style={styles.infoLabel}>Đơn vị:</Text>
-                                <Text style={styles.infoValue}>{material.unit}</Text>
-                            </View>
-                            {material.description && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Mô tả:</Text>
-                                    <Text style={styles.infoValue}>{material.description}</Text>
-                                </View>
-                            )}
-                            {selectedProject && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Dự án:</Text>
-                                    <Text style={styles.infoValue}>{selectedProject.name}</Text>
-                                </View>
-                            )}
+                        )}
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Đơn vị:</Text>
+                            <Text style={styles.infoValue}>{material.unit}</Text>
                         </View>
-
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Thông tin tồn kho</Text>
+                        {material.unit_price !== undefined && (
                             <View style={styles.infoRow}>
-                                <Text style={styles.infoLabel}>Tồn kho hiện tại:</Text>
-                                <Text style={[styles.infoValue, styles.stockValue]}>
-                                    {material.current_stock} {material.unit}
-                                </Text>
-                            </View>
-                            <View style={styles.infoRow}>
-                                <Text style={styles.infoLabel}>Mức tối thiểu:</Text>
+                                <Text style={styles.infoLabel}>Đơn giá mặc định:</Text>
                                 <Text style={styles.infoValue}>
-                                    {material.min_stock_level} {material.unit}
+                                    {new Intl.NumberFormat("vi-VN").format(material.unit_price)} VNĐ
                                 </Text>
                             </View>
-                        </View>
-                    </View>
-                )}
-
-                {/* Transactions Tab */}
-                {activeTab === "transactions" && (
-                    <View style={styles.transactionsSection}>
-                        {transactions.length === 0 ? (
-                            <View style={styles.emptyContainer}>
-                                <Ionicons name="receipt-outline" size={64} color="#9CA3AF" />
-                                <Text style={styles.emptyText}>Chưa có giao dịch</Text>
-                            </View>
-                        ) : (
-                            <View>
-                                {transactions.map((item) => (
-                                    <View key={item.id.toString()}>
-                                        {renderTransactionItem({ item })}
-                                    </View>
-                                ))}
+                        )}
+                        {material.description && (
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoLabel}>Mô tả:</Text>
+                                <Text style={styles.infoValue}>{material.description}</Text>
                             </View>
                         )}
                     </View>
-                )}
+                </View>
             </ScrollView>
 
             {/* Edit Modal */}
@@ -577,62 +360,6 @@ export default function MaterialDetailScreen() {
                                     onBlur={() => setFocusedField(null)}
                                 />
                             </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Mức tồn kho tối thiểu</Text>
-                                <TextInput
-                                    style={[
-                                        styles.input,
-                                        errors.min_stock_level && styles.inputError,
-                                        focusedField === "min_stock_level" && styles.inputFocused,
-                                    ]}
-                                    placeholder="0"
-                                    value={formData.min_stock_level?.toString() || "0"}
-                                    onChangeText={(text) => {
-                                        const value = text === "" ? 0 : parseFloat(text);
-                                        setFormData({ ...formData, min_stock_level: isNaN(value) ? 0 : value });
-                                        if (errors.min_stock_level) {
-                                            setErrors({ ...errors, min_stock_level: "" });
-                                        }
-                                    }}
-                                    keyboardType="numeric"
-                                    onFocus={() => setFocusedField("min_stock_level")}
-                                    onBlur={() => setFocusedField(null)}
-                                />
-                                {errors.min_stock_level && (
-                                    <Text style={styles.errorText}>{errors.min_stock_level}</Text>
-                                )}
-                            </View>
-
-                            {/* Điều chỉnh tồn kho */}
-                            <View style={styles.formGroup}>
-                                <View style={styles.labelContainer}>
-                                    <Text style={styles.label}>Điều chỉnh tồn kho</Text>
-                                    <Text style={styles.optional}>(Tùy chọn)</Text>
-                                </View>
-                                <View style={styles.stockAdjustmentContainer}>
-                                    <View style={styles.stockInfoRow}>
-                                        <Text style={styles.stockInfoLabel}>Tồn kho hiện tại:</Text>
-                                        <Text style={styles.stockInfoValue}>
-                                            {material?.current_stock || 0} {material?.unit || ""}
-                                        </Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={styles.adjustStockButton}
-                                        onPress={() => {
-                                            setShowEditModal(false);
-                                            setShowAdjustStockModal(true);
-                                        }}
-                                    >
-                                        <Ionicons name="create-outline" size={18} color="#FFFFFF" />
-                                        <Text style={styles.adjustStockButtonText}>Điều chỉnh tồn kho</Text>
-                                    </TouchableOpacity>
-                                </View>
-                                <Text style={styles.helperText}>
-                                    Nhấn để mở form điều chỉnh tồn kho (tăng/giảm)
-                                </Text>
-                            </View>
-
                         </View>
 
                         <View style={styles.modalActions}>
@@ -661,7 +388,7 @@ export default function MaterialDetailScreen() {
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* Project Picker Modal */}
+            {/* Project Picker Modal - Keeping if still needed for assignment logic elsewhere */}
             <Modal
                 visible={showProjectPicker}
                 transparent
@@ -713,108 +440,6 @@ export default function MaterialDetailScreen() {
                     </View>
                 </View>
             </Modal>
-
-            {/* Adjust Stock Modal */}
-            <Modal
-                visible={showAdjustStockModal}
-                animationType="slide"
-                presentationStyle="fullScreen"
-                onRequestClose={() => setShowAdjustStockModal(false)}
-            >
-                <KeyboardAvoidingView
-                    style={styles.modalContainer}
-                    behavior={Platform.OS === "ios" ? "padding" : "height"}
-                >
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Điều chỉnh tồn kho</Text>
-                        <TouchableOpacity onPress={() => setShowAdjustStockModal(false)}>
-                            <Ionicons name="close" size={24} color="#1F2937" />
-                        </TouchableOpacity>
-                    </View>
-
-                    <ScrollView
-                        style={styles.modalContent}
-                        contentContainerStyle={styles.modalBodyContent}
-                        keyboardShouldPersistTaps="handled"
-                    >
-                        <View style={styles.infoBox}>
-                            <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
-                            <View style={styles.infoBoxContent}>
-                                <Text style={styles.infoBoxText}>
-                                    Tồn kho hiện tại: <Text style={styles.infoBoxBold}>{material?.current_stock || 0} {material?.unit || ""}</Text>
-                                </Text>
-                                <Text style={styles.infoBoxSubtext}>
-                                    Nhập số dương để tăng tồn kho, số âm để giảm tồn kho
-                                </Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.formGroup}>
-                            <Text style={styles.label}>Số lượng điều chỉnh ({material?.unit || ""}) *</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Ví dụ: +10 hoặc -5"
-                                value={adjustStockData.quantity}
-                                onChangeText={(text) => setAdjustStockData({ ...adjustStockData, quantity: text })}
-                                keyboardType="decimal-pad"
-                            />
-                            <Text style={styles.helperText}>
-                                Số dương: tăng tồn kho | Số âm: giảm tồn kho
-                            </Text>
-                        </View>
-
-                        <View style={styles.formGroup}>
-                            <Text style={styles.label}>Ngày điều chỉnh</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={adjustStockData.transaction_date}
-                                onChangeText={(text) => setAdjustStockData({ ...adjustStockData, transaction_date: text })}
-                                placeholder="YYYY-MM-DD"
-                            />
-                        </View>
-
-                        <View style={styles.formGroup}>
-                            <Text style={styles.label}>Ghi chú</Text>
-                            <TextInput
-                                style={[styles.input, styles.textArea]}
-                                placeholder="Nhập lý do điều chỉnh..."
-                                value={adjustStockData.notes}
-                                onChangeText={(text) => setAdjustStockData({ ...adjustStockData, notes: text })}
-                                multiline
-                                numberOfLines={3}
-                                textAlignVertical="top"
-                            />
-                        </View>
-
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
-                                onPress={() => {
-                                    setShowAdjustStockModal(false);
-                                    setAdjustStockData({
-                                        quantity: "",
-                                        notes: "",
-                                        transaction_date: new Date().toISOString().split("T")[0],
-                                    });
-                                }}
-                            >
-                                <Text style={styles.cancelButtonText}>Hủy</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.submitButton, adjustingStock && styles.submitButtonDisabled]}
-                                onPress={handleAdjustStock}
-                                disabled={adjustingStock}
-                            >
-                                {adjustingStock ? (
-                                    <ActivityIndicator color="#FFFFFF" size="small" />
-                                ) : (
-                                    <Text style={styles.submitButtonText}>Xác nhận</Text>
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </ScrollView>
-                </KeyboardAvoidingView>
-            </Modal>
         </View>
     );
 }
@@ -840,173 +465,47 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
     },
-    stockCard: {
-        backgroundColor: "#FFFFFF",
-        margin: 16,
-        padding: 20,
-        borderRadius: 12,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    stockHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginBottom: 16,
-        gap: 16,
-    },
-    stockInfo: {
-        flex: 1,
-    },
-    stockLabel: {
-        fontSize: 14,
-        color: "#6B7280",
-        marginBottom: 4,
-    },
-    stockValue: {
-        fontSize: 24,
-        fontWeight: "700",
-        color: "#1F2937",
-    },
-    stockStatusBadge: {
-        alignSelf: "flex-start",
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 6,
-        marginBottom: 8,
-    },
-    stockStatusText: {
-        fontSize: 14,
-        fontWeight: "600",
-    },
-    minStockText: {
-        fontSize: 12,
-        color: "#6B7280",
-        marginTop: 4,
-    },
-    tabs: {
-        flexDirection: "row",
-        backgroundColor: "#FFFFFF",
-        marginHorizontal: 16,
-        marginBottom: 16,
-        borderRadius: 12,
-        padding: 4,
-    },
-    tab: {
-        flex: 1,
-        paddingVertical: 12,
-        alignItems: "center",
-        borderRadius: 8,
-    },
-    tabActive: {
-        backgroundColor: "#3B82F6",
-    },
-    tabText: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#6B7280",
-    },
-    tabTextActive: {
-        color: "#FFFFFF",
-    },
     detailsSection: {
         padding: 16,
     },
     section: {
         backgroundColor: "#FFFFFF",
         borderRadius: 12,
-        padding: 16,
+        padding: 20,
         marginBottom: 16,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     sectionTitle: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: "700",
-        color: "#1F2937",
-        marginBottom: 16,
+        color: "#111827",
+        marginBottom: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F3F4F6",
+        paddingBottom: 10,
     },
     infoRow: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "flex-start",
-        marginBottom: 12,
+        marginBottom: 16,
     },
     infoLabel: {
         fontSize: 14,
         color: "#6B7280",
         flex: 1,
+        fontWeight: "500",
     },
     infoValue: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: "600",
         color: "#1F2937",
-        flex: 2,
+        flex: 1.5,
         textAlign: "right",
-    },
-    transactionsSection: {
-        padding: 16,
-    },
-    transactionCard: {
-        backgroundColor: "#FFFFFF",
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-    transactionHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 12,
-    },
-    transactionTypeBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-    },
-    transactionTypeText: {
-        fontSize: 12,
-        fontWeight: "600",
-    },
-    transactionDate: {
-        fontSize: 12,
-        color: "#6B7280",
-    },
-    transactionInfo: {
-        gap: 4,
-    },
-    transactionQuantity: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: "#1F2937",
-    },
-    transactionProject: {
-        fontSize: 14,
-        color: "#6B7280",
-    },
-    transactionNotes: {
-        fontSize: 12,
-        color: "#9CA3AF",
-        marginTop: 4,
-    },
-    emptyContainer: {
-        padding: 40,
-        alignItems: "center",
-    },
-    emptyText: {
-        fontSize: 16,
-        color: "#6B7280",
-        marginTop: 16,
     },
     errorText: {
         fontSize: 16,
@@ -1026,13 +525,13 @@ const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
         backgroundColor: "#F9FAFB",
-        paddingTop: 40,
+        paddingTop: Platform.OS === "ios" ? 40 : 0,
     },
     modalHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: 16,
+        padding: 20,
         backgroundColor: "#FFFFFF",
         borderBottomWidth: 1,
         borderBottomColor: "#E5E7EB",
@@ -1043,7 +542,7 @@ const styles = StyleSheet.create({
         color: "#1F2937",
     },
     modalContent: {
-        padding: 16,
+        padding: 20,
     },
     formSection: {
         marginBottom: 24,
@@ -1054,62 +553,57 @@ const styles = StyleSheet.create({
     label: {
         fontSize: 14,
         fontWeight: "600",
-        color: "#1F2937",
+        color: "#374151",
         marginBottom: 8,
     },
     required: {
         color: "#EF4444",
     },
     input: {
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: "#D1D5DB",
-        borderRadius: 8,
-        padding: 12,
+        borderRadius: 10,
+        padding: 14,
         fontSize: 16,
         backgroundColor: "#FFFFFF",
+        color: "#1F2937",
     },
     inputFocused: {
         borderColor: "#3B82F6",
-        borderWidth: 2,
+        backgroundColor: "#F0F9FF",
     },
     inputError: {
         borderColor: "#EF4444",
     },
     textArea: {
-        height: 100,
+        height: 120,
         textAlignVertical: "top",
     },
-    pickerInput: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-    },
-    pickerText: {
-        fontSize: 16,
-        color: "#1F2937",
-    },
-    pickerPlaceholder: {
-        fontSize: 16,
-        color: "#9CA3AF",
+    errorTextField: {
+        fontSize: 12,
+        color: "#EF4444",
+        marginTop: 6,
     },
     modalActions: {
         flexDirection: "row",
         gap: 12,
         marginTop: 24,
-        marginBottom: 32,
+        marginBottom: 40,
     },
     modalButton: {
         flex: 1,
         padding: 16,
-        borderRadius: 8,
+        borderRadius: 12,
         alignItems: "center",
+        justifyContent: "center",
     },
     cancelButton: {
-        backgroundColor: "#E5E7EB",
+        backgroundColor: "#F3F4F6",
     },
     cancelButtonText: {
-        color: "#1F2937",
+        color: "#4B5563",
         fontWeight: "600",
+        fontSize: 16,
     },
     saveButton: {
         backgroundColor: "#3B82F6",
@@ -1120,6 +614,7 @@ const styles = StyleSheet.create({
     saveButtonText: {
         color: "#FFFFFF",
         fontWeight: "600",
+        fontSize: 16,
     },
     pickerModalOverlay: {
         flex: 1,
@@ -1128,137 +623,41 @@ const styles = StyleSheet.create({
     },
     pickerModal: {
         backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         maxHeight: "80%",
+        paddingBottom: 20,
     },
     pickerModalHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: 16,
+        padding: 20,
         borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
+        borderBottomColor: "#F3F4F6",
     },
     pickerModalTitle: {
         fontSize: 18,
         fontWeight: "700",
-        color: "#1F2937",
+        color: "#111827",
     },
     pickerItem: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: 16,
+        padding: 18,
         borderBottomWidth: 1,
-        borderBottomColor: "#F3F4F6",
+        borderBottomColor: "#F9FAFB",
     },
     pickerItemSelected: {
-        backgroundColor: "#EFF6FF",
+        backgroundColor: "#F0F9FF",
     },
     pickerItemText: {
         fontSize: 16,
-        color: "#1F2937",
+        color: "#374151",
     },
     pickerItemTextSelected: {
         color: "#3B82F6",
         fontWeight: "600",
     },
-    stockAdjustmentContainer: {
-        marginTop: 8,
-    },
-    stockInfoRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 12,
-        padding: 12,
-        backgroundColor: "#F3F4F6",
-        borderRadius: 8,
-    },
-    stockInfoLabel: {
-        fontSize: 14,
-        color: "#6B7280",
-    },
-    stockInfoValue: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#1F2937",
-    },
-    adjustStockButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#3B82F6",
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 8,
-        gap: 8,
-    },
-    adjustStockButtonText: {
-        color: "#FFFFFF",
-        fontSize: 14,
-        fontWeight: "600",
-    },
-    labelContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginBottom: 8,
-        gap: 4,
-    },
-    optional: {
-        fontSize: 12,
-        color: "#9CA3AF",
-        fontStyle: "italic",
-    },
-    helperText: {
-        fontSize: 12,
-        color: "#6B7280",
-        marginTop: 6,
-        fontStyle: "italic",
-    },
-    infoBox: {
-        flexDirection: "row",
-        backgroundColor: "#EFF6FF",
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 16,
-        gap: 8,
-    },
-    infoBoxContent: {
-        flex: 1,
-    },
-    infoBoxText: {
-        fontSize: 14,
-        color: "#1E40AF",
-        lineHeight: 20,
-    },
-    infoBoxBold: {
-        fontWeight: "700",
-    },
-    infoBoxSubtext: {
-        fontSize: 12,
-        color: "#3B82F6",
-        marginTop: 4,
-    },
-    modalBodyContent: {
-        padding: 16,
-        paddingBottom: 40,
-    },
-    modalActions: {
-        flexDirection: "row",
-        gap: 12,
-        marginTop: 24,
-    },
-    submitButton: {
-        backgroundColor: "#3B82F6",
-    },
-    submitButtonDisabled: {
-        opacity: 0.6,
-    },
-    submitButtonText: {
-        color: "#FFFFFF",
-        fontWeight: "600",
-    },
 });
-

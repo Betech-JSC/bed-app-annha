@@ -818,29 +818,34 @@ class ReportController extends Controller
         }
 
         // Công nợ nhà cung cấp (từ SupplierAcceptance)
-        $supplierDebts = SupplierAcceptance::whereHas('supplier.contracts', function ($q) use ($projectId) {
+        // Công nợ nhà cung cấp (từ SupplierAcceptance)
+        $supplierAcceptancesFound = SupplierAcceptance::whereHas('supplier.contracts', function ($q) use ($projectId) {
             $q->where('project_id', $projectId);
         })
             ->with(['supplier', 'contract'])
             ->where('status', 'approved')
-            ->get()
-            ->groupBy('supplier_id')
-            ->map(function ($acceptances, $supplierId) {
-                $supplier = $acceptances->first()->supplier;
-                $totalAccepted = $acceptances->sum('accepted_amount');
-                $totalPaid = $supplier->total_paid;
+            ->get();
 
-                return [
-                    'supplier' => [
-                        'id' => $supplier->id,
-                        'name' => $supplier->name,
-                    ],
-                    'total_accepted' => (float) $totalAccepted,
-                    'total_paid' => (float) $totalPaid,
-                    'remaining_debt' => (float) ($totalAccepted - $totalPaid),
-                ];
-            })
-            ->values();
+        $supplierIds = $supplierAcceptancesFound->pluck('supplier_id')->unique();
+        $supplierDebts = [];
+
+        foreach ($supplierIds as $supplierId) {
+            $supplier = \App\Models\Supplier::find($supplierId);
+            if (!$supplier) continue;
+
+            $totalAccepted = $supplierAcceptancesFound->where('supplier_id', $supplierId)->sum('accepted_amount');
+            $totalPaid = (float)$supplier->total_paid;
+
+            $supplierDebts[] = [
+                'supplier' => [
+                    'id' => $supplier->id,
+                    'name' => $supplier->name,
+                ],
+                'total_accepted' => (float)$totalAccepted,
+                'total_paid' => $totalPaid,
+                'remaining_debt' => max(0, (float)$totalAccepted - $totalPaid),
+            ];
+        }
 
         // Thanh toán dự án
         $projectPayments = ProjectPayment::where('project_id', $projectId)

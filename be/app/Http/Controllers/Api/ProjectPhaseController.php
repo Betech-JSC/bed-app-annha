@@ -11,12 +11,27 @@ use Illuminate\Validation\Rule;
 
 class ProjectPhaseController extends Controller
 {
+    protected $authService;
+
+    public function __construct(\App\Services\AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách phases của dự án
      */
     public function index(string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, \App\Constants\Permissions::PROJECT_PHASE_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem giai đoạn của dự án này.'
+            ], 403);
+        }
         $phases = $project->phases()
             ->with([
                 'tasks',
@@ -41,6 +56,14 @@ class ProjectPhaseController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, \App\Constants\Permissions::PROJECT_PHASE_CREATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo giai đoạn cho dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -89,7 +112,18 @@ class ProjectPhaseController extends Controller
      */
     public function show(string $projectId, string $id)
     {
-        $phase = ProjectPhase::where('project_id', $projectId)
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, \App\Constants\Permissions::PROJECT_PHASE_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi tiết giai đoạn này.'
+            ], 403);
+        }
+
+        $phase = ProjectPhase::where('project_id', $project->id)
             ->with(['tasks', 'project', 'creator', 'updater'])
             ->findOrFail($id);
 
@@ -104,8 +138,17 @@ class ProjectPhaseController extends Controller
      */
     public function update(Request $request, string $projectId, string $id)
     {
-        $phase = ProjectPhase::where('project_id', $projectId)->findOrFail($id);
+        $project = Project::findOrFail($projectId);
+        $phase = ProjectPhase::where('project_id', $project->id)->findOrFail($id);
         $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, \App\Constants\Permissions::PROJECT_PHASE_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật giai đoạn của dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -133,7 +176,17 @@ class ProjectPhaseController extends Controller
      */
     public function destroy(string $projectId, string $id)
     {
-        $phase = ProjectPhase::where('project_id', $projectId)->findOrFail($id);
+        $project = Project::findOrFail($projectId);
+        $phase = ProjectPhase::where('project_id', $project->id)->findOrFail($id);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, \App\Constants\Permissions::PROJECT_PHASE_DELETE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa giai đoạn của dự án này.'
+            ], 403);
+        }
 
         // Check if phase has tasks
         if ($phase->tasks()->count() > 0) {

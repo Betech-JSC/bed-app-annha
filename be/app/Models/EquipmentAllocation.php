@@ -12,7 +12,7 @@ class EquipmentAllocation extends Model
         'uuid',
         'equipment_id',
         'project_id',
-        'allocation_type',
+        'allocation_type', // rent, buy (owned)
         'quantity',
         'allocated_to',
         'manager_id',
@@ -21,11 +21,10 @@ class EquipmentAllocation extends Model
         'start_date',
         'end_date',
         'daily_rate',
-        'rental_fee',
+        'rental_fee', // Total cost for rental
         'billing_start_date',
         'billing_end_date',
-        'usage_hours',
-        'status',
+        'status', // active, returned
         'notes',
         'created_by',
         'cost_id',
@@ -37,11 +36,7 @@ class EquipmentAllocation extends Model
         'end_date' => 'date',
         'handover_date' => 'date',
         'return_date' => 'date',
-        'billing_start_date' => 'date',
-        'billing_end_date' => 'date',
-        'daily_rate' => 'decimal:2',
         'rental_fee' => 'decimal:2',
-        'usage_hours' => 'integer',
     ];
 
     // ==================================================================

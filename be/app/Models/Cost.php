@@ -116,9 +116,9 @@ class Cost extends Model
         return $this->belongsTo(Material::class, 'material_id');
     }
 
-    public function materialTransaction(): HasOne
+    public function materialTransactions(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasOne(MaterialTransaction::class, 'cost_id');
+        return $this->hasMany(MaterialTransaction::class, 'cost_id');
     }
 
     public function equipmentAllocation(): BelongsTo

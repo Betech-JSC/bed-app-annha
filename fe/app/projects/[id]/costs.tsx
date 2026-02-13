@@ -806,11 +806,11 @@ export default function CostsScreen() {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
+          style={{ flex: 1 }}
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalContentContainer}>
-              <View style={styles.modalContent}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.rejectModalCard}>
                 <View style={styles.modalHeaderEnhanced}>
                   <View style={styles.modalIconContainer}>
                     <Ionicons name="alert-circle" size={32} color="#EF4444" />
@@ -833,7 +833,7 @@ export default function CostsScreen() {
                   autoFocus
                 />
 
-                <View style={styles.modalActions}>
+                <View style={[styles.modalActions, { marginBottom: 0 }]}>
                   <TouchableOpacity
                     style={[styles.modalButton, styles.modalCancelButton]}
                     onPress={() => {
@@ -855,7 +855,7 @@ export default function CostsScreen() {
                     disabled={!rejectReason.trim()}
                   >
                     <Text style={styles.modalConfirmText}>
-                      Xác nhận từ chối
+                      Xác nhận
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1825,12 +1825,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   // New Styles for Enhanced Reject Modal
-  modalContentContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-    padding: 16,
+  rejectModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '90%',
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
   },
   modalHeaderEnhanced: {
     alignItems: "center",

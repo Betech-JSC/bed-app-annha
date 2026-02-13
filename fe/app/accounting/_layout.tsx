@@ -1,3 +1,4 @@
+import React from "react";
 import { Stack } from "expo-router";
 
 export default function AccountingLayout() {
@@ -9,6 +10,7 @@ export default function AccountingLayout() {
       }}
     >
       <Stack.Screen name="input-invoices" />
+      <Stack.Screen name="supplier-payables" />
     </Stack>
   );
 }

@@ -18,28 +18,12 @@ class Equipment extends Model
         'code',
         'quantity',
         'category',
-        'type',
-        'brand',
-        'model',
-        'serial_number',
-        'purchase_date',
-        'purchase_price',
-        'rental_rate_per_day',
-        'maintenance_interval_days',
-        'last_maintenance_date',
-        'next_maintenance_date',
-        'status',
+        'status', // available, in_use, maintenance, retired
         'notes',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
-        'purchase_date' => 'date',
-        'purchase_price' => 'decimal:2',
-        'rental_rate_per_day' => 'decimal:2',
-        'last_maintenance_date' => 'date',
-        'next_maintenance_date' => 'date',
-        'maintenance_interval_days' => 'integer',
     ];
 
     // ==================================================================

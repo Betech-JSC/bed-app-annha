@@ -300,6 +300,15 @@ export default function CompanyFinancialDashboardScreen() {
 
                     <TouchableOpacity
                         style={styles.actionButton}
+                        onPress={() => router.push('/accounting/supplier-payables' as any)}
+                    >
+                        <Ionicons name="alert-circle-outline" size={20} color="#EF4444" />
+                        <Text style={styles.actionButtonText}>Phải Thanh Toán NCC</Text>
+                        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.actionButton}
                         onPress={() => router.push('/company-costs' as any)}
                     >
                         <Ionicons name="wallet-outline" size={20} color="#3B82F6" />

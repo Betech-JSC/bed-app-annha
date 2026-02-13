@@ -216,18 +216,27 @@ class SupplierController extends Controller
 
         $supplier = Supplier::findOrFail($id);
 
-        // Tính tổng công nợ từ các hợp đồng
+        // 1. Tính tổng giá trị hợp đồng
         $totalContractValue = $supplier->contracts()
             ->where('status', 'active')
             ->sum('contract_value');
 
+        // 2. Tính tổng đã nghiệm thu (từ SupplierAcceptance)
         $totalAccepted = $supplier->acceptances()
             ->where('status', 'approved')
             ->sum('accepted_amount');
 
-        $totalPaid = $supplier->total_paid;
-        $totalDebt = $totalContractValue - $totalPaid;
-        $remainingDebt = $totalDebt - $totalPaid;
+        // Tổng cộng giá trị công việc đã xác nhận (Chỉ lấy Nghiệm thu)
+        $totalWorkPerformed = (float)$totalAccepted;
+
+        // 3. Tổng đã thanh toán (theo dõi trong model Supplier)
+        $totalPaid = (float)$supplier->total_paid;
+
+        // Công nợ hiện tại = Những gì đã làm nhưng chưa trả tiền
+        $totalDebt = max(0, $totalWorkPerformed - $totalPaid);
+
+        // Công nợ còn lại trên HỢP ĐỒNG (Những gì đã cam kết nhưng chưa trả tiền)
+        $remainingContractCommitment = max(0, (float)$totalContractValue - $totalPaid);
 
         return response()->json([
             'success' => true,
@@ -238,12 +247,12 @@ class SupplierController extends Controller
                 ],
                 'statistics' => [
                     'total_contract_value' => (float) $totalContractValue,
-                    'total_accepted' => (float) $totalAccepted,
+                    'total_accepted' => (float) $totalWorkPerformed,
                     'total_paid' => (float) $totalPaid,
                     'total_debt' => (float) $totalDebt,
-                    'remaining_debt' => (float) $remainingDebt,
-                    'payment_percentage' => $totalContractValue > 0 
-                        ? round(($totalPaid / $totalContractValue) * 100, 2) 
+                    'remaining_debt' => (float) $remainingContractCommitment,
+                    'payment_percentage' => $totalWorkPerformed > 0 
+                        ? round(($totalPaid / $totalWorkPerformed) * 100, 2) 
                         : 0,
                 ],
             ],

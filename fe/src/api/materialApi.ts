@@ -6,8 +6,7 @@ export interface Material {
   name: string;
   code?: string;
   unit: string;
-  current_stock: number;
-  min_stock_level: number;
+  unit_price?: number;
   description?: string;
   project_id?: number;
   created_at: string;
@@ -36,9 +35,6 @@ export interface CreateMaterialData {
   unit: string;
   description?: string;
   unit_price: number;
-  min_stock?: number;
-  max_stock?: number;
-  initial_stock?: number; // Tồn kho ban đầu khi tạo vật liệu mới
   category?: string;
   status?: string;
   project_id?: number;
@@ -57,20 +53,6 @@ export const materialApi = {
 
   getMaterial: async (id: number) => {
     const response = await api.get(`/admin/materials/${id}`);
-    return response.data;
-  },
-
-  getStock: async (id: number) => {
-    const response = await api.get(`/admin/materials/${id}/stock`);
-    return response.data;
-  },
-
-  getTransactions: async (id: number, params?: {
-    type?: string;
-    status?: string;
-    page?: number;
-  }) => {
-    const response = await api.get(`/admin/materials/${id}/transactions`, { params });
     return response.data;
   },
 
@@ -111,12 +93,17 @@ export const materialApi = {
     return response.data;
   },
 
-  adjustStock: async (id: number, data: {
-    quantity: number;
+  createBatchTransactions: async (projectId: string | number, data: {
     transaction_date: string;
-    notes?: string;
+    cost_group_id: number;
+    items: {
+      material_id: number;
+      quantity: number;
+      amount: number;
+      notes?: string;
+    }[];
   }) => {
-    const response = await api.post(`/admin/materials/${id}/adjust-stock`, data);
+    const response = await api.post(`/projects/${projectId}/materials/batch-transactions`, data);
     return response.data;
   },
 };

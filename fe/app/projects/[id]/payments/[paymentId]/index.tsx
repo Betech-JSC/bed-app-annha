@@ -15,6 +15,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { paymentApi, ProjectPayment } from "@/api/paymentApi";
 import { ScreenHeader, PermissionDenied } from "@/components";
+import ImageViewer from "@/components/ImageViewer";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { Permissions } from "@/constants/Permissions";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,6 +34,8 @@ export default function PaymentDetailScreen() {
     const [permissionMessage, setPermissionMessage] = useState("");
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
+    const [viewerVisible, setViewerVisible] = useState(false);
+    const [viewerIndex, setViewerIndex] = useState(0);
 
     useEffect(() => {
         console.log('[PaymentDetail] Loading payment:', { id, paymentId });
@@ -140,6 +143,24 @@ export default function PaymentDetailScreen() {
                 return "alert-circle";
             default:
                 return "ellipse";
+        }
+    };
+
+    const imageAttachments = payment?.attachments?.filter(a => a.mime_type?.startsWith("image/")) || [];
+    const viewerImages = imageAttachments.map(a => ({
+        uri: a.file_url,
+        name: a.original_name || a.file_name
+    }));
+
+    const handleAttachmentPress = (attachment: any) => {
+        if (attachment.mime_type?.startsWith("image/")) {
+            const imgIndex = imageAttachments.findIndex(a => (a.id === attachment.id && a.id !== undefined) || a.file_url === attachment.file_url);
+            if (imgIndex !== -1) {
+                setViewerIndex(imgIndex);
+                setViewerVisible(true);
+            }
+        } else {
+            Alert.alert("Thông báo", "Hệ thống chỉ hỗ trợ xem ảnh trực tiếp. Các định dạng khác vui lòng tải về.");
         }
     };
 
@@ -360,6 +381,7 @@ export default function PaymentDetailScreen() {
                                     <TouchableOpacity
                                         key={attachment.id || index}
                                         style={styles.attachmentCard}
+                                        onPress={() => handleAttachmentPress(attachment)}
                                     >
                                         {attachment.mime_type?.startsWith("image/") ? (
                                             <Image
@@ -381,7 +403,7 @@ export default function PaymentDetailScreen() {
                         </View>
                     )}
 
-                    {payment.status === "pending" && (
+                    {(payment.status === "pending" || payment.status === "overdue") && (
                         <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
                             <TouchableOpacity
                                 style={styles.actionButton}
@@ -390,7 +412,7 @@ export default function PaymentDetailScreen() {
                                 }}
                             >
                                 <Ionicons name="card-outline" size={20} color="#FFFFFF" />
-                                <Text style={styles.actionButtonText}>Đã Thanh Toán</Text>
+                                <Text style={styles.actionButtonText}>Thanh toán</Text>
                             </TouchableOpacity>
                         </PermissionGuard>
                     )}
@@ -493,6 +515,13 @@ export default function PaymentDetailScreen() {
                         </View>
                     </SafeAreaView>
                 </Modal>
+
+                <ImageViewer
+                    images={viewerImages}
+                    visible={viewerVisible}
+                    initialIndex={viewerIndex}
+                    onClose={() => setViewerVisible(false)}
+                />
             </View>
         </PermissionGuard>
     );

@@ -29,7 +29,6 @@ class ProjectController extends Controller
         
         // Check if user has permission to view all projects (from permissions, not role)
         $canViewAllProjects = $user->isAdmin()
-            || $user->hasPermission(\App\Constants\Permissions::PROJECT_VIEW)
             || $user->hasPermission(\App\Constants\Permissions::PROJECT_MANAGE);
 
         $query = Project::with([
@@ -357,7 +356,6 @@ class ProjectController extends Controller
 
         // Check permission
         $canView = $user->isAdmin()
-            || $user->hasPermission(Permissions::PROJECT_VIEW)
             || $user->hasPermission(Permissions::PROJECT_MANAGE)
             || $project->customer_id === $user->id
             || $project->project_manager_id === $user->id

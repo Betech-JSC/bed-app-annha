@@ -36,6 +36,16 @@ class RevenueController extends Controller
     public function projectSummary(string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        $authService = app(\App\Services\AuthorizationService::class);
+        if (!$authService->can($user, \App\Constants\Permissions::REVENUE_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem thông tin doanh thu của dự án này.'
+            ], 403);
+        }
 
         // Sử dụng FinancialCalculationService để tính toán
         $revenue = $this->financialCalculationService->calculateRevenue($project);
@@ -139,6 +149,16 @@ class RevenueController extends Controller
     public function costsByCategory(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        $authService = app(\App\Services\AuthorizationService::class);
+        if (!$authService->can($user, \App\Constants\Permissions::REVENUE_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem thông tin chi tiết doanh thu của dự án này.'
+            ], 403);
+        }
 
         $query = Cost::where('project_id', $project->id)
             ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments']);
@@ -223,6 +243,16 @@ class RevenueController extends Controller
     public function dashboard(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        $authService = app(\App\Services\AuthorizationService::class);
+        if (!$authService->can($user, \App\Constants\Permissions::REVENUE_DASHBOARD, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem dashboard doanh thu của dự án này.'
+            ], 403);
+        }
 
         $period = $request->query('period', 'all'); // all, month, quarter, year
 

@@ -20,15 +20,11 @@ class Material extends Model
         'description',
         'category',
         'unit_price',
-        'min_stock',
-        'max_stock',
         'status',
     ];
 
     protected $casts = [
         'unit_price' => 'decimal:2',
-        'min_stock' => 'decimal:2',
-        'max_stock' => 'decimal:2',
     ];
 
     // ==================================================================
@@ -38,40 +34,6 @@ class Material extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(MaterialTransaction::class);
-    }
-
-    // ==================================================================
-    // ACCESSOR
-    // ==================================================================
-
-    public function getCurrentStockAttribute(): float
-    {
-        // Chỉ tính các transaction đã được approved
-        $in = $this->transactions()
-            ->where('type', 'in')
-            ->where('status', 'approved')
-            ->sum('quantity');
-        
-        $out = $this->transactions()
-            ->where('type', 'out')
-            ->where('status', 'approved')
-            ->sum('quantity');
-        
-        // Adjustment có thể là số dương (tăng) hoặc âm (giảm)
-        $adjustment = $this->transactions()
-            ->where('type', 'adjustment')
-            ->where('status', 'approved')
-            ->sum('quantity');
-        
-        return ($in - $out) + ($adjustment ?? 0);
-    }
-
-    /**
-     * Accessor để tương thích với frontend (min_stock_level)
-     */
-    public function getMinStockLevelAttribute(): float
-    {
-        return $this->min_stock ?? 0;
     }
 
     // ==================================================================

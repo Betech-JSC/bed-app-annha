@@ -13,10 +13,12 @@ use Illuminate\Support\Facades\DB;
 class AcceptanceStageController extends Controller
 {
     protected $notificationService;
+    protected $authService;
 
-    public function __construct(NotificationService $notificationService)
+    public function __construct(NotificationService $notificationService, \App\Services\AuthorizationService $authService)
     {
         $this->notificationService = $notificationService;
+        $this->authService = $authService;
     }
 
     /**
@@ -25,6 +27,15 @@ class AcceptanceStageController extends Controller
     public function index(string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem giai đoạn nghiệm thu của dự án này.'
+            ], 403);
+        }
         $stages = $project->acceptanceStages()
             ->with([
                 'internalApprover',
@@ -339,6 +350,16 @@ class AcceptanceStageController extends Controller
                 'attachments'
             ])
             ->findOrFail($id);
+
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi tiết giai đoạn nghiệm thu này.'
+            ], 403);
+        }
 
         return response()->json([
             'success' => true,

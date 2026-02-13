@@ -11,68 +11,11 @@ use Illuminate\Support\Facades\Log;
 
 class MaterialInventoryService
 {
-    /**
-     * Tự động tạo MaterialTransaction khi Cost (vật liệu) được approved
-     * 
-     * @param Cost $cost
-     * @return MaterialTransaction|null
-     */
     public function createTransactionFromCost(Cost $cost): ?MaterialTransaction
     {
-        // Chỉ xử lý nếu Cost có material_id và status là approved
-        if (!$cost->material_id || $cost->status !== 'approved') {
-            return null;
-        }
-
-        // Kiểm tra xem đã có transaction chưa (tránh duplicate)
-        if ($cost->materialTransaction) {
-            Log::info("Cost {$cost->id} đã có MaterialTransaction, bỏ qua");
-            return $cost->materialTransaction;
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $material = Material::find($cost->material_id);
-            if (!$material) {
-                Log::warning("Material {$cost->material_id} không tồn tại cho Cost {$cost->id}");
-                DB::rollBack();
-                return null;
-            }
-
-            // Tính toán unit_price từ amount và quantity
-            $unitPrice = $cost->quantity > 0
-                ? $cost->amount / $cost->quantity
-                : $cost->amount;
-
-            // Tạo transaction type "in" (nhập kho) khi Cost được approved
-            $transaction = MaterialTransaction::create([
-                'material_id' => $cost->material_id,
-                'project_id' => $cost->project_id,
-                'cost_id' => $cost->id,
-                'type' => 'in', // Nhập kho
-                'quantity' => $cost->quantity ?? 1,
-                'unit_price' => $unitPrice,
-                'total_amount' => $cost->amount,
-                'supplier_id' => null, // Có thể lấy từ Cost nếu cần
-                'transaction_date' => $cost->cost_date,
-                'notes' => "Tự động tạo từ chi phí: {$cost->name}",
-                'status' => 'approved', // Tự động approved vì Cost đã approved
-                'created_by' => $cost->created_by,
-                'approved_by' => $cost->accountant_approved_by ?? $cost->management_approved_by,
-                'approved_at' => $cost->accountant_approved_at ?? $cost->management_approved_at ?? now(),
-            ]);
-
-            DB::commit();
-
-            Log::info("Đã tạo MaterialTransaction {$transaction->id} từ Cost {$cost->id}");
-
-            return $transaction->load(['material', 'project', 'cost']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Lỗi khi tạo MaterialTransaction từ Cost {$cost->id}: " . $e->getMessage());
-            return null;
-        }
+        // Chức năng tự động tạo giao dịch nhập kho đã bị loại bỏ theo yêu cầu loại bỏ module tồn kho.
+        // Chỉ giữ lại để tránh lỗi nếu có code references, nhưng không thực hiện logic.
+        return null;
     }
 
     /**
@@ -88,10 +31,10 @@ class MaterialInventoryService
         }
 
         try {
-            $transaction = $cost->materialTransaction;
-            if ($transaction) {
-                $transaction->delete();
-                Log::info("Đã xóa MaterialTransaction {$transaction->id} từ Cost {$cost->id}");
+            $transactionsCount = $cost->materialTransactions()->count();
+            if ($transactionsCount > 0) {
+                $cost->materialTransactions()->delete();
+                Log::info("Đã xóa {$transactionsCount} MaterialTransaction từ Cost {$cost->id}");
                 return true;
             }
             return false;
@@ -102,7 +45,7 @@ class MaterialInventoryService
     }
 
     /**
-     * Tạo transaction xuất kho cho dự án và đẩy qua chi phí dự án
+     * Ghi nhận sử dụng vật liệu cho dự án và đẩy qua chi phí dự án
      *
      * @param int $materialId
      * @param int $projectId
@@ -114,7 +57,7 @@ class MaterialInventoryService
      * @param float|null $amount
      * @return MaterialTransaction|null
      */
-    public function createOutTransaction(
+    public function createUsageTransaction(
         int $materialId,
         int $projectId,
         float $quantity,
@@ -126,12 +69,6 @@ class MaterialInventoryService
     ): ?MaterialTransaction {
         try {
             $material = Material::findOrFail($materialId);
-
-            // Kiểm tra tồn kho
-            $currentStock = $material->current_stock;
-            if ($currentStock < $quantity) {
-                throw new \Exception("Không đủ tồn kho. Tồn kho hiện tại: {$currentStock}, yêu cầu: {$quantity}");
-            }
 
             DB::beginTransaction();
 
@@ -167,7 +104,7 @@ class MaterialInventoryService
                         'name' => "Sử dụng vật liệu: {$material->name}",
                         'amount' => $totalAmount,
                         'quantity' => $quantity,
-                        'description' => "Xuất kho sử dụng cho dự án" . ($notes ? ": {$notes}" : ""),
+                        'description' => "Ghi nhận sử dụng vật liệu cho dự án" . ($notes ? ": {$notes}" : ""),
                         'cost_date' => $transactionDateStr,
                         'status' => 'draft',
                         'created_by' => $createdBy,
@@ -190,7 +127,7 @@ class MaterialInventoryService
                 'unit_price' => $unitPrice,
                 'total_amount' => $totalAmount,
                 'transaction_date' => $transactionDateStr,
-                'notes' => $notes ?: "Xuất kho cho dự án",
+                'notes' => $notes ?: "Sử dụng vật liệu cho dự án",
                 'status' => 'approved',
                 'created_by' => $createdBy,
                 'approved_by' => $createdBy,
@@ -205,6 +142,102 @@ class MaterialInventoryService
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Lỗi khi tạo transaction xuất kho: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Tạo phiếu sử dụng vật liệu tổng hợp và đẩy qua một chi phí tổng dự án
+     *
+     * @param array $items Array of ['material_id', 'quantity', 'amount', 'notes']
+     * @param int $projectId
+     * @param int $createdBy
+     * @param string|null $transactionDate
+     * @param int|null $costGroupId
+     * @return array
+     */
+    public function createBatchUsageTransaction(
+        array $items,
+        int $projectId,
+        int $createdBy,
+        ?string $transactionDate = null,
+        ?int $costGroupId = null
+    ): array {
+        try {
+            DB::beginTransaction();
+
+            $transactionDateStr = $transactionDate ? \Carbon\Carbon::parse($transactionDate)->toDateString() : now()->toDateString();
+            $totalBatchAmount = 0;
+            $materialNames = [];
+
+            foreach ($items as $item) {
+                $totalBatchAmount += $item['amount'] ?? 0;
+                $material = Material::find($item['material_id']);
+                if ($material) {
+                    $materialNames[] = "[{$material->name} x {$item['quantity']}]";
+                }
+            }
+
+            // 1. Tạo Cost tổng duy nhất cho cả Batch (nếu có cost_group_id)
+            $costId = null;
+            if ($costGroupId && $totalBatchAmount > 0) {
+                $costGroup = CostGroup::find($costGroupId);
+                if ($costGroup && $costGroup->is_active) {
+                    $cost = Cost::create([
+                        'project_id' => $projectId,
+                        'cost_group_id' => $costGroupId,
+                        'name' => "Sử dụng vật liệu tổng hợp - " . \Carbon\Carbon::parse($transactionDateStr)->format('d/m/Y'),
+                        'amount' => $totalBatchAmount,
+                        'description' => "Chi tiết vật liệu: " . implode(', ', $materialNames),
+                        'cost_date' => $transactionDateStr,
+                        'status' => 'draft',
+                        'created_by' => $createdBy,
+                    ]);
+                    $costId = $cost->id;
+
+                    $syncService = app(\App\Services\BudgetSyncService::class);
+                    $syncService->syncProjectBudgets($projectId);
+                }
+            }
+
+            // 2. Tạo các MaterialTransaction riêng lẻ nhưng link tới cùng costId
+            $transactions = [];
+            foreach ($items as $item) {
+                $materialId = $item['material_id'];
+                $quantity = $item['quantity'];
+                $amount = $item['amount'] ?? 0;
+                $notes = $item['notes'] ?? '';
+
+                $material = Material::findOrFail($materialId);
+                $unitPrice = $quantity > 0 ? $amount / $quantity : 0;
+
+                $transaction = MaterialTransaction::create([
+                    'material_id' => $materialId,
+                    'project_id' => $projectId,
+                    'cost_id' => $costId,
+                    'type' => 'out',
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'total_amount' => $amount,
+                    'transaction_date' => $transactionDateStr,
+                    'notes' => $notes ?: "Sử dụng vật liệu trong gói tổng hợp",
+                    'status' => 'approved',
+                    'created_by' => $createdBy,
+                    'approved_by' => $createdBy,
+                    'approved_at' => now(),
+                ]);
+                $transactions[] = $transaction;
+            }
+
+            DB::commit();
+
+            return [
+                'cost_id' => $costId,
+                'transactions' => $transactions
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Lỗi khi tạo batch transaction xuất kho: " . $e->getMessage());
             throw $e;
         }
     }

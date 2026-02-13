@@ -21,9 +21,11 @@ import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
 
 const STATUS_LABELS: Record<string, string> = {
     available: "Sẵn sàng",
-    in_use: "Đã trả",
+    in_use: "Đang sử dụng",
     maintenance: "Bảo trì",
     retired: "Ngừng sử dụng",
+    damaged: "Hư hỏng",
+    returned: "Đã trả",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -44,14 +46,7 @@ export default function EquipmentDetailScreen() {
         name: "",
         code: "",
         category: "",
-        type: "owned",
-        brand: "",
-        model: "",
-        serial_number: "",
-        purchase_date: undefined,
-        purchase_price: 0,
-        rental_rate_per_day: 0,
-        maintenance_interval_days: 30,
+        notes: "",
         status: "available",
     });
     const [submitting, setSubmitting] = useState(false);
@@ -78,14 +73,7 @@ export default function EquipmentDetailScreen() {
                     name: equipmentRes.data.name,
                     code: equipmentRes.data.code || "",
                     category: equipmentRes.data.category || "",
-                    type: equipmentRes.data.type,
-                    brand: equipmentRes.data.brand || "",
-                    model: equipmentRes.data.model || "",
-                    serial_number: equipmentRes.data.serial_number || "",
-                    purchase_date: equipmentRes.data.purchase_date,
-                    purchase_price: equipmentRes.data.purchase_price || 0,
-                    rental_rate_per_day: equipmentRes.data.rental_rate_per_day || 0,
-                    maintenance_interval_days: equipmentRes.data.maintenance_interval_days || 30,
+                    notes: equipmentRes.data.notes || "",
                     status: equipmentRes.data.status,
                 });
             }
@@ -118,14 +106,6 @@ export default function EquipmentDetailScreen() {
 
         if (!formData.name || formData.name.trim() === "") {
             newErrors.name = "Tên thiết bị là bắt buộc";
-        }
-
-        if (formData.purchase_price !== undefined && formData.purchase_price < 0) {
-            newErrors.purchase_price = "Giá mua không được âm";
-        }
-
-        if (formData.rental_rate_per_day !== undefined && formData.rental_rate_per_day < 0) {
-            newErrors.rental_rate_per_day = "Giá thuê không được âm";
         }
 
         setErrors(newErrors);
@@ -394,15 +374,9 @@ export default function EquipmentDetailScreen() {
                                 <Text style={styles.infoLabel}>Tên thiết bị:</Text>
                                 <Text style={styles.infoValue}>{equipment.name}</Text>
                             </View>
-                            {equipment.code && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Mã:</Text>
-                                    <Text style={styles.infoValue}>{equipment.code}</Text>
-                                </View>
-                            )}
                             <View style={styles.infoRow}>
-                                <Text style={styles.infoLabel}>Loại:</Text>
-                                <Text style={styles.infoValue}>{TYPE_LABELS[equipment.type]}</Text>
+                                <Text style={styles.infoLabel}>Mã:</Text>
+                                <Text style={styles.infoValue}>{equipment.code || "N/A"}</Text>
                             </View>
                             {equipment.category && (
                                 <View style={styles.infoRow}>
@@ -410,51 +384,9 @@ export default function EquipmentDetailScreen() {
                                     <Text style={styles.infoValue}>{equipment.category}</Text>
                                 </View>
                             )}
-                            {equipment.brand && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Hãng:</Text>
-                                    <Text style={styles.infoValue}>{equipment.brand}</Text>
-                                </View>
-                            )}
-                            {equipment.model && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Model:</Text>
-                                    <Text style={styles.infoValue}>{equipment.model}</Text>
-                                </View>
-                            )}
-                            {equipment.serial_number && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Số seri:</Text>
-                                    <Text style={styles.infoValue}>{equipment.serial_number}</Text>
-                                </View>
-                            )}
+
                         </View>
 
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Thông tin tài chính</Text>
-                            {equipment.purchase_date && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Ngày mua:</Text>
-                                    <Text style={styles.infoValue}>{formatDate(equipment.purchase_date)}</Text>
-                                </View>
-                            )}
-                            {equipment.purchase_price && equipment.purchase_price > 0 && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Giá mua:</Text>
-                                    <Text style={styles.infoValue}>{formatCurrency(equipment.purchase_price)}</Text>
-                                </View>
-                            )}
-                            {equipment.type === "rented" && equipment.rental_rate_per_day && equipment.rental_rate_per_day > 0 && (
-                                <View style={styles.infoRow}>
-                                    <Text style={styles.infoLabel}>Giá thuê/ngày:</Text>
-                                    <Text style={styles.infoValue}>{formatCurrency(equipment.rental_rate_per_day)}</Text>
-                                </View>
-                            )}
-                            <View style={styles.infoRow}>
-                                <Text style={styles.infoLabel}>Chu kỳ bảo trì:</Text>
-                                <Text style={styles.infoValue}>{equipment.maintenance_interval_days} ngày</Text>
-                            </View>
-                        </View>
                     </View>
                 )}
 
@@ -582,135 +514,26 @@ export default function EquipmentDetailScreen() {
                             </View>
 
                             <View style={styles.formGroup}>
-                                <Text style={styles.label}>Loại</Text>
-                                <View style={styles.radioGroup}>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.radioOption,
-                                            formData.type === "owned" && styles.radioOptionSelected,
-                                        ]}
-                                        onPress={() => setFormData({ ...formData, type: "owned" })}
-                                    >
-                                        <View style={styles.radio}>
-                                            {formData.type === "owned" && <View style={styles.radioSelected} />}
-                                        </View>
-                                        <Text style={styles.radioLabel}>Sở hữu</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.radioOption,
-                                            formData.type === "rented" && styles.radioOptionSelected,
-                                        ]}
-                                        onPress={() => setFormData({ ...formData, type: "rented" })}
-                                    >
-                                        <View style={styles.radio}>
-                                            {formData.type === "rented" && <View style={styles.radioSelected} />}
-                                        </View>
-                                        <Text style={styles.radioLabel}>Thuê</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Hãng</Text>
+                                <Text style={styles.label}>Ghi chú / Mô tả</Text>
                                 <TextInput
                                     style={[
                                         styles.input,
-                                        focusedField === "brand" && styles.inputFocused,
+                                        { height: 100 },
+                                        focusedField === "notes" && styles.inputFocused,
                                     ]}
-                                    placeholder="Nhập hãng (tùy chọn)"
-                                    value={formData.brand}
-                                    onChangeText={(text) => setFormData({ ...formData, brand: text })}
-                                    onFocus={() => setFocusedField("brand")}
+                                    placeholder="Nhập ghi chú"
+                                    value={formData.notes}
+                                    onChangeText={(text) => setFormData({ ...formData, notes: text })}
+                                    onFocus={() => setFocusedField("notes")}
                                     onBlur={() => setFocusedField(null)}
+                                    multiline
+                                    numberOfLines={4}
+                                    textAlignVertical="top"
                                 />
                             </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Model</Text>
-                                <TextInput
-                                    style={[
-                                        styles.input,
-                                        focusedField === "model" && styles.inputFocused,
-                                    ]}
-                                    placeholder="Nhập model (tùy chọn)"
-                                    value={formData.model}
-                                    onChangeText={(text) => setFormData({ ...formData, model: text })}
-                                    onFocus={() => setFocusedField("model")}
-                                    onBlur={() => setFocusedField(null)}
-                                />
-                            </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Số seri</Text>
-                                <TextInput
-                                    style={[
-                                        styles.input,
-                                        focusedField === "serial_number" && styles.inputFocused,
-                                    ]}
-                                    placeholder="Nhập số seri (tùy chọn)"
-                                    value={formData.serial_number}
-                                    onChangeText={(text) => setFormData({ ...formData, serial_number: text })}
-                                    onFocus={() => setFocusedField("serial_number")}
-                                    onBlur={() => setFocusedField(null)}
-                                />
-                            </View>
 
-                            <DatePickerInput
-                                label="Ngày mua"
-                                value={formData.purchase_date}
-                                onDateChange={(date) => {
-                                    setFormData({ ...formData, purchase_date: date });
-                                }}
-                                placeholder="Chọn ngày mua (tùy chọn)"
-                            />
-
-                            <CurrencyInput
-                                label="Giá mua (VNĐ)"
-                                value={formData.purchase_price || 0}
-                                onChangeText={(amount) => {
-                                    setFormData({ ...formData, purchase_price: amount });
-                                    if (errors.purchase_price) {
-                                        setErrors({ ...errors, purchase_price: "" });
-                                    }
-                                }}
-                                placeholder="0"
-                                error={errors.purchase_price}
-                            />
-
-                            {formData.type === "rented" && (
-                                <CurrencyInput
-                                    label="Giá thuê/ngày (VNĐ)"
-                                    value={formData.rental_rate_per_day || 0}
-                                    onChangeText={(amount) => {
-                                        setFormData({ ...formData, rental_rate_per_day: amount });
-                                        if (errors.rental_rate_per_day) {
-                                            setErrors({ ...errors, rental_rate_per_day: "" });
-                                        }
-                                    }}
-                                    placeholder="0"
-                                    error={errors.rental_rate_per_day}
-                                />
-                            )}
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Chu kỳ bảo trì (ngày)</Text>
-                                <TextInput
-                                    style={[
-                                        styles.input,
-                                        focusedField === "maintenance_interval_days" && styles.inputFocused,
-                                    ]}
-                                    placeholder="30"
-                                    value={formData.maintenance_interval_days?.toString() || "30"}
-                                    onChangeText={(text) => {
-                                        const value = text === "" ? 30 : parseInt(text);
-                                        setFormData({ ...formData, maintenance_interval_days: isNaN(value) ? 30 : value });
-                                    }}
-                                    keyboardType="numeric"
-                                    onFocus={() => setFocusedField("maintenance_interval_days")}
-                                    onBlur={() => setFocusedField(null)}
-                                />
-                            </View>
 
                             <View style={styles.formGroup}>
                                 <Text style={styles.label}>Trạng thái</Text>

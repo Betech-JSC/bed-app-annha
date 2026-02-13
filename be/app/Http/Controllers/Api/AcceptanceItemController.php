@@ -13,6 +13,12 @@ use Illuminate\Validation\Rule;
 
 class AcceptanceItemController extends Controller
 {
+    protected $authService;
+
+    public function __construct(\App\Services\AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách hạng mục của giai đoạn nghiệm thu
      */
@@ -20,6 +26,15 @@ class AcceptanceItemController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem hạng mục nghiệm thu của dự án này.'
+            ], 403);
+        }
 
         // BUSINESS RULE: Show ONLY Category A (parent) items, hide children A' and A''
         $items = $stage->items()
@@ -141,6 +156,15 @@ class AcceptanceItemController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi tiết hạng mục nghiệm thu này.'
+            ], 403);
+        }
 
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)
             ->with([

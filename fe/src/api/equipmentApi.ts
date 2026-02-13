@@ -7,15 +7,16 @@ export interface Equipment {
   code?: string;
   quantity: number;
   category?: string;
-  type: "owned" | "rented";
+  type?: "owned" | "rented";
   brand?: string;
   model?: string;
   serial_number?: string;
-  purchase_date?: string;
+  status: "available" | "in_use" | "maintenance" | "retired" | "returned";
   purchase_price?: number;
   rental_rate_per_day?: number;
-  maintenance_interval_days: number;
-  status: "available" | "in_use" | "maintenance" | "retired";
+  purchase_date?: string;
+  maintenance_interval_days?: number;
+  notes?: string;
   created_at: string;
   updated_at: string;
   allocations?: EquipmentAllocation[];
@@ -39,10 +40,7 @@ export interface EquipmentAllocation {
   handover_date?: string;
   return_date?: string;
   // Cho THUÊ (rent):
-  daily_rate?: number;
   rental_fee?: number;
-  billing_start_date?: string;
-  billing_end_date?: string;
   cost_id?: number;
   cost?: any;
   allocated_to?: number;
@@ -72,15 +70,16 @@ export interface CreateEquipmentData {
   code?: string;
   quantity?: number;
   category?: string;
-  type: "owned" | "rented";
+  type?: "owned" | "rented";
   brand?: string;
   model?: string;
   serial_number?: string;
-  purchase_date?: string;
+  status?: "available" | "in_use" | "maintenance" | "retired" | "returned";
   purchase_price?: number;
   rental_rate_per_day?: number;
+  purchase_date?: string;
   maintenance_interval_days?: number;
-  status?: "available" | "in_use" | "maintenance" | "retired";
+  notes?: string;
 }
 
 export const equipmentApi = {
@@ -156,10 +155,7 @@ export const equipmentApi = {
     handover_date?: string;
     return_date?: string;
     // Cho THUÊ (rent):
-    daily_rate?: number;
     rental_fee?: number;
-    billing_start_date?: string;
-    billing_end_date?: string;
   }) => {
     const response = await api.post(`/projects/${projectId}/equipment/allocations`, data);
     return response.data;

@@ -117,18 +117,18 @@ export default function SettingsScreen() {
       description: "Quản lý danh sách nhà thầu phụ tập trung",
     },
     {
-      title: "Vật Liệu",
+      title: "Danh Mục Vật Liệu",
       icon: "cube-outline",
       route: "/materials",
       permission: Permissions.MATERIAL_VIEW,
-      description: "Quản lý vật liệu và tồn kho",
+      description: "Quản lý danh mục vật liệu dùng trong dự án",
     },
     {
-      title: "Thiết Bị",
+      title: "Danh Mục Thiết Bị",
       icon: "construct-outline",
       route: "/equipment",
       permission: Permissions.EQUIPMENT_VIEW,
-      description: "Quản lý thiết bị và bảo trì",
+      description: "Quản lý danh mục thiết bị và bảo trì",
     },
     {
       title: "Bộ Tài Liệu Nghiệm Thu",

@@ -276,6 +276,20 @@ Route::middleware('auth:sanctum')->group(function () {
         // Materials
         Route::get('/{projectId}/materials', [MaterialController::class, 'getByProject']);
         Route::post('/{projectId}/materials/transactions', [MaterialController::class, 'createTransaction']);
+        Route::post('/{projectId}/materials/batch-transactions', [MaterialController::class, 'batchTransactions']);
+
+        // Material Bills (Hóa đơn vật liệu)
+        Route::prefix('/{projectId}/material-bills')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\MaterialBillController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Api\MaterialBillController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\Api\MaterialBillController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Api\MaterialBillController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Api\MaterialBillController::class, 'destroy']);
+            Route::post('/{id}/submit', [\App\Http\Controllers\Api\MaterialBillController::class, 'submit']);
+            Route::post('/{id}/approve-management', [\App\Http\Controllers\Api\MaterialBillController::class, 'approveManagement']);
+            Route::post('/{id}/approve-accountant', [\App\Http\Controllers\Api\MaterialBillController::class, 'approveAccountant']);
+            Route::post('/{id}/reject', [\App\Http\Controllers\Api\MaterialBillController::class, 'reject']);
+        });
 
         // Equipment
         Route::get('/{projectId}/equipment', [EquipmentController::class, 'getByProject']);

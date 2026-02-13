@@ -26,10 +26,6 @@ class EquipmentController extends Controller
 
         $query = Equipment::query();
 
-        if ($request->query('active_only') === 'true') {
-            $query->where('status', 'available');
-        }
-
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -73,15 +69,8 @@ class EquipmentController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50|unique:equipment,code',
             'category' => 'nullable|string|max:100',
-            'type' => 'required|in:owned,rented',
-            'brand' => 'nullable|string|max:100',
-            'model' => 'nullable|string|max:100',
-            'serial_number' => 'nullable|string|max:100',
-            'purchase_date' => 'nullable|date',
-            'purchase_price' => 'nullable|numeric|min:0',
-            'rental_rate_per_day' => 'nullable|numeric|min:0',
-            'maintenance_interval_days' => 'nullable|integer|min:1',
-            'status' => 'in:available,in_use,maintenance,retired',
+            'notes' => 'nullable|string',
+            'status' => 'nullable|in:available,in_use,maintenance,retired',
         ]);
 
         if ($validator->fails()) {
@@ -96,14 +85,7 @@ class EquipmentController extends Controller
             'name' => $request->name,
             'code' => $request->code,
             'category' => $request->category,
-            'type' => $request->type,
-            'brand' => $request->brand,
-            'model' => $request->model,
-            'serial_number' => $request->serial_number,
-            'purchase_date' => $request->purchase_date,
-            'purchase_price' => $request->purchase_price,
-            'rental_rate_per_day' => $request->rental_rate_per_day,
-            'maintenance_interval_days' => $request->maintenance_interval_days ?? 30,
+            'notes' => $request->notes,
             'status' => $request->status ?? 'available',
         ]);
 
@@ -200,8 +182,14 @@ class EquipmentController extends Controller
         }
 
         // Lấy các equipment đã có allocation trong project này
-        $query = Equipment::whereHas('allocations', function ($q) use ($projectId) {
+        $allocationStatus = $request->query('allocation_status');
+
+        $query = Equipment::whereHas('allocations', function ($q) use ($projectId, $allocationStatus) {
             $q->where('project_id', $projectId);
+            
+            if ($allocationStatus) {
+                $q->where('status', $allocationStatus);
+            }
         })->with(['allocations' => function ($q) use ($projectId) {
             $q->where('project_id', $projectId)
                 ->with(['allocatedTo', 'creator'])
@@ -231,11 +219,19 @@ class EquipmentController extends Controller
         $equipment = $query->paginate(20);
 
         // Thêm thông tin allocation cho project
-        $equipment->getCollection()->transform(function ($item) use ($projectId) {
+        $equipment->getCollection()->transform(function ($item) use ($projectId, $allocationStatus) {
             $projectAllocations = $item->allocations->where('project_id', $projectId);
-            $activeAllocation = $projectAllocations->where('status', 'active')->first();
             
-            $item->project_allocation = $activeAllocation;
+            // Determine which allocation to show as "primary"
+            if ($allocationStatus) {
+                 $primaryAllocation = $projectAllocations->where('status', $allocationStatus)->sortByDesc('start_date')->first();
+            } else {
+                 // Prefer active, otherwise latest returned
+                 $primaryAllocation = $projectAllocations->where('status', 'active')->first() 
+                                      ?? $projectAllocations->sortByDesc('start_date')->first();
+            }
+            
+            $item->project_allocation = $primaryAllocation;
             $item->project_allocations_count = $projectAllocations->count();
             
             return $item;
@@ -264,15 +260,8 @@ class EquipmentController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'code' => 'sometimes|nullable|string|max:50|unique:equipment,code,' . $id,
             'category' => 'nullable|string|max:100',
-            'type' => 'sometimes|required|in:owned,rented',
-            'brand' => 'nullable|string|max:100',
-            'model' => 'nullable|string|max:100',
-            'serial_number' => 'nullable|string|max:100',
-            'purchase_date' => 'nullable|date',
-            'purchase_price' => 'nullable|numeric|min:0',
-            'rental_rate_per_day' => 'nullable|numeric|min:0',
-            'maintenance_interval_days' => 'nullable|integer|min:1',
-            'status' => 'in:available,in_use,maintenance,retired',
+            'notes' => 'nullable|string',
+            'status' => 'nullable|in:available,in_use,maintenance,retired',
         ]);
 
         if ($validator->fails()) {
@@ -284,9 +273,7 @@ class EquipmentController extends Controller
         }
 
         $equipment->update($request->only([
-            'name', 'code', 'category', 'type', 'brand', 'model', 'serial_number',
-            'purchase_date', 'purchase_price', 'rental_rate_per_day',
-            'maintenance_interval_days', 'status'
+            'name', 'code', 'category', 'notes', 'status'
         ]));
 
         return response()->json([
@@ -352,7 +339,7 @@ class EquipmentController extends Controller
             'handover_date' => 'nullable|date',
             'return_date' => 'nullable|date|after_or_equal:handover_date',
             // Cho THUÊ (rent):
-            'daily_rate' => 'nullable|numeric|min:0|required_if:allocation_type,rent',
+            'daily_rate' => 'nullable|numeric|min:0',
             'rental_fee' => 'nullable|numeric|min:0',
             'billing_start_date' => 'nullable|date',
             'billing_end_date' => 'nullable|date|after_or_equal:billing_start_date',
@@ -366,28 +353,8 @@ class EquipmentController extends Controller
             ], 422);
         }
 
-        // Kiểm tra equipment có đang được sử dụng không (chỉ cho thuê)
+        // Kiểm tra equipment
         $equipment = Equipment::findOrFail($request->equipment_id);
-        
-        if ($request->allocation_type === 'rent') {
-            // Kiểm tra số lượng thiết bị còn lại
-            $allocatedQuantity = $equipment->allocations()
-                ->where('status', 'active')
-                ->where('allocation_type', 'rent')
-                ->where(function ($q) use ($request) {
-                    $q->whereNull('end_date')
-                        ->orWhere('end_date', '>=', $request->start_date);
-                })
-                ->sum('quantity');
-
-            $availableQuantity = $equipment->quantity - $allocatedQuantity;
-            if ($availableQuantity < $request->quantity) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Không đủ thiết bị. Còn lại: {$availableQuantity}, yêu cầu: {$request->quantity}."
-                ], 422);
-            }
-        }
 
         try {
             DB::beginTransaction();
@@ -417,7 +384,6 @@ class EquipmentController extends Controller
 
             // Cho THUÊ (rent)
             if ($request->allocation_type === 'rent') {
-                $allocationData['daily_rate'] = $request->daily_rate ?? $equipment->rental_rate_per_day;
                 $allocationData['rental_fee'] = $request->rental_fee;
                 $allocationData['billing_start_date'] = $request->billing_start_date ?? $request->start_date;
                 $allocationData['billing_end_date'] = $request->billing_end_date ?? $request->end_date;

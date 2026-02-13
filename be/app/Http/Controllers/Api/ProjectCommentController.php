@@ -31,8 +31,7 @@ class ProjectCommentController extends Controller
         $canView = false;
         if ($project->customer_id === $user->id || $project->project_manager_id === $user->id) {
             $canView = true;
-        } elseif ($this->authService->can($user, Permissions::PROJECT_COMMENT_VIEW, $project) ||
-                  $this->authService->can($user, Permissions::PROJECT_VIEW, $project)) {
+        } elseif ($this->authService->can($user, Permissions::PROJECT_COMMENT_VIEW, $project)) {
             $canView = true;
         }
 

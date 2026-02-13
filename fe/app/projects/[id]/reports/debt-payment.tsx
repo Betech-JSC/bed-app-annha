@@ -114,53 +114,53 @@ export default function DebtPaymentReportScreen() {
             </Text>
             {report.subcontractor_debts.length > 0 ? (
               report.subcontractor_debts.map((debt, index) => (
-            <View key={index} style={styles.debtCard}>
-              <View style={styles.debtHeader}>
-                <Text style={styles.debtTitle}>{debt.subcontractor?.name || "N/A"}</Text>
-                {debt.subcontractor?.category && (
-                  <Text style={styles.debtCategory}>{debt.subcontractor.category}</Text>
-                )}
-              </View>
-              <View style={styles.debtDetails}>
-                <View style={styles.debtRow}>
-                  <Text style={styles.debtLabel}>Giá trị hợp đồng:</Text>
-                  <Text style={styles.debtValue}>
-                    {formatCurrency(debt.contract_value || 0)}
-                  </Text>
+                <View key={index} style={styles.debtCard}>
+                  <View style={styles.debtHeader}>
+                    <Text style={styles.debtTitle}>{debt.subcontractor?.name || "N/A"}</Text>
+                    {debt.subcontractor?.category && (
+                      <Text style={styles.debtCategory}>{debt.subcontractor.category}</Text>
+                    )}
+                  </View>
+                  <View style={styles.debtDetails}>
+                    <View style={styles.debtRow}>
+                      <Text style={styles.debtLabel}>Giá trị hợp đồng:</Text>
+                      <Text style={styles.debtValue}>
+                        {formatCurrency(debt.contract_value || 0)}
+                      </Text>
+                    </View>
+                    <View style={styles.debtRow}>
+                      <Text style={styles.debtLabel}>Đã thanh toán:</Text>
+                      <Text style={[styles.debtValue, styles.paidValue]}>
+                        {formatCurrency(debt.total_paid || 0)}
+                      </Text>
+                    </View>
+                    <View style={styles.debtRow}>
+                      <Text style={styles.debtLabel}>Còn nợ:</Text>
+                      <Text style={[styles.debtValue, styles.remainingDebtValue]}>
+                        {formatCurrency(debt.remaining_debt || 0)}
+                      </Text>
+                    </View>
+                    <View style={styles.progressBar}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${debt.payment_percentage || 0}%`,
+                            backgroundColor:
+                              (debt.payment_percentage || 0) >= 80
+                                ? "#10B981"
+                                : (debt.payment_percentage || 0) >= 50
+                                  ? "#F59E0B"
+                                  : "#EF4444",
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.progressText}>
+                      Đã thanh toán: {(debt.payment_percentage || 0).toFixed(2)}%
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.debtRow}>
-                  <Text style={styles.debtLabel}>Đã thanh toán:</Text>
-                  <Text style={[styles.debtValue, styles.paidValue]}>
-                    {formatCurrency(debt.total_paid || 0)}
-                  </Text>
-                </View>
-                <View style={styles.debtRow}>
-                  <Text style={styles.debtLabel}>Còn nợ:</Text>
-                  <Text style={[styles.debtValue, styles.remainingDebtValue]}>
-                    {formatCurrency(debt.remaining_debt || 0)}
-                  </Text>
-                </View>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: `${debt.payment_percentage || 0}%`,
-                        backgroundColor:
-                          (debt.payment_percentage || 0) >= 80
-                            ? "#10B981"
-                            : (debt.payment_percentage || 0) >= 50
-                            ? "#F59E0B"
-                            : "#EF4444",
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.progressText}>
-                  Đã thanh toán: {(debt.payment_percentage || 0).toFixed(2)}%
-                </Text>
-              </View>
-            </View>
               ))
             ) : (
               <Text style={styles.emptyText}>Chưa có công nợ thầu phụ</Text>
@@ -179,7 +179,7 @@ export default function DebtPaymentReportScreen() {
                 <Text style={styles.debtTitle}>{debt.supplier?.name || "N/A"}</Text>
                 <View style={styles.debtDetails}>
                   <View style={styles.debtRow}>
-                    <Text style={styles.debtLabel}>Đã nghiệm thu:</Text>
+                    <Text style={styles.debtLabel}>Tổng thực hiện:</Text>
                     <Text style={styles.debtValue}>
                       {formatCurrency(debt.total_accepted || 0)}
                     </Text>

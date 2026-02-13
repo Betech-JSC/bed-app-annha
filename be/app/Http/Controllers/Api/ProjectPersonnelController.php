@@ -27,6 +27,14 @@ class ProjectPersonnelController extends Controller
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
+        // Check permission
+        if (!$this->authService->can($user, Permissions::PERSONNEL_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem danh sách nhân sự của dự án này.'
+            ], 403);
+        }
+
         $personnel = $project->personnel()
             ->with(['user', 'assigner', 'personnelRole'])
             ->get();

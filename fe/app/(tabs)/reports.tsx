@@ -20,6 +20,7 @@ import { Dimensions } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { supplierApi } from "@/api/supplierApi";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -44,6 +45,7 @@ export default function ReportsScreen() {
     const [companyCapital, setCompanyCapital] = useState<number>(0);
     const [showCapitalModal, setShowCapitalModal] = useState(false);
     const [capitalInput, setCapitalInput] = useState("");
+    const [totalSupplierDebt, setTotalSupplierDebt] = useState(0);
 
     useEffect(() => {
         loadData();
@@ -95,6 +97,7 @@ export default function ReportsScreen() {
                 setTotalCosts(0);
                 setTotalProfit(0);
             }
+            await loadSupplierDebt();
         } catch (error) {
             console.error("Error loading reports:", error);
         } finally {
@@ -158,6 +161,18 @@ export default function ReportsScreen() {
             setTotalProfit(profit);
         } catch (error) {
             console.error("Error loading summaries:", error);
+        }
+    };
+
+    const loadSupplierDebt = async () => {
+        try {
+            const response = await supplierApi.getSuppliers();
+            if (response.success) {
+                const total = (response.data.data || []).reduce((sum: number, s: any) => sum + (parseFloat(s.remaining_debt) || 0), 0);
+                setTotalSupplierDebt(total);
+            }
+        } catch (error) {
+            console.error("Error loading supplier debt:", error);
         }
     };
 
@@ -350,6 +365,21 @@ export default function ReportsScreen() {
                             {profitMargin.toFixed(2)}%
                         </Text>
                     </View>
+
+                    {/* Phải Trả Nhà Cung Cấp */}
+                    <TouchableOpacity
+                        style={styles.summaryCard}
+                        onPress={() => router.push("/accounting/supplier-payables")}
+                    >
+                        <View style={[styles.summaryIconContainer, { backgroundColor: "#FEE2E2" }]}>
+                            <Ionicons name="alert-circle" size={24} color="#EF4444" />
+                        </View>
+                        <Text style={styles.summaryLabel}>Phải Trả Nhà Cung Cấp</Text>
+                        <Text style={[styles.summaryValue, { color: "#EF4444" }]}>
+                            {formatCurrency(totalSupplierDebt)}
+                        </Text>
+                        <Text style={styles.summaryHint}>Xem chi tiết</Text>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Charts Section */}

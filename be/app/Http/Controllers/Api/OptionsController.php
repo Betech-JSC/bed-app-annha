@@ -75,9 +75,10 @@ class OptionsController extends Controller
     {
         $statuses = [
             ['value' => 'available', 'label' => 'Sẵn sàng', 'color' => '#10B981'],
-            ['value' => 'in_use', 'label' => 'Đã trả', 'color' => '#3B82F6'],
+            ['value' => 'in_use', 'label' => 'Đang sử dụng', 'color' => '#3B82F6'],
+            ['value' => 'returned', 'label' => 'Đã trả', 'color' => '#6B7280'],
             ['value' => 'maintenance', 'label' => 'Bảo trì', 'color' => '#F59E0B'],
-            ['value' => 'retired', 'label' => 'Ngừng sử dụng', 'color' => '#6B7280'],
+            ['value' => 'retired', 'label' => 'Ngừng sử dụng', 'color' => '#9CA3AF'],
             ['value' => 'damaged', 'label' => 'Hư hỏng', 'color' => '#EF4444'],
         ];
 
