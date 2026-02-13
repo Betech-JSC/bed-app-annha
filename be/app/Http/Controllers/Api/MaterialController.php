@@ -313,7 +313,7 @@ class MaterialController extends Controller
         if ($request->type === 'out') {
             try {
                 $inventoryService = app(\App\Services\MaterialInventoryService::class);
-                $transaction = $inventoryService->createOutTransaction(
+                $transaction = $inventoryService->createUsageTransaction(
                     $request->material_id,
                     $projectId,
                     $request->quantity,
@@ -395,7 +395,7 @@ class MaterialController extends Controller
 
         try {
             $inventoryService = app(\App\Services\MaterialInventoryService::class);
-            $result = $inventoryService->createBatchOutTransaction(
+            $result = $inventoryService->createBatchUsageTransaction(
                 $request->items,
                 $projectId,
                 $user->id,

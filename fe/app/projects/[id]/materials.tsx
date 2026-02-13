@@ -429,12 +429,13 @@ export default function ProjectMaterialsScreen() {
                     <View style={[styles.modalHeader, Platform.OS === 'android' && { paddingTop: insets.top + 16 }]}>
                         <TouchableOpacity
                             onPress={() => setShowAddModal(false)}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                            style={{ padding: 4, zIndex: 10 }}
                         >
                             <Ionicons name="close" size={24} color="#1F2937" />
                         </TouchableOpacity>
                         <Text style={styles.modalTitle}>Thêm Vật Liệu</Text>
-                        <View style={{ width: 24 }} />
+                        <View style={{ width: 32 }} />
                     </View>
 
                     {!selectedMaterial ? (
@@ -788,7 +789,7 @@ const styles = StyleSheet.create({
         color: "#1F2937",
         flex: 1,
         textAlign: "center",
-        marginLeft: -24,
+        marginLeft: 0,
     },
     modalBody: {
         flex: 1,

@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 import { ScreenHeader, DatePickerInput, CurrencyInput, PermissionDenied } from "@/components";
+import ImageViewer from "@/components/ImageViewer";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { Permissions } from "@/constants/Permissions";
@@ -54,6 +55,11 @@ export default function PaymentsScreen() {
   const [permissionMessage, setPermissionMessage] = useState("");
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailPayment, setDetailPayment] = useState<ProjectPayment | null>(null);
+
+  // ImageViewer state
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [viewerImages, setViewerImages] = useState<any[]>([]);
 
   // Form state
   const [formData, setFormData] = useState<CreatePaymentData>({
@@ -243,14 +249,14 @@ export default function PaymentsScreen() {
             styles.statusBadge,
             {
               backgroundColor:
-                getStatusColor(item.due_date, item.due_date) + "20",
+                getStatusColor(item.status, item.due_date) + "20",
             },
           ]}
         >
           <Text
             style={[
               styles.statusText,
-              { color: getStatusColor(item.due_date, item.due_date) },
+              { color: getStatusColor(item.status, item.due_date) },
             ]}
           >
             {getStatusText(item.status)}
@@ -258,55 +264,30 @@ export default function PaymentsScreen() {
         </View>
       </View>
 
-      <View style={styles.paymentDetails}>
+      <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
+        <Ionicons name="calendar-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
+        <Text style={{ fontSize: 13, color: "#6B7280" }}>
+          {item.paid_date
+            ? `Đã thanh toán: ${formatDate(item.paid_date)}`
+            : `Hạn: ${formatDate(item.due_date)}`
+          }
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
         {item.notes && (
-          <View style={styles.detailRow}>
-            <Ionicons name="document-text-outline" size={16} color="#6B7280" />
-            <View style={styles.notesContainer}>
-              <Text style={styles.detailLabel}>Nội dung:</Text>
-              <Text style={styles.notesText}>{item.notes}</Text>
-            </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="document-text-outline" size={14} color="#9CA3AF" style={{ marginRight: 2 }} />
+            <Text style={{ fontSize: 12, color: "#9CA3AF" }}>Ghi chú</Text>
           </View>
         )}
-        <View style={styles.detailRow}>
-          <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-          <Text style={styles.detailLabel}>Hạn thanh toán:</Text>
-          <Text style={styles.detailValue}>{formatDate(item.due_date)}</Text>
-        </View>
-        {item.paid_date && (
-          <View style={styles.detailRow}>
-            <Ionicons name="checkmark-circle-outline" size={16} color="#10B981" />
-            <Text style={styles.detailLabel}>Thanh toán:</Text>
-            <Text style={styles.detailValue}>{formatDate(item.paid_date)}</Text>
-          </View>
-        )}
-        {item.customer_approved_at && (
-          <View style={styles.detailRow}>
-            <Ionicons name="person-outline" size={16} color="#8B5CF6" />
-            <Text style={styles.detailLabel}>Khách hàng duyệt:</Text>
-            <Text style={styles.detailValue}>
-              {formatDate(item.customer_approved_at)}
-              {item.customer_approver && ` - ${item.customer_approver.name}`}
-            </Text>
-          </View>
-        )}
-        {item.payment_proof_uploaded_at && (
-          <View style={styles.detailRow}>
-            <Ionicons name="image-outline" size={16} color="#F59E0B" />
-            <Text style={styles.detailLabel}>Đã upload hình xác nhận:</Text>
-            <Text style={styles.detailValue}>{formatDate(item.payment_proof_uploaded_at)}</Text>
+        {item.attachments && item.attachments.length > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="attach-outline" size={14} color="#9CA3AF" style={{ marginRight: 2 }} />
+            <Text style={{ fontSize: 12, color: "#9CA3AF" }}>{item.attachments.length} file</Text>
           </View>
         )}
       </View>
-
-      {item.attachments && item.attachments.length > 0 && (
-        <View style={styles.attachmentsRow}>
-          <Ionicons name="document-outline" size={16} color="#3B82F6" />
-          <Text style={styles.attachmentsText}>
-            {item.attachments.length} chứng từ
-          </Text>
-        </View>
-      )}
 
       {item.status === "pending" && (
         <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
@@ -393,6 +374,10 @@ export default function PaymentsScreen() {
     })) || []);
     setMarkPaidAttachmentIds(payment.attachments?.map((att) => att.id) || []);
     setShowMarkPaidModal(true);
+    // Close detail modal if open to prevent stacking issues on Android/iOS
+    if (showDetailModal) {
+      setShowDetailModal(false);
+    }
   };
 
   const handleUploadProof = (payment: ProjectPayment) => {
@@ -812,6 +797,24 @@ export default function PaymentsScreen() {
                       <TouchableOpacity
                         key={attachment.id || index}
                         style={styles.attachmentCard}
+                        onPress={() => {
+                          if (attachment.mime_type && attachment.mime_type.startsWith("image/")) {
+                            // Filter images for the viewer
+                            const images = detailPayment.attachments
+                              ?.filter(att => att.mime_type?.startsWith("image/"))
+                              .map(att => ({ uri: att.file_url }));
+
+                            const clickedImageIndex = images?.findIndex(img => img.uri === attachment.file_url) ?? 0;
+
+                            if (images && images.length > 0) {
+                              setViewerImages(images);
+                              setCurrentImageIndex(clickedImageIndex);
+                              setImageViewerVisible(true);
+                            }
+                          } else {
+                            Alert.alert("Thông báo", "Chức năng xem trước chỉ hỗ trợ file ảnh.");
+                          }
+                        }}
                       >
                         {attachment.mime_type?.startsWith("image/") ? (
                           <Image
@@ -1180,6 +1183,11 @@ export default function PaymentsScreen() {
                 setMarkPaidFiles([]);
                 setMarkPaidAttachmentIds([]);
                 setActualAmount("");
+                // Re-open detail modal if we have a selected payment (cancelled from detail view)
+                if (selectedPayment) {
+                  setDetailPayment(selectedPayment);
+                  setShowDetailModal(true);
+                }
               }}
             >
               <Ionicons name="close" size={24} color="#1F2937" />
@@ -1252,6 +1260,11 @@ export default function PaymentsScreen() {
                 setMarkPaidFiles([]);
                 setMarkPaidAttachmentIds([]);
                 setActualAmount("");
+                // Re-open detail modal if we have a selected payment (cancelled from detail view)
+                if (selectedPayment) {
+                  setDetailPayment(selectedPayment);
+                  setShowDetailModal(true);
+                }
               }}
             >
               <Text style={styles.cancelButtonText}>Hủy</Text>
@@ -1377,6 +1390,13 @@ export default function PaymentsScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+      {/* ImageViewer */}
+      <ImageViewer
+        visible={imageViewerVisible}
+        images={viewerImages}
+        initialIndex={currentImageIndex}
+        onClose={() => setImageViewerVisible(false)}
+      />
     </View>
   );
 }
