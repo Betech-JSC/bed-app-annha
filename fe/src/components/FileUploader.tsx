@@ -213,7 +213,7 @@ export default function FileUploader({
     try {
       const formData = new FormData();
       files.forEach((file, index) => {
-        const fileExtension = file.uri.split(".").pop();
+        const fileExtension = file.uri.split(".").pop()?.toLowerCase();
         const fileType = file.mimeType || `image/${fileExtension}`;
 
         formData.append(`files[${index}]`, {

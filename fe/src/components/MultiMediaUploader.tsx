@@ -246,7 +246,7 @@ export default function MultiMediaUploader({
 
       files.forEach((file, index) => {
         const tempId = `temp_${Date.now()}_${index}`;
-        const fileExtension = file.uri?.split(".").pop() || "jpg";
+        const fileExtension = file.uri?.split(".").pop()?.toLowerCase() || "jpg";
         const fileName = file.name || file.fileName || `file_${Date.now()}_${index}.${fileExtension}`;
 
         tempItems.push({

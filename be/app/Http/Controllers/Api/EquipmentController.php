@@ -26,6 +26,10 @@ class EquipmentController extends Controller
 
         $query = Equipment::query();
 
+        if ($request->query('active_only') === 'true') {
+            $query->where('status', 'available');
+        }
+
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")

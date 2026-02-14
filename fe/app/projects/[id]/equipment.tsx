@@ -977,7 +977,6 @@ const styles = StyleSheet.create({
         color: "#1F2937",
         flex: 1,
         textAlign: "center",
-        marginLeft: -24,
     },
     modalBody: {
         flex: 1,

@@ -236,6 +236,8 @@ export default function UniversalFileUploader({
                         mimeType = 'application/pdf';
                     } else if (extension === 'mp4') {
                         mimeType = 'video/mp4';
+                    } else if (['heic', 'heif'].includes(extension)) {
+                        mimeType = 'image/heic';
                     } else {
                         mimeType = 'application/octet-stream';
                     }

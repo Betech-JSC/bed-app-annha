@@ -136,6 +136,8 @@ class AttachmentController extends Controller
                     'text/plain',
                     'application/zip',
                     'application/x-rar-compressed',
+                    'image/heic',
+                    'image/heif',
                 ];
 
                 if (!in_array($mime, $allowedMimes)) {
