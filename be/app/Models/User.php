@@ -73,10 +73,7 @@ class User extends Authenticatable
         return $this->where($field ?? 'id', $value)->withTrashed()->firstOrFail();
     }
 
-    public function account(): BelongsTo
-    {
-        return $this->belongsTo(Account::class);
-    }
+    // NOTE: account() relationship removed — Account model does not exist
 
     public function setPasswordAttribute($password)
     {
@@ -122,15 +119,7 @@ class User extends Authenticatable
         });
     }
 
-    public function wallet()
-    {
-        return $this->hasOne(Wallet::class);
-    }
-
-    public function transactions()
-    {
-        return $this->hasMany(Transaction::class);
-    }
+    // NOTE: wallet() and transactions() removed — Wallet/Transaction models do not exist
 
     /**
      * Roles của user (thông qua role_user pivot table)
@@ -164,61 +153,9 @@ class User extends Authenticatable
         return $this->belongsTo(Department::class);
     }
 
-    /**
-     * Leave requests của user
-     */
-    public function leaveRequests(): HasMany
-    {
-        return $this->hasMany(LeaveRequest::class);
-    }
-
-    /**
-     * Leave balances của user
-     */
-    public function leaveBalances(): HasMany
-    {
-        return $this->hasMany(LeaveBalance::class);
-    }
-
-    /**
-     * Employment contracts của user
-     */
-    public function employmentContracts(): HasMany
-    {
-        return $this->hasMany(EmploymentContract::class);
-    }
-
-    /**
-     * Employee insurance của user
-     */
-    public function employeeInsurance(): HasMany
-    {
-        return $this->hasMany(EmployeeInsurance::class);
-    }
-
-    /**
-     * Employee benefits của user
-     */
-    public function employeeBenefits(): HasMany
-    {
-        return $this->hasMany(EmployeeBenefit::class);
-    }
-
-    /**
-     * Performance evaluations của user (as employee)
-     */
-    public function performanceEvaluations(): HasMany
-    {
-        return $this->hasMany(PerformanceEvaluation::class);
-    }
-
-    /**
-     * Performance evaluations của user (as evaluator)
-     */
-    public function evaluationsAsEvaluator(): HasMany
-    {
-        return $this->hasMany(PerformanceEvaluation::class, 'evaluator_id');
-    }
+    // NOTE: leaveRequests, leaveBalances, employmentContracts, employeeInsurance,
+    //       employeeBenefits, performanceEvaluations, evaluationsAsEvaluator
+    //       removed — corresponding models do not exist
 
     /**
      * Reminders của user

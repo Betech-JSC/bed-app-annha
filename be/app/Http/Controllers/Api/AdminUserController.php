@@ -59,7 +59,7 @@ class AdminUserController extends Controller
      */
     public function index(Request $request)
     {
-        $query = User::with(['wallet', 'roles']);
+        $query = User::with(['roles']);
 
         // Filter theo role (chỉ admin)
         if ($request->has('role') && $request->role === 'admin') {
@@ -103,7 +103,6 @@ class AdminUserController extends Controller
                 'phone' => $user->phone,
                 'role' => $user->role,
                 'avatar' => $user->avatar,
-                'wallet_balance' => $user->wallet ? $user->wallet->balance : 0,
                 'roles' => $user->roles,
                 'created_at' => $user->created_at,
                 'deleted_at' => $user->deleted_at,
@@ -129,9 +128,7 @@ class AdminUserController extends Controller
     public function show($id)
     {
         try {
-            $user = User::with(['wallet', 'roles', 'employeeProfile', 'transactions' => function ($q) {
-                $q->latest()->limit(10);
-            }])->withTrashed()->findOrFail($id);
+            $user = User::with(['roles', 'employeeProfile'])->withTrashed()->findOrFail($id);
 
             // Thống kê liên quan đến dự án (nếu có)
             $projectsCount = 0;
@@ -159,10 +156,8 @@ class AdminUserController extends Controller
                     'role' => $user->role,
                     'avatar' => $user->avatar,
                     'fcm_token' => $user->fcm_token,
-                    'wallet' => $user->wallet,
                     'roles' => $user->roles,
                     'employee_profile' => $user->employeeProfile,
-                    'recent_transactions' => $user->transactions ?? [],
                     'statistics' => [
                         'projects_count' => $projectsCount,
                         'time_trackings_count' => $timeTrackingsCount,
@@ -260,21 +255,6 @@ class AdminUserController extends Controller
     public function destroy($id)
     {
         $user = User::withTrashed()->findOrFail($id);
-
-        // Kiểm tra xem user có đơn hàng đang xử lý không
-        $activeOrders = \App\Models\Order::where(function ($q) use ($user) {
-            $q->where('sender_id', $user->id)
-                ->orWhere('customer_id', $user->id);
-        })
-            ->whereIn('status', ['confirmed', 'picked_up', 'in_transit', 'arrived', 'delivered'])
-            ->count();
-
-        if ($activeOrders > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể xóa tài khoản vì có đơn hàng đang xử lý',
-            ], 400);
-        }
 
         $user->forceDelete();
 
@@ -443,7 +423,7 @@ class AdminUserController extends Controller
                 ],
                 'bonuses' => [
                     'total' => $totalBonuses,
-                    'count' => $bonuses->count(),
+                    'count' => 0,
                 ],
             ],
         ]);

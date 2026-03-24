@@ -268,17 +268,14 @@ class Project extends Model
         $date = now()->format('dmy'); // DDMMYYYY format
         $prefix = 'ANNHA-' . $date . '-';
         
-        // Tìm số thứ tự cao nhất trong ngày
-        $todayStart = now()->startOfDay();
-        $todayEnd = now()->endOfDay();
-        
-        $lastProject = static::whereBetween('created_at', [$todayStart, $todayEnd])
+        // Tìm số thứ tự cao nhất trong ngày (bao gồm cả soft-deleted)
+        $lastProject = static::withTrashed()
             ->where('code', 'like', $prefix . '%')
             ->orderByDesc('code')
             ->first();
         
         $sequence = 1;
-        if ($lastProject && preg_match('/-(\d+)$/', $lastProject->code, $matches)) {
+        if ($lastProject && preg_match('/(\d+)$/', $lastProject->code, $matches)) {
             $sequence = (int)$matches[1] + 1;
         }
         
@@ -288,7 +285,7 @@ class Project extends Model
         // Đảm bảo không trùng (trường hợp hiếm)
         $maxAttempts = 10;
         $attempt = 0;
-        while (static::where('code', $code)->exists() && $attempt < $maxAttempts) {
+        while (static::withTrashed()->where('code', $code)->exists() && $attempt < $maxAttempts) {
             $sequence++;
             $code = $prefix . str_pad($sequence, 2, '0', STR_PAD_LEFT);
             $attempt++;

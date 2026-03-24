@@ -54,9 +54,7 @@ use App\Http\Controllers\Api\SupplierContractController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\OfficeKpiController;
-use App\Http\Controllers\Api\TeamController;
-use App\Http\Controllers\Api\TeamContractController;
-use App\Http\Controllers\Api\LaborStandardController;
+// NOTE: TeamController, TeamContractController, LaborStandardController removed — models don't exist
 use App\Http\Controllers\Api\ApprovalCenterController;
 
 Route::post('login', [AuthController::class, 'login']);
@@ -407,29 +405,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{projectId}/tasks/{taskId}/dependencies/{id}', [ProjectTaskDependencyController::class, 'destroy']);
         Route::post('/{projectId}/tasks/{taskId}/dependencies/validate', [ProjectTaskDependencyController::class, 'validateCircular']);
 
-        // Teams Management
-        Route::get('/{projectId}/teams', [TeamController::class, 'index']);
-        Route::post('/{projectId}/teams', [TeamController::class, 'store']);
-        Route::get('/{projectId}/teams/{id}', [TeamController::class, 'show']);
-        Route::put('/{projectId}/teams/{id}', [TeamController::class, 'update']);
-        Route::delete('/{projectId}/teams/{id}', [TeamController::class, 'destroy']);
-        Route::post('/{projectId}/teams/{id}/members', [TeamController::class, 'addMember']);
-        Route::delete('/{projectId}/teams/{id}/members', [TeamController::class, 'removeMember']);
-
-        // Team Contracts
-        Route::get('/{projectId}/team-contracts', [TeamContractController::class, 'index']);
-        Route::post('/{projectId}/team-contracts', [TeamContractController::class, 'store']);
-        Route::get('/{projectId}/team-contracts/{id}', [TeamContractController::class, 'show']);
-        Route::put('/{projectId}/team-contracts/{id}', [TeamContractController::class, 'update']);
-        Route::delete('/{projectId}/team-contracts/{id}', [TeamContractController::class, 'destroy']);
-        Route::post('/{projectId}/team-contracts/{id}/approve', [TeamContractController::class, 'approve']);
-
-        // Labor Standards
-        Route::get('/{projectId}/labor-standards', [LaborStandardController::class, 'index']);
-        Route::post('/{projectId}/labor-standards', [LaborStandardController::class, 'store']);
-        Route::get('/{projectId}/labor-standards/{id}', [LaborStandardController::class, 'show']);
-        Route::put('/{projectId}/labor-standards/{id}', [LaborStandardController::class, 'update']);
-        Route::delete('/{projectId}/labor-standards/{id}', [LaborStandardController::class, 'destroy']);
+        // NOTE: Teams, Team Contracts, Labor Standards routes removed — models don't exist
 
         // Subcontractor Payments
         Route::get('/{projectId}/subcontractor-payments', [SubcontractorPaymentController::class, 'index']);

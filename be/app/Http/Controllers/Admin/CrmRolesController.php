@@ -26,14 +26,34 @@ class CrmRolesController extends Controller
                 'description' => $role->description,
                 'users_count' => $role->users_count ?? 0,
                 'permissions' => $role->permissions->pluck('id')->toArray(),
-                'permission_names' => $role->permissions->pluck('name')->toArray(),
+                'permission_names' => $role->permissions->map(fn($p) => $p->description ?: $p->name)->toArray(),
                 'created_at' => $role->created_at?->format('d/m/Y'),
             ]);
 
         // Group permissions by prefix (e.g. "project.view" => group "project")
         $permissions = Permission::orderBy('name')->get();
         $groupedPermissions = $permissions->groupBy(function ($p) {
+            // Handle compound prefixes like additional_cost, change_request, etc.
             $parts = explode('.', $p->name);
+            // If the prefix contains underscore-based compound names, group them properly
+            if (count($parts) >= 2) {
+                // Check for known compound prefixes
+                $first = $parts[0];
+                $second = $parts[1] ?? '';
+                $compoundPrefixes = [
+                    'additional_cost', 'change_request', 'input_invoice',
+                    'material_bill', 'subcontractor_payment', 'company_cost',
+                ];
+                if (in_array($first . '_' . $second, $compoundPrefixes)) {
+                    return $first . '_' . $second;
+                }
+                // Check for "supplier.contract", "supplier.acceptance", "subcontractor.progress" etc.
+                $dotPrefixes = ['supplier.contract', 'supplier.acceptance', 'subcontractor.contract', 'subcontractor.acceptance', 'subcontractor.progress', 'project.comment', 'project.task', 'project.phase', 'project.document', 'project.risk', 'project.monitoring', 'acceptance.template'];
+                $twoLevel = $first . '.' . $second;
+                if (in_array($twoLevel, $dotPrefixes)) {
+                    return $twoLevel;
+                }
+            }
             return $parts[0] ?? 'general';
         })->map(function ($group, $key) {
             return [
@@ -43,7 +63,7 @@ class CrmRolesController extends Controller
                     'id' => $p->id,
                     'name' => $p->name,
                     'description' => $p->description,
-                    'label' => $this->translatePermission($p->name),
+                    'label' => $p->description ?: $p->name,
                 ])->values(),
             ];
         })->values();
@@ -58,7 +78,7 @@ class CrmRolesController extends Controller
             'allPermissions' => $permissions->map(fn($p) => [
                 'id' => $p->id,
                 'name' => $p->name,
-                'label' => $this->translatePermission($p->name),
+                'label' => $p->description ?: $p->name,
             ]),
             'users' => $users,
         ]);
@@ -164,55 +184,64 @@ class CrmRolesController extends Controller
     private function translateGroup(string $key): string
     {
         return [
+            // Core
             'project' => 'Dự án',
-            'cost' => 'Chi phí',
-            'material' => 'Vật tư',
-            'equipment' => 'Thiết bị',
-            'hr' => 'Nhân sự',
-            'finance' => 'Tài chính',
+            'progress' => 'Tiến độ',
+            'project.comment' => 'Bình luận dự án',
+            'project.task' => 'Công việc dự án',
+            'project.phase' => 'Giai đoạn dự án',
+            'project.document' => 'Tài liệu dự án',
+            'project.risk' => 'Rủi ro dự án',
+            'project.monitoring' => 'Giám sát dự án',
+
+            // Finance
+            'cost' => 'Chi phí nội bộ',
+            'additional_cost' => 'Chi phí phát sinh',
+            'company_cost' => 'Chi phí công ty',
+            'payment' => 'Thanh toán',
+            'invoice' => 'Hóa đơn đầu ra',
+            'input_invoice' => 'Hóa đơn đầu vào',
+            'contract' => 'Hợp đồng',
+            'revenue' => 'Doanh thu',
+            'budgets' => 'Ngân sách',
+            'receipts' => 'Phiếu thu/chi',
             'report' => 'Báo cáo',
-            'user' => 'Người dùng',
-            'role' => 'Vai trò',
-            'permission' => 'Quyền hạn',
-            'notification' => 'Thông báo',
-            'setting' => 'Cài đặt',
-            'system' => 'Hệ thống',
+
+            // Resources
+            'material' => 'Vật tư/Vật liệu',
+            'material_bill' => 'Phiếu xuất vật tư',
+            'equipment' => 'Thiết bị',
+            'personnel' => 'Nhân sự dự án',
+
+            // Quality
+            'acceptance' => 'Nghiệm thu',
+            'acceptance.template' => 'Mẫu nghiệm thu',
+            'defect' => 'Lỗi phát sinh',
+            'change_request' => 'Yêu cầu thay đổi',
+            'issue' => 'Sự cố/Vấn đề',
+            'evm' => 'Phân tích EVM',
+
+            // Subcontractors & Suppliers
+            'subcontractor' => 'Nhà thầu phụ',
+            'subcontractor_payment' => 'Thanh toán NTP',
+            'subcontractor.contract' => 'Hợp đồng thầu phụ',
+            'subcontractor.acceptance' => 'Nghiệm thu thầu phụ',
+            'subcontractor.progress' => 'Tiến độ thầu phụ',
+            'suppliers' => 'Nhà cung cấp',
+            'supplier.contract' => 'Hợp đồng NCC',
+            'supplier.acceptance' => 'Nghiệm thu NCC',
+
+            // Operations
+            'document' => 'Tài liệu',
+            'log' => 'Nhật ký công trình',
+            'reminder' => 'Nhắc nhở',
+
+            // HR & System
+            'kpi' => 'KPI Nhân sự',
+            'departments' => 'Phòng ban',
+            'settings' => 'Cài đặt hệ thống',
+
             'general' => 'Chung',
-        ][$key] ?? ucfirst($key);
-    }
-
-    private function translatePermission(string $name): string
-    {
-        $translations = [
-            'project.view' => 'Xem dự án',
-            'project.create' => 'Tạo dự án',
-            'project.edit' => 'Sửa dự án',
-            'project.delete' => 'Xóa dự án',
-            'cost.view' => 'Xem chi phí',
-            'cost.create' => 'Tạo chi phí',
-            'cost.edit' => 'Sửa chi phí',
-            'cost.delete' => 'Xóa chi phí',
-            'cost.approve.management' => 'Duyệt chi phí (BĐH)',
-            'cost.approve.accountant' => 'Duyệt chi phí (Kế toán)',
-            'material.view' => 'Xem vật tư',
-            'material.create' => 'Tạo vật tư',
-            'material.edit' => 'Sửa vật tư',
-            'material.delete' => 'Xóa vật tư',
-            'equipment.view' => 'Xem thiết bị',
-            'equipment.create' => 'Tạo thiết bị',
-            'equipment.edit' => 'Sửa thiết bị',
-            'equipment.delete' => 'Xóa thiết bị',
-            'hr.view' => 'Xem nhân sự',
-            'hr.create' => 'Tạo nhân sự',
-            'hr.edit' => 'Sửa nhân sự',
-            'hr.delete' => 'Xóa nhân sự',
-            'report.view' => 'Xem báo cáo',
-            'setting.view' => 'Xem cài đặt',
-            'setting.edit' => 'Sửa cài đặt',
-            'notification.send' => 'Gửi thông báo',
-            'role.manage' => 'Quản lý vai trò',
-        ];
-
-        return $translations[$name] ?? $name;
+        ][$key] ?? ucfirst(str_replace('_', ' ', $key));
     }
 }

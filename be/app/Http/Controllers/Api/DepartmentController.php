@@ -218,13 +218,11 @@ class DepartmentController extends Controller
             'total_amount' => 0,
         ];
 
-        // Thống kê Leave Requests
+        // Leave stats removed - LeaveRequest model does not exist
         $leaveStats = [
-            'total' => LeaveRequest::whereIn('user_id', $department->employees()->pluck('id'))->count(),
-            'pending' => LeaveRequest::whereIn('user_id', $department->employees()->pluck('id'))
-                ->where('status', 'pending')->count(),
-            'approved' => LeaveRequest::whereIn('user_id', $department->employees()->pluck('id'))
-                ->where('status', 'approved')->count(),
+            'total' => 0,
+            'pending' => 0,
+            'approved' => 0,
         ];
 
 
