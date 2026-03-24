@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
@@ -29,60 +28,41 @@ export function usePushNotifications() {
     }, [userId, token]);
 
     useEffect(() => {
-        // ... (existing listeners code)
-        // 1️⃣ App đang foreground - không hiển thị alert, để heads-up notification xử lý
+        // 1️⃣ App đang foreground - notification sẽ hiển thị qua NotificationHandler
         const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
-            // Heads-up notification sẽ xử lý việc hiển thị
             console.log('Notification received in foreground:', notification.request.content);
+            // Unread count sẽ được cập nhật qua polling hoặc next focus
         });
 
         // 2️⃣ App background / killed → user tap notification
         const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
             const data = response.notification.request.content.data;
-            const { type } = data || {};
 
-            console.log('Notification tapped from background/killed state:', data);
+            console.log('Notification tapped:', data);
 
-            // Navigate based on notification type
+            // Navigate dựa trên action_url (ưu tiên) hoặc data
             try {
-                switch (type) {
-                    case 'project_cost':
-                        if (data?.project_id && data?.cost_id) {
-                            router.push(`/projects/${data.project_id}/costs/${data.cost_id}`);
-                        } else if (data?.project_id) {
-                            router.push(`/projects/${data.project_id}/costs`);
-                        }
-                        break;
-                    case 'project_invoice':
-                        if (data?.project_id && data?.invoice_id) {
-                            router.push(`/projects/${data.project_id}/invoices/${data.invoice_id}`);
-                        } else if (data?.project_id) {
-                            router.push(`/projects/${data.project_id}/invoices`);
-                        }
-                        break;
-                    case 'project_comment':
-                        if (data?.project_id) {
-                            router.push(`/projects/${data.project_id}/comments`);
-                        }
-                        break;
-                    case 'project_update':
-                    case 'assignment':
-                        if (data?.project_id) {
-                            router.push(`/projects/${data.project_id}`);
-                        }
-                        break;
-                    case 'chat_message':
-                        if (data?.chat_id) {
-                            router.push(`/chat/${data.chat_id}`);
-                        }
-                        break;
-                    case 'system':
-                    default:
-                        router.push('/notifications');
-                        break;
+                const actionUrl = data?.action_url;
+
+                if (actionUrl && typeof actionUrl === 'string') {
+                    router.push(actionUrl as any);
+                    return;
+                }
+
+                // Fallback: navigate dựa trên data
+                if (data?.project_id) {
+                    router.push(`/projects/${data.project_id}`);
+                } else {
+                    // Default: mở notifications screen
+                    router.push('/notifications');
                 }
             } catch (error) {
                 console.error('Navigation error from notification:', error);
+                try {
+                    router.push('/notifications');
+                } catch (e) {
+                    // Silent fail - app is in unknown state
+                }
             }
         });
 
@@ -92,3 +72,4 @@ export function usePushNotifications() {
         };
     }, []);
 }
+

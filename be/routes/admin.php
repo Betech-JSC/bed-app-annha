@@ -4,18 +4,12 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\FlightController;
-use App\Http\Controllers\Admin\OrderController;
-use App\Http\Controllers\Admin\RequestController;
-use App\Http\Controllers\Admin\ReviewController;
-use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\FileController;
-use App\Http\Controllers\Admin\AirlineController;
-use App\Http\Controllers\Admin\AirportController;
 
 // Admin Auth Routes (public)
 Route::prefix('admin')->name('admin.')->group(function () {
@@ -39,36 +33,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/ban', [UserController::class, 'ban'])->name('ban');
             Route::post('/{id}/unban', [UserController::class, 'unban'])->name('unban');
             Route::delete('/{id}', [UserController::class, 'destroy'])->name('destroy');
-        });
-
-        // Flights Management
-        Route::prefix('flights')->name('flights.')->group(function () {
-            Route::get('/', [FlightController::class, 'index'])->name('index');
-            Route::get('/{id}', [FlightController::class, 'show'])->name('show');
-            Route::post('/{id}/verify', [FlightController::class, 'verify'])->name('verify');
-            Route::post('/{id}/reject', [FlightController::class, 'reject'])->name('reject');
-            Route::post('/{id}/cancel', [FlightController::class, 'cancel'])->name('cancel');
-        });
-
-        // Orders Management
-        Route::prefix('orders')->name('orders.')->group(function () {
-            Route::get('/', [OrderController::class, 'index'])->name('index');
-            Route::get('/{id}', [OrderController::class, 'show'])->name('show');
-            Route::put('/{id}/status', [OrderController::class, 'updateStatus'])->name('updateStatus');
-            Route::post('/{id}/cancel', [OrderController::class, 'cancel'])->name('cancel');
-        });
-
-        // Requests Management
-        Route::prefix('requests')->name('requests.')->group(function () {
-            Route::get('/', [RequestController::class, 'index'])->name('index');
-            Route::get('/{id}', [RequestController::class, 'show'])->name('show');
-            Route::delete('/{id}', [RequestController::class, 'destroy'])->name('destroy');
-        });
-
-        // Reviews Management
-        Route::prefix('reviews')->name('reviews.')->group(function () {
-            Route::get('/', [ReviewController::class, 'index'])->name('index');
-            Route::delete('/{id}', [ReviewController::class, 'destroy'])->name('destroy');
         });
 
         // Reports & Analytics
@@ -120,27 +84,219 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{id}/download', [FileController::class, 'download'])->name('download');
             Route::delete('/{id}', [FileController::class, 'destroy'])->name('destroy');
         });
-
-        // Airlines Management
-        Route::prefix('airlines')->name('airlines.')->group(function () {
-            Route::get('/', [AirlineController::class, 'index'])->name('index');
-            Route::get('/create', [AirlineController::class, 'create'])->name('create');
-            Route::post('/', [AirlineController::class, 'store'])->name('store');
-            Route::get('/{id}', [AirlineController::class, 'show'])->name('show');
-            Route::get('/{id}/edit', [AirlineController::class, 'edit'])->name('edit');
-            Route::put('/{id}', [AirlineController::class, 'update'])->name('update');
-            Route::delete('/{id}', [AirlineController::class, 'destroy'])->name('destroy');
-        });
-
-        // Airports Management
-        Route::prefix('airports')->name('airports.')->group(function () {
-            Route::get('/', [AirportController::class, 'index'])->name('index');
-            Route::get('/create', [AirportController::class, 'create'])->name('create');
-            Route::post('/', [AirportController::class, 'store'])->name('store');
-            Route::get('/{id}', [AirportController::class, 'show'])->name('show');
-            Route::get('/{id}/edit', [AirportController::class, 'edit'])->name('edit');
-            Route::put('/{id}', [AirportController::class, 'update'])->name('update');
-            Route::delete('/{id}', [AirportController::class, 'destroy'])->name('destroy');
-        });
     });
 });
+
+// ============================================================
+// CRM Routes
+// ============================================================
+use App\Http\Controllers\Admin\CrmDashboardController;
+use App\Http\Controllers\Admin\CrmProjectsController;
+use App\Http\Controllers\Admin\CrmHrController;
+use App\Http\Controllers\Admin\CrmFinanceController;
+use App\Http\Controllers\Admin\CrmMaterialsController;
+use App\Http\Controllers\Admin\CrmEquipmentController;
+use App\Http\Controllers\Admin\CrmSettingsController;
+use App\Http\Controllers\Admin\CrmApprovalController;
+use App\Http\Controllers\Admin\CrmReportController;
+use App\Http\Controllers\Admin\CrmRolesController;
+use App\Http\Controllers\Admin\CrmNotificationController;
+use App\Http\Controllers\Admin\CrmFilesController;
+use App\Http\Controllers\Admin\CrmKpiController;
+use App\Http\Controllers\Admin\CrmSubcontractorController;
+
+Route::name('crm.')->middleware(['auth:admin'])->group(function () {
+    // Dashboard
+    Route::get('/', [CrmDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [CrmDashboardController::class, 'index']);
+
+    // Approval Center (Trung tâm duyệt yêu cầu)
+    Route::prefix('approvals')->name('approvals.')->group(function () {
+        Route::get('/', [CrmApprovalController::class, 'index'])->name('index');
+        Route::post('/{id}/approve-management', [CrmApprovalController::class, 'approveManagement'])->name('approve.management');
+        Route::post('/{id}/approve-accountant', [CrmApprovalController::class, 'approveAccountant'])->name('approve.accountant');
+        Route::post('/{id}/reject', [CrmApprovalController::class, 'reject'])->name('reject');
+    });
+
+    // Reports (Báo cáo dự án)
+    Route::get('/reports', [CrmReportController::class, 'index'])->name('reports.index');
+
+    // Roles & Permissions (Phân quyền vai trò)
+    Route::prefix('roles')->name('roles.')->group(function () {
+        Route::get('/', [CrmRolesController::class, 'index'])->name('index');
+        Route::post('/', [CrmRolesController::class, 'store'])->name('store');
+        Route::put('/{id}', [CrmRolesController::class, 'update'])->name('update');
+        Route::delete('/{id}', [CrmRolesController::class, 'destroy'])->name('destroy');
+        Route::post('/{id}/assign-user', [CrmRolesController::class, 'assignUser'])->name('assign-user');
+        Route::post('/{id}/remove-user', [CrmRolesController::class, 'removeUser'])->name('remove-user');
+    });
+
+    // Notifications (Thông báo hệ thống)
+    Route::prefix('notifications')->name('notifications.')->group(function () {
+        Route::get('/', [CrmNotificationController::class, 'index'])->name('index');
+        Route::post('/send', [CrmNotificationController::class, 'send'])->name('send');
+        Route::put('/{id}/read', [CrmNotificationController::class, 'markAsRead'])->name('read');
+        Route::put('/read-all', [CrmNotificationController::class, 'markAllRead'])->name('read-all');
+        Route::delete('/{id}', [CrmNotificationController::class, 'destroy'])->name('destroy');
+        Route::post('/bulk-delete', [CrmNotificationController::class, 'bulkDestroy'])->name('bulk-destroy');
+    });
+
+    // Files (Tổng hợp File)
+    Route::prefix('files')->name('files.')->group(function () {
+        Route::get('/', [CrmFilesController::class, 'index'])->name('index');
+        Route::get('/{id}/download', [CrmFilesController::class, 'download'])->name('download');
+        Route::delete('/{id}', [CrmFilesController::class, 'destroy'])->name('destroy');
+        Route::post('/bulk-delete', [CrmFilesController::class, 'bulkDestroy'])->name('bulk-destroy');
+    });
+
+    // Projects
+    Route::prefix('projects')->name('projects.')->group(function () {
+        Route::get('/', [CrmProjectsController::class, 'index'])->name('index');
+        Route::post('/', [CrmProjectsController::class, 'store'])->name('store');
+        Route::get('/{id}', [CrmProjectsController::class, 'show'])->name('show');
+        Route::put('/{id}', [CrmProjectsController::class, 'update'])->name('update');
+        Route::delete('/{id}', [CrmProjectsController::class, 'destroy'])->name('destroy');
+
+        // Sub-item CRUD (nested under project)
+        // Costs
+        Route::post('/{project}/costs', [CrmProjectsController::class, 'storeCost'])->name('costs.store');
+        Route::get('/{project}/costs/{cost}', function ($project) {
+            return redirect("/projects/{$project}");
+        })->name('costs.show');
+        Route::put('/{project}/costs/{cost}', [CrmProjectsController::class, 'updateCost'])->name('costs.update');
+        Route::delete('/{project}/costs/{cost}', [CrmProjectsController::class, 'destroyCost'])->name('costs.destroy');
+        Route::post('/{project}/costs/{cost}/submit', [CrmProjectsController::class, 'submitCost'])->name('costs.submit');
+        Route::post('/{project}/costs/{cost}/approve-management', [CrmProjectsController::class, 'approveCostManagement'])->name('costs.approve.management');
+        Route::post('/{project}/costs/{cost}/approve-accountant', [CrmProjectsController::class, 'approveCostAccountant'])->name('costs.approve.accountant');
+        Route::post('/{project}/costs/{cost}/reject', [CrmProjectsController::class, 'rejectCost'])->name('costs.reject');
+
+        // Payments
+        Route::post('/{project}/payments', [CrmProjectsController::class, 'storePayment'])->name('payments.store');
+        Route::delete('/{project}/payments/{payment}', [CrmProjectsController::class, 'destroyPayment'])->name('payments.destroy');
+
+        // Personnel
+        Route::post('/{project}/personnel', [CrmProjectsController::class, 'storePersonnel'])->name('personnel.store');
+        Route::delete('/{project}/personnel/{personnel}', [CrmProjectsController::class, 'destroyPersonnel'])->name('personnel.destroy');
+
+        // Construction Logs
+        Route::post('/{project}/logs', [CrmProjectsController::class, 'storeLog'])->name('logs.store');
+        Route::delete('/{project}/logs/{log}', [CrmProjectsController::class, 'destroyLog'])->name('logs.destroy');
+
+        // Comments
+        Route::post('/{project}/comments', [CrmProjectsController::class, 'storeComment'])->name('comments.store');
+        Route::delete('/{project}/comments/{comment}', [CrmProjectsController::class, 'destroyComment'])->name('comments.destroy');
+
+        // Defects
+        Route::post('/{project}/defects', [CrmProjectsController::class, 'storeDefect'])->name('defects.store');
+        Route::put('/{project}/defects/{defect}', [CrmProjectsController::class, 'updateDefect'])->name('defects.update');
+        Route::delete('/{project}/defects/{defect}', [CrmProjectsController::class, 'destroyDefect'])->name('defects.destroy');
+
+        // Change Requests
+        Route::post('/{project}/change-requests', [CrmProjectsController::class, 'storeChangeRequest'])->name('change-requests.store');
+        Route::delete('/{project}/change-requests/{cr}', [CrmProjectsController::class, 'destroyChangeRequest'])->name('change-requests.destroy');
+
+        // Risks
+        Route::post('/{project}/risks', [CrmProjectsController::class, 'storeRisk'])->name('risks.store');
+        Route::delete('/{project}/risks/{risk}', [CrmProjectsController::class, 'destroyRisk'])->name('risks.destroy');
+
+        // Contract
+        Route::post('/{project}/contract', [CrmProjectsController::class, 'storeContract'])->name('contract.store');
+        Route::put('/{project}/contract', [CrmProjectsController::class, 'updateContract'])->name('contract.update');
+
+        // Subcontractors
+        Route::post('/{project}/subcontractors', [CrmProjectsController::class, 'storeSubcontractor'])->name('subcontractors.store');
+        Route::put('/{project}/subcontractors/{sub}', [CrmProjectsController::class, 'updateSubcontractor'])->name('subcontractors.update');
+        Route::delete('/{project}/subcontractors/{sub}', [CrmProjectsController::class, 'destroySubcontractor'])->name('subcontractors.destroy');
+
+        // Additional Costs
+        Route::post('/{project}/additional-costs', [CrmProjectsController::class, 'storeAdditionalCost'])->name('additional-costs.store');
+        Route::post('/{project}/additional-costs/{ac}/approve', [CrmProjectsController::class, 'approveAdditionalCost'])->name('additional-costs.approve');
+        Route::post('/{project}/additional-costs/{ac}/reject', [CrmProjectsController::class, 'rejectAdditionalCost'])->name('additional-costs.reject');
+        Route::delete('/{project}/additional-costs/{ac}', [CrmProjectsController::class, 'destroyAdditionalCost'])->name('additional-costs.destroy');
+
+        // Budgets
+        Route::post('/{project}/budgets', [CrmProjectsController::class, 'storeBudget'])->name('budgets.store');
+        Route::put('/{project}/budgets/{budget}', [CrmProjectsController::class, 'updateBudget'])->name('budgets.update');
+        Route::delete('/{project}/budgets/{budget}', [CrmProjectsController::class, 'destroyBudget'])->name('budgets.destroy');
+
+        // Invoices
+        Route::post('/{project}/invoices', [CrmProjectsController::class, 'storeInvoice'])->name('invoices.store');
+        Route::put('/{project}/invoices/{invoice}', [CrmProjectsController::class, 'updateInvoice'])->name('invoices.update');
+        Route::delete('/{project}/invoices/{invoice}', [CrmProjectsController::class, 'destroyInvoice'])->name('invoices.destroy');
+
+        // Acceptance Stages
+        Route::post('/{project}/acceptance', [CrmProjectsController::class, 'storeAcceptance'])->name('acceptance.store');
+        Route::post('/{project}/acceptance/{stage}/approve', [CrmProjectsController::class, 'approveAcceptance'])->name('acceptance.approve');
+        Route::delete('/{project}/acceptance/{stage}', [CrmProjectsController::class, 'destroyAcceptance'])->name('acceptance.destroy');
+
+        // Documents
+        Route::post('/{project}/documents', [CrmProjectsController::class, 'storeDocument'])->name('documents.store');
+        Route::put('/{project}/documents/{doc}', [CrmProjectsController::class, 'updateDocument'])->name('documents.update');
+        Route::delete('/{project}/documents/{doc}', [CrmProjectsController::class, 'destroyDocument'])->name('documents.destroy');
+    });
+
+    // HR
+    Route::prefix('hr')->name('hr.')->group(function () {
+        Route::get('/employees', [CrmHrController::class, 'employees'])->name('employees');
+        Route::post('/employees', [CrmHrController::class, 'storeEmployee'])->name('employees.store');
+        Route::put('/employees/{id}', [CrmHrController::class, 'updateEmployee'])->name('employees.update');
+        Route::delete('/employees/{id}', [CrmHrController::class, 'destroyEmployee'])->name('employees.destroy');
+
+        Route::get('/departments', [CrmHrController::class, 'departments'])->name('departments');
+        Route::post('/departments', [CrmHrController::class, 'storeDepartment'])->name('departments.store');
+        Route::put('/departments/{id}', [CrmHrController::class, 'updateDepartment'])->name('departments.update');
+        Route::delete('/departments/{id}', [CrmHrController::class, 'destroyDepartment'])->name('departments.destroy');
+
+        // KPI
+        Route::get('/kpi', [CrmKpiController::class, 'index'])->name('kpi');
+        Route::post('/kpi', [CrmKpiController::class, 'store'])->name('kpi.store');
+        Route::put('/kpi/{id}', [CrmKpiController::class, 'update'])->name('kpi.update');
+        Route::delete('/kpi/{id}', [CrmKpiController::class, 'destroy'])->name('kpi.destroy');
+        Route::patch('/kpi/{id}/verify', [CrmKpiController::class, 'verify'])->name('kpi.verify');
+        Route::patch('/kpi/{id}/progress', [CrmKpiController::class, 'updateProgress'])->name('kpi.progress');
+    });
+
+    // Subcontractors
+    Route::prefix('subcontractors')->name('subcontractors.')->group(function () {
+        Route::get('/', [CrmSubcontractorController::class, 'index'])->name('index');
+        Route::post('/', [CrmSubcontractorController::class, 'store'])->name('store');
+        Route::put('/{id}', [CrmSubcontractorController::class, 'update'])->name('update');
+        Route::delete('/{id}', [CrmSubcontractorController::class, 'destroy'])->name('destroy');
+    });
+
+    // Finance
+    Route::prefix('finance')->name('finance.')->group(function () {
+        Route::get('/', [CrmFinanceController::class, 'index'])->name('index');
+        Route::get('/company-costs', [CrmFinanceController::class, 'companyCosts'])->name('company-costs');
+        Route::post('/company-costs', [CrmFinanceController::class, 'storeCompanyCost'])->name('company-costs.store');
+        Route::put('/company-costs/{id}', [CrmFinanceController::class, 'updateCompanyCost'])->name('company-costs.update');
+        Route::delete('/company-costs/{id}', [CrmFinanceController::class, 'destroyCompanyCost'])->name('company-costs.destroy');
+        Route::post('/company-costs/{id}/submit', [CrmFinanceController::class, 'submitCompanyCost'])->name('company-costs.submit');
+    });
+
+    // Materials
+    Route::prefix('materials')->name('materials.')->group(function () {
+        Route::get('/', [CrmMaterialsController::class, 'index'])->name('index');
+        Route::post('/', [CrmMaterialsController::class, 'store'])->name('store');
+        Route::put('/{id}', [CrmMaterialsController::class, 'update'])->name('update');
+        Route::delete('/{id}', [CrmMaterialsController::class, 'destroy'])->name('destroy');
+    });
+
+    // Equipment
+    Route::prefix('equipment')->name('equipment.')->group(function () {
+        Route::get('/', [CrmEquipmentController::class, 'index'])->name('index');
+        Route::post('/', [CrmEquipmentController::class, 'store'])->name('store');
+        Route::put('/{id}', [CrmEquipmentController::class, 'update'])->name('update');
+        Route::delete('/{id}', [CrmEquipmentController::class, 'destroy'])->name('destroy');
+    });
+
+    // Settings
+    Route::prefix('settings')->name('settings.')->group(function () {
+        Route::get('/', [CrmSettingsController::class, 'index'])->name('index');
+        Route::put('/update', [CrmSettingsController::class, 'updateSetting'])->name('update');
+        Route::post('/logo', [CrmSettingsController::class, 'uploadLogo'])->name('logo');
+        Route::put('/smtp', [CrmSettingsController::class, 'updateSmtp'])->name('smtp');
+        Route::post('/smtp/test', [CrmSettingsController::class, 'testSmtp'])->name('smtp.test');
+    });
+});
+

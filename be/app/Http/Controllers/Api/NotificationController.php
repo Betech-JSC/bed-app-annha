@@ -110,16 +110,12 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $notifications = Notification::forUser($user->id)
+        $updated = Notification::forUser($user->id)
             ->unread()
-            ->get();
-
-        $updated = 0;
-        foreach ($notifications as $notification) {
-            if ($notification->markAsRead()) {
-                $updated++;
-            }
-        }
+            ->update([
+                'status' => 'read',
+                'read_at' => now(),
+            ]);
 
         return response()->json([
             'success' => true,
@@ -264,10 +260,13 @@ class NotificationController extends Controller
                 Notification::create([
                     'user_id' => $user->id,
                     'type' => 'system',
+                    'category' => 'system_update',
                     'title' => $request->title,
                     'body' => $request->body,
+                    'message' => $request->body,
                     'data' => $request->data ?? [],
                     'status' => 'unread',
+                    'priority' => 'medium',
                 ]);
             }
 

@@ -155,62 +155,22 @@ export default function NotificationsScreen() {
             } catch (e) { }
         }
 
-        const { type, data, action_url } = notification;
+        const { data, action_url } = notification;
 
         try {
-            switch (type) {
-                case 'project_cost':
-                    if (data?.project_id && data?.cost_id) {
-                        router.push(`/projects/${data.project_id}/costs/${data.cost_id}`);
-                    } else if (data?.project_id) {
-                        router.push(`/projects/${data.project_id}/costs`);
-                    } else if (action_url) {
-                        router.push(action_url as any);
-                    }
-                    break;
-                case 'project_invoice':
-                    if (data?.project_id && data?.invoice_id) {
-                        router.push(`/projects/${data.project_id}/invoices/${data.invoice_id}`);
-                    } else if (data?.project_id) {
-                        router.push(`/projects/${data.project_id}/invoices`);
-                    } else if (action_url) {
-                        router.push(action_url as any);
-                    }
-                    break;
-                case 'project_comment':
-                    if (data?.project_id) {
-                        router.push(`/projects/${data.project_id}/comments`);
-                    } else if (action_url) {
-                        router.push(action_url as any);
-                    }
-                    break;
-                case 'project_update':
-                case 'assignment':
-                    if (data?.project_id) {
-                        router.push(`/projects/${data.project_id}`);
-                    } else if (action_url) {
-                        router.push(action_url as any);
-                    }
-                    break;
-                case 'chat_message':
-                    if (data?.chat_id) {
-                        router.push(`/chat/${data.chat_id}`);
-                    } else if (action_url) {
-                        router.push(action_url as any);
-                    }
-                    break;
-                case 'system':
-                default:
-                    if (action_url) {
-                        router.push(action_url as any);
-                    } else {
-                        // Fallback or just stay on the screen if it's already a system notification
-                    }
-                    break;
+            // Ưu tiên action_url (BE set đúng cho từng notification)
+            if (action_url) {
+                router.push(action_url as any);
+                return;
+            }
+
+            // Fallback: navigate dựa trên data
+            if (data?.project_id) {
+                router.push(`/projects/${data.project_id}`);
             }
         } catch (error) {
             console.error('Navigation error:', error);
-            // If smart navigation fails, try the action_url if it exists
+            // Fallback cuối cùng
             if (action_url) {
                 try {
                     router.push(action_url as any);
@@ -223,12 +183,13 @@ export default function NotificationsScreen() {
 
     const getTypeIcon = (type: string) => {
         switch (type) {
-            case 'project_cost': return { name: 'cash-outline', color: '#10B981' };
-            case 'project_invoice': return { name: 'receipt-outline', color: '#3B82F6' };
-            case 'project_comment': return { name: 'chatbubble-ellipses-outline', color: '#8B5CF6' };
-            case 'assignment': return { name: 'person-add-outline', color: '#F59E0B' };
-            case 'system': return { name: 'settings-outline', color: '#6B7280' };
-            default: return { name: 'notifications-outline', color: '#3B82F6' };
+            case 'project_performance': return { name: 'analytics-outline', color: '#F59E0B' };
+            case 'workflow':            return { name: 'git-branch-outline', color: '#8B5CF6' };
+            case 'assignment':          return { name: 'person-add-outline', color: '#10B981' };
+            case 'mention':             return { name: 'at-outline', color: '#EC4899' };
+            case 'file_upload':         return { name: 'cloud-upload-outline', color: '#06B6D4' };
+            case 'system':              return { name: 'settings-outline', color: '#6B7280' };
+            default:                    return { name: 'notifications-outline', color: '#3B82F6' };
         }
     };
 
@@ -456,10 +417,10 @@ export default function NotificationsScreen() {
                             <View style={styles.filterGrid}>
                                 {[
                                     { id: undefined, label: 'Tất cả' },
-                                    { id: 'project_cost', label: 'Chi phí' },
-                                    { id: 'project_invoice', label: 'Hóa đơn' },
-                                    { id: 'project_comment', label: 'Bình luận' },
+                                    { id: 'project_performance', label: 'Hiệu suất dự án' },
+                                    { id: 'workflow', label: 'Phê duyệt' },
                                     { id: 'assignment', label: 'Giao việc' },
+                                    { id: 'system', label: 'Hệ thống' },
                                 ].map(t => (
                                     <TouchableOpacity
                                         key={t.id || 'all'}

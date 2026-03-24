@@ -2,17 +2,9 @@
 
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ChatController;
-use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\Api\RegionsController;
-use App\Http\Controllers\Api\RequestController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AdminUserController;
-use App\Http\Controllers\Api\AdminFlightController;
-use App\Http\Controllers\Api\AdminOrderController;
-use App\Http\Controllers\Api\AdminAirlineController;
-use App\Http\Controllers\Api\AdminAirportController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\ProjectPaymentController;
@@ -62,24 +54,20 @@ use App\Http\Controllers\Api\SupplierContractController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\OfficeKpiController;
+use App\Http\Controllers\Api\TeamController;
+use App\Http\Controllers\Api\TeamContractController;
+use App\Http\Controllers\Api\LaborStandardController;
+use App\Http\Controllers\Api\WorkVolumeController;
+use App\Http\Controllers\Api\ApprovalCenterController;
 
-Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
 Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('reset-password', [AuthController::class, 'resetPassword']);
-Route::get('regions', [RegionsController::class, 'index']);
 Route::post('/users/save-token', [UserController::class, 'savePushToken']);
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    Route::post('/chat/send', [ChatController::class, 'sendMessage']);
     Route::post('logout', [AuthController::class, 'logout']);
-
-    // Orders
-    Route::get('orders/getList', [OrderController::class, 'index']);
-    Route::post('orders/store', [OrderController::class, 'store']);
-    Route::get('orders/{id}/show', [OrderController::class, 'show']);
-    Route::put('orders/{id}/status', [OrderController::class, 'updateStatus']);
 
 
     // Notifications
@@ -107,12 +95,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Options for dropdowns (project statuses, equipment statuses, roles, etc.)
     Route::get('options', [OptionsController::class, 'index']);
 
-    // KYC Verification
-    Route::post('kyc/submit', [\App\Http\Controllers\Api\KycController::class, 'submit']);
-    Route::get('kyc/status', [\App\Http\Controllers\Api\KycController::class, 'status']);
-
-
-
+    // ===================================================================
+    // APPROVAL CENTER (Trung tâm duyệt yêu cầu)
+    // ===================================================================
+    Route::prefix('approval-center')->group(function () {
+        Route::get('/', [ApprovalCenterController::class, 'index']);
+        Route::post('/quick-approve', [ApprovalCenterController::class, 'quickApprove']);
+        Route::post('/quick-reject', [ApprovalCenterController::class, 'quickReject']);
+    });
 
 
 
@@ -571,18 +561,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
-// Social Login Routes (Google & Facebook)
-Route::controller(AuthController::class)->group(function () {
-    // Redirect to provider (for web - optional)
-    Route::get('auth/{provider}/redirect', 'redirectToProvider');
 
-    // Handle callback - support both GET (web) and POST (mobile app)
-    Route::get('auth/{provider}/callback', 'handleProviderCallback');
-    Route::post('auth/{provider}/callback', 'handleProviderCallback');
-
-    // Direct login with access token (for mobile app - recommended)
-    Route::post('auth/{provider}/login', 'handleProviderCallback');
-});
 
 
 
@@ -618,42 +597,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/{id}/roles', [AdminUserController::class, 'syncUserRoles']); // Gán roles cho user
     });
 
-    // ========== QUẢN LÝ CHUYẾN BAY ==========
-    Route::prefix('flights')->group(function () {
-        Route::get('/', [AdminFlightController::class, 'index']); // Danh sách flights
-        Route::get('/statistics', [AdminFlightController::class, 'statistics']); // Thống kê
-        Route::get('/{id}', [AdminFlightController::class, 'show']); // Chi tiết flight
-        Route::post('/{id}/verify', [AdminFlightController::class, 'verify']); // Xác thực flight
-        Route::post('/{id}/reject', [AdminFlightController::class, 'reject']); // Từ chối flight
-        Route::post('/{id}/cancel', [AdminFlightController::class, 'cancel']); // Hủy flight
-    });
 
-    // ========== QUẢN LÝ ĐƠN HÀNG ==========
-    Route::prefix('orders')->group(function () {
-        Route::get('/', [AdminOrderController::class, 'index']); // Danh sách orders
-        Route::get('/statistics', [AdminOrderController::class, 'statistics']); // Thống kê
-        Route::get('/{id}', [AdminOrderController::class, 'show']); // Chi tiết order
-        Route::put('/{id}/status', [AdminOrderController::class, 'updateStatus']); // Cập nhật trạng thái
-        Route::post('/{id}/cancel', [AdminOrderController::class, 'cancel']); // Hủy đơn hàng
-    });
-
-    // ========== QUẢN LÝ HÃNG HÀNG KHÔNG ==========
-    Route::prefix('airlines')->group(function () {
-        Route::get('/', [AdminAirlineController::class, 'index']); // Danh sách airlines
-        Route::post('/', [AdminAirlineController::class, 'store']); // Tạo mới airline
-        Route::get('/{id}', [AdminAirlineController::class, 'show']); // Chi tiết airline
-        Route::put('/{id}', [AdminAirlineController::class, 'update']); // Cập nhật airline
-        Route::delete('/{id}', [AdminAirlineController::class, 'destroy']); // Xóa airline
-    });
-
-    // ========== QUẢN LÝ SÂN BAY ==========
-    Route::prefix('airports')->group(function () {
-        Route::get('/', [AdminAirportController::class, 'index']); // Danh sách airports
-        Route::post('/', [AdminAirportController::class, 'store']); // Tạo mới airport
-        Route::get('/{id}', [AdminAirportController::class, 'show']); // Chi tiết airport
-        Route::put('/{id}', [AdminAirportController::class, 'update']); // Cập nhật airport
-        Route::delete('/{id}', [AdminAirportController::class, 'destroy']); // Xóa airport
-    });
 
     // ========== NEW MODULES ROUTES ==========
 

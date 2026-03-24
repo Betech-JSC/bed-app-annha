@@ -4,11 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Hash;
-use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Facades\Storage;
 
 
@@ -48,18 +46,6 @@ class UserController extends Controller
             ], 404);
         }
 
-        // Thống kê đơn hàng
-        $ordersAsSender = Order::where('sender_id', $user->id)
-            ->where('status', 'completed')
-            ->count();
-        $ordersAsCustomer = Order::where('customer_id', $user->id)
-            ->where('status', 'completed')
-            ->count();
-        $totalOrders = Order::where(function ($query) use ($user) {
-            $query->where('sender_id', $user->id)
-                ->orWhere('customer_id', $user->id);
-        })->count();
-
         return response()->json([
             'success' => true,
             'data' => [
@@ -69,11 +55,9 @@ class UserController extends Controller
                 'phone' => $user->phone,
                 'avatar' => $user->avatar,
                 'role' => $user->role,
-                'kyc_status' => $user->kyc_status,
-                'verified' => $user->kyc_status === 'verified',
-                'rating' => 5.0, // TODO: Tính toán rating thực tế từ reviews
-                'total_orders' => $totalOrders,
-                'completed_orders' => $ordersAsSender + $ordersAsCustomer,
+                'department' => $user->department ?? null,
+                'position' => $user->position ?? null,
+                'created_at' => $user->created_at,
             ],
         ]);
     }

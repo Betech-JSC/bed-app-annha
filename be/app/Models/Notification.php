@@ -128,8 +128,10 @@ class Notification extends Model
      */
     public function scopeRead($query)
     {
-        return $query->where('status', 'read')
-            ->orWhereNotNull('read_at');
+        return $query->where(function ($q) {
+            $q->where('status', 'read')
+                ->orWhereNotNull('read_at');
+        });
     }
 
     /**

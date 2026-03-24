@@ -1,0 +1,261 @@
+/* ============================================================
+   BED CRM — Design System CSS
+   ============================================================ */
+
+:root {
+  /* Primary — Deep Ocean Blue */
+  --crm-primary: #1B4F72;
+  --crm-primary-light: #2E86C1;
+  --crm-primary-lighter: #AED6F1;
+  --crm-primary-dark: #154360;
+
+  /* Accent — Warm Amber */
+  --crm-accent: #F39C12;
+  --crm-accent-light: #F7DC6F;
+  --crm-accent-dark: #D68910;
+
+  /* Success */
+  --crm-success: #1D8348;
+  --crm-success-light: #82E0AA;
+
+  /* Danger */
+  --crm-danger: #C0392B;
+  --crm-danger-light: #F1948A;
+
+  /* Warning */
+  --crm-warning: #E67E22;
+  --crm-warning-light: #F0B27A;
+
+  /* Neutrals */
+  --crm-bg: #F0F2F5;
+  --crm-bg-card: #FFFFFF;
+  --crm-bg-sidebar: #0C1B2A;
+  --crm-bg-sidebar-hover: #162A3E;
+  --crm-text-primary: #1A1A2E;
+  --crm-text-secondary: #5D6B82;
+  --crm-text-muted: #9CA3AF;
+  --crm-border: #E8ECF1;
+  --crm-border-light: #F3F5F7;
+}
+
+/* ============================================================
+   Page Layout
+   ============================================================ */
+.crm-page {
+  @apply px-8 py-6;
+}
+
+.crm-page-header {
+  @apply flex items-start justify-between mb-8;
+}
+
+.crm-page-title {
+  @apply text-2xl font-extrabold tracking-tight;
+  color: var(--crm-text-primary);
+}
+
+.crm-page-subtitle {
+  @apply text-sm mt-1;
+  color: var(--crm-text-secondary);
+}
+
+.crm-page-actions {
+  @apply flex items-center gap-3;
+}
+
+/* ============================================================
+   Stats Grid
+   ============================================================ */
+.crm-stats-grid {
+  @apply grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8;
+}
+
+.crm-stat-card {
+  @apply bg-white rounded-2xl p-5 flex items-center gap-4
+         border border-gray-100
+         transition-all duration-300 ease-out;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.crm-stat-card:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.crm-stat-card__icon {
+  @apply w-14 h-14 rounded-xl flex items-center justify-center text-xl text-white flex-shrink-0;
+}
+
+.crm-stat-card--primary .crm-stat-card__icon {
+  background: linear-gradient(135deg, #1B4F72, #2E86C1);
+}
+
+.crm-stat-card--success .crm-stat-card__icon {
+  background: linear-gradient(135deg, #1D8348, #27AE60);
+}
+
+.crm-stat-card--warning .crm-stat-card__icon {
+  background: linear-gradient(135deg, #E67E22, #F39C12);
+}
+
+.crm-stat-card--danger .crm-stat-card__icon {
+  background: linear-gradient(135deg, #C0392B, #E74C3C);
+}
+
+.crm-stat-card--accent .crm-stat-card__icon {
+  background: linear-gradient(135deg, #8E44AD, #BB6BD9);
+}
+
+.crm-stat-card__value {
+  @apply text-2xl font-bold block;
+  color: var(--crm-text-primary);
+}
+
+.crm-stat-card__label {
+  @apply text-sm;
+  color: var(--crm-text-secondary);
+}
+
+.crm-stat-card__trend {
+  @apply text-xs font-semibold ml-auto px-2.5 py-1 rounded-full flex items-center gap-1;
+}
+
+.crm-stat-card__trend.positive {
+  @apply bg-green-50 text-green-600;
+}
+
+.crm-stat-card__trend.negative {
+  @apply bg-red-50 text-red-600;
+}
+
+/* ============================================================
+   Chart Card
+   ============================================================ */
+.crm-chart-card {
+  @apply bg-white rounded-2xl border border-gray-100 overflow-hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.crm-chart-card__header {
+  @apply flex items-start justify-between p-6 pb-2;
+}
+
+.crm-chart-card__title {
+  @apply text-base font-bold;
+  color: var(--crm-text-primary);
+}
+
+.crm-chart-card__subtitle {
+  @apply text-sm mt-0.5;
+  color: var(--crm-text-muted);
+}
+
+.crm-chart-card__body {
+  @apply px-6 pb-6;
+}
+
+/* ============================================================
+   Content Card
+   ============================================================ */
+.crm-content-card {
+  @apply bg-white rounded-2xl border border-gray-100 overflow-hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.crm-content-card__header {
+  @apply flex items-center justify-between flex-wrap gap-3 px-6 py-4 border-b border-gray-100;
+  min-height: 56px;
+}
+
+.crm-content-card__title {
+  @apply text-base font-bold flex items-center;
+  color: var(--crm-text-primary);
+}
+
+/* ============================================================
+   Sidebar Override
+   ============================================================ */
+.crm-sidebar {
+  background: linear-gradient(180deg, #0C1B2A 0%, #1A2332 100%) !important;
+}
+
+.crm-sidebar .ant-menu {
+  background: transparent !important;
+}
+
+.crm-sidebar .ant-menu-item {
+  @apply mx-3 rounded-xl !important;
+  margin-bottom: 2px !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  transition: all 0.2s ease !important;
+}
+
+.crm-sidebar .ant-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #fff !important;
+}
+
+.crm-sidebar .ant-menu-item-selected {
+  background: linear-gradient(135deg, var(--crm-primary), var(--crm-primary-light)) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+}
+
+.crm-sidebar .ant-menu-item-group-title {
+  @apply text-xs font-semibold uppercase tracking-widest px-6 pt-5 pb-2;
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* ============================================================
+   Table Overrides
+   ============================================================ */
+.crm-table .ant-table-thead > tr > th {
+  @apply text-xs font-semibold uppercase tracking-wider;
+  color: var(--crm-text-muted) !important;
+  background: var(--crm-border-light) !important;
+  border-bottom: none !important;
+}
+
+.crm-table .ant-table-tbody > tr {
+  transition: background 0.15s ease;
+}
+
+.crm-table .ant-table-tbody > tr:hover > td {
+  background: #F8FAFC !important;
+}
+
+.crm-table .ant-table-tbody > tr > td {
+  @apply text-sm;
+  color: var(--crm-text-primary);
+}
+
+/* ============================================================
+   Status Tags
+   ============================================================ */
+.crm-tag {
+  @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+}
+
+.crm-tag--active    { @apply bg-green-50 text-green-700; }
+.crm-tag--pending   { @apply bg-amber-50 text-amber-700; }
+.crm-tag--completed { @apply bg-blue-50 text-blue-700; }
+.crm-tag--cancelled { @apply bg-gray-100 text-gray-500; }
+.crm-tag--overdue   { @apply bg-red-50 text-red-700; }
+
+/* ============================================================
+   Quick Action Button
+   ============================================================ */
+.crm-quick-action {
+  @apply flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-100
+         transition-all duration-200 cursor-pointer;
+}
+
+.crm-quick-action:hover {
+  @apply border-blue-200 bg-blue-50;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(27, 79, 114, 0.1);
+}
+
+.crm-quick-action__icon {
+  @apply w-10 h-10 rounded-lg flex items-center justify-center text-white;
+}

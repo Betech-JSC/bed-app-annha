@@ -95,20 +95,22 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     }
   }, [token]);
 
-  const deleteNotification = useCallback(async (notificationId: number) => {
+    const deleteNotification = useCallback(async (notificationId: number) => {
     if (!token) return;
     try {
       await notificationApi.delete(notificationId);
-      const deleted = notifications.find((n) => n.id === notificationId);
-      setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
-      if (deleted?.status === "unread") {
-        setUnreadCount((prev) => Math.max(0, prev - 1));
-      }
+      setNotifications((prev) => {
+        const deleted = prev.find((n) => n.id === notificationId);
+        if (deleted?.status === "unread") {
+          setUnreadCount((p) => Math.max(0, p - 1));
+        }
+        return prev.filter((n) => n.id !== notificationId);
+      });
     } catch (err) {
       console.error("Error deleting notification:", err);
       throw err;
     }
-  }, [notifications, token]);
+  }, [token]);
 
   // Load on mount - chỉ load nếu được yêu cầu
   useEffect(() => {

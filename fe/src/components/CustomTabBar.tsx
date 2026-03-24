@@ -41,6 +41,16 @@ const tabs: TabItem[] = [
     ], */
   },
   {
+    name: "Duyệt",
+    route: "/approvals",
+    icon: "shield-checkmark-outline",
+    iconFocused: "shield-checkmark",
+    permissionList: [
+      Permissions.COST_APPROVE_MANAGEMENT,
+      Permissions.COST_APPROVE_ACCOUNTANT,
+    ],
+  },
+  {
     name: "Báo Cáo",
     route: "/(tabs)/reports",
     icon: "bar-chart-outline",
@@ -93,6 +103,9 @@ export default function CustomTabBar() {
     }
     if (route === "/(tabs)/hr") {
       return pathname?.startsWith("/hr") || pathname === "/(tabs)/hr";
+    }
+    if (route === "/approvals") {
+      return pathname?.startsWith("/approvals");
     }
     if (route === "/(tabs)/reports") {
       return pathname?.includes("/reports");

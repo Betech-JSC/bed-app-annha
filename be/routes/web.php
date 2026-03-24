@@ -14,10 +14,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Redirect root to admin dashboard if authenticated, otherwise to login
+// Redirect root to CRM dashboard if authenticated, otherwise to login
 Route::get('/', function () {
     if (auth('admin')->check()) {
-        return redirect()->route('admin.dashboard');
+        return redirect('/');
     }
     return redirect()->route('admin.login');
 });

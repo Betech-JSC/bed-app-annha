@@ -10,68 +10,10 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use App\Http\Controllers\Controller;
-use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
-    {
-        // Disable register - chỉ tạo user qua seeder hoặc admin panel
-        return ApiResponse::error('Đăng ký tài khoản đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.', 403);
-
-        // Code cũ đã được comment để tham khảo
-        /*
-        try {
-            $validator = Validator::make($request->all(), [
-                'name' => 'required|string|max:255',
-                'email' => 'required|string|email|max:255|unique:users',
-                'phone' => 'nullable|string|max:20',
-                'password' => 'required|string|min:8',
-                'role' => 'nullable|string|in:admin', // Chỉ cho phép admin
-                'fcm_token' => 'nullable|string', // FCM token từ frontend
-            ]);
-
-            if ($validator->fails()) {
-                return ApiResponse::validationError($validator);
-            }
-
-            // Chỉ cho phép tạo user với role admin (super admin)
-            $userData = [
-                'name' => $request->name,
-                'email' => $request->email,
-                'phone' => $request->phone,
-                'password' => Hash::make($request->password),
-                'role' => 'admin', // Chỉ tạo admin
-            ];
-
-            // Lưu FCM token nếu có
-            if ($request->has('fcm_token') && !empty($request->fcm_token)) {
-                $userData['fcm_token'] = $request->fcm_token;
-                Log::info('FCM token provided during registration', ['fcm_token' => $request->fcm_token]);
-            } else {
-                Log::info('FCM token not provided during registration', [
-                    'has_fcm_token' => $request->has('fcm_token'),
-                    'fcm_token_value' => $request->input('fcm_token'),
-                ]);
-            }
-
-            $user = User::create($userData);
-
-            $token = $user->createToken('MyApp')->plainTextToken;
-
-            $user->remember_token = $token;
-            $user->save();
-
-            return ApiResponse::success([
-                'user' => array_merge($user->toArray(), ['token' => $token]),
-            ], 'User created successfully');
-        } catch (\Throwable $th) {
-            return ApiResponse::error('An error occurred: ' . $th->getMessage());
-        }
-        */
-    }
-
     public function login(Request $request)
     {
         try {
@@ -136,118 +78,7 @@ class AuthController extends Controller
         return ApiResponse::success(null, 'Logged out successfully');
     }
 
-    /**
-     * Redirect to provider (Google/Facebook)
-     */
-    public function redirectToProvider($provider)
-    {
-        $validProviders = ['google', 'facebook'];
 
-        if (!in_array($provider, $validProviders)) {
-            return ApiResponse::error('Unsupported provider', 400);
-        }
-
-        try {
-            $redirectUrl = Socialite::driver($provider)
-                ->stateless()
-                ->redirect()
-                ->getTargetUrl();
-
-            return ApiResponse::success(['redirect_url' => $redirectUrl], 'Redirecting to ' . ucfirst($provider));
-        } catch (\Exception $e) {
-            return ApiResponse::error('Failed to redirect: ' . $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * Handle callback from provider
-     */
-    public function handleProviderCallback(Request $request, $provider)
-    {
-        $validProviders = ['google', 'facebook'];
-
-        if (!in_array($provider, $validProviders)) {
-            return ApiResponse::error('Unsupported provider', 400);
-        }
-
-        try {
-            // Lấy access_token từ frontend (Expo gửi qua POST)
-            $accessToken = $request->input('access_token');
-
-            if (!$accessToken) {
-                return ApiResponse::error('Access token is required', 400);
-            }
-
-            // Dùng access_token để lấy thông tin user từ provider
-            $socialUser = Socialite::driver($provider)
-                ->stateless()
-                ->userFromToken($accessToken);
-
-            // Tìm user theo provider_id hoặc email
-            $user = User::where('provider', $provider)
-                ->where('provider_id', $socialUser->getId())
-                ->first();
-
-            if (!$user) {
-                $email = $socialUser->getEmail();
-                $name = $socialUser->getName() ?? 'User';
-                $avatar = $socialUser->getAvatar();
-                $providerId = $socialUser->getId();
-
-                // Kiểm tra email đã tồn tại chưa (tránh duplicate)
-                // Nếu email null (một số trường hợp Facebook), chỉ tìm theo provider_id
-                if ($email) {
-                    $existingUser = User::where('email', $email)->first();
-                } else {
-                    $existingUser = null;
-                }
-
-                if ($existingUser) {
-                    // Gộp tài khoản: cập nhật provider
-                    $existingUser->update([
-                        'provider' => $provider,
-                        'provider_id' => $providerId,
-                        'avatar' => $avatar ?? $existingUser->avatar,
-                    ]);
-                    $user = $existingUser;
-                } else {
-                    // Tạo user mới
-                    // Nếu email null, tạo email tạm từ provider_id
-                    if (!$email) {
-                        $email = $provider . '_' . $providerId . '@social.local';
-                    }
-
-                    $user = User::create([
-                        'name' => $name,
-                        'email' => $email,
-                        'provider' => $provider,
-                        'provider_id' => $providerId,
-                        'password' => Hash::make(Str::random(16)),
-                        'avatar' => $avatar,
-                    ]);
-                }
-            } else {
-                // Cập nhật avatar nếu thay đổi
-                if ($user->avatar !== $socialUser->getAvatar()) {
-                    $user->avatar = $socialUser->getAvatar();
-                    $user->save();
-                }
-            }
-
-            // Tạo token
-            $token = $user->createToken('MyApp')->plainTextToken;
-
-            return ApiResponse::success([
-                'user' => array_merge($user->toArray(), ['token' => $token]),
-            ], 'Social login successful');
-        } catch (\Laravel\Socialite\Two\InvalidStateException $e) {
-            return ApiResponse::error('Invalid state. Please try again.', 400);
-        } catch (\GuzzleHttp\Exception\ClientException $e) {
-            return ApiResponse::error('Invalid access token.', 401);
-        } catch (\Exception $e) {
-            return ApiResponse::error('Authentication failed: ' . $e->getMessage(), 500);
-        }
-    }
 
     /**
      * Send password reset link
