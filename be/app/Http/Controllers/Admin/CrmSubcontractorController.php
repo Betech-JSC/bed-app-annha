@@ -149,7 +149,7 @@ class CrmSubcontractorController extends Controller
             'total_paid' => 0,
             'payment_status' => 'pending',
             'progress_status' => $validated['progress_status'] ?? 'not_started',
-            'created_by' => Auth::id(),
+            // created_by is nullable — skip for admin guard (FK to users table)
         ]);
 
         return redirect()->back()->with('success', 'Đã thêm nhà thầu phụ.');
@@ -173,7 +173,7 @@ class CrmSubcontractorController extends Controller
 
         $sub->update([
             ...$validated,
-            'updated_by' => Auth::id(),
+            // updated_by not set from CRM (admin guard FK incompatible)
         ]);
 
         return redirect()->back()->with('success', 'Đã cập nhật nhà thầu phụ.');

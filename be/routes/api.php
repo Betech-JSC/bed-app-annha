@@ -57,7 +57,6 @@ use App\Http\Controllers\Api\OfficeKpiController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TeamContractController;
 use App\Http\Controllers\Api\LaborStandardController;
-use App\Http\Controllers\Api\WorkVolumeController;
 use App\Http\Controllers\Api\ApprovalCenterController;
 
 Route::post('login', [AuthController::class, 'login']);
@@ -645,43 +644,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::delete('/{id}', [ReceiptController::class, 'destroy']);
     });
 
-    // Leave Management
-    Route::prefix('leave')->group(function () {
-        Route::get('/requests', [LeaveController::class, 'getRequests']);
-        Route::post('/requests', [LeaveController::class, 'createRequest']);
-        Route::post('/requests/{id}/approve', [LeaveController::class, 'approve']);
-        Route::post('/requests/{id}/reject', [LeaveController::class, 'reject']);
-        Route::get('/balance', [LeaveController::class, 'getBalance']);
-    });
-
-    // Employment Contracts
-    Route::prefix('employment-contracts')->group(function () {
-        Route::get('/', [EmploymentContractController::class, 'index']);
-        Route::post('/', [EmploymentContractController::class, 'store']);
-        Route::get('/{id}', [EmploymentContractController::class, 'show']);
-        Route::put('/{id}', [EmploymentContractController::class, 'update']);
-        Route::post('/{id}/renew', [EmploymentContractController::class, 'renew']);
-        Route::post('/{id}/terminate', [EmploymentContractController::class, 'terminate']);
-        Route::delete('/{id}', [EmploymentContractController::class, 'destroy']);
-    });
-
-    // Insurance & Benefits
-    Route::prefix('insurance')->group(function () {
-        Route::get('/', [InsuranceController::class, 'getInsurance']);
-        Route::put('/', [InsuranceController::class, 'updateInsurance']);
-        Route::get('/benefits', [InsuranceController::class, 'getBenefits']);
-        Route::post('/benefits', [InsuranceController::class, 'createBenefit']);
-        Route::put('/benefits/{id}', [InsuranceController::class, 'updateBenefit']);
-        Route::delete('/benefits/{id}', [InsuranceController::class, 'deleteBenefit']);
-    });
-
-    // Performance Evaluations
-    Route::prefix('performance')->group(function () {
-        Route::get('/evaluations', [PerformanceController::class, 'getEvaluations']);
-        Route::post('/evaluations', [PerformanceController::class, 'createEvaluation']);
-        Route::get('/evaluations/{id}', [PerformanceController::class, 'showEvaluation']);
-        Route::put('/evaluations/{id}', [PerformanceController::class, 'updateEvaluation']);
-    });
+    // NOTE: Leave, Employment Contracts, Insurance, Performance modules
+    // have been removed — controllers were never implemented.
 
     // Reminders
     Route::prefix('reminders')->group(function () {

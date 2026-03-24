@@ -152,7 +152,7 @@ class CrmKpiController extends Controller
             ...$validated,
             'current_value' => 0,
             'status' => 'pending',
-            'created_by' => Auth::id(),
+            // created_by is nullable — admin IDs can't satisfy FK to users table
         ]);
 
         return redirect()->back()->with('success', 'Đã tạo KPI thành công.');

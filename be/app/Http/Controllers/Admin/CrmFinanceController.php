@@ -208,7 +208,7 @@ class CrmFinanceController extends Controller
             'unit' => $validated['unit'] ?? null,
             'supplier_id' => $validated['supplier_id'] ?? null,
             'status' => 'draft',
-            'created_by' => Auth::id(),
+            // Note: created_by FK constrains to users table — admin IDs don't exist there
         ]);
 
         return redirect()->back()->with('success', 'Đã tạo chi phí công ty thành công.');
