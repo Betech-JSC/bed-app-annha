@@ -261,6 +261,9 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::put('/departments/{id}', [CrmHrController::class, 'updateDepartment'])->name('departments.update');
         Route::delete('/departments/{id}', [CrmHrController::class, 'destroyDepartment'])->name('departments.destroy');
 
+        // Org Chart
+        Route::get('/org-chart', [CrmHrController::class, 'orgChart'])->name('org-chart');
+
         // KPI
         Route::get('/kpi', [CrmKpiController::class, 'index'])->name('kpi');
         Route::post('/kpi', [CrmKpiController::class, 'store'])->name('kpi.store');

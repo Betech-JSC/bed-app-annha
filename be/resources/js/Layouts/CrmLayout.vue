@@ -169,6 +169,7 @@ import {
   CodeOutlined,
   QuestionCircleOutlined,
   BookOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -187,6 +188,8 @@ const selectedKeys = computed(() => {
   if (url.startsWith('/projects')) return ['projects']
   if (url.startsWith('/subcontractors')) return ['subcontractors']
   if (url.startsWith('/hr/kpi')) return ['kpi']
+  if (url.startsWith('/hr/org-chart')) return ['org-chart']
+  if (url.startsWith('/hr/departments')) return ['departments']
   if (url.startsWith('/hr')) return ['employees']
   if (url.startsWith('/finance')) return ['commerce']
   if (url.startsWith('/materials')) return ['materials']
@@ -251,6 +254,7 @@ const menuItems = [
     children: [
       { key: 'employees', label: 'Danh sách nhân viên' },
       { key: 'departments', label: 'Phòng ban' },
+      { key: 'org-chart', label: 'Sơ đồ tổ chức', icon: () => h(ApartmentOutlined) },
       { key: 'kpi', label: 'KPI nhân sự', icon: () => h(AimOutlined) },
     ],
   },
@@ -285,6 +289,7 @@ const handleMenuClick = ({ key }) => {
     employees: '/hr/employees',
     departments: '/hr/departments',
     kpi: '/hr/kpi',
+    'org-chart': '/hr/org-chart',
     subcontractors: '/subcontractors',
     notifications: '/notifications',
     settings: '/settings',

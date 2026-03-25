@@ -130,7 +130,7 @@ class CrmHrController extends Controller
      */
     public function departments(Request $request)
     {
-        $departments = Department::with('manager:id,name')
+        $departments = Department::with('manager:id,name', 'parent:id,name')
             ->withCount('employees as users_count')
             ->orderBy('name')
             ->get();
@@ -138,6 +138,43 @@ class CrmHrController extends Controller
         return Inertia::render('Crm/Hr/Departments/Index', [
             'departments' => $departments,
             'users' => User::select('id', 'name')->orderBy('name')->get(),
+            'allDepartments' => Department::select('id', 'name')->orderBy('name')->get(),
+        ]);
+    }
+
+    /**
+     * Organization Chart — hierarchical tree view
+     */
+    public function orgChart()
+    {
+        $departments = Department::with([
+            'manager:id,name,email,image',
+            'employees:id,name,email,image,department_id',
+            'children' => function ($q) {
+                $q->with([
+                    'manager:id,name,email,image',
+                    'employees:id,name,email,image,department_id',
+                    'children' => function ($q2) {
+                        $q2->with(['manager:id,name,email,image', 'employees:id,name,email,image,department_id'])
+                           ->withCount('employees as users_count');
+                    },
+                ])->withCount('employees as users_count');
+            },
+        ])
+        ->withCount('employees as users_count')
+        ->whereNull('parent_id')
+        ->orderBy('name')
+        ->get();
+
+        $totalEmployees = User::count();
+        $totalDepartments = Department::count();
+
+        return Inertia::render('Crm/Hr/OrgChart/Index', [
+            'departments' => $departments,
+            'stats' => [
+                'totalEmployees' => $totalEmployees,
+                'totalDepartments' => $totalDepartments,
+            ],
         ]);
     }
 
