@@ -3,7 +3,7 @@
 
   <PageHeader
     title="Trung Tâm Duyệt Yêu Cầu"
-    subtitle="Xem và xử lý tất cả yêu cầu đang chờ phê duyệt"
+    subtitle="Quản lý phê duyệt theo từng cấp — BĐH → Kế Toán"
   >
     <template #actions>
       <a-button size="large" class="rounded-xl" @click="refreshPage">
@@ -13,158 +13,218 @@
     </template>
   </PageHeader>
 
-  <!-- Summary Stats -->
-  <div class="crm-stats-grid" v-if="approvalData.summary?.length > 0">
-    <div
-      v-for="summary in approvalData.summary"
-      :key="summary.type"
-      class="approval-stat-card"
-      :class="{ 'active': currentFilter === summary.type }"
-      @click="toggleFilter(summary.type)"
-    >
-      <div class="approval-stat-icon" :style="{ background: `${summary.color}15` }">
-        <WalletOutlined v-if="summary.icon === 'wallet'" :style="{ color: summary.color, fontSize: '22px' }" />
-        <ProjectOutlined v-if="summary.icon === 'project'" :style="{ color: summary.color, fontSize: '22px' }" />
-        <ToolOutlined v-else-if="summary.icon === 'tool'" :style="{ color: summary.color, fontSize: '22px' }" />
+  <!-- ─── Stats Overview ─── -->
+  <div class="approval-overview">
+    <div class="approval-overview__card">
+      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #F59E0B20, #F59E0B08);">
+        <ClockCircleOutlined style="color: #F59E0B; font-size: 22px;" />
       </div>
-      <div class="approval-stat-info">
-        <div class="approval-stat-value">{{ summary.total }}</div>
-        <div class="approval-stat-label">{{ summary.label }}</div>
-        <div class="approval-stat-breakdown">
-          <a-tag v-if="summary.pending_management > 0" color="orange" class="text-xs">
-            BĐH: {{ summary.pending_management }}
-          </a-tag>
-          <a-tag v-if="summary.pending_accountant > 0" color="cyan" class="text-xs">
-            KT: {{ summary.pending_accountant }}
-          </a-tag>
+      <div>
+        <div class="approval-overview__value">{{ stats.pending_management }}</div>
+        <div class="approval-overview__label">Chờ BĐH duyệt</div>
+      </div>
+    </div>
+    <div class="approval-overview__card">
+      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #06B6D420, #06B6D408);">
+        <AuditOutlined style="color: #06B6D4; font-size: 22px;" />
+      </div>
+      <div>
+        <div class="approval-overview__value">{{ stats.pending_accountant }}</div>
+        <div class="approval-overview__label">Chờ KT xác nhận</div>
+      </div>
+    </div>
+    <div class="approval-overview__card">
+      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #10B98120, #10B98108);">
+        <CheckCircleOutlined style="color: #10B981; font-size: 22px;" />
+      </div>
+      <div>
+        <div class="approval-overview__value">{{ stats.approved_today }}</div>
+        <div class="approval-overview__label">Đã duyệt hôm nay</div>
+      </div>
+    </div>
+    <div class="approval-overview__card">
+      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #EF444420, #EF444408);">
+        <CloseCircleOutlined style="color: #EF4444; font-size: 22px;" />
+      </div>
+      <div>
+        <div class="approval-overview__value">{{ stats.rejected_today }}</div>
+        <div class="approval-overview__label">Từ chối hôm nay</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Approval Pipeline ─── -->
+  <div class="approval-pipeline" v-if="stats.pending_management + stats.pending_accountant > 0">
+    <div class="pipeline-total">
+      <DollarOutlined style="font-size: 18px;" />
+      <span>Tổng chờ duyệt: <strong>{{ formatCurrency(stats.total_pending_amount) }}</strong></span>
+    </div>
+    <div class="pipeline-flow">
+      <div class="pipeline-step" :class="{ 'pipeline-step--active': stats.pending_management > 0 }">
+        <div class="pipeline-step__dot" style="background: #F59E0B;"></div>
+        <span>BĐH ({{ stats.pending_management }})</span>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step" :class="{ 'pipeline-step--active': stats.pending_accountant > 0 }">
+        <div class="pipeline-step__dot" style="background: #06B6D4;"></div>
+        <span>Kế Toán ({{ stats.pending_accountant }})</span>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="pipeline-step__dot" style="background: #10B981;"></div>
+        <span>Hoàn tất</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Zone 1: Ban Điều Hành (Management) ─── -->
+  <ApprovalZone
+    title="Cấp 1 — Ban Điều Hành (BĐH)"
+    subtitle="Lãnh đạo xem xét và phê duyệt chi phí"
+    :items="managementItems"
+    :color="'#F59E0B'"
+    level="management"
+    emptyText="Không có yêu cầu chờ BĐH duyệt"
+    @approve="handleApprove"
+    @reject="openRejectModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 2: Kế Toán (Accountant) ─── -->
+  <ApprovalZone
+    title="Cấp 2 — Kế Toán (KT)"
+    subtitle="Kế toán xác nhận sau khi BĐH đã duyệt"
+    :items="accountantItems"
+    :color="'#06B6D4'"
+    level="accountant"
+    emptyText="Không có yêu cầu chờ Kế Toán xác nhận"
+    @approve="handleApprove"
+    @reject="openRejectModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 3: Lịch sử xử lý ─── -->
+  <div class="crm-content-card" style="margin-top: 24px;">
+    <div class="crm-content-card__header" @click="showHistory = !showHistory" style="cursor: pointer;">
+      <h3 class="crm-content-card__title">
+        <HistoryOutlined class="mr-2" />
+        Lịch sử xử lý gần đây
+        <a-tag color="default" class="ml-2">{{ recentItems.length }}</a-tag>
+      </h3>
+      <a-button type="text" size="small">
+        <template #icon>
+          <UpOutlined v-if="showHistory" />
+          <DownOutlined v-else />
+        </template>
+      </a-button>
+    </div>
+
+    <div v-if="showHistory">
+      <a-table
+        :columns="historyColumns"
+        :data-source="recentItems"
+        :pagination="{ pageSize: 10, showTotal: (total) => `${total} mục` }"
+        row-key="id"
+        size="small"
+        class="crm-table"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'title'">
+            <div>
+              <div class="font-semibold text-gray-800 text-sm">{{ record.title }}</div>
+              <div class="text-xs text-gray-400">{{ record.subtitle }}</div>
+            </div>
+          </template>
+          <template v-if="column.key === 'type'">
+            <a-tag :color="record.type === 'project_cost' ? 'blue' : 'gold'" class="rounded-lg text-xs">
+              {{ record.type_label }}
+            </a-tag>
+          </template>
+          <template v-if="column.key === 'amount'">
+            <span class="font-semibold text-gray-700 text-sm">{{ formatCurrency(record.amount) }}</span>
+          </template>
+          <template v-if="column.key === 'status'">
+            <a-tag :color="record.status === 'approved' ? 'green' : 'red'" class="rounded-lg">
+              {{ record.status_label }}
+            </a-tag>
+          </template>
+          <template v-if="column.key === 'created_at'">
+            <span class="text-xs text-gray-500">{{ record.created_at }}</span>
+          </template>
+        </template>
+      </a-table>
+    </div>
+  </div>
+
+  <!-- ─── Detail Drawer ─── -->
+  <a-drawer
+    :open="!!detailItem"
+    :title="detailItem?.title"
+    placement="right"
+    :width="440"
+    @close="detailItem = null"
+  >
+    <template v-if="detailItem">
+      <div class="detail-section">
+        <div class="detail-label">Loại chi phí</div>
+        <a-tag :color="detailItem.type === 'project_cost' ? 'blue' : 'gold'" class="rounded-lg">
+          {{ detailItem.type_label }}
+        </a-tag>
+      </div>
+      <div class="detail-section">
+        <div class="detail-label">Phân nhóm / Dự án</div>
+        <div class="text-sm text-gray-700">{{ detailItem.subtitle }}</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-label">Số tiền</div>
+        <div class="text-xl font-bold text-emerald-600">{{ formatCurrency(detailItem.amount) }}</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-label">Người tạo</div>
+        <div class="flex items-center gap-3">
+          <a-avatar :size="32" style="background: #1B4F72;">{{ detailItem.created_by?.charAt(0)?.toUpperCase() }}</a-avatar>
+          <div>
+            <div class="text-sm font-medium">{{ detailItem.created_by }}</div>
+            <div class="text-xs text-gray-400">{{ detailItem.created_by_email }}</div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- Grand Total Banner -->
-  <div v-if="approvalData.grand_total > 0" class="grand-total-banner">
-    <div class="grand-total-left">
-      <SafetyCertificateOutlined style="font-size: 28px;" />
-      <div>
-        <div class="grand-total-label">Tổng yêu cầu chờ duyệt</div>
-        <div class="grand-total-value">{{ approvalData.grand_total }}</div>
+      <div class="detail-section">
+        <div class="detail-label">Ngày tạo</div>
+        <div class="text-sm text-gray-600">{{ detailItem.created_at }}</div>
       </div>
-    </div>
-  </div>
-
-  <!-- Empty State -->
-  <div v-if="filteredItems.length === 0" class="empty-state">
-    <CheckCircleOutlined style="font-size: 64px; color: #10B981;" />
-    <h3>Tuyệt vời! 🎉</h3>
-    <p>Không có yêu cầu nào đang chờ duyệt</p>
-  </div>
-
-  <!-- Approval Table -->
-  <div v-else class="crm-content-card">
-    <div class="crm-content-card__header">
-      <h3 class="crm-content-card__title">
-        Danh sách yêu cầu
-        <a-tag color="blue" class="ml-2">{{ filteredItems.length }}</a-tag>
-      </h3>
-      <div class="flex gap-2">
-        <a-radio-group v-model:value="currentFilter" button-style="solid" size="small">
-          <a-radio-button value="all">Tất cả</a-radio-button>
-          <a-radio-button value="company_cost">CP Công ty</a-radio-button>
-          <a-radio-button value="project_cost">CP Dự án</a-radio-button>
-        </a-radio-group>
+      <div class="detail-section" v-if="detailItem.cost_date">
+        <div class="detail-label">Ngày phát sinh</div>
+        <div class="text-sm text-gray-600">{{ detailItem.cost_date }}</div>
       </div>
-    </div>
+      <div class="detail-section" v-if="detailItem.description">
+        <div class="detail-label">Mô tả</div>
+        <div class="text-sm text-gray-600 whitespace-pre-wrap">{{ detailItem.description }}</div>
+      </div>
+      <a-divider />
+      <div class="detail-section">
+        <div class="detail-label">Trạng thái duyệt</div>
+        <a-steps :current="getApprovalStep(detailItem)" size="small" direction="vertical" class="mt-2">
+          <a-step title="Tạo yêu cầu" :description="detailItem.created_at" />
+          <a-step
+            :title="detailItem.management_approved_by ? `BĐH đã duyệt — ${detailItem.management_approved_by}` : 'Chờ BĐH duyệt'"
+            :description="detailItem.management_approved_at || ''"
+            :status="detailItem.management_approved_by ? 'finish' : (detailItem.approval_level === 'management' ? 'process' : 'wait')"
+          />
+          <a-step
+            title="Kế Toán xác nhận"
+            :status="detailItem.status === 'approved' ? 'finish' : (detailItem.approval_level === 'accountant' ? 'process' : 'wait')"
+          />
+        </a-steps>
+      </div>
+      <div class="detail-section" v-if="detailItem.rejected_reason">
+        <div class="detail-label">Lý do từ chối</div>
+        <a-alert type="error" :message="detailItem.rejected_reason" show-icon class="rounded-xl" />
+      </div>
+    </template>
+  </a-drawer>
 
-    <a-table
-      :columns="columns"
-      :data-source="filteredItems"
-      :pagination="{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `${total} yêu cầu` }"
-      row-key="id"
-      class="crm-table"
-    >
-      <template #bodyCell="{ column, record }">
-        <!-- Title -->
-        <template v-if="column.key === 'title'">
-          <div>
-            <div class="font-semibold text-gray-800">{{ record.title }}</div>
-            <div class="text-xs text-gray-400">{{ record.subtitle }}</div>
-          </div>
-        </template>
-
-        <!-- Type -->
-        <template v-if="column.key === 'type'">
-          <a-tag :color="getTypeColor(record.type)" class="rounded-lg">
-            {{ getTypeLabel(record.type) }}
-          </a-tag>
-        </template>
-
-        <!-- Amount -->
-        <template v-if="column.key === 'amount'">
-          <span class="font-semibold text-emerald-600">{{ formatCurrency(record.amount) }}</span>
-        </template>
-
-        <!-- Approval Level -->
-        <template v-if="column.key === 'approval_level'">
-          <a-tag :color="record.approval_level === 'management' ? 'orange' : 'cyan'" class="rounded-lg">
-            {{ record.approval_level === 'management' ? 'Chờ BĐH' : 'Chờ KT' }}
-          </a-tag>
-        </template>
-
-        <!-- Creator -->
-        <template v-if="column.key === 'created_by'">
-          <div class="flex items-center gap-2">
-            <a-avatar :size="28" class="bg-crm-primary text-white text-xs">
-              {{ record.created_by?.charAt(0)?.toUpperCase() }}
-            </a-avatar>
-            <div>
-              <div class="text-sm font-medium">{{ record.created_by }}</div>
-              <div class="text-xs text-gray-400">{{ record.created_at }}</div>
-            </div>
-          </div>
-        </template>
-
-        <!-- Management Approver -->
-        <template v-if="column.key === 'management_approved_by'">
-          <div v-if="record.management_approved_by" class="flex items-center gap-1">
-            <CheckCircleOutlined class="text-green-500" />
-            <span class="text-sm text-green-600">{{ record.management_approved_by }}</span>
-          </div>
-          <span v-else class="text-gray-300">—</span>
-        </template>
-
-        <!-- Actions -->
-        <template v-if="column.key === 'actions'">
-          <div class="flex gap-2">
-            <a-tooltip title="Duyệt">
-              <a-button
-                type="primary"
-                size="small"
-                class="rounded-lg"
-                style="background: #10B981; border-color: #10B981;"
-                @click="handleApprove(record)"
-              >
-                <template #icon><CheckOutlined /></template>
-              </a-button>
-            </a-tooltip>
-
-            <a-tooltip title="Từ chối">
-              <a-button
-                danger
-                size="small"
-                class="rounded-lg"
-                @click="openRejectModal(record)"
-              >
-                <template #icon><CloseOutlined /></template>
-              </a-button>
-            </a-tooltip>
-          </div>
-        </template>
-      </template>
-    </a-table>
-  </div>
-
-  <!-- Reject Modal -->
+  <!-- ─── Reject Modal ─── -->
   <a-modal
     v-model:open="rejectModalVisible"
     title="Từ chối yêu cầu"
@@ -173,14 +233,12 @@
     ok-text="Xác nhận từ chối"
     cancel-text="Hủy"
     :ok-button-props="{ danger: true, disabled: !rejectReason.trim() }"
-    class="rounded-xl"
   >
     <div class="py-4">
       <div v-if="rejectTarget" class="mb-4 p-3 bg-gray-50 rounded-xl">
         <div class="font-semibold text-gray-700">{{ rejectTarget.title }}</div>
-        <div class="text-sm text-gray-500">{{ formatCurrency(rejectTarget.amount) }}</div>
+        <div class="text-sm text-emerald-600 font-semibold">{{ formatCurrency(rejectTarget.amount) }}</div>
       </div>
-
       <a-form-item
         label="Lý do từ chối"
         :validate-status="!rejectReason.trim() ? 'error' : ''"
@@ -199,73 +257,62 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
+import ApprovalZone from './ApprovalZone.vue'
 import {
   ReloadOutlined,
-  WalletOutlined,
-  ProjectOutlined,
-  ToolOutlined,
-  SafetyCertificateOutlined,
+  ClockCircleOutlined,
+  AuditOutlined,
   CheckCircleOutlined,
-  CheckOutlined,
-  CloseOutlined,
+  CloseCircleOutlined,
+  DollarOutlined,
+  HistoryOutlined,
+  UpOutlined,
+  DownOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
 defineOptions({ layout: CrmLayout })
 
 const props = defineProps({
-  approvalData: { type: Object, default: () => ({ summary: [], items: [], grand_total: 0 }) },
-  currentType: { type: String, default: 'all' },
+  managementItems: { type: Array, default: () => [] },
+  accountantItems: { type: Array, default: () => [] },
+  recentItems: { type: Array, default: () => [] },
+  stats: { type: Object, default: () => ({}) },
 })
 
-const currentFilter = ref(props.currentType)
 const rejectModalVisible = ref(false)
 const rejectTarget = ref(null)
 const rejectReason = ref('')
 const rejectLoading = ref(false)
+const showHistory = ref(false)
+const detailItem = ref(null)
 
-// Computed
-const filteredItems = computed(() => {
-  if (currentFilter.value === 'all') return props.approvalData.items || []
-  return (props.approvalData.items || []).filter(item => item.type === currentFilter.value)
-})
-
-// Methods
 const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-  }).format(amount)
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0)
 }
 
-const getTypeColor = (type) => {
-  const map = { company_cost: 'gold', project_cost: 'blue', material_bill: 'purple' }
-  return map[type] || 'default'
+const refreshPage = () => router.reload()
+
+const openDetailDrawer = (record) => {
+  detailItem.value = record
 }
 
-const getTypeLabel = (type) => {
-  const map = { company_cost: 'CP Công ty', project_cost: 'CP Dự án', material_bill: 'Vật tư' }
-  return map[type] || type
-}
-
-const toggleFilter = (type) => {
-  currentFilter.value = currentFilter.value === type ? 'all' : type
-}
-
-const refreshPage = () => {
-  router.reload()
+const getApprovalStep = (item) => {
+  if (item.status === 'approved') return 3
+  if (item.approval_level === 'accountant') return 2
+  return 1
 }
 
 const handleApprove = (record) => {
   const level = record.approval_level === 'management' ? 'Ban Điều Hành' : 'Kế Toán'
 
   Modal.confirm({
-    title: 'Xác nhận duyệt',
-    content: `Duyệt "${record.title}" (${level})?\n\nSố tiền: ${formatCurrency(record.amount)}`,
+    title: `Xác nhận duyệt (${level})`,
+    content: `Duyệt "${record.title}"?\n\nSố tiền: ${formatCurrency(record.amount)}`,
     okText: 'Duyệt',
     cancelText: 'Hủy',
     okButtonProps: { style: { background: '#10B981', borderColor: '#10B981' } },
@@ -276,12 +323,8 @@ const handleApprove = (record) => {
 
       router.post(url, {}, {
         preserveScroll: true,
-        onSuccess: () => {
-          message.success(`Đã duyệt "${record.title}"`)
-        },
-        onError: () => {
-          message.error('Không thể duyệt yêu cầu này')
-        },
+        onSuccess: () => message.success(`Đã duyệt "${record.title}"`),
+        onError: () => message.error('Không thể duyệt yêu cầu này'),
       })
     },
   })
@@ -314,122 +357,137 @@ const handleReject = () => {
   })
 }
 
-// Table Columns
-const columns = [
-  { title: 'Yêu cầu', key: 'title', width: 280 },
-  { title: 'Loại', key: 'type', width: 120 },
-  { title: 'Số tiền', key: 'amount', width: 160, align: 'right' },
-  { title: 'Cấp duyệt', key: 'approval_level', width: 120 },
-  { title: 'Người tạo', key: 'created_by', width: 200 },
-  { title: 'BĐH duyệt', key: 'management_approved_by', width: 150 },
-  { title: 'Thao tác', key: 'actions', width: 120, fixed: 'right' },
+const historyColumns = [
+  { title: 'Yêu cầu', key: 'title', width: 250 },
+  { title: 'Loại', key: 'type', width: 100 },
+  { title: 'Số tiền', key: 'amount', width: 140, align: 'right' },
+  { title: 'Kết quả', key: 'status', width: 120 },
+  { title: 'Ngày tạo', key: 'created_at', width: 140 },
 ]
 </script>
 
 <style scoped>
-.approval-stat-card {
+/* ─── Overview Cards ─── */
+.approval-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.approval-overview__card {
   background: white;
   border-radius: 16px;
-  padding: 20px;
+  padding: 18px 20px;
   display: flex;
-  gap: 16px;
   align-items: center;
-  border: 2px solid transparent;
-  cursor: pointer;
+  gap: 14px;
+  border: 1px solid #E8ECF1;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
-
-.approval-stat-card:hover {
-  border-color: var(--crm-primary-light, #2E86C1);
+.approval-overview__card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
-
-.approval-stat-card.active {
-  border-color: var(--crm-primary, #1B4F72);
-  box-shadow: 0 4px 12px rgba(27, 79, 114, 0.15);
-}
-
-.approval-stat-icon {
-  width: 52px;
-  height: 52px;
+.approval-overview__icon {
+  width: 48px;
+  height: 48px;
   border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
-
-.approval-stat-info {
-  flex: 1;
-}
-
-.approval-stat-value {
-  font-size: 28px;
+.approval-overview__value {
+  font-size: 26px;
   font-weight: 800;
   color: #1F2937;
   line-height: 1;
-  margin-bottom: 4px;
+}
+.approval-overview__label {
+  font-size: 12px;
+  color: #9CA3AF;
+  margin-top: 4px;
 }
 
-.approval-stat-label {
-  font-size: 13px;
-  color: #6B7280;
-  font-weight: 500;
-  margin-bottom: 8px;
-}
-
-.approval-stat-breakdown {
-  display: flex;
-  gap: 4px;
-}
-
-.grand-total-banner {
-  background: linear-gradient(135deg, #1B4F72, #2E86C1);
+/* ─── Pipeline ─── */
+.approval-pipeline {
+  background: linear-gradient(135deg, #0f172a, #1e293b);
   border-radius: 16px;
-  padding: 24px 28px;
+  padding: 18px 28px;
   margin-bottom: 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: white;
-  box-shadow: 0 4px 16px rgba(27, 79, 114, 0.3);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.2);
 }
-
-.grand-total-left {
+.pipeline-total {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
+  font-size: 14px;
+  opacity: 0.85;
 }
-
-.grand-total-label {
+.pipeline-total strong {
+  color: #34d399;
+  font-size: 16px;
+}
+.pipeline-flow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
-  opacity: 0.7;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+.pipeline-step--active {
+  opacity: 1;
+  font-weight: 600;
+}
+.pipeline-step__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.pipeline-step--active .pipeline-step__dot {
+  box-shadow: 0 0 8px currentColor;
+  animation: pulse-dot 2s infinite;
+}
+.pipeline-arrow {
+  color: rgba(255,255,255,0.3);
+  font-size: 14px;
 }
 
-.grand-total-value {
-  font-size: 36px;
-  font-weight: 800;
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
-.empty-state {
-  text-align: center;
-  padding: 80px 20px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+/* ─── Detail Drawer ─── */
+.detail-section {
+  margin-bottom: 18px;
+}
+.detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9CA3AF;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
 }
 
-.empty-state h3 {
-  font-size: 22px;
-  font-weight: 800;
-  color: #1F2937;
-  margin: 20px 0 8px;
-}
-
-.empty-state p {
-  font-size: 15px;
-  color: #6B7280;
+@media (max-width: 768px) {
+  .approval-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .approval-pipeline {
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 </style>

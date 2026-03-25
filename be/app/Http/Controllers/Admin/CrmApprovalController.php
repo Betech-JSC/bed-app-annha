@@ -11,19 +11,52 @@ use Inertia\Inertia;
 class CrmApprovalController extends Controller
 {
     /**
-     * Display the Approval Center page.
+     * Display the Approval Center page — grouped by approval level.
      */
     public function index(Request $request)
     {
-        $admin = Auth::guard('admin')->user();
-        $type = $request->get('type', 'all');
+        $user = Auth::guard('admin')->user();
 
-        // Load approval data
-        $data = $this->getApprovalData($admin, $type);
+        // ─── Management Level (BĐH) ───
+        $managementItems = Cost::whereIn('status', ['pending_management_approval'])
+            ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($cost) => $this->formatItem($cost));
+
+        // ─── Accountant Level (KT) ───
+        $accountantItems = Cost::whereIn('status', ['pending_accountant_approval'])
+            ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($cost) => $this->formatItem($cost));
+
+        // ─── Recently processed (last 30 items) ───
+        $recentItems = Cost::whereIn('status', ['approved', 'rejected'])
+            ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
+            ->orderBy('updated_at', 'desc')
+            ->limit(30)
+            ->get()
+            ->map(fn($cost) => $this->formatItem($cost));
+
+        // ─── Stats ───
+        $stats = [
+            'pending_management' => $managementItems->count(),
+            'pending_accountant' => $accountantItems->count(),
+            'approved_today' => Cost::where('status', 'approved')
+                ->whereDate('updated_at', today())
+                ->count(),
+            'rejected_today' => Cost::where('status', 'rejected')
+                ->whereDate('updated_at', today())
+                ->count(),
+            'total_pending_amount' => $managementItems->sum('amount') + $accountantItems->sum('amount'),
+        ];
 
         return Inertia::render('Crm/Approvals/Index', [
-            'approvalData' => $data,
-            'currentType' => $type,
+            'managementItems' => $managementItems->values(),
+            'accountantItems' => $accountantItems->values(),
+            'recentItems' => $recentItems->values(),
+            'stats' => $stats,
         ]);
     }
 
@@ -38,7 +71,6 @@ class CrmApprovalController extends Controller
             return back()->with('error', 'Chi phí không ở trạng thái chờ BĐH duyệt');
         }
 
-        // Don't set management_approved_by — FK constraint references users table, Admin ID would violate it
         $cost->management_approved_at = now();
         $cost->status = 'pending_accountant_approval';
         $cost->save();
@@ -57,8 +89,7 @@ class CrmApprovalController extends Controller
             return back()->with('error', 'Chi phí không ở trạng thái chờ KT xác nhận');
         }
 
-        // Use model method without user to handle all side effects properly
-        $cost->approveByAccountant(); // handles FK-safe status change + subcontractor + material + budget
+        $cost->approveByAccountant();
 
         return back()->with('success', "Đã xác nhận chi phí \"{$cost->name}\" (Kế toán)");
     }
@@ -86,109 +117,39 @@ class CrmApprovalController extends Controller
     }
 
     /**
-     * Aggregate all pending approvals.
+     * Format a cost record for the frontend.
      */
-    private function getApprovalData($admin, $type)
+    private function formatItem(Cost $cost): array
     {
-        $result = [
-            'summary' => [],
-            'items' => [],
-            'grand_total' => 0,
+        $isProject = $cost->project_id !== null;
+
+        return [
+            'id' => $cost->id,
+            'type' => $isProject ? 'project_cost' : 'company_cost',
+            'type_label' => $isProject ? 'CP Dự án' : 'CP Công ty',
+            'title' => $cost->name,
+            'subtitle' => $isProject
+                ? (($cost->project->code ?? '') . ' - ' . ($cost->project->name ?? 'Dự án'))
+                : ($cost->costGroup->name ?? 'Không phân nhóm'),
+            'amount' => (float) $cost->amount,
+            'status' => $cost->status,
+            'status_label' => $this->getStatusLabel($cost->status),
+            'created_by' => $cost->creator->name ?? 'N/A',
+            'created_by_email' => $cost->creator->email ?? '',
+            'created_at' => $cost->created_at->format('d/m/Y H:i'),
+            'cost_date' => $cost->cost_date,
+            'description' => $cost->description,
+            'project_name' => $cost->project->name ?? null,
+            'project_id' => $cost->project_id,
+            'management_approved_by' => $cost->managementApprover->name ?? null,
+            'management_approved_at' => $cost->management_approved_at?->format('d/m/Y H:i'),
+            'rejected_reason' => $cost->rejected_reason ?? null,
+            'approval_level' => match ($cost->status) {
+                'pending_management_approval' => 'management',
+                'pending_accountant_approval' => 'accountant',
+                default => 'done',
+            },
         ];
-
-        // ========================================
-        // 1. COMPANY COSTS
-        // ========================================
-        if ($type === 'all' || $type === 'company_cost') {
-            $companyCosts = Cost::companyCosts()
-                ->whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])
-                ->with(['creator:id,name,email', 'costGroup:id,name', 'managementApprover:id,name'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-
-            if ($companyCosts->isNotEmpty()) {
-                $result['summary'][] = [
-                    'type' => 'company_cost',
-                    'label' => 'Chi phí công ty',
-                    'icon' => 'wallet',
-                    'color' => '#F59E0B',
-                    'total' => $companyCosts->count(),
-                    'pending_management' => $companyCosts->where('status', 'pending_management_approval')->count(),
-                    'pending_accountant' => $companyCosts->where('status', 'pending_accountant_approval')->count(),
-                ];
-
-                foreach ($companyCosts as $cost) {
-                    $result['items'][] = [
-                        'id' => $cost->id,
-                        'type' => 'company_cost',
-                        'title' => $cost->name,
-                        'subtitle' => $cost->costGroup->name ?? 'Không phân nhóm',
-                        'amount' => (float) $cost->amount,
-                        'status' => $cost->status,
-                        'status_label' => $this->getStatusLabel($cost->status),
-                        'created_by' => $cost->creator->name ?? 'N/A',
-                        'created_at' => $cost->created_at->format('d/m/Y H:i'),
-                        'cost_date' => $cost->cost_date,
-                        'description' => $cost->description,
-                        'management_approved_by' => $cost->managementApprover->name ?? null,
-                        'management_approved_at' => $cost->management_approved_at?->format('d/m/Y H:i'),
-                        'approval_level' => $cost->status === 'pending_management_approval' ? 'management' : 'accountant',
-                    ];
-                }
-            }
-        }
-
-        // ========================================
-        // 2. PROJECT COSTS
-        // ========================================
-        if ($type === 'all' || $type === 'project_cost') {
-            $projectCosts = Cost::whereNotNull('project_id')
-                ->whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])
-                ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-
-            if ($projectCosts->isNotEmpty()) {
-                $result['summary'][] = [
-                    'type' => 'project_cost',
-                    'label' => 'Chi phí dự án',
-                    'icon' => 'project',
-                    'color' => '#3B82F6',
-                    'total' => $projectCosts->count(),
-                    'pending_management' => $projectCosts->where('status', 'pending_management_approval')->count(),
-                    'pending_accountant' => $projectCosts->where('status', 'pending_accountant_approval')->count(),
-                ];
-
-                foreach ($projectCosts as $cost) {
-                    $result['items'][] = [
-                        'id' => $cost->id,
-                        'type' => 'project_cost',
-                        'title' => $cost->name,
-                        'subtitle' => ($cost->project->code ?? '') . ' - ' . ($cost->project->name ?? 'Dự án'),
-                        'amount' => (float) $cost->amount,
-                        'status' => $cost->status,
-                        'status_label' => $this->getStatusLabel($cost->status),
-                        'created_by' => $cost->creator->name ?? 'N/A',
-                        'created_at' => $cost->created_at->format('d/m/Y H:i'),
-                        'cost_date' => $cost->cost_date,
-                        'description' => $cost->description,
-                        'project_name' => $cost->project->name ?? null,
-                        'project_id' => $cost->project_id,
-                        'management_approved_by' => $cost->managementApprover->name ?? null,
-                        'approval_level' => $cost->status === 'pending_management_approval' ? 'management' : 'accountant',
-                    ];
-                }
-            }
-        }
-
-        // Sort by created_at (newest first)
-        usort($result['items'], function ($a, $b) {
-            return strtotime(str_replace('/', '-', $b['created_at'])) - strtotime(str_replace('/', '-', $a['created_at']));
-        });
-
-        $result['grand_total'] = array_sum(array_column($result['summary'], 'total'));
-
-        return $result;
     }
 
     private function getStatusLabel(string $status): string
