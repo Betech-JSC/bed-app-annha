@@ -193,6 +193,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
 
         // Construction Logs
         Route::post('/{project}/logs', [CrmProjectsController::class, 'storeLog'])->name('logs.store');
+        Route::put('/{project}/logs/{log}', [CrmProjectsController::class, 'updateLog'])->name('logs.update');
         Route::delete('/{project}/logs/{log}', [CrmProjectsController::class, 'destroyLog'])->name('logs.destroy');
 
         // Comments

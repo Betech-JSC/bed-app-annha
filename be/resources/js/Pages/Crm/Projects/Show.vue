@@ -221,10 +221,26 @@
           <a-table :columns="logCols" :data-source="project.construction_logs || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'date'">{{ fmtDate(record.log_date) }}</template>
+              <template v-else-if="column.key === 'task'">{{ record.task?.name || '—' }}</template>
+              <template v-else-if="column.key === 'weather'">{{ record.weather || '—' }}</template>
+              <template v-else-if="column.key === 'personnel'">{{ record.personnel_count ?? '—' }}</template>
+              <template v-else-if="column.key === 'progress'">
+                <a-progress :percent="Number(record.completion_percentage || 0)" :size="'small'" :stroke-color="Number(record.completion_percentage) >= 100 ? '#10B981' : '#1B4F72'" />
+              </template>
+              <template v-else-if="column.key === 'creator'">{{ record.creator?.name || '—' }}</template>
+              <template v-else-if="column.key === 'notes'">
+                <a-tooltip v-if="record.notes" :title="record.notes"><span class="text-gray-500 truncate block max-w-[150px]">{{ record.notes }}</span></a-tooltip>
+                <span v-else class="text-gray-300">—</span>
+              </template>
               <template v-else-if="column.key === 'actions'">
-                <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký?" @confirm="deleteLog(record)">
-                  <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                </a-popconfirm>
+                <div class="flex gap-1">
+                  <a-tooltip title="Sửa">
+                    <a-button v-if="can('log.update') || can('log.create')" type="text" size="small" @click="openLogModal(record)"><EditOutlined /></a-button>
+                  </a-tooltip>
+                  <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký?" @confirm="deleteLog(record)">
+                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
+                  </a-popconfirm>
+                </div>
               </template>
             </template>
           </a-table>
@@ -569,11 +585,46 @@
   </a-modal>
 
   <!-- Log Modal -->
-  <a-modal v-model:open="showLogModal" title="Thêm nhật ký thi công" :width="600" @ok="saveLog" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showLogModal" :title="editingLog ? 'Cập nhật nhật ký thi công' : 'Thêm nhật ký thi công'" :width="640" @ok="saveLog" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tiêu đề"><a-input v-model:value="logForm.title" size="large" /></a-form-item>
-      <a-form-item label="Ngày" required><a-date-picker v-model:value="logForm.log_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
-      <a-form-item label="Nội dung" required><a-textarea v-model:value="logForm.content" :rows="4" /></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Ngày ghi nhật ký" required>
+            <a-date-picker v-model:value="logForm.log_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" :disabled="!!editingLog" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Thời tiết">
+            <a-select v-model:value="logForm.weather" size="large" class="w-full" placeholder="Chọn thời tiết" allow-clear>
+              <a-select-option value="Nắng">☀️ Nắng</a-select-option>
+              <a-select-option value="Mưa">🌧️ Mưa</a-select-option>
+              <a-select-option value="Mây">⛅ Mây</a-select-option>
+              <a-select-option value="Gió">💨 Gió</a-select-option>
+              <a-select-option value="Bão">🌪️ Bão</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Công việc liên quan">
+        <a-select v-model:value="logForm.task_id" size="large" class="w-full" placeholder="Chọn công việc (tùy chọn)" allow-clear show-search :filter-option="(input, opt) => opt.label?.toLowerCase().includes(input.toLowerCase())">
+          <a-select-option v-for="t in projectTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Số lượng nhân công">
+            <a-input-number v-model:value="logForm.personnel_count" :min="0" size="large" class="w-full" placeholder="VD: 10" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Phần trăm hoàn thành">
+            <a-slider v-model:value="logForm.completion_percentage" :min="0" :max="100" :step="5" :marks="{ 0: '0%', 25: '25%', 50: '50%', 75: '75%', 100: '100%' }" />
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Ghi chú">
+        <a-textarea v-model:value="logForm.notes" :rows="4" placeholder="Mô tả công việc đã thực hiện trong ngày..." :maxlength="2000" show-count />
+      </a-form-item>
     </a-form>
   </a-modal>
 
@@ -744,6 +795,7 @@ const props = defineProps({
   personnelRoles: { type: Array, default: () => [] },
   materials: { type: Array, default: () => [] },
   globalSubcontractors: { type: Array, default: () => [] },
+  projectTasks: { type: Array, default: () => [] },
 })
 
 // ============ RBAC ============
@@ -812,10 +864,14 @@ const personnelCols = [
 ]
 
 const logCols = [
-  { title: 'Tiêu đề', dataIndex: 'title', ellipsis: true },
-  { title: 'Nội dung', dataIndex: 'content', ellipsis: true },
   { title: 'Ngày', key: 'date', width: 110 },
-  { title: '', key: 'actions', width: 80, align: 'center' },
+  { title: 'Công việc', key: 'task', ellipsis: true },
+  { title: 'Thời tiết', key: 'weather', width: 90 },
+  { title: 'Nhân công', key: 'personnel', width: 90, align: 'center' },
+  { title: 'Tiến độ', key: 'progress', width: 140 },
+  { title: 'Ghi chú', key: 'notes', ellipsis: true },
+  { title: 'Người tạo', key: 'creator', width: 120 },
+  { title: '', key: 'actions', width: 100, align: 'center' },
 ]
 
 const defectCols = [
@@ -953,10 +1009,35 @@ const removePersonnel = (p) => router.delete(`/projects/${props.project.id}/pers
 
 // ============ LOG CRUD ============
 const showLogModal = ref(false)
-const logForm = ref({ title: '', content: '', log_date: null })
-const openLogModal = () => { logForm.value = { title: '', content: '', log_date: dayjs().format('YYYY-MM-DD') }; showLogModal.value = true }
-const saveLog = () => { router.post(`/projects/${props.project.id}/logs`, logForm.value, { onSuccess: () => showLogModal.value = false }) }
-const deleteLog = (l) => router.delete(`/projects/${props.project.id}/logs/${l.id}`)
+const editingLog = ref(null)
+const logForm = ref({ log_date: null, task_id: null, weather: null, personnel_count: null, completion_percentage: 0, notes: '' })
+
+const openLogModal = (record = null) => {
+  if (record) {
+    editingLog.value = record
+    logForm.value = {
+      task_id: record.task_id || null,
+      weather: record.weather || null,
+      personnel_count: record.personnel_count ?? null,
+      completion_percentage: Number(record.completion_percentage || 0),
+      notes: record.notes || '',
+    }
+  } else {
+    editingLog.value = null
+    logForm.value = { log_date: dayjs().format('YYYY-MM-DD'), task_id: null, weather: null, personnel_count: null, completion_percentage: 0, notes: '' }
+  }
+  showLogModal.value = true
+}
+
+const saveLog = () => {
+  if (editingLog.value) {
+    router.put(`/projects/${props.project.id}/logs/${editingLog.value.id}`, logForm.value, { preserveScroll: true, onSuccess: () => { showLogModal.value = false; editingLog.value = null } })
+  } else {
+    router.post(`/projects/${props.project.id}/logs`, logForm.value, { preserveScroll: true, onSuccess: () => showLogModal.value = false })
+  }
+}
+
+const deleteLog = (l) => router.delete(`/projects/${props.project.id}/logs/${l.id}`, { preserveScroll: true })
 
 // ============ COMMENT CRUD ============
 const addComment = () => {

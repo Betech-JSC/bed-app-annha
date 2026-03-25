@@ -88,7 +88,7 @@
       </div>
 
       <!-- Content -->
-      <div class="notif-content" @click="viewNotif(notif)">
+      <div class="notif-content" @click.stop="viewNotif(notif)">
         <div class="notif-title">
           <span v-if="notif.status === 'unread'" class="notif-dot"></span>
           {{ notif.title || notif.message || 'Thông báo' }}
@@ -132,6 +132,51 @@
       <p class="mt-4 text-gray-400 text-base">Không có thông báo nào</p>
     </div>
   </div>
+
+  <!-- Notification Detail Drawer -->
+  <a-drawer
+    :open="!!viewingNotif"
+    :title="viewingNotif?.title || 'Chi tiết thông báo'"
+    placement="right"
+    :width="420"
+    @close="viewingNotif = null"
+  >
+    <template v-if="viewingNotif">
+      <div class="detail-meta mb-4">
+        <a-tag :color="priorityColor(viewingNotif.priority)" class="rounded-lg">{{ priorityLabel(viewingNotif.priority) }}</a-tag>
+        <a-tag class="rounded-lg">{{ typeLabel(viewingNotif.type) }}</a-tag>
+        <a-tag v-if="viewingNotif.status === 'unread'" color="blue">Chưa đọc</a-tag>
+        <a-tag v-else color="default">Đã đọc</a-tag>
+      </div>
+      <div class="detail-body mb-4">
+        <div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+          {{ viewingNotif.body || viewingNotif.message || 'Không có nội dung' }}
+        </div>
+      </div>
+      <a-divider />
+      <div class="detail-info">
+        <div class="mb-3" v-if="viewingNotif.user">
+          <div class="text-xs font-semibold text-gray-400 uppercase mb-1">Người nhận</div>
+          <div class="flex items-center gap-2">
+            <a-avatar :size="28" style="background: #1B4F72;">{{ viewingNotif.user?.name?.charAt(0)?.toUpperCase() }}</a-avatar>
+            <span class="text-sm">{{ viewingNotif.user?.name }}</span>
+          </div>
+        </div>
+        <div class="mb-3">
+          <div class="text-xs font-semibold text-gray-400 uppercase mb-1">Thời gian</div>
+          <div class="text-sm text-gray-600">{{ new Date(viewingNotif.created_at).toLocaleString('vi-VN') }}</div>
+        </div>
+        <div v-if="viewingNotif.action_url" class="mb-3">
+          <div class="text-xs font-semibold text-gray-400 uppercase mb-1">Liên kết</div>
+          <a-button type="primary" block size="large" class="rounded-xl" style="background: linear-gradient(135deg, #1B4F72, #2E86C1);" @click="router.visit(viewingNotif.action_url)">
+            Đi tới trang liên kết →
+          </a-button>
+        </div>
+      </div>
+    </template>
+  </a-drawer>
+
+
 
   <!-- Pagination -->
   <div v-if="notifications.last_page > 1" class="flex justify-center mt-6 mb-4">
@@ -266,6 +311,7 @@ const props = defineProps({
 const showSendModal = ref(false)
 const selectedIds = ref([])
 const localFilters = reactive({ ...props.filters })
+const viewingNotif = ref(null)
 
 const statusOptions = [
   { value: '', label: 'Tất cả' },
@@ -307,8 +353,13 @@ const toggleSelect = (id) => {
   else selectedIds.value.push(id)
 }
 
-const markRead = (id) => {
-  router.put(`/notifications/${id}/read`, {}, { preserveScroll: true })
+const markRead = (id, callback) => {
+  router.put(`/notifications/${id}/read`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      if (callback) callback()
+    },
+  })
 }
 
 const markAllRead = () => {
@@ -335,8 +386,22 @@ const bulkDelete = () => {
 }
 
 const viewNotif = (notif) => {
-  if (notif.status === 'unread') markRead(notif.id)
-  if (notif.action_url) router.visit(notif.action_url)
+  // If has action_url, mark read then navigate (sequential, not concurrent)
+  if (notif.action_url) {
+    if (notif.status === 'unread') {
+      markRead(notif.id, () => {
+        router.visit(notif.action_url)
+      })
+    } else {
+      router.visit(notif.action_url)
+    }
+  } else {
+    // No action_url — show detail drawer
+    viewingNotif.value = notif
+    if (notif.status === 'unread') {
+      markRead(notif.id)
+    }
+  }
 }
 
 const submitSend = () => {

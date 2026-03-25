@@ -268,7 +268,7 @@ const menuItems = [
     children: [
       { key: 'files', label: 'Tổng hợp File', icon: () => h(FolderOpenOutlined) },
       { key: 'notifications', label: 'Thông báo', icon: () => h(BellOutlined) },
-      { key: 'roles', label: 'Phân quyền Admin', icon: () => h(SafetyOutlined) },
+      { key: 'roles', label: 'Phân quyền', icon: () => h(SafetyOutlined) },
       { key: 'system-logs', label: 'Nhật ký hệ thống', icon: () => h(CodeOutlined) },
       { key: 'settings', label: 'Cấu hình chung', icon: () => h(SettingOutlined) },
       { key: 'user-guide', label: 'Hướng dẫn sử dụng', icon: () => h(BookOutlined) },

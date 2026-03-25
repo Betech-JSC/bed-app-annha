@@ -112,7 +112,7 @@ class CrmProjectsController extends Controller
             'personnel.personnelRole',
             'subcontractors.payments',
             'constructionLogs' => function ($q) {
-                $q->latest('log_date');
+                $q->with(['creator:id,name', 'task:id,name'])->latest('log_date');
             },
             'acceptanceStages.items',
             'defects',
@@ -162,6 +162,14 @@ class CrmProjectsController extends Controller
             $globalSubcontractors = \App\Models\GlobalSubcontractor::orderBy('name')->get(['id', 'name', 'category', 'bank_name', 'bank_account_number', 'bank_account_name']);
         }
 
+        // Get leaf tasks (no children) for construction log form
+        $projectTasks = \App\Models\ProjectTask::where('project_id', $project->id)
+            ->whereNull('deleted_at')
+            ->whereDoesntHave('children', fn($q) => $q->whereNull('deleted_at'))
+            ->select('id', 'name', 'parent_id')
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('Crm/Projects/Show', [
             'project' => $project,
             'users' => $users,
@@ -170,6 +178,7 @@ class CrmProjectsController extends Controller
             'personnelRoles' => $personnelRoles,
             'materials' => $materials,
             'globalSubcontractors' => $globalSubcontractors,
+            'projectTasks' => $projectTasks,
         ]);
     }
 
@@ -452,7 +461,7 @@ class CrmProjectsController extends Controller
     }
 
     // ===================================================================
-    // SUB-ITEM CRUD — Construction Logs
+    // SUB-ITEM CRUD — Construction Logs (matching Mobile API)
     // ===================================================================
 
     public function storeLog(Request $request, string $projectId)
@@ -462,10 +471,40 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::LOG_CREATE, $project);
 
         $validated = $request->validate([
-            'title' => 'nullable|string|max:255',
-            'content' => 'required|string',
             'log_date' => 'required|date',
+            'task_id' => 'nullable|exists:project_tasks,id',
+            'weather' => 'nullable|string|max:100',
+            'personnel_count' => 'nullable|integer|min:0',
+            'completion_percentage' => 'nullable|numeric|min:0|max:100',
+            'notes' => 'nullable|string|max:2000',
         ]);
+
+        // Business rule: Only leaf tasks (no children) can receive log entries
+        if (!empty($validated['task_id'])) {
+            $task = \App\Models\ProjectTask::where('project_id', $project->id)
+                ->find($validated['task_id']);
+            if (!$task) {
+                return back()->with('error', 'Công việc không thuộc dự án này.');
+            }
+            $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
+                ->whereNull('deleted_at')->exists();
+            if ($hasChildren) {
+                return back()->with('error', 'Chỉ có thể ghi nhật ký cho công việc con (không có công việc con).');
+            }
+        }
+
+        // Business rule: completion_percentage can only increase
+        if (!empty($validated['task_id']) && isset($validated['completion_percentage'])) {
+            $lastLog = ConstructionLog::where('task_id', $validated['task_id'])
+                ->whereNotNull('completion_percentage')
+                ->orderBy('log_date', 'desc')
+                ->orderBy('created_at', 'desc')
+                ->first();
+
+            if ($lastLog && $validated['completion_percentage'] < $lastLog->completion_percentage) {
+                return back()->with('error', "Phần trăm hoàn thành chỉ có thể tăng. Tối thiểu: {$lastLog->completion_percentage}%");
+            }
+        }
 
         ConstructionLog::create([
             'project_id' => $project->id,
@@ -473,7 +512,63 @@ class CrmProjectsController extends Controller
             ...$validated,
         ]);
 
-        return back()->with('success', 'Đã thêm nhật ký.');
+        return back()->with('success', 'Đã thêm nhật ký thi công.');
+    }
+
+    public function updateLog(Request $request, string $projectId, string $logId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $log = ConstructionLog::where('project_id', $project->id)->findOrFail($logId);
+
+        // Allow creator or anyone with LOG_UPDATE permission
+        if ($log->created_by !== $user->id) {
+            $this->crmRequire($user, Permissions::LOG_UPDATE, $project);
+        }
+
+        $validated = $request->validate([
+            'task_id' => 'nullable|exists:project_tasks,id',
+            'weather' => 'nullable|string|max:100',
+            'personnel_count' => 'nullable|integer|min:0',
+            'completion_percentage' => 'nullable|numeric|min:0|max:100',
+            'notes' => 'nullable|string|max:2000',
+        ]);
+
+        // Business rule: Only leaf tasks
+        if (!empty($validated['task_id'])) {
+            $task = \App\Models\ProjectTask::where('project_id', $project->id)
+                ->find($validated['task_id']);
+            if (!$task) {
+                return back()->with('error', 'Công việc không thuộc dự án này.');
+            }
+            $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
+                ->whereNull('deleted_at')->exists();
+            if ($hasChildren) {
+                return back()->with('error', 'Chỉ có thể ghi nhật ký cho công việc con.');
+            }
+        }
+
+        // Business rule: completion_percentage can only increase
+        if (isset($validated['completion_percentage'])) {
+            $taskId = $validated['task_id'] ?? $log->task_id;
+            if ($taskId) {
+                $lastLog = ConstructionLog::where('task_id', $taskId)
+                    ->where('id', '!=', $log->id)
+                    ->whereNotNull('completion_percentage')
+                    ->orderBy('log_date', 'desc')
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+
+                $minPct = $lastLog ? $lastLog->completion_percentage : 0;
+                if ($validated['completion_percentage'] < $minPct) {
+                    return back()->with('error', "Phần trăm hoàn thành chỉ có thể tăng. Tối thiểu: {$minPct}%");
+                }
+            }
+        }
+
+        $log->update($validated);
+
+        return back()->with('success', 'Đã cập nhật nhật ký.');
     }
 
     public function destroyLog(string $projectId, string $logId)
@@ -482,7 +577,17 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::LOG_DELETE, $project);
 
-        ConstructionLog::where('project_id', $project->id)->findOrFail($logId)->delete();
+        $log = ConstructionLog::where('project_id', $project->id)->findOrFail($logId);
+
+        // Delete attachments
+        foreach ($log->attachments as $att) {
+            if ($att->file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($att->file_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($att->file_path);
+            }
+            $att->delete();
+        }
+
+        $log->delete();
         return back()->with('success', 'Đã xóa nhật ký.');
     }
 

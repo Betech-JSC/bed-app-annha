@@ -356,7 +356,7 @@ const categories = [
       {
         title: 'Phân quyền vai trò',
         steps: [
-          'Vào menu <strong>Hệ thống</strong> → <strong>Phân quyền Admin</strong>',
+          'Vào menu <strong>Hệ thống</strong> → <strong>Phân quyền</strong>',
           'Tạo vai trò mới (VD: Giám đốc, Kế toán, QLDA...)',
           'Chọn các quyền hạn tương ứng cho vai trò',
           'Gán vai trò cho nhân viên trong phần Quản lý nhân viên',
