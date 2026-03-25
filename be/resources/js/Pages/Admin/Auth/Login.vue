@@ -57,6 +57,19 @@
               <p class="login-form-card__subtitle">Đăng nhập để tiếp tục</p>
             </div>
 
+            <!-- Error Alert -->
+            <transition name="shake">
+              <a-alert
+                v-if="loginError"
+                :message="loginError"
+                type="error"
+                show-icon
+                closable
+                class="login-error-alert"
+                @close="loginError = ''"
+              />
+            </transition>
+
             <a-form
               :model="form"
               :rules="rules"
@@ -124,8 +137,8 @@
 </template>
 
 <script setup>
-import { Head, useForm } from '@inertiajs/vue3'
-import { message } from 'ant-design-vue'
+import { ref, watch } from 'vue'
+import { Head, useForm, usePage } from '@inertiajs/vue3'
 import {
   UserOutlined,
   LockOutlined,
@@ -136,6 +149,13 @@ const form = useForm({
   email: '',
   password: '',
   remember: false,
+})
+
+const loginError = ref('')
+
+// Clear error when user starts typing
+watch(() => [form.email, form.password], () => {
+  if (loginError.value) loginError.value = ''
 })
 
 const rules = {
@@ -149,12 +169,26 @@ const rules = {
 }
 
 const handleLogin = () => {
+  loginError.value = ''
   form.post('/admin/login', {
     onError: (errors) => {
+      // Parse error messages from Inertia validation
       if (errors.email) {
-        message.error(errors.email[0] || errors.email)
+        loginError.value = Array.isArray(errors.email) ? errors.email[0] : errors.email
+      } else if (errors.password) {
+        loginError.value = Array.isArray(errors.password) ? errors.password[0] : errors.password
       } else {
-        message.error('Đăng nhập thất bại')
+        // Generic error - could be network, server, etc.
+        const firstError = Object.values(errors)[0]
+        loginError.value = Array.isArray(firstError) ? firstError[0] : (firstError || 'Đăng nhập thất bại. Vui lòng thử lại.')
+      }
+    },
+    onFinish: () => {
+      // If there's a page-level error (500, etc.)
+      const page = usePage()
+      if (page.props?.errors && Object.keys(page.props.errors).length > 0) {
+        const firstErr = Object.values(page.props.errors)[0]
+        loginError.value = Array.isArray(firstErr) ? firstErr[0] : firstErr
       }
     },
   })
@@ -410,4 +444,25 @@ const handleLogin = () => {
     padding: 2rem;
   }
 }
+
+/* Error alert */
+.login-error-alert {
+  margin-bottom: 1.25rem;
+  border-radius: 12px !important;
+  animation: shakeIn 0.4s ease;
+}
+
+/* Shake animation */
+@keyframes shakeIn {
+  0% { transform: translateX(0); opacity: 0; }
+  20% { transform: translateX(-12px); opacity: 1; }
+  40% { transform: translateX(10px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+
+.shake-enter-active { animation: shakeIn 0.4s ease; }
+.shake-leave-active { transition: opacity 0.2s ease; }
+.shake-leave-to { opacity: 0; }
 </style>

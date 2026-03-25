@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\FileController;
+use App\Http\Controllers\Admin\CrmSystemLogController;
 
 // Admin Auth Routes (public)
 Route::prefix('admin')->name('admin.')->group(function () {
@@ -149,6 +150,18 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/bulk-delete', [CrmFilesController::class, 'bulkDestroy'])->name('bulk-destroy');
     });
 
+    // System Logs (Nhật ký hệ thống)
+    Route::prefix('system-logs')->name('system-logs.')->group(function () {
+        Route::get('/', [CrmSystemLogController::class, 'index'])->name('index');
+        Route::post('/clear', [CrmSystemLogController::class, 'clear'])->name('clear');
+        Route::get('/download', [CrmSystemLogController::class, 'download'])->name('download');
+    });
+
+    // User Guide (Hướng dẫn sử dụng)
+    Route::get('/user-guide', function () {
+        return \Inertia\Inertia::render('Crm/UserGuide/Index');
+    })->name('user-guide');
+
     // Projects
     Route::prefix('projects')->name('projects.')->group(function () {
         Route::get('/', [CrmProjectsController::class, 'index'])->name('index');
@@ -225,6 +238,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::delete('/{project}/invoices/{invoice}', [CrmProjectsController::class, 'destroyInvoice'])->name('invoices.destroy');
 
         // Acceptance Stages
+        Route::get('/{project}/acceptance', fn($project) => redirect("/projects/{$project}?tab=acceptance"))->name('acceptance.index');
         Route::post('/{project}/acceptance', [CrmProjectsController::class, 'storeAcceptance'])->name('acceptance.store');
         Route::post('/{project}/acceptance/{stage}/approve', [CrmProjectsController::class, 'approveAcceptance'])->name('acceptance.approve');
         Route::delete('/{project}/acceptance/{stage}', [CrmProjectsController::class, 'destroyAcceptance'])->name('acceptance.destroy');

@@ -39,57 +39,67 @@
     <!-- Main Content -->
     <a-layout>
       <!-- Header -->
-      <a-layout-header class="bg-white px-6 h-16 flex items-center justify-between shadow-sm border-b border-gray-100" style="line-height: normal;">
+      <a-layout-header class="crm-header" style="line-height: normal;">
         <div class="flex items-center gap-4">
           <a-button
             type="text"
             @click="collapsed = !collapsed"
-            class="flex items-center justify-center"
+            class="crm-header__btn"
           >
             <MenuUnfoldOutlined v-if="collapsed" />
             <MenuFoldOutlined v-else />
           </a-button>
 
           <!-- Breadcrumb -->
-          <a-breadcrumb>
+          <a-breadcrumb separator-style="color: rgba(255,255,255,0.3)">
             <a-breadcrumb-item>
-              <Link href="/" class="text-gray-400 hover:text-crm-primary transition-colors">
+              <Link href="/" class="crm-header__link">
                 <HomeOutlined />
               </Link>
             </a-breadcrumb-item>
             <a-breadcrumb-item v-for="item in breadcrumbs" :key="item.label">
-              <Link v-if="item.href" :href="item.href" class="text-gray-500 hover:text-crm-primary transition-colors">
+              <Link v-if="item.href" :href="item.href" class="crm-header__link">
                 {{ item.label }}
               </Link>
-              <span v-else class="text-gray-800 font-medium">{{ item.label }}</span>
+              <span v-else class="text-white font-medium">{{ item.label }}</span>
             </a-breadcrumb-item>
           </a-breadcrumb>
         </div>
 
         <div class="flex items-center gap-3">
+          <!-- User Guide -->
+          <a-tooltip title="Hướng dẫn sử dụng">
+            <a-button type="text" shape="circle" class="crm-header__btn" @click="router.visit('/user-guide')">
+              <template #icon><QuestionCircleOutlined style="font-size: 18px;" /></template>
+            </a-button>
+          </a-tooltip>
+
           <!-- Notifications -->
           <a-badge :count="unreadCount" :overflow-count="99">
-            <a-button type="text" shape="circle" @click="router.visit('/notifications')">
+            <a-button type="text" shape="circle" class="crm-header__btn" @click="router.visit('/notifications')">
               <template #icon><BellOutlined style="font-size: 18px;" /></template>
             </a-button>
           </a-badge>
 
           <!-- User -->
           <a-dropdown>
-            <div class="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-              <a-avatar :size="32" class="bg-crm-primary text-white font-semibold">
+            <div class="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors">
+              <a-avatar :size="32" style="background: rgba(255,255,255,0.15); color: white; font-weight: 600;">
                 {{ auth?.user?.name?.charAt(0)?.toUpperCase() || 'A' }}
               </a-avatar>
               <div v-if="auth?.user" class="hidden md:block">
-                <div class="text-sm font-semibold text-gray-800 leading-tight">{{ auth.user.name }}</div>
-                <div class="text-xs text-gray-400">{{ auth.user.email }}</div>
+                <div class="text-sm font-semibold text-white leading-tight">{{ auth.user.name }}</div>
+                <div class="text-xs text-white/50">{{ auth.user.email }}</div>
               </div>
-              <DownOutlined class="text-gray-400 text-xs" />
+              <DownOutlined class="text-white/50 text-xs" />
             </div>
             <template #overlay>
               <a-menu>
                 <a-menu-item key="profile">
                   <UserOutlined /> Hồ sơ
+                </a-menu-item>
+                <a-menu-item key="guide" @click="router.visit('/user-guide')">
+                  <QuestionCircleOutlined /> Hướng dẫn CRM
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout" class="text-red-500">
@@ -156,6 +166,9 @@ import {
   AuditOutlined,
   AimOutlined,
   UsergroupAddOutlined,
+  CodeOutlined,
+  QuestionCircleOutlined,
+  BookOutlined,
 } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -252,7 +265,9 @@ const menuItems = [
       { key: 'files', label: 'Tổng hợp File', icon: () => h(FolderOpenOutlined) },
       { key: 'notifications', label: 'Thông báo', icon: () => h(BellOutlined) },
       { key: 'roles', label: 'Phân quyền Admin', icon: () => h(SafetyOutlined) },
+      { key: 'system-logs', label: 'Nhật ký hệ thống', icon: () => h(CodeOutlined) },
       { key: 'settings', label: 'Cấu hình chung', icon: () => h(SettingOutlined) },
+      { key: 'user-guide', label: 'Hướng dẫn sử dụng', icon: () => h(BookOutlined) },
     ],
   },
 ]
@@ -275,6 +290,8 @@ const handleMenuClick = ({ key }) => {
     settings: '/settings',
     roles: '/roles',
     files: '/files',
+    'system-logs': '/system-logs',
+    'user-guide': '/user-guide',
   }
   if (routes[key]) {
     router.visit(routes[key])
@@ -287,6 +304,41 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
+/* ─── Header ─── */
+.crm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 64px;
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.crm-header__btn {
+  color: rgba(255, 255, 255, 0.75) !important;
+  transition: all 0.2s ease;
+}
+.crm-header__btn:hover {
+  color: white !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.crm-header__link {
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.2s;
+}
+.crm-header__link:hover {
+  color: white;
+}
+
+/* Breadcrumb separator fix for dark header */
+.crm-header :deep(.ant-breadcrumb-separator) {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* ─── Sidebar ─── */
 :deep(.ant-layout-sider) {
   position: fixed !important;
   left: 0;
