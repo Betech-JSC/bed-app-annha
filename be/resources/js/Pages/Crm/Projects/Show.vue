@@ -1090,9 +1090,19 @@
         <a-col :span="12"><a-form-item label="Số tiền" required><a-input-number v-model:value="costForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Ngày" required><a-date-picker v-model:value="costForm.cost_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
       </a-row>
-      <a-form-item v-if="costGroups.length" label="Nhóm chi phí"><a-select v-model:value="costForm.cost_group_id" size="large" class="w-full" allow-clear placeholder="Chọn nhóm">
-        <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
-      </a-select></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12"><a-form-item v-if="costGroups.length" label="Nhóm chi phí"><a-select v-model:value="costForm.cost_group_id" size="large" class="w-full" allow-clear placeholder="Chọn nhóm">
+          <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
+        </a-select></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Nhà thầu phụ"><a-select v-model:value="costForm.subcontractor_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn NTP">
+          <a-select-option v-for="s in (project.subcontractors || [])" :key="s.id" :value="s.id" :label="s.name">{{ s.name }}</a-select-option>
+        </a-select></a-form-item></a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :span="8"><a-form-item label="Vật tư"><a-input v-model:value="costForm.material_id" size="large" placeholder="Mã vật tư" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Số lượng"><a-input-number v-model:value="costForm.quantity" :min="0" size="large" class="w-full" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Đơn vị"><a-input v-model:value="costForm.unit" size="large" placeholder="VD: m², kg..." /></a-form-item></a-col>
+      </a-row>
       <a-form-item label="Mô tả"><a-textarea v-model:value="costForm.description" :rows="2" /></a-form-item>
       <!-- Inline Attachments -->
       <div class="border-t pt-3 mt-2">
@@ -1147,11 +1157,17 @@
   <!-- Payment Modal -->
   <a-modal v-model:open="showPaymentModal" title="Thêm thanh toán" :width="500" @ok="savePayment" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Ghi chú"><a-input v-model:value="paymentForm.notes" size="large" placeholder="Ghi chú thanh toán..." /></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12"><a-form-item label="Số phiếu thanh toán"><a-input v-model:value="paymentForm.payment_number" size="large" placeholder="TT-001" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Hợp đồng liên kết" v-if="project.contract"><a-select v-model:value="paymentForm.contract_id" size="large" class="w-full" allow-clear>
+          <a-select-option :value="project.contract.id">HĐ #{{ project.contract.id }} — {{ fmt(project.contract.contract_value) }}</a-select-option>
+        </a-select></a-form-item></a-col>
+      </a-row>
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Số tiền" required><a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Ngày đến hạn"><a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
       </a-row>
+      <a-form-item label="Ghi chú"><a-input v-model:value="paymentForm.notes" size="large" placeholder="Ghi chú thanh toán..." /></a-form-item>
       <!-- Inline Attachments -->
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Chứng từ thanh toán</div>
@@ -1414,25 +1430,40 @@
   <a-modal v-model:open="showTaskModal" :title="editingTask ? 'Cập nhật công việc' : 'Thêm công việc'" :width="640" @ok="saveTask" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Tên công việc" required><a-input v-model:value="taskForm.name" size="large" placeholder="Tên công việc" /></a-form-item>
-      <a-form-item label="Công việc cha">
-        <a-select v-model:value="taskForm.parent_id" size="large" class="w-full" allow-clear placeholder="Không có (công việc gốc)" show-search option-filter-prop="label">
-          <a-select-option v-for="t in parentTaskOptions" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
-        </a-select>
-      </a-form-item>
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="Ngày bắt đầu">
-            <a-date-picker v-model:value="taskForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+          <a-form-item label="Công việc cha">
+            <a-select v-model:value="taskForm.parent_id" size="large" class="w-full" allow-clear placeholder="Không có (công việc gốc)" show-search option-filter-prop="label">
+              <a-select-option v-for="t in parentTaskOptions" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+            </a-select>
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="Ngày kết thúc">
-            <a-date-picker v-model:value="taskForm.end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+          <a-form-item label="Giai đoạn" v-if="(project.phases || []).length">
+            <a-select v-model:value="taskForm.phase_id" size="large" class="w-full" allow-clear placeholder="Chọn giai đoạn">
+              <a-select-option v-for="p in (project.phases || [])" :key="p.id" :value="p.id">{{ p.name }}</a-select-option>
+            </a-select>
           </a-form-item>
         </a-col>
       </a-row>
       <a-row :gutter="16">
-        <a-col :span="12">
+        <a-col :span="8"><a-form-item label="Ngày bắt đầu"><a-date-picker v-model:value="taskForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Ngày kết thúc"><a-date-picker v-model:value="taskForm.end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Thời lượng (ngày)"><a-input-number v-model:value="taskForm.duration" :min="0" size="large" class="w-full" /></a-form-item></a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :span="8">
+          <a-form-item label="Trạng thái">
+            <a-select v-model:value="taskForm.status" size="large" class="w-full">
+              <a-select-option value="pending">Chờ</a-select-option>
+              <a-select-option value="in_progress">Đang thực hiện</a-select-option>
+              <a-select-option value="completed">Hoàn thành</a-select-option>
+              <a-select-option value="on_hold">Tạm dừng</a-select-option>
+              <a-select-option value="cancelled">Hủy</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
           <a-form-item label="Ưu tiên">
             <a-select v-model:value="taskForm.priority" size="large" class="w-full">
               <a-select-option value="low">Thấp</a-select-option>
@@ -1442,7 +1473,7 @@
             </a-select>
           </a-form-item>
         </a-col>
-        <a-col :span="12">
+        <a-col :span="8">
           <a-form-item label="Người giao việc">
             <a-select v-model:value="taskForm.assigned_to" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn người">
               <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }}</a-select-option>
@@ -1450,6 +1481,9 @@
           </a-form-item>
         </a-col>
       </a-row>
+      <a-form-item label="Tiến độ (%)">
+        <a-slider v-model:value="taskForm.progress_percentage" :min="0" :max="100" :marks="{0:'0%', 25:'25%', 50:'50%', 75:'75%', 100:'100%'}" />
+      </a-form-item>
       <a-form-item label="Mô tả"><a-textarea v-model:value="taskForm.description" :rows="3" placeholder="Mô tả công việc..." :maxlength="5000" show-count /></a-form-item>
     </a-form>
   </a-modal>
@@ -1471,6 +1505,10 @@
         <a-col :span="8"><a-form-item label="Ngân hàng"><a-input v-model:value="subForm.bank_name" size="large" /></a-form-item></a-col>
         <a-col :span="8"><a-form-item label="Số TK"><a-input v-model:value="subForm.bank_account_number" size="large" /></a-form-item></a-col>
         <a-col :span="8"><a-form-item label="Chủ TK"><a-input v-model:value="subForm.bank_account_name" size="large" /></a-form-item></a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :span="12"><a-form-item label="Ngày bắt đầu"><a-date-picker v-model:value="subForm.progress_start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Ngày kết thúc"><a-date-picker v-model:value="subForm.progress_end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
       </a-row>
       <a-form-item label="Trạng thái tiến độ">
         <a-select v-model:value="subForm.progress_status" size="large" class="w-full">
@@ -1513,8 +1551,14 @@
   <a-modal v-model:open="showBudgetModal" title="Tạo ngân sách" :width="700" @ok="saveBudget" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Tên ngân sách" required><a-input v-model:value="budgetForm.name" size="large" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Ngày" required><a-date-picker v-model:value="budgetForm.budget_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Tên ngân sách" required><a-input v-model:value="budgetForm.name" size="large" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Ngày" required><a-date-picker v-model:value="budgetForm.budget_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="4"><a-form-item label="Phiên bản"><a-input v-model:value="budgetForm.version" size="large" placeholder="v1" /></a-form-item></a-col>
+        <a-col :span="4"><a-form-item label="Trạng thái"><a-select v-model:value="budgetForm.status" size="large" class="w-full">
+          <a-select-option value="draft">Nháp</a-select-option>
+          <a-select-option value="approved">Đã duyệt</a-select-option>
+          <a-select-option value="revised">Sửa đổi</a-select-option>
+        </a-select></a-form-item></a-col>
       </a-row>
       <a-form-item label="Ghi chú"><a-textarea v-model:value="budgetForm.notes" :rows="2" /></a-form-item>
       <div class="mb-2 font-bold text-sm text-gray-700">Hạng mục</div>
@@ -1528,9 +1572,14 @@
   </a-modal>
 
   <!-- Invoice Modal -->
-  <a-modal v-model:open="showInvoiceModal" :title="editingInvoice ? 'Sửa hóa đơn' : 'Tạo hóa đơn'" :width="600" @ok="saveInvoice" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showInvoiceModal" :title="editingInvoice ? 'Sửa hóa đơn' : 'Tạo hóa đơn'" :width="640" @ok="saveInvoice" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Ngày hóa đơn" required><a-date-picker v-model:value="invoiceForm.invoice_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12"><a-form-item label="Ngày hóa đơn" required><a-date-picker v-model:value="invoiceForm.invoice_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item v-if="costGroups.length" label="Nhóm chi phí"><a-select v-model:value="invoiceForm.cost_group_id" size="large" class="w-full" allow-clear placeholder="Chọn nhóm">
+          <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
+        </a-select></a-form-item></a-col>
+      </a-row>
       <a-row :gutter="16">
         <a-col :span="8"><a-form-item label="Giá trước thuế" required><a-input-number v-model:value="invoiceForm.subtotal" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
         <a-col :span="8"><a-form-item label="Thuế"><a-input-number v-model:value="invoiceForm.tax_amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
@@ -1538,6 +1587,17 @@
       </a-row>
       <a-form-item label="Mô tả"><a-textarea v-model:value="invoiceForm.description" :rows="2" /></a-form-item>
       <a-form-item label="Ghi chú"><a-textarea v-model:value="invoiceForm.notes" :rows="2" /></a-form-item>
+      <!-- Inline Attachments -->
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> File hóa đơn đính kèm</div>
+        <div v-if="editingInvoice?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
+          <a v-for="a in editingInvoice.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
+            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          </a>
+        </div>
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -1831,11 +1891,11 @@ const uploadModalFiles = (entityType, entityId) => {
 // ============ COST CRUD ============
 const showCostModal = ref(false)
 const editingCost = ref(null)
-const costForm = ref({ name: '', amount: null, cost_date: null, cost_group_id: null, description: '' })
+const costForm = ref({ name: '', amount: null, cost_date: null, cost_group_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '' })
 const openCostModal = (c) => {
   editingCost.value = c
   modalFiles.value = []
-  costForm.value = c ? { name: c.name, amount: c.amount, cost_date: c.cost_date, cost_group_id: c.cost_group_id, description: c.description || '' } : { name: '', amount: null, cost_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, description: '' }
+  costForm.value = c ? { name: c.name, amount: c.amount, cost_date: c.cost_date, cost_group_id: c.cost_group_id, subcontractor_id: c.subcontractor_id || null, material_id: c.material_id || null, quantity: c.quantity || null, unit: c.unit || '', description: c.description || '' } : { name: '', amount: null, cost_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '' }
   showCostModal.value = true
 }
 const saveCost = () => {
@@ -1893,11 +1953,11 @@ const saveContract = () => {
 // ============ PAYMENT CRUD ============
 const showPaymentModal = ref(false)
 const editingPayment = ref(null)
-const paymentForm = ref({ notes: '', amount: null, due_date: null })
+const paymentForm = ref({ payment_number: '', contract_id: null, notes: '', amount: null, due_date: null })
 const openPaymentModal = (p = null) => {
   editingPayment.value = p
   modalFiles.value = []
-  paymentForm.value = p ? { notes: p.notes || '', amount: p.amount, due_date: p.due_date } : { notes: '', amount: null, due_date: null }
+  paymentForm.value = p ? { payment_number: p.payment_number || '', contract_id: p.contract_id || null, notes: p.notes || '', amount: p.amount, due_date: p.due_date } : { payment_number: '', contract_id: props.project.contract?.id || null, notes: '', amount: null, due_date: null }
   showPaymentModal.value = true
 }
 const savePayment = () => {
@@ -2169,7 +2229,7 @@ const parentTaskOptions = computed(() => {
 // Task CRUD
 const showTaskModal = ref(false)
 const editingTask = ref(null)
-const taskFormDefault = () => ({ name: '', description: '', parent_id: null, start_date: null, end_date: null, priority: 'medium', assigned_to: null })
+const taskFormDefault = () => ({ name: '', description: '', parent_id: null, phase_id: null, start_date: null, end_date: null, duration: null, progress_percentage: 0, status: 'pending', priority: 'medium', assigned_to: null })
 const taskForm = ref(taskFormDefault())
 
 const openTaskModal = (record = null, parentId = null) => {
@@ -2179,8 +2239,12 @@ const openTaskModal = (record = null, parentId = null) => {
       name: record.name || '',
       description: record.description || '',
       parent_id: record.parent_id ?? null,
+      phase_id: record.phase_id ?? null,
       start_date: record.start_date ? record.start_date.substring(0, 10) : null,
       end_date: record.end_date ? record.end_date.substring(0, 10) : null,
+      duration: record.duration ?? null,
+      progress_percentage: record.progress_percentage ?? 0,
+      status: record.status || 'pending',
       priority: record.priority || 'medium',
       assigned_to: record.assigned_to ?? null,
     }
@@ -2207,11 +2271,11 @@ const deleteTask = (t) => router.delete(`/projects/${props.project.id}/tasks/${t
 // ============ SUBCONTRACTOR CRUD ============
 const showSubModal = ref(false)
 const editingSub = ref(null)
-const subForm = ref({ name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_status: 'not_started', global_subcontractor_id: null })
+const subForm = ref({ name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null })
 const openSubModal = (s) => {
   editingSub.value = s
-  subForm.value = s ? { name: s.name, category: s.category || '', total_quote: s.total_quote, bank_name: s.bank_name || '', bank_account_number: s.bank_account_number || '', bank_account_name: s.bank_account_name || '', progress_status: s.progress_status || 'not_started' }
-    : { name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_status: 'not_started', global_subcontractor_id: null }
+  subForm.value = s ? { name: s.name, category: s.category || '', total_quote: s.total_quote, bank_name: s.bank_name || '', bank_account_number: s.bank_account_number || '', bank_account_name: s.bank_account_name || '', progress_start_date: s.progress_start_date || null, progress_end_date: s.progress_end_date || null, progress_status: s.progress_status || 'not_started' }
+    : { name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null }
   showSubModal.value = true
 }
 const onGlobalSubSelect = (id) => {
@@ -2257,8 +2321,8 @@ const deleteAC = (ac) => router.delete(`/projects/${props.project.id}/additional
 
 // ============ BUDGET CRUD ============
 const showBudgetModal = ref(false)
-const budgetForm = ref({ name: '', budget_date: null, notes: '', items: [{ name: '', estimated_amount: 0 }] })
-const openBudgetModal = () => { budgetForm.value = { name: '', budget_date: dayjs().format('YYYY-MM-DD'), notes: '', items: [{ name: '', estimated_amount: 0 }] }; showBudgetModal.value = true }
+const budgetForm = ref({ name: '', budget_date: null, version: '', status: 'draft', notes: '', items: [{ name: '', estimated_amount: 0 }] })
+const openBudgetModal = () => { budgetForm.value = { name: '', budget_date: dayjs().format('YYYY-MM-DD'), version: 'v1', status: 'draft', notes: '', items: [{ name: '', estimated_amount: 0 }] }; showBudgetModal.value = true }
 const saveBudget = () => { router.post(`/projects/${props.project.id}/budgets`, budgetForm.value, { onSuccess: () => showBudgetModal.value = false }) }
 const approveBudget = (b) => router.put(`/projects/${props.project.id}/budgets/${b.id}`, { status: 'approved' })
 const deleteBudget = (b) => router.delete(`/projects/${props.project.id}/budgets/${b.id}`)
@@ -2266,11 +2330,12 @@ const deleteBudget = (b) => router.delete(`/projects/${props.project.id}/budgets
 // ============ INVOICE CRUD ============
 const showInvoiceModal = ref(false)
 const editingInvoice = ref(null)
-const invoiceForm = ref({ invoice_date: null, subtotal: null, tax_amount: 0, discount_amount: 0, description: '', notes: '' })
+const invoiceForm = ref({ invoice_date: null, cost_group_id: null, subtotal: null, tax_amount: 0, discount_amount: 0, description: '', notes: '' })
 const openInvoiceModal = (inv) => {
   editingInvoice.value = inv
-  invoiceForm.value = inv ? { invoice_date: inv.invoice_date, subtotal: inv.subtotal, tax_amount: inv.tax_amount || 0, discount_amount: inv.discount_amount || 0, description: inv.description || '', notes: inv.notes || '' }
-    : { invoice_date: dayjs().format('YYYY-MM-DD'), subtotal: null, tax_amount: 0, discount_amount: 0, description: '', notes: '' }
+  modalFiles.value = []
+  invoiceForm.value = inv ? { invoice_date: inv.invoice_date, cost_group_id: inv.cost_group_id || null, subtotal: inv.subtotal, tax_amount: inv.tax_amount || 0, discount_amount: inv.discount_amount || 0, description: inv.description || '', notes: inv.notes || '' }
+    : { invoice_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, subtotal: null, tax_amount: 0, discount_amount: 0, description: '', notes: '' }
   showInvoiceModal.value = true
 }
 const saveInvoice = () => {

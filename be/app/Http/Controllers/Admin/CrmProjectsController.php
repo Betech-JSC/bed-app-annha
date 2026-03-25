@@ -119,10 +119,11 @@ class CrmProjectsController extends Controller
             },
             'acceptanceStages.items',
             'defects.attachments',
+            'phases',
             'progress',
             'changeRequests.requester',
             'changeRequests.approver',
-            'invoices',
+            'invoices.attachments',
             'budgets.items',
             'budgets.creator',
             'comments' => function ($q) {
@@ -426,18 +427,22 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_CREATE, $project);
 
         $validated = $request->validate([
+            'payment_number' => 'nullable|string|max:50',
+            'contract_id' => 'nullable|exists:contracts,id',
             'notes' => 'nullable|string|max:2000',
             'amount' => 'required|numeric|min:0',
             'due_date' => 'nullable|date',
             'status' => 'nullable|string',
         ]);
 
-        // Auto-generate payment_number
-        $lastNumber = ProjectPayment::where('project_id', $project->id)->max('payment_number') ?? 0;
+        // Auto-generate payment_number if not provided
+        if (empty($validated['payment_number'])) {
+            $lastNumber = ProjectPayment::where('project_id', $project->id)->max('payment_number') ?? 0;
+            $validated['payment_number'] = $lastNumber + 1;
+        }
 
         ProjectPayment::create([
             'project_id' => $project->id,
-            'payment_number' => $lastNumber + 1,
             ...$validated,
         ]);
 
@@ -1154,8 +1159,12 @@ class CrmProjectsController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'parent_id' => 'nullable|exists:project_tasks,id',
+            'phase_id' => 'nullable|exists:project_phases,id',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
+            'duration' => 'nullable|numeric|min:0',
+            'progress_percentage' => 'nullable|numeric|min:0|max:100',
+            'status' => 'nullable|in:pending,not_started,in_progress,completed,on_hold,cancelled',
             'priority' => 'nullable|in:low,medium,high,urgent',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
@@ -1173,9 +1182,9 @@ class CrmProjectsController extends Controller
             ->where('parent_id', $validated['parent_id'] ?? null)
             ->max('order') ?? -1;
 
-        // Auto-calculate duration
-        $duration = null;
-        if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+        // Use provided duration or auto-calculate
+        $duration = $validated['duration'] ?? null;
+        if (!$duration && !empty($validated['start_date']) && !empty($validated['end_date'])) {
             $duration = \Carbon\Carbon::parse($validated['start_date'])
                 ->diffInDays(\Carbon\Carbon::parse($validated['end_date'])) + 1;
         }
@@ -1185,14 +1194,15 @@ class CrmProjectsController extends Controller
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'parent_id' => $validated['parent_id'] ?? null,
+            'phase_id' => $validated['phase_id'] ?? null,
             'start_date' => $validated['start_date'] ?? null,
             'end_date' => $validated['end_date'] ?? null,
             'duration' => $duration,
             'priority' => $validated['priority'] ?? 'medium',
             'assigned_to' => $validated['assigned_to'] ?? null,
             'order' => $maxOrder + 1,
-            'status' => 'not_started',
-            'progress_percentage' => 0,
+            'status' => $validated['status'] ?? 'not_started',
+            'progress_percentage' => $validated['progress_percentage'] ?? 0,
             'created_by' => $user->id,
         ]);
 
@@ -1211,8 +1221,12 @@ class CrmProjectsController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'parent_id' => 'nullable|exists:project_tasks,id',
+            'phase_id' => 'nullable|exists:project_phases,id',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
+            'duration' => 'nullable|numeric|min:0',
+            'progress_percentage' => 'nullable|numeric|min:0|max:100',
+            'status' => 'nullable|in:pending,not_started,in_progress,completed,on_hold,cancelled',
             'priority' => 'nullable|in:low,medium,high,urgent',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
@@ -1224,9 +1238,9 @@ class CrmProjectsController extends Controller
             }
         }
 
-        // Auto-calculate duration
-        $duration = $task->duration;
-        if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+        // Use provided duration or auto-calculate
+        $duration = $validated['duration'] ?? $task->duration;
+        if (!isset($validated['duration']) && !empty($validated['start_date']) && !empty($validated['end_date'])) {
             $duration = \Carbon\Carbon::parse($validated['start_date'])
                 ->diffInDays(\Carbon\Carbon::parse($validated['end_date'])) + 1;
         }
@@ -1496,6 +1510,8 @@ class CrmProjectsController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'budget_date' => 'required|date',
+            'version' => 'nullable|string|max:20',
+            'status' => 'nullable|in:draft,approved,revised',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.name' => 'required|string|max:255',
@@ -1509,13 +1525,13 @@ class CrmProjectsController extends Controller
         $budget = ProjectBudget::create([
             'project_id' => $project->id,
             'name' => $validated['name'],
-            'version' => '1.0',
+            'version' => $validated['version'] ?? '1.0',
             'total_budget' => $totalBudget,
             'estimated_cost' => $totalBudget,
             'remaining_budget' => $totalBudget,
             'budget_date' => $validated['budget_date'],
             'notes' => $validated['notes'] ?? null,
-            'status' => 'draft',
+            'status' => $validated['status'] ?? 'draft',
             'created_by' => $user->id,
         ]);
 
