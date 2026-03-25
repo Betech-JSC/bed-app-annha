@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -109,23 +110,23 @@ class CrmNotificationController extends Controller
             'action_url' => 'nullable|string|max:500',
         ]);
 
-        $created = 0;
-        foreach ($validated['user_ids'] as $userId) {
-            Notification::create([
-                'user_id' => $userId,
-                'title' => $validated['title'],
-                'body' => $validated['body'],
-                'message' => $validated['title'],
-                'type' => $validated['type'],
-                'category' => 'system_update',
-                'priority' => $validated['priority'],
-                'action_url' => $validated['action_url'] ?? null,
-                'status' => 'unread',
-            ]);
-            $created++;
-        }
+        $notificationService = app(NotificationService::class);
 
-        return redirect()->back()->with('success', "Đã gửi {$created} thông báo thành công");
+        $notificationService->sendToUsers(
+            $validated['user_ids'],
+            $validated['type'],
+            'system_update',
+            $validated['title'],
+            $validated['body'],
+            [],
+            $validated['priority'],
+            $validated['action_url'] ?? null,
+            null,
+            null,
+            true // sendPush = true
+        );
+
+        return redirect()->back()->with('success', "Đã gửi " . count($validated['user_ids']) . " thông báo thành công");
     }
 
     /**

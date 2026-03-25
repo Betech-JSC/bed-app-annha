@@ -48,23 +48,271 @@
 
       <!-- ============ OVERVIEW TAB ============ -->
       <a-tab-pane key="overview" tab="Tổng quan">
-        <div class="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h4 class="font-bold text-gray-700 mb-3">Thông tin chung</h4>
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between"><span class="text-gray-400">Mã dự án</span><span class="font-semibold">{{ project.code }}</span></div>
-              <div class="flex justify-between"><span class="text-gray-400">Khách hàng</span><span class="font-semibold">{{ project.customer?.name || '—' }}</span></div>
-              <div class="flex justify-between"><span class="text-gray-400">Quản lý dự án</span><span class="font-semibold">{{ project.project_manager?.name || '—' }}</span></div>
-              <div class="flex justify-between"><span class="text-gray-400">Ngày bắt đầu</span><span>{{ fmtDate(project.start_date) }}</span></div>
-              <div class="flex justify-between"><span class="text-gray-400">Ngày kết thúc</span><span>{{ fmtDate(project.end_date) }}</span></div>
-              <div class="flex justify-between"><span class="text-gray-400">Người tạo</span><span>{{ project.creator?.name || '—' }}</span></div>
+        <div class="p-6 space-y-6">
+
+          <!-- Row 1: Project Info + Timeline -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Project Info Card -->
+            <div class="lg:col-span-2 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl p-6 border border-blue-100/60 relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-40 h-40 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+              <div class="relative">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-200">
+                    <span class="text-white text-lg font-bold">{{ (project.name || '?')[0] }}</span>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-bold text-gray-800 truncate">{{ project.name }}</h3>
+                    <span class="text-xs text-gray-400 font-mono">{{ project.code }}</span>
+                  </div>
+                  <a-tag :color="statusColors[project.status]" class="rounded-full text-xs font-semibold px-3">{{ statusLabels[project.status] }}</a-tag>
+                </div>
+
+                <div class="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-white/80 flex items-center justify-center text-blue-500 shadow-sm">
+                      <UserOutlined />
+                    </div>
+                    <div>
+                      <div class="text-[11px] text-gray-400 uppercase tracking-wider">Khách hàng</div>
+                      <div class="font-semibold text-gray-700">{{ project.customer?.name || '—' }}</div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-white/80 flex items-center justify-center text-indigo-500 shadow-sm">
+                      <UserOutlined />
+                    </div>
+                    <div>
+                      <div class="text-[11px] text-gray-400 uppercase tracking-wider">Quản lý dự án</div>
+                      <div class="font-semibold text-gray-700">{{ project.project_manager?.name || '—' }}</div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-white/80 flex items-center justify-center text-emerald-500 shadow-sm">
+                      <CalendarOutlined />
+                    </div>
+                    <div>
+                      <div class="text-[11px] text-gray-400 uppercase tracking-wider">Bắt đầu</div>
+                      <div class="font-semibold text-gray-700">{{ fmtDate(project.start_date) }}</div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-white/80 flex items-center justify-center text-orange-500 shadow-sm">
+                      <CalendarOutlined />
+                    </div>
+                    <div>
+                      <div class="text-[11px] text-gray-400 uppercase tracking-wider">Kết thúc</div>
+                      <div class="font-semibold text-gray-700">{{ fmtDate(project.end_date) }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Timeline bar -->
+                <div class="mt-5 pt-4 border-t border-blue-100/80">
+                  <div class="flex justify-between text-[11px] text-gray-400 mb-1.5">
+                    <span>{{ fmtDate(project.start_date) }}</span>
+                    <span class="font-medium" :class="timelineProgress > 100 ? 'text-red-500' : 'text-blue-500'">
+                      {{ timelineProgress > 100 ? 'Quá hạn' : `Còn ${daysRemaining} ngày` }}
+                    </span>
+                    <span>{{ fmtDate(project.end_date) }}</span>
+                  </div>
+                  <div class="h-2 bg-gray-200/60 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-700"
+                      :class="timelineProgress > 100 ? 'bg-gradient-to-r from-red-400 to-red-500' : 'bg-gradient-to-r from-blue-400 to-indigo-500'"
+                      :style="{ width: Math.min(timelineProgress, 100) + '%' }">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-3 text-sm text-gray-500 leading-relaxed" v-if="project.description">
+                  {{ project.description }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Progress Ring Card -->
+            <div class="bg-white rounded-2xl p-6 border border-gray-100 flex flex-col items-center justify-center text-center">
+              <div class="relative mb-4">
+                <a-progress
+                  type="circle"
+                  :percent="project.progress?.overall_percentage || 0"
+                  :size="140"
+                  :stroke-width="8"
+                  :stroke-color="{ '0%': '#3B82F6', '100%': '#6366F1' }"
+                  trail-color="#F1F5F9"
+                />
+              </div>
+              <div class="text-sm font-semibold text-gray-700 mb-1">Tiến độ tổng thể</div>
+              <div class="text-xs text-gray-400">
+                {{ taskStats.completed }}/{{ taskStats.total }} công việc hoàn thành
+              </div>
+
+              <!-- Mini stats -->
+              <div class="grid grid-cols-3 gap-3 mt-5 w-full">
+                <div class="text-center cursor-default group" title="Công việc">
+                  <div class="text-lg font-bold text-blue-600 group-hover:scale-110 transition-transform">{{ taskStats.total }}</div>
+                  <div class="text-[10px] text-gray-400 uppercase">Công việc</div>
+                </div>
+                <div class="text-center cursor-default group" title="Lỗi mở">
+                  <div class="text-lg font-bold text-red-500 group-hover:scale-110 transition-transform">{{ openDefects }}</div>
+                  <div class="text-[10px] text-gray-400 uppercase">Lỗi mở</div>
+                </div>
+                <div class="text-center cursor-default group" title="Rủi ro">
+                  <div class="text-lg font-bold text-amber-500 group-hover:scale-110 transition-transform">{{ activeRisks }}</div>
+                  <div class="text-[10px] text-gray-400 uppercase">Rủi ro</div>
+                </div>
+              </div>
             </div>
           </div>
-          <div>
-            <h4 class="font-bold text-gray-700 mb-3">Tiến độ</h4>
-            <a-progress :percent="project.progress?.overall_percentage || 0" :stroke-color="{ '0%': '#1B4F72', '100%': '#2E86C1' }" />
-            <div class="mt-4 text-sm text-gray-500">{{ project.description || 'Chưa có mô tả dự án.' }}</div>
+
+          <!-- Row 2: Financial Overview + Task Breakdown -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Financial Card -->
+            <div class="bg-white rounded-2xl p-6 border border-gray-100">
+              <div class="flex items-center justify-between mb-5">
+                <h4 class="font-bold text-gray-700 flex items-center gap-2">
+                  <span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-emerald-400 to-emerald-600"></span>
+                  Tài chính
+                </h4>
+                <div class="text-xs px-2.5 py-1 rounded-full font-medium"
+                  :class="profitMargin >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'">
+                  {{ profitMargin >= 0 ? '+' : '' }}{{ profitMargin.toFixed(1) }}% lợi nhuận
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <!-- Contract value -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <span class="text-blue-500 text-sm">💰</span>
+                    </div>
+                    <span class="text-sm text-gray-500">Giá trị hợp đồng</span>
+                  </div>
+                  <span class="text-sm font-bold text-gray-800">{{ fmt(project.contract?.contract_value) }}</span>
+                </div>
+
+                <!-- Total costs -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">
+                      <span class="text-red-500 text-sm">📊</span>
+                    </div>
+                    <span class="text-sm text-gray-500">Tổng chi phí thực tế</span>
+                  </div>
+                  <span class="text-sm font-bold text-red-500">{{ fmt(totalCosts) }}</span>
+                </div>
+
+                <!-- Additional costs -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center">
+                      <span class="text-orange-500 text-sm">⚡</span>
+                    </div>
+                    <span class="text-sm text-gray-500">Chi phí phát sinh</span>
+                  </div>
+                  <span class="text-sm font-bold text-orange-500">{{ fmt(totalAdditionalCosts) }}</span>
+                </div>
+
+                <!-- Subcontractor payments -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center">
+                      <span class="text-purple-500 text-sm">🏗️</span>
+                    </div>
+                    <span class="text-sm text-gray-500">Thanh toán NTP</span>
+                  </div>
+                  <span class="text-sm font-bold text-purple-600">{{ fmt(totalSubPayments) }}</span>
+                </div>
+
+                <!-- Visual bar -->
+                <div class="pt-3 border-t border-gray-50">
+                  <div class="flex justify-between text-[11px] text-gray-400 mb-1">
+                    <span>Chi tiêu / Hợp đồng</span>
+                    <span class="font-medium" :class="budgetUsage > 100 ? 'text-red-500' : 'text-gray-500'">{{ budgetUsage.toFixed(0) }}%</span>
+                  </div>
+                  <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-700"
+                      :class="budgetUsage > 90 ? 'bg-gradient-to-r from-red-400 to-red-500' : budgetUsage > 70 ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-gradient-to-r from-emerald-400 to-emerald-500'"
+                      :style="{ width: Math.min(budgetUsage, 100) + '%' }">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Team & Quick Links Card -->
+            <div class="bg-white rounded-2xl p-6 border border-gray-100">
+              <div class="flex items-center justify-between mb-5">
+                <h4 class="font-bold text-gray-700 flex items-center gap-2">
+                  <span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-indigo-400 to-indigo-600"></span>
+                  Nhân sự dự án
+                </h4>
+                <a-tag color="blue" class="rounded-full text-xs">{{ (project.personnel || []).length }} thành viên</a-tag>
+              </div>
+
+              <!-- Team Grid -->
+              <div class="grid grid-cols-2 gap-3 mb-5" v-if="(project.personnel || []).length > 0">
+                <div v-for="p in (project.personnel || []).slice(0, 6)" :key="p.id"
+                  class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm"
+                    :style="{ background: `hsl(${(p.user?.name || '').length * 37 % 360}, 60%, 55%)` }">
+                    {{ (p.user?.name || '?')[0] }}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-xs font-semibold text-gray-700 truncate group-hover:text-blue-600 transition-colors">{{ p.user?.name || 'N/A' }}</div>
+                    <div class="text-[10px] text-gray-400 truncate">{{ p.role?.name || 'Thành viên' }}</div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-center py-6 text-sm text-gray-400">Chưa có nhân sự</div>
+
+              <!-- Quick Overview Metrics -->
+              <div class="border-t border-gray-100 pt-4">
+                <div class="text-xs text-gray-400 uppercase tracking-wider mb-3 font-medium">Trạng thái công việc</div>
+                <div class="space-y-2.5">
+                  <div class="flex items-center gap-3">
+                    <div class="flex-1">
+                      <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-500">Hoàn thành</span>
+                        <span class="font-semibold text-emerald-600">{{ taskStats.total > 0 ? Math.round(taskStats.completed / taskStats.total * 100) : 0 }}%</span>
+                      </div>
+                      <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
+                          :style="{ width: (taskStats.total > 0 ? taskStats.completed / taskStats.total * 100 : 0) + '%' }"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div class="flex-1">
+                      <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-500">Đang thực hiện</span>
+                        <span class="font-semibold text-blue-600">{{ taskStats.total > 0 ? Math.round(taskStats.in_progress / taskStats.total * 100) : 0 }}%</span>
+                      </div>
+                      <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-blue-400 to-blue-500 rounded-full transition-all duration-500"
+                          :style="{ width: (taskStats.total > 0 ? taskStats.in_progress / taskStats.total * 100 : 0) + '%' }"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div class="flex-1">
+                      <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-500">Trễ tiến độ</span>
+                        <span class="font-semibold text-orange-500">{{ taskStats.total > 0 ? Math.round(taskStats.delayed / taskStats.total * 100) : 0 }}%</span>
+                      </div>
+                      <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-gradient-to-r from-orange-400 to-red-400 rounded-full transition-all duration-500"
+                          :style="{ width: (taskStats.total > 0 ? taskStats.delayed / taskStats.total * 100 : 0) + '%' }"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
         </div>
       </a-tab-pane>
 
@@ -821,12 +1069,12 @@
   <!-- Defect Modal -->
   <a-modal v-model:open="showDefectModal" :title="editingDefect ? 'Sửa lỗi' : 'Báo lỗi mới'" :width="600" @ok="saveDefect" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tiêu đề" required><a-input v-model:value="defectForm.title" size="large" /></a-form-item>
+      <a-form-item label="Mô tả lỗi" required><a-textarea v-model:value="defectForm.description" :rows="3" placeholder="Nhập mô tả chi tiết lỗi..." /></a-form-item>
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Mức độ" required><a-select v-model:value="defectForm.severity" size="large" class="w-full">
           <a-select-option value="low">Thấp</a-select-option>
           <a-select-option value="medium">Trung bình</a-select-option>
-          <a-select-option value="major">Nghiêm trọng</a-select-option>
+          <a-select-option value="high">Nghiêm trọng</a-select-option>
           <a-select-option value="critical">Rất nghiêm trọng</a-select-option>
         </a-select></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Trạng thái"><a-select v-model:value="defectForm.status" size="large" class="w-full">
@@ -836,7 +1084,6 @@
           <a-select-option value="verified">Đã xác nhận</a-select-option>
         </a-select></a-form-item></a-col>
       </a-row>
-      <a-form-item label="Mô tả"><a-textarea v-model:value="defectForm.description" :rows="3" /></a-form-item>
     </a-form>
   </a-modal>
 
@@ -1107,6 +1354,7 @@ import {
   SendOutlined, CheckCircleOutlined, CloseCircleOutlined,
   CheckOutlined, CloseOutlined,
   UploadOutlined, DownloadOutlined, FileOutlined,
+  UserOutlined, CalendarOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -1133,6 +1381,37 @@ const can = (perm) => {
 const fmt = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v) : '0 ₫'
 const fmtDate = (d) => d ? dayjs(d).format('DD/MM/YYYY') : '—'
 const totalCosts = computed(() => (props.project.costs || []).reduce((s, c) => s + Number(c.amount || 0), 0))
+
+// ============ OVERVIEW COMPUTED ============
+const totalAdditionalCosts = computed(() => (props.project.additional_costs || []).reduce((s, c) => s + Number(c.amount || 0), 0))
+const totalSubPayments = computed(() => {
+  const subs = props.project.subcontractors || []
+  return subs.reduce((sum, s) => sum + (s.payments || []).reduce((ps, p) => ps + Number(p.amount || 0), 0), 0)
+})
+const contractValue = computed(() => Number(props.project.contract?.contract_value || 0))
+const profitMargin = computed(() => {
+  if (contractValue.value <= 0) return 0
+  return ((contractValue.value - totalCosts.value) / contractValue.value) * 100
+})
+const budgetUsage = computed(() => {
+  if (contractValue.value <= 0) return 0
+  return (totalCosts.value / contractValue.value) * 100
+})
+const timelineProgress = computed(() => {
+  if (!props.project.start_date || !props.project.end_date) return 0
+  const start = dayjs(props.project.start_date)
+  const end = dayjs(props.project.end_date)
+  const total = end.diff(start, 'day') || 1
+  const elapsed = dayjs().diff(start, 'day')
+  return Math.round((elapsed / total) * 100)
+})
+const daysRemaining = computed(() => {
+  if (!props.project.end_date) return 0
+  const diff = dayjs(props.project.end_date).diff(dayjs(), 'day')
+  return Math.max(0, diff)
+})
+const openDefects = computed(() => (props.project.defects || []).filter(d => d.status === 'open' || d.status === 'in_progress').length)
+const activeRisks = computed(() => (props.project.risks || []).filter(r => r.status !== 'closed').length)
 
 // ============ STATE ============
 const activeTab = ref('overview')
@@ -1206,7 +1485,7 @@ const logCols = [
 ]
 
 const defectCols = [
-  { title: 'Tiêu đề', dataIndex: 'title', ellipsis: true },
+  { title: 'Mô tả', dataIndex: 'description', ellipsis: true },
   { title: 'Mức độ', key: 'severity', width: 120 },
   { title: 'Trạng thái', key: 'status', width: 120 },
   { title: '', key: 'actions', width: 100, align: 'center' },
@@ -1386,10 +1665,10 @@ const deleteComment = (c) => router.delete(`/projects/${props.project.id}/commen
 // ============ DEFECT CRUD ============
 const showDefectModal = ref(false)
 const editingDefect = ref(null)
-const defectForm = ref({ title: '', description: '', severity: 'medium', status: 'open' })
+const defectForm = ref({ description: '', severity: 'medium', status: 'open' })
 const openDefectModal = (d) => {
   editingDefect.value = d
-  defectForm.value = d ? { title: d.title, description: d.description || '', severity: d.severity, status: d.status } : { title: '', description: '', severity: 'medium', status: 'open' }
+  defectForm.value = d ? { description: d.description || '', severity: d.severity, status: d.status } : { description: '', severity: 'medium', status: 'open' }
   showDefectModal.value = true
 }
 const saveDefect = () => {

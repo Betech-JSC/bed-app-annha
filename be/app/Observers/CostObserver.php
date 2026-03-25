@@ -32,7 +32,6 @@ class CostObserver
                     $title = "Yêu cầu duyệt chi phí";
                     $body = "Có chi phí mới cần duyệt trong dự án '{$projectName}'";
 
-                    // Notify management team
                     $this->notificationService->sendToPermissionUsers(
                         \App\Constants\Permissions::COST_APPROVE_MANAGEMENT,
                         $cost->project_id,
@@ -49,7 +48,26 @@ class CostObserver
                         Notification::PRIORITY_HIGH,
                         "/projects/{$cost->project_id}/costs/{$cost->id}",
                         true,
-                        [$cost->created_by] // Exclude creator
+                        [$cost->created_by]
+                    );
+                } else {
+                    // Company cost — notify global management
+                    $this->notificationService->sendToPermissionUsers(
+                        \App\Constants\Permissions::COST_APPROVE_MANAGEMENT,
+                        null,
+                        Notification::TYPE_WORKFLOW,
+                        Notification::CATEGORY_WORKFLOW_APPROVAL,
+                        "Yêu cầu duyệt chi phí công ty",
+                        "Chi phí công ty '{$cost->name}' (" . number_format($cost->amount) . " VND) cần BĐH duyệt.",
+                        [
+                            'cost_id' => $cost->id,
+                            'amount' => $cost->amount,
+                            'cost_name' => $cost->name,
+                        ],
+                        Notification::PRIORITY_HIGH,
+                        "/company-costs/{$cost->id}",
+                        true,
+                        [$cost->created_by]
                     );
                 }
             }
@@ -58,20 +76,15 @@ class CostObserver
             if ($oldStatus === 'pending_management_approval' && $newStatus === 'pending_accountant_approval') {
                 if ($cost->project_id) {
                     $projectName = $cost->project ? $cost->project->name : 'N/A';
-                    $title = "Yêu cầu xác nhận chi phí";
-                    $body = "Chi phí trong dự án '{$projectName}' đã được ban điều hành duyệt, cần xác nhận";
 
-                    // Notify accountants
                     $this->notificationService->sendToPermissionUsers(
                         \App\Constants\Permissions::COST_APPROVE_ACCOUNTANT,
                         $cost->project_id,
                         Notification::TYPE_WORKFLOW,
                         Notification::CATEGORY_WORKFLOW_APPROVAL,
-                        $title,
-                        $body,
+                        "Yêu cầu xác nhận chi phí",
+                        "Chi phí trong dự án '{$projectName}' đã được BĐH duyệt, cần KT xác nhận.",
                         [
-                            'workflow_type' => 'Chi phí',
-                            'item_name' => "Chi phí #{$cost->id}",
                             'cost_id' => $cost->id,
                             'project_id' => $cost->project_id,
                         ],
@@ -79,52 +92,88 @@ class CostObserver
                         "/projects/{$cost->project_id}/costs/{$cost->id}",
                         true
                     );
+                } else {
+                    // Company cost → notify accountants globally
+                    $this->notificationService->sendToPermissionUsers(
+                        \App\Constants\Permissions::COST_APPROVE_ACCOUNTANT,
+                        null,
+                        Notification::TYPE_WORKFLOW,
+                        Notification::CATEGORY_WORKFLOW_APPROVAL,
+                        "Yêu cầu xác nhận chi phí công ty",
+                        "Chi phí công ty '{$cost->name}' (" . number_format($cost->amount) . " VND) đã được BĐH duyệt, cần KT xác nhận.",
+                        [
+                            'cost_id' => $cost->id,
+                            'amount' => $cost->amount,
+                        ],
+                        Notification::PRIORITY_HIGH,
+                        "/company-costs/{$cost->id}",
+                        true
+                    );
                 }
             }
 
-            // Khi cost được approve, có thể kiểm tra budget overrun
-            // Chỉ check một lần khi chuyển sang approved
+            // Khi cost được approve
             if ($oldStatus !== 'approved' && $newStatus === 'approved') {
                 $this->checkBudgetOverrun($cost);
 
-                // Notify Team (Informational) — only for project costs
                 if ($cost->project_id) {
                     $projectName = $cost->project ? $cost->project->name : 'N/A';
-                    $title = "Chi phí đã được duyệt";
-                    $body = "Chi phí '{$cost->description}' (Amount: " . number_format($cost->amount) . ") trong dự án '{$projectName}' đã được duyệt.";
-                    
                     $this->notificationService->sendToProjectTeam(
                         $cost->project_id,
                         Notification::TYPE_SYSTEM,
                         Notification::CATEGORY_STATUS_CHANGE,
-                        $title,
-                        $body,
+                        "Chi phí đã được duyệt",
+                        "Chi phí '{$cost->name}' (" . number_format($cost->amount) . " VND) trong dự án '{$projectName}' đã được duyệt.",
                         ['cost_id' => $cost->id, 'project_id' => $cost->project_id],
                         Notification::PRIORITY_MEDIUM,
                         "/projects/{$cost->project_id}/costs/{$cost->id}",
                         true
                     );
+                } else {
+                    // Notify creator of company cost
+                    if ($cost->created_by) {
+                        $this->notificationService->sendToUser(
+                            $cost->created_by,
+                            Notification::TYPE_SYSTEM,
+                            Notification::CATEGORY_STATUS_CHANGE,
+                            "Chi phí công ty đã được duyệt",
+                            "Chi phí '{$cost->name}' (" . number_format($cost->amount) . " VND) đã được KT xác nhận.",
+                            ['cost_id' => $cost->id],
+                            Notification::PRIORITY_MEDIUM,
+                            "/company-costs/{$cost->id}"
+                        );
+                    }
                 }
             }
 
             if ($oldStatus !== 'rejected' && $newStatus === 'rejected') {
-                // Notify Team when rejected — only for project costs
                 if ($cost->project_id) {
                     $projectName = $cost->project ? $cost->project->name : 'N/A';
-                    $title = "Chi phí bị từ chối";
-                    $body = "Chi phí '{$cost->description}' trong dự án '{$projectName}' đã bị từ chối.";
-                    
                     $this->notificationService->sendToProjectTeam(
                         $cost->project_id,
                         Notification::TYPE_SYSTEM,
                         Notification::CATEGORY_STATUS_CHANGE,
-                        $title,
-                        $body,
+                        "Chi phí bị từ chối",
+                        "Chi phí '{$cost->name}' trong dự án '{$projectName}' đã bị từ chối.",
                         ['cost_id' => $cost->id, 'project_id' => $cost->project_id],
                         Notification::PRIORITY_MEDIUM,
                         "/projects/{$cost->project_id}/costs/{$cost->id}",
                         true
                     );
+                } else {
+                    // Notify creator of rejected company cost
+                    if ($cost->created_by) {
+                        $this->notificationService->sendToUser(
+                            $cost->created_by,
+                            Notification::TYPE_SYSTEM,
+                            Notification::CATEGORY_STATUS_CHANGE,
+                            "Chi phí công ty bị từ chối",
+                            "Chi phí '{$cost->name}' (" . number_format($cost->amount) . " VND) đã bị từ chối." . ($cost->rejected_reason ? " Lý do: {$cost->rejected_reason}" : ''),
+                            ['cost_id' => $cost->id],
+                            Notification::PRIORITY_HIGH,
+                            "/company-costs/{$cost->id}"
+                        );
+                    }
                 }
             }
         }

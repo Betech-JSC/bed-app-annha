@@ -652,17 +652,19 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::DEFECT_CREATE, $project);
 
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'severity' => 'required|in:low,medium,major,critical',
-            'status' => 'nullable|string',
+            'description' => 'required|string',
+            'severity' => 'required|in:low,medium,high,critical',
+            'status' => 'nullable|string|in:open,in_progress,fixed,verified',
+            'acceptance_stage_id' => 'nullable|exists:acceptance_stages,id',
         ]);
 
         Defect::create([
             'project_id' => $project->id,
             'reported_by' => $user->id,
+            'description' => $validated['description'],
+            'severity' => $validated['severity'],
             'status' => $validated['status'] ?? 'open',
-            ...$validated,
+            'acceptance_stage_id' => $validated['acceptance_stage_id'] ?? null,
         ]);
 
         return back()->with('success', 'Đã báo cáo lỗi.');
@@ -676,10 +678,9 @@ class CrmProjectsController extends Controller
 
         $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
         $validated = $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'severity' => 'sometimes|in:low,medium,major,critical',
-            'status' => 'sometimes|string',
+            'description' => 'sometimes|string',
+            'severity' => 'sometimes|in:low,medium,high,critical',
+            'status' => 'sometimes|string|in:open,in_progress,fixed,verified',
         ]);
         $defect->update($validated);
         return back()->with('success', 'Đã cập nhật lỗi.');
