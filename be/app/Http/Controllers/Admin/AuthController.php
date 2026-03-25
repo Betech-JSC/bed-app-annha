@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Admin;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -23,7 +23,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Handle login
+     * Handle login — uses unified users table
      */
     public function login(Request $request): RedirectResponse
     {
@@ -32,15 +32,27 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $admin = Admin::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)->first();
 
-        if (!$admin || !Hash::check($request->password, $admin->password)) {
+        if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Thông tin đăng nhập không chính xác.'],
             ]);
         }
 
-        Auth::guard('admin')->login($admin, $request->boolean('remember'));
+        // Check if user has CRM access (has any role or is admin)
+        $hasAccess = $user->roles()->exists()
+            || $user->hasPermission('settings.manage')
+            || $user->role === 'admin'
+            || $user->role === 'super_admin';
+
+        if (!$hasAccess) {
+            throw ValidationException::withMessages([
+                'email' => ['Tài khoản không có quyền truy cập CRM. Vui lòng liên hệ quản trị viên.'],
+            ]);
+        }
+
+        Auth::guard('admin')->login($user, $request->boolean('remember'));
 
         $request->session()->regenerate();
 

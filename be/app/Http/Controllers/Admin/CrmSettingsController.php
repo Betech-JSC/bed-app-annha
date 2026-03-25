@@ -15,23 +15,24 @@ class CrmSettingsController extends Controller
 {
     public function index()
     {
-        $admins = \App\Models\Admin::with('roles')->get()->map(function ($admin) {
+        // Show users that have roles (CRM users)
+        $admins = \App\Models\User::has('roles')->with('roles')->get()->map(function ($user) {
             return [
-                'id' => $admin->id,
-                'name' => $admin->name,
-                'email' => $admin->email,
-                'super_admin' => $admin->super_admin,
-                'roles' => $admin->roles->pluck('name'),
-                'created_at' => $admin->created_at?->format('d/m/Y'),
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'super_admin' => $user->isSuperAdmin(),
+                'roles' => $user->roles->pluck('name'),
+                'created_at' => $user->created_at?->format('d/m/Y'),
             ];
         });
 
-        $roles = Role::with('permissions')->withCount('admins')->get()->map(function ($role) {
+        $roles = Role::with('permissions')->withCount('users')->get()->map(function ($role) {
             return [
                 'id' => $role->id,
                 'name' => $role->name,
                 'description' => $role->description,
-                'admins_count' => $role->admins_count,
+                'admins_count' => $role->users_count,
                 'permission_count' => $role->permissions->count(),
             ];
         });

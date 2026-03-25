@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Admin;
+use App\Models\User;
 use App\Models\Role;
 use App\Models\Permission;
 use Illuminate\Http\RedirectResponse;
@@ -117,13 +117,13 @@ class PermissionController extends Controller
      */
     public function manageAdminRoles(): Response
     {
-        $admins = Admin::with('roles')->get()->map(function ($admin) {
+        $admins = User::has('roles')->with('roles')->get()->map(function ($user) {
             return [
-                'id' => $admin->id,
-                'name' => $admin->name,
-                'email' => $admin->email,
-                'super_admin' => $admin->super_admin,
-                'roles' => $admin->roles->map(function ($role) {
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'super_admin' => $user->isSuperAdmin(),
+                'roles' => $user->roles->map(function ($role) {
                     return [
                         'id' => $role->id,
                         'name' => $role->name,
@@ -151,23 +151,17 @@ class PermissionController extends Controller
      */
     public function updateAdminRole($id): RedirectResponse
     {
-        $admin = Admin::findOrFail($id);
+        $user = User::findOrFail($id);
 
         Request::validate([
             'role_ids' => 'sometimes|array',
             'role_ids.*' => 'exists:roles,id',
-            'super_admin' => 'sometimes|boolean',
         ]);
 
-        if (Request::has('super_admin')) {
-            $admin->super_admin = Request::get('super_admin');
-            $admin->save();
-        }
-
         if (Request::has('role_ids')) {
-            $admin->roles()->sync(Request::get('role_ids'));
+            $user->roles()->sync(Request::get('role_ids'));
         }
 
-        return redirect()->back()->with('success', 'Đã cập nhật quyền cho admin thành công');
+        return redirect()->back()->with('success', 'Đã cập nhật quyền cho user thành công');
     }
 }

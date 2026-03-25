@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Route;
 // Redirect root to CRM dashboard if authenticated, otherwise to login
 Route::get('/', function () {
     if (auth('admin')->check()) {
-        return redirect('/');
+        return redirect('/dashboard');
     }
     return redirect()->route('admin.login');
 });
