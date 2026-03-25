@@ -68,6 +68,135 @@
         </div>
       </a-tab-pane>
 
+      <!-- ============ PROGRESS / TASKS TAB ============ -->
+      <a-tab-pane key="progress" tab="Tiến độ">
+        <div class="p-4">
+          <!-- Stats Cards -->
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 text-center border border-blue-200">
+              <div class="text-2xl font-bold text-blue-700">{{ taskStats.total }}</div>
+              <div class="text-xs text-blue-500">Tổng công việc</div>
+            </div>
+            <div class="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-3 text-center border border-gray-200">
+              <div class="text-2xl font-bold text-gray-600">{{ taskStats.not_started }}</div>
+              <div class="text-xs text-gray-500">Chưa bắt đầu</div>
+            </div>
+            <div class="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl p-3 text-center border border-cyan-200">
+              <div class="text-2xl font-bold text-cyan-700">{{ taskStats.in_progress }}</div>
+              <div class="text-xs text-cyan-500">Đang thực hiện</div>
+            </div>
+            <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-3 text-center border border-orange-200">
+              <div class="text-2xl font-bold text-orange-600">{{ taskStats.delayed }}</div>
+              <div class="text-xs text-orange-500">Trễ tiến độ</div>
+            </div>
+            <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3 text-center border border-green-200">
+              <div class="text-2xl font-bold text-green-700">{{ taskStats.completed }}</div>
+              <div class="text-xs text-green-500">Hoàn thành</div>
+            </div>
+          </div>
+
+          <!-- Add Root Task Button -->
+          <div class="flex justify-between items-center mb-3">
+            <div class="text-sm text-gray-500">
+              <a-progress :percent="overallTaskProgress" :stroke-color="{ '0%': '#1B4F72', '100%': '#27AE60' }" :format="p => `${p.toFixed(1)}%`" style="width: 280px" />
+            </div>
+            <a-button v-if="can('project.task.create')" type="primary" size="small" @click="openTaskModal()">
+              <template #icon><PlusOutlined /></template>Thêm công việc
+            </a-button>
+          </div>
+
+          <!-- Task Tree Table -->
+          <div class="border rounded-xl overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-gray-50 text-gray-500 text-xs border-b">
+                  <th class="text-left py-2 px-3 w-[40%]">Tên công việc</th>
+                  <th class="text-center py-2 px-3 w-[10%]">Ưu tiên</th>
+                  <th class="text-center py-2 px-3 w-[10%]">Trạng thái</th>
+                  <th class="text-center py-2 px-3 w-[15%]">Tiến độ</th>
+                  <th class="text-center py-2 px-3 w-[10%]">Thời gian</th>
+                  <th class="text-center py-2 px-3 w-[8%]">Người GV</th>
+                  <th class="text-center py-2 px-3 w-[7%]"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-if="rootTasks.length">
+                  <template v-for="task in rootTasks" :key="task.id">
+                    <!-- Parent Row -->
+                    <tr class="border-b hover:bg-blue-50/50 transition-colors cursor-pointer" :class="task.children?.length ? 'bg-blue-50/30 font-semibold' : ''" @click="toggleExpand(task.id)">
+                      <td class="py-2 px-3">
+                        <div class="flex items-center gap-2">
+                          <span v-if="task.children?.length" class="text-gray-400 text-xs transition-transform" :class="expandedTasks.has(task.id) ? 'rotate-90' : ''">▶</span>
+                          <span v-else class="w-3"></span>
+                          <span>{{ task.name }}</span>
+                          <span v-if="task.children?.length" class="text-xs text-gray-400">({{ task.children.length }})</span>
+                        </div>
+                      </td>
+                      <td class="text-center py-2 px-3"><a-tag :color="priorityColors[task.priority]" class="rounded-full text-xs">{{ priorityLabels[task.priority] || task.priority }}</a-tag></td>
+                      <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[task.status]" class="rounded-full text-xs">{{ taskStatusLabels[task.status] || task.status }}</a-tag></td>
+                      <td class="py-2 px-3"><a-progress :percent="parseFloat(task.progress_percentage || 0)" size="small" :stroke-color="parseFloat(task.progress_percentage || 0) >= 100 ? '#27AE60' : '#1B4F72'" /></td>
+                      <td class="text-center py-2 px-3 text-xs text-gray-500">
+                        <span v-if="task.start_date">{{ fmtDate(task.start_date) }}</span>
+                        <span v-if="task.start_date && task.end_date"> ~ </span>
+                        <span v-if="task.end_date">{{ fmtDate(task.end_date) }}</span>
+                        <span v-if="!task.start_date && !task.end_date" class="text-gray-300">—</span>
+                      </td>
+                      <td class="text-center py-2 px-3 text-xs">{{ task.assigned_user?.name || '—' }}</td>
+                      <td class="text-center py-2 px-3" @click.stop>
+                        <div class="flex gap-1 justify-center">
+                          <a-tooltip title="Sửa"><a-button type="text" size="small" @click.stop="openTaskModal(task)"><EditOutlined /></a-button></a-tooltip>
+                          <a-popconfirm title="Xóa công việc?" @confirm="deleteTask(task)"><a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button></a-popconfirm>
+                        </div>
+                      </td>
+                    </tr>
+                    <!-- Children Rows -->
+                    <template v-if="expandedTasks.has(task.id) && task.children?.length">
+                      <tr v-for="child in task.children" :key="child.id" class="border-b hover:bg-gray-50 transition-colors">
+                        <td class="py-2 px-3 pl-10">
+                          <div class="flex items-center gap-1 text-gray-600">
+                            <span class="text-gray-300 mr-1">└</span>
+                            {{ child.name }}
+                          </div>
+                        </td>
+                        <td class="text-center py-2 px-3"><a-tag :color="priorityColors[child.priority]" class="rounded-full text-xs">{{ priorityLabels[child.priority] || child.priority }}</a-tag></td>
+                        <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[child.status]" class="rounded-full text-xs">{{ taskStatusLabels[child.status] || child.status }}</a-tag></td>
+                        <td class="py-2 px-3"><a-progress :percent="parseFloat(child.progress_percentage || 0)" size="small" :stroke-color="parseFloat(child.progress_percentage || 0) >= 100 ? '#27AE60' : '#2E86C1'" /></td>
+                        <td class="text-center py-2 px-3 text-xs text-gray-500">
+                          <span v-if="child.start_date">{{ fmtDate(child.start_date) }}</span>
+                          <span v-if="child.start_date && child.end_date"> ~ </span>
+                          <span v-if="child.end_date">{{ fmtDate(child.end_date) }}</span>
+                          <span v-if="!child.start_date && !child.end_date" class="text-gray-300">—</span>
+                        </td>
+                        <td class="text-center py-2 px-3 text-xs">{{ child.assigned_user?.name || '—' }}</td>
+                        <td class="text-center py-2 px-3" @click.stop>
+                          <div class="flex gap-1 justify-center">
+                            <a-tooltip title="Sửa"><a-button type="text" size="small" @click="openTaskModal(child)"><EditOutlined /></a-button></a-tooltip>
+                            <a-popconfirm title="Xóa?" @confirm="deleteTask(child)"><a-button type="text" size="small" danger><DeleteOutlined /></a-button></a-popconfirm>
+                          </div>
+                        </td>
+                      </tr>
+                      <!-- Add child task row -->
+                      <tr v-if="can('project.task.create')" class="border-b">
+                        <td class="py-1 px-3 pl-10" colspan="7">
+                          <a-button type="dashed" size="small" class="text-xs text-blue-500" @click="openTaskModal(null, task.id)">
+                            <template #icon><PlusOutlined /></template>Thêm công việc con
+                          </a-button>
+                        </td>
+                      </tr>
+                    </template>
+                  </template>
+                </template>
+                <tr v-else>
+                  <td colspan="7" class="py-12 text-center text-gray-400">
+                    <a-empty description="Chưa có công việc nào" />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </a-tab-pane>
+
       <!-- ============ CONTRACT TAB ============ -->
       <a-tab-pane key="contract" tab="Hợp đồng">
         <div class="p-6">
@@ -321,14 +450,54 @@
               <template #icon><PlusOutlined /></template>Yêu cầu thay đổi
             </a-button>
           </div>
-          <a-table :columns="crCols" :data-source="project.change_requests || []" :pagination="false" row-key="id" size="small" class="crm-table">
+          <a-table :columns="crCols" :data-source="project.change_requests || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'cost'"><span v-if="record.cost_impact" class="font-semibold">{{ fmt(record.cost_impact) }}</span><span v-else>—</span></template>
-              <template v-else-if="column.key === 'status'"><a-tag :color="crStatusColors[record.status]" class="rounded-full">{{ crStatusLabels[record.status] || record.status }}</a-tag></template>
+              <template v-if="column.key === 'change_type'">
+                <a-tag class="rounded-full">{{ crTypeLabels[record.change_type] || record.change_type }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'priority'">
+                <a-tag :color="priorityColors[record.priority]" class="rounded-full">{{ priorityLabels[record.priority] || record.priority }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'cost'">
+                <span v-if="record.estimated_cost_impact" class="font-semibold">{{ fmt(record.estimated_cost_impact) }}</span>
+                <span v-else class="text-gray-300">—</span>
+              </template>
+              <template v-else-if="column.key === 'schedule'">
+                <span v-if="record.estimated_schedule_impact_days">{{ record.estimated_schedule_impact_days }} ngày</span>
+                <span v-else class="text-gray-300">—</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="crStatusColors[record.status]" class="rounded-full">{{ crStatusLabels[record.status] || record.status }}</a-tag>
+              </template>
               <template v-else-if="column.key === 'actions'">
-                <a-popconfirm v-if="can('change_request.delete')" title="Xóa?" @confirm="deleteChangeRequest(record)">
-                  <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                </a-popconfirm>
+                <div class="flex gap-1 flex-wrap justify-center">
+                  <a-tooltip title="Sửa" v-if="['draft','pending'].includes(record.status)">
+                    <a-button type="text" size="small" @click="openChangeRequestModal(record)"><EditOutlined /></a-button>
+                  </a-tooltip>
+                  <a-tooltip title="Gửi duyệt" v-if="record.status === 'draft'">
+                    <a-popconfirm title="Gửi yêu cầu để duyệt?" @confirm="submitCR(record)">
+                      <a-button type="text" size="small" class="text-blue-600"><SendOutlined /></a-button>
+                    </a-popconfirm>
+                  </a-tooltip>
+                  <a-tooltip title="Duyệt" v-if="record.status === 'pending' && can('change_request.approve')">
+                    <a-popconfirm title="Duyệt yêu cầu thay đổi?" @confirm="approveCR(record)">
+                      <a-button type="text" size="small" class="text-green-600"><CheckOutlined /></a-button>
+                    </a-popconfirm>
+                  </a-tooltip>
+                  <a-tooltip title="Từ chối" v-if="record.status === 'pending' && can('change_request.approve')">
+                    <a-popconfirm title="Từ chối yêu cầu?" @confirm="rejectCR(record)">
+                      <a-button type="text" size="small" class="text-red-600"><CloseOutlined /></a-button>
+                    </a-popconfirm>
+                  </a-tooltip>
+                  <a-tooltip title="Đánh dấu đã triển khai" v-if="record.status === 'approved'">
+                    <a-popconfirm title="Đánh dấu đã triển khai?" @confirm="implementCR(record)">
+                      <a-button type="text" size="small" class="text-purple-600"><CheckCircleOutlined /></a-button>
+                    </a-popconfirm>
+                  </a-tooltip>
+                  <a-popconfirm v-if="['draft','cancelled'].includes(record.status) && can('change_request.delete')" title="Xóa?" @confirm="deleteChangeRequest(record)">
+                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
+                  </a-popconfirm>
+                </div>
               </template>
             </template>
           </a-table>
@@ -460,14 +629,35 @@
               <template #icon><PlusOutlined /></template>Thêm rủi ro
             </a-button>
           </div>
-          <a-table :columns="riskCols" :data-source="project.risks || []" :pagination="false" row-key="id" size="small" class="crm-table">
+          <a-table :columns="riskCols" :data-source="project.risks || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'severity'"><a-tag :color="severityColors[record.severity]" class="rounded-full">{{ record.severity }}</a-tag></template>
-              <template v-else-if="column.key === 'status'"><a-tag :color="riskStatusColors[record.status]" class="rounded-full">{{ riskStatusLabels[record.status] || record.status }}</a-tag></template>
+              <template v-if="column.key === 'category'">
+                <a-tag class="rounded-full">{{ riskCategoryLabels[record.category] || record.category }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'probability'">
+                <a-tag :color="riskLevelColors[record.probability]" class="rounded-full">{{ riskLevelLabels[record.probability] || record.probability }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'impact'">
+                <a-tag :color="riskLevelColors[record.impact]" class="rounded-full">{{ riskLevelLabels[record.impact] || record.impact }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="riskStatusColors[record.status]" class="rounded-full">{{ riskStatusLabels[record.status] || record.status }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'owner'">{{ record.owner?.name || '—' }}</template>
               <template v-else-if="column.key === 'actions'">
-                <a-popconfirm v-if="can('project.risk.delete')" title="Xóa?" @confirm="deleteRisk(record)">
-                  <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                </a-popconfirm>
+                <div class="flex gap-1 justify-center">
+                  <a-tooltip title="Sửa">
+                    <a-button type="text" size="small" @click="openRiskModal(record)"><EditOutlined /></a-button>
+                  </a-tooltip>
+                  <a-tooltip title="Đánh dấu đã xử lý" v-if="record.status !== 'closed'">
+                    <a-popconfirm title="Đánh dấu rủi ro đã xử lý?" @confirm="resolveRisk(record)">
+                      <a-button type="text" size="small" class="text-green-600"><CheckCircleOutlined /></a-button>
+                    </a-popconfirm>
+                  </a-tooltip>
+                  <a-popconfirm v-if="can('project.risk.delete')" title="Xóa?" @confirm="deleteRisk(record)">
+                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
+                  </a-popconfirm>
+                </div>
               </template>
             </template>
           </a-table>
@@ -564,7 +754,7 @@
   <!-- Payment Modal -->
   <a-modal v-model:open="showPaymentModal" title="Thêm thanh toán" :width="500" @ok="savePayment" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Mô tả" required><a-input v-model:value="paymentForm.description" size="large" /></a-form-item>
+      <a-form-item label="Ghi chú"><a-input v-model:value="paymentForm.notes" size="large" placeholder="Ghi chú thanh toán..." /></a-form-item>
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Số tiền" required><a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Ngày đến hạn"><a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
@@ -651,24 +841,157 @@
   </a-modal>
 
   <!-- Change Request Modal -->
-  <a-modal v-model:open="showCRModal" title="Yêu cầu thay đổi" :width="600" @ok="saveCR" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showCRModal" :title="editingCR ? 'Cập nhật yêu cầu thay đổi' : 'Tạo yêu cầu thay đổi'" :width="720" @ok="saveCR" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tiêu đề" required><a-input v-model:value="crForm.title" size="large" /></a-form-item>
-      <a-form-item label="Ảnh hưởng chi phí"><a-input-number v-model:value="crForm.cost_impact" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
-      <a-form-item label="Mô tả"><a-textarea v-model:value="crForm.description" :rows="3" /></a-form-item>
+      <a-form-item label="Tiêu đề" required><a-input v-model:value="crForm.title" size="large" placeholder="Tiêu đề yêu cầu thay đổi" /></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Loại thay đổi" required>
+            <a-select v-model:value="crForm.change_type" size="large" class="w-full" placeholder="Chọn loại">
+              <a-select-option value="scope">Phạm vi</a-select-option>
+              <a-select-option value="schedule">Tiến độ</a-select-option>
+              <a-select-option value="cost">Chi phí</a-select-option>
+              <a-select-option value="quality">Chất lượng</a-select-option>
+              <a-select-option value="resource">Nguồn lực</a-select-option>
+              <a-select-option value="other">Khác</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Mức độ ưu tiên" required>
+            <a-select v-model:value="crForm.priority" size="large" class="w-full" placeholder="Chọn mức">
+              <a-select-option value="low">Thấp</a-select-option>
+              <a-select-option value="medium">Trung bình</a-select-option>
+              <a-select-option value="high">Cao</a-select-option>
+              <a-select-option value="urgent">Khẩn cấp</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Mô tả chi tiết" required><a-textarea v-model:value="crForm.description" :rows="3" placeholder="Mô tả chi tiết yêu cầu thay đổi..." :maxlength="5000" show-count /></a-form-item>
+      <a-form-item label="Lý do thay đổi"><a-textarea v-model:value="crForm.reason" :rows="2" placeholder="Lý do cần thay đổi..." :maxlength="2000" show-count /></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Ảnh hưởng chi phí (VNĐ)"><a-input-number v-model:value="crForm.estimated_cost_impact" size="large" class="w-full" :min="0" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Ảnh hưởng tiến độ (ngày)"><a-input-number v-model:value="crForm.estimated_schedule_impact_days" size="large" class="w-full" :min="0" /></a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Phân tích ảnh hưởng"><a-textarea v-model:value="crForm.impact_analysis" :rows="2" placeholder="Ảnh hưởng tới dự án..." :maxlength="5000" show-count /></a-form-item>
+      <a-form-item label="Kế hoạch triển khai"><a-textarea v-model:value="crForm.implementation_plan" :rows="2" placeholder="Các bước triển khai sau khi duyệt..." :maxlength="5000" show-count /></a-form-item>
     </a-form>
   </a-modal>
 
   <!-- Risk Modal -->
-  <a-modal v-model:open="showRiskModal" title="Thêm rủi ro" :width="600" @ok="saveRisk" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showRiskModal" :title="editingRisk ? 'Cập nhật rủi ro' : 'Thêm rủi ro'" :width="720" @ok="saveRisk" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tiêu đề" required><a-input v-model:value="riskForm.title" size="large" /></a-form-item>
-      <a-form-item label="Mức độ" required><a-select v-model:value="riskForm.severity" size="large" class="w-full">
-        <a-select-option value="low">Thấp</a-select-option>
-        <a-select-option value="medium">Trung bình</a-select-option>
-        <a-select-option value="high">Cao</a-select-option>
-      </a-select></a-form-item>
-      <a-form-item label="Mô tả"><a-textarea v-model:value="riskForm.description" :rows="3" /></a-form-item>
+      <a-form-item label="Tiêu đề" required><a-input v-model:value="riskForm.title" size="large" placeholder="Tên rủi ro" /></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="8">
+          <a-form-item label="Danh mục" required>
+            <a-select v-model:value="riskForm.category" size="large" class="w-full" placeholder="Loại">
+              <a-select-option value="schedule">Tiến độ</a-select-option>
+              <a-select-option value="cost">Chi phí</a-select-option>
+              <a-select-option value="quality">Chất lượng</a-select-option>
+              <a-select-option value="scope">Phạm vi</a-select-option>
+              <a-select-option value="resource">Nguồn lực</a-select-option>
+              <a-select-option value="technical">Kỹ thuật</a-select-option>
+              <a-select-option value="external">Bên ngoài</a-select-option>
+              <a-select-option value="other">Khác</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Xác suất" required>
+            <a-select v-model:value="riskForm.probability" size="large" class="w-full" placeholder="Mức">
+              <a-select-option value="very_low">Rất thấp</a-select-option>
+              <a-select-option value="low">Thấp</a-select-option>
+              <a-select-option value="medium">Trung bình</a-select-option>
+              <a-select-option value="high">Cao</a-select-option>
+              <a-select-option value="very_high">Rất cao</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Mức ảnh hưởng" required>
+            <a-select v-model:value="riskForm.impact" size="large" class="w-full" placeholder="Mức">
+              <a-select-option value="very_low">Rất thấp</a-select-option>
+              <a-select-option value="low">Thấp</a-select-option>
+              <a-select-option value="medium">Trung bình</a-select-option>
+              <a-select-option value="high">Cao</a-select-option>
+              <a-select-option value="very_high">Rất cao</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Loại rủi ro">
+            <a-select v-model:value="riskForm.risk_type" size="large" class="w-full">
+              <a-select-option value="threat">🔴 Mối đe dọa</a-select-option>
+              <a-select-option value="opportunity">🟢 Cơ hội</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Người chịu trách nhiệm">
+            <a-select v-model:value="riskForm.owner_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn người">
+              <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Mô tả"><a-textarea v-model:value="riskForm.description" :rows="2" placeholder="Mô tả chi tiết rủi ro..." :maxlength="5000" show-count /></a-form-item>
+      <a-form-item label="Kế hoạch giảm thiểu"><a-textarea v-model:value="riskForm.mitigation_plan" :rows="2" placeholder="Phương án giảm thiểu rủi ro..." :maxlength="5000" show-count /></a-form-item>
+      <a-form-item label="Kế hoạch dự phòng"><a-textarea v-model:value="riskForm.contingency_plan" :rows="2" placeholder="Phương án dự phòng..." :maxlength="5000" show-count /></a-form-item>
+      <a-form-item label="Ngày mục tiêu xử lý">
+        <a-date-picker v-model:value="riskForm.target_resolution_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <!-- Task Modal -->
+  <a-modal v-model:open="showTaskModal" :title="editingTask ? 'Cập nhật công việc' : 'Thêm công việc'" :width="640" @ok="saveTask" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+    <a-form layout="vertical" class="mt-4">
+      <a-form-item label="Tên công việc" required><a-input v-model:value="taskForm.name" size="large" placeholder="Tên công việc" /></a-form-item>
+      <a-form-item label="Công việc cha">
+        <a-select v-model:value="taskForm.parent_id" size="large" class="w-full" allow-clear placeholder="Không có (công việc gốc)" show-search option-filter-prop="label">
+          <a-select-option v-for="t in parentTaskOptions" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Ngày bắt đầu">
+            <a-date-picker v-model:value="taskForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Ngày kết thúc">
+            <a-date-picker v-model:value="taskForm.end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Ưu tiên">
+            <a-select v-model:value="taskForm.priority" size="large" class="w-full">
+              <a-select-option value="low">Thấp</a-select-option>
+              <a-select-option value="medium">Trung bình</a-select-option>
+              <a-select-option value="high">Cao</a-select-option>
+              <a-select-option value="urgent">Khẩn cấp</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Người giao việc">
+            <a-select v-model:value="taskForm.assigned_to" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn người">
+              <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Mô tả"><a-textarea v-model:value="taskForm.description" :rows="3" placeholder="Mô tả công việc..." :maxlength="5000" show-count /></a-form-item>
     </a-form>
   </a-modal>
 
@@ -782,6 +1105,7 @@ import dayjs from 'dayjs'
 import {
   ArrowLeftOutlined, EditOutlined, PlusOutlined, DeleteOutlined,
   SendOutlined, CheckCircleOutlined, CloseCircleOutlined,
+  CheckOutlined, CloseOutlined,
   UploadOutlined, DownloadOutlined, FileOutlined,
 } from '@ant-design/icons-vue'
 
@@ -796,6 +1120,7 @@ const props = defineProps({
   materials: { type: Array, default: () => [] },
   globalSubcontractors: { type: Array, default: () => [] },
   projectTasks: { type: Array, default: () => [] },
+  allTasks: { type: Array, default: () => [] },
 })
 
 // ============ RBAC ============
@@ -830,12 +1155,18 @@ const paymentStatusLabelsMap = { pending: 'Chưa TT', partial: 'TT 1 phần', pa
 const paymentTagColors = { pending: 'orange', partial: 'blue', paid: 'green', completed: 'green', overdue: 'red' }
 const defectStatusLabels = { open: 'Mở', in_progress: 'Đang xử lý', fixed: 'Đã sửa', verified: 'Đã xác nhận', closed: 'Đã đóng' }
 const defectStatusColors = { open: 'red', in_progress: 'processing', fixed: 'green', verified: 'cyan', closed: 'default' }
-const crStatusLabels = { pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối' }
-const crStatusColors = { pending: 'orange', approved: 'green', rejected: 'red' }
+const crStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', implemented: 'Đã triển khai', cancelled: 'Đã hủy' }
+const crStatusColors = { draft: 'default', pending: 'orange', approved: 'green', rejected: 'red', implemented: 'cyan', cancelled: 'default' }
+const crTypeLabels = { scope: 'Phạm vi', schedule: 'Tiến độ', cost: 'Chi phí', quality: 'Chất lượng', resource: 'Nguồn lực', other: 'Khác' }
+const priorityLabels = { low: 'Thấp', medium: 'Trung bình', high: 'Cao', urgent: 'Khẩn cấp' }
+const priorityColors = { low: 'default', medium: 'blue', high: 'orange', urgent: 'red' }
 const budgetStatusLabels = { draft: 'Nháp', approved: 'Đã duyệt', archived: 'Lưu trữ' }
 const budgetStatusColors = { draft: 'default', approved: 'green', archived: 'blue' }
-const riskStatusLabels = { open: 'Đang mở', mitigated: 'Đã giảm thiểu', resolved: 'Đã xử lý', closed: 'Đã đóng' }
-const riskStatusColors = { open: 'red', mitigated: 'orange', resolved: 'green', closed: 'default' }
+const riskStatusLabels = { identified: 'Đã nhận diện', analyzed: 'Đã phân tích', mitigated: 'Đã giảm thiểu', monitored: 'Đang giám sát', closed: 'Đã đóng' }
+const riskStatusColors = { identified: 'orange', analyzed: 'blue', mitigated: 'cyan', monitored: 'processing', closed: 'green' }
+const riskCategoryLabels = { schedule: 'Tiến độ', cost: 'Chi phí', quality: 'Chất lượng', scope: 'Phạm vi', resource: 'Nguồn lực', technical: 'Kỹ thuật', external: 'Bên ngoài', other: 'Khác' }
+const riskLevelLabels = { very_low: 'Rất thấp', low: 'Thấp', medium: 'TB', high: 'Cao', very_high: 'Rất cao' }
+const riskLevelColors = { very_low: 'default', low: 'green', medium: 'blue', high: 'orange', very_high: 'red' }
 const acceptStatusLabels = { pending: 'Chờ duyệt', supervisor_approved: 'GS duyệt', project_manager_approved: 'QLDA duyệt', customer_approved: 'KH duyệt', owner_approved: 'CĐT duyệt' }
 
 // ============ TABLE COLUMNS ============
@@ -883,16 +1214,22 @@ const defectCols = [
 
 const crCols = [
   { title: 'Tiêu đề', dataIndex: 'title', ellipsis: true },
-  { title: 'Ảnh hưởng CP', key: 'cost', align: 'right', width: 150 },
-  { title: 'Trạng thái', key: 'status', width: 120 },
-  { title: '', key: 'actions', width: 80, align: 'center' },
+  { title: 'Loại', key: 'change_type', width: 100 },
+  { title: 'Ưu tiên', key: 'priority', width: 100 },
+  { title: 'CP ảnh hưởng', key: 'cost', align: 'right', width: 140 },
+  { title: 'TĐ (ngày)', key: 'schedule', align: 'center', width: 90 },
+  { title: 'Trạng thái', key: 'status', width: 130 },
+  { title: '', key: 'actions', width: 180, align: 'center' },
 ]
 
 const riskCols = [
   { title: 'Tiêu đề', dataIndex: 'title', ellipsis: true },
-  { title: 'Mức độ', key: 'severity', width: 120 },
-  { title: 'Trạng thái', key: 'status', width: 120 },
-  { title: '', key: 'actions', width: 80, align: 'center' },
+  { title: 'Danh mục', key: 'category', width: 100 },
+  { title: 'Xác suất', key: 'probability', width: 90 },
+  { title: 'Ảnh hưởng', key: 'impact', width: 90 },
+  { title: 'Trạng thái', key: 'status', width: 130 },
+  { title: 'Người xử lý', key: 'owner', width: 120 },
+  { title: '', key: 'actions', width: 130, align: 'center' },
 ]
 
 const subCols = [
@@ -995,8 +1332,8 @@ const saveContract = () => {
 
 // ============ PAYMENT CRUD ============
 const showPaymentModal = ref(false)
-const paymentForm = ref({ description: '', amount: null, due_date: null })
-const openPaymentModal = () => { paymentForm.value = { description: '', amount: null, due_date: null }; showPaymentModal.value = true }
+const paymentForm = ref({ notes: '', amount: null, due_date: null })
+const openPaymentModal = () => { paymentForm.value = { notes: '', amount: null, due_date: null }; showPaymentModal.value = true }
 const savePayment = () => { router.post(`/projects/${props.project.id}/payments`, paymentForm.value, { onSuccess: () => showPaymentModal.value = false }) }
 const deletePayment = (p) => router.delete(`/projects/${props.project.id}/payments/${p.id}`)
 
@@ -1064,17 +1401,165 @@ const deleteDefect = (d) => router.delete(`/projects/${props.project.id}/defects
 
 // ============ CHANGE REQUEST CRUD ============
 const showCRModal = ref(false)
-const crForm = ref({ title: '', description: '', cost_impact: null })
-const openChangeRequestModal = () => { crForm.value = { title: '', description: '', cost_impact: null }; showCRModal.value = true }
-const saveCR = () => { router.post(`/projects/${props.project.id}/change-requests`, crForm.value, { onSuccess: () => showCRModal.value = false }) }
-const deleteChangeRequest = (cr) => router.delete(`/projects/${props.project.id}/change-requests/${cr.id}`)
+const editingCR = ref(null)
+const crFormDefault = () => ({ title: '', description: '', change_type: null, priority: null, reason: '', impact_analysis: '', estimated_cost_impact: null, estimated_schedule_impact_days: null, implementation_plan: '' })
+const crForm = ref(crFormDefault())
+
+const openChangeRequestModal = (record = null) => {
+  if (record) {
+    editingCR.value = record
+    crForm.value = {
+      title: record.title || '',
+      description: record.description || '',
+      change_type: record.change_type || null,
+      priority: record.priority || null,
+      reason: record.reason || '',
+      impact_analysis: record.impact_analysis || '',
+      estimated_cost_impact: record.estimated_cost_impact ?? null,
+      estimated_schedule_impact_days: record.estimated_schedule_impact_days ?? null,
+      implementation_plan: record.implementation_plan || '',
+    }
+  } else {
+    editingCR.value = null
+    crForm.value = crFormDefault()
+  }
+  showCRModal.value = true
+}
+
+const saveCR = () => {
+  const pId = props.project.id
+  if (editingCR.value) {
+    router.put(`/projects/${pId}/change-requests/${editingCR.value.id}`, crForm.value, { preserveScroll: true, onSuccess: () => { showCRModal.value = false; editingCR.value = null } })
+  } else {
+    router.post(`/projects/${pId}/change-requests`, crForm.value, { preserveScroll: true, onSuccess: () => showCRModal.value = false })
+  }
+}
+
+const submitCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/submit`, {}, { preserveScroll: true })
+const approveCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/approve`, {}, { preserveScroll: true })
+const rejectCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/reject`, { reason: 'Không đồng ý' }, { preserveScroll: true })
+const implementCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/implement`, {}, { preserveScroll: true })
+const deleteChangeRequest = (cr) => router.delete(`/projects/${props.project.id}/change-requests/${cr.id}`, { preserveScroll: true })
 
 // ============ RISK CRUD ============
 const showRiskModal = ref(false)
-const riskForm = ref({ title: '', description: '', severity: 'medium' })
-const openRiskModal = () => { riskForm.value = { title: '', description: '', severity: 'medium' }; showRiskModal.value = true }
-const saveRisk = () => { router.post(`/projects/${props.project.id}/risks`, riskForm.value, { onSuccess: () => showRiskModal.value = false }) }
-const deleteRisk = (r) => router.delete(`/projects/${props.project.id}/risks/${r.id}`)
+const editingRisk = ref(null)
+const riskFormDefault = () => ({ title: '', description: '', category: null, probability: null, impact: null, risk_type: 'threat', mitigation_plan: '', contingency_plan: '', owner_id: null, target_resolution_date: null })
+const riskForm = ref(riskFormDefault())
+
+const openRiskModal = (record = null) => {
+  if (record) {
+    editingRisk.value = record
+    riskForm.value = {
+      title: record.title || '',
+      description: record.description || '',
+      category: record.category || null,
+      probability: record.probability || null,
+      impact: record.impact || null,
+      risk_type: record.risk_type || 'threat',
+      mitigation_plan: record.mitigation_plan || '',
+      contingency_plan: record.contingency_plan || '',
+      owner_id: record.owner_id ?? null,
+      target_resolution_date: record.target_resolution_date || null,
+    }
+  } else {
+    editingRisk.value = null
+    riskForm.value = riskFormDefault()
+  }
+  showRiskModal.value = true
+}
+
+const saveRisk = () => {
+  const pId = props.project.id
+  if (editingRisk.value) {
+    router.put(`/projects/${pId}/risks/${editingRisk.value.id}`, riskForm.value, { preserveScroll: true, onSuccess: () => { showRiskModal.value = false; editingRisk.value = null } })
+  } else {
+    router.post(`/projects/${pId}/risks`, riskForm.value, { preserveScroll: true, onSuccess: () => showRiskModal.value = false })
+  }
+}
+
+const resolveRisk = (r) => router.post(`/projects/${props.project.id}/risks/${r.id}/resolve`, {}, { preserveScroll: true })
+const deleteRisk = (r) => router.delete(`/projects/${props.project.id}/risks/${r.id}`, { preserveScroll: true })
+
+// ============ TASK / PROGRESS ============
+const taskStatusLabels = { not_started: 'Chưa bắt đầu', in_progress: 'Đang thực hiện', delayed: 'Trễ tiến độ', completed: 'Hoàn thành' }
+const taskStatusColors = { not_started: 'default', in_progress: 'processing', delayed: 'error', completed: 'success' }
+
+// Build tree: root = tasks with no parent_id
+const rootTasks = computed(() => {
+  return (props.allTasks || []).filter(t => !t.parent_id)
+})
+
+const taskStats = computed(() => {
+  const all = props.allTasks || []
+  return {
+    total: all.length,
+    not_started: all.filter(t => t.status === 'not_started').length,
+    in_progress: all.filter(t => t.status === 'in_progress').length,
+    delayed: all.filter(t => t.status === 'delayed').length,
+    completed: all.filter(t => t.status === 'completed').length,
+  }
+})
+
+const overallTaskProgress = computed(() => {
+  const roots = rootTasks.value
+  if (!roots.length) return 0
+  const total = roots.reduce((sum, t) => sum + parseFloat(t.progress_percentage || 0), 0)
+  return Math.round(total / roots.length * 10) / 10
+})
+
+// Expand/Collapse
+const expandedTasks = ref(new Set())
+const toggleExpand = (taskId) => {
+  if (expandedTasks.value.has(taskId)) {
+    expandedTasks.value.delete(taskId)
+  } else {
+    expandedTasks.value.add(taskId)
+  }
+}
+
+// Parent task options (exclude the task being edited and its descendants)
+const parentTaskOptions = computed(() => {
+  return rootTasks.value.filter(t => !editingTask.value || t.id !== editingTask.value.id)
+})
+
+// Task CRUD
+const showTaskModal = ref(false)
+const editingTask = ref(null)
+const taskFormDefault = () => ({ name: '', description: '', parent_id: null, start_date: null, end_date: null, priority: 'medium', assigned_to: null })
+const taskForm = ref(taskFormDefault())
+
+const openTaskModal = (record = null, parentId = null) => {
+  if (record) {
+    editingTask.value = record
+    taskForm.value = {
+      name: record.name || '',
+      description: record.description || '',
+      parent_id: record.parent_id ?? null,
+      start_date: record.start_date ? record.start_date.substring(0, 10) : null,
+      end_date: record.end_date ? record.end_date.substring(0, 10) : null,
+      priority: record.priority || 'medium',
+      assigned_to: record.assigned_to ?? null,
+    }
+  } else {
+    editingTask.value = null
+    const form = taskFormDefault()
+    if (parentId) form.parent_id = parentId
+    taskForm.value = form
+  }
+  showTaskModal.value = true
+}
+
+const saveTask = () => {
+  const pId = props.project.id
+  if (editingTask.value) {
+    router.put(`/projects/${pId}/tasks/${editingTask.value.id}`, taskForm.value, { preserveScroll: true, onSuccess: () => { showTaskModal.value = false; editingTask.value = null } })
+  } else {
+    router.post(`/projects/${pId}/tasks`, taskForm.value, { preserveScroll: true, onSuccess: () => showTaskModal.value = false })
+  }
+}
+
+const deleteTask = (t) => router.delete(`/projects/${props.project.id}/tasks/${t.id}`, { preserveScroll: true })
 
 // ============ SUBCONTRACTOR CRUD ============
 const showSubModal = ref(false)

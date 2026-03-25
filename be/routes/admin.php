@@ -117,6 +117,18 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{id}/approve-management', [CrmApprovalController::class, 'approveManagement'])->name('approve.management');
         Route::post('/{id}/approve-accountant', [CrmApprovalController::class, 'approveAccountant'])->name('approve.accountant');
         Route::post('/{id}/reject', [CrmApprovalController::class, 'reject'])->name('reject');
+
+        // Customer Acceptance
+        Route::post('/acceptance/{id}/approve', [CrmApprovalController::class, 'approveCustomerAcceptance'])->name('acceptance.approve');
+        Route::post('/acceptance/{id}/reject', [CrmApprovalController::class, 'rejectCustomerAcceptance'])->name('acceptance.reject');
+
+        // Change Request
+        Route::post('/change-request/{id}/approve', [CrmApprovalController::class, 'approveChangeRequest'])->name('change-request.approve');
+        Route::post('/change-request/{id}/reject', [CrmApprovalController::class, 'rejectChangeRequest'])->name('change-request.reject');
+
+        // Additional Cost
+        Route::post('/additional-cost/{id}/approve', [CrmApprovalController::class, 'approveAdditionalCost'])->name('additional-cost.approve');
+        Route::post('/additional-cost/{id}/reject', [CrmApprovalController::class, 'rejectAdditionalCost'])->name('additional-cost.reject');
     });
 
     // Reports (Báo cáo dự án)
@@ -207,11 +219,23 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
 
         // Change Requests
         Route::post('/{project}/change-requests', [CrmProjectsController::class, 'storeChangeRequest'])->name('change-requests.store');
+        Route::put('/{project}/change-requests/{cr}', [CrmProjectsController::class, 'updateChangeRequest'])->name('change-requests.update');
+        Route::post('/{project}/change-requests/{cr}/submit', [CrmProjectsController::class, 'submitChangeRequest'])->name('change-requests.submit');
+        Route::post('/{project}/change-requests/{cr}/approve', [CrmProjectsController::class, 'approveChangeRequest'])->name('change-requests.approve');
+        Route::post('/{project}/change-requests/{cr}/reject', [CrmProjectsController::class, 'rejectChangeRequest'])->name('change-requests.reject');
+        Route::post('/{project}/change-requests/{cr}/implement', [CrmProjectsController::class, 'implementChangeRequest'])->name('change-requests.implement');
         Route::delete('/{project}/change-requests/{cr}', [CrmProjectsController::class, 'destroyChangeRequest'])->name('change-requests.destroy');
 
         // Risks
         Route::post('/{project}/risks', [CrmProjectsController::class, 'storeRisk'])->name('risks.store');
+        Route::put('/{project}/risks/{risk}', [CrmProjectsController::class, 'updateRisk'])->name('risks.update');
+        Route::post('/{project}/risks/{risk}/resolve', [CrmProjectsController::class, 'resolveRisk'])->name('risks.resolve');
         Route::delete('/{project}/risks/{risk}', [CrmProjectsController::class, 'destroyRisk'])->name('risks.destroy');
+
+        // Tasks (Tiến độ)
+        Route::post('/{project}/tasks', [CrmProjectsController::class, 'storeTask'])->name('tasks.store');
+        Route::put('/{project}/tasks/{task}', [CrmProjectsController::class, 'updateTask'])->name('tasks.update');
+        Route::delete('/{project}/tasks/{task}', [CrmProjectsController::class, 'destroyTask'])->name('tasks.destroy');
 
         // Contract
         Route::post('/{project}/contract', [CrmProjectsController::class, 'storeContract'])->name('contract.store');

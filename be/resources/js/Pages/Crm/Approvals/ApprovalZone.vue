@@ -42,13 +42,13 @@
         <div class="zone-card__header">
           <div class="zone-card__type">
             <a-tag
-              :color="item.type === 'project_cost' ? 'blue' : 'gold'"
+              :color="tagColors[item.type] || 'default'"
               class="rounded-lg text-xs"
             >
               {{ item.type_label }}
             </a-tag>
           </div>
-          <div class="zone-card__amount">
+          <div class="zone-card__amount" v-if="item.amount">
             {{ formatCurrency(item.amount) }}
           </div>
         </div>
@@ -133,6 +133,14 @@ defineProps({
 defineEmits(['approve', 'reject', 'view'])
 
 const collapsed = ref(false)
+
+const tagColors = {
+  project_cost: 'blue',
+  company_cost: 'gold',
+  acceptance: 'purple',
+  change_request: 'magenta',
+  additional_cost: 'orange',
+}
 
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0)

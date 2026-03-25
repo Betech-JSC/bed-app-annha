@@ -87,41 +87,45 @@ class CostObserver
             if ($oldStatus !== 'approved' && $newStatus === 'approved') {
                 $this->checkBudgetOverrun($cost);
 
-                // Notify Team (Informational)
-                $projectName = $cost->project ? $cost->project->name : 'N/A'; // Define here
-                $title = "Chi phí đã được duyệt";
-                $body = "Chi phí '{$cost->description}' (Amount: " . number_format($cost->amount) . ") trong dự án '{$projectName}' đã được duyệt.";
-                
-                $this->notificationService->sendToProjectTeam(
-                    $cost->project_id,
-                    Notification::TYPE_SYSTEM,
-                    Notification::CATEGORY_STATUS_CHANGE,
-                    $title,
-                    $body,
-                    ['cost_id' => $cost->id, 'project_id' => $cost->project_id],
-                    Notification::PRIORITY_MEDIUM,
-                    "/projects/{$cost->project_id}/costs/{$cost->id}",
-                    true
-                );
+                // Notify Team (Informational) — only for project costs
+                if ($cost->project_id) {
+                    $projectName = $cost->project ? $cost->project->name : 'N/A';
+                    $title = "Chi phí đã được duyệt";
+                    $body = "Chi phí '{$cost->description}' (Amount: " . number_format($cost->amount) . ") trong dự án '{$projectName}' đã được duyệt.";
+                    
+                    $this->notificationService->sendToProjectTeam(
+                        $cost->project_id,
+                        Notification::TYPE_SYSTEM,
+                        Notification::CATEGORY_STATUS_CHANGE,
+                        $title,
+                        $body,
+                        ['cost_id' => $cost->id, 'project_id' => $cost->project_id],
+                        Notification::PRIORITY_MEDIUM,
+                        "/projects/{$cost->project_id}/costs/{$cost->id}",
+                        true
+                    );
+                }
             }
 
-            // Notify Team when rejected
             if ($oldStatus !== 'rejected' && $newStatus === 'rejected') {
-                $projectName = $cost->project ? $cost->project->name : 'N/A';
-                $title = "Chi phí bị từ chối";
-                $body = "Chi phí '{$cost->description}' trong dự án '{$projectName}' đã bị từ chối.";
-                
-                $this->notificationService->sendToProjectTeam(
-                    $cost->project_id,
-                    Notification::TYPE_SYSTEM,
-                    Notification::CATEGORY_STATUS_CHANGE,
-                    $title,
-                    $body,
-                    ['cost_id' => $cost->id, 'project_id' => $cost->project_id],
-                    Notification::PRIORITY_MEDIUM,
-                    "/projects/{$cost->project_id}/costs/{$cost->id}",
-                    true
-                );
+                // Notify Team when rejected — only for project costs
+                if ($cost->project_id) {
+                    $projectName = $cost->project ? $cost->project->name : 'N/A';
+                    $title = "Chi phí bị từ chối";
+                    $body = "Chi phí '{$cost->description}' trong dự án '{$projectName}' đã bị từ chối.";
+                    
+                    $this->notificationService->sendToProjectTeam(
+                        $cost->project_id,
+                        Notification::TYPE_SYSTEM,
+                        Notification::CATEGORY_STATUS_CHANGE,
+                        $title,
+                        $body,
+                        ['cost_id' => $cost->id, 'project_id' => $cost->project_id],
+                        Notification::PRIORITY_MEDIUM,
+                        "/projects/{$cost->project_id}/costs/{$cost->id}",
+                        true
+                    );
+                }
             }
         }
     }

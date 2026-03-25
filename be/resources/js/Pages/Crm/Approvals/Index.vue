@@ -3,7 +3,7 @@
 
   <PageHeader
     title="Trung Tâm Duyệt Yêu Cầu"
-    subtitle="Quản lý phê duyệt theo từng cấp — BĐH → Kế Toán"
+    subtitle="Quản lý phê duyệt theo từng cấp — BĐH → Kế Toán · Khách hàng · Thay đổi · CP Phát sinh"
   >
     <template #actions>
       <a-button size="large" class="rounded-xl" @click="refreshPage">
@@ -34,6 +34,24 @@
       </div>
     </div>
     <div class="approval-overview__card">
+      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #8B5CF620, #8B5CF608);">
+        <UserOutlined style="color: #8B5CF6; font-size: 22px;" />
+      </div>
+      <div>
+        <div class="approval-overview__value">{{ stats.pending_customer }}</div>
+        <div class="approval-overview__label">Chờ KH duyệt</div>
+      </div>
+    </div>
+    <div class="approval-overview__card">
+      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #EC489920, #EC489908);">
+        <SwapOutlined style="color: #EC4899; font-size: 22px;" />
+      </div>
+      <div>
+        <div class="approval-overview__value">{{ stats.pending_change_request + stats.pending_additional_cost }}</div>
+        <div class="approval-overview__label">CR / CP Phát sinh</div>
+      </div>
+    </div>
+    <div class="approval-overview__card">
       <div class="approval-overview__icon" style="background: linear-gradient(135deg, #10B98120, #10B98108);">
         <CheckCircleOutlined style="color: #10B981; font-size: 22px;" />
       </div>
@@ -54,10 +72,10 @@
   </div>
 
   <!-- ─── Approval Pipeline ─── -->
-  <div class="approval-pipeline" v-if="stats.pending_management + stats.pending_accountant > 0">
+  <div class="approval-pipeline" v-if="totalPending > 0">
     <div class="pipeline-total">
       <DollarOutlined style="font-size: 18px;" />
-      <span>Tổng chờ duyệt: <strong>{{ formatCurrency(stats.total_pending_amount) }}</strong></span>
+      <span>Tổng chờ duyệt: <strong>{{ formatCurrency(stats.total_pending_amount) }}</strong> · {{ totalPending }} yêu cầu</span>
     </div>
     <div class="pipeline-flow">
       <div class="pipeline-step" :class="{ 'pipeline-step--active': stats.pending_management > 0 }">
@@ -68,6 +86,11 @@
       <div class="pipeline-step" :class="{ 'pipeline-step--active': stats.pending_accountant > 0 }">
         <div class="pipeline-step__dot" style="background: #06B6D4;"></div>
         <span>Kế Toán ({{ stats.pending_accountant }})</span>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step" :class="{ 'pipeline-step--active': stats.pending_customer > 0 }">
+        <div class="pipeline-step__dot" style="background: #8B5CF6;"></div>
+        <span>KH ({{ stats.pending_customer }})</span>
       </div>
       <div class="pipeline-arrow">→</div>
       <div class="pipeline-step">
@@ -103,7 +126,46 @@
     @view="openDetailDrawer"
   />
 
-  <!-- ─── Zone 3: Lịch sử xử lý ─── -->
+  <!-- ─── Zone 3: Khách hàng duyệt Nghiệm thu ─── -->
+  <ApprovalZone
+    title="Khách hàng — Duyệt nghiệm thu"
+    subtitle="Giai đoạn nghiệm thu đã được QLDA phê duyệt, chờ khách hàng xác nhận"
+    :items="customerAcceptanceItems"
+    :color="'#8B5CF6'"
+    level="customer"
+    emptyText="Không có nghiệm thu chờ khách hàng duyệt"
+    @approve="handleApproveAcceptance"
+    @reject="openRejectAcceptanceModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 4: Yêu cầu Thay đổi (Change Request) ─── -->
+  <ApprovalZone
+    title="Yêu cầu Thay đổi (CR)"
+    subtitle="Các yêu cầu thay đổi đang chờ phê duyệt"
+    :items="changeRequestItems"
+    :color="'#EC4899'"
+    level="change_request"
+    emptyText="Không có yêu cầu thay đổi chờ duyệt"
+    @approve="handleApproveCR"
+    @reject="openRejectCRModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 5: Chi phí Phát sinh ─── -->
+  <ApprovalZone
+    title="Chi phí Phát sinh"
+    subtitle="Các chi phí phát sinh đang chờ BĐH duyệt"
+    :items="additionalCostItems"
+    :color="'#F97316'"
+    level="additional_cost"
+    emptyText="Không có chi phí phát sinh chờ duyệt"
+    @approve="handleApproveAC"
+    @reject="openRejectACModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 6: Lịch sử xử lý ─── -->
   <div class="crm-content-card" style="margin-top: 24px;">
     <div class="crm-content-card__header" @click="showHistory = !showHistory" style="cursor: pointer;">
       <h3 class="crm-content-card__title">
@@ -136,7 +198,7 @@
             </div>
           </template>
           <template v-if="column.key === 'type'">
-            <a-tag :color="record.type === 'project_cost' ? 'blue' : 'gold'" class="rounded-lg text-xs">
+            <a-tag :color="typeColors[record.type] || 'default'" class="rounded-lg text-xs">
               {{ record.type_label }}
             </a-tag>
           </template>
@@ -166,16 +228,16 @@
   >
     <template v-if="detailItem">
       <div class="detail-section">
-        <div class="detail-label">Loại chi phí</div>
-        <a-tag :color="detailItem.type === 'project_cost' ? 'blue' : 'gold'" class="rounded-lg">
+        <div class="detail-label">Loại</div>
+        <a-tag :color="typeColors[detailItem.type] || 'default'" class="rounded-lg">
           {{ detailItem.type_label }}
         </a-tag>
       </div>
       <div class="detail-section">
-        <div class="detail-label">Phân nhóm / Dự án</div>
+        <div class="detail-label">Dự án / Phân nhóm</div>
         <div class="text-sm text-gray-700">{{ detailItem.subtitle }}</div>
       </div>
-      <div class="detail-section">
+      <div class="detail-section" v-if="detailItem.amount">
         <div class="detail-label">Số tiền</div>
         <div class="text-xl font-bold text-emerald-600">{{ formatCurrency(detailItem.amount) }}</div>
       </div>
@@ -193,16 +255,19 @@
         <div class="detail-label">Ngày tạo</div>
         <div class="text-sm text-gray-600">{{ detailItem.created_at }}</div>
       </div>
-      <div class="detail-section" v-if="detailItem.cost_date">
-        <div class="detail-label">Ngày phát sinh</div>
-        <div class="text-sm text-gray-600">{{ detailItem.cost_date }}</div>
-      </div>
       <div class="detail-section" v-if="detailItem.description">
         <div class="detail-label">Mô tả</div>
         <div class="text-sm text-gray-600 whitespace-pre-wrap">{{ detailItem.description }}</div>
       </div>
+      <!-- Priority for CR -->
+      <div class="detail-section" v-if="detailItem.priority">
+        <div class="detail-label">Mức ưu tiên</div>
+        <a-tag :color="{ low: 'default', medium: 'processing', high: 'warning', urgent: 'error' }[detailItem.priority]" class="rounded-lg">
+          {{ { low: 'Thấp', medium: 'Trung bình', high: 'Cao', urgent: 'Khẩn cấp' }[detailItem.priority] || detailItem.priority }}
+        </a-tag>
+      </div>
       <a-divider />
-      <div class="detail-section">
+      <div class="detail-section" v-if="detailItem.type === 'project_cost' || detailItem.type === 'company_cost'">
         <div class="detail-label">Trạng thái duyệt</div>
         <a-steps :current="getApprovalStep(detailItem)" size="small" direction="vertical" class="mt-2">
           <a-step title="Tạo yêu cầu" :description="detailItem.created_at" />
@@ -237,7 +302,8 @@
     <div class="py-4">
       <div v-if="rejectTarget" class="mb-4 p-3 bg-gray-50 rounded-xl">
         <div class="font-semibold text-gray-700">{{ rejectTarget.title }}</div>
-        <div class="text-sm text-emerald-600 font-semibold">{{ formatCurrency(rejectTarget.amount) }}</div>
+        <div class="text-sm text-gray-500">{{ rejectTarget.type_label }}</div>
+        <div v-if="rejectTarget.amount" class="text-sm text-emerald-600 font-semibold">{{ formatCurrency(rejectTarget.amount) }}</div>
       </div>
       <a-form-item
         label="Lý do từ chối"
@@ -257,7 +323,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
@@ -272,6 +338,8 @@ import {
   HistoryOutlined,
   UpOutlined,
   DownOutlined,
+  UserOutlined,
+  SwapOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -280,6 +348,9 @@ defineOptions({ layout: CrmLayout })
 const props = defineProps({
   managementItems: { type: Array, default: () => [] },
   accountantItems: { type: Array, default: () => [] },
+  customerAcceptanceItems: { type: Array, default: () => [] },
+  changeRequestItems: { type: Array, default: () => [] },
+  additionalCostItems: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
 })
@@ -288,8 +359,25 @@ const rejectModalVisible = ref(false)
 const rejectTarget = ref(null)
 const rejectReason = ref('')
 const rejectLoading = ref(false)
+const rejectType = ref('cost') // cost | acceptance | change_request | additional_cost
 const showHistory = ref(false)
 const detailItem = ref(null)
+
+const typeColors = {
+  project_cost: 'blue',
+  company_cost: 'gold',
+  acceptance: 'purple',
+  change_request: 'magenta',
+  additional_cost: 'orange',
+}
+
+const totalPending = computed(() => {
+  return (props.stats.pending_management || 0)
+    + (props.stats.pending_accountant || 0)
+    + (props.stats.pending_customer || 0)
+    + (props.stats.pending_change_request || 0)
+    + (props.stats.pending_additional_cost || 0)
+})
 
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0)
@@ -307,6 +395,7 @@ const getApprovalStep = (item) => {
   return 1
 }
 
+// ─── Cost Approve (BĐH / KT) ───
 const handleApprove = (record) => {
   const level = record.approval_level === 'management' ? 'Ban Điều Hành' : 'Kế Toán'
 
@@ -330,9 +419,86 @@ const handleApprove = (record) => {
   })
 }
 
+// ─── Customer Acceptance Approve ───
+const handleApproveAcceptance = (record) => {
+  Modal.confirm({
+    title: 'Khách hàng duyệt nghiệm thu',
+    content: `Xác nhận khách hàng duyệt nghiệm thu "${record.title}"?`,
+    okText: 'Xác nhận duyệt',
+    cancelText: 'Hủy',
+    okButtonProps: { style: { background: '#8B5CF6', borderColor: '#8B5CF6' } },
+    onOk() {
+      router.post(`/approvals/acceptance/${record.id}/approve`, {}, {
+        preserveScroll: true,
+        onSuccess: () => message.success(`Đã duyệt nghiệm thu "${record.title}"`),
+        onError: () => message.error('Không thể duyệt nghiệm thu này'),
+      })
+    },
+  })
+}
+
+const openRejectAcceptanceModal = (record) => {
+  rejectTarget.value = record
+  rejectReason.value = ''
+  rejectType.value = 'acceptance'
+  rejectModalVisible.value = true
+}
+
+// ─── Change Request Approve ───
+const handleApproveCR = (record) => {
+  Modal.confirm({
+    title: 'Phê duyệt yêu cầu thay đổi',
+    content: `Duyệt "${record.title}"?\n\nẢnh hưởng chi phí: ${formatCurrency(record.amount)}`,
+    okText: 'Phê duyệt',
+    cancelText: 'Hủy',
+    okButtonProps: { style: { background: '#EC4899', borderColor: '#EC4899' } },
+    onOk() {
+      router.post(`/approvals/change-request/${record.id}/approve`, {}, {
+        preserveScroll: true,
+        onSuccess: () => message.success(`Đã duyệt "${record.title}"`),
+        onError: () => message.error('Không thể duyệt yêu cầu thay đổi này'),
+      })
+    },
+  })
+}
+
+const openRejectCRModal = (record) => {
+  rejectTarget.value = record
+  rejectReason.value = ''
+  rejectType.value = 'change_request'
+  rejectModalVisible.value = true
+}
+
+// ─── Additional Cost Approve ───
+const handleApproveAC = (record) => {
+  Modal.confirm({
+    title: 'Duyệt chi phí phát sinh',
+    content: `Duyệt "${record.title}"?\n\nSố tiền: ${formatCurrency(record.amount)}`,
+    okText: 'Duyệt',
+    cancelText: 'Hủy',
+    okButtonProps: { style: { background: '#F97316', borderColor: '#F97316' } },
+    onOk() {
+      router.post(`/approvals/additional-cost/${record.id}/approve`, {}, {
+        preserveScroll: true,
+        onSuccess: () => message.success(`Đã duyệt "${record.title}"`),
+        onError: () => message.error('Không thể duyệt yêu cầu này'),
+      })
+    },
+  })
+}
+
+const openRejectACModal = (record) => {
+  rejectTarget.value = record
+  rejectReason.value = ''
+  rejectType.value = 'additional_cost'
+  rejectModalVisible.value = true
+}
+
+// ─── Common Reject (Cost) ───
 const openRejectModal = (record) => {
   rejectTarget.value = record
   rejectReason.value = ''
+  rejectType.value = 'cost'
   rejectModalVisible.value = true
 }
 
@@ -340,7 +506,15 @@ const handleReject = () => {
   if (!rejectReason.value.trim() || !rejectTarget.value) return
 
   rejectLoading.value = true
-  router.post(`/approvals/${rejectTarget.value.id}/reject`, {
+
+  const urlMap = {
+    cost: `/approvals/${rejectTarget.value.id}/reject`,
+    acceptance: `/approvals/acceptance/${rejectTarget.value.id}/reject`,
+    change_request: `/approvals/change-request/${rejectTarget.value.id}/reject`,
+    additional_cost: `/approvals/additional-cost/${rejectTarget.value.id}/reject`,
+  }
+
+  router.post(urlMap[rejectType.value], {
     reason: rejectReason.value.trim(),
   }, {
     preserveScroll: true,
@@ -370,7 +544,7 @@ const historyColumns = [
 /* ─── Overview Cards ─── */
 .approval-overview {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -481,6 +655,11 @@ const historyColumns = [
   margin-bottom: 6px;
 }
 
+@media (max-width: 1200px) {
+  .approval-overview {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
 @media (max-width: 768px) {
   .approval-overview {
     grid-template-columns: repeat(2, 1fr);

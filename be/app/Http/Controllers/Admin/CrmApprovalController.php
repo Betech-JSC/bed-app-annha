@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cost;
+use App\Models\AcceptanceStage;
+use App\Models\ChangeRequest;
+use App\Models\AdditionalCost;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class CrmApprovalController extends Controller
@@ -31,6 +35,27 @@ class CrmApprovalController extends Controller
             ->get()
             ->map(fn($cost) => $this->formatItem($cost));
 
+        // ─── Customer Acceptance (Khách hàng duyệt nghiệm thu) ───
+        $customerAcceptanceItems = AcceptanceStage::where('status', 'project_manager_approved')
+            ->with(['project:id,name,code', 'projectManagerApprover:id,name', 'task:id,name'])
+            ->orderBy('updated_at', 'desc')
+            ->get()
+            ->map(fn($stage) => $this->formatAcceptanceItem($stage));
+
+        // ─── Change Requests chờ duyệt ───
+        $changeRequestItems = ChangeRequest::whereIn('status', ['submitted', 'under_review'])
+            ->with(['project:id,name,code', 'requester:id,name,email'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($cr) => $this->formatChangeRequestItem($cr));
+
+        // ─── Additional Costs chờ duyệt ───
+        $additionalCostItems = AdditionalCost::whereIn('status', ['pending', 'pending_approval'])
+            ->with(['project:id,name,code', 'proposer:id,name,email'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($ac) => $this->formatAdditionalCostItem($ac));
+
         // ─── Recently processed (last 30 items) ───
         $recentItems = Cost::whereIn('status', ['approved', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
@@ -43,6 +68,9 @@ class CrmApprovalController extends Controller
         $stats = [
             'pending_management' => $managementItems->count(),
             'pending_accountant' => $accountantItems->count(),
+            'pending_customer' => $customerAcceptanceItems->count(),
+            'pending_change_request' => $changeRequestItems->count(),
+            'pending_additional_cost' => $additionalCostItems->count(),
             'approved_today' => Cost::where('status', 'approved')
                 ->whereDate('updated_at', today())
                 ->count(),
@@ -55,6 +83,9 @@ class CrmApprovalController extends Controller
         return Inertia::render('Crm/Approvals/Index', [
             'managementItems' => $managementItems->values(),
             'accountantItems' => $accountantItems->values(),
+            'customerAcceptanceItems' => $customerAcceptanceItems->values(),
+            'changeRequestItems' => $changeRequestItems->values(),
+            'additionalCostItems' => $additionalCostItems->values(),
             'recentItems' => $recentItems->values(),
             'stats' => $stats,
         ]);
@@ -116,9 +147,114 @@ class CrmApprovalController extends Controller
         return back()->with('success', "Đã từ chối chi phí \"{$cost->name}\"");
     }
 
-    /**
-     * Format a cost record for the frontend.
-     */
+    // =========================================================================
+    // Customer Acceptance Approval
+    // =========================================================================
+
+    public function approveCustomerAcceptance(Request $request, $id)
+    {
+        $stage = AcceptanceStage::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($stage->status !== 'project_manager_approved') {
+            return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ khách hàng duyệt');
+        }
+
+        $stage->approveCustomer($user);
+
+        return back()->with('success', "Khách hàng đã duyệt nghiệm thu \"{$stage->name}\"");
+    }
+
+    public function rejectCustomerAcceptance(Request $request, $id)
+    {
+        $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $stage = AcceptanceStage::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        $stage->reject($request->reason, $user);
+
+        return back()->with('success', "Đã từ chối nghiệm thu \"{$stage->name}\"");
+    }
+
+    // =========================================================================
+    // Change Request Approval
+    // =========================================================================
+
+    public function approveChangeRequest(Request $request, $id)
+    {
+        $cr = ChangeRequest::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if (!in_array($cr->status, ['submitted', 'under_review'])) {
+            return back()->with('error', 'Yêu cầu thay đổi không ở trạng thái chờ duyệt');
+        }
+
+        $cr->approve($user, $request->input('notes'));
+
+        return back()->with('success', "Đã duyệt yêu cầu thay đổi \"{$cr->title}\"");
+    }
+
+    public function rejectChangeRequest(Request $request, $id)
+    {
+        $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $cr = ChangeRequest::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if (!in_array($cr->status, ['submitted', 'under_review'])) {
+            return back()->with('error', 'Yêu cầu thay đổi không ở trạng thái chờ duyệt');
+        }
+
+        $cr->reject($user, $request->reason);
+
+        return back()->with('success', "Đã từ chối yêu cầu thay đổi \"{$cr->title}\"");
+    }
+
+    // =========================================================================
+    // Additional Cost Approval
+    // =========================================================================
+
+    public function approveAdditionalCost(Request $request, $id)
+    {
+        $ac = AdditionalCost::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if (!in_array($ac->status, ['pending', 'pending_approval'])) {
+            return back()->with('error', 'Chi phí phát sinh không ở trạng thái chờ duyệt');
+        }
+
+        $ac->approve($user);
+
+        return back()->with('success', "Đã duyệt chi phí phát sinh");
+    }
+
+    public function rejectAdditionalCost(Request $request, $id)
+    {
+        $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $ac = AdditionalCost::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if (!in_array($ac->status, ['pending', 'pending_approval'])) {
+            return back()->with('error', 'Chi phí phát sinh không ở trạng thái chờ duyệt');
+        }
+
+        $ac->reject($request->reason);
+
+        return back()->with('success', "Đã từ chối chi phí phát sinh");
+    }
+
+    // =========================================================================
+    // Format Functions
+    // =========================================================================
+
     private function formatItem(Cost $cost): array
     {
         $isProject = $cost->project_id !== null;
@@ -149,6 +285,72 @@ class CrmApprovalController extends Controller
                 'pending_accountant_approval' => 'accountant',
                 default => 'done',
             },
+        ];
+    }
+
+    private function formatAcceptanceItem(AcceptanceStage $stage): array
+    {
+        return [
+            'id' => $stage->id,
+            'type' => 'acceptance',
+            'type_label' => 'Nghiệm thu',
+            'title' => $stage->name,
+            'subtitle' => ($stage->project->code ?? '') . ' - ' . ($stage->project->name ?? 'Dự án'),
+            'amount' => 0,
+            'status' => $stage->status,
+            'status_label' => 'Chờ KH duyệt',
+            'created_by' => $stage->projectManagerApprover->name ?? 'N/A',
+            'created_by_email' => '',
+            'created_at' => $stage->updated_at?->format('d/m/Y H:i') ?? '',
+            'description' => $stage->description,
+            'project_name' => $stage->project->name ?? null,
+            'project_id' => $stage->project_id,
+            'task_name' => $stage->task->name ?? null,
+            'approval_level' => 'customer',
+        ];
+    }
+
+    private function formatChangeRequestItem(ChangeRequest $cr): array
+    {
+        return [
+            'id' => $cr->id,
+            'type' => 'change_request',
+            'type_label' => 'Thay đổi',
+            'title' => $cr->title,
+            'subtitle' => ($cr->project->code ?? '') . ' - ' . ($cr->project->name ?? 'Dự án'),
+            'amount' => (float) ($cr->estimated_cost_impact ?? 0),
+            'status' => $cr->status,
+            'status_label' => 'Chờ phê duyệt',
+            'created_by' => $cr->requester->name ?? 'N/A',
+            'created_by_email' => $cr->requester->email ?? '',
+            'created_at' => $cr->created_at?->format('d/m/Y H:i') ?? '',
+            'description' => $cr->description,
+            'project_name' => $cr->project->name ?? null,
+            'project_id' => $cr->project_id,
+            'change_type' => $cr->change_type,
+            'priority' => $cr->priority,
+            'approval_level' => 'change_request',
+        ];
+    }
+
+    private function formatAdditionalCostItem(AdditionalCost $ac): array
+    {
+        return [
+            'id' => $ac->id,
+            'type' => 'additional_cost',
+            'type_label' => 'CP Phát sinh',
+            'title' => Str::limit($ac->description, 60),
+            'subtitle' => ($ac->project->code ?? '') . ' - ' . ($ac->project->name ?? 'Dự án'),
+            'amount' => (float) ($ac->amount ?? 0),
+            'status' => $ac->status,
+            'status_label' => 'Chờ BĐH duyệt',
+            'created_by' => $ac->proposer->name ?? 'N/A',
+            'created_by_email' => $ac->proposer->email ?? '',
+            'created_at' => $ac->created_at?->format('d/m/Y H:i') ?? '',
+            'description' => $ac->description,
+            'project_name' => $ac->project->name ?? null,
+            'project_id' => $ac->project_id,
+            'approval_level' => 'additional_cost',
         ];
     }
 

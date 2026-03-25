@@ -117,12 +117,14 @@ class CrmProjectsController extends Controller
             'acceptanceStages.items',
             'defects',
             'progress',
-            'changeRequests',
+            'changeRequests.requester',
+            'changeRequests.approver',
             'invoices',
             'budgets.items',
             'budgets.creator',
             'comments.user',
-            'risks',
+            'risks.owner',
+            'risks.identifier',
             'attachments' => function ($q) {
                 $q->latest();
             },
@@ -170,6 +172,15 @@ class CrmProjectsController extends Controller
             ->orderBy('name')
             ->get();
 
+        // Get ALL tasks with hierarchy for progress tab (like mobile overview)
+        $allTasks = \App\Models\ProjectTask::where('project_id', $project->id)
+            ->whereNull('deleted_at')
+            ->with(['assignedUser:id,name', 'children' => function ($q) {
+                $q->whereNull('deleted_at')->orderBy('order');
+            }])
+            ->orderBy('order')
+            ->get();
+
         return Inertia::render('Crm/Projects/Show', [
             'project' => $project,
             'users' => $users,
@@ -179,6 +190,7 @@ class CrmProjectsController extends Controller
             'materials' => $materials,
             'globalSubcontractors' => $globalSubcontractors,
             'projectTasks' => $projectTasks,
+            'allTasks' => $allTasks,
         ]);
     }
 
@@ -396,14 +408,18 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_CREATE, $project);
 
         $validated = $request->validate([
-            'description' => 'required|string|max:255',
+            'notes' => 'nullable|string|max:2000',
             'amount' => 'required|numeric|min:0',
             'due_date' => 'nullable|date',
             'status' => 'nullable|string',
         ]);
 
+        // Auto-generate payment_number
+        $lastNumber = ProjectPayment::where('project_id', $project->id)->max('payment_number') ?? 0;
+
         ProjectPayment::create([
             'project_id' => $project->id,
+            'payment_number' => $lastNumber + 1,
             ...$validated,
         ]);
 
@@ -690,19 +706,95 @@ class CrmProjectsController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'cost_impact' => 'nullable|numeric',
-            'status' => 'nullable|string',
+            'description' => 'required|string|max:5000',
+            'change_type' => 'required|in:scope,schedule,cost,quality,resource,other',
+            'priority' => 'required|in:low,medium,high,urgent',
+            'reason' => 'nullable|string|max:2000',
+            'impact_analysis' => 'nullable|string|max:5000',
+            'estimated_cost_impact' => 'nullable|numeric|min:0',
+            'estimated_schedule_impact_days' => 'nullable|integer|min:0',
+            'implementation_plan' => 'nullable|string|max:5000',
         ]);
 
         ChangeRequest::create([
             'project_id' => $project->id,
             'requested_by' => $user->id,
-            'status' => $validated['status'] ?? 'pending',
+            'status' => 'draft',
             ...$validated,
         ]);
 
         return back()->with('success', 'Đã tạo yêu cầu thay đổi.');
+    }
+
+    public function updateChangeRequest(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::CHANGE_REQUEST_UPDATE, $project);
+
+        $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
+
+        if (!in_array($cr->status, ['draft', 'pending'])) {
+            return back()->with('error', 'Chỉ có thể sửa yêu cầu thay đổi ở trạng thái nháp hoặc chờ duyệt.');
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'required|string|max:5000',
+            'change_type' => 'required|in:scope,schedule,cost,quality,resource,other',
+            'priority' => 'required|in:low,medium,high,urgent',
+            'reason' => 'nullable|string|max:2000',
+            'impact_analysis' => 'nullable|string|max:5000',
+            'estimated_cost_impact' => 'nullable|numeric|min:0',
+            'estimated_schedule_impact_days' => 'nullable|integer|min:0',
+            'implementation_plan' => 'nullable|string|max:5000',
+        ]);
+
+        $cr->update($validated);
+        return back()->with('success', 'Đã cập nhật yêu cầu thay đổi.');
+    }
+
+    public function submitChangeRequest(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
+
+        if ($cr->status !== 'draft') {
+            return back()->with('error', 'Chỉ có thể gửi yêu cầu ở trạng thái nháp.');
+        }
+
+        $cr->submit();
+        return back()->with('success', 'Đã gửi yêu cầu thay đổi để duyệt.');
+    }
+
+    public function approveChangeRequest(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $project);
+
+        $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
+        $cr->approve($user, $request->input('notes'));
+        return back()->with('success', 'Đã duyệt yêu cầu thay đổi.');
+    }
+
+    public function rejectChangeRequest(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
+        $cr->reject($user, $request->input('reason', 'Không đồng ý'));
+        return back()->with('success', 'Đã từ chối yêu cầu thay đổi.');
+    }
+
+    public function implementChangeRequest(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
+        $cr->markAsImplemented();
+        return back()->with('success', 'Đã đánh dấu đã triển khai.');
     }
 
     public function destroyChangeRequest(string $projectId, string $id)
@@ -711,7 +803,11 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::CHANGE_REQUEST_DELETE, $project);
 
-        ChangeRequest::where('project_id', $project->id)->findOrFail($id)->delete();
+        $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
+        if (!in_array($cr->status, ['draft', 'cancelled'])) {
+            return back()->with('error', 'Chỉ có thể xóa yêu cầu ở trạng thái nháp hoặc đã hủy.');
+        }
+        $cr->delete();
         return back()->with('success', 'Đã xóa yêu cầu thay đổi.');
     }
 
@@ -727,18 +823,69 @@ class CrmProjectsController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'severity' => 'required|in:low,medium,high',
-            'status' => 'nullable|string',
+            'description' => 'nullable|string|max:5000',
+            'category' => 'required|in:schedule,cost,quality,scope,resource,technical,external,other',
+            'probability' => 'required|in:very_low,low,medium,high,very_high',
+            'impact' => 'required|in:very_low,low,medium,high,very_high',
+            'risk_type' => 'nullable|in:threat,opportunity',
+            'mitigation_plan' => 'nullable|string|max:5000',
+            'contingency_plan' => 'nullable|string|max:5000',
+            'owner_id' => 'nullable|exists:users,id',
+            'target_resolution_date' => 'nullable|date',
         ]);
 
         ProjectRisk::create([
             'project_id' => $project->id,
-            'status' => $validated['status'] ?? 'identified',
+            'identified_by' => $user->id,
+            'identified_date' => now(),
+            'status' => 'identified',
+            'risk_type' => $validated['risk_type'] ?? 'threat',
             ...$validated,
         ]);
 
         return back()->with('success', 'Đã thêm rủi ro.');
+    }
+
+    public function updateRisk(Request $request, string $projectId, string $riskId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PROJECT_RISK_UPDATE, $project);
+
+        $risk = ProjectRisk::where('project_id', $project->id)->findOrFail($riskId);
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string|max:5000',
+            'category' => 'required|in:schedule,cost,quality,scope,resource,technical,external,other',
+            'probability' => 'required|in:very_low,low,medium,high,very_high',
+            'impact' => 'required|in:very_low,low,medium,high,very_high',
+            'status' => 'nullable|in:identified,analyzed,mitigated,monitored,closed',
+            'risk_type' => 'nullable|in:threat,opportunity',
+            'mitigation_plan' => 'nullable|string|max:5000',
+            'contingency_plan' => 'nullable|string|max:5000',
+            'owner_id' => 'nullable|exists:users,id',
+            'target_resolution_date' => 'nullable|date',
+        ]);
+
+        $risk->update(array_merge($validated, ['updated_by' => $user->id]));
+
+        if (isset($validated['status']) && $validated['status'] === 'closed' && !$risk->resolved_date) {
+            $risk->markAsResolved();
+        }
+
+        return back()->with('success', 'Đã cập nhật rủi ro.');
+    }
+
+    public function resolveRisk(string $projectId, string $riskId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        $risk = ProjectRisk::where('project_id', $project->id)->findOrFail($riskId);
+        $risk->markAsResolved();
+
+        return back()->with('success', 'Đã đánh dấu rủi ro đã xử lý.');
     }
 
     public function destroyRisk(string $projectId, string $riskId)
@@ -749,6 +896,126 @@ class CrmProjectsController extends Controller
 
         ProjectRisk::where('project_id', $project->id)->findOrFail($riskId)->delete();
         return back()->with('success', 'Đã xóa rủi ro.');
+    }
+
+    // ===================================================================
+    // SUB-ITEM CRUD — Tasks (Tiến độ dự án)
+    // ===================================================================
+
+    public function storeTask(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PROJECT_TASK_CREATE, $project);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'parent_id' => 'nullable|exists:project_tasks,id',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'priority' => 'nullable|in:low,medium,high,urgent',
+            'assigned_to' => 'nullable|exists:users,id',
+        ]);
+
+        // Validate parent belongs to project
+        if (!empty($validated['parent_id'])) {
+            $parent = $project->tasks()->find($validated['parent_id']);
+            if (!$parent) {
+                return back()->with('error', 'Công việc cha không thuộc dự án này.');
+            }
+        }
+
+        // Auto-calculate order
+        $maxOrder = $project->tasks()
+            ->where('parent_id', $validated['parent_id'] ?? null)
+            ->max('order') ?? -1;
+
+        // Auto-calculate duration
+        $duration = null;
+        if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+            $duration = \Carbon\Carbon::parse($validated['start_date'])
+                ->diffInDays(\Carbon\Carbon::parse($validated['end_date'])) + 1;
+        }
+
+        $task = \App\Models\ProjectTask::create([
+            'project_id' => $project->id,
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'parent_id' => $validated['parent_id'] ?? null,
+            'start_date' => $validated['start_date'] ?? null,
+            'end_date' => $validated['end_date'] ?? null,
+            'duration' => $duration,
+            'priority' => $validated['priority'] ?? 'medium',
+            'assigned_to' => $validated['assigned_to'] ?? null,
+            'order' => $maxOrder + 1,
+            'status' => 'not_started',
+            'progress_percentage' => 0,
+            'created_by' => $user->id,
+        ]);
+
+        return back()->with('success', 'Đã thêm công việc.');
+    }
+
+    public function updateTask(Request $request, string $projectId, string $taskId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PROJECT_TASK_UPDATE, $project);
+
+        $task = \App\Models\ProjectTask::where('project_id', $project->id)->findOrFail($taskId);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'parent_id' => 'nullable|exists:project_tasks,id',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'priority' => 'nullable|in:low,medium,high,urgent',
+            'assigned_to' => 'nullable|exists:users,id',
+        ]);
+
+        // Prevent circular reference
+        if (!empty($validated['parent_id'])) {
+            if ($validated['parent_id'] == $task->id) {
+                return back()->with('error', 'Công việc không thể là cha của chính nó.');
+            }
+        }
+
+        // Auto-calculate duration
+        $duration = $task->duration;
+        if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+            $duration = \Carbon\Carbon::parse($validated['start_date'])
+                ->diffInDays(\Carbon\Carbon::parse($validated['end_date'])) + 1;
+        }
+
+        $task->update([
+            ...$validated,
+            'duration' => $duration,
+            'updated_by' => $user->id,
+        ]);
+
+        return back()->with('success', 'Đã cập nhật công việc.');
+    }
+
+    public function destroyTask(string $projectId, string $taskId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PROJECT_TASK_DELETE, $project);
+
+        $task = \App\Models\ProjectTask::where('project_id', $project->id)->findOrFail($taskId);
+
+        // Check if task has children
+        $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
+            ->whereNull('deleted_at')
+            ->exists();
+        if ($hasChildren) {
+            return back()->with('error', 'Không thể xóa công việc có công việc con. Hãy xóa các công việc con trước.');
+        }
+
+        $task->delete();
+        return back()->with('success', 'Đã xóa công việc.');
     }
 
     // ===================================================================
