@@ -21,6 +21,7 @@ use App\Models\Invoice;
 use App\Models\ProjectRisk;
 use App\Models\AdditionalCost;
 use App\Models\AcceptanceStage;
+use App\Models\AcceptanceTemplate;
 use App\Models\Attachment;
 use App\Constants\Permissions;
 use App\Services\AuthorizationService;
@@ -98,16 +99,18 @@ class CrmProjectsController extends Controller
             'customer',
             'projectManager',
             'creator',
-            'contract',
-            'payments',
+            'contract.attachments',
+            'payments.attachments',
             'additionalCosts.proposer',
             'additionalCosts.approver',
+            'additionalCosts.attachments',
             'costs' => function ($q) {
                 $q->orderByDesc('created_at');
             },
             'costs.creator',
             'costs.costGroup',
             'costs.subcontractor',
+            'costs.attachments',
             'personnel.user',
             'personnel.personnelRole',
             'subcontractors.payments',
@@ -115,14 +118,16 @@ class CrmProjectsController extends Controller
                 $q->with(['creator:id,name', 'task:id,name'])->latest('log_date');
             },
             'acceptanceStages.items',
-            'defects',
+            'defects.attachments',
             'progress',
             'changeRequests.requester',
             'changeRequests.approver',
             'invoices',
             'budgets.items',
             'budgets.creator',
-            'comments.user',
+            'comments' => function ($q) {
+                $q->whereNull('parent_id')->with(['user', 'replies.user'])->orderByDesc('created_at');
+            },
             'risks.owner',
             'risks.identifier',
             'attachments' => function ($q) {
@@ -181,6 +186,17 @@ class CrmProjectsController extends Controller
             ->orderBy('order')
             ->get();
 
+        // Get acceptance templates for acceptance stage form
+        $acceptanceTemplates = AcceptanceTemplate::select('id', 'name')->orderBy('name')->get();
+
+        // Get parent tasks (A-level, i.e. tasks that have children) for acceptance stage binding
+        $parentTasks = \App\Models\ProjectTask::where('project_id', $project->id)
+            ->whereNull('deleted_at')
+            ->whereHas('children', fn($q) => $q->whereNull('deleted_at'))
+            ->select('id', 'name')
+            ->orderBy('order')
+            ->get();
+
         return Inertia::render('Crm/Projects/Show', [
             'project' => $project,
             'users' => $users,
@@ -191,6 +207,8 @@ class CrmProjectsController extends Controller
             'globalSubcontractors' => $globalSubcontractors,
             'projectTasks' => $projectTasks,
             'allTasks' => $allTasks,
+            'acceptanceTemplates' => $acceptanceTemplates,
+            'parentTasks' => $parentTasks,
         ]);
     }
 
@@ -432,8 +450,224 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::PAYMENT_DELETE, $project);
 
-        ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId)->delete();
+        $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+        if (in_array($payment->status, ['confirmed', 'paid'])) {
+            return back()->with('error', 'Không thể xóa thanh toán đã xác nhận.');
+        }
+        $payment->delete();
         return back()->with('success', 'Đã xóa thanh toán.');
+    }
+
+    /**
+     * CRM: Cập nhật thanh toán
+     */
+    public function updatePayment(Request $request, string $projectId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PAYMENT_UPDATE, $project);
+
+        $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+        if (in_array($payment->status, ['confirmed', 'paid'])) {
+            return back()->with('error', 'Không thể sửa thanh toán đã xác nhận.');
+        }
+
+        $validated = $request->validate([
+            'amount' => 'sometimes|numeric|min:0',
+            'notes' => 'nullable|string|max:2000',
+            'due_date' => 'sometimes|date',
+        ]);
+
+        $payment->update($validated);
+        return back()->with('success', 'Đã cập nhật thanh toán.');
+    }
+
+    /**
+     * CRM: KH đánh dấu đã thanh toán (pending → customer_paid)
+     */
+    public function markPaymentPaidByCustomer(Request $request, string $projectId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+        if ($payment->status !== 'pending' && $payment->status !== 'overdue') {
+            return back()->with('error', 'Thanh toán không ở trạng thái chờ thanh toán.');
+        }
+
+        $validated = $request->validate([
+            'paid_date' => 'nullable|date',
+            'actual_amount' => 'nullable|numeric|min:0',
+        ]);
+
+        try {
+            DB::beginTransaction();
+            $payment->markAsPaidByCustomer(
+                $user,
+                $validated['paid_date'] ?? null,
+                $validated['actual_amount'] ?? null
+            );
+            DB::commit();
+            return back()->with('success', 'Đã đánh dấu khách hàng đã thanh toán. Chờ KT xác nhận.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * CRM: Kế toán xác nhận thanh toán (customer_paid → confirmed)
+     */
+    public function confirmPayment(Request $request, string $projectId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $project);
+
+        $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+        if ($payment->status !== 'customer_paid') {
+            return back()->with('error', 'Chỉ xác nhận được khi KH đã đánh dấu thanh toán.');
+        }
+
+        $validated = $request->validate([
+            'paid_date' => 'nullable|date',
+        ]);
+
+        try {
+            DB::beginTransaction();
+            $payment->markAsPaid($user);
+            if (!empty($validated['paid_date'])) {
+                $payment->update(['paid_date' => $validated['paid_date']]);
+            }
+            DB::commit();
+            return back()->with('success', 'Đã xác nhận thanh toán (Kế toán).');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * CRM: Kế toán từ chối thanh toán (customer_paid → pending)
+     */
+    public function rejectPayment(Request $request, string $projectId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $project);
+
+        $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+        if ($payment->status !== 'customer_paid') {
+            return back()->with('error', 'Chỉ từ chối được khi KH đã đánh dấu thanh toán.');
+        }
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        try {
+            DB::beginTransaction();
+            $payment->update([
+                'status' => 'pending',
+                'notes' => ($payment->notes ? $payment->notes . "\n\n" : '') . "KT từ chối — " . $validated['reason'],
+            ]);
+            DB::commit();
+            return back()->with('success', 'Đã từ chối thanh toán.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    // ===================================================================
+    // FILE ATTACHMENTS — Generic helper + specific endpoints
+    // ===================================================================
+
+    /**
+     * Helper: Attach uploaded files to any attachable model
+     */
+    private function attachFilesToEntity(Request $request, $entity, string $storagePath): int
+    {
+        $request->validate([
+            'files' => 'required|array|min:1',
+            'files.*' => 'required|file|max:20480', // max 20MB each
+        ]);
+
+        $user = auth('admin')->user();
+        $count = 0;
+
+        foreach ($request->file('files') as $file) {
+            $path = $file->store($storagePath, 'public');
+            Attachment::create([
+                'original_name' => $file->getClientOriginalName(),
+                'file_name' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'file_url' => '/storage/' . $path,
+                'file_size' => $file->getSize(),
+                'mime_type' => $file->getClientMimeType(),
+                'type' => $file->getClientOriginalExtension(),
+                'attachable_type' => get_class($entity),
+                'attachable_id' => $entity->id,
+                'uploaded_by' => $user->id ?? null,
+            ]);
+            $count++;
+        }
+        return $count;
+    }
+
+    /**
+     * CRM: Đính kèm file vào Chi phí
+     */
+    public function attachFilesToCost(Request $request, string $projectId, string $costId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COSTS_CREATE, $project);
+
+        $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
+        $count = $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$costId}");
+        return back()->with('success', "Đã đính kèm {$count} file vào phiếu chi.");
+    }
+
+    /**
+     * CRM: Đính kèm file vào Thanh toán (chứng từ thanh toán)
+     */
+    public function attachFilesToPayment(Request $request, string $projectId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+        $count = $this->attachFilesToEntity($request, $payment, "payments/{$project->id}/{$paymentId}");
+        return back()->with('success', "Đã đính kèm {$count} chứng từ thanh toán.");
+    }
+
+    /**
+     * CRM: Đính kèm file vào Chi phí phát sinh
+     */
+    public function attachFilesToAdditionalCost(Request $request, string $projectId, string $acId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::ADDITIONAL_COST_CREATE, $project);
+
+        $ac = AdditionalCost::where('project_id', $project->id)->findOrFail($acId);
+        $count = $this->attachFilesToEntity($request, $ac, "additional-costs/{$project->id}/{$acId}");
+        return back()->with('success', "Đã đính kèm {$count} file vào CP phát sinh.");
+    }
+
+    /**
+     * CRM: Đính kèm file vào Lỗi (hình ảnh, tài liệu)
+     */
+    public function attachFilesToDefect(Request $request, string $projectId, string $defectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::DEFECT_CREATE, $project);
+
+        $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
+        $count = $this->attachFilesToEntity($request, $defect, "defects/{$project->id}/{$defectId}");
+        return back()->with('success', "Đã đính kèm {$count} file vào lỗi.");
     }
 
     // ===================================================================
@@ -620,11 +854,13 @@ class CrmProjectsController extends Controller
 
         $validated = $request->validate([
             'content' => 'required|string|max:2000',
+            'parent_id' => 'nullable|exists:project_comments,id',
         ]);
 
         ProjectComment::create([
             'project_id' => $project->id,
             'user_id' => $user->id,
+            'parent_id' => $validated['parent_id'] ?? null,
             ...$validated,
         ]);
 
@@ -655,7 +891,9 @@ class CrmProjectsController extends Controller
             'description' => 'required|string',
             'severity' => 'required|in:low,medium,high,critical',
             'status' => 'nullable|string|in:open,in_progress,fixed,verified',
+            'task_id' => 'nullable|exists:project_tasks,id',
             'acceptance_stage_id' => 'nullable|exists:acceptance_stages,id',
+            'defect_type' => 'nullable|in:standard_violation,other',
         ]);
 
         Defect::create([
@@ -664,7 +902,9 @@ class CrmProjectsController extends Controller
             'description' => $validated['description'],
             'severity' => $validated['severity'],
             'status' => $validated['status'] ?? 'open',
+            'task_id' => $validated['task_id'] ?? null,
             'acceptance_stage_id' => $validated['acceptance_stage_id'] ?? null,
+            'defect_type' => $validated['defect_type'] ?? null,
         ]);
 
         return back()->with('success', 'Đã báo cáo lỗi.');
@@ -1064,6 +1304,20 @@ class CrmProjectsController extends Controller
         return back()->with('success', 'Đã cập nhật hợp đồng.');
     }
 
+    /**
+     * CRM: Đính kèm file vào Hợp đồng
+     */
+    public function attachFilesToContract(Request $request, string $projectId, string $contractId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::CONTRACT_UPDATE, $project);
+
+        $contract = Contract::where('project_id', $project->id)->findOrFail($contractId);
+        $count = $this->attachFilesToEntity($request, $contract, "contracts/{$project->id}/{$contractId}");
+        return back()->with('success', "Đã đính kèm {$count} file vào hợp đồng.");
+    }
+
     // ===================================================================
     // SUB-ITEM CRUD — Subcontractors (Gap 1)
     // ===================================================================
@@ -1211,7 +1465,7 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'CP phát sinh không ở trạng thái chờ duyệt.');
         }
         $validated = $request->validate(['rejected_reason' => 'required|string|max:500']);
-        $cost->reject($validated['rejected_reason']);
+        $cost->reject($validated['rejected_reason'], $admin);
         return back()->with('success', 'Đã từ chối chi phí phát sinh.');
     }
 
@@ -1406,6 +1660,9 @@ class CrmProjectsController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'task_id' => 'nullable|exists:project_tasks,id',
+            'acceptance_template_id' => 'nullable|exists:acceptance_templates,id',
+            'order' => 'nullable|integer|min:0',
         ]);
 
         $maxOrder = $project->acceptanceStages()->max('order') ?? 0;
@@ -1414,7 +1671,9 @@ class CrmProjectsController extends Controller
             'project_id' => $project->id,
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
-            'order' => $maxOrder + 1,
+            'task_id' => $validated['task_id'] ?? null,
+            'acceptance_template_id' => $validated['acceptance_template_id'] ?? null,
+            'order' => $validated['order'] ?? ($maxOrder + 1),
             'is_custom' => true,
             'status' => 'pending',
         ]);

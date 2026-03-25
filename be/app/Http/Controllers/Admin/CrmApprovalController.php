@@ -7,6 +7,7 @@ use App\Models\Cost;
 use App\Models\AcceptanceStage;
 use App\Models\ChangeRequest;
 use App\Models\AdditionalCost;
+use App\Models\SubcontractorPayment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +59,19 @@ class CrmApprovalController extends Controller
             ->get()
             ->map(fn($ac) => $this->formatAdditionalCostItem($ac));
 
+        // ─── Subcontractor Payments chờ duyệt ───
+        $subPaymentManagement = SubcontractorPayment::where('status', 'pending_management_approval')
+            ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($p) => $this->formatSubPaymentItem($p));
+
+        $subPaymentAccountant = SubcontractorPayment::where('status', 'pending_accountant_confirmation')
+            ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'approver:id,name'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($p) => $this->formatSubPaymentItem($p));
+
         // ─── Recently processed (last 30 items) ───
         $recentItems = Cost::whereIn('status', ['approved', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
@@ -73,6 +87,7 @@ class CrmApprovalController extends Controller
             'pending_customer' => $customerAcceptanceItems->count(),
             'pending_change_request' => $changeRequestItems->count(),
             'pending_additional_cost' => $additionalCostItems->count(),
+            'pending_sub_payment' => $subPaymentManagement->count() + $subPaymentAccountant->count(),
             'approved_today' => Cost::where('status', 'approved')
                 ->whereDate('updated_at', today())
                 ->count(),
@@ -88,6 +103,8 @@ class CrmApprovalController extends Controller
             'customerAcceptanceItems' => $customerAcceptanceItems->values(),
             'changeRequestItems' => $changeRequestItems->values(),
             'additionalCostItems' => $additionalCostItems->values(),
+            'subPaymentManagementItems' => $subPaymentManagement->values(),
+            'subPaymentAccountantItems' => $subPaymentAccountant->values(),
             'recentItems' => $recentItems->values(),
             'stats' => $stats,
         ]);
@@ -439,7 +456,7 @@ class CrmApprovalController extends Controller
         try {
             DB::beginTransaction();
 
-            $ac->reject($request->reason);
+            $ac->reject($request->reason, $user);
 
             DB::commit();
 
@@ -453,6 +470,109 @@ class CrmApprovalController extends Controller
             DB::rollBack();
             Log::error('CRM: Additional cost rejection failed', ['ac_id' => $id, 'error' => $e->getMessage()]);
             return back()->with('error', 'Lỗi hệ thống khi từ chối chi phí phát sinh');
+        }
+    }
+
+    // =========================================================================
+    // SUBCONTRACTOR PAYMENT APPROVAL
+    // Flow: draft → pending_management_approval → pending_accountant_confirmation → paid
+    // =========================================================================
+
+    public function approveSubPayment(Request $request, $id)
+    {
+        $payment = SubcontractorPayment::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($payment->status !== 'pending_management_approval') {
+            return back()->with('error', 'Phiếu thanh toán NTP không ở trạng thái chờ BĐH duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $result = $payment->approve($user);
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt phiếu thanh toán NTP');
+            }
+            DB::commit();
+
+            Log::info('CRM: BĐH approved sub payment', [
+                'payment_id' => $payment->id,
+                'approved_by' => $user->id,
+                'amount' => $payment->amount,
+            ]);
+
+            return back()->with('success', "Đã duyệt thanh toán NTP (Ban điều hành)");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Sub payment approval failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi duyệt thanh toán NTP');
+        }
+    }
+
+    public function confirmSubPayment(Request $request, $id)
+    {
+        $payment = SubcontractorPayment::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($payment->status !== 'pending_accountant_confirmation') {
+            return back()->with('error', 'Phiếu thanh toán NTP không ở trạng thái chờ KT xác nhận');
+        }
+
+        try {
+            DB::beginTransaction();
+            $result = $payment->markAsPaid($user);
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể xác nhận thanh toán NTP');
+            }
+            DB::commit();
+
+            Log::info('CRM: KT confirmed sub payment', [
+                'payment_id' => $payment->id,
+                'paid_by' => $user->id,
+                'amount' => $payment->amount,
+            ]);
+
+            return back()->with('success', "Đã xác nhận thanh toán NTP (Kế toán)");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Sub payment confirm failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi xác nhận thanh toán NTP');
+        }
+    }
+
+    public function rejectSubPayment(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+
+        $payment = SubcontractorPayment::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if (!in_array($payment->status, ['pending_management_approval', 'pending_accountant_confirmation'])) {
+            return back()->with('error', 'Phiếu thanh toán NTP không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $result = $payment->reject($user, $request->reason);
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể từ chối thanh toán NTP');
+            }
+            DB::commit();
+
+            Log::info('CRM: Sub payment rejected', [
+                'payment_id' => $payment->id,
+                'rejected_by' => $user->id,
+                'reason' => $request->reason,
+            ]);
+
+            return back()->with('success', 'Đã từ chối thanh toán NTP');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Sub payment reject failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi từ chối thanh toán NTP');
         }
     }
 
@@ -559,13 +679,47 @@ class CrmApprovalController extends Controller
         ];
     }
 
+    private function formatSubPaymentItem(SubcontractorPayment $payment): array
+    {
+        return [
+            'id' => $payment->id,
+            'type' => 'sub_payment',
+            'type_label' => 'Thanh toán NTP',
+            'title' => 'Thanh toán: ' . ($payment->subcontractor->name ?? 'N/A'),
+            'subtitle' => ($payment->project->code ?? '') . ' - ' . ($payment->project->name ?? 'Dự án'),
+            'amount' => (float) $payment->amount,
+            'status' => $payment->status,
+            'status_label' => match ($payment->status) {
+                'pending_management_approval' => 'Chờ BĐH duyệt',
+                'pending_accountant_confirmation' => 'Chờ KT xác nhận',
+                default => $payment->status,
+            },
+            'created_by' => $payment->creator->name ?? 'N/A',
+            'created_by_email' => $payment->creator->email ?? '',
+            'created_at' => $payment->created_at?->format('d/m/Y H:i') ?? '',
+            'description' => $payment->description ?? ('Đợt: ' . ($payment->payment_stage ?? 'N/A')),
+            'project_name' => $payment->project->name ?? null,
+            'project_id' => $payment->project_id,
+            'payment_method' => $payment->payment_method,
+            'subcontractor_name' => $payment->subcontractor->name ?? null,
+            'management_approved_by' => $payment->approver->name ?? null,
+            'approval_level' => match ($payment->status) {
+                'pending_management_approval' => 'management',
+                'pending_accountant_confirmation' => 'accountant',
+                default => 'done',
+            },
+        ];
+    }
+
     private function getStatusLabel(string $status): string
     {
         return match ($status) {
             'draft' => 'Nháp',
             'pending_management_approval' => 'Chờ BĐH duyệt',
             'pending_accountant_approval' => 'Chờ KT xác nhận',
+            'pending_accountant_confirmation' => 'Chờ KT xác nhận',
             'approved' => 'Đã duyệt',
+            'paid' => 'Đã thanh toán',
             'rejected' => 'Từ chối',
             default => $status,
         };

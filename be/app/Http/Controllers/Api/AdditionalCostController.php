@@ -347,7 +347,7 @@ class AdditionalCostController extends Controller
             'rejected_reason' => 'required|string|max:500',
         ]);
 
-        $cost->reject($validated['rejected_reason']);
+        $cost->reject($validated['rejected_reason'], $request->user());
 
         // Notify proposer and customer
         $this->notificationService->notifyCostRejected($cost, $validated['rejected_reason']);

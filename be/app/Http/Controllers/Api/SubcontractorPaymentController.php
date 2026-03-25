@@ -231,13 +231,20 @@ class SubcontractorPaymentController extends Controller
             ], 400);
         }
 
-        $payment->approve($user);
+        try {
+            DB::beginTransaction();
+            $payment->approve($user);
+            DB::commit();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Phiếu thanh toán đã được ban điều hành duyệt.',
-            'data' => $payment->fresh(['approver'])
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Phiếu thanh toán đã được ban điều hành duyệt.',
+                'data' => $payment->fresh(['approver'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => 'Lỗi hệ thống.', 'error' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -260,13 +267,24 @@ class SubcontractorPaymentController extends Controller
             'rejection_reason' => 'nullable|string|max:1000',
         ]);
 
-        $payment->reject($user, $validated['rejection_reason'] ?? null);
+        try {
+            DB::beginTransaction();
+            $result = $payment->reject($user, $validated['rejection_reason'] ?? null);
+            if (!$result) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Không thể từ chối phiếu chi.'], 400);
+            }
+            DB::commit();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Phiếu chi đã bị từ chối.',
-            'data' => $payment->fresh(['rejector'])
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Phiếu chi đã bị từ chối.',
+                'data' => $payment->fresh(['rejector'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => 'Lỗi hệ thống.', 'error' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -285,12 +303,19 @@ class SubcontractorPaymentController extends Controller
             ], 400);
         }
 
-        $payment->markAsPaid($user);
+        try {
+            DB::beginTransaction();
+            $payment->markAsPaid($user);
+            DB::commit();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Phiếu thanh toán đã được xác nhận là đã thanh toán.',
-            'data' => $payment->fresh(['payer', 'subcontractor'])
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Phiếu thanh toán đã được xác nhận là đã thanh toán.',
+                'data' => $payment->fresh(['payer', 'subcontractor'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => 'Lỗi hệ thống.', 'error' => $e->getMessage()], 500);
+        }
     }
 }

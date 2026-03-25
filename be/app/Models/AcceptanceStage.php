@@ -213,6 +213,9 @@ class AcceptanceStage extends Model
 
     public function approveInternal(?User $user = null): bool
     {
+        if ($this->status !== 'pending') {
+            return false;
+        }
         $this->status = 'internal_approved';
         if ($user) {
             $this->internal_approved_by = $user->id;
@@ -320,6 +323,11 @@ class AcceptanceStage extends Model
 
     public function reject(string $reason, ?User $user = null): bool
     {
+        // Only allow rejection from non-final states
+        $rejectableStatuses = ['pending', 'internal_approved', 'supervisor_approved', 'project_manager_approved'];
+        if (!in_array($this->status, $rejectableStatuses)) {
+            return false;
+        }
         $this->status = 'rejected';
         $this->rejection_reason = $reason;
         if ($user) {

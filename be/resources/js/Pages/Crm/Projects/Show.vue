@@ -47,7 +47,8 @@
     <a-tabs v-model:activeKey="activeTab" class="crm-detail-tabs">
 
       <!-- ============ OVERVIEW TAB ============ -->
-      <a-tab-pane key="overview" tab="Tổng quan">
+      <a-tab-pane key="overview">
+        <template #tab><a-tooltip title="Thông tin tổng quan dự án: trạng thái, tiến độ, ngân sách, nhân sự" placement="bottom">Tổng quan</a-tooltip></template>
         <div class="p-6 space-y-6">
 
           <!-- Row 1: Project Info + Timeline -->
@@ -317,7 +318,8 @@
       </a-tab-pane>
 
       <!-- ============ PROGRESS / TASKS TAB ============ -->
-      <a-tab-pane key="progress" tab="Tiến độ">
+      <a-tab-pane key="progress">
+        <template #tab><a-tooltip title="Quản lý công việc, phân công và theo dõi tiến độ thi công theo WBS" placement="bottom">Tiến độ</a-tooltip></template>
         <div class="p-4">
           <!-- Stats Cards -->
           <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
@@ -446,7 +448,8 @@
       </a-tab-pane>
 
       <!-- ============ CONTRACT TAB ============ -->
-      <a-tab-pane key="contract" tab="Hợp đồng">
+      <a-tab-pane key="contract">
+        <template #tab><a-tooltip title="Quản lý hợp đồng dự án: giá trị, ngày ký, trạng thái duyệt" placement="bottom">Hợp đồng</a-tooltip></template>
         <div class="p-6">
           <div class="flex items-center justify-between mb-4">
             <h4 class="font-bold text-gray-700">Hợp đồng</h4>
@@ -467,7 +470,8 @@
       </a-tab-pane>
 
       <!-- ============ COSTS TAB ============ -->
-      <a-tab-pane key="costs" :tab="`Chi phí (${project.costs?.length || 0})`">
+      <a-tab-pane key="costs">
+        <template #tab><a-tooltip title="Quản lý phiếu chi: tạo, gửi duyệt BĐH → KT xác nhận, đính kèm chứng từ" placement="bottom">Chi phí ({{ project.costs?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex items-center justify-between mb-3">
             <div class="text-sm text-gray-400">Tổng: <span class="font-bold text-red-500">{{ fmt(totalCosts) }}</span></div>
@@ -501,6 +505,11 @@
                   <a-popconfirm v-if="can('cost.delete')" title="Xóa chi phí?" @confirm="deleteCost(record)">
                     <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
                   </a-popconfirm>
+                  <a-tooltip title="Đính kèm file">
+                    <a-badge :count="record.attachments?.length || 0" :offset="[-2, 2]" size="small">
+                      <a-button type="text" size="small" @click="openAttachModal('cost', record)"><UploadOutlined class="text-gray-500" /></a-button>
+                    </a-badge>
+                  </a-tooltip>
                 </div>
               </template>
             </template>
@@ -509,22 +518,61 @@
       </a-tab-pane>
 
       <!-- ============ PAYMENTS TAB ============ -->
-      <a-tab-pane key="payments" :tab="`Thanh toán (${project.payments?.length || 0})`">
+      <a-tab-pane key="payments">
+        <template #tab><a-tooltip title="Quản lý đợt thanh toán: KH đánh dấu đã thanh toán → KT xác nhận/từ chối" placement="bottom">Thanh toán ({{ project.payments?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
-          <div class="flex justify-end mb-3">
+          <div class="flex justify-between items-center mb-3">
+            <div class="text-xs text-gray-400">Luồng: Chờ TT → KH đánh dấu TT → KT xác nhận → Hoàn tất</div>
             <a-button v-if="can('payment.create')" type="primary" size="small" @click="openPaymentModal()">
               <template #icon><PlusOutlined /></template>Thêm thanh toán
             </a-button>
           </div>
-          <a-table :columns="paymentCols" :data-source="project.payments || []" :pagination="false" row-key="id" size="small" class="crm-table">
+          <a-table :columns="paymentCols" :data-source="project.payments || []" :pagination="{ pageSize: 10, showTotal: (t) => `${t} đợt` }" row-key="id" size="small" class="crm-table">
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'amount'"><span class="font-semibold text-green-600">{{ fmt(record.amount) }}</span></template>
-              <template v-else-if="column.key === 'status'"><a-tag :color="paymentTagColors[record.status]" class="rounded-full text-xs">{{ paymentStatusLabelsMap[record.status] || record.status }}</a-tag></template>
+              <template v-if="column.key === 'payment_number'">
+                <span class="font-semibold text-gray-700">#{{ record.payment_number }}</span>
+              </template>
+              <template v-else-if="column.key === 'amount'"><span class="font-semibold text-green-600">{{ fmt(record.amount) }}</span></template>
+              <template v-else-if="column.key === 'actual_amount'">
+                <span v-if="record.actual_amount" class="font-semibold" :class="record.actual_amount >= record.amount ? 'text-green-600' : 'text-orange-500'">{{ fmt(record.actual_amount) }}</span>
+                <span v-else class="text-gray-300">—</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="paymentTagColors[record.status]" class="rounded-full text-xs">{{ paymentStatusLabelsMap[record.status] || record.status }}</a-tag>
+              </template>
               <template v-else-if="column.key === 'date'">{{ fmtDate(record.due_date) }}</template>
+              <template v-else-if="column.key === 'paid_date'">
+                <span v-if="record.paid_date" class="text-green-600">{{ fmtDate(record.paid_date) }}</span>
+                <span v-else class="text-gray-300">—</span>
+              </template>
               <template v-else-if="column.key === 'actions'">
-                <a-popconfirm v-if="can('payment.delete')" title="Xóa?" @confirm="deletePayment(record)">
-                  <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                </a-popconfirm>
+                <a-space :size="2">
+                  <!-- KH đánh dấu đã thanh toán (khi pending / overdue) -->
+                  <a-popconfirm v-if="['pending','overdue'].includes(record.status)" title="Đánh dấu KH đã thanh toán?" @confirm="markPaymentPaid(record)">
+                    <a-tooltip title="KH đã thanh toán">
+                      <a-button type="text" size="small" class="text-blue-500"><DollarOutlined /></a-button>
+                    </a-tooltip>
+                  </a-popconfirm>
+                  <!-- KT xác nhận (khi customer_paid) -->
+                  <a-popconfirm v-if="record.status === 'customer_paid' && can('payment.confirm')" title="KT xác nhận thanh toán?" @confirm="confirmPaymentAction(record)">
+                    <a-tooltip title="KT xác nhận">
+                      <a-button type="text" size="small" class="text-green-500"><CheckCircleOutlined /></a-button>
+                    </a-tooltip>
+                  </a-popconfirm>
+                  <!-- KT từ chối (khi customer_paid) -->
+                  <a-tooltip v-if="record.status === 'customer_paid' && can('payment.confirm')" title="KT từ chối">
+                    <a-button type="text" size="small" danger @click="openRejectPaymentModal(record)"><CloseCircleOutlined /></a-button>
+                  </a-tooltip>
+                  <!-- Xóa (khi chưa confirmed) -->
+                  <a-popconfirm v-if="can('payment.delete') && !['confirmed','paid'].includes(record.status)" title="Xóa?" @confirm="deletePayment(record)">
+                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
+                  </a-popconfirm>
+                  <a-tooltip title="Đính kèm chứng từ">
+                    <a-badge :count="record.attachments?.length || 0" :offset="[-2, 2]" size="small">
+                      <a-button type="text" size="small" @click="openAttachModal('payment', record)"><UploadOutlined class="text-gray-500" /></a-button>
+                    </a-badge>
+                  </a-tooltip>
+                </a-space>
               </template>
             </template>
           </a-table>
@@ -533,7 +581,8 @@
       </a-tab-pane>
 
       <!-- ============ PERSONNEL TAB ============ -->
-      <a-tab-pane key="personnel" :tab="`Nhân sự (${project.personnel?.length || 0})`">
+      <a-tab-pane key="personnel">
+        <template #tab><a-tooltip title="Phân công nhân sự tham gia dự án theo vai trò" placement="bottom">Nhân sự ({{ project.personnel?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('personnel.assign')" type="primary" size="small" @click="openPersonnelModal()">
@@ -560,7 +609,8 @@
       </a-tab-pane>
 
       <!-- ============ SUBCONTRACTORS TAB ============ -->
-      <a-tab-pane key="subcontractors" :tab="`Nhà thầu phụ (${project.subcontractors?.length || 0})`">
+      <a-tab-pane key="subcontractors">
+        <template #tab><a-tooltip title="Quản lý nhà thầu phụ: báo giá, tiến độ, thanh toán và đối soát" placement="bottom">Nhà thầu phụ ({{ project.subcontractors?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('subcontractor.create')" type="primary" size="small" @click="openSubModal(null)">
@@ -588,7 +638,8 @@
       </a-tab-pane>
 
       <!-- ============ LOGS TAB ============ -->
-      <a-tab-pane key="logs" :tab="`Nhật ký (${project.construction_logs?.length || 0})`">
+      <a-tab-pane key="logs">
+        <template #tab><a-tooltip title="Nhật ký thi công: ghi chép hàng ngày về thời tiết, nhân công, tiến độ" placement="bottom">Nhật ký ({{ project.construction_logs?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('log.create')" type="primary" size="small" @click="openLogModal()">
@@ -625,7 +676,8 @@
       </a-tab-pane>
 
       <!-- ============ ACCEPTANCE TAB ============ -->
-      <a-tab-pane key="acceptance" :tab="`Nghiệm thu (${project.acceptance_stages?.length || 0})`">
+      <a-tab-pane key="acceptance">
+        <template #tab><a-tooltip title="Quản lý nghiệm thu: tạo giai đoạn, duyệt 3 cấp (GSTC → QLDA → BĐH)" placement="bottom">Nghiệm thu ({{ project.acceptance_stages?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('acceptance.create')" type="primary" size="small" @click="openAcceptModal()">
@@ -662,7 +714,8 @@
       </a-tab-pane>
 
       <!-- ============ DEFECTS TAB ============ -->
-      <a-tab-pane key="defects" :tab="`Lỗi (${project.defects?.length || 0})`">
+      <a-tab-pane key="defects">
+        <template #tab><a-tooltip title="Báo cáo và theo dõi lỗi thi công: mức độ, trạng thái xử lý" placement="bottom">Lỗi ({{ project.defects?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('defect.create')" type="primary" size="small" @click="openDefectModal(null)">
@@ -691,7 +744,8 @@
       </a-tab-pane>
 
       <!-- ============ CHANGE REQUESTS TAB ============ -->
-      <a-tab-pane key="change_requests" :tab="`Thay đổi (${project.change_requests?.length || 0})`">
+      <a-tab-pane key="change_requests">
+        <template #tab><a-tooltip title="Yêu cầu thay đổi: phạm vi, chi phí, tiến độ — phân tích ảnh hưởng và phê duyệt" placement="bottom">Thay đổi ({{ project.change_requests?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('change_request.create')" type="primary" size="small" @click="openChangeRequestModal()">
@@ -753,31 +807,74 @@
       </a-tab-pane>
 
       <!-- ============ COMMENTS TAB ============ -->
-      <a-tab-pane key="comments" :tab="`Bình luận (${project.comments?.length || 0})`">
+      <a-tab-pane key="comments">
+        <template #tab><a-tooltip title="Trao đổi nội bộ giữa các thành viên dự án" placement="bottom">Bình luận ({{ commentCount }})</a-tooltip></template>
         <div class="p-4">
-          <div v-if="can('project.comment.create')" class="flex gap-2 mb-4">
+          <!-- Root comment input -->
+          <div v-if="can('project.comment.create')" class="flex gap-2 mb-5">
             <a-textarea v-model:value="commentText" placeholder="Viết bình luận..." :rows="2" class="flex-1" />
-            <a-button type="primary" @click="addComment" :disabled="!commentText.trim()">Gửi</a-button>
+            <a-button type="primary" @click="addComment()" :disabled="!commentText.trim()">Gửi</a-button>
           </div>
-          <div v-for="c in (project.comments || [])" :key="c.id" class="flex gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
-            <a-avatar :size="32" class="bg-blue-500 text-white text-xs flex-shrink-0">{{ c.user?.name?.charAt(0) }}</a-avatar>
-            <div class="flex-1">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="font-semibold text-sm">{{ c.user?.name }}</span>
-                <span class="text-xs text-gray-400">{{ fmtDate(c.created_at) }}</span>
+
+          <!-- Comment Tree -->
+          <div v-for="c in (project.comments || [])" :key="c.id" class="mb-4">
+            <!-- Root Comment -->
+            <div class="flex gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+              <a-avatar :size="32" class="bg-blue-500 text-white text-xs flex-shrink-0">{{ c.user?.name?.charAt(0) }}</a-avatar>
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="font-semibold text-sm">{{ c.user?.name }}</span>
+                  <span class="text-xs text-gray-400">{{ fmtDate(c.created_at) }}</span>
+                </div>
+                <div class="text-sm text-gray-700 mb-1.5">{{ c.content }}</div>
+                <div class="flex items-center gap-3">
+                  <a-button v-if="can('project.comment.create')" type="link" size="small" class="!p-0 !h-auto text-xs text-gray-400 hover:!text-blue-500" @click="toggleReply(c.id)">
+                    <template #icon><SendOutlined class="text-[10px]" /></template>Trả lời
+                  </a-button>
+                  <a-popconfirm v-if="can('project.comment.delete')" title="Xóa?" @confirm="deleteComment(c)">
+                    <a-button type="link" size="small" danger class="!p-0 !h-auto text-xs">Xóa</a-button>
+                  </a-popconfirm>
+                </div>
               </div>
-              <div class="text-sm text-gray-700">{{ c.content }}</div>
             </div>
-            <a-popconfirm v-if="can('project.comment.delete')" title="Xóa?" @confirm="deleteComment(c)">
-              <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-            </a-popconfirm>
+
+            <!-- Inline reply input -->
+            <div v-if="replyingTo === c.id" class="ml-11 mt-2 flex gap-2">
+              <a-textarea v-model:value="replyText" placeholder="Trả lời bình luận..." :rows="1" class="flex-1" auto-size />
+              <a-button type="primary" size="small" @click="addComment(c.id)" :disabled="!replyText.trim()">Gửi</a-button>
+              <a-button size="small" @click="replyingTo = null">Hủy</a-button>
+            </div>
+
+            <!-- Replies (children) -->
+            <div v-if="c.replies?.length" class="ml-11 mt-1 border-l-2 border-blue-100 pl-3">
+              <div v-for="r in c.replies" :key="r.id" class="flex gap-3 py-2 hover:bg-blue-50/50 rounded-lg px-2 transition-colors">
+                <a-avatar :size="26" class="bg-green-500 text-white text-[10px] flex-shrink-0">{{ r.user?.name?.charAt(0) }}</a-avatar>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 mb-0.5">
+                    <span class="font-semibold text-xs">{{ r.user?.name }}</span>
+                    <span class="text-[10px] text-gray-400">{{ fmtDate(r.created_at) }}</span>
+                  </div>
+                  <div class="text-sm text-gray-600">{{ r.content }}</div>
+                  <div class="flex items-center gap-3 mt-1">
+                    <a-button v-if="can('project.comment.create')" type="link" size="small" class="!p-0 !h-auto text-[10px] text-gray-400 hover:!text-blue-500" @click="toggleReply(c.id)">
+                      <template #icon><SendOutlined class="text-[10px]" /></template>Trả lời
+                    </a-button>
+                    <a-popconfirm v-if="can('project.comment.delete')" title="Xóa?" @confirm="deleteComment(r)">
+                      <a-button type="link" size="small" danger class="!p-0 !h-auto text-[10px]">Xóa</a-button>
+                    </a-popconfirm>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
           <a-empty v-if="!project.comments?.length" description="Chưa có bình luận" />
         </div>
       </a-tab-pane>
 
       <!-- ============ ADDITIONAL COSTS TAB ============ -->
-      <a-tab-pane key="additional_costs" :tab="`CP Phát sinh (${project.additional_costs?.length || 0})`">
+      <a-tab-pane key="additional_costs">
+        <template #tab><a-tooltip title="Chi phí phát sinh ngoài báo giá: đề xuất → duyệt → ghi nhận" placement="bottom">CP Phát sinh ({{ project.additional_costs?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('additional_cost.create')" type="primary" size="small" @click="openAdditionalCostModal()">
@@ -802,6 +899,11 @@
                   <a-popconfirm v-if="can('additional_cost.delete') && ['pending_approval','rejected'].includes(record.status)" title="Xóa?" @confirm="deleteAC(record)">
                     <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
                   </a-popconfirm>
+                  <a-tooltip title="Đính kèm file">
+                    <a-badge :count="record.attachments?.length || 0" :offset="[-2, 2]" size="small">
+                      <a-button type="text" size="small" @click="openAttachModal('additional-cost', record)"><UploadOutlined class="text-gray-500" /></a-button>
+                    </a-badge>
+                  </a-tooltip>
                 </div>
               </template>
             </template>
@@ -811,7 +913,8 @@
       </a-tab-pane>
 
       <!-- ============ BUDGETS TAB ============ -->
-      <a-tab-pane key="budgets" :tab="`Ngân sách (${project.budgets?.length || 0})`">
+      <a-tab-pane key="budgets">
+        <template #tab><a-tooltip title="Quản lý ngân sách dự án: phân bổ theo hạng mục, theo dõi thực chi" placement="bottom">Ngân sách ({{ project.budgets?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('budgets.create')" type="primary" size="small" @click="openBudgetModal()">
@@ -843,7 +946,8 @@
       </a-tab-pane>
 
       <!-- ============ INVOICES TAB ============ -->
-      <a-tab-pane key="invoices" :tab="`Hóa đơn (${project.invoices?.length || 0})`">
+      <a-tab-pane key="invoices">
+        <template #tab><a-tooltip title="Quản lý hóa đơn xuất cho khách hàng: tạo, gửi, theo dõi thanh toán" placement="bottom">Hóa đơn ({{ project.invoices?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('invoice.create')" type="primary" size="small" @click="openInvoiceModal(null)">
@@ -870,7 +974,8 @@
       </a-tab-pane>
 
       <!-- ============ RISKS TAB ============ -->
-      <a-tab-pane key="risks" :tab="`Rủi ro (${project.risks?.length || 0})`">
+      <a-tab-pane key="risks">
+        <template #tab><a-tooltip title="Đánh giá và quản lý rủi ro: xác suất, ảnh hưởng, kế hoạch giảm thiểu" placement="bottom">Rủi ro ({{ project.risks?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('project.risk.create')" type="primary" size="small" @click="openRiskModal()">
@@ -913,7 +1018,8 @@
       </a-tab-pane>
 
       <!-- ============ DOCUMENTS TAB ============ -->
-      <a-tab-pane key="documents" :tab="`Tài liệu (${project.attachments?.length || 0})`">
+      <a-tab-pane key="documents">
+        <template #tab><a-tooltip title="Kho tài liệu dự án: bản vẽ, hợp đồng, biên bản, hình ảnh" placement="bottom">Tài liệu ({{ project.attachments?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('project.document.upload')" type="primary" size="small" @click="showDocUploadModal = true">
@@ -988,14 +1094,53 @@
         <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
       </a-select></a-form-item>
       <a-form-item label="Mô tả"><a-textarea v-model:value="costForm.description" :rows="2" /></a-form-item>
+      <!-- Inline Attachments -->
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp đính kèm</div>
+        <div v-if="editingCost?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
+          <a v-for="a in editingCost.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
+            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          </a>
+        </div>
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+      </div>
     </a-form>
   </a-modal>
 
   <!-- Contract Modal -->
-  <a-modal v-model:open="showContractModal" :title="editingContract ? 'Sửa hợp đồng' : 'Tạo hợp đồng'" :width="500" @ok="saveContract" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showContractModal" :title="editingContract ? 'Sửa hợp đồng' : 'Tạo hợp đồng'" :width="640" @ok="saveContract" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Giá trị HĐ" required><a-input-number v-model:value="contractForm.contract_value" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
-      <a-form-item label="Ngày ký"><a-date-picker v-model:value="contractForm.signed_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Giá trị HĐ" required><a-input-number v-model:value="contractForm.contract_value" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Ngày ký"><a-date-picker v-model:value="contractForm.signed_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Trạng thái">
+        <a-select v-model:value="contractForm.status" size="large" class="w-full">
+          <a-select-option value="draft">Bản nháp</a-select-option>
+          <a-select-option value="pending_customer_approval">Chờ KH duyệt</a-select-option>
+          <a-select-option value="approved">Đã duyệt</a-select-option>
+          <a-select-option value="rejected">Từ chối</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item v-if="editingContract?.rejected_reason" label="Lý do từ chối">
+        <a-alert :message="editingContract.rejected_reason" type="error" show-icon class="!text-xs" />
+      </a-form-item>
+      <!-- Inline Attachments -->
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp hợp đồng đính kèm</div>
+        <div v-if="editingContract?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
+          <a v-for="a in editingContract.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
+            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          </a>
+        </div>
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -1007,7 +1152,51 @@
         <a-col :span="12"><a-form-item label="Số tiền" required><a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Ngày đến hạn"><a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
       </a-row>
+      <!-- Inline Attachments -->
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Chứng từ thanh toán</div>
+        <div v-if="editingPayment?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
+          <a v-for="a in editingPayment.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
+            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          </a>
+        </div>
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+      </div>
     </a-form>
+  </a-modal>
+
+  <!-- Reject Payment Modal -->
+  <a-modal v-model:open="showRejectPaymentModal" title="Từ chối thanh toán" :width="400" @ok="rejectPaymentAction" ok-text="Từ chối" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :ok-button-props="{ danger: true, disabled: !rejectPaymentReason.trim() }">
+    <div class="mt-4">
+      <div v-if="rejectPaymentTarget" class="mb-3 p-3 bg-gray-50 rounded-xl">
+        <div class="font-semibold text-gray-700">Đợt #{{ rejectPaymentTarget.payment_number }}</div>
+        <div class="text-sm text-green-600 font-semibold">{{ fmt(rejectPaymentTarget.amount) }}</div>
+      </div>
+      <a-form-item label="Lý do từ chối" :validate-status="!rejectPaymentReason.trim() ? 'error' : ''" help="Bắt buộc nhập lý do">
+        <a-textarea v-model:value="rejectPaymentReason" placeholder="Nhập lý do từ chối thanh toán..." :rows="3" :maxlength="1000" show-count />
+      </a-form-item>
+    </div>
+  </a-modal>
+
+  <!-- Shared File Upload Modal — used by Cost, Payment, Additional Cost -->
+  <a-modal v-model:open="showAttachModal" :title="attachModalTitle" :width="540" @ok="submitAttachFiles" ok-text="Upload" cancel-text="Đóng" centered destroy-on-close class="crm-modal" :ok-button-props="{ disabled: !attachFiles.length }">
+    <div class="mt-4">
+      <!-- Existing attachments -->
+      <div v-if="attachTarget?.attachments?.length" class="mb-4">
+        <div class="text-xs font-semibold text-gray-500 mb-2">File đã đính kèm ({{ attachTarget.attachments.length }})</div>
+        <div v-for="att in attachTarget.attachments" :key="att.id" class="flex items-center gap-2 py-1.5 px-3 bg-gray-50 rounded-lg mb-1 text-sm">
+          <FileOutlined class="text-gray-400" />
+          <a :href="att.file_url" target="_blank" class="text-blue-600 hover:underline flex-1 truncate">{{ att.original_name || att.file_name }}</a>
+          <span class="text-gray-400 text-xs">{{ formatFileSize(att.file_size) }}</span>
+        </div>
+      </div>
+      <!-- Upload new files -->
+      <a-form-item label="Chọn file mới" required>
+        <input type="file" ref="attachFileInput" @change="onAttachFileChange" multiple class="block w-full text-sm py-2 px-3 border border-gray-300 rounded-lg" />
+      </a-form-item>
+      <div v-if="attachFiles.length" class="text-xs text-green-600">{{ attachFiles.length }} file sẵn sàng upload</div>
+    </div>
   </a-modal>
 
   <!-- Personnel Modal -->
@@ -1067,7 +1256,7 @@
   </a-modal>
 
   <!-- Defect Modal -->
-  <a-modal v-model:open="showDefectModal" :title="editingDefect ? 'Sửa lỗi' : 'Báo lỗi mới'" :width="600" @ok="saveDefect" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showDefectModal" :title="editingDefect ? 'Sửa lỗi' : 'Báo lỗi mới'" :width="640" @ok="saveDefect" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Mô tả lỗi" required><a-textarea v-model:value="defectForm.description" :rows="3" placeholder="Nhập mô tả chi tiết lỗi..." /></a-form-item>
       <a-row :gutter="16">
@@ -1084,6 +1273,29 @@
           <a-select-option value="verified">Đã xác nhận</a-select-option>
         </a-select></a-form-item></a-col>
       </a-row>
+      <a-row :gutter="16">
+        <a-col :span="12"><a-form-item label="Công việc liên quan"><a-select v-model:value="defectForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn công việc">
+          <a-select-option v-for="t in projectTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Giai đoạn nghiệm thu"><a-select v-model:value="defectForm.acceptance_stage_id" size="large" class="w-full" allow-clear placeholder="Chọn giai đoạn">
+          <a-select-option v-for="s in (project.acceptance_stages || [])" :key="s.id" :value="s.id">{{ s.name }}</a-select-option>
+        </a-select></a-form-item></a-col>
+      </a-row>
+      <a-form-item label="Loại lỗi"><a-select v-model:value="defectForm.defect_type" size="large" class="w-full" allow-clear placeholder="Chọn loại">
+        <a-select-option value="standard_violation">Vi phạm tiêu chuẩn</a-select-option>
+        <a-select-option value="other">Khác</a-select-option>
+      </a-select></a-form-item>
+      <!-- Inline Attachments -->
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Hình ảnh / File đính kèm</div>
+        <div v-if="editingDefect?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
+          <a v-for="a in editingDefect.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
+            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          </a>
+        </div>
+        <input type="file" multiple accept="image/*,.pdf,.doc,.docx" @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -1276,6 +1488,17 @@
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Số tiền" required><a-input-number v-model:value="acForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
       <a-form-item label="Mô tả" required><a-textarea v-model:value="acForm.description" :rows="3" /></a-form-item>
+      <!-- Inline Attachments -->
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp minh chứng</div>
+        <div v-if="editingAC?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
+          <a v-for="a in editingAC.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
+            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          </a>
+        </div>
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -1319,10 +1542,24 @@
   </a-modal>
 
   <!-- Acceptance Modal -->
-  <a-modal v-model:open="showAcceptModal" title="Tạo giai đoạn nghiệm thu" :width="500" @ok="saveAccept" ok-text="Tạo" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showAcceptModal" title="Tạo giai đoạn nghiệm thu" :width="600" @ok="saveAccept" ok-text="Tạo" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tên giai đoạn" required><a-input v-model:value="acceptForm.name" size="large" /></a-form-item>
-      <a-form-item label="Mô tả"><a-textarea v-model:value="acceptForm.description" :rows="3" /></a-form-item>
+      <a-form-item label="Tên giai đoạn" required><a-input v-model:value="acceptForm.name" size="large" placeholder="VD: Nghiệm thu phần thô, nghiệm thu hoàn thiện..." /></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12"><a-form-item label="Công việc cha (hạng mục A)"><a-select v-model:value="acceptForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục">
+          <a-select-option v-for="t in parentTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Mẫu nghiệm thu"><a-select v-model:value="acceptForm.acceptance_template_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn mẫu">
+          <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select></a-form-item></a-col>
+      </a-row>
+      <a-form-item label="Mô tả"><a-textarea v-model:value="acceptForm.description" :rows="3" placeholder="Mô tả nội dung nghiệm thu..." /></a-form-item>
+      <!-- Inline Attachments -->
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Biên bản / Tài liệu nghiệm thu</div>
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -1352,7 +1589,7 @@ import dayjs from 'dayjs'
 import {
   ArrowLeftOutlined, EditOutlined, PlusOutlined, DeleteOutlined,
   SendOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  CheckOutlined, CloseOutlined,
+  CheckOutlined, CloseOutlined, DollarOutlined,
   UploadOutlined, DownloadOutlined, FileOutlined,
   UserOutlined, CalendarOutlined,
 } from '@ant-design/icons-vue'
@@ -1369,6 +1606,8 @@ const props = defineProps({
   globalSubcontractors: { type: Array, default: () => [] },
   projectTasks: { type: Array, default: () => [] },
   allTasks: { type: Array, default: () => [] },
+  acceptanceTemplates: { type: Array, default: () => [] },
+  parentTasks: { type: Array, default: () => [] },
 })
 
 // ============ RBAC ============
@@ -1430,8 +1669,8 @@ const acStatusLabels = { pending_approval: 'Chờ duyệt', approved: 'Đã duy�
 const acStatusColors = { pending_approval: 'orange', approved: 'green', rejected: 'red' }
 const contractStatusLabels = { draft: 'Nháp', active: 'Đang hiệu lực', approved: 'Đã duyệt', expired: 'Hết hạn', terminated: 'Đã thanh lý' }
 const contractStatusColors = { draft: 'default', active: 'green', approved: 'green', expired: 'orange', terminated: 'red' }
-const paymentStatusLabelsMap = { pending: 'Chưa TT', partial: 'TT 1 phần', paid: 'Đã TT đủ', completed: 'Đã TT đủ', overdue: 'Quá hạn TT' }
-const paymentTagColors = { pending: 'orange', partial: 'blue', paid: 'green', completed: 'green', overdue: 'red' }
+const paymentStatusLabelsMap = { pending: 'Chờ thanh toán', customer_paid: 'KH đã TT', customer_pending_approval: 'Chờ KH duyệt', customer_approved: 'KH đã duyệt', confirmed: 'KT đã xác nhận', paid: 'Đã TT đủ', partial: 'TT 1 phần', completed: 'Hoàn tất', overdue: 'Quá hạn TT' }
+const paymentTagColors = { pending: 'orange', customer_paid: 'blue', customer_pending_approval: 'cyan', customer_approved: 'geekblue', confirmed: 'green', paid: 'green', partial: 'blue', completed: 'green', overdue: 'red' }
 const defectStatusLabels = { open: 'Mở', in_progress: 'Đang xử lý', fixed: 'Đã sửa', verified: 'Đã xác nhận', closed: 'Đã đóng' }
 const defectStatusColors = { open: 'red', in_progress: 'processing', fixed: 'green', verified: 'cyan', closed: 'default' }
 const crStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', implemented: 'Đã triển khai', cancelled: 'Đã hủy' }
@@ -1460,11 +1699,14 @@ const costCols = [
 ]
 
 const paymentCols = [
-  { title: 'Mô tả', dataIndex: 'description', ellipsis: true },
-  { title: 'Số tiền', key: 'amount', align: 'right', width: 150 },
-  { title: 'Đến hạn', key: 'date', width: 120 },
-  { title: 'Trạng thái', key: 'status', width: 120 },
-  { title: '', key: 'actions', width: 80, align: 'center' },
+  { title: 'Đợt', key: 'payment_number', width: 60, align: 'center' },
+  { title: 'Ghi chú', dataIndex: 'notes', ellipsis: true },
+  { title: 'Số tiền', key: 'amount', align: 'right', width: 140 },
+  { title: 'Thực TT', key: 'actual_amount', align: 'right', width: 140 },
+  { title: 'Đến hạn', key: 'date', width: 110 },
+  { title: 'Ngày TT', key: 'paid_date', width: 110 },
+  { title: 'Trạng thái', key: 'status', width: 140 },
+  { title: '', key: 'actions', width: 160, align: 'center' },
 ]
 
 const personnelCols = [
@@ -1570,19 +1812,46 @@ const openEditProject = () => {
 }
 const saveProject = () => { router.put(`/projects/${props.project.id}`, projectForm.value, { onSuccess: () => showEditProject.value = false }) }
 
+// ============ SHARED MODAL FILES ============
+const modalFiles = ref([])
+const uploadModalFiles = (entityType, entityId) => {
+  return new Promise((resolve) => {
+    if (!modalFiles.value.length) return resolve()
+    const formData = new FormData()
+    modalFiles.value.forEach(f => formData.append('files[]', f))
+    router.post(`/projects/${props.project.id}/${entityType}/${entityId}/attach-files`, formData, {
+      forceFormData: true,
+      preserveScroll: true,
+      onSuccess: () => { modalFiles.value = []; resolve() },
+      onError: () => { modalFiles.value = []; resolve() },
+    })
+  })
+}
+
 // ============ COST CRUD ============
 const showCostModal = ref(false)
 const editingCost = ref(null)
 const costForm = ref({ name: '', amount: null, cost_date: null, cost_group_id: null, description: '' })
 const openCostModal = (c) => {
   editingCost.value = c
+  modalFiles.value = []
   costForm.value = c ? { name: c.name, amount: c.amount, cost_date: c.cost_date, cost_group_id: c.cost_group_id, description: c.description || '' } : { name: '', amount: null, cost_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, description: '' }
   showCostModal.value = true
 }
 const saveCost = () => {
   const url = editingCost.value ? `/projects/${props.project.id}/costs/${editingCost.value.id}` : `/projects/${props.project.id}/costs`
   const method = editingCost.value ? 'put' : 'post'
-  router[method](url, costForm.value, { onSuccess: () => showCostModal.value = false })
+  router[method](url, costForm.value, {
+    onSuccess: async (page) => {
+      showCostModal.value = false
+      if (modalFiles.value.length) {
+        // For edits, use existing id; for creates, find the latest cost
+        const costId = editingCost.value?.id || page.props?.project?.costs?.slice(-1)[0]?.id
+        if (costId) await uploadModalFiles('costs', costId)
+        router.reload()
+      }
+    },
+  })
 }
 const deleteCost = (c) => router.delete(`/projects/${props.project.id}/costs/${c.id}`)
 const submitCost = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/submit`)
@@ -1597,24 +1866,88 @@ const rejectCost = () => { router.post(`/projects/${props.project.id}/costs/${re
 // ============ CONTRACT CRUD ============
 const showContractModal = ref(false)
 const editingContract = ref(null)
-const contractForm = ref({ contract_value: null, signed_date: null })
+const contractForm = ref({ contract_value: null, signed_date: null, status: 'draft' })
 const openContractModal = (c) => {
   editingContract.value = c
-  contractForm.value = c ? { contract_value: c.contract_value, signed_date: c.signed_date } : { contract_value: null, signed_date: null }
+  modalFiles.value = []
+  contractForm.value = c
+    ? { contract_value: c.contract_value, signed_date: c.signed_date, status: c.status || 'draft' }
+    : { contract_value: null, signed_date: null, status: 'draft' }
   showContractModal.value = true
 }
 const saveContract = () => {
   const url = `/projects/${props.project.id}/contract`
   const method = editingContract.value ? 'put' : 'post'
-  router[method](url, contractForm.value, { onSuccess: () => showContractModal.value = false })
+  router[method](url, contractForm.value, {
+    onSuccess: async (page) => {
+      showContractModal.value = false
+      if (modalFiles.value.length) {
+        const contractId = page.props?.project?.contract?.id
+        if (contractId) await uploadModalFiles('contracts', contractId)
+        router.reload()
+      }
+    },
+  })
 }
 
 // ============ PAYMENT CRUD ============
 const showPaymentModal = ref(false)
+const editingPayment = ref(null)
 const paymentForm = ref({ notes: '', amount: null, due_date: null })
-const openPaymentModal = () => { paymentForm.value = { notes: '', amount: null, due_date: null }; showPaymentModal.value = true }
-const savePayment = () => { router.post(`/projects/${props.project.id}/payments`, paymentForm.value, { onSuccess: () => showPaymentModal.value = false }) }
+const openPaymentModal = (p = null) => {
+  editingPayment.value = p
+  modalFiles.value = []
+  paymentForm.value = p ? { notes: p.notes || '', amount: p.amount, due_date: p.due_date } : { notes: '', amount: null, due_date: null }
+  showPaymentModal.value = true
+}
+const savePayment = () => {
+  router.post(`/projects/${props.project.id}/payments`, paymentForm.value, {
+    onSuccess: async (page) => {
+      showPaymentModal.value = false
+      if (modalFiles.value.length) {
+        const payId = page.props?.project?.payments?.slice(-1)[0]?.id
+        if (payId) await uploadModalFiles('payments', payId)
+        router.reload()
+      }
+    },
+  })
+}
 const deletePayment = (p) => router.delete(`/projects/${props.project.id}/payments/${p.id}`)
+const markPaymentPaid = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/mark-paid`, { paid_date: new Date().toISOString().slice(0, 10) })
+const confirmPaymentAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/confirm`, { paid_date: new Date().toISOString().slice(0, 10) })
+const showRejectPaymentModal = ref(false)
+const rejectPaymentTarget = ref(null)
+const rejectPaymentReason = ref('')
+const openRejectPaymentModal = (record) => { rejectPaymentTarget.value = record; rejectPaymentReason.value = ''; showRejectPaymentModal.value = true }
+const rejectPaymentAction = () => {
+  if (!rejectPaymentReason.value.trim()) return
+  router.post(`/projects/${props.project.id}/payments/${rejectPaymentTarget.value.id}/reject`, { reason: rejectPaymentReason.value.trim() }, { onSuccess: () => { showRejectPaymentModal.value = false; rejectPaymentTarget.value = null } })
+}
+
+// ============ SHARED FILE UPLOAD ============
+const showAttachModal = ref(false)
+const attachType = ref('') // 'cost' | 'payment' | 'additional-cost'
+const attachTarget = ref(null)
+const attachFiles = ref([])
+const attachFileInput = ref(null)
+const attachModalTitles = { cost: 'Đính kèm file — Phiếu chi', payment: 'Đính kèm chứng từ — Thanh toán', 'additional-cost': 'Đính kèm file — CP Phát sinh' }
+const attachModalTitle = computed(() => attachModalTitles[attachType.value] || 'Đính kèm file')
+const openAttachModal = (type, record) => { attachType.value = type; attachTarget.value = record; attachFiles.value = []; showAttachModal.value = true }
+const onAttachFileChange = (e) => { attachFiles.value = Array.from(e.target.files || []) }
+const submitAttachFiles = () => {
+  if (!attachFiles.value.length || !attachTarget.value) return
+  const formData = new FormData()
+  attachFiles.value.forEach((f) => formData.append('files[]', f))
+  const urlMap = {
+    cost: `/projects/${props.project.id}/costs/${attachTarget.value.id}/attach-files`,
+    payment: `/projects/${props.project.id}/payments/${attachTarget.value.id}/attach-files`,
+    'additional-cost': `/projects/${props.project.id}/additional-costs/${attachTarget.value.id}/attach-files`,
+  }
+  router.post(urlMap[attachType.value], formData, {
+    forceFormData: true,
+    onSuccess: () => { showAttachModal.value = false; attachFiles.value = [] },
+  })
+}
 
 // ============ PERSONNEL CRUD ============
 const showPersonnelModal = ref(false)
@@ -1655,26 +1988,57 @@ const saveLog = () => {
 
 const deleteLog = (l) => router.delete(`/projects/${props.project.id}/logs/${l.id}`, { preserveScroll: true })
 
-// ============ COMMENT CRUD ============
-const addComment = () => {
-  if (!commentText.value.trim()) return
-  router.post(`/projects/${props.project.id}/comments`, { content: commentText.value }, { onSuccess: () => commentText.value = '' })
+// ============ COMMENT CRUD (Threaded) ============
+const replyingTo = ref(null)
+const replyText = ref('')
+const commentCount = computed(() => {
+  const comments = props.project.comments || []
+  return comments.reduce((sum, c) => sum + 1 + (c.replies?.length || 0), 0)
+})
+const toggleReply = (commentId) => {
+  if (replyingTo.value === commentId) { replyingTo.value = null; replyText.value = '' }
+  else { replyingTo.value = commentId; replyText.value = '' }
 }
-const deleteComment = (c) => router.delete(`/projects/${props.project.id}/comments/${c.id}`)
+const addComment = (parentId = null) => {
+  const content = parentId ? replyText.value : commentText.value
+  if (!content.trim()) return
+  const data = { content: content.trim() }
+  if (parentId) data.parent_id = parentId
+  router.post(`/projects/${props.project.id}/comments`, data, {
+    preserveScroll: true,
+    onSuccess: () => {
+      if (parentId) { replyText.value = ''; replyingTo.value = null }
+      else { commentText.value = '' }
+    },
+  })
+}
+const deleteComment = (c) => router.delete(`/projects/${props.project.id}/comments/${c.id}`, { preserveScroll: true })
 
 // ============ DEFECT CRUD ============
 const showDefectModal = ref(false)
 const editingDefect = ref(null)
-const defectForm = ref({ description: '', severity: 'medium', status: 'open' })
+const defectForm = ref({ description: '', severity: 'medium', status: 'open', task_id: null, acceptance_stage_id: null, defect_type: null })
 const openDefectModal = (d) => {
   editingDefect.value = d
-  defectForm.value = d ? { description: d.description || '', severity: d.severity, status: d.status } : { description: '', severity: 'medium', status: 'open' }
+  modalFiles.value = []
+  defectForm.value = d
+    ? { description: d.description || '', severity: d.severity, status: d.status, task_id: d.task_id || null, acceptance_stage_id: d.acceptance_stage_id || null, defect_type: d.defect_type || null }
+    : { description: '', severity: 'medium', status: 'open', task_id: null, acceptance_stage_id: null, defect_type: null }
   showDefectModal.value = true
 }
 const saveDefect = () => {
   const url = editingDefect.value ? `/projects/${props.project.id}/defects/${editingDefect.value.id}` : `/projects/${props.project.id}/defects`
   const method = editingDefect.value ? 'put' : 'post'
-  router[method](url, defectForm.value, { onSuccess: () => showDefectModal.value = false })
+  router[method](url, defectForm.value, {
+    onSuccess: async (page) => {
+      showDefectModal.value = false
+      if (modalFiles.value.length) {
+        const defectId = editingDefect.value?.id || page.props?.project?.defects?.slice(-1)[0]?.id
+        if (defectId) await uploadModalFiles('defects', defectId)
+        router.reload()
+      }
+    },
+  })
 }
 const deleteDefect = (d) => router.delete(`/projects/${props.project.id}/defects/${d.id}`)
 
@@ -1863,9 +2227,26 @@ const deleteSub = (s) => router.delete(`/projects/${props.project.id}/subcontrac
 
 // ============ ADDITIONAL COST CRUD ============
 const showACModal = ref(false)
+const editingAC = ref(null)
 const acForm = ref({ amount: null, description: '' })
-const openAdditionalCostModal = () => { acForm.value = { amount: null, description: '' }; showACModal.value = true }
-const saveAC = () => { router.post(`/projects/${props.project.id}/additional-costs`, acForm.value, { onSuccess: () => showACModal.value = false }) }
+const openAdditionalCostModal = (ac = null) => {
+  editingAC.value = ac
+  modalFiles.value = []
+  acForm.value = ac ? { amount: ac.amount, description: ac.description || '' } : { amount: null, description: '' }
+  showACModal.value = true
+}
+const saveAC = () => {
+  router.post(`/projects/${props.project.id}/additional-costs`, acForm.value, {
+    onSuccess: async (page) => {
+      showACModal.value = false
+      if (modalFiles.value.length) {
+        const acId = page.props?.project?.additional_costs?.slice(-1)[0]?.id
+        if (acId) await uploadModalFiles('additional-costs', acId)
+        router.reload()
+      }
+    },
+  })
+}
 const approveAC = (ac) => router.post(`/projects/${props.project.id}/additional-costs/${ac.id}/approve`)
 const showRejectACModal = ref(false)
 const rejectingAC = ref(null)
@@ -1901,8 +2282,8 @@ const deleteInvoice = (inv) => router.delete(`/projects/${props.project.id}/invo
 
 // ============ ACCEPTANCE CRUD ============
 const showAcceptModal = ref(false)
-const acceptForm = ref({ name: '', description: '' })
-const openAcceptModal = () => { acceptForm.value = { name: '', description: '' }; showAcceptModal.value = true }
+const acceptForm = ref({ name: '', description: '', task_id: null, acceptance_template_id: null })
+const openAcceptModal = () => { acceptForm.value = { name: '', description: '', task_id: null, acceptance_template_id: null }; showAcceptModal.value = true }
 const saveAccept = () => { router.post(`/projects/${props.project.id}/acceptance`, acceptForm.value, { onSuccess: () => showAcceptModal.value = false }) }
 const approveAccept = (stage, level) => router.post(`/projects/${props.project.id}/acceptance/${stage.id}/approve`, { level })
 const deleteAccept = (stage) => router.delete(`/projects/${props.project.id}/acceptance/${stage.id}`)

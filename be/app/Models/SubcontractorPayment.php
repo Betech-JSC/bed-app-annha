@@ -176,6 +176,11 @@ class SubcontractorPayment extends Model
 
     public function reject(?User $user = null, ?string $reason = null): bool
     {
+        // CRITICAL: Only allow rejection from approval states — never from paid/draft/rejected
+        if (!in_array($this->status, ['pending_management_approval', 'pending_accountant_confirmation'])) {
+            return false;
+        }
+
         if ($user) {
             $this->rejected_by = $user->id;
         }

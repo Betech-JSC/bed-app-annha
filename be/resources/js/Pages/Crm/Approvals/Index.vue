@@ -3,7 +3,7 @@
 
   <PageHeader
     title="Trung Tâm Duyệt Yêu Cầu"
-    subtitle="Quản lý phê duyệt theo từng cấp — BĐH → Kế Toán · Khách hàng · Thay đổi · CP Phát sinh"
+    subtitle="Quản lý phê duyệt theo từng cấp — BĐH → Kế Toán · Khách hàng · Thay đổi · CP Phát sinh · NTP"
   >
     <template #actions>
       <a-button size="large" class="rounded-xl" @click="refreshPage">
@@ -165,7 +165,33 @@
     @view="openDetailDrawer"
   />
 
-  <!-- ─── Zone 6: Lịch sử xử lý ─── -->
+  <!-- ─── Zone 6: Thanh toán NTP — BĐH ─── -->
+  <ApprovalZone
+    title="Thanh toán NTP — Chờ BĐH duyệt"
+    subtitle="Phiếu thanh toán nhà thầu phụ chờ Ban điều hành phê duyệt"
+    :items="subPaymentManagementItems"
+    :color="'#0EA5E9'"
+    level="sub_payment_management"
+    emptyText="Không có thanh toán NTP chờ BĐH duyệt"
+    @approve="handleApproveSubPayment"
+    @reject="openRejectSubPaymentModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 7: Thanh toán NTP — KT ─── -->
+  <ApprovalZone
+    title="Thanh toán NTP — Chờ KT xác nhận"
+    subtitle="Phiếu thanh toán đã được BĐH duyệt, chờ Kế toán xác nhận thanh toán"
+    :items="subPaymentAccountantItems"
+    :color="'#14B8A6'"
+    level="sub_payment_accountant"
+    emptyText="Không có thanh toán NTP chờ Kế Toán xác nhận"
+    @approve="handleConfirmSubPayment"
+    @reject="openRejectSubPaymentModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 8: Lịch sử xử lý ─── -->
   <div class="crm-content-card" style="margin-top: 24px;">
     <div class="crm-content-card__header" @click="showHistory = !showHistory" style="cursor: pointer;">
       <h3 class="crm-content-card__title">
@@ -351,6 +377,8 @@ const props = defineProps({
   customerAcceptanceItems: { type: Array, default: () => [] },
   changeRequestItems: { type: Array, default: () => [] },
   additionalCostItems: { type: Array, default: () => [] },
+  subPaymentManagementItems: { type: Array, default: () => [] },
+  subPaymentAccountantItems: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
 })
@@ -359,7 +387,7 @@ const rejectModalVisible = ref(false)
 const rejectTarget = ref(null)
 const rejectReason = ref('')
 const rejectLoading = ref(false)
-const rejectType = ref('cost') // cost | acceptance | change_request | additional_cost
+const rejectType = ref('cost') // cost | acceptance | change_request | additional_cost | sub_payment
 const showHistory = ref(false)
 const detailItem = ref(null)
 
@@ -369,6 +397,7 @@ const typeColors = {
   acceptance: 'purple',
   change_request: 'magenta',
   additional_cost: 'orange',
+  sub_payment: 'cyan',
 }
 
 const totalPending = computed(() => {
@@ -377,6 +406,7 @@ const totalPending = computed(() => {
     + (props.stats.pending_customer || 0)
     + (props.stats.pending_change_request || 0)
     + (props.stats.pending_additional_cost || 0)
+    + (props.stats.pending_sub_payment || 0)
 })
 
 const formatCurrency = (amount) => {
@@ -494,6 +524,48 @@ const openRejectACModal = (record) => {
   rejectModalVisible.value = true
 }
 
+// ─── Subcontractor Payment Approve/Confirm ───
+const handleApproveSubPayment = (record) => {
+  Modal.confirm({
+    title: 'BĐH duyệt thanh toán NTP',
+    content: `Duyệt thanh toán "${record.title}"?\n\nSố tiền: ${formatCurrency(record.amount)}`,
+    okText: 'Duyệt',
+    cancelText: 'Hủy',
+    okButtonProps: { style: { background: '#0EA5E9', borderColor: '#0EA5E9' } },
+    onOk() {
+      router.post(`/approvals/sub-payment/${record.id}/approve`, {}, {
+        preserveScroll: true,
+        onSuccess: () => message.success(`Đã duyệt thanh toán NTP (BĐH)`),
+        onError: () => message.error('Không thể duyệt thanh toán NTP'),
+      })
+    },
+  })
+}
+
+const handleConfirmSubPayment = (record) => {
+  Modal.confirm({
+    title: 'KT xác nhận thanh toán NTP',
+    content: `Xác nhận đã thanh toán "${record.title}"?\n\nSố tiền: ${formatCurrency(record.amount)}\n\n⚠️ Sau khi xác nhận, phiếu sẽ chuyển sang trạng thái ĐÃ THANH TOÁN và tự động tạo bản ghi chi phí.`,
+    okText: 'Xác nhận thanh toán',
+    cancelText: 'Hủy',
+    okButtonProps: { style: { background: '#14B8A6', borderColor: '#14B8A6' } },
+    onOk() {
+      router.post(`/approvals/sub-payment/${record.id}/confirm`, {}, {
+        preserveScroll: true,
+        onSuccess: () => message.success(`Đã xác nhận thanh toán NTP (Kế toán)`),
+        onError: () => message.error('Không thể xác nhận thanh toán NTP'),
+      })
+    },
+  })
+}
+
+const openRejectSubPaymentModal = (record) => {
+  rejectTarget.value = record
+  rejectReason.value = ''
+  rejectType.value = 'sub_payment'
+  rejectModalVisible.value = true
+}
+
 // ─── Common Reject (Cost) ───
 const openRejectModal = (record) => {
   rejectTarget.value = record
@@ -512,6 +584,7 @@ const handleReject = () => {
     acceptance: `/approvals/acceptance/${rejectTarget.value.id}/reject`,
     change_request: `/approvals/change-request/${rejectTarget.value.id}/reject`,
     additional_cost: `/approvals/additional-cost/${rejectTarget.value.id}/reject`,
+    sub_payment: `/approvals/sub-payment/${rejectTarget.value.id}/reject`,
   }
 
   router.post(urlMap[rejectType.value], {

@@ -129,6 +129,11 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Additional Cost
         Route::post('/additional-cost/{id}/approve', [CrmApprovalController::class, 'approveAdditionalCost'])->name('additional-cost.approve');
         Route::post('/additional-cost/{id}/reject', [CrmApprovalController::class, 'rejectAdditionalCost'])->name('additional-cost.reject');
+
+        // Subcontractor Payment
+        Route::post('/sub-payment/{id}/approve', [CrmApprovalController::class, 'approveSubPayment'])->name('sub-payment.approve');
+        Route::post('/sub-payment/{id}/confirm', [CrmApprovalController::class, 'confirmSubPayment'])->name('sub-payment.confirm');
+        Route::post('/sub-payment/{id}/reject', [CrmApprovalController::class, 'rejectSubPayment'])->name('sub-payment.reject');
     });
 
     // Reports (Báo cáo dự án)
@@ -194,10 +199,16 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/costs/{cost}/approve-management', [CrmProjectsController::class, 'approveCostManagement'])->name('costs.approve.management');
         Route::post('/{project}/costs/{cost}/approve-accountant', [CrmProjectsController::class, 'approveCostAccountant'])->name('costs.approve.accountant');
         Route::post('/{project}/costs/{cost}/reject', [CrmProjectsController::class, 'rejectCost'])->name('costs.reject');
+        Route::post('/{project}/costs/{cost}/attach-files', [CrmProjectsController::class, 'attachFilesToCost'])->name('costs.attach-files');
 
         // Payments
         Route::post('/{project}/payments', [CrmProjectsController::class, 'storePayment'])->name('payments.store');
+        Route::put('/{project}/payments/{payment}', [CrmProjectsController::class, 'updatePayment'])->name('payments.update');
+        Route::post('/{project}/payments/{payment}/mark-paid', [CrmProjectsController::class, 'markPaymentPaidByCustomer'])->name('payments.mark-paid');
+        Route::post('/{project}/payments/{payment}/confirm', [CrmProjectsController::class, 'confirmPayment'])->name('payments.confirm');
+        Route::post('/{project}/payments/{payment}/reject', [CrmProjectsController::class, 'rejectPayment'])->name('payments.reject');
         Route::delete('/{project}/payments/{payment}', [CrmProjectsController::class, 'destroyPayment'])->name('payments.destroy');
+        Route::post('/{project}/payments/{payment}/attach-files', [CrmProjectsController::class, 'attachFilesToPayment'])->name('payments.attach-files');
 
         // Personnel
         Route::post('/{project}/personnel', [CrmProjectsController::class, 'storePersonnel'])->name('personnel.store');
@@ -216,6 +227,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/defects', [CrmProjectsController::class, 'storeDefect'])->name('defects.store');
         Route::put('/{project}/defects/{defect}', [CrmProjectsController::class, 'updateDefect'])->name('defects.update');
         Route::delete('/{project}/defects/{defect}', [CrmProjectsController::class, 'destroyDefect'])->name('defects.destroy');
+        Route::post('/{project}/defects/{defect}/attach-files', [CrmProjectsController::class, 'attachFilesToDefect'])->name('defects.attach-files');
 
         // Change Requests
         Route::post('/{project}/change-requests', [CrmProjectsController::class, 'storeChangeRequest'])->name('change-requests.store');
@@ -240,6 +252,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Contract
         Route::post('/{project}/contract', [CrmProjectsController::class, 'storeContract'])->name('contract.store');
         Route::put('/{project}/contract', [CrmProjectsController::class, 'updateContract'])->name('contract.update');
+        Route::post('/{project}/contracts/{contract}/attach-files', [CrmProjectsController::class, 'attachFilesToContract'])->name('contracts.attach-files');
 
         // Subcontractors
         Route::post('/{project}/subcontractors', [CrmProjectsController::class, 'storeSubcontractor'])->name('subcontractors.store');
@@ -251,6 +264,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/additional-costs/{ac}/approve', [CrmProjectsController::class, 'approveAdditionalCost'])->name('additional-costs.approve');
         Route::post('/{project}/additional-costs/{ac}/reject', [CrmProjectsController::class, 'rejectAdditionalCost'])->name('additional-costs.reject');
         Route::delete('/{project}/additional-costs/{ac}', [CrmProjectsController::class, 'destroyAdditionalCost'])->name('additional-costs.destroy');
+        Route::post('/{project}/additional-costs/{ac}/attach-files', [CrmProjectsController::class, 'attachFilesToAdditionalCost'])->name('additional-costs.attach-files');
 
         // Budgets
         Route::post('/{project}/budgets', [CrmProjectsController::class, 'storeBudget'])->name('budgets.store');
