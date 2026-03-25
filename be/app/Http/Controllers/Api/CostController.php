@@ -241,7 +241,7 @@ class CostController extends Controller
         }
 
         // Chỉ cho phép cập nhật khi ở trạng thái draft (trừ Super Admin)
-        if (!$isSuperAdmin && $cost->status !== 'draft') {
+        if (!$user->owner && $cost->status !== 'draft') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể cập nhật chi phí ở trạng thái nháp.',
@@ -489,7 +489,7 @@ class CostController extends Controller
         }
 
         // Chỉ cho phép xóa khi ở trạng thái draft (trừ Super Admin)
-        if (!$isSuperAdmin && $cost->status !== 'draft') {
+        if (!$user->owner && $cost->status !== 'draft') {
             return response()->json([
                 'success' => false,
                 'message' => 'Chỉ có thể xóa chi phí ở trạng thái nháp.',

@@ -260,7 +260,7 @@ class AdditionalCostController extends Controller
         }
 
         // Chỉ duyệt khi đang chờ duyệt
-        if ($cost->status !== 'pending_approval' && $cost->status !== 'pending') {
+        if (!in_array($cost->status, ['pending_approval', 'pending'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Chi phí không ở trạng thái chờ duyệt.'
@@ -270,16 +270,24 @@ class AdditionalCostController extends Controller
         try {
             DB::beginTransaction();
 
-            $cost->status = 'approved';
-            $cost->approved_by = $user->id;
-            $cost->approved_at = now();
-            $cost->save();
+            // Nếu status là 'pending', chuyển sang 'pending_approval' trước
+            if ($cost->status === 'pending') {
+                $cost->status = 'pending_approval';
+                $cost->save();
+            }
+
+            // Sử dụng model method để đảm bảo audit trail đầy đủ
+            if (!$cost->approve($user)) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không thể duyệt chi phí phát sinh.'
+                ], 400);
+            }
 
             // Cập nhật giá trị hợp đồng
             $contract = $project->contract;
             if ($contract) {
-                // Remove formatting if any, ensure it's numeric/decimal
-                // Assuming contract_value is stored as decimal in DB
                 $contract->contract_value += $cost->amount;
                 $contract->save();
             }

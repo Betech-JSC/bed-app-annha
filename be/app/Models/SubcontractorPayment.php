@@ -124,6 +124,11 @@ class SubcontractorPayment extends Model
 
     public function approve(?User $user = null): bool
     {
+        // CRITICAL: Must only approve from pending_management_approval to prevent double-approval
+        if ($this->status !== 'pending_management_approval') {
+            return false;
+        }
+
         if ($user) {
             $this->approved_by = $user->id;
         }
@@ -134,6 +139,11 @@ class SubcontractorPayment extends Model
 
     public function markAsPaid(?User $user = null): bool
     {
+        // CRITICAL: Must only pay after accountant confirms. Prevents financial leak.
+        if ($this->status !== 'pending_accountant_confirmation') {
+            return false;
+        }
+
         if ($user) {
             $this->paid_by = $user->id;
         }

@@ -9,6 +9,8 @@ use App\Models\ChangeRequest;
 use App\Models\AdditionalCost;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -91,42 +93,101 @@ class CrmApprovalController extends Controller
         ]);
     }
 
+    // =========================================================================
+    // COST APPROVAL (BĐH → Kế Toán)
+    // Flow: draft → pending_management_approval → pending_accountant_approval → approved
+    // =========================================================================
+
     /**
-     * Approve a cost by management.
+     * BĐH duyệt chi phí.
+     * CRITICAL: Dùng model method để đảm bảo ghi lại AI DUYỆT + timestamp.
      */
     public function approveManagement(Request $request, $id)
     {
         $cost = Cost::findOrFail($id);
+        $user = Auth::guard('admin')->user();
 
         if ($cost->status !== 'pending_management_approval') {
             return back()->with('error', 'Chi phí không ở trạng thái chờ BĐH duyệt');
         }
 
-        $cost->management_approved_at = now();
-        $cost->status = 'pending_accountant_approval';
-        $cost->save();
+        try {
+            DB::beginTransaction();
 
-        return back()->with('success', "Đã duyệt chi phí \"{$cost->name}\" (Ban điều hành)");
+            // Dùng model method — ghi nhận user + timestamp đúng cách
+            $result = $cost->approveByManagement($user);
+
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt chi phí này — trạng thái không hợp lệ');
+            }
+
+            DB::commit();
+
+            Log::info('CRM: BĐH approved cost', [
+                'cost_id' => $cost->id,
+                'approved_by' => $user->id,
+                'amount' => $cost->amount,
+            ]);
+
+            return back()->with('success', "Đã duyệt chi phí \"{$cost->name}\" (Ban điều hành)");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Cost approval failed', ['cost_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi duyệt chi phí');
+        }
     }
 
     /**
-     * Approve a cost by accountant.
+     * Kế Toán xác nhận chi phí.
+     * CRITICAL: Dùng model method — triggers budget sync, material transactions, subcontractor update.
      */
     public function approveAccountant(Request $request, $id)
     {
         $cost = Cost::findOrFail($id);
+        $user = Auth::guard('admin')->user();
 
         if ($cost->status !== 'pending_accountant_approval') {
             return back()->with('error', 'Chi phí không ở trạng thái chờ KT xác nhận');
         }
 
-        $cost->approveByAccountant();
+        try {
+            DB::beginTransaction();
 
-        return back()->with('success', "Đã xác nhận chi phí \"{$cost->name}\" (Kế toán)");
+            // CRITICAL: Phải dùng model method vì nó:
+            // 1. Ghi nhận user + timestamp
+            // 2. Tự động cập nhật subcontractor total_paid
+            // 3. Tự động tạo MaterialTransaction
+            // 4. Tự động sync budget items
+            $result = $cost->approveByAccountant($user);
+
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể xác nhận chi phí này — trạng thái không hợp lệ');
+            }
+
+            DB::commit();
+
+            Log::info('CRM: KT confirmed cost', [
+                'cost_id' => $cost->id,
+                'confirmed_by' => $user->id,
+                'amount' => $cost->amount,
+            ]);
+
+            return back()->with('success', "Đã xác nhận chi phí \"{$cost->name}\" (Kế toán)");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Cost accountant approval failed', ['cost_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi xác nhận chi phí');
+        }
     }
 
     /**
-     * Reject a cost.
+     * Từ chối chi phí (từ cả BĐH hoặc KT).
+     * CRITICAL: Phải dùng model method vì nó:
+     * 1. Rollback subcontractor total_paid nếu cost đã approved
+     * 2. Xóa MaterialTransaction nếu đã tạo
+     * 3. Cập nhật budget items
      */
     public function reject(Request $request, $id)
     {
@@ -135,20 +196,42 @@ class CrmApprovalController extends Controller
         ]);
 
         $cost = Cost::findOrFail($id);
+        $user = Auth::guard('admin')->user();
 
         if (!in_array($cost->status, ['pending_management_approval', 'pending_accountant_approval'])) {
             return back()->with('error', 'Chi phí không ở trạng thái chờ duyệt');
         }
 
-        $cost->status = 'rejected';
-        $cost->rejected_reason = $request->reason;
-        $cost->save();
+        try {
+            DB::beginTransaction();
 
-        return back()->with('success', "Đã từ chối chi phí \"{$cost->name}\"");
+            // CRITICAL: Dùng model method — xử lý rollback subcontractor, material, budget
+            $result = $cost->reject($request->reason, $user);
+
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể từ chối chi phí này');
+            }
+
+            DB::commit();
+
+            Log::info('CRM: Cost rejected', [
+                'cost_id' => $cost->id,
+                'rejected_by' => $user->id,
+                'reason' => $request->reason,
+            ]);
+
+            return back()->with('success', "Đã từ chối chi phí \"{$cost->name}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Cost rejection failed', ['cost_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi từ chối chi phí');
+        }
     }
 
     // =========================================================================
-    // Customer Acceptance Approval
+    // CUSTOMER ACCEPTANCE APPROVAL
+    // Flow: pending → supervisor_approved → project_manager_approved → customer_approved
     // =========================================================================
 
     public function approveCustomerAcceptance(Request $request, $id)
@@ -160,9 +243,30 @@ class CrmApprovalController extends Controller
             return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ khách hàng duyệt');
         }
 
-        $stage->approveCustomer($user);
+        try {
+            DB::beginTransaction();
 
-        return back()->with('success', "Khách hàng đã duyệt nghiệm thu \"{$stage->name}\"");
+            // Model method: creates acceptance items, updates project progress
+            $result = $stage->approveCustomer($user);
+
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt nghiệm thu này');
+            }
+
+            DB::commit();
+
+            Log::info('CRM: Customer accepted stage', [
+                'stage_id' => $stage->id,
+                'approved_by' => $user->id,
+            ]);
+
+            return back()->with('success', "Khách hàng đã duyệt nghiệm thu \"{$stage->name}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Acceptance approval failed', ['stage_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi duyệt nghiệm thu');
+        }
     }
 
     public function rejectCustomerAcceptance(Request $request, $id)
@@ -174,13 +278,34 @@ class CrmApprovalController extends Controller
         $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
 
-        $stage->reject($request->reason, $user);
+        if (!in_array($stage->status, ['project_manager_approved', 'customer_approved'])) {
+            return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái có thể từ chối');
+        }
 
-        return back()->with('success', "Đã từ chối nghiệm thu \"{$stage->name}\"");
+        try {
+            DB::beginTransaction();
+
+            // Model method: auto-creates defect record
+            $stage->reject($request->reason, $user);
+
+            DB::commit();
+
+            Log::info('CRM: Customer rejected acceptance', [
+                'stage_id' => $stage->id,
+                'rejected_by' => $user->id,
+            ]);
+
+            return back()->with('success', "Đã từ chối nghiệm thu \"{$stage->name}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Acceptance rejection failed', ['stage_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi từ chối nghiệm thu');
+        }
     }
 
     // =========================================================================
-    // Change Request Approval
+    // CHANGE REQUEST APPROVAL
+    // Flow: draft → submitted → (under_review) → approved/rejected → implemented
     // =========================================================================
 
     public function approveChangeRequest(Request $request, $id)
@@ -192,9 +317,30 @@ class CrmApprovalController extends Controller
             return back()->with('error', 'Yêu cầu thay đổi không ở trạng thái chờ duyệt');
         }
 
-        $cr->approve($user, $request->input('notes'));
+        try {
+            DB::beginTransaction();
 
-        return back()->with('success', "Đã duyệt yêu cầu thay đổi \"{$cr->title}\"");
+            $result = $cr->approve($user, $request->input('notes'));
+
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt yêu cầu thay đổi này');
+            }
+
+            DB::commit();
+
+            Log::info('CRM: Change request approved', [
+                'cr_id' => $cr->id,
+                'approved_by' => $user->id,
+                'cost_impact' => $cr->estimated_cost_impact,
+            ]);
+
+            return back()->with('success', "Đã duyệt yêu cầu thay đổi \"{$cr->title}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: CR approval failed', ['cr_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi duyệt yêu cầu thay đổi');
+        }
     }
 
     public function rejectChangeRequest(Request $request, $id)
@@ -210,13 +356,29 @@ class CrmApprovalController extends Controller
             return back()->with('error', 'Yêu cầu thay đổi không ở trạng thái chờ duyệt');
         }
 
-        $cr->reject($user, $request->reason);
+        try {
+            DB::beginTransaction();
 
-        return back()->with('success', "Đã từ chối yêu cầu thay đổi \"{$cr->title}\"");
+            $cr->reject($user, $request->reason);
+
+            DB::commit();
+
+            Log::info('CRM: Change request rejected', [
+                'cr_id' => $cr->id,
+                'rejected_by' => $user->id,
+            ]);
+
+            return back()->with('success', "Đã từ chối yêu cầu thay đổi \"{$cr->title}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: CR rejection failed', ['cr_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi từ chối yêu cầu thay đổi');
+        }
     }
 
     // =========================================================================
-    // Additional Cost Approval
+    // ADDITIONAL COST APPROVAL
+    // Flow: pending/pending_approval → approved/rejected → customer_paid → confirmed
     // =========================================================================
 
     public function approveAdditionalCost(Request $request, $id)
@@ -228,9 +390,37 @@ class CrmApprovalController extends Controller
             return back()->with('error', 'Chi phí phát sinh không ở trạng thái chờ duyệt');
         }
 
-        $ac->approve($user);
+        try {
+            DB::beginTransaction();
 
-        return back()->with('success', "Đã duyệt chi phí phát sinh");
+            // AdditionalCost::approve() handles both pending_approval and customer_paid flows
+            // For 'pending' status, we need to move to pending_approval first then approve
+            if ($ac->status === 'pending') {
+                $ac->status = 'pending_approval';
+                $ac->save();
+            }
+
+            $result = $ac->approve($user);
+
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt chi phí phát sinh này');
+            }
+
+            DB::commit();
+
+            Log::info('CRM: Additional cost approved', [
+                'ac_id' => $ac->id,
+                'approved_by' => $user->id,
+                'amount' => $ac->amount,
+            ]);
+
+            return back()->with('success', "Đã duyệt chi phí phát sinh");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Additional cost approval failed', ['ac_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi duyệt chi phí phát sinh');
+        }
     }
 
     public function rejectAdditionalCost(Request $request, $id)
@@ -246,9 +436,24 @@ class CrmApprovalController extends Controller
             return back()->with('error', 'Chi phí phát sinh không ở trạng thái chờ duyệt');
         }
 
-        $ac->reject($request->reason);
+        try {
+            DB::beginTransaction();
 
-        return back()->with('success', "Đã từ chối chi phí phát sinh");
+            $ac->reject($request->reason);
+
+            DB::commit();
+
+            Log::info('CRM: Additional cost rejected', [
+                'ac_id' => $ac->id,
+                'rejected_by' => $user->id,
+            ]);
+
+            return back()->with('success', "Đã từ chối chi phí phát sinh");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Additional cost rejection failed', ['ac_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi từ chối chi phí phát sinh');
+        }
     }
 
     // =========================================================================

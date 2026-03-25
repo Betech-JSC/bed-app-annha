@@ -461,6 +461,7 @@ class CrmProjectsController extends Controller
             'project_id' => $project->id,
             'user_id' => $validated['user_id'],
             'role_id' => $validated['personnel_role_id'] ?? null,
+            'assigned_by' => $user->id,
         ]);
 
         return back()->with('success', 'Đã phân công nhân sự.');

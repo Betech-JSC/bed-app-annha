@@ -144,7 +144,11 @@ class CrmSystemLogController extends Controller
         while (!$file->eof()) {
             $line = $file->current();
             if (trim($line) !== '') {
-                $result[] = rtrim($line);
+                // Sanitize: convert to UTF-8, strip invalid bytes
+                $clean = @mb_convert_encoding(rtrim($line), 'UTF-8', 'UTF-8');
+                if ($clean !== false) {
+                    $result[] = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $clean);
+                }
             }
             $file->next();
         }
@@ -189,11 +193,11 @@ class CrmSystemLogController extends Controller
 
         // Truncate long context/message for performance
         foreach ($entries as &$entry) {
-            if (strlen($entry['message']) > 500) {
-                $entry['message'] = substr($entry['message'], 0, 500) . '...';
+            if (mb_strlen($entry['message']) > 500) {
+                $entry['message'] = mb_strcut($entry['message'], 0, 500, 'UTF-8') . '...';
             }
-            if (strlen($entry['context']) > 2000) {
-                $entry['context'] = substr($entry['context'], 0, 2000) . "\n... (truncated)";
+            if (mb_strlen($entry['context']) > 2000) {
+                $entry['context'] = mb_strcut($entry['context'], 0, 2000, 'UTF-8') . "\n... (truncated)";
             }
         }
 

@@ -256,6 +256,13 @@ class AcceptanceStageController extends Controller
                 break;
             case 'owner':
                 // Legacy: Chủ nhà
+                // MUST check defects BEFORE approving, not after
+                if ($stage->has_open_defects) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Không thể duyệt vì còn lỗi chưa được khắc phục.'
+                    ], 400);
+                }
                 if ($project->customer_id === $user->id && $stage->status === 'design_approved') {
                     $success = $stage->approveOwner($user);
                 }
@@ -266,14 +273,6 @@ class AcceptanceStageController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Không thể duyệt giai đoạn này. Vui lòng kiểm tra trạng thái và quyền truy cập.'
-            ], 400);
-        }
-
-        // Check for open defects
-        if ($approvalType === 'owner' && $stage->has_open_defects) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể duyệt vì còn lỗi chưa được khắc phục.'
             ], 400);
         }
 
