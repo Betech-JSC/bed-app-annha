@@ -677,18 +677,48 @@
 
       <!-- ============ ACCEPTANCE TAB ============ -->
       <a-tab-pane key="acceptance">
-        <template #tab><a-tooltip title="Quản lý nghiệm thu: tạo giai đoạn, duyệt 3 cấp (GSTC → QLDA → BĐH)" placement="bottom">Nghiệm thu ({{ project.acceptance_stages?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý nghiệm thu: tạo giai đoạn, duyệt 3 cấp, bộ tài liệu, lỗi ghi nhận" placement="bottom">Nghiệm thu ({{ project.acceptance_stages?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
-          <div class="flex justify-end mb-3">
+          <div class="flex justify-end mb-3 gap-2">
             <a-button v-if="can('acceptance.create')" type="primary" size="small" @click="openAcceptModal()">
               <template #icon><PlusOutlined /></template>Tạo giai đoạn
             </a-button>
           </div>
-          <div v-for="stage in (project.acceptance_stages || [])" :key="stage.id" class="mb-4 p-4 bg-gray-50 rounded-xl">
-            <div class="flex items-center justify-between mb-2">
-              <h5 class="font-bold">{{ stage.name }}</h5>
-              <div class="flex gap-1 items-center">
-                <a-tag :color="stage.status === 'pending' ? 'orange' : stage.status === 'customer_approved' ? 'green' : 'blue'" class="rounded-full text-xs">{{ acceptStatusLabels[stage.status] || stage.status }}</a-tag>
+
+          <!-- Stage Cards (matching APP's AcceptanceChecklist) -->
+          <div v-for="stage in (project.acceptance_stages || [])" :key="stage.id" class="mb-4 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+            <!-- Stage Header -->
+            <div class="flex items-center justify-between p-4 border-b border-gray-100">
+              <div class="flex items-center gap-3 flex-1">
+                <!-- Status Icon -->
+                <div :class="['w-9 h-9 rounded-xl flex items-center justify-center', getAcceptIconClass(stage.status)]">
+                  <CheckCircleOutlined v-if="stage.status?.includes('approved')" class="text-lg" />
+                  <CloseCircleOutlined v-else-if="stage.status === 'rejected'" class="text-lg text-red-500" />
+                  <span v-else class="text-lg">⏳</span>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-gray-800">{{ stage.name }}</span>
+                    <!-- Acceptability Status Badge (Giống APP) -->
+                    <span :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold',
+                      getAcceptability(stage) === 'acceptable' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
+                      <span :class="['w-1.5 h-1.5 rounded-full', getAcceptability(stage) === 'acceptable' ? 'bg-emerald-500' : 'bg-red-500']"></span>
+                      {{ getAcceptability(stage) === 'acceptable' ? 'Đạt' : 'Chưa đạt' }}
+                    </span>
+                  </div>
+                  <!-- Task info (linked parent task) -->
+                  <div v-if="stage.task" class="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                    <span>📐</span> {{ stage.task?.name }}
+                  </div>
+                  <!-- Template info -->
+                  <div v-if="stage.acceptance_template" class="flex items-center gap-1 text-xs text-blue-400 mt-0.5">
+                    <FileOutlined class="text-[10px]" /> {{ stage.acceptance_template.name }}
+                  </div>
+                </div>
+              </div>
+              <!-- Status & Actions -->
+              <div class="flex gap-1 items-center flex-shrink-0">
+                <a-tag :color="acceptStatusColors[stage.status] || 'default'" class="rounded-full text-xs">{{ acceptStatusLabels[stage.status] || stage.status }}</a-tag>
                 <a-tooltip v-if="stage.status === 'pending' && can('acceptance.approve.level_1')" title="Duyệt (Giám sát)">
                   <a-button type="text" size="small" @click="approveAccept(stage, 1)"><CheckCircleOutlined class="text-blue-500" /></a-button>
                 </a-tooltip>
@@ -698,17 +728,68 @@
                 <a-tooltip v-if="stage.status === 'project_manager_approved' && can('acceptance.approve.level_3')" title="Duyệt (KH)">
                   <a-button type="text" size="small" @click="approveAccept(stage, 3)"><CheckCircleOutlined class="text-emerald-600" /></a-button>
                 </a-tooltip>
+                <a-tooltip title="Sửa" v-if="can('acceptance.update') && stage.status !== 'owner_approved'">
+                  <a-button type="text" size="small" @click="openEditAcceptModal(stage)"><EditOutlined /></a-button>
+                </a-tooltip>
                 <a-popconfirm v-if="can('acceptance.delete') && stage.status !== 'owner_approved'" title="Xóa?" @confirm="deleteAccept(stage)">
                   <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
                 </a-popconfirm>
               </div>
             </div>
-            <div v-if="stage.description" class="text-sm text-gray-500 mb-2">{{ stage.description }}</div>
-            <div v-for="item in (stage.items || [])" :key="item.id" class="flex items-center gap-2 text-sm py-1">
-              <a-checkbox :checked="item.is_completed" disabled />
-              <span>{{ item.name }}</span>
+
+            <!-- Completion Progress -->
+            <div v-if="stage.items?.length" class="px-4 pt-3">
+              <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+                <span>Hoàn thành</span>
+                <span class="font-semibold">{{ getAcceptCompletion(stage).approved }}/{{ getAcceptCompletion(stage).total }}</span>
+              </div>
+              <a-progress :percent="getAcceptCompletion(stage).percent" :size="'small'" :stroke-color="getAcceptCompletion(stage).percent >= 100 ? '#10B981' : '#3B82F6'" :show-info="false" />
+            </div>
+
+            <!-- Defect Warning (Giống APP) -->
+            <div v-if="getOpenDefects(stage) > 0" class="mx-4 mt-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2 cursor-pointer hover:bg-red-100 transition" @click="activeTab = 'defects'">
+              <span class="text-red-500">⚠️</span>
+              <div class="flex-1">
+                <div class="text-xs font-semibold text-red-700">Còn {{ getOpenDefects(stage) }} lỗi chưa xử lý</div>
+                <div class="text-[10px] text-red-400">Nhấn để xem chi tiết →</div>
+              </div>
+            </div>
+
+            <!-- Description -->
+            <div v-if="stage.description" class="px-4 pt-2 text-sm text-gray-500">{{ stage.description }}</div>
+
+            <!-- Attachments Gallery (Giống APP: Image Gallery) -->
+            <div v-if="stage.attachments?.length" class="px-4 pt-3">
+              <div class="flex items-center gap-1 text-xs font-semibold text-gray-600 mb-2">
+                <FileOutlined class="text-[10px]" /> Hình ảnh / Tài liệu nghiệm thu ({{ stage.attachments.length }})
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <a v-for="att in stage.attachments" :key="att.id" :href="att.file_url" target="_blank"
+                   class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition border border-blue-100">
+                  <FileOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
+                </a>
+              </div>
+            </div>
+
+            <!-- Checklist Items (hạng mục nghiệm thu) -->
+            <div v-if="stage.items?.length" class="px-4 pt-3 pb-1">
+              <div class="text-xs font-semibold text-gray-600 mb-2">Hạng mục ({{ stage.items.length }})</div>
+              <div v-for="item in stage.items" :key="item.id" class="flex items-center gap-2 text-sm py-1.5 border-b border-gray-50 last:border-0">
+                <a-checkbox :checked="item.workflow_status === 'customer_approved'" disabled />
+                <span :class="item.workflow_status === 'customer_approved' ? 'text-gray-400 line-through' : 'text-gray-700'">{{ item.name }}</span>
+                <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px] ml-auto">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
+              </div>
+            </div>
+
+            <!-- Action button (Giống APP: "Nghiệm thu giai đoạn") -->
+            <div class="px-4 py-3 border-t border-gray-100 mt-2">
+              <a-button type="link" block size="small" @click="openAcceptDetailModal(stage)" class="!text-blue-600 !font-semibold">
+                <CheckCircleOutlined /> {{ can('acceptance.update') ? 'Nghiệm thu giai đoạn' : 'Xem chi tiết nghiệm thu' }}
+                <span class="ml-1">→</span>
+              </a-button>
             </div>
           </div>
+
           <a-empty v-if="!project.acceptance_stages?.length" description="Chưa có nghiệm thu" />
         </div>
       </a-tab-pane>
@@ -1014,6 +1095,122 @@
               </template>
             </template>
           </a-table>
+        </div>
+      </a-tab-pane>
+
+      <!-- ============ MATERIALS TAB (Giống APP) ============ -->
+      <a-tab-pane key="materials">
+        <template #tab><a-tooltip title="Quản lý vật liệu sử dụng trong dự án: ghi nhận xuất kho, chi phí vật tư" placement="bottom">Vật liệu ({{ projectMaterials?.length || 0 }})</a-tooltip></template>
+        <div class="p-4">
+          <!-- Summary Cards -->
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-sm">📦</span></div>
+                <span class="text-xs text-gray-400">Vật liệu sử dụng</span>
+              </div>
+              <div class="text-xl font-bold text-gray-800">{{ projectMaterials?.length || 0 }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-4 border border-emerald-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-sm">💰</span></div>
+                <span class="text-xs text-gray-400">Tổng chi phí</span>
+              </div>
+              <div class="text-xl font-bold text-emerald-600">{{ fmt(totalMaterialCost) }}</div>
+            </div>
+          </div>
+
+          <div class="flex justify-end mb-3">
+            <a-button v-if="can('material.create')" type="primary" size="small" @click="openMaterialModal()">
+              <template #icon><PlusOutlined /></template>Thêm vật liệu
+            </a-button>
+          </div>
+
+          <a-table :columns="materialCols" :data-source="projectMaterials || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'name'">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center"><span class="text-blue-600 text-xs">📦</span></div>
+                  <div>
+                    <div class="font-semibold text-gray-800">{{ record.name }}</div>
+                    <div v-if="record.code" class="text-[10px] text-gray-400 font-mono">{{ record.code }}</div>
+                  </div>
+                </div>
+              </template>
+              <template v-else-if="column.key === 'usage'">
+                <span class="font-semibold text-blue-600">{{ fmtQty(Math.abs(record.project_usage || 0)) }} <span class="text-xs text-gray-400">{{ record.unit }}</span></span>
+              </template>
+              <template v-else-if="column.key === 'transactions'">{{ record.project_transactions_count || 0 }} lần</template>
+              <template v-else-if="column.key === 'total'">
+                <span class="font-semibold text-emerald-600">{{ fmt(record.project_total_amount || 0) }}</span>
+              </template>
+            </template>
+          </a-table>
+          <a-empty v-if="!projectMaterials?.length" description="Chưa có vật liệu nào được sử dụng" />
+        </div>
+      </a-tab-pane>
+
+      <!-- ============ EQUIPMENT TAB (Giống APP) ============ -->
+      <a-tab-pane key="equipment">
+        <template #tab><a-tooltip title="Quản lý thiết bị phân bổ cho dự án: thuê, có sẵn, bàn giao" placement="bottom">Thiết bị ({{ projectEquipment?.length || 0 }})</a-tooltip></template>
+        <div class="p-4">
+          <div class="flex justify-end mb-3">
+            <a-button v-if="can('equipment.create')" type="primary" size="small" @click="openEquipmentModal()">
+              <template #icon><PlusOutlined /></template>Phân bổ thiết bị
+            </a-button>
+          </div>
+
+          <a-table :columns="equipmentCols" :data-source="projectEquipment || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table" :expandable="{ expandedRowRender: eqExpandedRow }">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'name'">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center"><span class="text-amber-600 text-xs">🏗️</span></div>
+                  <div>
+                    <div class="font-semibold text-gray-800">{{ record.name }}</div>
+                    <div v-if="record.code" class="text-[10px] text-gray-400 font-mono">{{ record.code }}</div>
+                  </div>
+                </div>
+              </template>
+              <template v-else-if="column.key === 'type'">
+                <a-tag class="rounded-full text-xs">{{ eqTypeLabel(record.type) }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="eqStatusColor(record.status)" class="rounded-full text-xs">{{ eqStatusLabel(record.status) }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'allocation'">
+                <template v-if="record.allocations?.length">
+                  <div v-for="a in record.allocations.slice(0,1)" :key="a.id">
+                    <a-tag :color="a.allocation_type === 'rent' ? 'blue' : 'green'" class="rounded-full text-xs">{{ a.allocation_type === 'rent' ? 'Thuê' : 'Có sẵn' }}</a-tag>
+                    <span class="text-xs text-gray-500 ml-1">{{ fmtDate(a.start_date) }}</span>
+                    <span v-if="a.rental_fee" class="text-xs text-emerald-600 ml-1">{{ fmt(a.rental_fee) }}</span>
+                  </div>
+                </template>
+                <span v-else class="text-xs text-gray-400">—</span>
+              </template>
+              <template v-else-if="column.key === 'actions'">
+                <div class="flex gap-1">
+                  <template v-for="a in (record.allocations || []).filter(x => x.status === 'active')" :key="a.id">
+                    <a-popconfirm title="Hoàn trả thiết bị?" @confirm="returnEquipmentAction(record, a)">
+                      <a-button type="text" size="small" class="text-orange-500"><CloseCircleOutlined /> Trả</a-button>
+                    </a-popconfirm>
+                  </template>
+                </div>
+              </template>
+            </template>
+            <template #expandedRowRender="{ record }">
+              <div class="px-4 py-2 bg-gray-50/50 rounded-lg">
+                <div v-for="a in record.allocations" :key="a.id" class="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0 text-xs">
+                  <a-tag :color="a.status === 'active' ? 'green' : 'default'" class="rounded-full">{{ a.status === 'active' ? 'Đang dùng' : 'Đã trả' }}</a-tag>
+                  <span>{{ a.allocation_type === 'rent' ? 'Thuê' : 'Có sẵn' }} — SL: {{ a.quantity }}</span>
+                  <span>{{ fmtDate(a.start_date) }} → {{ a.return_date ? fmtDate(a.return_date) : (a.end_date ? fmtDate(a.end_date) : '...') }}</span>
+                  <span v-if="a.rental_fee" class="text-emerald-600 font-semibold">{{ fmt(a.rental_fee) }}</span>
+                  <span v-if="a.manager" class="text-gray-500">👤 {{ a.manager.name }}</span>
+                  <span v-if="a.notes" class="text-gray-400 italic">{{ a.notes }}</span>
+                </div>
+              </div>
+            </template>
+          </a-table>
+          <a-empty v-if="!projectEquipment?.length" description="Chưa có thiết bị nào trong dự án" />
         </div>
       </a-tab-pane>
 
@@ -1601,7 +1798,7 @@
     </a-form>
   </a-modal>
 
-  <!-- Acceptance Modal -->
+  <!-- Acceptance Create Modal -->
   <a-modal v-model:open="showAcceptModal" title="Tạo giai đoạn nghiệm thu" :width="600" @ok="saveAccept" ok-text="Tạo" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Tên giai đoạn" required><a-input v-model:value="acceptForm.name" size="large" placeholder="VD: Nghiệm thu phần thô, nghiệm thu hoàn thiện..." /></a-form-item>
@@ -1623,6 +1820,149 @@
     </a-form>
   </a-modal>
 
+  <!-- Acceptance Edit Modal -->
+  <a-modal v-model:open="showEditAcceptModal" title="Chỉnh sửa giai đoạn nghiệm thu" :width="600" @ok="updateAccept" ok-text="Cập nhật" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+    <a-form layout="vertical" class="mt-4">
+      <a-form-item label="Tên giai đoạn" required><a-input v-model:value="editAcceptForm.name" size="large" /></a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12"><a-form-item label="Công việc cha (hạng mục A)"><a-select v-model:value="editAcceptForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục">
+          <a-select-option v-for="t in parentTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Mẫu nghiệm thu"><a-select v-model:value="editAcceptForm.acceptance_template_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn mẫu">
+          <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select></a-form-item></a-col>
+      </a-row>
+      <a-form-item label="Mô tả"><a-textarea v-model:value="editAcceptForm.description" :rows="3" /></a-form-item>
+      <a-form-item label="Thứ tự"><a-input-number v-model:value="editAcceptForm.order" :min="0" size="large" class="w-full" placeholder="Tự động" /></a-form-item>
+    </a-form>
+  </a-modal>
+
+  <!-- ==================== ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ==================== -->
+  <a-drawer v-model:open="showAcceptDetailDrawer" :title="acceptDetailStage ? `Nghiệm thu: ${acceptDetailStage.name}` : 'Chi tiết nghiệm thu'"
+    :width="640" placement="right" destroy-on-close class="accept-detail-drawer">
+    <template v-if="acceptDetailStage">
+      <!-- Stage Info Card -->
+      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-4 border border-blue-100">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-bold text-gray-800 text-base">{{ acceptDetailStage.name }}</span>
+          <span :class="['inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold',
+            getAcceptability(acceptDetailStage) === 'acceptable' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
+            {{ getAcceptability(acceptDetailStage) === 'acceptable' ? '✅ Đạt' : '❌ Chưa đạt' }}
+          </span>
+        </div>
+        <div class="text-xs text-gray-500 space-y-1">
+          <div v-if="acceptDetailStage.task">📐 Hạng mục: <span class="font-semibold">{{ acceptDetailStage.task.name }}</span></div>
+          <div v-if="acceptDetailStage.created_at">📅 Ngày tạo: {{ dayjs(acceptDetailStage.created_at).format('DD/MM/YYYY HH:mm') }}</div>
+          <div><a-tag :color="acceptStatusColors[acceptDetailStage.status] || 'default'" class="rounded-full text-xs">{{ acceptStatusLabels[acceptDetailStage.status] || acceptDetailStage.status }}</a-tag></div>
+        </div>
+      </div>
+
+      <!-- 1. Bộ tài liệu nghiệm thu (Template) -->
+      <div class="mb-5">
+        <div class="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1"><FileOutlined /> Bộ tài liệu nghiệm thu</div>
+        <a-select v-if="can('acceptance.update')" v-model:value="acceptDetailTemplateId" size="large" class="w-full mb-2" allow-clear show-search option-filter-prop="label" placeholder="Chọn bộ tài liệu nghiệm thu từ cài đặt" @change="onAcceptDetailTemplateChange">
+          <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">
+            {{ t.name }} <span v-if="t.description" class="text-gray-400 text-xs ml-1">— {{ t.description }}</span>
+          </a-select-option>
+        </a-select>
+        <div v-else-if="acceptDetailStage.acceptance_template" class="p-3 bg-gray-50 rounded-lg">
+          <div class="font-semibold text-sm">{{ acceptDetailStage.acceptance_template.name }}</div>
+          <div v-if="acceptDetailStage.acceptance_template.description" class="text-xs text-gray-500 mt-1">{{ acceptDetailStage.acceptance_template.description }}</div>
+        </div>
+        <div v-else class="text-xs text-gray-400 italic">Chưa chọn bộ tài liệu</div>
+
+        <!-- Template documents/images preview -->
+        <div v-if="acceptDetailSelectedTemplate" class="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+          <div class="text-xs font-semibold text-blue-700 mb-1">{{ acceptDetailSelectedTemplate.name }}</div>
+          <div v-if="acceptDetailSelectedTemplate.description" class="text-xs text-blue-500">{{ acceptDetailSelectedTemplate.description }}</div>
+          <div v-if="acceptDetailSelectedTemplate.documents?.length" class="text-xs text-gray-500 mt-1">📄 {{ acceptDetailSelectedTemplate.documents.length }} tài liệu</div>
+          <div v-if="acceptDetailSelectedTemplate.images?.length" class="text-xs text-gray-500">🖼 {{ acceptDetailSelectedTemplate.images.length }} hình ảnh</div>
+        </div>
+      </div>
+
+      <!-- 2. Lỗi ghi nhận -->
+      <div class="mb-5">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <div class="text-sm font-bold text-gray-700 flex items-center gap-1">⚠️ Lỗi ghi nhận</div>
+            <div v-if="acceptDetailDefects.length" class="text-xs text-gray-400 mt-0.5">
+              <span v-if="acceptDetailDefects.filter(d => d.status === 'verified').length" class="text-emerald-600">✓ {{ acceptDetailDefects.filter(d => d.status === 'verified').length }} đã xử lý</span>
+              <span v-if="acceptDetailDefects.filter(d => d.status !== 'verified').length" class="text-red-500 ml-1">⚠ {{ acceptDetailDefects.filter(d => d.status !== 'verified').length }} chưa xử lý</span>
+            </div>
+          </div>
+          <a-button v-if="can('defect.create')" type="dashed" size="small" @click="showCreateDefectInDrawer = true">
+            <PlusOutlined /> Tạo lỗi
+          </a-button>
+        </div>
+
+        <!-- Defects list -->
+        <div v-for="d in acceptDetailDefects" :key="d.id" class="p-3 mb-2 rounded-lg border" :class="d.status === 'verified' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="text-sm font-semibold" :class="d.status === 'verified' ? 'text-green-700 line-through' : 'text-red-700'">{{ d.description }}</div>
+              <div class="flex items-center gap-2 mt-1">
+                <a-tag :color="d.severity === 'high' ? 'red' : d.severity === 'low' ? 'green' : 'orange'" class="rounded-full text-[10px]">{{ { low: 'Nhẹ', medium: 'TB', high: 'Nặng' }[d.severity] || d.severity }}</a-tag>
+                <a-tag :color="{ open: 'default', in_progress: 'processing', resolved: 'blue', verified: 'success' }[d.status] || 'default'" class="rounded-full text-[10px]">{{ { open: 'Mở', in_progress: 'Đang xử lý', resolved: 'Đã sửa', verified: 'Đã xác nhận' }[d.status] || d.status }}</a-tag>
+              </div>
+            </div>
+          </div>
+        </div>
+        <a-empty v-if="!acceptDetailDefects.length" :image="null" description="Không có lỗi nào — tuyệt vời!" class="py-2" />
+
+        <!-- Inline Create Defect Form -->
+        <div v-if="showCreateDefectInDrawer" class="mt-3 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-bold text-gray-700">Tạo lỗi mới</span>
+            <a-button type="text" size="small" @click="showCreateDefectInDrawer = false"><CloseOutlined /></a-button>
+          </div>
+          <a-form layout="vertical">
+            <a-form-item label="Mô tả lỗi" required><a-textarea v-model:value="newAcceptDefect.description" :rows="2" placeholder="Mô tả lỗi phát hiện..." /></a-form-item>
+            <a-row :gutter="12">
+              <a-col :span="12"><a-form-item label="Mức độ">
+                <a-radio-group v-model:value="newAcceptDefect.severity" size="small" button-style="solid">
+                  <a-radio-button value="low">Nhẹ</a-radio-button>
+                  <a-radio-button value="medium">TB</a-radio-button>
+                  <a-radio-button value="high">Nặng</a-radio-button>
+                </a-radio-group>
+              </a-form-item></a-col>
+            </a-row>
+            <a-button type="primary" block @click="createDefectFromDrawer" :loading="creatingDefect">
+              <CheckOutlined /> Tạo lỗi ghi nhận
+            </a-button>
+          </a-form>
+        </div>
+      </div>
+
+      <!-- 3. Hạng mục nghiệm thu (items) -->
+      <div v-if="acceptDetailStage.items?.length" class="mb-5">
+        <div class="text-sm font-bold text-gray-700 mb-2">📋 Hạng mục nghiệm thu ({{ acceptDetailStage.items.length }})</div>
+        <div v-for="item in acceptDetailStage.items" :key="item.id" class="flex items-center gap-2 py-2 px-3 rounded-lg mb-1" :class="item.workflow_status === 'customer_approved' ? 'bg-green-50' : 'bg-gray-50'">
+          <a-checkbox :checked="item.workflow_status === 'customer_approved'" disabled />
+          <span class="flex-1 text-sm" :class="item.workflow_status === 'customer_approved' ? 'text-green-600 line-through' : ''">{{ item.name }}</span>
+          <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px]">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
+        </div>
+      </div>
+
+      <!-- 4. Tài liệu đính kèm -->
+      <div v-if="acceptDetailStage.attachments?.length" class="mb-5">
+        <div class="text-sm font-bold text-gray-700 mb-2">📎 Tài liệu đính kèm ({{ acceptDetailStage.attachments.length }})</div>
+        <div class="flex gap-2 flex-wrap">
+          <a v-for="att in acceptDetailStage.attachments" :key="att.id" :href="att.file_url" target="_blank"
+             class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition border border-blue-100">
+            <DownloadOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
+          </a>
+        </div>
+      </div>
+
+      <!-- Save Button -->
+      <div v-if="can('acceptance.update')" class="pt-4 border-t">
+        <a-button type="primary" block size="large" @click="saveAcceptDetail" :loading="savingAcceptDetail">
+          <CheckCircleOutlined /> Lưu nghiệm thu
+        </a-button>
+      </div>
+    </template>
+  </a-drawer>
+
   <!-- Document Upload Modal -->
   <a-modal v-model:open="showDocUploadModal" title="Upload tài liệu" :width="500" @ok="uploadDoc" ok-text="Upload" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :ok-button-props="{ disabled: !docUploadForm.file }">
     <a-form layout="vertical" class="mt-4">
@@ -1639,6 +1979,123 @@
       <a-form-item label="Mô tả"><a-textarea v-model:value="docEditForm.description" :rows="3" /></a-form-item>
     </a-form>
   </a-modal>
+
+  <!-- ==================== MATERIAL BATCH MODAL ==================== -->
+  <a-modal v-model:open="showMaterialModal" title="Thêm Vật Liệu Sử Dụng" :width="700" :footer="null" centered destroy-on-close class="crm-modal">
+    <div class="mt-4 space-y-4">
+      <!-- Batch List Header -->
+      <div v-if="materialBatchItems.length" class="bg-blue-50 rounded-xl p-3 border border-blue-100">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-semibold text-blue-800">Danh sách chờ ({{ materialBatchItems.length }})</span>
+          <a-button type="text" size="small" danger @click="materialBatchItems = []">Xóa tất cả</a-button>
+        </div>
+        <div v-for="(bi, i) in materialBatchItems" :key="i" class="flex items-center justify-between px-2 py-1.5 bg-white rounded-lg mb-1 text-xs">
+          <span class="font-semibold">{{ bi.material.name }}</span>
+          <span class="text-gray-500">{{ bi.quantity }} {{ bi.material.unit }} — {{ fmt(bi.amount) }}</span>
+          <a-button type="text" size="small" danger @click="materialBatchItems.splice(i, 1)"><DeleteOutlined /></a-button>
+        </div>
+        <div class="flex items-center justify-between pt-2 border-t border-blue-100 mt-2">
+          <span class="text-sm font-bold text-gray-700">Tổng cộng:</span>
+          <span class="text-sm font-bold text-emerald-600">{{ fmt(materialBatchItems.reduce((s,i) => s + i.amount, 0)) }}</span>
+        </div>
+      </div>
+
+      <!-- Select Material -->
+      <a-form layout="vertical">
+        <a-form-item label="Chọn vật liệu">
+          <a-select v-model:value="matForm.material_id" show-search option-filter-prop="label" placeholder="Tìm và chọn vật liệu..." size="large" class="w-full" @change="onMaterialSelect">
+            <a-select-option v-for="m in materials" :key="m.id" :value="m.id" :label="m.name">
+              {{ m.name }} <span class="text-gray-400 text-xs">({{ m.code || 'N/A' }})</span>
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="8">
+            <a-form-item :label="'Số lượng' + (matFormSelected?.unit ? ` (${matFormSelected.unit})` : '')">
+              <a-input-number v-model:value="matForm.quantity" :min="0.01" :step="1" size="large" class="w-full" @change="calcMatAmount" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Chi phí (VNĐ)">
+              <a-input-number v-model:value="matForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label=" ">
+              <a-button type="dashed" block size="large" @click="addMaterialToBatch" :disabled="!matForm.material_id || !matForm.quantity || !matForm.amount">
+                <PlusOutlined /> Thêm vào danh sách
+              </a-button>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="Ngày giao dịch">
+              <a-date-picker v-model:value="matForm.transaction_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Nhóm chi phí" required>
+              <a-select v-model:value="matForm.cost_group_id" placeholder="Chọn nhóm chi phí" size="large" class="w-full">
+                <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+
+      <a-button v-if="materialBatchItems.length" type="primary" block size="large" :loading="submittingMaterial" @click="submitMaterialBatch">
+        <CheckOutlined /> Xác nhận & Đẩy qua chi phí ({{ materialBatchItems.length }} vật liệu)
+      </a-button>
+    </div>
+  </a-modal>
+
+  <!-- ==================== EQUIPMENT ALLOCATION MODAL ==================== -->
+  <a-modal v-model:open="showEquipmentModal" title="Phân Bổ Thiết Bị" :width="600" @ok="submitEquipmentAllocation" ok-text="Phân bổ" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :confirm-loading="submittingEquipment">
+    <a-form layout="vertical" class="mt-4">
+      <a-form-item label="Chọn thiết bị" required>
+        <a-select v-model:value="eqForm.equipment_id" show-search option-filter-prop="label" placeholder="Tìm thiết bị..." size="large" class="w-full">
+          <a-select-option v-for="e in allEquipment" :key="e.id" :value="e.id" :label="e.name">
+            {{ e.name }} <span class="text-gray-400 text-xs">({{ e.code || '' }} — {{ eqStatusLabel(e.status) }})</span>
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+
+      <a-form-item label="Loại hình">
+        <a-radio-group v-model:value="eqForm.allocation_type" button-style="solid" size="large">
+          <a-radio-button value="rent">Thuê</a-radio-button>
+          <a-radio-button value="buy">Có sẵn</a-radio-button>
+        </a-radio-group>
+      </a-form-item>
+
+      <a-row :gutter="12">
+        <a-col :span="8"><a-form-item label="Số lượng"><a-input-number v-model:value="eqForm.quantity" :min="1" size="large" class="w-full" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Ngày bắt đầu" required><a-date-picker v-model:value="eqForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Ngày kết thúc"><a-date-picker v-model:value="eqForm.end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+      </a-row>
+
+      <!-- Rent fields -->
+      <a-form-item v-if="eqForm.allocation_type === 'rent'" label="Tổng phí thuê (VNĐ)" required>
+        <a-input-number v-model:value="eqForm.rental_fee" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" />
+      </a-form-item>
+
+      <!-- Buy fields -->
+      <template v-if="eqForm.allocation_type === 'buy'">
+        <a-form-item label="Người nhận bàn giao" required>
+          <a-select v-model:value="eqForm.manager_id" show-search option-filter-prop="label" placeholder="Chọn người..." size="large" class="w-full">
+            <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }}</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12"><a-form-item label="Ngày bàn giao"><a-date-picker v-model:value="eqForm.handover_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="Ngày hoàn trả"><a-date-picker v-model:value="eqForm.return_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        </a-row>
+      </template>
+
+      <a-form-item label="Ghi chú"><a-textarea v-model:value="eqForm.notes" :rows="2" placeholder="Ghi chú (tùy chọn)..." /></a-form-item>
+    </a-form>
+  </a-modal>
+
 </template>
 
 <script setup>
@@ -1668,6 +2125,9 @@ const props = defineProps({
   allTasks: { type: Array, default: () => [] },
   acceptanceTemplates: { type: Array, default: () => [] },
   parentTasks: { type: Array, default: () => [] },
+  projectMaterials: { type: Array, default: () => [] },
+  projectEquipment: { type: Array, default: () => [] },
+  allEquipment: { type: Array, default: () => [] },
 })
 
 // ============ RBAC ============
@@ -2345,13 +2805,122 @@ const saveInvoice = () => {
 }
 const deleteInvoice = (inv) => router.delete(`/projects/${props.project.id}/invoices/${inv.id}`)
 
-// ============ ACCEPTANCE CRUD ============
+// ============ ACCEPTANCE CRUD (Giống APP: AcceptanceChecklist) ============
 const showAcceptModal = ref(false)
 const acceptForm = ref({ name: '', description: '', task_id: null, acceptance_template_id: null })
 const openAcceptModal = () => { acceptForm.value = { name: '', description: '', task_id: null, acceptance_template_id: null }; showAcceptModal.value = true }
 const saveAccept = () => { router.post(`/projects/${props.project.id}/acceptance`, acceptForm.value, { onSuccess: () => showAcceptModal.value = false }) }
 const approveAccept = (stage, level) => router.post(`/projects/${props.project.id}/acceptance/${stage.id}/approve`, { level })
 const deleteAccept = (stage) => router.delete(`/projects/${props.project.id}/acceptance/${stage.id}`)
+
+// Edit acceptance
+const showEditAcceptModal = ref(false)
+const editAcceptForm = ref({ name: '', description: '', task_id: null, acceptance_template_id: null, order: null })
+const editingAcceptId = ref(null)
+const openEditAcceptModal = (stage) => {
+  editingAcceptId.value = stage.id
+  editAcceptForm.value = {
+    name: stage.name || '',
+    description: stage.description || '',
+    task_id: stage.task_id || null,
+    acceptance_template_id: stage.acceptance_template_id || null,
+    order: stage.order || null,
+  }
+  showEditAcceptModal.value = true
+}
+const updateAccept = () => {
+  router.put(`/projects/${props.project.id}/acceptance/${editingAcceptId.value}`, editAcceptForm.value, {
+    onSuccess: () => { showEditAcceptModal.value = false }
+  })
+}
+
+// Acceptance status helpers
+const acceptStatusColors = {
+  pending: 'orange', supervisor_approved: 'blue', project_manager_approved: 'cyan',
+  customer_approved: 'green', owner_approved: 'purple', design_approved: 'geekblue',
+  internal_approved: 'gold', rejected: 'red',
+}
+const getAcceptIconClass = (status) => {
+  if (!status) return 'bg-gray-100'
+  if (status.includes('approved')) return 'bg-emerald-100 text-emerald-600'
+  if (status === 'rejected') return 'bg-red-100 text-red-600'
+  return 'bg-orange-100 text-orange-600'
+}
+const getAcceptability = (stage) => {
+  if (stage.acceptability_status) return stage.acceptability_status
+  const hasOpenDefects = (stage.defects || []).some(d => d.status === 'open' || d.status === 'in_progress')
+  return hasOpenDefects ? 'not_acceptable' : 'acceptable'
+}
+const getAcceptCompletion = (stage) => {
+  const items = stage.items || []
+  const total = items.length
+  const approved = items.filter(i => i.workflow_status === 'customer_approved').length
+  return { total, approved, percent: total > 0 ? Math.round((approved / total) * 100) : 0 }
+}
+const getOpenDefects = (stage) => {
+  return (stage.defects || []).filter(d => d.status !== 'verified').length
+}
+const acceptItemStatusColor = (status) => ({ pending: 'default', submitted: 'processing', project_manager_approved: 'blue', customer_approved: 'success' }[status] || 'default')
+const acceptItemStatusLabel = (status) => ({ pending: 'Chờ', submitted: 'Đã nộp', project_manager_approved: 'QLDA duyệt', customer_approved: 'KH duyệt' }[status] || status)
+
+// ============ ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ============
+const showAcceptDetailDrawer = ref(false)
+const acceptDetailStage = ref(null)
+const acceptDetailTemplateId = ref(null)
+const acceptDetailDefects = ref([])
+const showCreateDefectInDrawer = ref(false)
+const newAcceptDefect = ref({ description: '', severity: 'medium' })
+const creatingDefect = ref(false)
+const savingAcceptDetail = ref(false)
+
+const acceptDetailSelectedTemplate = computed(() => {
+  if (!acceptDetailTemplateId.value) return null
+  return (props.acceptanceTemplates || []).find(t => t.id === acceptDetailTemplateId.value)
+})
+
+const openAcceptDetailModal = (stage) => {
+  acceptDetailStage.value = stage
+  acceptDetailTemplateId.value = stage.acceptance_template_id || null
+  acceptDetailDefects.value = stage.defects || []
+  showCreateDefectInDrawer.value = false
+  newAcceptDefect.value = { description: '', severity: 'medium' }
+  showAcceptDetailDrawer.value = true
+}
+
+const onAcceptDetailTemplateChange = (val) => {
+  acceptDetailTemplateId.value = val
+}
+
+const createDefectFromDrawer = () => {
+  if (!newAcceptDefect.value.description?.trim()) return
+  creatingDefect.value = true
+  router.post(`/projects/${props.project.id}/defects`, {
+    description: newAcceptDefect.value.description,
+    severity: newAcceptDefect.value.severity,
+    status: 'open',
+    acceptance_stage_id: acceptDetailStage.value.id,
+    task_id: acceptDetailStage.value.task_id || null,
+  }, {
+    onSuccess: () => {
+      showCreateDefectInDrawer.value = false
+      newAcceptDefect.value = { description: '', severity: 'medium' }
+      showAcceptDetailDrawer.value = false // close drawer to refresh
+    },
+    onFinish: () => { creatingDefect.value = false },
+  })
+}
+
+const saveAcceptDetail = () => {
+  if (!acceptDetailStage.value) return
+  savingAcceptDetail.value = true
+  router.put(`/projects/${props.project.id}/acceptance/${acceptDetailStage.value.id}`, {
+    acceptance_template_id: acceptDetailTemplateId.value,
+  }, {
+    onSuccess: () => { showAcceptDetailDrawer.value = false },
+    onFinish: () => { savingAcceptDetail.value = false },
+  })
+}
+
 
 // ============ DOCUMENT CRUD ============
 const showDocUploadModal = ref(false)
@@ -2373,6 +2942,116 @@ const docEditForm = ref({ description: '' })
 const openEditDocModal = (doc) => { editingDoc.value = doc; docEditForm.value = { description: doc.description || '' }; showDocEditModal.value = true }
 const updateDoc = () => { router.put(`/projects/${props.project.id}/documents/${editingDoc.value.id}`, docEditForm.value, { onSuccess: () => showDocEditModal.value = false }) }
 const deleteDoc = (doc) => router.delete(`/projects/${props.project.id}/documents/${doc.id}`)
+
+// ============ MATERIALS TAB (Giống APP) ============
+const fmtQty = (v) => new Intl.NumberFormat('vi-VN').format(v)
+const totalMaterialCost = computed(() => (props.projectMaterials || []).reduce((s, m) => s + Number(m.project_total_amount || 0), 0))
+
+const materialCols = [
+  { title: 'Vật liệu', key: 'name', dataIndex: 'name' },
+  { title: 'Sử dụng', key: 'usage', width: 120, align: 'center' },
+  { title: 'Lần dùng', key: 'transactions', width: 90, align: 'center' },
+  { title: 'Tổng tiền', key: 'total', width: 150, align: 'right' },
+]
+
+const showMaterialModal = ref(false)
+const materialBatchItems = ref([])
+const submittingMaterial = ref(false)
+const matForm = ref({ material_id: null, quantity: 1, amount: 0, notes: '', transaction_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null })
+const matFormSelected = computed(() => (props.materials || []).find(m => m.id === matForm.value.material_id))
+
+const openMaterialModal = () => {
+  matForm.value = { material_id: null, quantity: 1, amount: 0, notes: '', transaction_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null }
+  materialBatchItems.value = []
+  showMaterialModal.value = true
+}
+
+const onMaterialSelect = (id) => {
+  const m = (props.materials || []).find(x => x.id === id)
+  if (m && m.unit_price) {
+    matForm.value.amount = matForm.value.quantity * m.unit_price
+  }
+}
+
+const calcMatAmount = () => {
+  const m = matFormSelected.value
+  if (m && m.unit_price) {
+    matForm.value.amount = (matForm.value.quantity || 0) * m.unit_price
+  }
+}
+
+const addMaterialToBatch = () => {
+  const m = (props.materials || []).find(x => x.id === matForm.value.material_id)
+  if (!m) return
+  materialBatchItems.value.push({
+    material: m,
+    quantity: matForm.value.quantity,
+    amount: matForm.value.amount,
+    notes: matForm.value.notes,
+  })
+  matForm.value = { ...matForm.value, material_id: null, quantity: 1, amount: 0, notes: '' }
+}
+
+const submitMaterialBatch = () => {
+  if (!materialBatchItems.value.length || !matForm.value.cost_group_id) return
+  submittingMaterial.value = true
+  router.post(`/projects/${props.project.id}/materials/batch`, {
+    transaction_date: matForm.value.transaction_date,
+    cost_group_id: matForm.value.cost_group_id,
+    items: materialBatchItems.value.map(b => ({
+      material_id: b.material.id,
+      quantity: b.quantity,
+      amount: b.amount,
+      notes: b.notes || undefined,
+    })),
+  }, {
+    onSuccess: () => { showMaterialModal.value = false; materialBatchItems.value = [] },
+    onFinish: () => { submittingMaterial.value = false },
+  })
+}
+
+// ============ EQUIPMENT TAB (Giống APP) ============
+const eqStatusLabel = (s) => ({ available: 'Sẵn sàng', in_use: 'Đang dùng', maintenance: 'Bảo trì', retired: 'Ngừng dùng' }[s] || s)
+const eqStatusColor = (s) => ({ available: 'green', in_use: 'blue', maintenance: 'orange', retired: 'default' }[s] || 'default')
+const eqTypeLabel = (t) => ({ owned: 'Có sẵn', rented: 'Thuê', leased: 'Thuê dài hạn' }[t] || t)
+
+const equipmentCols = [
+  { title: 'Thiết bị', key: 'name', dataIndex: 'name' },
+  { title: 'Loại', key: 'type', width: 100, align: 'center' },
+  { title: 'Trạng thái', key: 'status', width: 100, align: 'center' },
+  { title: 'Phân bổ', key: 'allocation', width: 250 },
+  { title: '', key: 'actions', width: 100, align: 'center' },
+]
+
+const showEquipmentModal = ref(false)
+const submittingEquipment = ref(false)
+const eqForm = ref({
+  equipment_id: null, allocation_type: 'rent', quantity: 1,
+  start_date: dayjs().format('YYYY-MM-DD'), end_date: null, notes: '',
+  manager_id: null, handover_date: null, return_date: null, rental_fee: 0,
+})
+
+const openEquipmentModal = () => {
+  eqForm.value = {
+    equipment_id: null, allocation_type: 'rent', quantity: 1,
+    start_date: dayjs().format('YYYY-MM-DD'), end_date: null, notes: '',
+    manager_id: null, handover_date: null, return_date: null, rental_fee: 0,
+  }
+  showEquipmentModal.value = true
+}
+
+const submitEquipmentAllocation = () => {
+  if (!eqForm.value.equipment_id) return
+  submittingEquipment.value = true
+  router.post(`/projects/${props.project.id}/equipment/allocate`, eqForm.value, {
+    onSuccess: () => { showEquipmentModal.value = false },
+    onFinish: () => { submittingEquipment.value = false },
+  })
+}
+
+const returnEquipmentAction = (eq, allocation) => {
+  router.post(`/projects/${props.project.id}/equipment/${allocation.id}/return`)
+}
 </script>
 
 <style scoped>

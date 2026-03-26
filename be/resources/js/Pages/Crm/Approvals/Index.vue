@@ -52,6 +52,24 @@
       </div>
     </div>
     <div class="approval-overview__card">
+      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #6366F120, #6366F108);">
+        <FileProtectOutlined style="color: #6366F1; font-size: 22px;" />
+      </div>
+      <div>
+        <div class="approval-overview__value">{{ stats.pending_contract + stats.pending_payment }}</div>
+        <div class="approval-overview__label">HĐ / TT chờ KH</div>
+      </div>
+    </div>
+    <div class="approval-overview__card">
+      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #A855F720, #A855F708);">
+        <InboxOutlined style="color: #A855F7; font-size: 22px;" />
+      </div>
+      <div>
+        <div class="approval-overview__value">{{ stats.pending_material_bill + stats.pending_sub_acceptance }}</div>
+        <div class="approval-overview__label">VT / NT NTP</div>
+      </div>
+    </div>
+    <div class="approval-overview__card">
       <div class="approval-overview__icon" style="background: linear-gradient(135deg, #10B98120, #10B98108);">
         <CheckCircleOutlined style="color: #10B981; font-size: 22px;" />
       </div>
@@ -188,6 +206,58 @@
     emptyText="Không có thanh toán NTP chờ Kế Toán xác nhận"
     @approve="handleConfirmSubPayment"
     @reject="openRejectSubPaymentModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 8: Hợp đồng chờ KH duyệt ─── -->
+  <ApprovalZone
+    title="Hợp đồng chờ Khách hàng duyệt"
+    subtitle="Hợp đồng đã gửi cho khách hàng, chờ phê duyệt"
+    :items="contractItems"
+    :color="'#6366F1'"
+    level="contract"
+    emptyText="Không có hợp đồng chờ KH duyệt"
+    @approve="handleApproveContract"
+    @reject="openRejectContractModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 9: Thanh toán DA chờ KH duyệt ─── -->
+  <ApprovalZone
+    title="Thanh toán dự án chờ Khách hàng duyệt"
+    subtitle="Đợt thanh toán đã gửi khách hàng, chờ xác nhận"
+    :items="paymentItems"
+    :color="'#D946EF'"
+    level="project_payment"
+    emptyText="Không có đợt thanh toán chờ KH duyệt"
+    @approve="handleApprovePayment"
+    @reject="openRejectPaymentModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 10: Phiếu vật tư chờ duyệt ─── -->
+  <ApprovalZone
+    title="Phiếu xuất vật tư chờ duyệt"
+    subtitle="Phiếu xuất vật tư chờ BĐH hoặc Kế toán xác nhận"
+    :items="materialBillItems"
+    :color="'#A855F7'"
+    level="material_bill"
+    emptyText="Không có phiếu vật tư chờ duyệt"
+    @approve="handleApproveMaterialBill"
+    @reject="openRejectMaterialBillModal"
+    @view="openDetailDrawer"
+  />
+
+  <!-- ─── Zone 11: Nghiệm thu NTP chờ duyệt ─── -->
+  <ApprovalZone
+    title="Nghiệm thu Nhà thầu phụ chờ duyệt"
+    subtitle="Biên bản nghiệm thu NTP chờ xác nhận"
+    :items="subAcceptanceItems"
+    :color="'#0D9488'"
+    level="sub_acceptance"
+    emptyText="Không có nghiệm thu NTP chờ duyệt"
+    @approve="handleApproveSubAcceptance"
+    @reject="openRejectSubAcceptanceModal"
     @view="openDetailDrawer"
   />
 
@@ -366,6 +436,8 @@ import {
   DownOutlined,
   UserOutlined,
   SwapOutlined,
+  FileProtectOutlined,
+  InboxOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -379,6 +451,10 @@ const props = defineProps({
   additionalCostItems: { type: Array, default: () => [] },
   subPaymentManagementItems: { type: Array, default: () => [] },
   subPaymentAccountantItems: { type: Array, default: () => [] },
+  contractItems: { type: Array, default: () => [] },
+  paymentItems: { type: Array, default: () => [] },
+  materialBillItems: { type: Array, default: () => [] },
+  subAcceptanceItems: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
 })
@@ -398,6 +474,10 @@ const typeColors = {
   change_request: 'magenta',
   additional_cost: 'orange',
   sub_payment: 'cyan',
+  contract: 'geekblue',
+  project_payment: 'volcano',
+  material_bill: 'purple',
+  sub_acceptance: 'lime',
 }
 
 const totalPending = computed(() => {
@@ -407,6 +487,10 @@ const totalPending = computed(() => {
     + (props.stats.pending_change_request || 0)
     + (props.stats.pending_additional_cost || 0)
     + (props.stats.pending_sub_payment || 0)
+    + (props.stats.pending_contract || 0)
+    + (props.stats.pending_payment || 0)
+    + (props.stats.pending_material_bill || 0)
+    + (props.stats.pending_sub_acceptance || 0)
 })
 
 const formatCurrency = (amount) => {
@@ -566,6 +650,91 @@ const openRejectSubPaymentModal = (record) => {
   rejectModalVisible.value = true
 }
 
+// ─── Contract Approve (KH duyệt HĐ) ───
+const handleApproveContract = (record) => {
+  Modal.confirm({
+    title: 'Khách hàng duyệt hợp đồng',
+    content: `Duyệt hợp đồng "${record.title}"?\n\nGiá trị: ${formatCurrency(record.amount)}`,
+    okText: 'Duyệt',
+    cancelText: 'Hủy',
+    okButtonProps: { style: { background: '#6366F1', borderColor: '#6366F1' } },
+    onOk() {
+      router.post(`/approvals/contract/${record.id}/approve`, {}, {
+        preserveScroll: true,
+        onSuccess: () => message.success(`Đã duyệt hợp đồng "${record.title}"`),
+        onError: () => message.error('Không thể duyệt hợp đồng'),
+      })
+    },
+  })
+}
+const openRejectContractModal = (record) => {
+  rejectTarget.value = record; rejectReason.value = ''; rejectType.value = 'contract'; rejectModalVisible.value = true
+}
+
+// ─── Payment Approve (KH duyệt thanh toán) ───
+const handleApprovePayment = (record) => {
+  Modal.confirm({
+    title: 'Khách hàng duyệt thanh toán',
+    content: `Duyệt đợt thanh toán "${record.title}"?\n\nSố tiền: ${formatCurrency(record.amount)}`,
+    okText: 'Duyệt',
+    cancelText: 'Hủy',
+    okButtonProps: { style: { background: '#D946EF', borderColor: '#D946EF' } },
+    onOk() {
+      router.post(`/approvals/payment/${record.id}/approve`, {}, {
+        preserveScroll: true,
+        onSuccess: () => message.success(`Đã duyệt đợt thanh toán`),
+        onError: () => message.error('Không thể duyệt thanh toán'),
+      })
+    },
+  })
+}
+const openRejectPaymentModal = (record) => {
+  rejectTarget.value = record; rejectReason.value = ''; rejectType.value = 'project_payment'; rejectModalVisible.value = true
+}
+
+// ─── Material Bill Approve ───
+const handleApproveMaterialBill = (record) => {
+  const level = record.approval_level === 'management' ? 'BĐH' : 'Kế Toán'
+  Modal.confirm({
+    title: `${level} duyệt phiếu vật tư`,
+    content: `Duyệt phiếu "${record.title}"?\n\nSố tiền: ${formatCurrency(record.amount)}`,
+    okText: 'Duyệt',
+    cancelText: 'Hủy',
+    okButtonProps: { style: { background: '#A855F7', borderColor: '#A855F7' } },
+    onOk() {
+      router.post(`/approvals/material-bill/${record.id}/approve`, {}, {
+        preserveScroll: true,
+        onSuccess: () => message.success(`Đã duyệt phiếu vật tư`),
+        onError: () => message.error('Không thể duyệt phiếu vật tư'),
+      })
+    },
+  })
+}
+const openRejectMaterialBillModal = (record) => {
+  rejectTarget.value = record; rejectReason.value = ''; rejectType.value = 'material_bill'; rejectModalVisible.value = true
+}
+
+// ─── Sub Acceptance Approve ───
+const handleApproveSubAcceptance = (record) => {
+  Modal.confirm({
+    title: 'Duyệt nghiệm thu NTP',
+    content: `Duyệt nghiệm thu "${record.title}"?\n\nNhà thầu: ${record.subcontractor_name || 'N/A'}`,
+    okText: 'Duyệt',
+    cancelText: 'Hủy',
+    okButtonProps: { style: { background: '#0D9488', borderColor: '#0D9488' } },
+    onOk() {
+      router.post(`/approvals/sub-acceptance/${record.id}/approve`, {}, {
+        preserveScroll: true,
+        onSuccess: () => message.success(`Đã duyệt nghiệm thu NTP`),
+        onError: () => message.error('Không thể duyệt nghiệm thu NTP'),
+      })
+    },
+  })
+}
+const openRejectSubAcceptanceModal = (record) => {
+  rejectTarget.value = record; rejectReason.value = ''; rejectType.value = 'sub_acceptance'; rejectModalVisible.value = true
+}
+
 // ─── Common Reject (Cost) ───
 const openRejectModal = (record) => {
   rejectTarget.value = record
@@ -585,6 +754,10 @@ const handleReject = () => {
     change_request: `/approvals/change-request/${rejectTarget.value.id}/reject`,
     additional_cost: `/approvals/additional-cost/${rejectTarget.value.id}/reject`,
     sub_payment: `/approvals/sub-payment/${rejectTarget.value.id}/reject`,
+    contract: `/approvals/contract/${rejectTarget.value.id}/reject`,
+    project_payment: `/approvals/payment/${rejectTarget.value.id}/reject`,
+    material_bill: `/approvals/material-bill/${rejectTarget.value.id}/reject`,
+    sub_acceptance: `/approvals/sub-acceptance/${rejectTarget.value.id}/reject`,
   }
 
   router.post(urlMap[rejectType.value], {
@@ -617,7 +790,7 @@ const historyColumns = [
 /* ─── Overview Cards ─── */
 .approval-overview {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -730,7 +903,7 @@ const historyColumns = [
 
 @media (max-width: 1200px) {
   .approval-overview {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 @media (max-width: 768px) {

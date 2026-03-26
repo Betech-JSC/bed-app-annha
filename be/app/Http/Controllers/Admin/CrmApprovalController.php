@@ -8,6 +8,9 @@ use App\Models\AcceptanceStage;
 use App\Models\ChangeRequest;
 use App\Models\AdditionalCost;
 use App\Models\SubcontractorPayment;
+use App\Models\Contract;
+use App\Models\ProjectPayment;
+use App\Models\SubcontractorAcceptance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -72,13 +75,71 @@ class CrmApprovalController extends Controller
             ->get()
             ->map(fn($p) => $this->formatSubPaymentItem($p));
 
-        // ─── Recently processed (last 30 items) ───
-        $recentItems = Cost::whereIn('status', ['approved', 'rejected'])
+        // ─── Hợp đồng chờ Khách hàng duyệt ───
+        $contractItems = Contract::where('status', 'pending_customer_approval')
+            ->with(['project:id,name,code'])
+            ->orderBy('updated_at', 'desc')
+            ->get()
+            ->map(fn($c) => $this->formatContractItem($c));
+
+        // ─── Thanh toán dự án chờ Khách hàng duyệt ───
+        $paymentItems = ProjectPayment::where('status', 'customer_pending_approval')
+            ->with(['project:id,name,code', 'contract:id,name'])
+            ->orderBy('updated_at', 'desc')
+            ->get()
+            ->map(fn($p) => $this->formatPaymentItem($p));
+
+        // ─── Phiếu vật tư chờ duyệt ───
+        $materialBillItems = collect();
+        $materialBillClass = 'App\\Models\\MaterialBill';
+        if (class_exists($materialBillClass)) {
+            $materialBillItems = $materialBillClass::whereIn('status', ['pending_management', 'pending_accountant'])
+                ->with(['creator:id,name,email', 'project:id,name,code'])
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(fn($b) => $this->formatMaterialBillItem($b));
+        }
+
+        // ─── Nghiệm thu NTP chờ duyệt ───
+        $subAcceptanceItems = SubcontractorAcceptance::where('status', 'pending')
+            ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($sa) => $this->formatSubAcceptanceItem($sa));
+
+        // ─── Recently processed (last 30 items — ALL types) ───
+        $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
             ->orderBy('updated_at', 'desc')
-            ->limit(30)
+            ->limit(10)
             ->get()
             ->map(fn($cost) => $this->formatItem($cost));
+
+        $recentCR = ChangeRequest::whereIn('status', ['approved', 'rejected'])
+            ->with(['project:id,name,code', 'requester:id,name,email'])
+            ->orderBy('updated_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(fn($cr) => $this->formatChangeRequestItem($cr));
+
+        $recentAC = AdditionalCost::whereIn('status', ['approved', 'rejected'])
+            ->with(['project:id,name,code', 'proposer:id,name,email'])
+            ->orderBy('updated_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(fn($ac) => $this->formatAdditionalCostItem($ac));
+
+        $recentSubPayments = SubcontractorPayment::whereIn('status', ['paid', 'rejected'])
+            ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email'])
+            ->orderBy('updated_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(fn($p) => $this->formatSubPaymentItem($p));
+
+        $recentItems = $recentCosts->merge($recentCR)->merge($recentAC)->merge($recentSubPayments)
+            ->sortByDesc('created_at')
+            ->take(30)
+            ->values();
 
         // ─── Stats ───
         $stats = [
@@ -88,6 +149,10 @@ class CrmApprovalController extends Controller
             'pending_change_request' => $changeRequestItems->count(),
             'pending_additional_cost' => $additionalCostItems->count(),
             'pending_sub_payment' => $subPaymentManagement->count() + $subPaymentAccountant->count(),
+            'pending_contract' => $contractItems->count(),
+            'pending_payment' => $paymentItems->count(),
+            'pending_material_bill' => $materialBillItems->count(),
+            'pending_sub_acceptance' => $subAcceptanceItems->count(),
             'approved_today' => Cost::where('status', 'approved')
                 ->whereDate('updated_at', today())
                 ->count(),
@@ -105,6 +170,10 @@ class CrmApprovalController extends Controller
             'additionalCostItems' => $additionalCostItems->values(),
             'subPaymentManagementItems' => $subPaymentManagement->values(),
             'subPaymentAccountantItems' => $subPaymentAccountant->values(),
+            'contractItems' => $contractItems->values(),
+            'paymentItems' => $paymentItems->values(),
+            'materialBillItems' => $materialBillItems->values(),
+            'subAcceptanceItems' => $subAcceptanceItems->values(),
             'recentItems' => $recentItems->values(),
             'stats' => $stats,
         ]);
@@ -711,15 +780,318 @@ class CrmApprovalController extends Controller
         ];
     }
 
+    private function formatContractItem(Contract $contract): array
+    {
+        return [
+            'id' => $contract->id,
+            'type' => 'contract',
+            'type_label' => 'Hợp đồng',
+            'title' => $contract->name ?? "HĐ #{$contract->id}",
+            'subtitle' => ($contract->project->code ?? '') . ' - ' . ($contract->project->name ?? 'Dự án'),
+            'amount' => (float) ($contract->total_value ?? 0),
+            'status' => $contract->status,
+            'status_label' => 'Chờ KH duyệt',
+            'created_by' => 'Hệ thống',
+            'created_by_email' => '',
+            'created_at' => $contract->updated_at?->format('d/m/Y H:i') ?? '',
+            'description' => $contract->description ?? null,
+            'project_name' => $contract->project->name ?? null,
+            'project_id' => $contract->project_id,
+            'approval_level' => 'contract',
+        ];
+    }
+
+    private function formatPaymentItem(ProjectPayment $payment): array
+    {
+        return [
+            'id' => $payment->id,
+            'type' => 'project_payment',
+            'type_label' => 'Thanh toán DA',
+            'title' => 'Đợt ' . ($payment->payment_number ?? $payment->id),
+            'subtitle' => ($payment->project->code ?? '') . ' - ' . ($payment->project->name ?? 'Dự án'),
+            'amount' => (float) ($payment->amount ?? 0),
+            'status' => $payment->status,
+            'status_label' => 'Chờ KH duyệt',
+            'created_by' => 'Hệ thống',
+            'created_by_email' => '',
+            'created_at' => $payment->updated_at?->format('d/m/Y H:i') ?? '',
+            'description' => $payment->description ?? ('Hợp đồng: ' . ($payment->contract->name ?? 'N/A')),
+            'project_name' => $payment->project->name ?? null,
+            'project_id' => $payment->project_id,
+            'approval_level' => 'project_payment',
+        ];
+    }
+
+    private function formatMaterialBillItem($bill): array
+    {
+        return [
+            'id' => $bill->id,
+            'type' => 'material_bill',
+            'type_label' => 'Phiếu vật tư',
+            'title' => $bill->bill_number ?? "Phiếu #{$bill->id}",
+            'subtitle' => ($bill->project->code ?? '') . ' - ' . ($bill->project->name ?? 'Dự án'),
+            'amount' => (float) ($bill->total_amount ?? 0),
+            'status' => $bill->status,
+            'status_label' => match ($bill->status) {
+                'pending_management' => 'Chờ BĐH duyệt',
+                'pending_accountant' => 'Chờ KT xác nhận',
+                default => $bill->status,
+            },
+            'created_by' => $bill->creator->name ?? 'N/A',
+            'created_by_email' => $bill->creator->email ?? '',
+            'created_at' => $bill->created_at?->format('d/m/Y H:i') ?? '',
+            'description' => $bill->note ?? null,
+            'project_name' => $bill->project->name ?? null,
+            'project_id' => $bill->project_id,
+            'approval_level' => match ($bill->status) {
+                'pending_management' => 'management',
+                'pending_accountant' => 'accountant',
+                default => 'done',
+            },
+        ];
+    }
+
+    private function formatSubAcceptanceItem(SubcontractorAcceptance $sa): array
+    {
+        return [
+            'id' => $sa->id,
+            'type' => 'sub_acceptance',
+            'type_label' => 'NT NTP',
+            'title' => $sa->name ?? 'Nghiệm thu NTP',
+            'subtitle' => ($sa->project->code ?? '') . ' - ' . ($sa->project->name ?? 'Dự án'),
+            'amount' => (float) ($sa->amount ?? 0),
+            'status' => $sa->status,
+            'status_label' => 'Chờ duyệt',
+            'created_by' => $sa->creator->name ?? 'N/A',
+            'created_by_email' => '',
+            'created_at' => $sa->created_at?->format('d/m/Y H:i') ?? '',
+            'description' => $sa->notes ?? null,
+            'project_name' => $sa->project->name ?? null,
+            'project_id' => $sa->project_id,
+            'subcontractor_name' => $sa->subcontractor->name ?? null,
+            'approval_level' => 'sub_acceptance',
+        ];
+    }
+
+    // =========================================================================
+    // CONTRACT APPROVAL (Khách hàng duyệt hợp đồng)
+    // =========================================================================
+
+    public function approveContract(Request $request, $id)
+    {
+        $contract = Contract::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($contract->status !== 'pending_customer_approval') {
+            return back()->with('error', 'Hợp đồng không ở trạng thái chờ khách hàng duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $result = $contract->approve($user);
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt hợp đồng');
+            }
+            DB::commit();
+            Log::info('CRM: Contract approved', ['contract_id' => $id, 'by' => $user->id]);
+            return back()->with('success', "Đã duyệt hợp đồng \"{$contract->name}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Contract approval failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi duyệt hợp đồng');
+        }
+    }
+
+    public function rejectContract(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $contract = Contract::findOrFail($id);
+
+        if ($contract->status !== 'pending_customer_approval') {
+            return back()->with('error', 'Hợp đồng không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $contract->reject($request->reason);
+            DB::commit();
+            return back()->with('success', "Đã từ chối hợp đồng \"{$contract->name}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi từ chối hợp đồng');
+        }
+    }
+
+    // =========================================================================
+    // PROJECT PAYMENT APPROVAL (Khách hàng duyệt thanh toán)
+    // =========================================================================
+
+    public function approvePayment(Request $request, $id)
+    {
+        $payment = ProjectPayment::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($payment->status !== 'customer_pending_approval') {
+            return back()->with('error', 'Đợt thanh toán không ở trạng thái chờ khách hàng duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $result = $payment->approveByCustomer($user);
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt thanh toán');
+            }
+            DB::commit();
+            Log::info('CRM: Payment approved by customer', ['payment_id' => $id, 'by' => $user->id]);
+            return back()->with('success', 'Đã duyệt đợt thanh toán');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi duyệt thanh toán');
+        }
+    }
+
+    public function rejectPayment(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $payment = ProjectPayment::findOrFail($id);
+
+        if ($payment->status !== 'customer_pending_approval') {
+            return back()->with('error', 'Đợt thanh toán không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $payment->update(['status' => 'rejected', 'rejected_reason' => $request->reason]);
+            DB::commit();
+            return back()->with('success', 'Đã từ chối đợt thanh toán');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi từ chối thanh toán');
+        }
+    }
+
+    // =========================================================================
+    // MATERIAL BILL APPROVAL
+    // =========================================================================
+
+    public function approveMaterialBill(Request $request, $id)
+    {
+        $billClass = 'App\\Models\\MaterialBill';
+        if (!class_exists($billClass)) {
+            return back()->with('error', 'Module phiếu vật tư chưa khả dụng');
+        }
+
+        $bill = $billClass::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        try {
+            DB::beginTransaction();
+
+            if ($bill->status === 'pending_management' && method_exists($bill, 'approveByManagement')) {
+                $bill->approveByManagement($user);
+            } elseif ($bill->status === 'pending_accountant' && method_exists($bill, 'approveByAccountant')) {
+                $bill->approveByAccountant($user);
+            } else {
+                DB::rollBack();
+                return back()->with('error', 'Phiếu không ở trạng thái chờ duyệt');
+            }
+
+            DB::commit();
+            Log::info('CRM: Material bill approved', ['bill_id' => $id, 'by' => $user->id]);
+            return back()->with('success', 'Đã duyệt phiếu vật tư');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi duyệt phiếu vật tư');
+        }
+    }
+
+    public function rejectMaterialBill(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $billClass = 'App\\Models\\MaterialBill';
+        if (!class_exists($billClass)) {
+            return back()->with('error', 'Module phiếu vật tư chưa khả dụng');
+        }
+
+        $bill = $billClass::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        try {
+            DB::beginTransaction();
+            if (method_exists($bill, 'reject')) {
+                $bill->reject($request->reason, $user);
+            }
+            DB::commit();
+            return back()->with('success', 'Đã từ chối phiếu vật tư');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi từ chối phiếu vật tư');
+        }
+    }
+
+    // =========================================================================
+    // SUBCONTRACTOR ACCEPTANCE APPROVAL
+    // =========================================================================
+
+    public function approveSubAcceptance(Request $request, $id)
+    {
+        $sa = SubcontractorAcceptance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($sa->status !== 'pending') {
+            return back()->with('error', 'Nghiệm thu NTP không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $result = $sa->approve($user, $request->input('notes'));
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt nghiệm thu NTP');
+            }
+            DB::commit();
+            Log::info('CRM: Sub acceptance approved', ['id' => $id, 'by' => $user->id]);
+            return back()->with('success', 'Đã duyệt nghiệm thu NTP');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi duyệt nghiệm thu NTP');
+        }
+    }
+
+    public function rejectSubAcceptance(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $sa = SubcontractorAcceptance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($sa->status !== 'pending') {
+            return back()->with('error', 'Nghiệm thu NTP không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $sa->reject($request->reason, $user);
+            DB::commit();
+            return back()->with('success', 'Đã từ chối nghiệm thu NTP');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi từ chối nghiệm thu NTP');
+        }
+    }
+
     private function getStatusLabel(string $status): string
     {
         return match ($status) {
             'draft' => 'Nháp',
-            'pending_management_approval' => 'Chờ BĐH duyệt',
-            'pending_accountant_approval' => 'Chờ KT xác nhận',
+            'pending' => 'Chờ duyệt',
+            'pending_management_approval', 'pending_management' => 'Chờ BĐH duyệt',
+            'pending_accountant_approval', 'pending_accountant' => 'Chờ KT xác nhận',
             'pending_accountant_confirmation' => 'Chờ KT xác nhận',
-            'approved' => 'Đã duyệt',
-            'paid' => 'Đã thanh toán',
+            'pending_customer_approval', 'customer_pending_approval' => 'Chờ KH duyệt',
+            'approved', 'customer_approved' => 'Đã duyệt',
+            'paid', 'customer_paid' => 'Đã thanh toán',
             'rejected' => 'Từ chối',
             default => $status,
         };

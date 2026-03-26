@@ -192,6 +192,7 @@ const selectedKeys = computed(() => {
   if (url.startsWith('/hr/departments')) return ['departments']
   if (url.startsWith('/hr')) return ['employees']
   if (url.startsWith('/finance')) return ['commerce']
+  if (url.startsWith('/cost-groups')) return ['cost-groups']
   if (url.startsWith('/materials')) return ['materials']
   if (url.startsWith('/equipment')) return ['equipment']
   if (url.startsWith('/reports')) return ['reports']
@@ -236,6 +237,7 @@ const menuItems = [
     children: [
       { key: 'finance', label: 'Phân tích tài chính' },
       { key: 'company-costs', label: 'Chi phí công ty' },
+      { key: 'cost-groups', label: 'Nhóm chi phí' },
     ],
   },
   {
@@ -284,6 +286,7 @@ const handleMenuClick = ({ key }) => {
     reports: '/reports',
     finance: '/finance',
     'company-costs': '/finance/company-costs',
+    'cost-groups': '/cost-groups',
     materials: '/materials',
     equipment: '/equipment',
     employees: '/hr/employees',

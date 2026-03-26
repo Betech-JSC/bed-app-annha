@@ -96,6 +96,7 @@ use App\Http\Controllers\Admin\CrmProjectsController;
 use App\Http\Controllers\Admin\CrmHrController;
 use App\Http\Controllers\Admin\CrmFinanceController;
 use App\Http\Controllers\Admin\CrmMaterialsController;
+use App\Http\Controllers\Admin\CrmCostGroupsController;
 use App\Http\Controllers\Admin\CrmEquipmentController;
 use App\Http\Controllers\Admin\CrmSettingsController;
 use App\Http\Controllers\Admin\CrmApprovalController;
@@ -134,6 +135,22 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/sub-payment/{id}/approve', [CrmApprovalController::class, 'approveSubPayment'])->name('sub-payment.approve');
         Route::post('/sub-payment/{id}/confirm', [CrmApprovalController::class, 'confirmSubPayment'])->name('sub-payment.confirm');
         Route::post('/sub-payment/{id}/reject', [CrmApprovalController::class, 'rejectSubPayment'])->name('sub-payment.reject');
+
+        // Contract (KH duyệt hợp đồng)
+        Route::post('/contract/{id}/approve', [CrmApprovalController::class, 'approveContract'])->name('contract.approve');
+        Route::post('/contract/{id}/reject', [CrmApprovalController::class, 'rejectContract'])->name('contract.reject');
+
+        // Project Payment (KH duyệt thanh toán)
+        Route::post('/payment/{id}/approve', [CrmApprovalController::class, 'approvePayment'])->name('payment.approve');
+        Route::post('/payment/{id}/reject', [CrmApprovalController::class, 'rejectPayment'])->name('payment.reject');
+
+        // Material Bill (Phiếu vật tư)
+        Route::post('/material-bill/{id}/approve', [CrmApprovalController::class, 'approveMaterialBill'])->name('material-bill.approve');
+        Route::post('/material-bill/{id}/reject', [CrmApprovalController::class, 'rejectMaterialBill'])->name('material-bill.reject');
+
+        // Subcontractor Acceptance (Nghiệm thu NTP)
+        Route::post('/sub-acceptance/{id}/approve', [CrmApprovalController::class, 'approveSubAcceptance'])->name('sub-acceptance.approve');
+        Route::post('/sub-acceptance/{id}/reject', [CrmApprovalController::class, 'rejectSubAcceptance'])->name('sub-acceptance.reject');
     });
 
     // Reports (Báo cáo dự án)
@@ -279,6 +296,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Acceptance Stages
         Route::get('/{project}/acceptance', fn($project) => redirect("/projects/{$project}?tab=acceptance"))->name('acceptance.index');
         Route::post('/{project}/acceptance', [CrmProjectsController::class, 'storeAcceptance'])->name('acceptance.store');
+        Route::put('/{project}/acceptance/{stage}', [CrmProjectsController::class, 'updateAcceptance'])->name('acceptance.update');
         Route::post('/{project}/acceptance/{stage}/approve', [CrmProjectsController::class, 'approveAcceptance'])->name('acceptance.approve');
         Route::delete('/{project}/acceptance/{stage}', [CrmProjectsController::class, 'destroyAcceptance'])->name('acceptance.destroy');
 
@@ -286,6 +304,13 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/documents', [CrmProjectsController::class, 'storeDocument'])->name('documents.store');
         Route::put('/{project}/documents/{doc}', [CrmProjectsController::class, 'updateDocument'])->name('documents.update');
         Route::delete('/{project}/documents/{doc}', [CrmProjectsController::class, 'destroyDocument'])->name('documents.destroy');
+
+        // Project Materials (batch transaction — matching mobile APP)
+        Route::post('/{project}/materials/batch', [CrmProjectsController::class, 'storeMaterialBatch'])->name('materials.batch');
+
+        // Project Equipment (allocation — matching mobile APP)
+        Route::post('/{project}/equipment/allocate', [CrmProjectsController::class, 'storeEquipmentAllocation'])->name('equipment.allocate');
+        Route::post('/{project}/equipment/{allocation}/return', [CrmProjectsController::class, 'returnEquipment'])->name('equipment.return');
     });
 
     // HR
@@ -336,6 +361,15 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/', [CrmMaterialsController::class, 'store'])->name('store');
         Route::put('/{id}', [CrmMaterialsController::class, 'update'])->name('update');
         Route::delete('/{id}', [CrmMaterialsController::class, 'destroy'])->name('destroy');
+    });
+
+    // Cost Groups
+    Route::prefix('cost-groups')->name('cost-groups.')->group(function () {
+        Route::get('/', [CrmCostGroupsController::class, 'index'])->name('index');
+        Route::post('/', [CrmCostGroupsController::class, 'store'])->name('store');
+        Route::put('/{id}', [CrmCostGroupsController::class, 'update'])->name('update');
+        Route::put('/{id}/toggle-active', [CrmCostGroupsController::class, 'toggleActive'])->name('toggle-active');
+        Route::delete('/{id}', [CrmCostGroupsController::class, 'destroy'])->name('destroy');
     });
 
     // Equipment

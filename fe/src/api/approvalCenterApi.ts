@@ -3,7 +3,7 @@ import api from './api';
 // Types
 export interface ApprovalItem {
     id: number;
-    type: 'company_cost' | 'project_cost' | 'material_bill';
+    type: 'company_cost' | 'project_cost' | 'material_bill' | 'acceptance' | 'change_request' | 'additional_cost' | 'sub_payment' | 'contract' | 'payment' | 'sub_acceptance' | 'supplier_acceptance';
     title: string;
     subtitle: string;
     amount: number;
@@ -17,9 +17,12 @@ export interface ApprovalItem {
     project_name?: string;
     management_approved_by?: string;
     management_approved_at?: string;
+    subcontractor_name?: string;
+    supplier_name?: string;
+    priority?: string;
     route: string;
     can_approve: boolean;
-    approval_level: 'management' | 'accountant';
+    approval_level: string;
 }
 
 export interface ApprovalSummary {
@@ -28,8 +31,8 @@ export interface ApprovalSummary {
     icon: string;
     color: string;
     total: number;
-    pending_management: number;
-    pending_accountant: number;
+    pending_management?: number;
+    pending_accountant?: number;
 }
 
 export interface ApprovalCenterData {

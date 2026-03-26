@@ -48,9 +48,57 @@ const TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; 
         color: '#8B5CF6',
         bgColor: '#EDE9FE',
     },
+    acceptance: {
+        label: 'Nghiệm thu KH',
+        icon: 'checkmark-done-outline',
+        color: '#10B981',
+        bgColor: '#D1FAE5',
+    },
+    change_request: {
+        label: 'Yêu cầu thay đổi',
+        icon: 'git-compare-outline',
+        color: '#EC4899',
+        bgColor: '#FCE7F3',
+    },
+    additional_cost: {
+        label: 'CP Phát sinh',
+        icon: 'trending-up-outline',
+        color: '#F97316',
+        bgColor: '#FFF7ED',
+    },
+    sub_payment: {
+        label: 'Thanh toán NTP',
+        icon: 'card-outline',
+        color: '#0EA5E9',
+        bgColor: '#E0F2FE',
+    },
+    contract: {
+        label: 'HĐ chờ KH',
+        icon: 'document-text-outline',
+        color: '#6366F1',
+        bgColor: '#E0E7FF',
+    },
+    payment: {
+        label: 'TT chờ KH',
+        icon: 'cash-outline',
+        color: '#D946EF',
+        bgColor: '#FAE8FF',
+    },
+    sub_acceptance: {
+        label: 'NT NTP',
+        icon: 'checkbox-outline',
+        color: '#0D9488',
+        bgColor: '#CCFBF1',
+    },
+    supplier_acceptance: {
+        label: 'NT NCC',
+        icon: 'storefront-outline',
+        color: '#84CC16',
+        bgColor: '#ECFCCB',
+    },
 };
 
-const APPROVAL_LEVEL_CONFIG = {
+const APPROVAL_LEVEL_CONFIG: Record<string, { label: string; shortLabel: string; color: string; bgColor: string }> = {
     management: {
         label: 'Ban Điều Hành',
         shortLabel: 'BĐH',
@@ -63,6 +111,43 @@ const APPROVAL_LEVEL_CONFIG = {
         color: '#06B6D4',
         bgColor: '#ECFEFF',
     },
+    customer: {
+        label: 'Khách Hàng',
+        shortLabel: 'KH',
+        color: '#10B981',
+        bgColor: '#D1FAE5',
+    },
+    change_request: {
+        label: 'Yêu Cầu Thay Đổi',
+        shortLabel: 'CR',
+        color: '#EC4899',
+        bgColor: '#FCE7F3',
+    },
+    additional_cost: {
+        label: 'CP Phát Sinh',
+        shortLabel: 'CPPS',
+        color: '#F97316',
+        bgColor: '#FFF7ED',
+    },
+    sub_acceptance: {
+        label: 'Nghiệm Thu NTP',
+        shortLabel: 'NT',
+        color: '#0D9488',
+        bgColor: '#CCFBF1',
+    },
+    supplier_acceptance: {
+        label: 'Nghiệm Thu NCC',
+        shortLabel: 'NCC',
+        color: '#84CC16',
+        bgColor: '#ECFCCB',
+    },
+};
+
+const DEFAULT_LEVEL_CONFIG = {
+    label: 'Duyệt',
+    shortLabel: 'Duyệt',
+    color: '#6B7280',
+    bgColor: '#F3F4F6',
 };
 
 export default function ApprovalCenterScreen() {
@@ -116,7 +201,7 @@ export default function ApprovalCenterScreen() {
     };
 
     const handleQuickApprove = async (item: ApprovalItem) => {
-        const levelLabel = APPROVAL_LEVEL_CONFIG[item.approval_level].label;
+        const levelLabel = (APPROVAL_LEVEL_CONFIG[item.approval_level] || DEFAULT_LEVEL_CONFIG).label;
 
         Alert.alert(
             'Xác nhận duyệt',
@@ -179,7 +264,7 @@ export default function ApprovalCenterScreen() {
     const handleNavigateToDetail = (item: ApprovalItem) => {
         if (item.type === 'company_cost') {
             router.push(`/company-costs/${item.id}` as any);
-        } else if (item.type === 'project_cost' && item.project_id) {
+        } else if (item.project_id) {
             router.push(`/projects/${item.project_id}` as any);
         }
     };
@@ -280,7 +365,7 @@ export default function ApprovalCenterScreen() {
     // ─────────────────────────────────────────────────
     const renderApprovalItem = ({ item, index }: { item: ApprovalItem; index: number }) => {
         const typeConfig = TYPE_CONFIG[item.type] || TYPE_CONFIG.company_cost;
-        const levelConfig = APPROVAL_LEVEL_CONFIG[item.approval_level];
+        const levelConfig = APPROVAL_LEVEL_CONFIG[item.approval_level] || DEFAULT_LEVEL_CONFIG;
         const isLoading = actionLoading === item.id;
 
         return (
@@ -421,6 +506,14 @@ export default function ApprovalCenterScreen() {
         { key: 'company_cost', label: 'CP Công ty', icon: 'wallet-outline' },
         { key: 'project_cost', label: 'CP Dự án', icon: 'construct-outline' },
         { key: 'material_bill', label: 'Vật tư', icon: 'cube-outline' },
+        { key: 'acceptance', label: 'Nghiệm thu', icon: 'checkmark-done-outline' },
+        { key: 'change_request', label: 'Thay đổi', icon: 'git-compare-outline' },
+        { key: 'additional_cost', label: 'Phát sinh', icon: 'trending-up-outline' },
+        { key: 'sub_payment', label: 'TT NTP', icon: 'card-outline' },
+        { key: 'contract', label: 'Hợp đồng', icon: 'document-text-outline' },
+        { key: 'payment', label: 'TT KH', icon: 'cash-outline' },
+        { key: 'sub_acceptance', label: 'NT NTP', icon: 'checkbox-outline' },
+        { key: 'supplier_acceptance', label: 'NT NCC', icon: 'storefront-outline' },
     ];
 
     return (
@@ -689,10 +782,11 @@ const styles = StyleSheet.create({
     // Summary Cards
     summaryCardsRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: 10,
     },
     summaryCard: {
-        flex: 1,
+        width: (SCREEN_WIDTH - 32 - 20) / 3,
         backgroundColor: '#FFFFFF',
         borderRadius: 14,
         padding: 14,

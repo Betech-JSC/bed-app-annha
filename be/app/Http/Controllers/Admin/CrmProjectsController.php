@@ -117,7 +117,17 @@ class CrmProjectsController extends Controller
             'constructionLogs' => function ($q) {
                 $q->with(['creator:id,name', 'task:id,name'])->latest('log_date');
             },
-            'acceptanceStages.items',
+            'acceptanceStages' => function ($q) {
+                $q->with([
+                    'items',
+                    'task:id,name,parent_id',
+                    'acceptanceTemplate',
+                    'defects' => function ($dq) {
+                        $dq->whereIn('status', ['open', 'in_progress', 'resolved', 'verified']);
+                    },
+                    'attachments',
+                ])->orderBy('order');
+            },
             'defects.attachments',
             'phases',
             'progress',
@@ -198,6 +208,41 @@ class CrmProjectsController extends Controller
             ->orderBy('order')
             ->get();
 
+        // Get project materials (with usage stats) — matching mobile APP
+        $projectMaterials = [];
+        if (class_exists(\App\Models\MaterialTransaction::class)) {
+            $projectMaterials = \App\Models\Material::whereHas('transactions', function ($q) use ($project) {
+                $q->where('project_id', $project->id);
+            })->withCount(['transactions as project_transactions_count' => function ($q) use ($project) {
+                $q->where('project_id', $project->id);
+            }])->withSum(['transactions as project_total_amount' => function ($q) use ($project) {
+                $q->where('project_id', $project->id);
+            }], 'total_amount')
+            ->withSum(['transactions as project_usage' => function ($q) use ($project) {
+                $q->where('project_id', $project->id)->where('type', 'out');
+            }], 'quantity')
+            ->get();
+        }
+
+        // Get project equipment (with allocations) — matching mobile APP
+        $projectEquipment = [];
+        if (class_exists(\App\Models\EquipmentAllocation::class)) {
+            $projectEquipment = \App\Models\Equipment::whereHas('allocations', function ($q) use ($project) {
+                $q->where('project_id', $project->id);
+            })->with(['allocations' => function ($q) use ($project) {
+                $q->where('project_id', $project->id)->latest();
+            }, 'allocations.allocatedTo:id,name', 'allocations.manager:id,name'])
+            ->get();
+        }
+
+        // Get all equipment (available ones) for allocation form
+        $allEquipment = [];
+        if (class_exists(\App\Models\Equipment::class)) {
+            $allEquipment = \App\Models\Equipment::whereIn('status', ['available', 'in_use'])
+                ->select('id', 'name', 'code', 'type', 'status', 'category')
+                ->orderBy('name')->get();
+        }
+
         return Inertia::render('Crm/Projects/Show', [
             'project' => $project,
             'users' => $users,
@@ -210,6 +255,9 @@ class CrmProjectsController extends Controller
             'allTasks' => $allTasks,
             'acceptanceTemplates' => $acceptanceTemplates,
             'parentTasks' => $parentTasks,
+            'projectMaterials' => $projectMaterials,
+            'projectEquipment' => $projectEquipment,
+            'allEquipment' => $allEquipment,
         ]);
     }
 
@@ -1697,6 +1745,28 @@ class CrmProjectsController extends Controller
         return back()->with('success', 'Đã tạo giai đoạn nghiệm thu.');
     }
 
+
+    public function updateAcceptance(Request $request, string $projectId, string $stageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_UPDATE, $project);
+
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'description' => 'nullable|string',
+            'task_id' => 'nullable|exists:project_tasks,id',
+            'acceptance_template_id' => 'nullable|exists:acceptance_templates,id',
+            'order' => 'nullable|integer|min:0',
+        ]);
+
+        $stage->update($validated);
+
+        return back()->with('success', 'Đã cập nhật giai đoạn nghiệm thu.');
+    }
+
     public function approveAcceptance(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
@@ -1815,5 +1885,162 @@ class CrmProjectsController extends Controller
 
         $attachment->delete();
         return back()->with('success', 'Đã xóa tài liệu.');
+    }
+
+    // ============================================
+    // PROJECT MATERIALS — Batch Transaction (Giống APP)
+    // ============================================
+
+    public function storeMaterialBatch(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::MATERIAL_CREATE, $project);
+
+        $validated = $request->validate([
+            'transaction_date' => 'required|date',
+            'cost_group_id' => 'required|exists:cost_groups,id',
+            'items' => 'required|array|min:1',
+            'items.*.material_id' => 'required|exists:materials,id',
+            'items.*.quantity' => 'required|numeric|min:0.01',
+            'items.*.amount' => 'required|numeric|min:0',
+            'items.*.notes' => 'nullable|string|max:500',
+        ]);
+
+        $totalAmount = collect($validated['items'])->sum('amount');
+        $itemNames = [];
+
+        \DB::transaction(function () use ($project, $validated, $totalAmount, $user, &$itemNames) {
+            // 1. Create a project cost entry
+            $cost = \App\Models\ProjectCost::create([
+                'project_id' => $project->id,
+                'name' => 'Chi phí vật liệu - ' . now()->format('d/m/Y'),
+                'amount' => $totalAmount,
+                'cost_date' => $validated['transaction_date'],
+                'cost_group_id' => $validated['cost_group_id'],
+                'status' => 'draft',
+                'created_by' => $user->id ?? null,
+            ]);
+
+            // 2. Create material transactions
+            foreach ($validated['items'] as $item) {
+                $material = \App\Models\Material::find($item['material_id']);
+                $itemNames[] = $material->name;
+
+                \App\Models\MaterialTransaction::create([
+                    'uuid' => \Illuminate\Support\Str::uuid()->toString(),
+                    'material_id' => $item['material_id'],
+                    'project_id' => $project->id,
+                    'cost_id' => $cost->id,
+                    'type' => 'out',
+                    'quantity' => -abs($item['quantity']),
+                    'unit_price' => $material->unit_price ?? ($item['amount'] / max($item['quantity'], 1)),
+                    'total_amount' => $item['amount'],
+                    'transaction_date' => $validated['transaction_date'],
+                    'notes' => $item['notes'] ?? null,
+                    'created_by' => $user->id ?? null,
+                    'status' => 'completed',
+                ]);
+
+                // Update stock
+                $material->decrement('current_stock', abs($item['quantity']));
+            }
+        });
+
+        return back()->with('success', 'Đã ghi nhận ' . count($validated['items']) . ' vật liệu sử dụng: ' . implode(', ', $itemNames));
+    }
+
+    // ============================================
+    // PROJECT EQUIPMENT — Allocate (Giống APP)
+    // ============================================
+
+    public function storeEquipmentAllocation(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
+
+        $validated = $request->validate([
+            'equipment_id' => 'required|exists:equipment,id',
+            'allocation_type' => 'required|in:rent,buy',
+            'quantity' => 'required|integer|min:1',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'notes' => 'nullable|string|max:1000',
+            // For buy (owned)
+            'manager_id' => 'nullable|exists:users,id',
+            'handover_date' => 'nullable|date',
+            'return_date' => 'nullable|date',
+            // For rent
+            'rental_fee' => 'nullable|numeric|min:0',
+        ]);
+
+        $equipment = \App\Models\Equipment::findOrFail($validated['equipment_id']);
+
+        $allocation = \DB::transaction(function () use ($project, $validated, $equipment, $user) {
+            $allocation = \App\Models\EquipmentAllocation::create([
+                'uuid' => \Illuminate\Support\Str::uuid()->toString(),
+                'equipment_id' => $equipment->id,
+                'project_id' => $project->id,
+                'allocation_type' => $validated['allocation_type'],
+                'quantity' => $validated['quantity'],
+                'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'manager_id' => $validated['manager_id'] ?? null,
+                'handover_date' => $validated['handover_date'] ?? $validated['start_date'],
+                'return_date' => $validated['return_date'] ?? null,
+                'rental_fee' => $validated['rental_fee'] ?? null,
+                'status' => 'active',
+                'created_by' => $user->id ?? null,
+            ]);
+
+            // Update equipment status
+            $equipment->update(['status' => 'in_use']);
+
+            // If rental, auto-create a cost entry
+            if ($validated['allocation_type'] === 'rent' && ($validated['rental_fee'] ?? 0) > 0) {
+                $cost = \App\Models\ProjectCost::create([
+                    'project_id' => $project->id,
+                    'name' => 'Thuê thiết bị: ' . $equipment->name,
+                    'amount' => $validated['rental_fee'],
+                    'cost_date' => $validated['start_date'],
+                    'status' => 'draft',
+                    'created_by' => $user->id ?? null,
+                ]);
+                $allocation->update(['cost_id' => $cost->id]);
+            }
+
+            return $allocation;
+        });
+
+        $typeLabel = $validated['allocation_type'] === 'rent' ? 'Thuê' : 'Có sẵn';
+        return back()->with('success', "Đã phân bổ thiết bị ({$typeLabel}): {$equipment->name}");
+    }
+
+    public function returnEquipment(Request $request, string $projectId, string $allocationId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
+
+        $allocation = \App\Models\EquipmentAllocation::where('project_id', $project->id)->findOrFail($allocationId);
+
+        $allocation->update([
+            'status' => 'returned',
+            'return_date' => now()->toDateString(),
+        ]);
+
+        // Check if equipment has other active allocations
+        $otherActive = \App\Models\EquipmentAllocation::where('equipment_id', $allocation->equipment_id)
+            ->where('id', '!=', $allocation->id)
+            ->where('status', 'active')
+            ->exists();
+
+        if (!$otherActive) {
+            $allocation->equipment->update(['status' => 'available']);
+        }
+
+        return back()->with('success', 'Đã hoàn trả thiết bị.');
     }
 }
