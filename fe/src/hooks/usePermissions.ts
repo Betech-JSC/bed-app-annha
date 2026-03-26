@@ -153,7 +153,6 @@ export function useProjectPermissions(projectId: string | number | null) {
 
       if (response.success) {
         const perms = Array.isArray(response.data) ? response.data : [];
-        console.log(`[useProjectPermissions] Loaded permissions for project ${projectId}:`, perms);
 
         // Update cache
         projectPermissionsCache[projectIdStr] = {
@@ -163,7 +162,6 @@ export function useProjectPermissions(projectId: string | number | null) {
 
         setPermissions(perms);
       } else {
-        console.warn(`[useProjectPermissions] Failed to load permissions for project ${projectId}:`, response);
         setPermissions([]);
       }
     } catch (error: any) {
@@ -211,32 +209,21 @@ export function useProjectPermissions(projectId: string | number | null) {
   }, [projectId, loadProjectPermissions]);
 
   const hasPermission = useCallback((permission: string): boolean => {
-    console.log(`[useProjectPermissions.hasPermission] Checking: ${permission}, Loading: ${loading}, Permissions:`, permissions);
-
-    // If still loading, return false to be safe (but PermissionGuard will handle loading state)
     if (loading) {
-      console.log(`[useProjectPermissions.hasPermission] Still loading, returning false`);
       return false;
     }
 
     if (!Array.isArray(permissions) || permissions.length === 0) {
-      console.log(`[useProjectPermissions.hasPermission] No permissions available for project ${projectId}. Permission check: ${permission}`);
       return false;
     }
 
     // Check for wildcard first
     if (permissions.includes("*")) {
-      console.log(`[useProjectPermissions.hasPermission] Wildcard (*) found, returning true`);
       return true;
     }
 
-    const has = permissions.includes(permission);
-    console.log(`[useProjectPermissions.hasPermission] Permission ${permission} ${has ? 'GRANTED' : 'DENIED'}`);
-    if (!has) {
-      console.log(`[useProjectPermissions.hasPermission] Permission check failed: ${permission} for project ${projectId}. Available permissions:`, permissions);
-    }
-    return has;
-  }, [permissions, loading, projectId]);
+    return permissions.includes(permission);
+  }, [permissions, loading]);
 
   const hasAnyPermission = (permissionList: string[]): boolean => {
     if (!Array.isArray(permissions) || permissions.length === 0) {

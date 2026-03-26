@@ -150,6 +150,18 @@ const DEFAULT_LEVEL_CONFIG = {
     bgColor: '#F3F4F6',
 };
 
+// ─────────────────────────────────────────────────
+// Role Filter Config
+// ─────────────────────────────────────────────────
+const ROLE_FILTERS: { key: string; label: string; icon: string; color: string }[] = [
+    { key: 'all', label: 'Tất cả', icon: 'grid-outline', color: '#6B7280' },
+    { key: 'project_owner', label: 'Giám đốc', icon: 'ribbon-outline', color: '#F97316' },
+    { key: 'accountant', label: 'Kế toán', icon: 'calculator-outline', color: '#06B6D4' },
+    { key: 'client', label: 'Khách hàng', icon: 'people-outline', color: '#10B981' },
+    { key: 'project_manager', label: 'QLDA', icon: 'person-outline', color: '#3B82F6' },
+    { key: 'site_supervisor', label: 'Giám sát', icon: 'eye-outline', color: '#0D9488' },
+];
+
 export default function ApprovalCenterScreen() {
     const router = useRouter();
     const tabBarHeight = useTabBarHeight();
@@ -158,6 +170,7 @@ export default function ApprovalCenterScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedType, setSelectedType] = useState<string>('all');
+    const [selectedRole, setSelectedRole] = useState<string>('all');
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectTarget, setRejectTarget] = useState<ApprovalItem | null>(null);
     const [rejectReason, setRejectReason] = useState('');
@@ -363,15 +376,34 @@ export default function ApprovalCenterScreen() {
     // ─────────────────────────────────────────────────
     // Approval Item Card
     // ─────────────────────────────────────────────────
+    // Check if user has the required role
+    const userHasRole = (requiredRole: string): boolean => {
+        if (!data?.user_roles) return true; // fallback: show all
+        if (data.user_roles.includes('super_admin') || data.user_roles.includes('admin')) return true;
+        return data.user_roles.includes(requiredRole);
+    };
+
+    // Filter items by selected role
+    const getFilteredItems = (): ApprovalItem[] => {
+        if (!data?.items) return [];
+        let items = data.items;
+        if (selectedRole !== 'all') {
+            items = items.filter(item => item.required_role === selectedRole);
+        }
+        return items;
+    };
+
     const renderApprovalItem = ({ item, index }: { item: ApprovalItem; index: number }) => {
         const typeConfig = TYPE_CONFIG[item.type] || TYPE_CONFIG.company_cost;
         const levelConfig = APPROVAL_LEVEL_CONFIG[item.approval_level] || DEFAULT_LEVEL_CONFIG;
         const isLoading = actionLoading === item.id;
+        const hasRole = userHasRole(item.required_role);
 
         return (
             <Animated.View
                 style={[
                     styles.approvalCard,
+                    !hasRole && styles.approvalCardDimmed,
                     {
                         opacity: fadeAnim,
                         transform: [{
@@ -407,6 +439,31 @@ export default function ApprovalCenterScreen() {
                     </View>
                 </TouchableOpacity>
 
+                {/* Required Role Badge */}
+                <View style={styles.roleBadgeRow}>
+                    <View style={[styles.roleBadge, { backgroundColor: (item.required_role_color || '#6B7280') + '15' }]}>
+                        <Ionicons
+                            name={(item.required_role_icon || 'shield-outline') as any}
+                            size={13}
+                            color={item.required_role_color || '#6B7280'}
+                        />
+                        <Text style={[styles.roleBadgeText, { color: item.required_role_color || '#6B7280' }]}>
+                            Cần: {item.required_role_label || 'N/A'}
+                        </Text>
+                    </View>
+                    {hasRole ? (
+                        <View style={styles.roleMatchBadge}>
+                            <Ionicons name="checkmark-circle" size={13} color="#10B981" />
+                            <Text style={styles.roleMatchText}>Có quyền</Text>
+                        </View>
+                    ) : (
+                        <View style={styles.roleNoMatchBadge}>
+                            <Ionicons name="lock-closed" size={13} color="#EF4444" />
+                            <Text style={styles.roleNoMatchText}>Không có quyền</Text>
+                        </View>
+                    )}
+                </View>
+
                 {/* Card Body */}
                 <View style={styles.cardBody}>
                     <View style={styles.cardInfoRow}>
@@ -441,7 +498,7 @@ export default function ApprovalCenterScreen() {
                 </View>
 
                 {/* Card Actions */}
-                {item.can_approve && (
+                {item.can_approve && hasRole && (
                     <View style={styles.cardActions}>
                         <TouchableOpacity
                             style={[styles.cardActionBtn, styles.rejectBtn]}
@@ -473,6 +530,19 @@ export default function ApprovalCenterScreen() {
                                     <Text style={styles.approveBtnText}>Duyệt</Text>
                                 </>
                             )}
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* View-only for users without role */}
+                {(!hasRole || !item.can_approve) && (
+                    <View style={styles.cardActions}>
+                        <TouchableOpacity
+                            style={[styles.cardActionBtn, { flex: 1 }]}
+                            onPress={() => handleNavigateToDetail(item)}
+                        >
+                            <Ionicons name="eye-outline" size={18} color="#6B7280" />
+                            <Text style={styles.viewBtnText}>Xem chi tiết</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -569,6 +639,52 @@ export default function ApprovalCenterScreen() {
                 />
             </View>
 
+            {/* Role Filter Bar */}
+            <View style={styles.roleFilterBar}>
+                <View style={styles.roleFilterHeader}>
+                    <Ionicons name="people-outline" size={14} color="#6B7280" />
+                    <Text style={styles.roleFilterLabel}>Theo vai trò:</Text>
+                </View>
+                <FlatList
+                    horizontal
+                    data={ROLE_FILTERS}
+                    keyExtractor={(item) => item.key}
+                    showsHorizontalScrollIndicator={false}
+                    renderItem={({ item: roleItem }) => {
+                        const isActive = selectedRole === roleItem.key;
+                        const isUserRole = data?.user_roles?.includes(roleItem.key) || (roleItem.key === 'all');
+                        return (
+                            <TouchableOpacity
+                                style={[
+                                    styles.roleChip,
+                                    isActive && { backgroundColor: roleItem.color, borderColor: roleItem.color },
+                                    isUserRole && !isActive && styles.roleChipHighlight,
+                                ]}
+                                onPress={() => setSelectedRole(roleItem.key)}
+                            >
+                                <Ionicons
+                                    name={roleItem.icon as any}
+                                    size={14}
+                                    color={isActive ? '#FFFFFF' : roleItem.color}
+                                />
+                                <Text
+                                    style={[
+                                        styles.roleChipText,
+                                        isActive && { color: '#FFFFFF' },
+                                        !isActive && { color: roleItem.color },
+                                    ]}
+                                >
+                                    {roleItem.label}
+                                </Text>
+                                {isUserRole && !isActive && roleItem.key !== 'all' && (
+                                    <View style={styles.roleChipDot} />
+                                )}
+                            </TouchableOpacity>
+                        );
+                    }}
+                />
+            </View>
+
             {loading && !refreshing ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#3B82F6" />
@@ -576,7 +692,7 @@ export default function ApprovalCenterScreen() {
                 </View>
             ) : (
                 <FlatList
-                    data={data?.items || []}
+                    data={getFilteredItems()}
                     renderItem={renderApprovalItem}
                     keyExtractor={(item) => `${item.type}-${item.id}`}
                     ListHeaderComponent={renderSummarySection}
@@ -854,6 +970,109 @@ const styles = StyleSheet.create({
         shadowRadius: 6,
         elevation: 2,
         overflow: 'hidden',
+    },
+    approvalCardDimmed: {
+        opacity: 0.65,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+
+    // Role Badge Row (inside card)
+    roleBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingBottom: 8,
+    },
+    roleBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    roleBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    roleMatchBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        backgroundColor: '#D1FAE5',
+    },
+    roleMatchText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#10B981',
+    },
+    roleNoMatchBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        backgroundColor: '#FEE2E2',
+    },
+    roleNoMatchText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#EF4444',
+    },
+
+    // Role Filter Bar
+    roleFilterBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        gap: 8,
+    },
+    roleFilterHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    roleFilterLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#6B7280',
+    },
+    roleChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#F3F4F6',
+        marginRight: 6,
+        borderWidth: 1.5,
+        borderColor: 'transparent',
+    },
+    roleChipHighlight: {
+        borderColor: '#D1D5DB',
+        backgroundColor: '#F9FAFB',
+    },
+    roleChipText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    roleChipDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: '#10B981',
+        marginLeft: 2,
     },
     cardHeader: {
         flexDirection: 'row',

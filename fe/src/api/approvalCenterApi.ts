@@ -23,6 +23,12 @@ export interface ApprovalItem {
     route: string;
     can_approve: boolean;
     approval_level: string;
+    // Role info — who needs to approve
+    required_role: string;
+    required_role_label: string;
+    required_role_short: string;
+    required_role_icon: string;
+    required_role_color: string;
 }
 
 export interface ApprovalSummary {
@@ -39,6 +45,7 @@ export interface ApprovalCenterData {
     summary: ApprovalSummary[];
     items: ApprovalItem[];
     grand_total: number;
+    user_roles: string[];
 }
 
 export const approvalCenterApi = {

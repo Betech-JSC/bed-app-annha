@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, ViewProps } from "react-native";
 import { usePermissions, useProjectPermissions } from "@/hooks/usePermissions";
 
@@ -23,60 +23,24 @@ function PermissionGuard({
   const globalPermissions = usePermissions();
   const projectPermissions = useProjectPermissions(projectId || null);
 
-  const hasPermission = () => {
-    // Use project permissions if projectId is provided
+  // Memoize permission check to avoid recalculating on every render
+  const isAllowed = useMemo(() => {
     const perms = projectId ? projectPermissions : globalPermissions;
 
-    // Debug logging
-    if (projectId && permission) {
-      console.log(`[PermissionGuard] Checking permission: ${permission} for project ${projectId}`);
-      console.log(`[PermissionGuard] Loading: ${perms.loading}, Permissions:`, perms.permissions);
-      console.log(`[PermissionGuard] Permissions array length:`, perms.permissions?.length || 0);
-      console.log(`[PermissionGuard] Permissions includes "*":`, perms.permissions?.includes("*"));
-      console.log(`[PermissionGuard] Permissions includes "${permission}":`, perms.permissions?.includes(permission));
-    }
-
-    // If still loading, return false to prevent flash of unauthorized content
-    // This effectively hides the UI until permissions are loaded
+    // If still loading, hide UI to prevent flash
     if (perms.loading) {
-      console.log(`[PermissionGuard] Still loading, hiding UI by default`);
       return false;
     }
 
     if (permission) {
-      // Direct check first for better debugging and as fallback
-      const directCheck = Array.isArray(perms.permissions) && (
-        perms.permissions.includes("*") ||
-        perms.permissions.includes(permission)
-      );
-      console.log(`[PermissionGuard] Direct check result: ${directCheck}`);
-
-      // Also use hasPermission method
-      const result = perms.hasPermission(permission);
-      console.log(`[PermissionGuard] hasPermission() result: ${result} for ${permission}`);
-
-      // Use direct check if hasPermission() returns false but direct check is true
-      // This handles edge cases where hasPermission() might have issues
-      const finalResult = result || directCheck;
-
-      if (!finalResult && projectId) {
-        console.warn(`[PermissionGuard] ⚠️ Permission denied: ${permission} for project ${projectId}`);
-        console.warn(`[PermissionGuard] Available permissions:`, perms.permissions);
-        console.warn(`[PermissionGuard] Permission string comparison:`, {
-          requested: permission,
-          requestedType: typeof permission,
-          available: perms.permissions,
-          availableTypes: perms.permissions?.map(p => typeof p),
-          includes: perms.permissions?.includes(permission),
-          wildcard: perms.permissions?.includes("*"),
-          directCheck,
-          hasPermissionResult: result,
-        });
-      } else if (finalResult && projectId) {
-        console.log(`[PermissionGuard] ✅ Permission granted: ${permission} for project ${projectId}`);
+      // Direct array check (fast path)
+      if (Array.isArray(perms.permissions)) {
+        if (perms.permissions.includes("*") || perms.permissions.includes(permission)) {
+          return true;
+        }
       }
-
-      return finalResult;
+      // Fallback to hasPermission method
+      return perms.hasPermission(permission);
     }
 
     if (permissions && permissions.length > 0) {
@@ -88,9 +52,18 @@ function PermissionGuard({
     }
 
     return true; // No permission check, show by default
-  };
+  }, [
+    permission,
+    permissions,
+    requireAll,
+    projectId,
+    globalPermissions.permissions,
+    globalPermissions.loading,
+    projectPermissions.permissions,
+    projectPermissions.loading,
+  ]);
 
-  if (!hasPermission()) {
+  if (!isAllowed) {
     return <>{fallback}</>;
   }
 

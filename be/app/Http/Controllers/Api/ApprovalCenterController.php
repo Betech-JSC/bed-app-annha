@@ -526,6 +526,13 @@ class ApprovalCenterController extends Controller
             }
         }
 
+        // Inject required_role info into each item
+        foreach ($result['items'] as &$item) {
+            $roleInfo = $this->getRequiredRoleInfo($item['approval_level']);
+            $item = array_merge($item, $roleInfo);
+        }
+        unset($item);
+
         // Sort all items by created_at desc
         usort($result['items'], function ($a, $b) {
             return strtotime($b['created_at']) - strtotime($a['created_at']);
@@ -533,6 +540,13 @@ class ApprovalCenterController extends Controller
 
         // Calculate grand total
         $result['grand_total'] = array_sum(array_column($result['summary'], 'total'));
+
+        // Include current user's roles for client-side role matching
+        $userRoles = [];
+        if (method_exists($user, 'roles')) {
+            $userRoles = $user->roles->pluck('name')->toArray();
+        }
+        $result['user_roles'] = $userRoles;
 
         return response()->json([
             'success' => true,
@@ -1021,4 +1035,71 @@ class ApprovalCenterController extends Controller
             default => $status,
         };
     }
+
+    /**
+     * Map approval_level to the required role(s) and display labels.
+     * This helps the APP show which role is needed for each approval item.
+     */
+    private function getRequiredRoleInfo(string $approvalLevel): array
+    {
+        return match ($approvalLevel) {
+            'management' => [
+                'required_role' => 'project_owner',
+                'required_role_label' => 'Giám đốc / Ban ĐH',
+                'required_role_short' => 'GĐ',
+                'required_role_icon' => 'ribbon-outline',
+                'required_role_color' => '#F97316',
+            ],
+            'accountant' => [
+                'required_role' => 'accountant',
+                'required_role_label' => 'Kế toán',
+                'required_role_short' => 'KT',
+                'required_role_icon' => 'calculator-outline',
+                'required_role_color' => '#06B6D4',
+            ],
+            'customer' => [
+                'required_role' => 'client',
+                'required_role_label' => 'Khách hàng / Chủ ĐT',
+                'required_role_short' => 'KH',
+                'required_role_icon' => 'people-outline',
+                'required_role_color' => '#10B981',
+            ],
+            'change_request' => [
+                'required_role' => 'project_manager',
+                'required_role_label' => 'Quản lý Dự án',
+                'required_role_short' => 'QLDA',
+                'required_role_icon' => 'person-outline',
+                'required_role_color' => '#3B82F6',
+            ],
+            'additional_cost' => [
+                'required_role' => 'project_manager',
+                'required_role_label' => 'Quản lý / Ban ĐH',
+                'required_role_short' => 'QL',
+                'required_role_icon' => 'briefcase-outline',
+                'required_role_color' => '#F97316',
+            ],
+            'sub_acceptance' => [
+                'required_role' => 'site_supervisor',
+                'required_role_label' => 'Giám sát / QLDA',
+                'required_role_short' => 'GS',
+                'required_role_icon' => 'eye-outline',
+                'required_role_color' => '#0D9488',
+            ],
+            'supplier_acceptance' => [
+                'required_role' => 'site_supervisor',
+                'required_role_label' => 'Giám sát / QLDA',
+                'required_role_short' => 'GS',
+                'required_role_icon' => 'eye-outline',
+                'required_role_color' => '#84CC16',
+            ],
+            default => [
+                'required_role' => 'admin',
+                'required_role_label' => 'Quản trị',
+                'required_role_short' => 'QT',
+                'required_role_icon' => 'shield-outline',
+                'required_role_color' => '#6B7280',
+            ],
+        };
+    }
 }
+
