@@ -1,0 +1,282 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Attendance;
+use App\Models\WorkShift;
+use App\Models\ShiftAssignment;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Carbon\Carbon;
+
+class AttendanceController extends Controller
+{
+    // ===== CHẤM CÔNG =====
+
+    /** Danh sách chấm công (theo project hoặc tổng) */
+    public function index(Request $request): JsonResponse
+    {
+        $query = Attendance::with(['user:id,name,email', 'project:id,name', 'approver:id,name']);
+
+        if ($request->project_id) $query->forProject($request->project_id);
+        if ($request->user_id) $query->forUser($request->user_id);
+        if ($request->month && $request->year) {
+            $query->forMonth($request->year, $request->month);
+        } elseif ($request->date) {
+            $query->forDate($request->date);
+        }
+        if ($request->status) $query->where('status', $request->status);
+
+        $data = $query->orderByDesc('work_date')->paginate($request->per_page ?? 30);
+        return response()->json($data);
+    }
+
+    /** Check-in */
+    public function checkIn(Request $request): JsonResponse
+    {
+        $request->validate([
+            'project_id' => 'nullable|exists:projects,id',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        $user = $request->user();
+        $today = Carbon::today()->toDateString();
+
+        $existing = Attendance::where('user_id', $user->id)->where('work_date', $today)->first();
+        if ($existing && $existing->check_in) {
+            return response()->json(['message' => 'Bạn đã check-in hôm nay rồi'], 422);
+        }
+
+        $attendance = Attendance::updateOrCreate(
+            ['user_id' => $user->id, 'work_date' => $today],
+            [
+                'project_id' => $request->project_id,
+                'check_in' => Carbon::now()->format('H:i:s'),
+                'status' => Carbon::now()->hour >= 8 && Carbon::now()->minute > 15 ? 'late' : 'present',
+                'check_in_method' => $request->method ?? 'manual',
+                'latitude' => $request->latitude,
+                'longitude' => $request->longitude,
+                'note' => $request->note,
+            ]
+        );
+
+        return response()->json([
+            'message' => 'Check-in thành công',
+            'data' => $attendance->load('user:id,name'),
+        ]);
+    }
+
+    /** Check-out */
+    public function checkOut(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $today = Carbon::today()->toDateString();
+
+        $attendance = Attendance::where('user_id', $user->id)->where('work_date', $today)->first();
+        if (!$attendance || !$attendance->check_in) {
+            return response()->json(['message' => 'Bạn chưa check-in hôm nay'], 422);
+        }
+        if ($attendance->check_out) {
+            return response()->json(['message' => 'Bạn đã check-out rồi'], 422);
+        }
+
+        $checkOut = Carbon::now()->format('H:i:s');
+        $hoursWorked = $attendance->calculateHours();
+        $overtimeHours = max(0, $hoursWorked - 8);
+
+        $attendance->update([
+            'check_out' => $checkOut,
+            'hours_worked' => $hoursWorked,
+            'overtime_hours' => $overtimeHours,
+        ]);
+
+        return response()->json([
+            'message' => 'Check-out thành công',
+            'data' => $attendance->fresh()->load('user:id,name'),
+        ]);
+    }
+
+    /** Tạo/Chỉnh sửa chấm công thủ công (admin) */
+    public function store(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'work_date' => 'required|date',
+            'check_in' => 'nullable|date_format:H:i',
+            'check_out' => 'nullable|date_format:H:i',
+            'status' => 'required|in:present,absent,late,half_day,leave,holiday',
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        $data = $request->only(['user_id', 'project_id', 'work_date', 'check_in', 'check_out', 'status', 'note']);
+
+        if ($data['check_in'] && $data['check_out']) {
+            $start = Carbon::parse($data['check_in']);
+            $end = Carbon::parse($data['check_out']);
+            $data['hours_worked'] = round($end->diffInMinutes($start) / 60, 2);
+            $data['overtime_hours'] = max(0, $data['hours_worked'] - 8);
+        }
+
+        $attendance = Attendance::updateOrCreate(
+            ['user_id' => $data['user_id'], 'work_date' => $data['work_date']],
+            $data
+        );
+
+        return response()->json([
+            'message' => 'Lưu chấm công thành công',
+            'data' => $attendance->load(['user:id,name', 'project:id,name']),
+        ]);
+    }
+
+    /** Duyệt chấm công */
+    public function approve(Request $request, $id): JsonResponse
+    {
+        $attendance = Attendance::findOrFail($id);
+        $attendance->update([
+            'approved_by' => $request->user()->id,
+            'approved_at' => now(),
+        ]);
+
+        return response()->json(['message' => 'Đã duyệt chấm công', 'data' => $attendance]);
+    }
+
+    /** Thống kê chấm công theo tháng */
+    public function statistics(Request $request): JsonResponse
+    {
+        $request->validate([
+            'year' => 'required|integer',
+            'month' => 'required|integer|between:1,12',
+            'project_id' => 'nullable|exists:projects,id',
+        ]);
+
+        $query = Attendance::forMonth($request->year, $request->month);
+        if ($request->project_id) $query->forProject($request->project_id);
+
+        $records = $query->get();
+        $userStats = $records->groupBy('user_id')->map(function ($userRecords) {
+            return [
+                'user' => $userRecords->first()->user,
+                'total_days' => $userRecords->count(),
+                'present' => $userRecords->where('status', 'present')->count(),
+                'late' => $userRecords->where('status', 'late')->count(),
+                'absent' => $userRecords->where('status', 'absent')->count(),
+                'leave' => $userRecords->where('status', 'leave')->count(),
+                'half_day' => $userRecords->where('status', 'half_day')->count(),
+                'total_hours' => $userRecords->sum('hours_worked'),
+                'total_overtime' => $userRecords->sum('overtime_hours'),
+            ];
+        })->values();
+
+        return response()->json([
+            'summary' => [
+                'total_records' => $records->count(),
+                'total_present' => $records->where('status', 'present')->count(),
+                'total_late' => $records->where('status', 'late')->count(),
+                'total_absent' => $records->where('status', 'absent')->count(),
+                'total_hours' => $records->sum('hours_worked'),
+                'total_overtime' => $records->sum('overtime_hours'),
+            ],
+            'by_user' => $userStats,
+        ]);
+    }
+
+    // ===== PHÂN CA =====
+
+    /** Danh sách ca */
+    public function shifts(Request $request): JsonResponse
+    {
+        $query = WorkShift::query();
+        if ($request->project_id) $query->where('project_id', $request->project_id);
+        if ($request->active_only) $query->where('is_active', true);
+        return response()->json($query->orderBy('start_time')->get());
+    }
+
+    /** Tạo ca */
+    public function createShift(Request $request): JsonResponse
+    {
+        $request->validate([
+            'project_id' => 'nullable|exists:projects,id',
+            'name' => 'required|string|max:100',
+            'start_time' => 'required|date_format:H:i',
+            'end_time' => 'required|date_format:H:i',
+            'break_hours' => 'nullable|numeric|min:0|max:4',
+            'is_overtime_shift' => 'nullable|boolean',
+            'overtime_multiplier' => 'nullable|numeric|min:1|max:5',
+        ]);
+
+        $shift = WorkShift::create($request->all());
+        return response()->json(['message' => 'Tạo ca thành công', 'data' => $shift], 201);
+    }
+
+    /** Sửa ca */
+    public function updateShift(Request $request, $id): JsonResponse
+    {
+        $shift = WorkShift::findOrFail($id);
+        $shift->update($request->all());
+        return response()->json(['message' => 'Cập nhật ca thành công', 'data' => $shift]);
+    }
+
+    /** Xóa ca */
+    public function deleteShift($id): JsonResponse
+    {
+        WorkShift::findOrFail($id)->delete();
+        return response()->json(['message' => 'Đã xóa ca']);
+    }
+
+    // ===== PHÂN CA NHÂN SỰ =====
+
+    /** Danh sách phân ca */
+    public function shiftAssignments(Request $request): JsonResponse
+    {
+        $query = ShiftAssignment::with(['workShift', 'user:id,name', 'project:id,name', 'assigner:id,name']);
+
+        if ($request->project_id) $query->forProject($request->project_id);
+        if ($request->date) $query->forDate($request->date);
+        if ($request->week_of) $query->forWeek($request->week_of);
+        if ($request->user_id) $query->where('user_id', $request->user_id);
+
+        return response()->json($query->orderBy('assigned_date')->get());
+    }
+
+    /** Phân ca hàng loạt */
+    public function assignShifts(Request $request): JsonResponse
+    {
+        $request->validate([
+            'work_shift_id' => 'required|exists:work_shifts,id',
+            'user_ids' => 'required|array|min:1',
+            'user_ids.*' => 'exists:users,id',
+            'dates' => 'required|array|min:1',
+            'dates.*' => 'date',
+            'project_id' => 'nullable|exists:projects,id',
+        ]);
+
+        $created = [];
+        foreach ($request->user_ids as $userId) {
+            foreach ($request->dates as $date) {
+                $created[] = ShiftAssignment::updateOrCreate(
+                    ['user_id' => $userId, 'assigned_date' => $date, 'work_shift_id' => $request->work_shift_id],
+                    [
+                        'project_id' => $request->project_id,
+                        'assigned_by' => $request->user()->id,
+                    ]
+                );
+            }
+        }
+
+        return response()->json([
+            'message' => 'Phân ca thành công cho ' . count($created) . ' lượt',
+            'data' => $created,
+        ]);
+    }
+
+    /** Xóa phân ca */
+    public function removeAssignment($id): JsonResponse
+    {
+        ShiftAssignment::findOrFail($id)->delete();
+        return response()->json(['message' => 'Đã xóa phân ca']);
+    }
+}

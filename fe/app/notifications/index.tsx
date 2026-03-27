@@ -147,6 +147,73 @@ export default function NotificationsScreen() {
         }));
     }, [allNotifications, searchText]);
 
+    /**
+     * Map backend action_url to valid Expo Router paths.
+     * Backend sends CRM routes like /projects/39/defects/70
+     * Mobile app has routes like /projects/[id]/defects (no detail sub-routes)
+     */
+    const mapActionUrlToMobileRoute = (actionUrl: string): string | null => {
+        // Match pattern: /projects/{id}/{module}/{optional-detail-id}
+        const projectMatch = actionUrl.match(/^\/projects\/(\d+)(?:\/(.+))?$/);
+        if (projectMatch) {
+            const projectId = projectMatch[1];
+            const subPath = projectMatch[2] || '';
+
+            // Extract module name (first segment, ignore detail IDs)
+            const moduleSegment = subPath.split('/')[0];
+
+            // Map to valid mobile routes
+            const moduleRouteMap: Record<string, string> = {
+                '': '',                     // /projects/{id} → project detail
+                'defects': '/defects',
+                'risks': '/risks',
+                'costs': '/costs',
+                'acceptance': '/acceptance',
+                'change-requests': '/change-requests',
+                'payments': '/payments',
+                'invoices': '/invoices',
+                'subcontractors': '/subcontractors',
+                'materials': '/materials',
+                'equipment': '/equipment',
+                'documents': '/documents',
+                'logs': '/logs',
+                'personnel': '/personnel',
+                'contract': '/contract',
+                'budget': '/budget',
+                'progress': '/progress',
+                'evm': '/evm',
+                'predictions': '/predictions',
+                'monitoring': '/monitoring',
+                'comments': '/comments',
+                'kpis': '/kpis',
+                'finance': '/finance',
+                'cash-flow': '/finance',
+                'additional-costs': '/additional-costs',
+                'material-bills': '/materials',
+                'subcontractor-payments': '/subcontractors',
+                'summary-report': '/summary-report',
+                'labor-productivity': '/labor-productivity',
+                'schedule-analysis': '/schedule-analysis',
+                'issue-records': '/issue-records',
+                'revenue': '/revenue',
+            };
+
+            const mobileModule = moduleRouteMap[moduleSegment];
+            if (mobileModule !== undefined) {
+                return `/projects/${projectId}${mobileModule}`;
+            }
+
+            // Unknown sub-module → just go to project detail
+            return `/projects/${projectId}`;
+        }
+
+        // Non-project routes
+        if (actionUrl.startsWith('/company-costs')) return null;
+        if (actionUrl.startsWith('/settings')) return null;
+
+        return null;
+    };
+
     const handleNotificationPress = async (notification: Notification) => {
         if (notification.status === "unread") {
             try {
@@ -158,22 +225,28 @@ export default function NotificationsScreen() {
         const { data, action_url } = notification;
 
         try {
-            // Ưu tiên action_url (BE set đúng cho từng notification)
+            // Map action_url to a valid mobile route
             if (action_url) {
-                router.push(action_url as any);
+                const mobileRoute = mapActionUrlToMobileRoute(action_url);
+                if (mobileRoute) {
+                    router.push(mobileRoute as any);
+                    return;
+                }
+            }
+
+            // Fallback: navigate to project detail using data.project_id
+            if (data?.project_id) {
+                router.push(`/projects/${data.project_id}` as any);
                 return;
             }
 
-            // Fallback: navigate dựa trên data
-            if (data?.project_id) {
-                router.push(`/projects/${data.project_id}`);
-            }
+            // No navigable target — just mark as read silently
         } catch (error) {
             console.error('Navigation error:', error);
-            // Fallback cuối cùng
-            if (action_url) {
+            // Last-resort fallback
+            if (data?.project_id) {
                 try {
-                    router.push(action_url as any);
+                    router.push(`/projects/${data.project_id}` as any);
                 } catch (err) {
                     console.error('Final navigation fallback error:', err);
                 }

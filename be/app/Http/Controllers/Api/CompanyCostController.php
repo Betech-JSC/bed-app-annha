@@ -9,8 +9,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
+
 class CompanyCostController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Display a listing of company costs.
      */
@@ -265,6 +274,14 @@ class CompanyCostController extends Controller
         $cost = Cost::companyCosts()->findOrFail($id);
         $user = Auth::user();
 
+        // RBAC check: only users with cost.approve.management can approve
+        if (!$this->authService->can($user, Permissions::COST_APPROVE_MANAGEMENT)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền duyệt chi phí (Ban điều hành).',
+            ], 403);
+        }
+
         if (!$cost->approveByManagement($user)) {
             return response()->json([
                 'success' => false,
@@ -286,6 +303,14 @@ class CompanyCostController extends Controller
     {
         $cost = Cost::companyCosts()->findOrFail($id);
         $user = Auth::user();
+
+        // RBAC check: only users with cost.approve.accountant can approve
+        if (!$this->authService->can($user, Permissions::COST_APPROVE_ACCOUNTANT)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xác nhận chi phí (Kế toán).',
+            ], 403);
+        }
 
         if (!$cost->approveByAccountant($user)) {
             return response()->json([

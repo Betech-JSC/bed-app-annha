@@ -56,6 +56,12 @@ use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\OfficeKpiController;
 // NOTE: TeamController, TeamContractController, LaborStandardController removed — models don't exist
 use App\Http\Controllers\Api\ApprovalCenterController;
+use App\Http\Controllers\Api\WbsTemplateController;
+use App\Http\Controllers\Api\GanttController;
+use App\Http\Controllers\Api\FinanceController;
+use App\Http\Controllers\Api\MaterialQuotaController;
+use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\LaborProductivityController;
 
 Route::post('login', [AuthController::class, 'login']);
 Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
@@ -113,6 +119,28 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [OfficeKpiController::class, 'update']);
         Route::delete('/{id}', [OfficeKpiController::class, 'destroy']);
         Route::post('/{id}/verify', [OfficeKpiController::class, 'verify']);
+    });
+
+    // ===================================================================
+    // CHẤM CÔNG & PHÂN CA (Attendance & Shift Management)
+    // ===================================================================
+    Route::prefix('attendance')->group(function () {
+        Route::get('/', [AttendanceController::class, 'index']);
+        Route::post('/check-in', [AttendanceController::class, 'checkIn']);
+        Route::post('/check-out', [AttendanceController::class, 'checkOut']);
+        Route::post('/', [AttendanceController::class, 'store']);
+        Route::post('/{id}/approve', [AttendanceController::class, 'approve']);
+        Route::get('/statistics', [AttendanceController::class, 'statistics']);
+    });
+
+    Route::prefix('shifts')->group(function () {
+        Route::get('/', [AttendanceController::class, 'shifts']);
+        Route::post('/', [AttendanceController::class, 'createShift']);
+        Route::put('/{id}', [AttendanceController::class, 'updateShift']);
+        Route::delete('/{id}', [AttendanceController::class, 'deleteShift']);
+        Route::get('/assignments', [AttendanceController::class, 'shiftAssignments']);
+        Route::post('/assignments', [AttendanceController::class, 'assignShifts']);
+        Route::delete('/assignments/{id}', [AttendanceController::class, 'removeAssignment']);
     });
 
     // ===================================================================
@@ -224,12 +252,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/kpis/{id}/verify', [KpiController::class, 'verify']);
 
         // Subcontractors
-        Route::get('/{projectId}/subcontractors', [SubcontractorController::class, 'index']);
-        Route::post('/{projectId}/subcontractors', [SubcontractorController::class, 'store']);
-        Route::get('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'show'])->where('id', '[0-9]+');
-        Route::put('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'update'])->where('id', '[0-9]+');
-        Route::delete('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'destroy'])->where('id', '[0-9]+');
-        Route::post('/{projectId}/subcontractors/{id}/approve', [SubcontractorController::class, 'approve'])->where('id', '[0-9]+');
+        Route::get('/{projectId}/subcontractors', [SubcontractorController::class, 'index'])->middleware('permission:subcontractor.view,projectId');
+        Route::post('/{projectId}/subcontractors', [SubcontractorController::class, 'store'])->middleware('permission:subcontractor.create,projectId');
+        Route::get('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'show'])->where('id', '[0-9]+')->middleware('permission:subcontractor.view,projectId');
+        Route::put('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'update'])->where('id', '[0-9]+')->middleware('permission:subcontractor.update,projectId');
+        Route::delete('/{projectId}/subcontractors/{id}', [SubcontractorController::class, 'destroy'])->where('id', '[0-9]+')->middleware('permission:subcontractor.delete,projectId');
+        Route::post('/{projectId}/subcontractors/{id}/approve', [SubcontractorController::class, 'approve'])->where('id', '[0-9]+')->middleware('permission:subcontractor.update,projectId');
 
         // Subcontractor Items
         Route::get('/{projectId}/subcontractors/{subcontractorId}/items', [SubcontractorItemController::class, 'index'])->where(['subcontractorId' => '[0-9]+']);
@@ -244,21 +272,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{projectId}/documents/{id}', [ProjectDocumentController::class, 'update']);
         Route::delete('/{projectId}/documents/{id}', [ProjectDocumentController::class, 'destroy']);
 
-        // Construction Logs
+        // Construction Logs (Enhanced Sprint 1)
         Route::get('/{projectId}/logs', [ConstructionLogController::class, 'index']);
         Route::post('/{projectId}/logs', [ConstructionLogController::class, 'store']);
         Route::put('/{projectId}/logs/{id}', [ConstructionLogController::class, 'update']);
         Route::delete('/{projectId}/logs/{id}', [ConstructionLogController::class, 'destroy']);
+        Route::get('/{projectId}/logs/daily-report', [ConstructionLogController::class, 'dailyReport']);
+        Route::post('/{projectId}/logs/{logId}/approve', [ConstructionLogController::class, 'approveLog']);
+        Route::get('/{projectId}/logs/progress-comparison', [ConstructionLogController::class, 'progressComparison']);
+        Route::post('/{projectId}/logs/{logId}/request-adjustment', [ConstructionLogController::class, 'requestAdjustment']);
 
         // Budgets
-        Route::get('/{projectId}/budgets', [BudgetController::class, 'index']);
-        Route::post('/{projectId}/budgets', [BudgetController::class, 'store']);
-        Route::get('/{projectId}/budgets/{id}', [BudgetController::class, 'show']);
-        Route::get('/{projectId}/budgets/{id}/compare', [BudgetController::class, 'compareWithActual']);
-        Route::put('/{projectId}/budgets/{id}', [BudgetController::class, 'update']);
-        Route::delete('/{projectId}/budgets/{id}', [BudgetController::class, 'destroy']);
-        Route::post('/{projectId}/budgets/sync', [BudgetController::class, 'sync']);
-        Route::post('/{projectId}/budgets/{id}/sync', [BudgetController::class, 'sync']);
+        Route::get('/{projectId}/budgets', [BudgetController::class, 'index'])->middleware('permission:budgets.view,projectId');
+        Route::post('/{projectId}/budgets', [BudgetController::class, 'store'])->middleware('permission:budgets.create,projectId');
+        Route::get('/{projectId}/budgets/{id}', [BudgetController::class, 'show'])->middleware('permission:budgets.view,projectId');
+        Route::get('/{projectId}/budgets/{id}/compare', [BudgetController::class, 'compareWithActual'])->middleware('permission:budgets.view,projectId');
+        Route::put('/{projectId}/budgets/{id}', [BudgetController::class, 'update'])->middleware('permission:budgets.update,projectId');
+        Route::delete('/{projectId}/budgets/{id}', [BudgetController::class, 'destroy'])->middleware('permission:budgets.delete,projectId');
+        Route::post('/{projectId}/budgets/sync', [BudgetController::class, 'sync'])->middleware('permission:budgets.update,projectId');
+        Route::post('/{projectId}/budgets/{id}/sync', [BudgetController::class, 'sync'])->middleware('permission:budgets.update,projectId');
 
         // Materials
         Route::get('/{projectId}/materials', [MaterialController::class, 'getByProject']);
@@ -327,45 +359,45 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/workflow-reject', [AcceptanceItemController::class, 'workflowReject'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
 
         // Defects
-        Route::get('/{projectId}/defects', [DefectController::class, 'index']);
-        Route::post('/{projectId}/defects', [DefectController::class, 'store']);
-        Route::get('/{projectId}/defects/{id}', [DefectController::class, 'show']);
-        Route::put('/{projectId}/defects/{id}', [DefectController::class, 'update']);
+        Route::get('/{projectId}/defects', [DefectController::class, 'index'])->middleware('permission:defect.view,projectId');
+        Route::post('/{projectId}/defects', [DefectController::class, 'store'])->middleware('permission:defect.create,projectId');
+        Route::get('/{projectId}/defects/{id}', [DefectController::class, 'show'])->middleware('permission:defect.view,projectId');
+        Route::put('/{projectId}/defects/{id}', [DefectController::class, 'update'])->middleware('permission:defect.update,projectId');
 
         // Project Risks
-        Route::get('/{projectId}/risks', [ProjectRiskController::class, 'index']);
-        Route::post('/{projectId}/risks', [ProjectRiskController::class, 'store']);
-        Route::get('/{projectId}/risks/{id}', [ProjectRiskController::class, 'show']);
-        Route::put('/{projectId}/risks/{id}', [ProjectRiskController::class, 'update']);
-        Route::delete('/{projectId}/risks/{id}', [ProjectRiskController::class, 'destroy']);
-        Route::post('/{projectId}/risks/{id}/resolve', [ProjectRiskController::class, 'markAsResolved']);
+        Route::get('/{projectId}/risks', [ProjectRiskController::class, 'index'])->middleware('permission:project.risk.view,projectId');
+        Route::post('/{projectId}/risks', [ProjectRiskController::class, 'store'])->middleware('permission:project.risk.create,projectId');
+        Route::get('/{projectId}/risks/{id}', [ProjectRiskController::class, 'show'])->middleware('permission:project.risk.view,projectId');
+        Route::put('/{projectId}/risks/{id}', [ProjectRiskController::class, 'update'])->middleware('permission:project.risk.update,projectId');
+        Route::delete('/{projectId}/risks/{id}', [ProjectRiskController::class, 'destroy'])->middleware('permission:project.risk.delete,projectId');
+        Route::post('/{projectId}/risks/{id}/resolve', [ProjectRiskController::class, 'markAsResolved'])->middleware('permission:project.risk.update,projectId');
 
         // Change Requests
-        Route::get('/{projectId}/change-requests', [ChangeRequestController::class, 'index']);
-        Route::post('/{projectId}/change-requests', [ChangeRequestController::class, 'store']);
-        Route::get('/{projectId}/change-requests/{id}', [ChangeRequestController::class, 'show']);
-        Route::put('/{projectId}/change-requests/{id}', [ChangeRequestController::class, 'update']);
-        Route::delete('/{projectId}/change-requests/{id}', [ChangeRequestController::class, 'destroy']);
-        Route::post('/{projectId}/change-requests/{id}/submit', [ChangeRequestController::class, 'submit']);
-        Route::post('/{projectId}/change-requests/{id}/approve', [ChangeRequestController::class, 'approve']);
-        Route::post('/{projectId}/change-requests/{id}/reject', [ChangeRequestController::class, 'reject']);
-        Route::post('/{projectId}/change-requests/{id}/implement', [ChangeRequestController::class, 'markAsImplemented']);
+        Route::get('/{projectId}/change-requests', [ChangeRequestController::class, 'index'])->middleware('permission:change_request.view,projectId');
+        Route::post('/{projectId}/change-requests', [ChangeRequestController::class, 'store'])->middleware('permission:change_request.create,projectId');
+        Route::get('/{projectId}/change-requests/{id}', [ChangeRequestController::class, 'show'])->middleware('permission:change_request.view,projectId');
+        Route::put('/{projectId}/change-requests/{id}', [ChangeRequestController::class, 'update'])->middleware('permission:change_request.update,projectId');
+        Route::delete('/{projectId}/change-requests/{id}', [ChangeRequestController::class, 'destroy'])->middleware('permission:change_request.delete,projectId');
+        Route::post('/{projectId}/change-requests/{id}/submit', [ChangeRequestController::class, 'submit'])->middleware('permission:change_request.create,projectId');
+        Route::post('/{projectId}/change-requests/{id}/approve', [ChangeRequestController::class, 'approve'])->middleware('permission:change_request.approve,projectId');
+        Route::post('/{projectId}/change-requests/{id}/reject', [ChangeRequestController::class, 'reject'])->middleware('permission:change_request.reject,projectId');
+        Route::post('/{projectId}/change-requests/{id}/implement', [ChangeRequestController::class, 'markAsImplemented'])->middleware('permission:change_request.update,projectId');
 
         // EVM Metrics
-        Route::get('/{projectId}/evm/latest', [ProjectEvmController::class, 'latest']);
-        Route::post('/{projectId}/evm/calculate', [ProjectEvmController::class, 'calculate']);
-        Route::get('/{projectId}/evm/history', [ProjectEvmController::class, 'history']);
-        Route::get('/{projectId}/evm/analyze', [ProjectEvmController::class, 'analyze']);
+        Route::get('/{projectId}/evm/latest', [ProjectEvmController::class, 'latest'])->middleware('permission:evm.view,projectId');
+        Route::post('/{projectId}/evm/calculate', [ProjectEvmController::class, 'calculate'])->middleware('permission:evm.view,projectId');
+        Route::get('/{projectId}/evm/history', [ProjectEvmController::class, 'history'])->middleware('permission:evm.view,projectId');
+        Route::get('/{projectId}/evm/analyze', [ProjectEvmController::class, 'analyze'])->middleware('permission:evm.view,projectId');
 
         // Predictive Analytics
-        Route::get('/{projectId}/predictions/completion', [PredictiveAnalyticsController::class, 'predictCompletion']);
-        Route::get('/{projectId}/predictions/cost', [PredictiveAnalyticsController::class, 'predictCost']);
-        Route::get('/{projectId}/predictions/delay-risk', [PredictiveAnalyticsController::class, 'analyzeDelayRisk']);
-        Route::get('/{projectId}/predictions/cost-risk', [PredictiveAnalyticsController::class, 'analyzeCostRisk']);
-        Route::get('/{projectId}/predictions/full', [PredictiveAnalyticsController::class, 'fullAnalysis']);
+        Route::get('/{projectId}/predictions/completion', [PredictiveAnalyticsController::class, 'predictCompletion'])->middleware('permission:predictive.view,projectId');
+        Route::get('/{projectId}/predictions/cost', [PredictiveAnalyticsController::class, 'predictCost'])->middleware('permission:predictive.view,projectId');
+        Route::get('/{projectId}/predictions/delay-risk', [PredictiveAnalyticsController::class, 'analyzeDelayRisk'])->middleware('permission:predictive.view,projectId');
+        Route::get('/{projectId}/predictions/cost-risk', [PredictiveAnalyticsController::class, 'analyzeCostRisk'])->middleware('permission:predictive.view,projectId');
+        Route::get('/{projectId}/predictions/full', [PredictiveAnalyticsController::class, 'fullAnalysis'])->middleware('permission:predictive.view,projectId');
 
         // Project Monitoring
-        Route::get('/{projectId}/monitoring', [ProjectMonitoringController::class, 'projectMonitoring']);
+        Route::get('/{projectId}/monitoring', [ProjectMonitoringController::class, 'projectMonitoring'])->middleware('permission:project.monitoring.view,projectId');
 
         // Comments
         Route::get('/{projectId}/comments', [ProjectCommentController::class, 'index']);
@@ -375,12 +407,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{projectId}/comments/{id}', [ProjectCommentController::class, 'destroy']);
 
         // Báo cáo tổng hợp dự án
-        Route::get('/{projectId}/summary-report', [ProjectSummaryReportController::class, 'getSummaryReport']);
-        Route::get('/{projectId}/summary-report/costs/{type}', [ProjectSummaryReportController::class, 'getCostDetails']);
+        Route::get('/{projectId}/summary-report', [ProjectSummaryReportController::class, 'getSummaryReport'])->middleware('permission:report.project_summary.view,projectId');
+        Route::get('/{projectId}/summary-report/costs/{type}', [ProjectSummaryReportController::class, 'getCostDetails'])->middleware('permission:report.project_summary.view,projectId');
 
         // Progress
-        Route::get('/{projectId}/progress', [ProjectProgressController::class, 'show']);
-        Route::get('/{projectId}/progress/overview', [ProjectProgressController::class, 'overview']);
+        Route::get('/{projectId}/progress', [ProjectProgressController::class, 'show'])->middleware('permission:progress.view,projectId');
+        Route::get('/{projectId}/progress/overview', [ProjectProgressController::class, 'overview'])->middleware('permission:progress.view,projectId');
 
         // Gantt Chart - Phases
         Route::get('/{projectId}/phases', [ProjectPhaseController::class, 'index']);
@@ -399,24 +431,67 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/tasks/reorder', [ProjectTaskController::class, 'reorder']);
         Route::post('/{projectId}/tasks/{id}/progress', [ProjectTaskController::class, 'updateProgress']);
         Route::post('/{projectId}/tasks/recalculate-all', [ProjectTaskController::class, 'recalculateAll']);
+        Route::post('/{projectId}/tasks/import-template', [WbsTemplateController::class, 'importToProject']);
 
         // Gantt Chart - Task Dependencies
         Route::post('/{projectId}/tasks/{taskId}/dependencies', [ProjectTaskDependencyController::class, 'store']);
         Route::delete('/{projectId}/tasks/{taskId}/dependencies/{id}', [ProjectTaskDependencyController::class, 'destroy']);
         Route::post('/{projectId}/tasks/{taskId}/dependencies/validate', [ProjectTaskDependencyController::class, 'validateCircular']);
 
+        // Gantt & CPM API (Sprint 1 — Module 1)
+        Route::get('/{projectId}/gantt', [GanttController::class, 'ganttData'])->middleware('permission:gantt.view,projectId');
+        Route::get('/{projectId}/gantt/cpm', [GanttController::class, 'cpm'])->middleware('permission:gantt.view,projectId');
+        Route::put('/{projectId}/gantt/auto-adjust', [GanttController::class, 'autoAdjust'])->middleware('permission:gantt.update,projectId');
+        Route::get('/{projectId}/gantt/delay-warnings', [GanttController::class, 'delayWarnings'])->middleware('permission:gantt.view,projectId');
+        Route::get('/{projectId}/gantt/progress-comparison', [GanttController::class, 'progressComparison'])->middleware('permission:gantt.view,projectId');
+
+        // Schedule Adjustments (Sprint 1 — Module 1)
+        Route::get('/{projectId}/schedule-adjustments', [GanttController::class, 'adjustments'])->middleware('permission:gantt.view,projectId');
+        Route::post('/{projectId}/schedule-adjustments', [GanttController::class, 'createAdjustment'])->middleware('permission:gantt.update,projectId');
+        Route::post('/{projectId}/schedule-adjustments/{adjustmentId}/approve', [GanttController::class, 'approveAdjustment'])->middleware('permission:gantt.update,projectId');
+        Route::post('/{projectId}/schedule-adjustments/{adjustmentId}/reject', [GanttController::class, 'rejectAdjustment'])->middleware('permission:gantt.update,projectId');
+
         // NOTE: Teams, Team Contracts, Labor Standards routes removed — models don't exist
 
+        // ============ Sprint 2 — Module 3: Finance ============
+        Route::get('/{projectId}/cash-flow', [FinanceController::class, 'cashFlow'])->middleware('permission:finance.view,projectId');
+        Route::post('/{projectId}/cash-flow', [FinanceController::class, 'storeCashFlow'])->middleware('permission:finance.manage,projectId');
+        Route::get('/{projectId}/profit-loss', [FinanceController::class, 'profitLoss'])->middleware('permission:finance.view,projectId');
+        Route::get('/{projectId}/budget-vs-actual', [FinanceController::class, 'budgetVsActual'])->middleware('permission:finance.view,projectId');
+        Route::get('/{projectId}/subcontractor-debt', [FinanceController::class, 'subcontractorDebt'])->middleware('permission:finance.view,projectId');
+        Route::get('/{projectId}/tax-summary', [FinanceController::class, 'taxSummary'])->middleware('permission:finance.view,projectId');
+        Route::get('/{projectId}/warranty-retentions', [FinanceController::class, 'warrantyRetentions'])->middleware('permission:finance.view,projectId');
+        Route::post('/{projectId}/warranty-retentions', [FinanceController::class, 'storeWarrantyRetention'])->middleware('permission:finance.manage,projectId');
+        Route::post('/{projectId}/warranty-retentions/{id}/release', [FinanceController::class, 'releaseWarranty'])->middleware('permission:finance.manage,projectId');
+
+        // ============ Sprint 2 — Module 4: Material Quotas & Inventory ============
+        Route::get('/{projectId}/materials/inventory', [MaterialQuotaController::class, 'inventory'])->middleware('permission:material.view,projectId');
+        Route::get('/{projectId}/materials/quotas', [MaterialQuotaController::class, 'quotas'])->middleware('permission:material.view,projectId');
+        Route::post('/{projectId}/materials/quotas', [MaterialQuotaController::class, 'storeQuota'])->middleware('permission:material.create,projectId');
+        Route::put('/{projectId}/materials/quotas/{id}', [MaterialQuotaController::class, 'updateQuota'])->middleware('permission:material.update,projectId');
+        Route::get('/{projectId}/materials/warnings', [MaterialQuotaController::class, 'warnings'])->middleware('permission:material.view,projectId');
+        Route::post('/{projectId}/materials/import', [MaterialQuotaController::class, 'importMaterial'])->middleware('permission:material.create,projectId');
+        Route::post('/{projectId}/materials/export', [MaterialQuotaController::class, 'exportMaterial'])->middleware('permission:material.view,projectId');
+        Route::get('/{projectId}/materials/history', [MaterialQuotaController::class, 'history'])->middleware('permission:material.view,projectId');
+        Route::post('/{projectId}/materials/sync-inventory', [MaterialQuotaController::class, 'syncInventory'])->middleware('permission:material.update,projectId');
+
+        // ============ Năng suất lao động (Labor Productivity) ============
+        Route::get('/{projectId}/labor-productivity', [LaborProductivityController::class, 'index'])->middleware('permission:labor_productivity.view,projectId');
+        Route::post('/{projectId}/labor-productivity', [LaborProductivityController::class, 'store'])->middleware('permission:labor_productivity.create,projectId');
+        Route::put('/{projectId}/labor-productivity/{id}', [LaborProductivityController::class, 'update'])->middleware('permission:labor_productivity.update,projectId');
+        Route::delete('/{projectId}/labor-productivity/{id}', [LaborProductivityController::class, 'destroy'])->middleware('permission:labor_productivity.delete,projectId');
+        Route::get('/{projectId}/labor-productivity/dashboard', [LaborProductivityController::class, 'dashboard'])->middleware('permission:labor_productivity.view,projectId');
+
         // Subcontractor Payments
-        Route::get('/{projectId}/subcontractor-payments', [SubcontractorPaymentController::class, 'index']);
-        Route::post('/{projectId}/subcontractor-payments', [SubcontractorPaymentController::class, 'store']);
-        Route::get('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'show']);
-        Route::put('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'update']);
-        Route::delete('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'destroy']);
-        Route::post('/{projectId}/subcontractor-payments/{id}/submit', [SubcontractorPaymentController::class, 'submit']);
-        Route::post('/{projectId}/subcontractor-payments/{id}/approve', [SubcontractorPaymentController::class, 'approve']);
-        Route::post('/{projectId}/subcontractor-payments/{id}/reject', [SubcontractorPaymentController::class, 'reject']);
-        Route::post('/{projectId}/subcontractor-payments/{id}/mark-paid', [SubcontractorPaymentController::class, 'markAsPaid']);
+        Route::get('/{projectId}/subcontractor-payments', [SubcontractorPaymentController::class, 'index'])->middleware('permission:subcontractor_payment.view,projectId');
+        Route::post('/{projectId}/subcontractor-payments', [SubcontractorPaymentController::class, 'store'])->middleware('permission:subcontractor_payment.create,projectId');
+        Route::get('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'show'])->middleware('permission:subcontractor_payment.view,projectId');
+        Route::put('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'update'])->middleware('permission:subcontractor_payment.update,projectId');
+        Route::delete('/{projectId}/subcontractor-payments/{id}', [SubcontractorPaymentController::class, 'destroy'])->middleware('permission:subcontractor_payment.delete,projectId');
+        Route::post('/{projectId}/subcontractor-payments/{id}/submit', [SubcontractorPaymentController::class, 'submit'])->middleware('permission:subcontractor_payment.create,projectId');
+        Route::post('/{projectId}/subcontractor-payments/{id}/approve', [SubcontractorPaymentController::class, 'approve'])->middleware('permission:subcontractor_payment.approve,projectId');
+        Route::post('/{projectId}/subcontractor-payments/{id}/reject', [SubcontractorPaymentController::class, 'reject'])->middleware('permission:subcontractor_payment.approve,projectId');
+        Route::post('/{projectId}/subcontractor-payments/{id}/mark-paid', [SubcontractorPaymentController::class, 'markAsPaid'])->middleware('permission:subcontractor_payment.mark_paid,projectId');
     });
 
     // Acceptance Templates (outside projects prefix)
@@ -425,6 +500,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/acceptance-templates/{id}', [AcceptanceTemplateController::class, 'show'])->where('id', '[0-9]+');
     Route::put('/acceptance-templates/{id}', [AcceptanceTemplateController::class, 'update'])->where('id', '[0-9]+');
     Route::delete('/acceptance-templates/{id}', [AcceptanceTemplateController::class, 'destroy'])->where('id', '[0-9]+');
+
+    // WBS Templates (Sprint 1 — Module 1)
+    Route::prefix('wbs-templates')->group(function () {
+        Route::get('/', [WbsTemplateController::class, 'index']);
+        Route::post('/', [WbsTemplateController::class, 'store']);
+        Route::get('/{id}', [WbsTemplateController::class, 'show']);
+    });
 
     // ===================================================================
 

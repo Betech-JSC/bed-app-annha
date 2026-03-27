@@ -18,6 +18,15 @@ class ConstructionLog extends Model
         'personnel_count',
         'completion_percentage',
         'notes',
+        'shift',
+        'work_items',
+        'issues',
+        'safety_notes',
+        'delay_reason',
+        'adjustment_id',
+        'approval_status',
+        'approved_by',
+        'approved_at',
         'created_by',
     ];
 
@@ -25,6 +34,8 @@ class ConstructionLog extends Model
         'log_date' => 'date',
         'completion_percentage' => 'decimal:2',
         'personnel_count' => 'integer',
+        'work_items' => 'array',
+        'approved_at' => 'datetime',
     ];
 
     // ==================================================================

@@ -317,6 +317,214 @@
         </div>
       </a-tab-pane>
 
+      <!-- ============ GANTT / CPM TAB (Sprint 1) ============ -->
+      <a-tab-pane key="gantt">
+        <template #tab><a-tooltip title="Biểu đồ Gantt, CPM đường găng, cảnh báo chậm tiến độ, đề xuất hiệu chỉnh" placement="bottom">Gantt/CPM</a-tooltip></template>
+        <div class="p-4 space-y-4">
+
+          <!-- Action Bar -->
+          <div class="flex justify-between items-center">
+            <div class="flex gap-2">
+              <a-button size="small" :type="ganttView === 'chart' ? 'primary' : 'default'" @click="ganttView = 'chart'">Biểu đồ Gantt</a-button>
+              <a-button size="small" :type="ganttView === 'cpm' ? 'primary' : 'default'" @click="loadCPMData(); ganttView = 'cpm'">Đường găng (CPM)</a-button>
+              <a-button size="small" :type="ganttView === 'warnings' ? 'primary' : 'default'" @click="loadDelayWarnings(); ganttView = 'warnings'">
+                <template v-if="delayWarnings.length"><a-badge :count="delayWarnings.length" :offset="[8, -4]" /></template>
+                Cảnh báo
+              </a-button>
+              <a-button size="small" :type="ganttView === 'comparison' ? 'primary' : 'default'" @click="loadProgressComparison(); ganttView = 'comparison'">KH vs TT</a-button>
+              <a-button size="small" :type="ganttView === 'adjustments' ? 'primary' : 'default'" @click="loadScheduleAdjustments(); ganttView = 'adjustments'">Hiệu chỉnh</a-button>
+            </div>
+            <div class="flex gap-2">
+              <a-button size="small" @click="showImportWbs = true"><template #icon><PlusOutlined /></template>Import WBS Template</a-button>
+              <a-button size="small" type="primary" @click="loadGanttData()" :loading="ganttLoading"><template #icon><CalendarOutlined /></template>Refresh</a-button>
+            </div>
+          </div>
+
+          <!-- GANTT CHART VIEW -->
+          <div v-if="ganttView === 'chart'">
+            <div v-if="ganttLoading" class="py-12 text-center"><a-spin size="large" /></div>
+            <div v-else-if="ganttTasks.length === 0" class="py-12 text-center text-gray-400">
+              <a-empty description="Chưa có dữ liệu Gantt — vui lòng tạo công việc hoặc import WBS template" />
+            </div>
+            <div v-else class="border rounded-xl overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="bg-gradient-to-r from-blue-50 to-indigo-50 text-gray-600 border-b">
+                    <th class="text-left py-2 px-3 sticky left-0 bg-blue-50 min-w-[220px]">Công việc</th>
+                    <th class="text-center py-2 px-2 min-w-[60px]">Ngày bắt đầu</th>
+                    <th class="text-center py-2 px-2 min-w-[60px]">Ngày kết thúc</th>
+                    <th class="text-center py-2 px-2 min-w-[50px]">Ngày</th>
+                    <th class="text-center py-2 px-2 min-w-[90px]">Tiến độ</th>
+                    <th class="text-center py-2 px-2 min-w-[70px]">Trạng thái</th>
+                    <th class="text-center py-2 px-2 min-w-[60px]">Phụ thuộc</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="task in ganttTasks" :key="task.id" class="border-b hover:bg-blue-50/30 transition-colors"
+                    :class="{ 'bg-red-50/40 font-semibold': task.is_critical, 'bg-gray-50/50': task.is_parent }">
+                    <td class="py-2 px-3 sticky left-0 bg-white" :style="{ paddingLeft: (task.level || 0) * 16 + 12 + 'px' }">
+                      <div class="flex items-center gap-1.5">
+                        <span v-if="task.is_critical" class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" title="Đường găng"></span>
+                        <span class="truncate">{{ task.name }}</span>
+                      </div>
+                    </td>
+                    <td class="text-center py-2 px-2 text-gray-500">{{ fmtDate(task.start_date) }}</td>
+                    <td class="text-center py-2 px-2 text-gray-500">{{ fmtDate(task.end_date) }}</td>
+                    <td class="text-center py-2 px-2">{{ task.duration || '—' }}</td>
+                    <td class="py-2 px-2">
+                      <a-progress :percent="Number(task.progress || task.progress_percentage || 0)" size="small"
+                        :stroke-color="Number(task.progress || task.progress_percentage || 0) >= 100 ? '#10B981' : task.is_critical ? '#EF4444' : '#3B82F6'" />
+                    </td>
+                    <td class="text-center py-2 px-2">
+                      <a-tag :color="taskStatusColors[task.status] || 'default'" class="text-[10px] rounded-full">{{ taskStatusLabels[task.status] || task.status }}</a-tag>
+                    </td>
+                    <td class="text-center py-2 px-2 text-gray-400">{{ task.dependencies?.length || 0 }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- CPM VIEW -->
+          <div v-else-if="ganttView === 'cpm'">
+            <div v-if="cpmLoading" class="py-12 text-center"><a-spin size="large" /></div>
+            <div v-else>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                  <div class="text-2xl font-bold text-red-600">{{ cpmData.critical_tasks?.length || 0 }}</div>
+                  <div class="text-xs text-red-500">Công việc trên đường găng</div>
+                </div>
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+                  <div class="text-2xl font-bold text-blue-600">{{ cpmData.total_duration || 0 }}</div>
+                  <div class="text-xs text-blue-500">Tổng ngày (đường găng)</div>
+                </div>
+                <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                  <div class="text-2xl font-bold text-green-600">{{ (cpmData.all_nodes || []).filter(n => n.TF > 0).length }}</div>
+                  <div class="text-xs text-green-500">Công việc có dự trữ</div>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                  <div class="text-2xl font-bold text-amber-600">{{ cpmData.total_duration || '—' }} ngày</div>
+                  <div class="text-xs text-amber-500">Tổng thời gian dự án</div>
+                </div>
+              </div>
+              <div class="border rounded-xl overflow-hidden">
+                <div class="bg-gradient-to-r from-red-50 to-orange-50 px-4 py-2 text-xs font-semibold text-red-700 border-b">🔴 Đường găng — Critical Path</div>
+                <table class="w-full text-xs">
+                  <thead><tr class="bg-gray-50 text-gray-500 border-b">
+                    <th class="text-left py-2 px-3">Công việc</th><th class="text-center py-2 px-2">ES</th><th class="text-center py-2 px-2">EF</th>
+                    <th class="text-center py-2 px-2">LS</th><th class="text-center py-2 px-2">LF</th><th class="text-center py-2 px-2">Float</th><th class="text-center py-2 px-2">Duration</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="item in (cpmData.critical_tasks || [])" :key="item.id" class="border-b bg-red-50/30">
+                      <td class="py-2 px-3 font-medium text-red-700">{{ item.name }}</td>
+                      <td class="text-center py-2 px-2">{{ item.ES }}</td>
+                      <td class="text-center py-2 px-2">{{ item.EF }}</td>
+                      <td class="text-center py-2 px-2">{{ item.LS }}</td>
+                      <td class="text-center py-2 px-2">{{ item.LF }}</td>
+                      <td class="text-center py-2 px-2 font-bold text-red-600">0</td>
+                      <td class="text-center py-2 px-2">{{ item.duration }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- DELAY WARNINGS VIEW -->
+          <div v-else-if="ganttView === 'warnings'">
+            <div v-if="delayWarnings.length === 0" class="py-8 text-center">
+              <div class="text-4xl mb-2">✅</div>
+              <div class="text-gray-500">Không có cảnh báo chậm tiến độ</div>
+            </div>
+            <div v-else class="space-y-3">
+              <div v-for="warning in delayWarnings" :key="warning.task_id"
+                class="border rounded-xl p-4 hover:shadow-sm transition-shadow"
+                :class="warning.priority === 'high' ? 'border-red-300 bg-red-50/50' : warning.priority === 'medium' ? 'border-orange-300 bg-orange-50/50' : 'border-yellow-200 bg-yellow-50/50'">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <div class="font-semibold text-gray-800">{{ warning.task_name }}</div>
+                    <div class="text-xs text-gray-500 mt-1">
+                      Kế hoạch: {{ warning.expected_progress?.toFixed(1) }}% — Thực tế: {{ warning.actual_progress?.toFixed(1) }}%
+                    </div>
+                  </div>
+                  <a-tag :color="warning.priority === 'high' ? 'red' : warning.priority === 'medium' ? 'orange' : 'gold'" class="rounded-full">
+                    Chậm {{ warning.delay_days }} ngày
+                  </a-tag>
+                </div>
+                <div class="mt-2">
+                  <a-progress :percent="Number(warning.actual_progress || 0)" :success="{ percent: Number(warning.expected_progress || 0) }" size="small" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PROGRESS COMPARISON VIEW -->
+          <div v-else-if="ganttView === 'comparison'">
+            <div v-if="progressComparisonData.length === 0" class="py-8 text-center text-gray-400"><a-empty description="Chưa có dữ liệu so sánh" /></div>
+            <div v-else>
+              <div class="border rounded-xl overflow-hidden">
+                <table class="w-full text-xs">
+                  <thead><tr class="bg-gradient-to-r from-green-50 to-blue-50 text-gray-600 border-b">
+                    <th class="text-left py-2 px-3">Hạng mục</th>
+                    <th class="text-center py-2 px-2">% Kế hoạch</th>
+                    <th class="text-center py-2 px-2">% Thực tế</th>
+                    <th class="text-center py-2 px-2">Chênh lệch</th>
+                    <th class="text-center py-2 px-2">Trạng thái</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="item in progressComparisonData" :key="item.id" class="border-b hover:bg-gray-50">
+                      <td class="py-2 px-3">{{ item.name }}</td>
+                      <td class="text-center py-2 px-2">{{ item.planned_progress?.toFixed(1) }}%</td>
+                      <td class="text-center py-2 px-2 font-medium">{{ item.actual_progress?.toFixed(1) }}%</td>
+                      <td class="text-center py-2 px-2" :class="(item.actual_progress - item.planned_progress) >= 0 ? 'text-green-600' : 'text-red-600'">
+                        {{ (item.actual_progress - item.planned_progress) >= 0 ? '+' : '' }}{{ (item.actual_progress - item.planned_progress)?.toFixed(1) }}%
+                      </td>
+                      <td class="text-center py-2 px-2">
+                        <a-tag :color="item.gap <= 0 ? 'green' : 'red'" class="text-[10px] rounded-full">
+                          {{ item.gap <= 0 ? 'Đúng tiến độ' : `Chậm ${item.delay_days} ngày` }}
+                        </a-tag>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SCHEDULE ADJUSTMENTS VIEW -->
+          <div v-else-if="ganttView === 'adjustments'">
+            <a-table :columns="adjustmentCols" :data-source="scheduleAdjustments" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'task'">{{ record.task?.name || '—' }}</template>
+                <template v-else-if="column.key === 'reason'">
+                  <a-tooltip :title="record.reason"><span class="truncate block max-w-[200px]">{{ record.reason }}</span></a-tooltip>
+                </template>
+                <template v-else-if="column.key === 'proposed'">
+                  <span class="text-xs">{{ fmtDate(record.proposed_start_date) }} → {{ fmtDate(record.proposed_end_date) }}</span>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="record.status === 'approved' ? 'green' : record.status === 'rejected' ? 'red' : 'orange'" class="rounded-full text-[10px]">
+                    {{ record.status === 'approved' ? 'Đã duyệt' : record.status === 'rejected' ? 'Từ chối' : 'Chờ duyệt' }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'actions'">
+                  <div v-if="record.status === 'pending'" class="flex gap-1">
+                    <a-popconfirm title="Duyệt hiệu chỉnh tiến độ này?" @confirm="approveAdjustment(record.id)">
+                      <a-button type="primary" size="small" ghost><CheckOutlined /></a-button>
+                    </a-popconfirm>
+                    <a-popconfirm title="Từ chối?" @confirm="rejectAdjustment(record.id)">
+                      <a-button danger size="small" ghost><CloseOutlined /></a-button>
+                    </a-popconfirm>
+                  </div>
+                  <span v-else class="text-gray-300">—</span>
+                </template>
+              </template>
+            </a-table>
+          </div>
+
+        </div>
+      </a-tab-pane>
+
       <!-- ============ PROGRESS / TASKS TAB ============ -->
       <a-tab-pane key="progress">
         <template #tab><a-tooltip title="Quản lý công việc, phân công và theo dõi tiến độ thi công theo WBS" placement="bottom">Tiến độ</a-tooltip></template>
@@ -1026,6 +1234,188 @@
         </div>
       </a-tab-pane>
 
+      <!-- ============ FINANCE DASHBOARD TAB (Sprint 2 — Module 3) ============ -->
+      <a-tab-pane key="finance">
+        <template #tab><a-tooltip title="Dòng tiền, Lãi/Lỗ, Ngân sách vs Thực chi, Công nợ NTP, Bảo hành" placement="bottom">💰 Tài chính</a-tooltip></template>
+        <div class="p-4 space-y-4">
+          <div class="flex gap-2 flex-wrap">
+            <a-button size="small" :type="financeView === 'cashflow' ? 'primary' : 'default'" @click="financeView = 'cashflow'">Dòng tiền</a-button>
+            <a-button size="small" :type="financeView === 'pnl' ? 'primary' : 'default'" @click="financeView = 'pnl'">Lãi / Lỗ</a-button>
+            <a-button size="small" :type="financeView === 'bva' ? 'primary' : 'default'" @click="financeView = 'bva'">NS vs Thực chi</a-button>
+            <a-button size="small" :type="financeView === 'debt' ? 'primary' : 'default'" @click="financeView = 'debt'">Công nợ NTP</a-button>
+            <a-button size="small" :type="financeView === 'warranty' ? 'primary' : 'default'" @click="financeView = 'warranty'">Bảo hành</a-button>
+            <a-button size="small" type="primary" ghost @click="loadFinanceData()" :loading="financeLoading"><template #icon><CalendarOutlined /></template>Refresh</a-button>
+          </div>
+
+          <!-- Cash Flow -->
+          <div v-if="financeView === 'cashflow'">
+            <div v-if="financeLoading" class="py-8 text-center"><a-spin /></div>
+            <div v-else-if="!cashFlowData.months?.length" class="py-8 text-center"><a-empty description="Chưa có dữ liệu dòng tiền" /></div>
+            <div v-else>
+              <div class="grid grid-cols-3 gap-3 mb-4">
+                <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                  <div class="text-xl font-bold text-green-600">{{ fmtMoney(cashFlowData.totals?.total_inflow) }}</div>
+                  <div class="text-xs text-green-500">Tổng thu</div>
+                </div>
+                <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                  <div class="text-xl font-bold text-red-600">{{ fmtMoney(cashFlowData.totals?.total_outflow) }}</div>
+                  <div class="text-xs text-red-500">Tổng chi</div>
+                </div>
+                <div class="rounded-xl p-4 text-center" :class="(cashFlowData.totals?.net_cash_flow || 0) >= 0 ? 'bg-blue-50 border border-blue-200' : 'bg-amber-50 border border-amber-200'">
+                  <div class="text-xl font-bold" :class="(cashFlowData.totals?.net_cash_flow || 0) >= 0 ? 'text-blue-600' : 'text-amber-600'">{{ fmtMoney(cashFlowData.totals?.net_cash_flow) }}</div>
+                  <div class="text-xs" :class="(cashFlowData.totals?.net_cash_flow || 0) >= 0 ? 'text-blue-500' : 'text-amber-500'">Dòng tiền ròng</div>
+                </div>
+              </div>
+              <div class="border rounded-xl overflow-hidden">
+                <table class="w-full text-xs">
+                  <thead><tr class="bg-gradient-to-r from-blue-50 to-green-50 text-gray-600 border-b">
+                    <th class="text-left py-2 px-3">Tháng</th>
+                    <th class="text-right py-2 px-2">Thu (KH)</th><th class="text-right py-2 px-2">Thu (TT)</th>
+                    <th class="text-right py-2 px-2">Chi (KH)</th><th class="text-right py-2 px-2">Chi (TT)</th>
+                    <th class="text-right py-2 px-2">Lũy kế ròng</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="m in cashFlowData.months" :key="m.month" class="border-b hover:bg-gray-50">
+                      <td class="py-2 px-3 font-medium">{{ m.label }}</td>
+                      <td class="text-right py-2 px-2 text-green-600">{{ fmtMoney(m.planned_inflow) }}</td>
+                      <td class="text-right py-2 px-2 text-green-700 font-medium">{{ fmtMoney(m.actual_inflow) }}</td>
+                      <td class="text-right py-2 px-2 text-red-500">{{ fmtMoney(m.planned_outflow) }}</td>
+                      <td class="text-right py-2 px-2 text-red-600 font-medium">{{ fmtMoney(m.actual_outflow) }}</td>
+                      <td class="text-right py-2 px-2 font-bold" :class="m.cumulative_actual_net >= 0 ? 'text-blue-600' : 'text-amber-600'">{{ fmtMoney(m.cumulative_actual_net) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- P/L -->
+          <div v-else-if="financeView === 'pnl'">
+            <div v-if="financeLoading" class="py-8 text-center"><a-spin /></div>
+            <div v-else-if="!pnlData.revenue" class="py-8 text-center"><a-empty description="Chưa có dữ liệu P/L" /></div>
+            <div v-else class="space-y-4">
+              <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+                <h4 class="text-sm font-bold text-green-700 mb-3">📈 DOANH THU</h4>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                  <div><span class="text-xs text-gray-500">Giá trị HĐ:</span><div class="font-bold text-green-700">{{ fmtMoney(pnlData.revenue.contract_value) }}</div></div>
+                  <div><span class="text-xs text-gray-500">Phát sinh:</span><div class="font-bold">{{ fmtMoney(pnlData.revenue.additional_value) }}</div></div>
+                  <div><span class="text-xs text-gray-500">Tổng DT:</span><div class="font-bold text-green-800 text-lg">{{ fmtMoney(pnlData.revenue.total_revenue) }}</div></div>
+                  <div><span class="text-xs text-gray-500">Còn phải thu:</span><div class="font-bold text-amber-600">{{ fmtMoney(pnlData.revenue.receivable) }}</div></div>
+                </div>
+              </div>
+              <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+                <h4 class="text-sm font-bold text-red-700 mb-3">📉 CHI PHÍ</h4>
+                <div class="space-y-1">
+                  <div v-for="(val, cat) in pnlData.costs.by_category" :key="cat" class="flex justify-between text-xs">
+                    <span class="text-gray-600">{{ costCatLabels[cat] || cat }}</span>
+                    <span class="font-medium">{{ fmtMoney(val) }}</span>
+                  </div>
+                  <div class="flex justify-between font-bold text-sm pt-2 border-t border-red-200 mt-2">
+                    <span>Tổng chi phí</span><span class="text-red-700">{{ fmtMoney(pnlData.costs.total_costs) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="rounded-xl p-4 border-2" :class="pnlData.profit_loss.net_profit >= 0 ? 'bg-blue-50 border-blue-300' : 'bg-amber-50 border-amber-300'">
+                <h4 class="text-sm font-bold mb-3" :class="pnlData.profit_loss.net_profit >= 0 ? 'text-blue-700' : 'text-amber-700'">{{ pnlData.profit_loss.net_profit >= 0 ? '✅ LÃI' : '⚠️ LỖ' }}</h4>
+                <div class="grid grid-cols-2 gap-3">
+                  <div><span class="text-xs text-gray-500">Lãi gộp:</span><div class="font-bold text-lg">{{ fmtMoney(pnlData.profit_loss.gross_profit) }}</div></div>
+                  <div><span class="text-xs text-gray-500">Biên lãi gộp:</span><div class="font-bold text-lg">{{ pnlData.profit_loss.gross_margin }}%</div></div>
+                  <div><span class="text-xs text-gray-500">Lãi ròng:</span><div class="font-bold text-lg">{{ fmtMoney(pnlData.profit_loss.net_profit) }}</div></div>
+                  <div><span class="text-xs text-gray-500">Biên ròng:</span><div class="font-bold text-lg">{{ pnlData.profit_loss.net_margin }}%</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Budget vs Actual -->
+          <div v-else-if="financeView === 'bva'">
+            <div v-if="financeLoading" class="py-8 text-center"><a-spin /></div>
+            <div v-else-if="!bvaData.items?.length" class="py-8 text-center"><a-empty description="Chưa có dữ liệu" /></div>
+            <div v-else>
+              <div class="grid grid-cols-3 gap-3 mb-4">
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+                  <div class="text-lg font-bold text-blue-600">{{ fmtMoney(bvaData.summary?.total_budget) }}</div>
+                  <div class="text-xs text-blue-500">Ngân sách</div>
+                </div>
+                <div class="bg-purple-50 border border-purple-200 rounded-xl p-4 text-center">
+                  <div class="text-lg font-bold text-purple-600">{{ fmtMoney(bvaData.summary?.total_actual) }}</div>
+                  <div class="text-xs text-purple-500">Thực chi</div>
+                </div>
+                <div class="rounded-xl p-4 text-center" :class="(bvaData.summary?.variance || 0) >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'">
+                  <div class="text-lg font-bold" :class="(bvaData.summary?.variance || 0) >= 0 ? 'text-green-600' : 'text-red-600'">{{ bvaData.summary?.variance_pct }}%</div>
+                  <div class="text-xs">Chênh lệch</div>
+                </div>
+              </div>
+              <div class="border rounded-xl overflow-hidden">
+                <table class="w-full text-xs">
+                  <thead><tr class="bg-gradient-to-r from-blue-50 to-purple-50 text-gray-600 border-b">
+                    <th class="text-left py-2 px-3">Hạng mục</th>
+                    <th class="text-right py-2 px-2">NS</th><th class="text-right py-2 px-2">Thực chi</th>
+                    <th class="text-right py-2 px-2">Chênh lệch</th><th class="text-center py-2 px-2">TT</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="item in bvaData.items" :key="item.id" class="border-b hover:bg-gray-50">
+                      <td class="py-2 px-3 font-medium">{{ item.name }}</td>
+                      <td class="text-right py-2 px-2 text-blue-600">{{ fmtMoney(item.budget_amount) }}</td>
+                      <td class="text-right py-2 px-2 text-purple-600 font-medium">{{ fmtMoney(item.actual_amount) }}</td>
+                      <td class="text-right py-2 px-2 font-bold" :class="item.variance >= 0 ? 'text-green-600' : 'text-red-600'">{{ fmtMoney(item.variance) }}</td>
+                      <td class="text-center py-2 px-2"><a-tag :color="item.status === 'under_budget' ? 'green' : 'red'" class="text-[10px] rounded-full">{{ item.status === 'under_budget' ? '✓' : '✗' }}</a-tag></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subcontractor Debt -->
+          <div v-else-if="financeView === 'debt'">
+            <div v-if="financeLoading" class="py-8 text-center"><a-spin /></div>
+            <div v-else-if="!debtData.subcontractors?.length" class="py-8 text-center"><a-empty description="Chưa có nhà thầu phụ" /></div>
+            <div v-else>
+              <div class="grid grid-cols-3 gap-3 mb-4">
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+                  <div class="text-lg font-bold text-blue-600">{{ fmtMoney(debtData.summary?.total_contract) }}</div><div class="text-xs text-blue-500">Tổng HĐ</div>
+                </div>
+                <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                  <div class="text-lg font-bold text-green-600">{{ fmtMoney(debtData.summary?.total_paid) }}</div><div class="text-xs text-green-500">Đã TT</div>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                  <div class="text-lg font-bold text-amber-600">{{ fmtMoney(debtData.summary?.total_remaining) }}</div><div class="text-xs text-amber-500">Còn lại</div>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <div v-for="sub in debtData.subcontractors" :key="sub.id" class="bg-white border rounded-xl p-3">
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="font-medium text-sm">{{ sub.name }}</span>
+                    <a-tag :color="sub.payment_status === 'completed' ? 'green' : sub.payment_status === 'partial' ? 'blue' : 'default'" class="text-[10px] rounded-full">{{ sub.paid_pct }}%</a-tag>
+                  </div>
+                  <a-progress :percent="sub.paid_pct" size="small" :stroke-color="sub.paid_pct >= 100 ? '#10B981' : '#3B82F6'" />
+                  <div class="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Đã TT: {{ fmtMoney(sub.total_paid) }}</span>
+                    <span>Còn: {{ fmtMoney(sub.remaining) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Warranty -->
+          <div v-else-if="financeView === 'warranty'">
+            <div v-if="financeLoading" class="py-8 text-center"><a-spin /></div>
+            <div v-else-if="!warrantyData.retentions?.length" class="py-8 text-center"><a-empty description="Chưa có bảo hành" /></div>
+            <div v-else class="space-y-2">
+              <div v-for="ret in warrantyData.retentions" :key="ret.id" class="bg-white border rounded-xl p-3">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="font-medium text-sm">{{ ret.subcontractor?.name || '—' }}</span>
+                  <a-tag :color="ret.release_status === 'released' ? 'green' : 'default'" class="text-[10px]">{{ ret.release_status === 'released' ? 'Đã giải phóng' : ret.release_status === 'partial_release' ? 'Một phần' : 'Đang giữ' }}</a-tag>
+                </div>
+                <div class="text-xs text-gray-500">Giữ: {{ fmtMoney(ret.retention_amount) }} ({{ ret.retention_percentage }}%) — {{ fmtDate(ret.warranty_start_date) }} → {{ fmtDate(ret.warranty_end_date) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
+
       <!-- ============ INVOICES TAB ============ -->
       <a-tab-pane key="invoices">
         <template #tab><a-tooltip title="Quản lý hóa đơn xuất cho khách hàng: tạo, gửi, theo dõi thanh toán" placement="bottom">Hóa đơn ({{ project.invoices?.length || 0 }})</a-tooltip></template>
@@ -1095,6 +1485,269 @@
               </template>
             </template>
           </a-table>
+        </div>
+      </a-tab-pane>
+
+      <!-- ============ ATTENDANCE TAB ============ -->
+      <a-tab-pane key="attendance">
+        <template #tab><a-tooltip title="Quản lý chấm công: check-in/out, thống kê giờ làm, phân ca" placement="bottom">Chấm công</a-tooltip></template>
+        <div class="p-4 space-y-4">
+          <!-- Action Bar -->
+          <div class="flex justify-between items-center">
+            <div class="flex gap-2">
+              <a-button size="small" :type="attendanceView === 'list' ? 'primary' : 'default'" @click="attendanceView = 'list'">Danh sách</a-button>
+              <a-button size="small" :type="attendanceView === 'stats' ? 'primary' : 'default'" @click="loadAttendanceStats(); attendanceView = 'stats'">Thống kê tháng</a-button>
+              <a-button size="small" :type="attendanceView === 'shifts' ? 'primary' : 'default'" @click="loadShifts(); attendanceView = 'shifts'">Phân ca</a-button>
+            </div>
+            <div class="flex gap-2">
+              <a-date-picker v-model:value="attendanceDate" picker="month" size="small" format="MM/YYYY" @change="loadAttendanceData()" />
+              <a-button type="primary" size="small" @click="showAttendanceModal = true">
+                <template #icon><PlusOutlined /></template>Chấm công thủ công
+              </a-button>
+            </div>
+          </div>
+
+          <!-- Stats Cards -->
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3" v-if="attendanceSummary">
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3 text-center border border-blue-200">
+              <div class="text-2xl font-bold text-blue-700">{{ attendanceSummary.total_records || 0 }}</div>
+              <div class="text-xs text-blue-500">Tổng ngày</div>
+            </div>
+            <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-3 text-center border border-green-200">
+              <div class="text-2xl font-bold text-green-700">{{ attendanceSummary.total_present || 0 }}</div>
+              <div class="text-xs text-green-500">Có mặt</div>
+            </div>
+            <div class="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-3 text-center border border-amber-200">
+              <div class="text-2xl font-bold text-amber-600">{{ attendanceSummary.total_late || 0 }}</div>
+              <div class="text-xs text-amber-500">Trễ</div>
+            </div>
+            <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-3 text-center border border-red-200">
+              <div class="text-2xl font-bold text-red-600">{{ attendanceSummary.total_absent || 0 }}</div>
+              <div class="text-xs text-red-500">Vắng</div>
+            </div>
+            <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-3 text-center border border-purple-200">
+              <div class="text-2xl font-bold text-purple-700">{{ attendanceSummary.total_overtime?.toFixed(1) || 0 }}h</div>
+              <div class="text-xs text-purple-500">Tổng OT</div>
+            </div>
+          </div>
+
+          <!-- List View -->
+          <div v-if="attendanceView === 'list'">
+            <a-table :columns="attendanceCols" :data-source="attendanceList" :pagination="{ pageSize: 15, showTotal: (t) => `${t} bản ghi` }" row-key="id" size="small" class="crm-table">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'user'">
+                  <div class="flex items-center gap-2">
+                    <a-avatar :size="24" class="bg-blue-500 text-white text-xs">{{ record.user?.name?.[0] || '?' }}</a-avatar>
+                    <span class="text-sm font-medium">{{ record.user?.name || '—' }}</span>
+                  </div>
+                </template>
+                <template v-else-if="column.key === 'date'">{{ fmtDate(record.work_date) }}</template>
+                <template v-else-if="column.key === 'check_in'">
+                  <span :class="record.status === 'late' ? 'text-amber-600 font-medium' : 'text-green-600'">{{ record.check_in?.substring(0,5) || '—' }}</span>
+                </template>
+                <template v-else-if="column.key === 'check_out'">
+                  <span class="text-red-500">{{ record.check_out?.substring(0,5) || '—' }}</span>
+                </template>
+                <template v-else-if="column.key === 'hours'">
+                  <span class="font-semibold">{{ record.hours_worked || 0 }}h</span>
+                  <span v-if="record.overtime_hours > 0" class="text-amber-500 text-xs ml-1">(+{{ record.overtime_hours }}h OT)</span>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="attendanceStatusColors[record.status]" class="rounded-full text-[10px]">{{ attendanceStatusLabels[record.status] || record.status }}</a-tag>
+                </template>
+                <template v-else-if="column.key === 'actions'">
+                  <div class="flex gap-1">
+                    <a-tooltip v-if="!record.approved_at" title="Duyệt">
+                      <a-popconfirm title="Duyệt chấm công?" @confirm="approveAttendance(record.id)">
+                        <a-button type="text" size="small"><CheckOutlined class="text-green-500" /></a-button>
+                      </a-popconfirm>
+                    </a-tooltip>
+                    <span v-else class="text-xs text-green-500">✓</span>
+                  </div>
+                </template>
+              </template>
+            </a-table>
+          </div>
+
+          <!-- Stats View -->
+          <div v-else-if="attendanceView === 'stats'" class="space-y-3">
+            <div v-for="(userStat, idx) in attendanceByUser" :key="idx"
+              class="bg-white rounded-xl p-4 border border-gray-100 flex items-center justify-between hover:shadow-sm transition-shadow">
+              <div class="flex items-center gap-3">
+                <a-avatar :size="32" class="bg-blue-500 text-white">{{ (userStat.user?.name || '?')[0] }}</a-avatar>
+                <div>
+                  <div class="text-sm font-semibold text-gray-700">{{ userStat.user?.name || '—' }}</div>
+                  <div class="text-xs text-gray-400">{{ userStat.total_days }} ngày • {{ userStat.total_hours }}h tổng</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 text-xs">
+                <a-tag color="green" class="rounded-full">✓ {{ userStat.present }}</a-tag>
+                <a-tag color="orange" class="rounded-full">⏰ {{ userStat.late }}</a-tag>
+                <a-tag color="red" class="rounded-full">✗ {{ userStat.absent }}</a-tag>
+                <a-tag v-if="userStat.total_overtime > 0" color="purple" class="rounded-full">OT {{ userStat.total_overtime }}h</a-tag>
+              </div>
+            </div>
+            <a-empty v-if="!attendanceByUser?.length" description="Chưa có dữ liệu tháng này" />
+          </div>
+
+          <!-- Shifts View -->
+          <div v-else-if="attendanceView === 'shifts'" class="space-y-4">
+            <div class="flex justify-end">
+              <a-button type="primary" size="small" @click="showShiftModal = true">
+                <template #icon><PlusOutlined /></template>Tạo ca
+              </a-button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div v-for="shift in shiftsList" :key="shift.id"
+                class="bg-white rounded-xl p-4 border border-gray-100 hover:border-blue-200 transition-colors">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-semibold text-gray-800">{{ shift.name }}</span>
+                  <a-tag v-if="shift.is_overtime_shift" color="orange" class="rounded-full text-[10px]">OT x{{ shift.overtime_multiplier }}</a-tag>
+                </div>
+                <div class="text-xs text-gray-500">{{ shift.start_time }} — {{ shift.end_time }}</div>
+                <div class="text-xs text-gray-400 mt-1">Nghỉ giữa ca: {{ shift.break_hours }}h</div>
+              </div>
+            </div>
+            <a-empty v-if="!shiftsList?.length" description="Chưa có ca làm việc" />
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <!-- ============ LABOR PRODUCTIVITY TAB ============ -->
+      <a-tab-pane key="labor">
+        <template #tab><a-tooltip title="Theo dõi năng suất lao động: khối lượng KH vs TT, hiệu suất nhân công" placement="bottom">Năng suất LĐ</a-tooltip></template>
+        <div class="p-4 space-y-4">
+          <!-- Action Bar -->
+          <div class="flex justify-between items-center">
+            <div class="flex gap-2">
+              <a-button size="small" :type="laborView === 'dashboard' ? 'primary' : 'default'" @click="loadLaborDashboard(); laborView = 'dashboard'">Dashboard</a-button>
+              <a-button size="small" :type="laborView === 'records' ? 'primary' : 'default'" @click="loadLaborRecords(); laborView = 'records'">Dữ liệu</a-button>
+            </div>
+            <a-button type="primary" size="small" @click="showLaborModal = true">
+              <template #icon><PlusOutlined /></template>Ghi nhận
+            </a-button>
+          </div>
+
+          <!-- Dashboard View -->
+          <div v-if="laborView === 'dashboard' && laborDashboard">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 text-center border border-blue-200">
+                <div class="text-2xl font-bold text-blue-700">{{ laborDashboard.summary?.total_records || 0 }}</div>
+                <div class="text-xs text-blue-500">Bản ghi</div>
+              </div>
+              <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 text-center border border-green-200">
+                <div class="text-2xl font-bold text-green-700">{{ laborDashboard.summary?.avg_efficiency?.toFixed(1) || 0 }}%</div>
+                <div class="text-xs text-green-500">TB Hiệu suất</div>
+              </div>
+              <div class="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-4 text-center border border-amber-200">
+                <div class="text-2xl font-bold text-amber-600">{{ laborDashboard.summary?.total_workers || 0 }}</div>
+                <div class="text-xs text-amber-500">Nhân công</div>
+              </div>
+              <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 text-center border border-purple-200">
+                <div class="text-2xl font-bold text-purple-700">{{ Math.round(laborDashboard.summary?.total_hours || 0) }}h</div>
+                <div class="text-xs text-purple-500">Tổng giờ</div>
+              </div>
+            </div>
+
+            <!-- Efficiency Gauge -->
+            <div class="bg-white rounded-xl p-5 border border-gray-100 mb-4">
+              <div class="flex justify-between items-center mb-3">
+                <h4 class="font-semibold text-gray-700 flex items-center gap-2">
+                  <span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-blue-400 to-blue-600"></span>
+                  Hiệu suất tổng thể
+                </h4>
+                <span class="text-lg font-bold" :class="(laborDashboard.summary?.avg_efficiency || 0) >= 90 ? 'text-green-600' : (laborDashboard.summary?.avg_efficiency || 0) >= 70 ? 'text-amber-600' : 'text-red-600'">
+                  {{ laborDashboard.summary?.avg_efficiency?.toFixed(1) || 0 }}%
+                </span>
+              </div>
+              <div class="h-4 bg-gray-100 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-700"
+                  :class="(laborDashboard.summary?.avg_efficiency || 0) >= 90 ? 'bg-gradient-to-r from-green-400 to-green-500' : (laborDashboard.summary?.avg_efficiency || 0) >= 70 ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-gradient-to-r from-red-400 to-red-500'"
+                  :style="{ width: Math.min(laborDashboard.summary?.avg_efficiency || 0, 100) + '%' }">
+                </div>
+              </div>
+              <div class="flex justify-between text-[11px] text-gray-400 mt-2">
+                <span>KH: {{ laborDashboard.summary?.total_planned?.toLocaleString() || 0 }}</span>
+                <span>TT: {{ laborDashboard.summary?.total_actual?.toLocaleString() || 0 }}</span>
+              </div>
+            </div>
+
+            <!-- By User Ranking -->
+            <div v-if="laborDashboard.by_user?.length" class="bg-white rounded-xl p-5 border border-gray-100 mb-4">
+              <h4 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-amber-400 to-amber-600"></span>
+                🏆 Xếp hạng nhân công
+              </h4>
+              <div class="space-y-2">
+                <div v-for="(u, idx) in laborDashboard.by_user.slice(0, 8)" :key="idx"
+                  class="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors">
+                  <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                    :class="idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-gray-100 text-gray-600' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-gray-50 text-gray-400'">
+                    #{{ idx + 1 }}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-semibold text-gray-700 truncate">{{ u.user_name }}</div>
+                    <div class="text-[10px] text-gray-400">{{ u.records_count }} lượt • {{ u.total_actual?.toLocaleString() }} đơn vị</div>
+                  </div>
+                  <div class="text-sm font-bold" :class="u.avg_efficiency >= 90 ? 'text-green-600' : u.avg_efficiency >= 70 ? 'text-amber-600' : 'text-red-500'">
+                    {{ u.avg_efficiency }}%
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- By Item -->
+            <div v-if="laborDashboard.by_item?.length" class="bg-white rounded-xl p-5 border border-gray-100">
+              <h4 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-indigo-400 to-indigo-600"></span>
+                📦 Theo hạng mục
+              </h4>
+              <a-table :columns="laborItemCols" :data-source="laborDashboard.by_item" :pagination="false" row-key="work_item" size="small" class="crm-table">
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'efficiency'">
+                    <span class="font-bold" :class="record.avg_efficiency >= 90 ? 'text-green-600' : record.avg_efficiency >= 70 ? 'text-amber-600' : 'text-red-500'">
+                      {{ record.avg_efficiency }}%
+                    </span>
+                  </template>
+                  <template v-else-if="column.key === 'planned'">{{ record.total_planned?.toLocaleString() }}</template>
+                  <template v-else-if="column.key === 'actual'">{{ record.total_actual?.toLocaleString() }}</template>
+                </template>
+              </a-table>
+            </div>
+          </div>
+
+          <!-- Records View -->
+          <div v-else-if="laborView === 'records'">
+            <a-table :columns="laborRecordCols" :data-source="laborRecords" :pagination="{ pageSize: 15, showTotal: (t) => `${t} bản ghi` }" row-key="id" size="small" class="crm-table">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'work_item'">
+                  <div>
+                    <div class="text-sm font-semibold">{{ record.work_item }}</div>
+                    <div class="text-[10px] text-gray-400">{{ record.user?.name || '—' }} • {{ fmtDate(record.record_date) }}</div>
+                  </div>
+                </template>
+                <template v-else-if="column.key === 'planned'">{{ record.planned_quantity }} {{ record.unit }}</template>
+                <template v-else-if="column.key === 'actual'">
+                  <span class="font-semibold">{{ record.actual_quantity }} {{ record.unit }}</span>
+                </template>
+                <template v-else-if="column.key === 'efficiency'">
+                  <a-tag :color="record.efficiency_percent >= 90 ? 'green' : record.efficiency_percent >= 70 ? 'orange' : 'red'" class="rounded-full text-xs font-semibold">
+                    {{ record.efficiency_percent }}%
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'productivity'">
+                  <span class="text-blue-600 font-medium">{{ record.productivity_rate }} {{ record.unit }}/ng·h</span>
+                </template>
+                <template v-else-if="column.key === 'workers'">{{ record.workers_count }} người • {{ record.hours_spent }}h</template>
+                <template v-else-if="column.key === 'actions'">
+                  <a-popconfirm title="Xóa bản ghi?" @confirm="deleteLaborRecord(record.id)">
+                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
+                  </a-popconfirm>
+                </template>
+              </template>
+            </a-table>
+          </div>
         </div>
       </a-tab-pane>
 
@@ -2010,17 +2663,23 @@
           </a-select>
         </a-form-item>
         <a-row :gutter="12">
-          <a-col :span="8">
+          <a-col :span="6">
             <a-form-item :label="'Số lượng' + (matFormSelected?.unit ? ` (${matFormSelected.unit})` : '')">
               <a-input-number v-model:value="matForm.quantity" :min="0.01" :step="1" size="large" class="w-full" @change="calcMatAmount" />
             </a-form-item>
           </a-col>
-          <a-col :span="8">
-            <a-form-item label="Chi phí (VNĐ)">
+          <a-col :span="6">
+            <a-form-item label="Đơn giá (VNĐ)">
+              <a-input-number v-model:value="matForm.unit_price" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" @change="calcMatAmount" />
+              <div v-if="matFormSelected?.unit_price" class="text-xs text-gray-400 mt-1">Niêm yết: {{ new Intl.NumberFormat('vi-VN').format(matFormSelected.unit_price) }} đ</div>
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="Thành tiền (VNĐ)">
               <a-input-number v-model:value="matForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" />
             </a-form-item>
           </a-col>
-          <a-col :span="8">
+          <a-col :span="6">
             <a-form-item label=" ">
               <a-button type="dashed" block size="large" @click="addMaterialToBatch" :disabled="!matForm.material_id || !matForm.quantity || !matForm.amount">
                 <PlusOutlined /> Thêm vào danh sách
@@ -2096,12 +2755,165 @@
     </a-form>
   </a-modal>
 
+  <!-- WBS Import Modal (Sprint 1) -->
+  <a-modal v-model:open="showImportWbs" title="Import WBS Template" :width="500" @ok="importWbsTemplate" ok-text="Import" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :confirm-loading="wbsImporting">
+    <a-form layout="vertical" class="mt-4">
+      <a-form-item label="WBS Template" required>
+        <a-select v-model:value="wbsImportForm.template_id" size="large" class="w-full" placeholder="Chọn template" @change="loadWbsTemplatePreview">
+          <a-select-option v-for="t in wbsTemplates" :key="t.id" :value="t.id">
+            {{ t.name }} <span class="text-gray-400">({{ t.project_type }})</span>
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="Ngày bắt đầu dự án" required>
+        <a-date-picker v-model:value="wbsImportForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+      </a-form-item>
+      <div v-if="wbsPreview" class="bg-gray-50 rounded-xl p-3 text-xs space-y-1 max-h-60 overflow-y-auto">
+        <div class="font-semibold text-gray-600 mb-2">Preview cấu trúc ({{ wbsPreview.items_count }} hạng mục):</div>
+        <div v-for="phase in (wbsPreview.tree || [])" :key="phase.id">
+          <div class="font-medium text-blue-600">📁 {{ phase.name }}</div>
+          <div v-for="cat in (phase.children || [])" :key="cat.id" class="pl-4 text-gray-500">
+            <div>📂 {{ cat.name }}</div>
+            <div v-for="task in (cat.children || []).slice(0, 3)" :key="task.id" class="pl-4 text-gray-400">
+              └ {{ task.name }} ({{ task.default_duration || '?' }} ngày)
+            </div>
+            <div v-if="(cat.children || []).length > 3" class="pl-4 text-gray-300">... và {{ cat.children.length - 3 }} hạng mục khác</div>
+          </div>
+        </div>
+      </div>
+    </a-form>
+  </a-modal>
+
+  <!-- ============ ATTENDANCE MODAL ============ -->
+  <a-modal v-model:open="showAttendanceModal" title="Chấm công thủ công" :width="520" @ok="submitManualAttendance" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :confirm-loading="attendanceSaving">
+    <a-form layout="vertical" class="mt-4">
+      <a-form-item label="Nhân viên" required>
+        <a-select v-model:value="attendanceForm.user_id" size="large" class="w-full" placeholder="Chọn nhân viên" show-search :filter-option="filterOption">
+          <a-select-option v-for="u in (project.personnel || []).map(p => p.user)" :key="u?.id" :value="u?.id">{{ u?.name }}</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="Ngày làm việc" required>
+        <a-date-picker v-model:value="attendanceForm.work_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+      </a-form-item>
+      <div class="grid grid-cols-2 gap-3">
+        <a-form-item label="Giờ vào">
+          <a-time-picker v-model:value="attendanceForm.check_in" size="large" class="w-full" format="HH:mm" value-format="HH:mm" />
+        </a-form-item>
+        <a-form-item label="Giờ ra">
+          <a-time-picker v-model:value="attendanceForm.check_out" size="large" class="w-full" format="HH:mm" value-format="HH:mm" />
+        </a-form-item>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <a-form-item label="Trạng thái">
+          <a-select v-model:value="attendanceForm.status" size="large" class="w-full">
+            <a-select-option value="present">Có mặt</a-select-option>
+            <a-select-option value="absent">Vắng</a-select-option>
+            <a-select-option value="late">Trễ</a-select-option>
+            <a-select-option value="half_day">Nửa ngày</a-select-option>
+            <a-select-option value="leave">Nghỉ phép</a-select-option>
+            <a-select-option value="holiday">Nghỉ lễ</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="OT (giờ)">
+          <a-input-number v-model:value="attendanceForm.overtime_hours" size="large" class="w-full" :min="0" :max="12" :step="0.5" />
+        </a-form-item>
+      </div>
+      <a-form-item label="Ghi chú">
+        <a-textarea v-model:value="attendanceForm.note" :rows="2" placeholder="Ghi chú thêm..." />
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <!-- ============ SHIFT MODAL ============ -->
+  <a-modal v-model:open="showShiftModal" title="Tạo ca làm việc" :width="480" @ok="submitShift" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :confirm-loading="shiftSaving">
+    <a-form layout="vertical" class="mt-4">
+      <a-form-item label="Tên ca" required>
+        <a-input v-model:value="shiftForm.name" size="large" placeholder="VD: Ca sáng, Ca đêm" />
+      </a-form-item>
+      <div class="grid grid-cols-2 gap-3">
+        <a-form-item label="Giờ bắt đầu" required>
+          <a-time-picker v-model:value="shiftForm.start_time" size="large" class="w-full" format="HH:mm" value-format="HH:mm" />
+        </a-form-item>
+        <a-form-item label="Giờ kết thúc" required>
+          <a-time-picker v-model:value="shiftForm.end_time" size="large" class="w-full" format="HH:mm" value-format="HH:mm" />
+        </a-form-item>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <a-form-item label="Nghỉ giữa ca (giờ)">
+          <a-input-number v-model:value="shiftForm.break_hours" size="large" class="w-full" :min="0" :max="2" :step="0.5" />
+        </a-form-item>
+        <a-form-item label="Hệ số OT">
+          <a-input-number v-model:value="shiftForm.overtime_multiplier" size="large" class="w-full" :min="1" :max="3" :step="0.5" />
+        </a-form-item>
+      </div>
+      <a-form-item>
+        <a-checkbox v-model:checked="shiftForm.is_overtime_shift">Ca ngoài giờ (OT)</a-checkbox>
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+  <!-- ============ LABOR PRODUCTIVITY MODAL ============ -->
+  <a-modal v-model:open="showLaborModal" title="Ghi nhận năng suất lao động" :width="560" @ok="submitLaborRecord" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :confirm-loading="laborSaving">
+    <a-form layout="vertical" class="mt-4">
+      <a-form-item label="Hạng mục công việc" required>
+        <a-input v-model:value="laborForm.work_item" size="large" placeholder="VD: Đổ sàn tầng 3, Xây tường ngăn" />
+      </a-form-item>
+      <div class="grid grid-cols-3 gap-3">
+        <a-form-item label="Đơn vị" required>
+          <a-select v-model:value="laborForm.unit" size="large" class="w-full">
+            <a-select-option v-for="u in ['m²', 'm³', 'm', 'kg', 'tấn', 'cái', 'bộ', 'm.dài', 'điểm']" :key="u" :value="u">{{ u }}</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="KL Kế hoạch" required>
+          <a-input-number v-model:value="laborForm.planned_quantity" size="large" class="w-full" :min="0" placeholder="0" />
+        </a-form-item>
+        <a-form-item label="KL Thực tế" required>
+          <a-input-number v-model:value="laborForm.actual_quantity" size="large" class="w-full" :min="0" placeholder="0" />
+        </a-form-item>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <a-form-item label="Nhân công">
+          <a-input-number v-model:value="laborForm.workers_count" size="large" class="w-full" :min="1" />
+        </a-form-item>
+        <a-form-item label="Số giờ làm">
+          <a-input-number v-model:value="laborForm.hours_spent" size="large" class="w-full" :min="0.5" :step="0.5" />
+        </a-form-item>
+        <a-form-item label="Ngày">
+          <a-date-picker v-model:value="laborForm.record_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+        </a-form-item>
+      </div>
+      <!-- Preview -->
+      <div v-if="laborForm.planned_quantity && laborForm.actual_quantity" class="bg-blue-50 rounded-xl p-4 border border-blue-200 mb-4">
+        <div class="text-xs text-gray-500 mb-2 font-semibold">📊 Xem trước năng suất</div>
+        <div class="flex gap-6 text-sm">
+          <div>
+            <span class="text-gray-400">Hiệu suất:</span>
+            <span class="font-bold ml-1"
+              :class="(laborForm.actual_quantity / laborForm.planned_quantity * 100) >= 90 ? 'text-green-600' : (laborForm.actual_quantity / laborForm.planned_quantity * 100) >= 70 ? 'text-amber-600' : 'text-red-500'">
+              {{ (laborForm.actual_quantity / laborForm.planned_quantity * 100).toFixed(1) }}%
+            </span>
+          </div>
+          <div v-if="laborForm.workers_count && laborForm.hours_spent">
+            <span class="text-gray-400">Năng suất:</span>
+            <span class="font-bold text-blue-600 ml-1">
+              {{ (laborForm.actual_quantity / (laborForm.workers_count * laborForm.hours_spent)).toFixed(2) }} {{ laborForm.unit }}/người·giờ
+            </span>
+          </div>
+        </div>
+      </div>
+      <a-form-item label="Ghi chú">
+        <a-textarea v-model:value="laborForm.note" :rows="2" placeholder="Ghi chú thêm..." />
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
+import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import {
   ArrowLeftOutlined, EditOutlined, PlusOutlined, DeleteOutlined,
@@ -2175,6 +2987,179 @@ const activeRisks = computed(() => (props.project.risks || []).filter(r => r.sta
 // ============ STATE ============
 const activeTab = ref('overview')
 const commentText = ref('')
+
+// ============ GANTT/CPM STATE (Sprint 1) ============
+const ganttView = ref('chart')
+const ganttLoading = ref(false)
+const cpmLoading = ref(false)
+const ganttTasks = ref([])
+const cpmData = ref({})
+const delayWarnings = ref([])
+const progressComparisonData = ref([])
+const scheduleAdjustments = ref([])
+const showImportWbs = ref(false)
+const wbsImporting = ref(false)
+const wbsTemplates = ref([])
+const wbsPreview = ref(null)
+const wbsImportForm = ref({ template_id: null, start_date: null })
+
+const adjustmentCols = [
+  { title: 'Công việc', key: 'task', dataIndex: 'task' },
+  { title: 'Lý do', key: 'reason', dataIndex: 'reason' },
+  { title: 'Đề xuất', key: 'proposed' },
+  { title: 'Trạng thái', key: 'status', dataIndex: 'status', width: 100 },
+  { title: '', key: 'actions', width: 90 },
+]
+
+const apiBase = '/api'
+const apiGet = async (url) => {
+  const res = await fetch(apiBase + url, {
+    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    credentials: 'same-origin',
+  })
+  return res.json()
+}
+const apiPost = async (url, body = {}) => {
+  const token = document.querySelector('meta[name="csrf-token"]')?.content
+  const res = await fetch(apiBase + url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  })
+  return res.json()
+}
+
+const loadGanttData = async () => {
+  ganttLoading.value = true
+  try {
+    const data = await apiGet(`/projects/${props.project.id}/gantt`)
+    ganttTasks.value = data.data?.tasks || []
+  } catch (e) { console.error('Gantt load error', e) }
+  ganttLoading.value = false
+}
+
+const loadCPMData = async () => {
+  cpmLoading.value = true
+  try {
+    const data = await apiGet(`/projects/${props.project.id}/gantt/cpm`)
+    cpmData.value = data.data || {}
+  } catch (e) { console.error('CPM error', e) }
+  cpmLoading.value = false
+}
+
+const loadDelayWarnings = async () => {
+  try {
+    const data = await apiGet(`/projects/${props.project.id}/gantt/delay-warnings`)
+    delayWarnings.value = data.data?.warnings || []
+  } catch (e) { console.error('Warnings error', e) }
+}
+
+const loadProgressComparison = async () => {
+  try {
+    const data = await apiGet(`/projects/${props.project.id}/gantt/progress-comparison`)
+    progressComparisonData.value = data.data?.comparison || []
+  } catch (e) { console.error('Comparison error', e) }
+}
+
+const loadScheduleAdjustments = async () => {
+  try {
+    const data = await apiGet(`/projects/${props.project.id}/schedule-adjustments`)
+    scheduleAdjustments.value = data.data?.data || []
+  } catch (e) { console.error('Adjustments error', e) }
+}
+
+const approveAdjustment = async (id) => {
+  try {
+    await apiPost(`/projects/${props.project.id}/schedule-adjustments/${id}/approve`)
+    loadScheduleAdjustments()
+    loadGanttData()
+  } catch (e) { console.error('Approve error', e) }
+}
+
+const rejectAdjustment = async (id) => {
+  try {
+    await apiPost(`/projects/${props.project.id}/schedule-adjustments/${id}/reject`)
+    loadScheduleAdjustments()
+  } catch (e) { console.error('Reject error', e) }
+}
+
+// WBS Import
+const loadWbsTemplates = async () => {
+  try {
+    const data = await apiGet('/wbs-templates')
+    wbsTemplates.value = data.data || []
+  } catch (e) { console.error('WBS templates error', e) }
+}
+
+const loadWbsTemplatePreview = async (templateId) => {
+  if (!templateId) { wbsPreview.value = null; return }
+  try {
+    const data = await apiGet(`/wbs-templates/${templateId}`)
+    wbsPreview.value = data.data || null
+  } catch (e) { console.error('WBS preview error', e) }
+}
+
+const importWbsTemplate = async () => {
+  if (!wbsImportForm.value.template_id || !wbsImportForm.value.start_date) return
+  wbsImporting.value = true
+  try {
+    await apiPost(`/projects/${props.project.id}/tasks/import-template`, wbsImportForm.value)
+    showImportWbs.value = false
+    wbsImportForm.value = { template_id: null, start_date: null }
+    wbsPreview.value = null
+    loadGanttData()
+    router.reload({ preserveScroll: true })
+  } catch (e) { console.error('Import error', e) }
+  wbsImporting.value = false
+}
+
+// Auto-load gantt data when switching to gantt tab
+watch(activeTab, (val) => {
+  if (val === 'gantt') {
+    loadGanttData()
+    loadWbsTemplates()
+    loadDelayWarnings()
+  }
+  if (val === 'finance') loadFinanceData()
+})
+
+// ============ Sprint 2 — Finance Dashboard State ============
+const financeView = ref('cashflow')
+const financeLoading = ref(false)
+const cashFlowData = ref({})
+const pnlData = ref({})
+const bvaData = ref({})
+const debtData = ref({})
+const warrantyData = ref({})
+
+const costCatLabels = {
+  material: 'Vật tư xây dựng',
+  labor: 'Nhân công',
+  equipment: 'Thiết bị',
+  subcontractor: 'Nhà thầu phụ',
+  transportation: 'Vận chuyển',
+  other: 'Chi phí khác',
+}
+
+const loadFinanceData = async () => {
+  financeLoading.value = true
+  try {
+    const [cf, pl, bva, debt, warranty] = await Promise.all([
+      apiGet(`/projects/${props.project.id}/cash-flow`),
+      apiGet(`/projects/${props.project.id}/profit-loss`),
+      apiGet(`/projects/${props.project.id}/budget-vs-actual`),
+      apiGet(`/projects/${props.project.id}/subcontractor-debt`),
+      apiGet(`/projects/${props.project.id}/warranty-retentions`),
+    ])
+    cashFlowData.value = cf.data || {}
+    pnlData.value = pl.data || {}
+    bvaData.value = bva.data || {}
+    debtData.value = debt.data || {}
+    warrantyData.value = warranty.data || {}
+  } catch (e) { console.error('Finance load error', e) }
+  financeLoading.value = false
+}
 
 // Status maps
 const statusLabels = { planning: 'Lập kế hoạch', in_progress: 'Đang thi công', completed: 'Hoàn thành', cancelled: 'Đã hủy' }
@@ -2943,6 +3928,194 @@ const openEditDocModal = (doc) => { editingDoc.value = doc; docEditForm.value = 
 const updateDoc = () => { router.put(`/projects/${props.project.id}/documents/${editingDoc.value.id}`, docEditForm.value, { onSuccess: () => showDocEditModal.value = false }) }
 const deleteDoc = (doc) => router.delete(`/projects/${props.project.id}/documents/${doc.id}`)
 
+// ============ ATTENDANCE TAB STATE ============
+const attendanceView = ref('list')
+const attendanceDate = ref(null)
+const attendanceList = ref([])
+const attendanceSummary = ref(null)
+const attendanceByUser = ref([])
+const shiftsList = ref([])
+const showAttendanceModal = ref(false)
+const showShiftModal = ref(false)
+
+const attendanceStatusColors = { present: 'green', absent: 'red', late: 'orange', half_day: 'blue', leave: 'purple', holiday: 'pink' }
+const attendanceStatusLabels = { present: 'Có mặt', absent: 'Vắng', late: 'Trễ', half_day: 'Nửa ngày', leave: 'Nghỉ phép', holiday: 'Nghỉ lễ' }
+
+const attendanceCols = [
+  { title: 'Nhân viên', key: 'user', width: 180 },
+  { title: 'Ngày', key: 'date', width: 100, align: 'center' },
+  { title: 'Vào', key: 'check_in', width: 70, align: 'center' },
+  { title: 'Ra', key: 'check_out', width: 70, align: 'center' },
+  { title: 'Giờ làm', key: 'hours', width: 130 },
+  { title: 'Trạng thái', key: 'status', width: 100, align: 'center' },
+  { title: '', key: 'actions', width: 60, align: 'center' },
+]
+
+const loadAttendanceData = async () => {
+  try {
+    const params = { project_id: props.project.id }
+    if (attendanceDate.value) {
+      params.year = attendanceDate.value.year()
+      params.month = attendanceDate.value.month() + 1
+    }
+    const res = await axios.get('/api/attendance', { params })
+    attendanceList.value = res.data?.data || res.data || []
+    // Also load stats
+    loadAttendanceStats()
+  } catch (e) { console.error('Load attendance:', e) }
+}
+
+const loadAttendanceStats = async () => {
+  try {
+    const now = new Date()
+    const params = {
+      year: attendanceDate.value?.year() || now.getFullYear(),
+      month: (attendanceDate.value?.month() + 1) || (now.getMonth() + 1),
+      project_id: props.project.id,
+    }
+    const res = await axios.get('/api/attendance/statistics', { params })
+    attendanceSummary.value = res.data?.summary || null
+    attendanceByUser.value = res.data?.by_user || []
+  } catch (e) { console.error('Load attendance stats:', e) }
+}
+
+const approveAttendance = async (id) => {
+  try {
+    await axios.post(`/api/attendance/${id}/approve`)
+    message.success('Đã duyệt chấm công')
+    loadAttendanceData()
+  } catch (e) { message.error('Lỗi duyệt chấm công') }
+}
+
+const loadShifts = async () => {
+  try {
+    const res = await axios.get('/api/shifts', { params: { project_id: props.project.id } })
+    shiftsList.value = res.data || []
+  } catch (e) { console.error('Load shifts:', e) }
+}
+
+// ============ LABOR PRODUCTIVITY TAB STATE ============
+const laborView = ref('dashboard')
+const laborDashboard = ref(null)
+const laborRecords = ref([])
+const showLaborModal = ref(false)
+
+const laborRecordCols = [
+  { title: 'Hạng mục', key: 'work_item', width: 200 },
+  { title: 'KH', key: 'planned', width: 100, align: 'center' },
+  { title: 'Thực tế', key: 'actual', width: 100, align: 'center' },
+  { title: 'Hiệu suất', key: 'efficiency', width: 90, align: 'center' },
+  { title: 'Năng suất', key: 'productivity', width: 130 },
+  { title: 'Nhân công', key: 'workers', width: 120, align: 'center' },
+  { title: '', key: 'actions', width: 50 },
+]
+
+const laborItemCols = [
+  { title: 'Hạng mục', dataIndex: 'work_item', key: 'work_item' },
+  { title: 'Đơn vị', dataIndex: 'unit', key: 'unit', width: 70, align: 'center' },
+  { title: 'KH', key: 'planned', width: 100, align: 'right' },
+  { title: 'Thực tế', key: 'actual', width: 100, align: 'right' },
+  { title: 'Hiệu suất', key: 'efficiency', width: 100, align: 'center' },
+]
+
+const loadLaborDashboard = async () => {
+  try {
+    const res = await axios.get(`/api/projects/${props.project.id}/labor-productivity/dashboard`)
+    laborDashboard.value = res.data || null
+  } catch (e) { console.error('Load labor dashboard:', e) }
+}
+
+const loadLaborRecords = async () => {
+  try {
+    const res = await axios.get(`/api/projects/${props.project.id}/labor-productivity`)
+    laborRecords.value = res.data?.data || res.data || []
+  } catch (e) { console.error('Load labor records:', e) }
+}
+
+const deleteLaborRecord = async (id) => {
+  try {
+    await axios.delete(`/api/projects/${props.project.id}/labor-productivity/${id}`)
+    message.success('Đã xóa')
+    loadLaborRecords()
+    loadLaborDashboard()
+  } catch (e) { message.error('Lỗi xóa') }
+}
+
+// ---- Attendance / Shift / Labor FORM STATE ----
+const filterOption = (input, option) => (option?.children || option?.label || '').toString().toLowerCase().includes(input.toLowerCase())
+const attendanceSaving = ref(false)
+const shiftSaving = ref(false)
+const laborSaving = ref(false)
+
+const attendanceForm = ref({
+  user_id: null, work_date: null, check_in: null, check_out: null,
+  status: 'present', overtime_hours: 0, note: '',
+})
+const shiftForm = ref({
+  name: '', start_time: null, end_time: null,
+  break_hours: 1, overtime_multiplier: 1.5, is_overtime_shift: false,
+})
+const laborForm = ref({
+  work_item: '', unit: 'm²', planned_quantity: null, actual_quantity: null,
+  workers_count: 1, hours_spent: 8, record_date: null, note: '',
+})
+
+const submitManualAttendance = async () => {
+  if (!attendanceForm.value.user_id || !attendanceForm.value.work_date) {
+    return message.warning('Vui lòng chọn nhân viên và ngày')
+  }
+  try {
+    attendanceSaving.value = true
+    await axios.post('/api/attendance', {
+      ...attendanceForm.value,
+      project_id: props.project.id,
+      check_in_method: 'manual',
+    })
+    message.success('Đã chấm công thủ công')
+    showAttendanceModal.value = false
+    attendanceForm.value = { user_id: null, work_date: null, check_in: null, check_out: null, status: 'present', overtime_hours: 0, note: '' }
+    loadAttendanceData()
+  } catch (e) { message.error(e.response?.data?.message || 'Lỗi chấm công') }
+  finally { attendanceSaving.value = false }
+}
+
+const submitShift = async () => {
+  if (!shiftForm.value.name || !shiftForm.value.start_time || !shiftForm.value.end_time) {
+    return message.warning('Vui lòng nhập tên ca và giờ')
+  }
+  try {
+    shiftSaving.value = true
+    await axios.post('/api/shifts', { ...shiftForm.value, project_id: props.project.id })
+    message.success('Đã tạo ca làm việc')
+    showShiftModal.value = false
+    shiftForm.value = { name: '', start_time: null, end_time: null, break_hours: 1, overtime_multiplier: 1.5, is_overtime_shift: false }
+    loadShifts()
+  } catch (e) { message.error(e.response?.data?.message || 'Lỗi tạo ca') }
+  finally { shiftSaving.value = false }
+}
+
+const submitLaborRecord = async () => {
+  if (!laborForm.value.work_item || !laborForm.value.planned_quantity || !laborForm.value.actual_quantity) {
+    return message.warning('Vui lòng nhập đầy đủ thông tin')
+  }
+  try {
+    laborSaving.value = true
+    await axios.post(`/api/projects/${props.project.id}/labor-productivity`, laborForm.value)
+    message.success('Đã ghi nhận năng suất')
+    showLaborModal.value = false
+    laborForm.value = { work_item: '', unit: 'm²', planned_quantity: null, actual_quantity: null, workers_count: 1, hours_spent: 8, record_date: null, note: '' }
+    loadLaborDashboard()
+    loadLaborRecords()
+  } catch (e) { message.error(e.response?.data?.message || 'Lỗi ghi nhận') }
+  finally { laborSaving.value = false }
+}
+
+// Auto-load when switching to these tabs
+watch(activeTab, (tab) => {
+  if (tab === 'attendance') loadAttendanceData()
+  if (tab === 'labor') { loadLaborDashboard(); loadLaborRecords() }
+})
+
 // ============ MATERIALS TAB (Giống APP) ============
 const fmtQty = (v) => new Intl.NumberFormat('vi-VN').format(v)
 const totalMaterialCost = computed(() => (props.projectMaterials || []).reduce((s, m) => s + Number(m.project_total_amount || 0), 0))
@@ -2957,11 +4130,11 @@ const materialCols = [
 const showMaterialModal = ref(false)
 const materialBatchItems = ref([])
 const submittingMaterial = ref(false)
-const matForm = ref({ material_id: null, quantity: 1, amount: 0, notes: '', transaction_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null })
+const matForm = ref({ material_id: null, quantity: 1, unit_price: 0, amount: 0, notes: '', transaction_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null })
 const matFormSelected = computed(() => (props.materials || []).find(m => m.id === matForm.value.material_id))
 
 const openMaterialModal = () => {
-  matForm.value = { material_id: null, quantity: 1, amount: 0, notes: '', transaction_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null }
+  matForm.value = { material_id: null, quantity: 1, unit_price: 0, amount: 0, notes: '', transaction_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null }
   materialBatchItems.value = []
   showMaterialModal.value = true
 }
@@ -2969,15 +4142,16 @@ const openMaterialModal = () => {
 const onMaterialSelect = (id) => {
   const m = (props.materials || []).find(x => x.id === id)
   if (m && m.unit_price) {
+    matForm.value.unit_price = m.unit_price
     matForm.value.amount = matForm.value.quantity * m.unit_price
+  } else {
+    matForm.value.unit_price = 0
+    matForm.value.amount = 0
   }
 }
 
 const calcMatAmount = () => {
-  const m = matFormSelected.value
-  if (m && m.unit_price) {
-    matForm.value.amount = (matForm.value.quantity || 0) * m.unit_price
-  }
+  matForm.value.amount = (matForm.value.quantity || 0) * (matForm.value.unit_price || 0)
 }
 
 const addMaterialToBatch = () => {
@@ -2989,7 +4163,7 @@ const addMaterialToBatch = () => {
     amount: matForm.value.amount,
     notes: matForm.value.notes,
   })
-  matForm.value = { ...matForm.value, material_id: null, quantity: 1, amount: 0, notes: '' }
+  matForm.value = { ...matForm.value, material_id: null, quantity: 1, unit_price: 0, amount: 0, notes: '' }
 }
 
 const submitMaterialBatch = () => {

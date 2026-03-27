@@ -106,6 +106,7 @@ use App\Http\Controllers\Admin\CrmNotificationController;
 use App\Http\Controllers\Admin\CrmFilesController;
 use App\Http\Controllers\Admin\CrmKpiController;
 use App\Http\Controllers\Admin\CrmSubcontractorController;
+use App\Http\Controllers\Admin\CrmAcceptanceTemplateController;
 
 Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     // Dashboard
@@ -343,6 +344,16 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/', [CrmSubcontractorController::class, 'store'])->name('store');
         Route::put('/{id}', [CrmSubcontractorController::class, 'update'])->name('update');
         Route::delete('/{id}', [CrmSubcontractorController::class, 'destroy'])->name('destroy');
+    });
+
+    // Acceptance Templates (Bộ tài liệu nghiệm thu)
+    Route::prefix('acceptance-templates')->name('acceptance-templates.')->group(function () {
+        Route::get('/', [CrmAcceptanceTemplateController::class, 'index'])->name('index');
+        Route::get('/{id}', [CrmAcceptanceTemplateController::class, 'show'])->name('show');
+        Route::post('/', [CrmAcceptanceTemplateController::class, 'store'])->name('store');
+        Route::put('/{id}', [CrmAcceptanceTemplateController::class, 'update'])->name('update');
+        Route::put('/{id}/toggle-active', [CrmAcceptanceTemplateController::class, 'toggleActive'])->name('toggle-active');
+        Route::delete('/{id}', [CrmAcceptanceTemplateController::class, 'destroy'])->name('destroy');
     });
 
     // Finance

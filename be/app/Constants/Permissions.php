@@ -312,6 +312,47 @@ class Permissions
     public const ACCEPTANCE_TEMPLATE_DELETE = 'acceptance.template.delete';
 
     // ===================================================================
+    // GANTT / WBS MODULE
+    // ===================================================================
+    public const GANTT_VIEW = 'gantt.view';
+    public const GANTT_UPDATE = 'gantt.update';
+    public const WBS_TEMPLATE_VIEW = 'wbs.template.view';
+    public const WBS_TEMPLATE_CREATE = 'wbs.template.create';
+
+    // ===================================================================
+    // FINANCE MODULE (Cash Flow, P/L, BvA, Debt, Warranty)
+    // ===================================================================
+    public const FINANCE_VIEW = 'finance.view';
+    public const FINANCE_MANAGE = 'finance.manage';
+
+    // ===================================================================
+    // ATTENDANCE MODULE
+    // ===================================================================
+    public const ATTENDANCE_VIEW = 'attendance.view';
+    public const ATTENDANCE_CHECK_IN = 'attendance.check_in';
+    public const ATTENDANCE_MANAGE = 'attendance.manage';
+    public const ATTENDANCE_APPROVE = 'attendance.approve';
+
+    // ===================================================================
+    // LABOR PRODUCTIVITY MODULE
+    // ===================================================================
+    public const LABOR_PRODUCTIVITY_VIEW = 'labor_productivity.view';
+    public const LABOR_PRODUCTIVITY_CREATE = 'labor_productivity.create';
+    public const LABOR_PRODUCTIVITY_UPDATE = 'labor_productivity.update';
+    public const LABOR_PRODUCTIVITY_DELETE = 'labor_productivity.delete';
+
+    // ===================================================================
+    // EVM & PREDICTIVE MODULE
+    // ===================================================================
+    public const EVM_VIEW = 'evm.view';
+    public const PREDICTIVE_VIEW = 'predictive.view';
+
+    // ===================================================================
+    // COMPANY FINANCIAL REPORT MODULE
+    // ===================================================================
+    public const COMPANY_FINANCIAL_VIEW = 'company_financial.view';
+
+    // ===================================================================
     // PROJECT MONITORING MODULE
     // ===================================================================
     public const PROJECT_MONITORING_VIEW = 'project.monitoring.view';
@@ -562,6 +603,35 @@ class Permissions
             self::ACCEPTANCE_TEMPLATE_UPDATE,
             self::ACCEPTANCE_TEMPLATE_DELETE,
 
+            // Gantt / WBS
+            self::GANTT_VIEW,
+            self::GANTT_UPDATE,
+            self::WBS_TEMPLATE_VIEW,
+            self::WBS_TEMPLATE_CREATE,
+
+            // Finance
+            self::FINANCE_VIEW,
+            self::FINANCE_MANAGE,
+
+            // Attendance
+            self::ATTENDANCE_VIEW,
+            self::ATTENDANCE_CHECK_IN,
+            self::ATTENDANCE_MANAGE,
+            self::ATTENDANCE_APPROVE,
+
+            // Labor Productivity
+            self::LABOR_PRODUCTIVITY_VIEW,
+            self::LABOR_PRODUCTIVITY_CREATE,
+            self::LABOR_PRODUCTIVITY_UPDATE,
+            self::LABOR_PRODUCTIVITY_DELETE,
+
+            // EVM & Predictive
+            self::EVM_VIEW,
+            self::PREDICTIVE_VIEW,
+
+            // Company Financial
+            self::COMPANY_FINANCIAL_VIEW,
+
             // Project Monitoring
             self::PROJECT_MONITORING_VIEW,
 
@@ -780,6 +850,35 @@ class Permissions
                 self::ACCEPTANCE_TEMPLATE_CREATE,
                 self::ACCEPTANCE_TEMPLATE_UPDATE,
                 self::ACCEPTANCE_TEMPLATE_DELETE,
+            ],
+            'gantt' => [
+                self::GANTT_VIEW,
+                self::GANTT_UPDATE,
+                self::WBS_TEMPLATE_VIEW,
+                self::WBS_TEMPLATE_CREATE,
+            ],
+            'finance' => [
+                self::FINANCE_VIEW,
+                self::FINANCE_MANAGE,
+            ],
+            'attendance' => [
+                self::ATTENDANCE_VIEW,
+                self::ATTENDANCE_CHECK_IN,
+                self::ATTENDANCE_MANAGE,
+                self::ATTENDANCE_APPROVE,
+            ],
+            'labor_productivity' => [
+                self::LABOR_PRODUCTIVITY_VIEW,
+                self::LABOR_PRODUCTIVITY_CREATE,
+                self::LABOR_PRODUCTIVITY_UPDATE,
+                self::LABOR_PRODUCTIVITY_DELETE,
+            ],
+            'evm_predictive' => [
+                self::EVM_VIEW,
+                self::PREDICTIVE_VIEW,
+            ],
+            'company_financial' => [
+                self::COMPANY_FINANCIAL_VIEW,
             ],
             'project_monitoring' => [
                 self::PROJECT_MONITORING_VIEW,

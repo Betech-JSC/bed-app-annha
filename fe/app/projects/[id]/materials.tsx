@@ -490,13 +490,18 @@ export default function ProjectMaterialsScreen() {
                                     value={transactionData.quantity}
                                     onChangeText={(text) => {
                                         const qty = parseFloat(text);
-                                        const amount = !isNaN(qty) && selectedMaterial.unit_price
-                                            ? qty * selectedMaterial.unit_price
+                                        // Recalculate amount if quantity changes, using current amount/qty ratio or unit_price
+                                        const currentQty = parseFloat(transactionData.quantity);
+                                        const currentUnitPrice = !isNaN(currentQty) && currentQty > 0
+                                            ? transactionData.amount / currentQty
+                                            : (selectedMaterial.unit_price || 0);
+                                        const amount = !isNaN(qty) && currentUnitPrice
+                                            ? qty * currentUnitPrice
                                             : transactionData.amount;
                                         setTransactionData({
                                             ...transactionData,
                                             quantity: text,
-                                            amount: amount
+                                            amount: Math.round(amount)
                                         });
                                     }}
                                     placeholder="Nhập số lượng"
@@ -519,9 +524,8 @@ export default function ProjectMaterialsScreen() {
                                 value={transactionData.amount}
                                 onChangeText={(amount) => setTransactionData({ ...transactionData, amount })}
                                 placeholder="Nhập chi phí cho vật liệu"
-                                helperText={selectedMaterial.unit_price ? "Tự động tính theo đơn giá niêm yết" : "Số tiền sẽ được đẩy qua chi phí dự án"}
-                                editable={!selectedMaterial.unit_price}
-                                style={selectedMaterial.unit_price ? { backgroundColor: '#F3F4F6' } : {}}
+                                helperText={selectedMaterial.unit_price ? "Giá đã tự động tính, bạn có thể điều chỉnh lại" : "Số tiền sẽ được đẩy qua chi phí dự án"}
+                                editable={true}
                             />
 
                             <DatePickerInput

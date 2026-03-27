@@ -25,7 +25,7 @@
           <span class="font-semibold">{{ formatCurrency(record.contract_value) }}</span>
         </template>
         <template v-else-if="column.key === 'status'">
-          <a-tag :color="record.status === 'approved' ? 'green' : 'orange'" class="rounded-full">{{ record.status }}</a-tag>
+          <a-tag :color="contractStatusColors[record.status] || 'default'" class="rounded-full">{{ statusLabels[record.status] || record.status }}</a-tag>
         </template>
         <template v-else-if="column.key === 'date'">
           {{ record.signed_date ? dayjs(record.signed_date).format('DD/MM/YYYY') : '—' }}
@@ -48,7 +48,7 @@
           <span class="font-semibold text-red-500">{{ formatCurrency(record.amount) }}</span>
         </template>
         <template v-else-if="column.key === 'status'">
-          <a-tag :color="statusColors[record.status]" class="rounded-full">{{ record.status }}</a-tag>
+          <a-tag :color="statusColors[record.status]" class="rounded-full">{{ statusLabels[record.status] || record.status }}</a-tag>
         </template>
         <template v-else-if="column.key === 'creator'">
           {{ record.creator?.name || '—' }}
@@ -87,7 +87,28 @@ const costColumns = [
   { title: 'Ngày', key: 'date', width: 110 },
 ]
 
-const statusColors = { draft: 'default', submitted: 'processing', approved_management: 'blue', approved_accountant: 'green', rejected: 'red' }
+const statusColors = { draft: 'default', submitted: 'processing', pending_management_approval: 'orange', pending_accountant_approval: 'cyan', approved_management: 'blue', approved_accountant: 'green', approved: 'green', rejected: 'red', paid: 'green' }
+const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', active: 'green', approved: 'green', expired: 'default', terminated: 'red' }
+const statusLabels = {
+  draft: 'Nháp',
+  submitted: 'Đã gửi',
+  pending: 'Chờ duyệt',
+  pending_management_approval: 'Chờ BĐH duyệt',
+  pending_accountant_approval: 'Chờ KT xác nhận',
+  pending_customer_approval: 'Chờ KH duyệt',
+  customer_pending_approval: 'Chờ KH duyệt',
+  approved_management: 'BĐH đã duyệt',
+  approved_accountant: 'KT đã duyệt',
+  approved: 'Đã duyệt',
+  rejected: 'Từ chối',
+  active: 'Đang hiệu lực',
+  expired: 'Hết hạn',
+  terminated: 'Đã thanh lý',
+  paid: 'Đã thanh toán',
+  customer_paid: 'KH đã thanh toán',
+  customer_approved: 'KH đã duyệt',
+  pending_accountant_confirmation: 'Chờ KT xác nhận',
+}
 const formatCurrency = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v) : '0 ₫'
 </script>
 

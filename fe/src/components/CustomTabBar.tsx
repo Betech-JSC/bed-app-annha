@@ -33,12 +33,12 @@ const tabs: TabItem[] = [
     route: "/(tabs)/hr",
     icon: "people-outline",
     iconFocused: "people",
-    /* permissionList: [
+    permissionList: [
       Permissions.HR_EMPLOYEE_VIEW,
       Permissions.HR_PAYROLL_VIEW,
       Permissions.HR_TIME_TRACKING_VIEW,
       Permissions.HR_BONUS_VIEW,
-    ], */
+    ],
   },
   {
     name: "Duyệt",
@@ -48,6 +48,16 @@ const tabs: TabItem[] = [
     permissionList: [
       Permissions.COST_APPROVE_MANAGEMENT,
       Permissions.COST_APPROVE_ACCOUNTANT,
+      Permissions.CONTRACT_APPROVE_LEVEL_1,
+      Permissions.CONTRACT_APPROVE_LEVEL_2,
+      Permissions.ACCEPTANCE_APPROVE_LEVEL_1,
+      Permissions.ACCEPTANCE_APPROVE_LEVEL_2,
+      Permissions.ACCEPTANCE_APPROVE_LEVEL_3,
+      Permissions.MATERIAL_APPROVE,
+      Permissions.CHANGE_REQUEST_APPROVE,
+      Permissions.SUBCONTRACTOR_PAYMENT_APPROVE,
+      Permissions.ADDITIONAL_COST_APPROVE,
+      Permissions.SUPPLIER_CONTRACT_APPROVE,
     ],
   },
   {
@@ -62,6 +72,7 @@ const tabs: TabItem[] = [
     route: "/(tabs)/settings",
     icon: "settings-outline",
     iconFocused: "settings",
+    permission: Permissions.SETTINGS_VIEW,
   },
 ];
 

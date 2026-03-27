@@ -6,262 +6,134 @@
     subtitle="Quản lý phê duyệt theo từng cấp — BĐH → Kế Toán · Khách hàng · Thay đổi · CP Phát sinh · NTP"
   >
     <template #actions>
-      <a-button size="large" class="rounded-xl" @click="refreshPage">
-        <template #icon><ReloadOutlined /></template>
-        Làm mới
-      </a-button>
+      <div class="flex items-center gap-3">
+        <a-segmented v-model:value="viewMode" :options="[
+          { label: 'Kanban', value: 'kanban' },
+          { label: 'Danh sách', value: 'list' },
+        ]" size="large" class="rounded-xl" />
+        <a-button size="large" class="rounded-xl" @click="refreshPage">
+          <template #icon><ReloadOutlined /></template>
+          Làm mới
+        </a-button>
+      </div>
     </template>
   </PageHeader>
 
-  <!-- ─── Stats Overview ─── -->
-  <div class="approval-overview">
-    <div class="approval-overview__card">
-      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #F59E0B20, #F59E0B08);">
-        <ClockCircleOutlined style="color: #F59E0B; font-size: 22px;" />
-      </div>
-      <div>
-        <div class="approval-overview__value">{{ stats.pending_management }}</div>
-        <div class="approval-overview__label">Chờ BĐH duyệt</div>
-      </div>
+  <!-- ─── Stats Overview (compact) ─── -->
+  <div class="kb-stats">
+    <div class="kb-stats__item" v-for="s in statsList" :key="s.label">
+      <div class="kb-stats__dot" :style="{ background: s.color }"></div>
+      <span class="kb-stats__value">{{ s.value }}</span>
+      <span class="kb-stats__label">{{ s.label }}</span>
     </div>
-    <div class="approval-overview__card">
-      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #06B6D420, #06B6D408);">
-        <AuditOutlined style="color: #06B6D4; font-size: 22px;" />
-      </div>
-      <div>
-        <div class="approval-overview__value">{{ stats.pending_accountant }}</div>
-        <div class="approval-overview__label">Chờ KT xác nhận</div>
-      </div>
+    <div class="kb-stats__divider"></div>
+    <div class="kb-stats__item kb-stats__item--total">
+      <DollarOutlined style="font-size: 16px; color: #10B981;" />
+      <span class="kb-stats__value" style="color: #10B981;">{{ formatCurrency(stats.total_pending_amount) }}</span>
+      <span class="kb-stats__label">Tổng chờ duyệt</span>
     </div>
-    <div class="approval-overview__card">
-      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #8B5CF620, #8B5CF608);">
-        <UserOutlined style="color: #8B5CF6; font-size: 22px;" />
+  </div>
+
+  <!-- ─── KANBAN VIEW ─── -->
+  <div v-if="viewMode === 'kanban'" class="kb-board">
+    <div
+      v-for="col in kanbanColumns"
+      :key="col.key"
+      class="kb-column"
+      :class="{ 'kb-column--empty': col.items.length === 0 }"
+    >
+      <!-- Column Header -->
+      <div class="kb-column__header">
+        <div class="kb-column__header-left">
+          <div class="kb-column__indicator" :style="{ background: col.color }"></div>
+          <div>
+            <div class="kb-column__title">{{ col.title }}</div>
+            <div class="kb-column__subtitle">{{ col.subtitle }}</div>
+          </div>
+        </div>
+        <a-badge :count="col.items.length" :number-style="{ background: col.color, fontSize: '11px', boxShadow: 'none' }" />
       </div>
-      <div>
-        <div class="approval-overview__value">{{ stats.pending_customer }}</div>
-        <div class="approval-overview__label">Chờ KH duyệt</div>
-      </div>
-    </div>
-    <div class="approval-overview__card">
-      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #EC489920, #EC489908);">
-        <SwapOutlined style="color: #EC4899; font-size: 22px;" />
-      </div>
-      <div>
-        <div class="approval-overview__value">{{ stats.pending_change_request + stats.pending_additional_cost }}</div>
-        <div class="approval-overview__label">CR / CP Phát sinh</div>
-      </div>
-    </div>
-    <div class="approval-overview__card">
-      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #6366F120, #6366F108);">
-        <FileProtectOutlined style="color: #6366F1; font-size: 22px;" />
-      </div>
-      <div>
-        <div class="approval-overview__value">{{ stats.pending_contract + stats.pending_payment }}</div>
-        <div class="approval-overview__label">HĐ / TT chờ KH</div>
-      </div>
-    </div>
-    <div class="approval-overview__card">
-      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #A855F720, #A855F708);">
-        <InboxOutlined style="color: #A855F7; font-size: 22px;" />
-      </div>
-      <div>
-        <div class="approval-overview__value">{{ stats.pending_material_bill + stats.pending_sub_acceptance }}</div>
-        <div class="approval-overview__label">VT / NT NTP</div>
-      </div>
-    </div>
-    <div class="approval-overview__card">
-      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #10B98120, #10B98108);">
-        <CheckCircleOutlined style="color: #10B981; font-size: 22px;" />
-      </div>
-      <div>
-        <div class="approval-overview__value">{{ stats.approved_today }}</div>
-        <div class="approval-overview__label">Đã duyệt hôm nay</div>
-      </div>
-    </div>
-    <div class="approval-overview__card">
-      <div class="approval-overview__icon" style="background: linear-gradient(135deg, #EF444420, #EF444408);">
-        <CloseCircleOutlined style="color: #EF4444; font-size: 22px;" />
-      </div>
-      <div>
-        <div class="approval-overview__value">{{ stats.rejected_today }}</div>
-        <div class="approval-overview__label">Từ chối hôm nay</div>
+
+      <!-- Column Body — Scrollable -->
+      <div class="kb-column__body">
+        <div v-if="col.items.length === 0" class="kb-column__empty">
+          <CheckCircleOutlined style="font-size: 28px; color: #D1D5DB;" />
+          <span>{{ col.emptyText || 'Trống' }}</span>
+        </div>
+        <div
+          v-for="item in col.items"
+          :key="item.id"
+          class="kb-card"
+          :style="{ '--card-color': col.color }"
+          @click="openDetailDrawer(item)"
+        >
+          <!-- Card header -->
+          <div class="kb-card__top">
+            <a-tag :color="tagColors[item.type] || 'default'" class="rounded-lg" style="font-size: 10px; line-height: 18px; padding: 0 6px;">
+              {{ item.type_label }}
+            </a-tag>
+            <div v-if="item.amount" class="kb-card__amount">
+              {{ formatCompact(item.amount) }}
+            </div>
+          </div>
+          <!-- Card body -->
+          <div class="kb-card__title">{{ item.title }}</div>
+          <div class="kb-card__subtitle">{{ item.subtitle }}</div>
+          <!-- BĐH approval info (for accountant zone) -->
+          <div v-if="col.level === 'accountant' && item.management_approved_by" class="kb-card__approval-badge">
+            <CheckCircleOutlined style="color: #10B981; font-size: 11px;" />
+            <span>BĐH: {{ item.management_approved_by }}</span>
+          </div>
+          <!-- Card footer -->
+          <div class="kb-card__footer">
+            <div class="kb-card__meta">
+              <a-avatar :size="20" style="background: #1B4F72; font-size: 9px;">
+                {{ item.created_by?.charAt(0)?.toUpperCase() }}
+              </a-avatar>
+              <span>{{ item.created_at }}</span>
+            </div>
+            <div class="kb-card__actions" @click.stop>
+              <a-tooltip title="Duyệt">
+                <a-button
+                  type="primary"
+                  size="small"
+                  class="kb-card__btn-approve"
+                  :style="{ background: col.approve_color || '#10B981', borderColor: col.approve_color || '#10B981' }"
+                  @click.stop="col.onApprove(item)"
+                >
+                  <template #icon><CheckOutlined /></template>
+                </a-button>
+              </a-tooltip>
+              <a-tooltip title="Từ chối">
+                <a-button danger size="small" class="kb-card__btn-reject" @click.stop="col.onReject(item)">
+                  <template #icon><CloseOutlined /></template>
+                </a-button>
+              </a-tooltip>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ─── Approval Pipeline ─── -->
-  <div class="approval-pipeline" v-if="totalPending > 0">
-    <div class="pipeline-total">
-      <DollarOutlined style="font-size: 18px;" />
-      <span>Tổng chờ duyệt: <strong>{{ formatCurrency(stats.total_pending_amount) }}</strong> · {{ totalPending }} yêu cầu</span>
-    </div>
-    <div class="pipeline-flow">
-      <div class="pipeline-step" :class="{ 'pipeline-step--active': stats.pending_management > 0 }">
-        <div class="pipeline-step__dot" style="background: #F59E0B;"></div>
-        <span>BĐH ({{ stats.pending_management }})</span>
-      </div>
-      <div class="pipeline-arrow">→</div>
-      <div class="pipeline-step" :class="{ 'pipeline-step--active': stats.pending_accountant > 0 }">
-        <div class="pipeline-step__dot" style="background: #06B6D4;"></div>
-        <span>Kế Toán ({{ stats.pending_accountant }})</span>
-      </div>
-      <div class="pipeline-arrow">→</div>
-      <div class="pipeline-step" :class="{ 'pipeline-step--active': stats.pending_customer > 0 }">
-        <div class="pipeline-step__dot" style="background: #8B5CF6;"></div>
-        <span>KH ({{ stats.pending_customer }})</span>
-      </div>
-      <div class="pipeline-arrow">→</div>
-      <div class="pipeline-step">
-        <div class="pipeline-step__dot" style="background: #10B981;"></div>
-        <span>Hoàn tất</span>
-      </div>
-    </div>
+  <!-- ─── LIST VIEW (legacy zones) ─── -->
+  <div v-else class="kb-list-view">
+    <ApprovalZone
+      v-for="col in kanbanColumns"
+      :key="col.key"
+      :title="col.title"
+      :subtitle="col.subtitle"
+      :items="col.items"
+      :color="col.color"
+      :level="col.level"
+      :emptyText="col.emptyText"
+      @approve="col.onApprove"
+      @reject="col.onReject"
+      @view="openDetailDrawer"
+    />
   </div>
 
-  <!-- ─── Zone 1: Ban Điều Hành (Management) ─── -->
-  <ApprovalZone
-    title="Cấp 1 — Ban Điều Hành (BĐH)"
-    subtitle="Lãnh đạo xem xét và phê duyệt chi phí"
-    :items="managementItems"
-    :color="'#F59E0B'"
-    level="management"
-    emptyText="Không có yêu cầu chờ BĐH duyệt"
-    @approve="handleApprove"
-    @reject="openRejectModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 2: Kế Toán (Accountant) ─── -->
-  <ApprovalZone
-    title="Cấp 2 — Kế Toán (KT)"
-    subtitle="Kế toán xác nhận sau khi BĐH đã duyệt"
-    :items="accountantItems"
-    :color="'#06B6D4'"
-    level="accountant"
-    emptyText="Không có yêu cầu chờ Kế Toán xác nhận"
-    @approve="handleApprove"
-    @reject="openRejectModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 3: Khách hàng duyệt Nghiệm thu ─── -->
-  <ApprovalZone
-    title="Khách hàng — Duyệt nghiệm thu"
-    subtitle="Giai đoạn nghiệm thu đã được QLDA phê duyệt, chờ khách hàng xác nhận"
-    :items="customerAcceptanceItems"
-    :color="'#8B5CF6'"
-    level="customer"
-    emptyText="Không có nghiệm thu chờ khách hàng duyệt"
-    @approve="handleApproveAcceptance"
-    @reject="openRejectAcceptanceModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 4: Yêu cầu Thay đổi (Change Request) ─── -->
-  <ApprovalZone
-    title="Yêu cầu Thay đổi (CR)"
-    subtitle="Các yêu cầu thay đổi đang chờ phê duyệt"
-    :items="changeRequestItems"
-    :color="'#EC4899'"
-    level="change_request"
-    emptyText="Không có yêu cầu thay đổi chờ duyệt"
-    @approve="handleApproveCR"
-    @reject="openRejectCRModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 5: Chi phí Phát sinh ─── -->
-  <ApprovalZone
-    title="Chi phí Phát sinh"
-    subtitle="Các chi phí phát sinh đang chờ BĐH duyệt"
-    :items="additionalCostItems"
-    :color="'#F97316'"
-    level="additional_cost"
-    emptyText="Không có chi phí phát sinh chờ duyệt"
-    @approve="handleApproveAC"
-    @reject="openRejectACModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 6: Thanh toán NTP — BĐH ─── -->
-  <ApprovalZone
-    title="Thanh toán NTP — Chờ BĐH duyệt"
-    subtitle="Phiếu thanh toán nhà thầu phụ chờ Ban điều hành phê duyệt"
-    :items="subPaymentManagementItems"
-    :color="'#0EA5E9'"
-    level="sub_payment_management"
-    emptyText="Không có thanh toán NTP chờ BĐH duyệt"
-    @approve="handleApproveSubPayment"
-    @reject="openRejectSubPaymentModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 7: Thanh toán NTP — KT ─── -->
-  <ApprovalZone
-    title="Thanh toán NTP — Chờ KT xác nhận"
-    subtitle="Phiếu thanh toán đã được BĐH duyệt, chờ Kế toán xác nhận thanh toán"
-    :items="subPaymentAccountantItems"
-    :color="'#14B8A6'"
-    level="sub_payment_accountant"
-    emptyText="Không có thanh toán NTP chờ Kế Toán xác nhận"
-    @approve="handleConfirmSubPayment"
-    @reject="openRejectSubPaymentModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 8: Hợp đồng chờ KH duyệt ─── -->
-  <ApprovalZone
-    title="Hợp đồng chờ Khách hàng duyệt"
-    subtitle="Hợp đồng đã gửi cho khách hàng, chờ phê duyệt"
-    :items="contractItems"
-    :color="'#6366F1'"
-    level="contract"
-    emptyText="Không có hợp đồng chờ KH duyệt"
-    @approve="handleApproveContract"
-    @reject="openRejectContractModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 9: Thanh toán DA chờ KH duyệt ─── -->
-  <ApprovalZone
-    title="Thanh toán dự án chờ Khách hàng duyệt"
-    subtitle="Đợt thanh toán đã gửi khách hàng, chờ xác nhận"
-    :items="paymentItems"
-    :color="'#D946EF'"
-    level="project_payment"
-    emptyText="Không có đợt thanh toán chờ KH duyệt"
-    @approve="handleApprovePayment"
-    @reject="openRejectPaymentModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 10: Phiếu vật tư chờ duyệt ─── -->
-  <ApprovalZone
-    title="Phiếu xuất vật tư chờ duyệt"
-    subtitle="Phiếu xuất vật tư chờ BĐH hoặc Kế toán xác nhận"
-    :items="materialBillItems"
-    :color="'#A855F7'"
-    level="material_bill"
-    emptyText="Không có phiếu vật tư chờ duyệt"
-    @approve="handleApproveMaterialBill"
-    @reject="openRejectMaterialBillModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 11: Nghiệm thu NTP chờ duyệt ─── -->
-  <ApprovalZone
-    title="Nghiệm thu Nhà thầu phụ chờ duyệt"
-    subtitle="Biên bản nghiệm thu NTP chờ xác nhận"
-    :items="subAcceptanceItems"
-    :color="'#0D9488'"
-    level="sub_acceptance"
-    emptyText="Không có nghiệm thu NTP chờ duyệt"
-    @approve="handleApproveSubAcceptance"
-    @reject="openRejectSubAcceptanceModal"
-    @view="openDetailDrawer"
-  />
-
-  <!-- ─── Zone 8: Lịch sử xử lý ─── -->
+  <!-- ─── Lịch sử xử lý ─── -->
   <div class="crm-content-card" style="margin-top: 24px;">
     <div class="crm-content-card__header" @click="showHistory = !showHistory" style="cursor: pointer;">
       <h3 class="crm-content-card__title">
@@ -302,8 +174,8 @@
             <span class="font-semibold text-gray-700 text-sm">{{ formatCurrency(record.amount) }}</span>
           </template>
           <template v-if="column.key === 'status'">
-            <a-tag :color="record.status === 'approved' ? 'green' : 'red'" class="rounded-lg">
-              {{ record.status_label }}
+            <a-tag :color="historyStatusColor(record.status)" class="rounded-lg">
+              {{ record.status_label || statusViMap[record.status] || record.status }}
             </a-tag>
           </template>
           <template v-if="column.key === 'created_at'">
@@ -382,6 +254,32 @@
         <div class="detail-label">Lý do từ chối</div>
         <a-alert type="error" :message="detailItem.rejected_reason" show-icon class="rounded-xl" />
       </div>
+
+      <!-- Quick Actions in Drawer -->
+      <a-divider />
+      <div class="flex gap-3">
+        <a-button
+          type="primary"
+          block
+          size="large"
+          class="rounded-xl"
+          style="background: #10B981; border-color: #10B981;"
+          @click="handleDrawerApprove"
+        >
+          <template #icon><CheckOutlined /></template>
+          Duyệt
+        </a-button>
+        <a-button
+          danger
+          block
+          size="large"
+          class="rounded-xl"
+          @click="handleDrawerReject"
+        >
+          <template #icon><CloseOutlined /></template>
+          Từ chối
+        </a-button>
+      </div>
     </template>
   </a-drawer>
 
@@ -430,6 +328,8 @@ import {
   AuditOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  CheckOutlined,
+  CloseOutlined,
   DollarOutlined,
   HistoryOutlined,
   UpOutlined,
@@ -459,11 +359,12 @@ const props = defineProps({
   stats: { type: Object, default: () => ({}) },
 })
 
+const viewMode = ref('kanban')
 const rejectModalVisible = ref(false)
 const rejectTarget = ref(null)
 const rejectReason = ref('')
 const rejectLoading = ref(false)
-const rejectType = ref('cost') // cost | acceptance | change_request | additional_cost | sub_payment
+const rejectType = ref('cost')
 const showHistory = ref(false)
 const detailItem = ref(null)
 
@@ -480,6 +381,70 @@ const typeColors = {
   sub_acceptance: 'lime',
 }
 
+const tagColors = {
+  project_cost: 'blue',
+  company_cost: 'gold',
+  acceptance: 'purple',
+  change_request: 'magenta',
+  additional_cost: 'orange',
+  sub_payment: 'cyan',
+  contract: 'geekblue',
+  project_payment: 'volcano',
+  material_bill: 'purple',
+  sub_acceptance: 'lime',
+}
+
+// ─── Vietnamese status labels for fallback ───
+const statusViMap = {
+  draft: 'Nháp',
+  pending: 'Chờ duyệt',
+  pending_approval: 'Chờ duyệt',
+  submitted: 'Đã gửi',
+  under_review: 'Đang xem xét',
+  pending_management_approval: 'Chờ BĐH duyệt',
+  pending_accountant_approval: 'Chờ KT xác nhận',
+  pending_accountant_confirmation: 'Chờ KT xác nhận',
+  pending_customer_approval: 'Chờ KH duyệt',
+  customer_pending_approval: 'Chờ KH duyệt',
+  pending_management: 'Chờ BĐH duyệt',
+  pending_accountant: 'Chờ KT xác nhận',
+  approved_management: 'BĐH đã duyệt',
+  approved_accountant: 'KT đã duyệt',
+  approved: 'Đã duyệt',
+  customer_approved: 'KH đã duyệt',
+  rejected: 'Từ chối',
+  paid: 'Đã thanh toán',
+  customer_paid: 'KH đã thanh toán',
+  confirmed: 'Đã xác nhận',
+  implemented: 'Đã triển khai',
+  cancelled: 'Đã hủy',
+  active: 'Đang hiệu lực',
+  expired: 'Hết hạn',
+  terminated: 'Đã thanh lý',
+  project_manager_approved: 'QLDA đã duyệt',
+  supervisor_approved: 'GS đã duyệt',
+  owner_approved: 'CĐT đã duyệt',
+}
+
+const historyStatusColor = (status) => {
+  if (['approved', 'customer_approved', 'approved_management', 'approved_accountant', 'paid', 'customer_paid', 'confirmed', 'implemented'].includes(status)) return 'green'
+  if (['rejected', 'cancelled'].includes(status)) return 'red'
+  if (['draft'].includes(status)) return 'default'
+  if (['submitted', 'under_review'].includes(status)) return 'processing'
+  return 'orange'
+}
+
+const statsList = computed(() => [
+  { label: 'BĐH', value: props.stats.pending_management || 0, color: '#F59E0B' },
+  { label: 'Kế toán', value: props.stats.pending_accountant || 0, color: '#06B6D4' },
+  { label: 'Khách hàng', value: props.stats.pending_customer || 0, color: '#8B5CF6' },
+  { label: 'CR/PS', value: (props.stats.pending_change_request || 0) + (props.stats.pending_additional_cost || 0), color: '#EC4899' },
+  { label: 'HĐ/TT', value: (props.stats.pending_contract || 0) + (props.stats.pending_payment || 0), color: '#6366F1' },
+  { label: 'VT/NTP', value: (props.stats.pending_material_bill || 0) + (props.stats.pending_sub_acceptance || 0), color: '#A855F7' },
+  { label: 'Đã duyệt', value: props.stats.approved_today || 0, color: '#10B981' },
+  { label: 'Từ chối', value: props.stats.rejected_today || 0, color: '#EF4444' },
+])
+
 const totalPending = computed(() => {
   return (props.stats.pending_management || 0)
     + (props.stats.pending_accountant || 0)
@@ -493,8 +458,35 @@ const totalPending = computed(() => {
     + (props.stats.pending_sub_acceptance || 0)
 })
 
+// ─── Kanban columns definition ───
+const kanbanColumns = computed(() => {
+  // Only show columns that have items
+  const all = [
+    { key: 'management', title: 'BĐH Duyệt', subtitle: 'Chi phí chờ BĐH', items: props.managementItems, color: '#F59E0B', approve_color: '#10B981', level: 'management', emptyText: 'Không có yêu cầu', onApprove: handleApprove, onReject: openRejectModal },
+    { key: 'accountant', title: 'Kế Toán', subtitle: 'BĐH đã duyệt → KT xác nhận', items: props.accountantItems, color: '#06B6D4', approve_color: '#06B6D4', level: 'accountant', emptyText: 'Trống', onApprove: handleApprove, onReject: openRejectModal },
+    { key: 'customer', title: 'KH Nghiệm Thu', subtitle: 'KH duyệt nghiệm thu công trình', items: props.customerAcceptanceItems, color: '#8B5CF6', approve_color: '#8B5CF6', level: 'customer', emptyText: 'Chưa có hạng mục chờ KH nghiệm thu', onApprove: handleApproveAcceptance, onReject: openRejectAcceptanceModal },
+    { key: 'cr', title: 'Thay Đổi (CR)', subtitle: 'Yêu cầu thay đổi chờ duyệt', items: props.changeRequestItems, color: '#EC4899', approve_color: '#EC4899', level: 'change_request', emptyText: 'Trống', onApprove: handleApproveCR, onReject: openRejectCRModal },
+    { key: 'ac', title: 'CP Phát Sinh', subtitle: 'Chi phí phát sinh chờ duyệt', items: props.additionalCostItems, color: '#F97316', approve_color: '#F97316', level: 'additional_cost', emptyText: 'Trống', onApprove: handleApproveAC, onReject: openRejectACModal },
+    { key: 'sub_pay_mgmt', title: 'TT NTP (BĐH)', subtitle: 'Thanh toán NTP chờ BĐH', items: props.subPaymentManagementItems, color: '#0EA5E9', approve_color: '#0EA5E9', level: 'sub_payment_management', emptyText: 'Trống', onApprove: handleApproveSubPayment, onReject: openRejectSubPaymentModal },
+    { key: 'sub_pay_kt', title: 'TT NTP (KT)', subtitle: 'Thanh toán NTP chờ KT', items: props.subPaymentAccountantItems, color: '#14B8A6', approve_color: '#14B8A6', level: 'sub_payment_accountant', emptyText: 'Trống', onApprove: handleConfirmSubPayment, onReject: openRejectSubPaymentModal },
+    { key: 'contract', title: 'HĐ chờ KH duyệt', subtitle: 'KH xác nhận hợp đồng thi công', items: props.contractItems, color: '#6366F1', approve_color: '#6366F1', level: 'contract', emptyText: 'Chưa có hợp đồng chờ KH duyệt', onApprove: handleApproveContract, onReject: openRejectContractModal },
+    { key: 'payment', title: 'TT chờ KH duyệt', subtitle: 'KH xác nhận đợt thanh toán', items: props.paymentItems, color: '#D946EF', approve_color: '#D946EF', level: 'project_payment', emptyText: 'Chưa có đợt thanh toán chờ KH', onApprove: handleApprovePayment, onReject: openRejectPaymentModal },
+    { key: 'material', title: 'Phiếu Vật Tư', subtitle: 'Phiếu xuất VT chờ duyệt', items: props.materialBillItems, color: '#A855F7', approve_color: '#A855F7', level: 'material_bill', emptyText: 'Trống', onApprove: handleApproveMaterialBill, onReject: openRejectMaterialBillModal },
+    { key: 'sub_acceptance', title: 'NT NTP', subtitle: 'Nghiệm thu NTP chờ duyệt', items: props.subAcceptanceItems, color: '#0D9488', approve_color: '#0D9488', level: 'sub_acceptance', emptyText: 'Trống', onApprove: handleApproveSubAcceptance, onReject: openRejectSubAcceptanceModal },
+  ]
+  return all.filter(c => c.items.length > 0 || ['management', 'accountant', 'customer', 'contract', 'payment'].includes(c.key))
+})
+
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0)
+}
+
+const formatCompact = (amount) => {
+  if (!amount) return '0'
+  if (amount >= 1e9) return (amount / 1e9).toFixed(1) + ' tỷ'
+  if (amount >= 1e6) return (amount / 1e6).toFixed(1) + ' tr'
+  if (amount >= 1e3) return (amount / 1e3).toFixed(0) + 'k'
+  return new Intl.NumberFormat('vi-VN').format(amount)
 }
 
 const refreshPage = () => router.reload()
@@ -507,6 +499,31 @@ const getApprovalStep = (item) => {
   if (item.status === 'approved') return 3
   if (item.approval_level === 'accountant') return 2
   return 1
+}
+
+// ─── Drawer quick approve/reject ───
+const handleDrawerApprove = () => {
+  if (!detailItem.value) return
+  const item = detailItem.value
+  // Find existing handler by type/level
+  const col = kanbanColumns.value.find(c =>
+    c.items.some(i => i.id === item.id)
+  )
+  if (col) {
+    detailItem.value = null
+    col.onApprove(item)
+  }
+}
+const handleDrawerReject = () => {
+  if (!detailItem.value) return
+  const item = detailItem.value
+  const col = kanbanColumns.value.find(c =>
+    c.items.some(i => i.id === item.id)
+  )
+  if (col) {
+    detailItem.value = null
+    col.onReject(item)
+  }
 }
 
 // ─── Cost Approve (BĐH / KT) ───
@@ -787,105 +804,253 @@ const historyColumns = [
 </script>
 
 <style scoped>
-/* ─── Overview Cards ─── */
-.approval-overview {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 16px;
-  margin-bottom: 20px;
-}
-.approval-overview__card {
+/* ─── Stats Bar ─── */
+.kb-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 24px;
   background: white;
   border-radius: 16px;
-  padding: 18px 20px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
   border: 1px solid #E8ECF1;
-  transition: all 0.2s ease;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
 }
-.approval-overview__card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-  transform: translateY(-2px);
-}
-.approval-overview__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+.kb-stats__item {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
   flex-shrink: 0;
 }
-.approval-overview__value {
-  font-size: 26px;
+.kb-stats__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.kb-stats__value {
+  font-size: 18px;
   font-weight: 800;
   color: #1F2937;
   line-height: 1;
 }
-.approval-overview__label {
-  font-size: 12px;
+.kb-stats__label {
+  font-size: 11px;
   color: #9CA3AF;
-  margin-top: 4px;
+}
+.kb-stats__divider {
+  width: 1px;
+  height: 28px;
+  background: #E5E7EB;
+  flex-shrink: 0;
+}
+.kb-stats__item--total {
+  gap: 6px;
 }
 
-/* ─── Pipeline ─── */
-.approval-pipeline {
-  background: linear-gradient(135deg, #0f172a, #1e293b);
+/* ─── Kanban Board ─── */
+.kb-board {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+  min-height: 500px;
+  scrollbar-width: thin;
+}
+.kb-board::-webkit-scrollbar {
+  height: 6px;
+}
+.kb-board::-webkit-scrollbar-track {
+  background: transparent;
+}
+.kb-board::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
+}
+
+/* ─── Column ─── */
+.kb-column {
+  min-width: 300px;
+  max-width: 320px;
+  flex-shrink: 0;
+  background: #F8FAFC;
   border-radius: 16px;
-  padding: 18px 28px;
-  margin-bottom: 24px;
+  border: 1px solid #E8ECF1;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 240px);
+  transition: all 0.2s ease;
+}
+.kb-column--empty {
+  min-width: 200px;
+  max-width: 220px;
+}
+.kb-column:hover {
+  border-color: #CBD5E1;
+}
+
+.kb-column__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: white;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.2);
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid #E8ECF1;
+  gap: 8px;
+  flex-shrink: 0;
 }
-.pipeline-total {
+.kb-column__header-left {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
-  opacity: 0.85;
+  min-width: 0;
 }
-.pipeline-total strong {
-  color: #34d399;
-  font-size: 16px;
+.kb-column__indicator {
+  width: 4px;
+  height: 32px;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
-.pipeline-flow {
+.kb-column__title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1F2937;
+  line-height: 1.2;
+}
+.kb-column__subtitle {
+  font-size: 10px;
+  color: #9CA3AF;
+  line-height: 1.3;
+}
+
+/* ─── Column Body — Scrollable ─── */
+.kb-column__body {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: thin;
+}
+.kb-column__body::-webkit-scrollbar {
+  width: 4px;
+}
+.kb-column__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.kb-column__body::-webkit-scrollbar-thumb {
+  background: #E5E7EB;
+  border-radius: 2px;
+}
+
+.kb-column__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 16px;
+  color: #D1D5DB;
+  font-size: 12px;
+}
+
+/* ─── Card ─── */
+.kb-card {
+  background: white;
+  border: 1px solid #E8ECF1;
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border-left: 3px solid var(--card-color, #E8ECF1);
+}
+.kb-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+  border-color: var(--card-color, #E8ECF1);
+}
+
+.kb-card__top {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
-.pipeline-step {
+.kb-card__amount {
+  font-size: 14px;
+  font-weight: 800;
+  color: #059669;
+  white-space: nowrap;
+}
+
+.kb-card__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1F2937;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-card__subtitle {
+  font-size: 11px;
+  color: #6B7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 8px;
+}
+
+.kb-card__approval-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #F0FDF4;
+  border-radius: 6px;
+  border: 1px solid #BBF7D0;
+  font-size: 10px;
+  color: #6B7280;
+  margin-bottom: 8px;
+}
+
+.kb-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid #F3F4F6;
+}
+.kb-card__meta {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  opacity: 0.5;
-  transition: opacity 0.2s ease;
+  font-size: 10px;
+  color: #9CA3AF;
+  min-width: 0;
+  overflow: hidden;
 }
-.pipeline-step--active {
+.kb-card__actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.kb-card:hover .kb-card__actions {
   opacity: 1;
-  font-weight: 600;
 }
-.pipeline-step__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-.pipeline-step--active .pipeline-step__dot {
-  box-shadow: 0 0 8px currentColor;
-  animation: pulse-dot 2s infinite;
-}
-.pipeline-arrow {
-  color: rgba(255,255,255,0.3);
-  font-size: 14px;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+.kb-card__btn-approve,
+.kb-card__btn-reject {
+  border-radius: 8px !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 /* ─── Detail Drawer ─── */
@@ -901,18 +1066,25 @@ const historyColumns = [
   margin-bottom: 6px;
 }
 
+/* ─── List View Fallback ─── */
+.kb-list-view {
+  /* reuse existing zone styles */
+}
+
+/* ─── Responsive ─── */
 @media (max-width: 1200px) {
-  .approval-overview {
-    grid-template-columns: repeat(4, 1fr);
+  .kb-stats {
+    flex-wrap: wrap;
+    gap: 12px;
   }
 }
 @media (max-width: 768px) {
-  .approval-overview {
-    grid-template-columns: repeat(2, 1fr);
+  .kb-board {
+    min-height: 400px;
   }
-  .approval-pipeline {
-    flex-direction: column;
-    gap: 12px;
+  .kb-column {
+    min-width: 260px;
+    max-width: 280px;
   }
 }
 </style>

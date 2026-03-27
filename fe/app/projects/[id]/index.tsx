@@ -294,6 +294,41 @@ export default function ProjectDetailScreen() {
       color: "#3B82F6",
       permission: Permissions.PROJECT_COMMENT_CREATE, // Or view
     },
+    {
+      title: "Phân Tích Tiến Độ (Gantt/CPM)",
+      icon: "git-network-outline",
+      route: `/projects/${id}/schedule-analysis`,
+      color: "#0EA5E9",
+      permission: Permissions.PROGRESS_VIEW,
+    },
+    {
+      title: "💰 Tài Chính (Dòng tiền / P&L)",
+      icon: "wallet-outline",
+      route: `/projects/${id}/finance`,
+      color: "#10B981",
+      permission: Permissions.COST_VIEW,
+    },
+    {
+      title: "📊 Giám Sát Kho & Định Mức",
+      icon: "archive-outline",
+      route: `/projects/${id}/inventory-monitor`,
+      color: "#8B5CF6",
+      permission: Permissions.MATERIAL_VIEW,
+    },
+    {
+      title: "⏰ Chấm Công",
+      icon: "finger-print-outline",
+      route: `/hr/attendance`,
+      color: "#0EA5E9",
+      permission: Permissions.PERSONNEL_VIEW,
+    },
+    {
+      title: "📈 Năng Suất Lao Động",
+      icon: "trending-up-outline",
+      route: `/projects/${id}/labor-productivity`,
+      color: "#F97316",
+      permission: Permissions.PROGRESS_VIEW,
+    },
   ];
 
   const visibleMenuItems = menuItems.filter(item => hasPermission(item.permission));

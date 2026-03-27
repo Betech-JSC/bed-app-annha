@@ -4,9 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ConstructionLog;
+use App\Models\DailyReportApproval;
 use App\Models\Project;
+use App\Models\ProjectTask;
+use App\Models\ScheduleAdjustment;
 use App\Models\Attachment;
 use App\Services\TaskProgressService;
+use App\Services\GanttService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -81,6 +85,15 @@ class ConstructionLogController extends Controller
             'personnel_count' => 'nullable|integer|min:0',
             'completion_percentage' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string|max:2000',
+            'shift' => 'nullable|in:morning,afternoon,night',
+            'work_items' => 'nullable|array',
+            'work_items.*.name' => 'required|string',
+            'work_items.*.quantity' => 'nullable|numeric',
+            'work_items.*.unit' => 'nullable|string',
+            'work_items.*.progress' => 'nullable|numeric|min:0|max:100',
+            'issues' => 'nullable|string|max:2000',
+            'safety_notes' => 'nullable|string|max:2000',
+            'delay_reason' => 'nullable|string|max:1000',
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'exists:attachments,id',
         ]);
@@ -141,6 +154,11 @@ class ConstructionLogController extends Controller
                 'personnel_count' => $validated['personnel_count'] ?? null,
                 'completion_percentage' => $validated['completion_percentage'] ?? null,
                 'notes' => $validated['notes'] ?? null,
+                'shift' => $validated['shift'] ?? null,
+                'work_items' => $validated['work_items'] ?? null,
+                'issues' => $validated['issues'] ?? null,
+                'safety_notes' => $validated['safety_notes'] ?? null,
+                'delay_reason' => $validated['delay_reason'] ?? null,
             ]);
 
             // Attach files if provided
@@ -373,5 +391,212 @@ class ConstructionLogController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    // ==================================================================
+    // ENHANCED METHODS (Sprint 1 — Module 2)
+    // ==================================================================
+
+    /**
+     * Báo cáo ngày tổng hợp
+     * Aggregates all logs for a specific date with task progress comparison
+     */
+    public function dailyReport(string $projectId, Request $request)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::LOG_VIEW, $project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền'], 403);
+        }
+
+        $date = $request->get('date', now()->format('Y-m-d'));
+
+        $logs = ConstructionLog::where('project_id', $projectId)
+            ->where('log_date', $date)
+            ->with(['creator', 'task', 'attachments'])
+            ->orderBy('shift')
+            ->get();
+
+        // Aggregate stats
+        $totalPersonnel = $logs->sum('personnel_count');
+        $tasksWorked = $logs->pluck('task_id')->filter()->unique()->count();
+        $avgCompletion = $logs->whereNotNull('completion_percentage')->avg('completion_percentage');
+        $issues = $logs->pluck('issues')->filter()->values();
+        $delayReasons = $logs->pluck('delay_reason')->filter()->values();
+
+        // Weather summary
+        $weatherSummary = $logs->pluck('weather')->filter()->unique()->implode(', ');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'date'             => $date,
+                'logs'             => $logs,
+                'summary'          => [
+                    'total_logs'       => $logs->count(),
+                    'total_personnel'  => $totalPersonnel,
+                    'tasks_worked'     => $tasksWorked,
+                    'avg_completion'   => round($avgCompletion, 2),
+                    'weather'          => $weatherSummary,
+                    'has_issues'       => $issues->isNotEmpty(),
+                    'issue_count'      => $issues->count(),
+                    'has_delays'       => $delayReasons->isNotEmpty(),
+                ],
+                'issues'       => $issues,
+                'delay_reasons' => $delayReasons,
+            ],
+        ]);
+    }
+
+    /**
+     * Phê duyệt nhật ký công trường
+     */
+    public function approveLog(Request $request, string $projectId, string $logId)
+    {
+        $project = Project::findOrFail($projectId);
+        $log = ConstructionLog::where('project_id', $projectId)->findOrFail($logId);
+        $user = auth()->user();
+
+        // Check permission
+        if (!$this->authService->can($user, Permissions::LOG_UPDATE, $project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền duyệt'], 403);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|in:approved,rejected',
+            'notes'  => 'nullable|string|max:500',
+        ]);
+
+        // Create or update approval
+        $approval = DailyReportApproval::updateOrCreate(
+            [
+                'construction_log_id' => $log->id,
+                'approver_id'         => $user->id,
+            ],
+            [
+                'status'      => $validated['status'],
+                'notes'       => $validated['notes'] ?? null,
+                'approved_at' => $validated['status'] === 'approved' ? now() : null,
+            ]
+        );
+
+        // Update log approval status
+        $log->update([
+            'approval_status' => $validated['status'],
+            'approved_by'     => $user->id,
+            'approved_at'     => $validated['status'] === 'approved' ? now() : null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $validated['status'] === 'approved'
+                ? 'Đã duyệt nhật ký công trường'
+                : 'Đã từ chối nhật ký công trường',
+            'data' => $log->fresh(['creator', 'task', 'attachments']),
+        ]);
+    }
+
+    /**
+     * So sánh tiến độ kế hoạch vs thực tế (linked to Gantt)
+     */
+    public function progressComparison(string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::LOG_VIEW, $project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền'], 403);
+        }
+
+        $ganttService = app(GanttService::class);
+        $ganttData = $ganttService->getGanttData((int) $projectId);
+
+        // Build comparison with latest log data per task
+        $comparison = [];
+        foreach ($ganttData['tasks'] as $task) {
+            $latestLog = ConstructionLog::where('task_id', $task['id'])
+                ->orderByDesc('log_date')
+                ->first();
+
+            $comparison[] = [
+                'task_id'           => $task['id'],
+                'task_name'         => $task['name'],
+                'planned_start'     => $task['start_date'],
+                'planned_end'       => $task['end_date'],
+                'planned_progress'  => round($task['expected_progress'], 1),
+                'actual_progress'   => round($task['progress'], 1),
+                'gap'               => round($task['expected_progress'] - $task['progress'], 1),
+                'delay_days'        => $task['delay_days'],
+                'delay_status'      => $task['delay_status'],
+                'is_critical'       => $task['is_critical'],
+                'last_log_date'     => $latestLog?->log_date?->format('Y-m-d'),
+                'last_log_notes'    => $latestLog?->notes,
+                'has_delay_reason'  => !empty($latestLog?->delay_reason),
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'comparison' => $comparison,
+                'stats'      => $ganttData['project_stats'],
+            ],
+        ]);
+    }
+
+    /**
+     * Đề xuất hiệu chỉnh tiến độ từ nhật ký
+     */
+    public function requestAdjustment(Request $request, string $projectId, string $logId)
+    {
+        $project = Project::findOrFail($projectId);
+        $log = ConstructionLog::where('project_id', $projectId)->findOrFail($logId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::LOG_CREATE, $project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền'], 403);
+        }
+
+        if (!$log->task_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Nhật ký này chưa liên kết với công việc nào',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'proposed_end'    => 'required|date|after:today',
+            'reason'          => 'required|string|max:1000',
+            'impact_analysis' => 'nullable|string|max:2000',
+        ]);
+
+        $task = ProjectTask::findOrFail($log->task_id);
+
+        $adjustment = ScheduleAdjustment::create([
+            'project_id'      => $projectId,
+            'task_id'         => $task->id,
+            'type'            => 'adjustment_proposal',
+            'original_start'  => $task->start_date,
+            'original_end'    => $task->end_date,
+            'proposed_start'  => $task->start_date,
+            'proposed_end'    => $validated['proposed_end'],
+            'delay_days'      => $task->end_date
+                ? \Carbon\Carbon::parse($validated['proposed_end'])->diffInDays($task->end_date, false)
+                : 0,
+            'reason'          => $validated['reason'],
+            'impact_analysis' => $validated['impact_analysis'] ?? null,
+            'priority'        => $task->children()->exists() ? 'high' : 'medium',
+            'created_by'      => $user->id,
+        ]);
+
+        // Link adjustment to log
+        $log->update(['adjustment_id' => $adjustment->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã tạo đề xuất hiệu chỉnh tiến độ',
+            'data'    => $adjustment->load(['task', 'creator']),
+        ], 201);
     }
 }

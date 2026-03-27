@@ -49,24 +49,25 @@ class AuthorizationService
             ->first();
 
         if ($personnel) {
-            // User đã được assign → check project-specific permissions trước
+            // Check project-specific permissions (explicit overrides in JSON column)
             if ($personnel->permissions && is_array($personnel->permissions) && count($personnel->permissions) > 0) {
-                // Check wildcard
                 if (in_array('*', $personnel->permissions)) {
                     return true;
                 }
-                // Check specific permission
                 if (in_array($permission, $personnel->permissions)) {
                     return true;
                 }
             }
 
-            // Nếu project-specific permissions rỗng hoặc không có permission → fallback về global permissions
-            // (Super admin hoặc users với global permissions vẫn có thể xem)
+            // NOTE: project_personnel.role_id references personnel_roles table (NOT system roles).
+            // PersonnelRole defines project-level roles (PM, supervisor, accountant...)
+            // with their own canView/canEdit/canApprove methods.
+            // DO NOT resolve system Role permissions from PersonnelRole codes.
+
+            // Fallback về global permissions (system role)
             return $user->hasPermission($permission);
         } else {
             // User chưa được assign → check global permissions
-            // (Có thể là admin/accountant cần xem tất cả projects)
             return $user->hasPermission($permission);
         }
     }
@@ -83,7 +84,7 @@ class AuthorizationService
         // Resolve project ID
         $projectId = $project instanceof Project ? $project->id : $project;
 
-        // Get global permissions first (cần dùng cho fallback)
+        // Get global permissions (from user's system roles + direct permissions)
         $rolePermissions = $user->roles()
             ->with('permissions')
             ->get()
@@ -104,14 +105,17 @@ class AuthorizationService
             ->first();
 
         if ($personnel) {
-            // User đã được assign → lấy project-specific permissions
+            // Get explicit project-specific permissions (JSON column overrides)
             $projectPermissions = ($personnel->permissions && is_array($personnel->permissions)) 
                 ? $personnel->permissions 
                 : [];
+
+            // NOTE: project_personnel.role_id references personnel_roles (NOT system roles).
+            // We do NOT resolve system Role permissions from PersonnelRole.
+            // PersonnelRole uses canView/canEdit/canApprove methods instead.
             
-            // Trả về hợp của global permissions và project-specific permissions
-            // Điều này đảm bảo Admin/Super Admin không bị mất quyền khi được assign vào project
-            return array_unique(array_merge($globalPermissions, $projectPermissions));
+            // Merge: global + project-specific permissions
+            return array_values(array_unique(array_merge($globalPermissions, $projectPermissions)));
         } else {
             // User chưa được assign → trả về global permissions
             return $globalPermissions;

@@ -84,7 +84,7 @@ class CrmApprovalController extends Controller
 
         // ─── Thanh toán dự án chờ Khách hàng duyệt ───
         $paymentItems = ProjectPayment::where('status', 'customer_pending_approval')
-            ->with(['project:id,name,code', 'contract:id,name'])
+            ->with(['project:id,name,code', 'contract:id,contract_value'])
             ->orderBy('updated_at', 'desc')
             ->get()
             ->map(fn($p) => $this->formatPaymentItem($p));

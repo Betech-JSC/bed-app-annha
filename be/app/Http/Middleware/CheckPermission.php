@@ -25,6 +25,11 @@ class CheckPermission
             ], 401);
         }
 
+        // Owner/Admin bypass: super admins always pass through
+        if ($user->owner || $user->role === 'admin' || $user->isSuperAdmin()) {
+            return $next($request);
+        }
+
         // Check permission thông qua ProjectPersonnel nếu có projectIdParam
         if ($projectIdParam && $request->route($projectIdParam)) {
             $projectId = $request->route($projectIdParam);

@@ -170,6 +170,7 @@ import {
   QuestionCircleOutlined,
   BookOutlined,
   ApartmentOutlined,
+  FileProtectOutlined,
 } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -185,6 +186,7 @@ const selectedKeys = computed(() => {
   const url = page.url
   if (url === '/' || url === '/dashboard') return ['dashboard']
   if (url.startsWith('/approvals')) return ['approvals']
+  if (url.startsWith('/acceptance-templates')) return ['acceptance-templates']
   if (url.startsWith('/projects')) return ['projects']
   if (url.startsWith('/subcontractors')) return ['subcontractors']
   if (url.startsWith('/hr/kpi')) return ['kpi']
@@ -228,6 +230,7 @@ const menuItems = [
       { key: 'projects', label: 'Danh sách dự án' },
       { key: 'reports', label: 'Báo cáo dự án' },
       { key: 'subcontractors', label: 'Nhà thầu phụ', icon: () => h(UsergroupAddOutlined) },
+      { key: 'acceptance-templates', label: 'Bộ TL Nghiệm thu', icon: () => h(FileProtectOutlined) },
     ],
   },
   {
@@ -294,6 +297,7 @@ const handleMenuClick = ({ key }) => {
     kpi: '/hr/kpi',
     'org-chart': '/hr/org-chart',
     subcontractors: '/subcontractors',
+    'acceptance-templates': '/acceptance-templates',
     notifications: '/notifications',
     settings: '/settings',
     roles: '/roles',

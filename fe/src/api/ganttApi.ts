@@ -195,5 +195,133 @@ export const ganttApi = {
     );
     return response.data;
   },
+
+  // ==================================================================
+  // GANTT & CPM (Sprint 1 — Module 1)
+  // ==================================================================
+
+  // Get Gantt chart aggregated data
+  getGanttData: async (projectId: string | number) => {
+    const response = await api.get(`/projects/${projectId}/gantt`);
+    return response.data;
+  },
+
+  // Get CPM critical path analysis
+  getCPM: async (projectId: string | number) => {
+    const response = await api.get(`/projects/${projectId}/gantt/cpm`);
+    return response.data;
+  },
+
+  // Auto-adjust task dates after change
+  autoAdjust: async (
+    projectId: string | number,
+    data: { task_id: number; new_duration?: number; new_start_date?: string }
+  ) => {
+    const response = await api.put(
+      `/projects/${projectId}/gantt/auto-adjust`,
+      data
+    );
+    return response.data;
+  },
+
+  // Get delay warnings
+  getDelayWarnings: async (projectId: string | number) => {
+    const response = await api.get(
+      `/projects/${projectId}/gantt/delay-warnings`
+    );
+    return response.data;
+  },
+
+  // Get progress comparison (planned vs actual)
+  getProgressComparison: async (projectId: string | number) => {
+    const response = await api.get(
+      `/projects/${projectId}/gantt/progress-comparison`
+    );
+    return response.data;
+  },
+
+  // ==================================================================
+  // SCHEDULE ADJUSTMENTS (Sprint 1)
+  // ==================================================================
+
+  // List schedule adjustments
+  getScheduleAdjustments: async (projectId: string | number) => {
+    const response = await api.get(
+      `/projects/${projectId}/schedule-adjustments`
+    );
+    return response.data;
+  },
+
+  // Create schedule adjustment proposal
+  createScheduleAdjustment: async (
+    projectId: string | number,
+    data: {
+      task_id: number;
+      reason: string;
+      proposed_start_date?: string;
+      proposed_end_date?: string;
+      proposed_duration?: number;
+    }
+  ) => {
+    const response = await api.post(
+      `/projects/${projectId}/schedule-adjustments`,
+      data
+    );
+    return response.data;
+  },
+
+  // Approve schedule adjustment
+  approveScheduleAdjustment: async (
+    projectId: string | number,
+    adjustmentId: string | number,
+    data?: { notes?: string }
+  ) => {
+    const response = await api.post(
+      `/projects/${projectId}/schedule-adjustments/${adjustmentId}/approve`,
+      data
+    );
+    return response.data;
+  },
+
+  // Reject schedule adjustment
+  rejectScheduleAdjustment: async (
+    projectId: string | number,
+    adjustmentId: string | number,
+    data?: { rejection_reason?: string }
+  ) => {
+    const response = await api.post(
+      `/projects/${projectId}/schedule-adjustments/${adjustmentId}/reject`,
+      data
+    );
+    return response.data;
+  },
+
+  // ==================================================================
+  // WBS TEMPLATES (Sprint 1)
+  // ==================================================================
+
+  // List WBS templates
+  getWbsTemplates: async () => {
+    const response = await api.get("/wbs-templates");
+    return response.data;
+  },
+
+  // Get WBS template detail with tree
+  getWbsTemplate: async (templateId: string | number) => {
+    const response = await api.get(`/wbs-templates/${templateId}`);
+    return response.data;
+  },
+
+  // Import WBS template to project
+  importWbsTemplate: async (
+    projectId: string | number,
+    data: { template_id: number; start_date: string }
+  ) => {
+    const response = await api.post(
+      `/projects/${projectId}/tasks/import-template`,
+      data
+    );
+    return response.data;
+  },
 };
 

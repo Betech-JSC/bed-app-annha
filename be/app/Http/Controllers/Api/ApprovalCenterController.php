@@ -412,7 +412,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'payment') {
             $payments = ProjectPayment::where('status', 'customer_pending_approval')
-                ->with(['project:id,name,code', 'contract:id,name'])
+                ->with(['project:id,name,code', 'contract:id,uuid,contract_value'])
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
@@ -436,7 +436,7 @@ class ApprovalCenterController extends Controller
                         'status_label' => 'Chờ KH duyệt',
                         'created_by' => 'Hệ thống',
                         'created_at' => $payment->updated_at->toISOString(),
-                        'description' => $payment->description ?? ('HĐ: ' . ($payment->contract->name ?? 'N/A')),
+                        'description' => $payment->description ?? ('HĐ: ' . ($payment->contract->uuid ?? 'N/A')),
                         'project_id' => $payment->project_id,
                         'route' => "/projects/{$payment->project_id}/payments",
                         'can_approve' => true,
