@@ -140,6 +140,15 @@ const tagColors = {
   acceptance: 'purple',
   change_request: 'magenta',
   additional_cost: 'orange',
+  material_bill: 'geekblue',
+  sub_payment: 'cyan',
+  contract: 'purple',
+  payment: 'pink',
+  sub_acceptance: 'lime',
+  supplier_acceptance: 'green',
+  acceptance_item: 'volcano',
+  construction_log: 'geekblue',
+  schedule_adjustment: 'red',
 }
 
 const formatCurrency = (amount) => {

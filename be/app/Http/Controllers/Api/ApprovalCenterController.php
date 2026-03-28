@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Cost;
 use App\Models\AcceptanceStage;
+use App\Models\AcceptanceItem;
+use App\Models\ConstructionLog;
+use App\Models\ScheduleAdjustment;
 use App\Models\ChangeRequest;
 use App\Models\AdditionalCost;
 use App\Models\SubcontractorPayment;
@@ -526,6 +529,127 @@ class ApprovalCenterController extends Controller
             }
         }
 
+        // ================================================================
+        // 12. ACCEPTANCE ITEMS (Nghiệm thu hạng mục)
+        // ================================================================
+        if ($type === 'all' || $type === 'acceptance_item') {
+            $acceptanceItems = AcceptanceItem::where('acceptance_status', 'pending')
+                ->whereDate('end_date', '<=', now())
+                ->with(['acceptanceStage.project:id,name,code', 'creator:id,name', 'task:id,name'])
+                ->orderBy('end_date', 'asc')
+                ->get();
+
+            if ($acceptanceItems->isNotEmpty()) {
+                $result['summary'][] = [
+                    'type' => 'acceptance_item',
+                    'label' => 'NT Hạng mục',
+                    'icon' => 'list-outline',
+                    'color' => '#14B8A6',
+                    'total' => $acceptanceItems->count(),
+                ];
+
+                foreach ($acceptanceItems as $ai) {
+                    $project = $ai->acceptanceStage?->project;
+                    $result['items'][] = [
+                        'id' => $ai->id,
+                        'type' => 'acceptance_item',
+                        'title' => $ai->name ?? 'Hạng mục nghiệm thu',
+                        'subtitle' => ($project?->code ?? '') . ' - ' . ($project?->name ?? 'Dự án'),
+                        'amount' => 0,
+                        'status' => $ai->acceptance_status,
+                        'status_label' => 'Chờ nghiệm thu',
+                        'created_by' => $ai->creator?->name ?? 'N/A',
+                        'created_at' => $ai->updated_at->toISOString(),
+                        'description' => $ai->task?->name ? 'Công việc: ' . $ai->task->name : ($ai->description ?? null),
+                        'project_id' => $project?->id,
+                        'route' => "/projects/{$project?->id}/acceptance",
+                        'can_approve' => true,
+                        'approval_level' => 'acceptance_item',
+                    ];
+                }
+            }
+        }
+
+        // ================================================================
+        // 13. CONSTRUCTION LOGS (Nhật ký công trường chờ duyệt)
+        // ================================================================
+        if ($type === 'all' || $type === 'construction_log') {
+            $pendingLogs = ConstructionLog::where('approval_status', 'pending')
+                ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
+                ->orderBy('log_date', 'desc')
+                ->get();
+
+            if ($pendingLogs->isNotEmpty()) {
+                $result['summary'][] = [
+                    'type' => 'construction_log',
+                    'label' => 'Nhật ký CT',
+                    'icon' => 'newspaper-outline',
+                    'color' => '#A855F7',
+                    'total' => $pendingLogs->count(),
+                ];
+
+                foreach ($pendingLogs as $log) {
+                    $result['items'][] = [
+                        'id' => $log->id,
+                        'type' => 'construction_log',
+                        'title' => 'Nhật ký ' . ($log->log_date?->format('d/m/Y') ?? 'N/A'),
+                        'subtitle' => ($log->project?->code ?? '') . ' - ' . ($log->project?->name ?? 'Dự án'),
+                        'amount' => 0,
+                        'status' => $log->approval_status,
+                        'status_label' => 'Chờ duyệt',
+                        'created_by' => $log->creator?->name ?? 'N/A',
+                        'created_at' => $log->created_at->toISOString(),
+                        'description' => $log->notes ?? ($log->task?->name ? 'Công việc: ' . $log->task->name : null),
+                        'project_id' => $log->project_id,
+                        'route' => "/projects/{$log->project_id}",
+                        'can_approve' => true,
+                        'approval_level' => 'construction_log',
+                    ];
+                }
+            }
+        }
+
+        // ================================================================
+        // 14. SCHEDULE ADJUSTMENTS (Điều chỉnh tiến độ)
+        // ================================================================
+        if ($type === 'all' || $type === 'schedule_adjustment') {
+            $adjustments = ScheduleAdjustment::where('status', 'pending')
+                ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            if ($adjustments->isNotEmpty()) {
+                $result['summary'][] = [
+                    'type' => 'schedule_adjustment',
+                    'label' => 'Điều chỉnh TĐ',
+                    'icon' => 'calendar-outline',
+                    'color' => '#E11D48',
+                    'total' => $adjustments->count(),
+                ];
+
+                foreach ($adjustments as $adj) {
+                    $delayInfo = $adj->delay_days ? "Trễ {$adj->delay_days} ngày" : null;
+                    $result['items'][] = [
+                        'id' => $adj->id,
+                        'type' => 'schedule_adjustment',
+                        'title' => ($adj->task?->name ?? 'Điều chỉnh') . ($delayInfo ? " ({$delayInfo})" : ''),
+                        'subtitle' => ($adj->project?->code ?? '') . ' - ' . ($adj->project?->name ?? 'Dự án'),
+                        'amount' => 0,
+                        'status' => $adj->status,
+                        'status_label' => 'Chờ duyệt',
+                        'created_by' => $adj->creator?->name ?? 'N/A',
+                        'created_at' => $adj->created_at->toISOString(),
+                        'description' => $adj->reason ?? $adj->impact_analysis,
+                        'project_id' => $adj->project_id,
+                        'priority' => $adj->priority,
+                        'route' => "/projects/{$adj->project_id}",
+                        'can_approve' => true,
+                        'approval_level' => 'schedule_adjustment',
+                    ];
+                }
+            }
+        }
+
         // Inject required_role info into each item
         foreach ($result['items'] as &$item) {
             $roleInfo = $this->getRequiredRoleInfo($item['approval_level']);
@@ -556,12 +680,12 @@ class ApprovalCenterController extends Controller
 
     /**
      * Quick approve action directly from approval center.
-     * Supports ALL 11 approval types.
+     * Supports ALL 14 approval types.
      */
     public function quickApprove(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance',
+            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment',
             'id' => 'required|integer',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -747,6 +871,49 @@ class ApprovalCenterController extends Controller
                     }
                     DB::commit();
                     return response()->json(['success' => true, 'message' => 'Đã duyệt nghiệm thu NCC']);
+
+                // ─── Acceptance Item ───
+                case 'acceptance_item':
+                    $ai = AcceptanceItem::findOrFail($id);
+                    if ($ai->acceptance_status !== 'pending' || !$ai->is_completed) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Hạng mục không ở trạng thái chờ nghiệm thu'], 400);
+                    }
+                    if (!$ai->approve($user, $request->notes)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Không thể duyệt hạng mục nghiệm thu'], 400);
+                    }
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã duyệt nghiệm thu hạng mục']);
+
+                // ─── Construction Log ───
+                case 'construction_log':
+                    $log = ConstructionLog::findOrFail($id);
+                    if ($log->approval_status !== 'pending') {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Nhật ký không ở trạng thái chờ duyệt'], 400);
+                    }
+                    $log->update([
+                        'approval_status' => 'approved',
+                        'approved_by' => $user->id,
+                        'approved_at' => now(),
+                    ]);
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã duyệt nhật ký công trường']);
+
+                // ─── Schedule Adjustment ───
+                case 'schedule_adjustment':
+                    $adj = ScheduleAdjustment::findOrFail($id);
+                    if ($adj->status !== 'pending') {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Điều chỉnh không ở trạng thái chờ duyệt'], 400);
+                    }
+                    if (!$adj->approve($user, $request->notes)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Không thể duyệt điều chỉnh tiến độ'], 400);
+                    }
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã duyệt điều chỉnh tiến độ']);
             }
 
             DB::rollBack();
@@ -763,12 +930,12 @@ class ApprovalCenterController extends Controller
 
     /**
      * Quick reject action directly from approval center.
-     * Supports ALL 11 approval types.
+     * Supports ALL 14 approval types.
      */
     public function quickReject(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance',
+            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment',
             'id' => 'required|integer',
             'reason' => 'required|string|max:500',
         ]);
@@ -869,6 +1036,34 @@ class ApprovalCenterController extends Controller
                     $sa->reject($request->reason, $user);
                     DB::commit();
                     return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu NCC']);
+
+                case 'acceptance_item':
+                    $ai = AcceptanceItem::findOrFail($request->id);
+                    if (!$ai->reject($request->reason, $user)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Không thể từ chối hạng mục'], 400);
+                    }
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu hạng mục']);
+
+                case 'construction_log':
+                    $log = ConstructionLog::findOrFail($request->id);
+                    $log->update([
+                        'approval_status' => 'rejected',
+                        'approved_by' => $user->id,
+                        'approved_at' => now(),
+                    ]);
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã từ chối nhật ký công trường']);
+
+                case 'schedule_adjustment':
+                    $adj = ScheduleAdjustment::findOrFail($request->id);
+                    if (!$adj->reject($user, $request->reason)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Không thể từ chối điều chỉnh tiến độ'], 400);
+                    }
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã từ chối điều chỉnh tiến độ']);
             }
 
             DB::rollBack();
@@ -1012,6 +1207,36 @@ class ApprovalCenterController extends Controller
                     ], 403);
                 }
                 break;
+
+            case 'acceptance_item':
+                if (!$user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1)
+                    && !$user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bạn không có quyền duyệt hạng mục nghiệm thu.'
+                    ], 403);
+                }
+                break;
+
+            case 'construction_log':
+                if (!$user->hasPermission(Permissions::LOG_UPDATE)
+                    && !$user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bạn không có quyền duyệt nhật ký công trường.'
+                    ], 403);
+                }
+                break;
+
+            case 'schedule_adjustment':
+                if (!$user->hasPermission(Permissions::GANTT_UPDATE)
+                    && !$user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bạn không có quyền duyệt điều chỉnh tiến độ.'
+                    ], 403);
+                }
+                break;
         }
 
         return true;
@@ -1091,6 +1316,27 @@ class ApprovalCenterController extends Controller
                 'required_role_short' => 'GS',
                 'required_role_icon' => 'eye-outline',
                 'required_role_color' => '#84CC16',
+            ],
+            'acceptance_item' => [
+                'required_role' => 'site_supervisor',
+                'required_role_label' => 'Giám sát / QLDA',
+                'required_role_short' => 'GS',
+                'required_role_icon' => 'clipboard-outline',
+                'required_role_color' => '#14B8A6',
+            ],
+            'construction_log' => [
+                'required_role' => 'project_manager',
+                'required_role_label' => 'Quản lý Dự án',
+                'required_role_short' => 'QLDA',
+                'required_role_icon' => 'newspaper-outline',
+                'required_role_color' => '#A855F7',
+            ],
+            'schedule_adjustment' => [
+                'required_role' => 'project_manager',
+                'required_role_label' => 'Quản lý / Ban ĐH',
+                'required_role_short' => 'QL',
+                'required_role_icon' => 'calendar-outline',
+                'required_role_color' => '#E11D48',
             ],
             default => [
                 'required_role' => 'admin',

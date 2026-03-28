@@ -96,6 +96,24 @@ const TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; 
         color: '#84CC16',
         bgColor: '#ECFCCB',
     },
+    acceptance_item: {
+        label: 'NT Hạng mục',
+        icon: 'list-outline',
+        color: '#14B8A6',
+        bgColor: '#CCFBF1',
+    },
+    construction_log: {
+        label: 'Nhật ký CT',
+        icon: 'newspaper-outline',
+        color: '#A855F7',
+        bgColor: '#F3E8FF',
+    },
+    schedule_adjustment: {
+        label: 'Điều chỉnh TĐ',
+        icon: 'calendar-outline',
+        color: '#E11D48',
+        bgColor: '#FFE4E6',
+    },
 };
 
 const APPROVAL_LEVEL_CONFIG: Record<string, { label: string; shortLabel: string; color: string; bgColor: string }> = {
@@ -140,6 +158,24 @@ const APPROVAL_LEVEL_CONFIG: Record<string, { label: string; shortLabel: string;
         shortLabel: 'NCC',
         color: '#84CC16',
         bgColor: '#ECFCCB',
+    },
+    acceptance_item: {
+        label: 'NT Hạng Mục',
+        shortLabel: 'HM',
+        color: '#14B8A6',
+        bgColor: '#CCFBF1',
+    },
+    construction_log: {
+        label: 'Nhật Ký CT',
+        shortLabel: 'NK',
+        color: '#A855F7',
+        bgColor: '#F3E8FF',
+    },
+    schedule_adjustment: {
+        label: 'Điều Chỉnh TĐ',
+        shortLabel: 'TĐ',
+        color: '#E11D48',
+        bgColor: '#FFE4E6',
     },
 };
 
@@ -584,6 +620,9 @@ export default function ApprovalCenterScreen() {
         { key: 'payment', label: 'TT KH', icon: 'cash-outline' },
         { key: 'sub_acceptance', label: 'NT NTP', icon: 'checkbox-outline' },
         { key: 'supplier_acceptance', label: 'NT NCC', icon: 'storefront-outline' },
+        { key: 'acceptance_item', label: 'NT HM', icon: 'list-outline' },
+        { key: 'construction_log', label: 'Nhật ký', icon: 'newspaper-outline' },
+        { key: 'schedule_adjustment', label: 'Tiến độ', icon: 'calendar-outline' },
     ];
 
     return (

@@ -350,6 +350,12 @@ export const Permissions = {
     // ===================================================================
     SETTINGS_VIEW: 'settings.view',
     SETTINGS_MANAGE: 'settings.manage',
+
+    // ===================================================================
+    // GANTT / WBS MODULE
+    // ===================================================================
+    GANTT_VIEW: 'gantt.view',
+    GANTT_UPDATE: 'gantt.update',
 } as const;
 
 // Type for permission values

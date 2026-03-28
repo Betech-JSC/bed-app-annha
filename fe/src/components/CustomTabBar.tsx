@@ -58,6 +58,8 @@ const tabs: TabItem[] = [
       Permissions.SUBCONTRACTOR_PAYMENT_APPROVE,
       Permissions.ADDITIONAL_COST_APPROVE,
       Permissions.SUPPLIER_CONTRACT_APPROVE,
+      Permissions.LOG_UPDATE,
+      Permissions.GANTT_UPDATE,
     ],
   },
   {
