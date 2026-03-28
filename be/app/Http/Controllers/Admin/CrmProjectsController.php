@@ -10,6 +10,7 @@ use App\Models\Contract;
 use App\Models\ProjectPayment;
 use App\Models\ProjectPersonnel;
 use App\Models\Subcontractor;
+use App\Models\SubcontractorPayment;
 use App\Models\GlobalSubcontractor;
 use App\Models\ConstructionLog;
 use App\Models\ProjectComment;
@@ -114,6 +115,9 @@ class CrmProjectsController extends Controller
             'personnel.user',
             'personnel.personnelRole',
             'subcontractors.payments',
+            'subcontractors.items',
+            'subcontractors.attachments',
+            'subcontractors.approver',
             'constructionLogs' => function ($q) {
                 $q->with(['creator:id,name', 'task:id,name'])->latest('log_date');
             },
@@ -1401,6 +1405,8 @@ class CrmProjectsController extends Controller
             'progress_start_date' => 'nullable|date',
             'progress_end_date' => 'nullable|date|after_or_equal:progress_start_date',
             'progress_status' => ['nullable', 'in:not_started,in_progress,completed,delayed'],
+            'create_cost' => 'nullable|boolean',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
         ]);
 
         // Pull from global subcontractor if selected
@@ -1412,16 +1418,73 @@ class CrmProjectsController extends Controller
             $validated['bank_account_name'] = $validated['bank_account_name'] ?? $gs->bank_account_name;
         }
 
-        Subcontractor::create([
-            'project_id' => $project->id,
-            'created_by' => $user->id,
-            'payment_status' => 'pending',
-            'progress_status' => $validated['progress_status'] ?? 'not_started',
-            'advance_payment' => 0,
-            ...$validated,
-        ]);
+        DB::beginTransaction();
+        try {
+            $subcontractor = Subcontractor::create([
+                'project_id' => $project->id,
+                'global_subcontractor_id' => $validated['global_subcontractor_id'] ?? null,
+                'created_by' => $user->id,
+                'payment_status' => 'pending',
+                'progress_status' => $validated['progress_status'] ?? 'not_started',
+                'advance_payment' => 0,
+                'name' => $validated['name'],
+                'category' => $validated['category'] ?? null,
+                'bank_name' => $validated['bank_name'] ?? null,
+                'bank_account_number' => $validated['bank_account_number'] ?? null,
+                'bank_account_name' => $validated['bank_account_name'] ?? null,
+                'total_quote' => $validated['total_quote'],
+                'progress_start_date' => $validated['progress_start_date'] ?? null,
+                'progress_end_date' => $validated['progress_end_date'] ?? null,
+            ]);
 
-        return back()->with('success', 'Đã thêm nhà thầu phụ.');
+            // Auto-create Cost record (matching APP logic)
+            if (!empty($validated['create_cost'])) {
+                $costGroupId = $validated['cost_group_id'] ?? null;
+                if (!$costGroupId) {
+                    $defaultCostGroup = \App\Models\CostGroup::where('code', 'subcontractor')
+                        ->orWhere('name', 'LIKE', '%Nhà thầu phụ%')
+                        ->orWhere('name', 'LIKE', '%Thầu phụ%')
+                        ->first();
+                    $costGroupId = $defaultCostGroup?->id;
+                }
+
+                Cost::create([
+                    'project_id' => $project->id,
+                    'subcontractor_id' => $subcontractor->id,
+                    'cost_group_id' => $costGroupId,
+                    'name' => "Chi phí nhà thầu phụ: {$subcontractor->name}",
+                    'amount' => $subcontractor->total_quote,
+                    'description' => "Chi phí từ nhà thầu phụ. Hạng mục: " . ($subcontractor->category ?? 'N/A'),
+                    'cost_date' => $validated['progress_start_date'] ?? now()->toDateString(),
+                    'status' => 'draft',
+                    'created_by' => $user->id,
+                ]);
+            }
+
+            // Handle file uploads
+            if ($request->hasFile('files')) {
+                foreach ($request->file('files') as $file) {
+                    $path = $file->store("subcontractors/{$project->id}/{$subcontractor->id}", 'public');
+                    Attachment::create([
+                        'attachable_type' => Subcontractor::class,
+                        'attachable_id' => $subcontractor->id,
+                        'original_name' => $file->getClientOriginalName(),
+                        'file_name' => $file->getClientOriginalName(),
+                        'file_path' => $path,
+                        'file_url' => '/storage/' . $path,
+                        'file_size' => $file->getSize(),
+                        'mime_type' => $file->getClientMimeType(),
+                        'uploaded_by' => $user->id,
+                    ]);
+                }
+            }
+
+            DB::commit();
+            return back()->with('success', 'Đã thêm nhà thầu phụ.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi thêm NTP: ' . $e->getMessage());
+        }
     }
 
     public function updateSubcontractor(Request $request, string $projectId, string $id)
@@ -1444,7 +1507,41 @@ class CrmProjectsController extends Controller
         ]);
 
         $sub->update([...$validated, 'updated_by' => $user->id]);
+
+        // Handle file uploads on update
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $file) {
+                $path = $file->store("subcontractors/{$project->id}/{$sub->id}", 'public');
+                Attachment::create([
+                    'attachable_type' => Subcontractor::class,
+                    'attachable_id' => $sub->id,
+                    'original_name' => $file->getClientOriginalName(),
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_url' => '/storage/' . $path,
+                    'file_size' => $file->getSize(),
+                    'mime_type' => $file->getClientMimeType(),
+                    'uploaded_by' => $user->id,
+                ]);
+            }
+        }
+
         return back()->with('success', 'Đã cập nhật nhà thầu phụ.');
+    }
+
+    public function approveSubcontractor(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $admin = auth('admin')->user();
+
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($id);
+        if (method_exists($sub, 'approve')) {
+            $sub->approve(null); // null to avoid FK violation with admin table
+        } else {
+            $sub->update(['approved_at' => now()]);
+        }
+
+        return back()->with('success', 'Đã duyệt nhà thầu phụ.');
     }
 
     public function destroySubcontractor(string $projectId, string $id)
@@ -1456,6 +1553,170 @@ class CrmProjectsController extends Controller
         Cost::where('subcontractor_id', $id)->update(['subcontractor_id' => null]);
         Subcontractor::where('project_id', $project->id)->findOrFail($id)->delete();
         return back()->with('success', 'Đã xóa nhà thầu phụ.');
+    }
+
+    // ===================================================================
+    // SUB-ITEM CRUD — Subcontractor Payments (Synced from APP)
+    // ===================================================================
+
+    public function storeSubPayment(Request $request, string $projectId, string $subId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_CREATE, $project);
+
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($subId);
+
+        $validated = $request->validate([
+            'payment_stage' => 'nullable|string|max:255',
+            'amount' => 'required|numeric|min:0',
+            'payment_date' => 'nullable|date',
+            'payment_method' => 'required|in:cash,bank_transfer,check,other',
+            'reference_number' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+        ]);
+
+        // Check if amount exceeds remaining
+        $remaining = $sub->total_quote - $sub->total_paid;
+        if ($validated['amount'] > $remaining) {
+            return back()->with('error', 'Số tiền thanh toán vượt quá số tiền còn lại (' . number_format($remaining) . ').');
+        }
+
+        DB::beginTransaction();
+        try {
+            $payment = SubcontractorPayment::create([
+                'subcontractor_id' => $sub->id,
+                'project_id' => $project->id,
+                ...$validated,
+                'status' => 'draft',
+                'created_by' => $user->id,
+            ]);
+
+            // Handle file uploads
+            if ($request->hasFile('files')) {
+                foreach ($request->file('files') as $file) {
+                    $path = $file->store("sub-payments/{$project->id}/{$payment->id}", 'public');
+                    Attachment::create([
+                        'attachable_type' => SubcontractorPayment::class,
+                        'attachable_id' => $payment->id,
+                        'original_name' => $file->getClientOriginalName(),
+                        'file_name' => $file->getClientOriginalName(),
+                        'file_path' => $path,
+                        'file_url' => '/storage/' . $path,
+                        'file_size' => $file->getSize(),
+                        'mime_type' => $file->getClientMimeType(),
+                        'uploaded_by' => $user->id,
+                    ]);
+                }
+            }
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo phiếu thanh toán NTP.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi tạo phiếu TT: ' . $e->getMessage());
+        }
+    }
+
+    public function submitSubPayment(string $projectId, string $subId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        if ($payment->status !== 'draft') {
+            return back()->with('error', 'Chỉ gửi duyệt phiếu ở trạng thái nháp.');
+        }
+
+        $payment->submitForApproval();
+        return back()->with('success', 'Đã gửi phiếu chi để duyệt.');
+    }
+
+    public function approveSubPayment(string $projectId, string $subId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $admin = auth('admin')->user();
+        $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        if ($payment->status !== 'pending_management_approval') {
+            return back()->with('error', 'Phiếu TT không ở trạng thái chờ duyệt.');
+        }
+
+        DB::beginTransaction();
+        try {
+            $payment->approve(null); // null to avoid FK violation
+            DB::commit();
+            return back()->with('success', 'Đã duyệt phiếu thanh toán NTP.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi duyệt phiếu: ' . $e->getMessage());
+        }
+    }
+
+    public function rejectSubPayment(Request $request, string $projectId, string $subId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $admin = auth('admin')->user();
+        $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        if (!in_array($payment->status, ['pending_management_approval', 'pending_accountant_confirmation'])) {
+            return back()->with('error', 'Không thể từ chối phiếu ở trạng thái này.');
+        }
+
+        DB::beginTransaction();
+        try {
+            $payment->reject(null, $request->input('rejection_reason'));
+            DB::commit();
+            return back()->with('success', 'Đã từ chối phiếu thanh toán.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi từ chối phiếu: ' . $e->getMessage());
+        }
+    }
+
+    public function confirmSubPayment(string $projectId, string $subId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $admin = auth('admin')->user();
+        $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        if ($payment->status !== 'pending_accountant_confirmation') {
+            return back()->with('error', 'Phiếu TT chưa được duyệt bởi BĐH.');
+        }
+
+        DB::beginTransaction();
+        try {
+            $payment->markAsPaid(null); // null to avoid FK violation
+            DB::commit();
+            return back()->with('success', 'Đã xác nhận thanh toán.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi xác nhận: ' . $e->getMessage());
+        }
+    }
+
+    public function destroySubPayment(string $projectId, string $subId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
+        if ($payment->status === 'paid') {
+            return back()->with('error', 'Không thể xóa phiếu đã thanh toán.');
+        }
+
+        $payment->delete();
+        return back()->with('success', 'Đã xóa phiếu thanh toán.');
+    }
+
+    public function attachFilesToSubcontractor(Request $request, string $projectId, string $subId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_UPDATE, $project);
+
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($subId);
+        $count = $this->attachFilesToEntity($request, $sub, "subcontractors/{$project->id}/{$subId}");
+        return back()->with('success', "Đã đính kèm {$count} file vào NTP.");
     }
 
     // ===================================================================

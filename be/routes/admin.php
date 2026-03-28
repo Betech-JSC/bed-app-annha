@@ -275,7 +275,17 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Subcontractors
         Route::post('/{project}/subcontractors', [CrmProjectsController::class, 'storeSubcontractor'])->name('subcontractors.store');
         Route::put('/{project}/subcontractors/{sub}', [CrmProjectsController::class, 'updateSubcontractor'])->name('subcontractors.update');
+        Route::post('/{project}/subcontractors/{sub}/approve', [CrmProjectsController::class, 'approveSubcontractor'])->name('subcontractors.approve');
         Route::delete('/{project}/subcontractors/{sub}', [CrmProjectsController::class, 'destroySubcontractor'])->name('subcontractors.destroy');
+        Route::post('/{project}/subcontractors/{sub}/attach-files', [CrmProjectsController::class, 'attachFilesToSubcontractor'])->name('subcontractors.attach-files');
+
+        // Subcontractor Payments
+        Route::post('/{project}/subcontractors/{sub}/payments', [CrmProjectsController::class, 'storeSubPayment'])->name('subcontractors.payments.store');
+        Route::post('/{project}/subcontractors/{sub}/payments/{payment}/submit', [CrmProjectsController::class, 'submitSubPayment'])->name('subcontractors.payments.submit');
+        Route::post('/{project}/subcontractors/{sub}/payments/{payment}/approve', [CrmProjectsController::class, 'approveSubPayment'])->name('subcontractors.payments.approve');
+        Route::post('/{project}/subcontractors/{sub}/payments/{payment}/reject', [CrmProjectsController::class, 'rejectSubPayment'])->name('subcontractors.payments.reject');
+        Route::post('/{project}/subcontractors/{sub}/payments/{payment}/confirm', [CrmProjectsController::class, 'confirmSubPayment'])->name('subcontractors.payments.confirm');
+        Route::delete('/{project}/subcontractors/{sub}/payments/{payment}', [CrmProjectsController::class, 'destroySubPayment'])->name('subcontractors.payments.destroy');
 
         // Additional Costs
         Route::post('/{project}/additional-costs', [CrmProjectsController::class, 'storeAdditionalCost'])->name('additional-costs.store');
