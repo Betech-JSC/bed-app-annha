@@ -2367,9 +2367,24 @@
       <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-4 border border-blue-100">
         <div class="text-sm font-bold text-gray-700 mb-3">💰 Tổng quan tài chính</div>
         <a-row :gutter="12">
-          <a-col :span="8"><a-statistic title="Hợp đồng" :value="subDetail.total_quote" :precision="0" :formatter="v => fmt(v)" class="text-center" /></a-col>
-          <a-col :span="8"><a-statistic title="Đã thanh toán" :value="subDetail.total_paid || 0" :precision="0" :formatter="v => fmt(v)" class="text-center" :value-style="{ color: '#10B981' }" /></a-col>
-          <a-col :span="8"><a-statistic title="Còn lại" :value="subDetail.total_quote - (subDetail.total_paid || 0)" :precision="0" :formatter="v => fmt(v)" class="text-center" :value-style="{ color: '#EF4444' }" /></a-col>
+          <a-col :span="8">
+            <div class="text-center">
+              <div class="text-xs text-gray-500 mb-1">Hợp đồng</div>
+              <div class="text-lg font-bold text-gray-800">{{ fmt(subDetail.total_quote) }}</div>
+            </div>
+          </a-col>
+          <a-col :span="8">
+            <div class="text-center">
+              <div class="text-xs text-gray-500 mb-1">Đã thanh toán</div>
+              <div class="text-lg font-bold text-green-500">{{ fmt(subDetail.total_paid || 0) }}</div>
+            </div>
+          </a-col>
+          <a-col :span="8">
+            <div class="text-center">
+              <div class="text-xs text-gray-500 mb-1">Còn lại</div>
+              <div class="text-lg font-bold text-red-500">{{ fmt(subDetail.total_quote - (subDetail.total_paid || 0)) }}</div>
+            </div>
+          </a-col>
         </a-row>
         <a-progress :percent="subDetail.total_quote > 0 ? Math.round((subDetail.total_paid || 0) / subDetail.total_quote * 100) : 0" :stroke-color="{ from: '#3B82F6', to: '#10B981' }" class="mt-3" />
       </div>
