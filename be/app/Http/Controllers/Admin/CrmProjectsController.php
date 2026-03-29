@@ -128,7 +128,9 @@ class CrmProjectsController extends Controller
             },
             'acceptanceStages' => function ($q) {
                 $q->with([
-                    'items',
+                    'items' => function ($iq) {
+                        $iq->with(['attachments', 'task:id,name,progress_percentage,parent_id'])->orderBy('order');
+                    },
                     'task:id,name,parent_id',
                     'acceptanceTemplate',
                     'defects' => function ($dq) {
@@ -1265,10 +1267,10 @@ class CrmProjectsController extends Controller
             'status' => 'nullable|string|in:open,in_progress,fixed,verified',
             'task_id' => 'nullable|exists:project_tasks,id',
             'acceptance_stage_id' => 'nullable|exists:acceptance_stages,id',
-            'defect_type' => 'nullable|in:standard_violation,other',
+            'defect_type' => 'nullable|in:standard_violation,acceptance,other',
         ]);
 
-        Defect::create([
+        $defect = Defect::create([
             'project_id' => $project->id,
             'reported_by' => $user->id,
             'description' => $validated['description'],
@@ -1278,6 +1280,11 @@ class CrmProjectsController extends Controller
             'acceptance_stage_id' => $validated['acceptance_stage_id'] ?? null,
             'defect_type' => $validated['defect_type'] ?? null,
         ]);
+
+        // Attach files if provided
+        if ($request->hasFile('files')) {
+            $this->attachFilesToEntity($request, $defect, "defects/{$project->id}/{$defect->id}");
+        }
 
         return back()->with('success', 'Đã báo cáo lỗi.');
     }

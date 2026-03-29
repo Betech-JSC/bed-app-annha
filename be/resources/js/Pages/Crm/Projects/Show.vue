@@ -2918,7 +2918,8 @@
         </div>
 
         <!-- Defects list -->
-        <div v-for="d in acceptDetailDefects" :key="d.id" class="p-3 mb-2 rounded-lg border" :class="d.status === 'verified' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
+        <div v-for="d in acceptDetailDefects" :key="d.id" class="p-3 mb-2 rounded-lg border cursor-pointer hover:shadow-sm transition" :class="d.status === 'verified' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'"
+          @click="goToDefect(d)">
           <div class="flex items-start justify-between">
             <div class="flex-1">
               <div class="text-sm font-semibold" :class="d.status === 'verified' ? 'text-green-700 line-through' : 'text-red-700'">{{ d.description }}</div>
@@ -2926,7 +2927,19 @@
                 <a-tag :color="d.severity === 'high' ? 'red' : d.severity === 'low' ? 'green' : 'orange'" class="rounded-full text-[10px]">{{ { low: 'Nhẹ', medium: 'TB', high: 'Nặng' }[d.severity] || d.severity }}</a-tag>
                 <a-tag :color="{ open: 'default', in_progress: 'processing', resolved: 'blue', verified: 'success' }[d.status] || 'default'" class="rounded-full text-[10px]">{{ { open: 'Mở', in_progress: 'Đang xử lý', resolved: 'Đã sửa', verified: 'Đã xác nhận' }[d.status] || d.status }}</a-tag>
               </div>
+              <!-- Defect attachments thumbnails -->
+              <div v-if="d.attachments?.length" class="flex gap-1 mt-2 flex-wrap">
+                <a v-for="att in d.attachments.slice(0, 4)" :key="att.id" href="#" @click.stop.prevent="openFilePreview(att)"
+                  class="w-10 h-10 rounded-md overflow-hidden border border-gray-200 hover:border-blue-400 transition">
+                  <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
+                  <div v-else class="w-full h-full flex items-center justify-center bg-gray-50"><FileOutlined class="text-gray-400 text-xs" /></div>
+                </a>
+                <span v-if="d.attachments.length > 4" class="w-10 h-10 rounded-md bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 border border-gray-200">+{{ d.attachments.length - 4 }}</span>
+              </div>
             </div>
+            <a-tooltip title="Xem tại Module Lỗi">
+              <LinkOutlined class="text-gray-400 hover:text-blue-500 text-sm ml-2 mt-1" />
+            </a-tooltip>
           </div>
         </div>
         <a-empty v-if="!acceptDetailDefects.length" :image="null" description="Không có lỗi nào — tuyệt vời!" class="py-2" />
@@ -2948,6 +2961,23 @@
                 </a-radio-group>
               </a-form-item></a-col>
             </a-row>
+            <!-- File upload for defect -->
+            <a-form-item label="Ảnh / Chứng từ lỗi">
+              <div class="flex items-center gap-2 flex-wrap">
+                <div v-for="(f, idx) in newAcceptDefectFiles" :key="idx" class="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-200 group">
+                  <img v-if="f.preview" :src="f.preview" class="w-full h-full object-cover" />
+                  <div v-else class="w-full h-full flex items-center justify-center bg-gray-50"><FileOutlined class="text-gray-400" /></div>
+                  <div class="absolute top-0 right-0 p-0.5 cursor-pointer opacity-0 group-hover:opacity-100 transition" @click="newAcceptDefectFiles.splice(idx, 1)">
+                    <CloseCircleOutlined class="text-red-500 text-sm bg-white rounded-full" />
+                  </div>
+                </div>
+                <label for="defect-file-upload" class="w-14 h-14 rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-400 flex flex-col items-center justify-center cursor-pointer transition hover:bg-blue-50">
+                  <CameraOutlined class="text-gray-400 text-lg" />
+                  <span class="text-[8px] text-gray-400 mt-0.5">Thêm</span>
+                </label>
+                <input id="defect-file-upload" type="file" multiple accept="image/*,.pdf,.doc,.docx" class="hidden" @change="onDefectFileSelect" />
+              </div>
+            </a-form-item>
             <a-button type="primary" block @click="createDefectFromDrawer" :loading="creatingDefect">
               <CheckOutlined /> Tạo lỗi ghi nhận
             </a-button>
@@ -2955,25 +2985,155 @@
         </div>
       </div>
 
-      <!-- 3. Hạng mục nghiệm thu (items) -->
-      <div v-if="acceptDetailStage.items?.length" class="mb-5">
-        <div class="text-sm font-bold text-gray-700 mb-2">📋 Hạng mục nghiệm thu ({{ acceptDetailStage.items.length }})</div>
-        <div v-for="item in acceptDetailStage.items" :key="item.id" class="flex items-center gap-2 py-2 px-3 rounded-lg mb-1" :class="item.workflow_status === 'customer_approved' ? 'bg-green-50' : 'bg-gray-50'">
-          <a-checkbox :checked="item.workflow_status === 'customer_approved'" disabled />
-          <span class="flex-1 text-sm" :class="item.workflow_status === 'customer_approved' ? 'text-green-600 line-through' : ''">{{ item.name }}</span>
-          <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px]">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
+      <!-- 3. Hạng mục nghiệm thu (items) — Full workflow UI matching APP -->
+      <div class="mb-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-sm font-bold text-gray-700">📋 Hạng mục nghiệm thu ({{ acceptDetailStage.items?.length || 0 }})</div>
         </div>
+
+        <!-- Items List with Full Workflow -->
+        <div v-for="item in (acceptDetailStage.items || [])" :key="item.id"
+             class="mb-3 rounded-xl border overflow-hidden transition-all"
+             :class="item.workflow_status === 'customer_approved' ? 'bg-green-50 border-green-200' : item.workflow_status === 'rejected' ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'">
+          <!-- Item Header -->
+          <div class="px-4 py-3">
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <div class="flex-1">
+                <div class="font-semibold text-sm" :class="item.workflow_status === 'customer_approved' ? 'text-green-700' : 'text-gray-800'">
+                  <CheckCircleFilled v-if="item.workflow_status === 'customer_approved'" class="text-green-500 mr-1" />
+                  {{ item.name }}
+                </div>
+                <div v-if="item.task" class="text-xs text-gray-400 mt-0.5">📐 {{ item.task.name }}
+                  <span v-if="item.task.progress_percentage != null" class="ml-1">({{ item.task.progress_percentage }}%)</span>
+                </div>
+                <div v-if="item.start_date || item.end_date" class="text-xs text-gray-400 mt-0.5">
+                  📅 {{ item.start_date ? fmtDate(item.start_date) : '—' }} → {{ item.end_date ? fmtDate(item.end_date) : '—' }}
+                </div>
+              </div>
+              <!-- Status Tag + Actions -->
+              <div class="flex items-center gap-1 shrink-0">
+                <a-tag :color="acceptItemStatusColor(item.workflow_status || 'draft')" class="rounded-full text-[10px]">{{ acceptItemStatusLabel(item.workflow_status || 'draft') }}</a-tag>
+                <a-dropdown v-if="can('acceptance.update') && item.workflow_status !== 'customer_approved'" :trigger="['click']">
+                  <a-button type="text" size="small"><MoreOutlined /></a-button>
+                  <template #overlay>
+                    <a-menu>
+                      <a-menu-item @click="editAcceptItem(item)"><EditOutlined class="mr-1" /> Sửa</a-menu-item>
+                      <a-menu-item danger @click="deleteAcceptItem(item)"><DeleteOutlined class="mr-1" /> Xóa</a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </div>
+            </div>
+
+            <!-- Workflow Steps Progress (matching APP 4-step: Nộp → GS → PM → KH) -->
+            <div class="flex items-center gap-0.5 mb-2">
+              <div v-for="(step, idx) in [
+                { key: 'submitted', label: 'Nộp', icon: '📤' },
+                { key: 'supervisor_approved', label: 'GS', icon: '👷' },
+                { key: 'project_manager_approved', label: 'PM', icon: '👔' },
+                { key: 'customer_approved', label: 'KH', icon: '🏠' }
+              ]" :key="step.key" class="flex items-center gap-0.5">
+                <div class="flex flex-col items-center"
+                  :class="getStepState(item.workflow_status, step.key) === 'done' ? 'opacity-100' : getStepState(item.workflow_status, step.key) === 'current' ? 'opacity-100' : 'opacity-40'">
+                  <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-all"
+                    :class="getStepState(item.workflow_status, step.key) === 'done' ? 'bg-green-500 border-green-500 text-white' : getStepState(item.workflow_status, step.key) === 'current' ? 'bg-blue-500 border-blue-500 text-white animate-pulse' : 'bg-gray-100 border-gray-300 text-gray-400'">
+                    <span v-if="getStepState(item.workflow_status, step.key) === 'done'">✓</span>
+                    <span v-else>{{ idx + 1 }}</span>
+                  </div>
+                  <span class="text-[9px] mt-0.5 font-medium" :class="getStepState(item.workflow_status, step.key) === 'done' ? 'text-green-600' : getStepState(item.workflow_status, step.key) === 'current' ? 'text-blue-600' : 'text-gray-400'">{{ step.label }}</span>
+                </div>
+                <div v-if="idx < 3" class="w-4 h-0.5 mt-[-10px]" :class="getStepState(item.workflow_status, step.key) === 'done' ? 'bg-green-400' : 'bg-gray-200'"></div>
+              </div>
+            </div>
+
+            <!-- Rejection Reason -->
+            <div v-if="item.workflow_status === 'rejected' && item.rejection_reason" class="p-2.5 mb-2 bg-red-100 rounded-lg border border-red-200">
+              <div class="text-xs font-semibold text-red-700 mb-0.5">❌ Lý do từ chối:</div>
+              <div class="text-xs text-red-600">{{ item.rejection_reason }}</div>
+            </div>
+
+            <!-- Photos / Attachments -->
+            <div v-if="item.attachments?.length" class="flex gap-1.5 flex-wrap mb-2">
+              <a v-for="att in item.attachments" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
+                class="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 transition">
+                <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full flex items-center justify-center bg-gray-50 text-gray-400 text-[10px]">📄</div>
+              </a>
+            </div>
+
+            <!-- Upload Photos for Item -->
+            <div v-if="can('acceptance.update') && item.workflow_status !== 'customer_approved'" class="mb-2">
+              <label :for="`accept-item-upload-${item.id}`"
+                class="inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 cursor-pointer py-1 px-2 rounded-lg hover:bg-blue-50 transition">
+                <CameraOutlined /> Upload ảnh thực tế
+              </label>
+              <input :id="`accept-item-upload-${item.id}`" type="file" multiple accept="image/*" class="hidden" @change="(e) => uploadAcceptItemPhotos(item, e)" />
+            </div>
+
+            <!-- Workflow Action Buttons -->
+            <div class="flex flex-wrap gap-1.5">
+              <!-- Draft/Rejected: Submit for approval -->
+              <a-popconfirm v-if="['draft','rejected'].includes(item.workflow_status || 'draft')" title="Gửi duyệt hạng mục này?" @confirm="submitAcceptItem(item)" ok-text="Gửi duyệt">
+                <a-button type="primary" size="small" ghost><SendOutlined /> Gửi duyệt</a-button>
+              </a-popconfirm>
+
+              <!-- Submitted: Supervisor approve -->
+              <a-popconfirm v-if="item.workflow_status === 'submitted' && can('acceptance.approve_level_1')" title="Giám sát duyệt hạng mục này?" @confirm="approveAcceptItemSupervisor(item)" ok-text="Duyệt GS">
+                <a-button type="primary" size="small" class="!bg-cyan-500 !border-cyan-500"><CheckCircleOutlined /> GS Duyệt</a-button>
+              </a-popconfirm>
+
+              <!-- Supervisor approved: PM approve -->
+              <a-popconfirm v-if="item.workflow_status === 'supervisor_approved' && can('acceptance.approve_level_2')" title="PM duyệt hạng mục này?" @confirm="approveAcceptItemPM(item)" ok-text="Duyệt PM">
+                <a-button type="primary" size="small"><CheckCircleOutlined /> PM Duyệt</a-button>
+              </a-popconfirm>
+
+              <!-- PM approved: Customer approve -->
+              <a-popconfirm v-if="['pm_approved','project_manager_approved'].includes(item.workflow_status) && can('acceptance.approve_level_3')" title="Khách hàng nghiệm thu hạng mục này?" @confirm="approveAcceptItemCustomer(item)" ok-text="Nghiệm thu">
+                <a-button type="primary" size="small" class="!bg-emerald-500 !border-emerald-500"><CheckCircleOutlined /> KH Nghiệm thu</a-button>
+              </a-popconfirm>
+
+              <!-- Reject (available at any pending approval step) -->
+              <a-button v-if="['submitted','supervisor_approved','pm_approved','project_manager_approved'].includes(item.workflow_status)" size="small" danger @click="openRejectAcceptItemModal(item)">
+                <CloseCircleOutlined /> Từ chối
+              </a-button>
+            </div>
+          </div>
+        </div>
+
+        <a-empty v-if="!acceptDetailStage.items?.length" :image="null" description="Chưa có hạng mục nghiệm thu" class="py-4" />
       </div>
 
-      <!-- 4. Tài liệu đính kèm -->
-      <div v-if="acceptDetailStage.attachments?.length" class="mb-5">
-        <div class="text-sm font-bold text-gray-700 mb-2">📎 Tài liệu đính kèm ({{ acceptDetailStage.attachments.length }})</div>
-        <div class="flex gap-2 flex-wrap">
+      <!-- 4. Chứng từ / Tài liệu nghiệm thu -->
+      <div class="mb-5">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-bold text-gray-700">📎 Chứng từ nghiệm thu ({{ acceptDetailStage.attachments?.length || 0 }})</div>
+          <label v-if="can('acceptance.update')" :for="`accept-stage-upload-${acceptDetailStage.id}`"
+            class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 cursor-pointer py-1.5 px-3 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 transition font-medium">
+            <UploadOutlined /> Upload chứng từ
+          </label>
+          <input :id="`accept-stage-upload-${acceptDetailStage.id}`" type="file" multiple class="hidden" @change="uploadAcceptStageFiles" />
+        </div>
+        <!-- Existing attachments -->
+        <div v-if="acceptDetailStage.attachments?.length" class="flex gap-2 flex-wrap">
           <a v-for="att in acceptDetailStage.attachments" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
-             class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition border border-blue-100 cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
+            class="group relative overflow-hidden rounded-lg border border-gray-200 hover:border-blue-400 transition shadow-sm hover:shadow-md">
+            <!-- Image thumbnail -->
+            <template v-if="att.mime_type?.startsWith('image/')">
+              <img :src="att.file_url" class="w-16 h-16 object-cover" />
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                <EyeOutlined class="text-white opacity-0 group-hover:opacity-100 transition text-sm" />
+              </div>
+            </template>
+            <!-- File chip -->
+            <template v-else>
+              <div class="w-16 h-16 flex flex-col items-center justify-center bg-gray-50 group-hover:bg-blue-50 transition p-1">
+                <FileOutlined class="text-gray-400 text-lg mb-0.5" />
+                <span class="text-[8px] text-gray-400 text-center leading-tight line-clamp-2">{{ att.original_name || att.file_name }}</span>
+              </div>
+            </template>
           </a>
         </div>
+        <div v-else class="text-xs text-gray-400 italic py-2">Chưa có chứng từ. Hãy upload hình ảnh / tài liệu nghiệm thu.</div>
       </div>
 
       <!-- Save Button -->
@@ -2984,6 +3144,33 @@
       </div>
     </template>
   </a-drawer>
+
+  <!-- ==================== ACCEPT ITEM REJECT MODAL ==================== -->
+  <a-modal v-model:open="showRejectAcceptItemModal" title="Từ chối hạng mục nghiệm thu" :width="480" @ok="confirmRejectAcceptItem" ok-text="Từ chối" cancel-text="Hủy"
+    :ok-button-props="{ danger: true, disabled: !rejectAcceptItemReason.trim() }" centered destroy-on-close class="crm-modal">
+    <div class="mt-4">
+      <div class="p-3 mb-3 bg-red-50 rounded-lg border border-red-100">
+        <div class="text-sm font-semibold text-red-700">{{ rejectingAcceptItem?.name }}</div>
+        <div class="text-xs text-red-500 mt-1">Khi từ chối, hệ thống sẽ tự động tạo lỗi ghi nhận.</div>
+      </div>
+      <a-form-item label="Lý do từ chối" required>
+        <a-textarea v-model:value="rejectAcceptItemReason" :rows="3" placeholder="Nhập lý do từ chối nghiệm thu..." :max-length="1000" show-count />
+      </a-form-item>
+    </div>
+  </a-modal>
+
+  <!-- ==================== EDIT ACCEPT ITEM MODAL ==================== -->
+  <a-modal v-model:open="showEditAcceptItemModal" title="Sửa hạng mục nghiệm thu" :width="520" @ok="updateAcceptItemData" ok-text="Cập nhật" cancel-text="Hủy"
+    :confirm-loading="editingAcceptItemLoading" centered destroy-on-close class="crm-modal">
+    <a-form layout="vertical" class="mt-4" size="small">
+      <a-form-item label="Tên hạng mục" required><a-input v-model:value="editAcceptItemForm.name" placeholder="Tên hạng mục nghiệm thu" /></a-form-item>
+      <a-row :gutter="8">
+        <a-col :span="12"><a-form-item label="Ngày bắt đầu"><a-date-picker v-model:value="editAcceptItemForm.start_date" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Ngày kết thúc"><a-date-picker v-model:value="editAcceptItemForm.end_date" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+      </a-row>
+      <a-form-item label="Ghi chú"><a-textarea v-model:value="editAcceptItemForm.notes" :rows="2" placeholder="Ghi chú" /></a-form-item>
+    </a-form>
+  </a-modal>
 
   <!-- Document Upload Modal -->
   <a-modal v-model:open="showDocUploadModal" title="Upload tài liệu" :width="500" @ok="uploadDoc" ok-text="Upload" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :ok-button-props="{ disabled: !docUploadForm.file }">
@@ -3370,7 +3557,7 @@ import {
   CheckOutlined, CloseOutlined, DollarOutlined,
   UploadOutlined, DownloadOutlined, FileOutlined,
   UserOutlined, CalendarOutlined, EyeOutlined, CheckSquareOutlined,
-  LinkOutlined,
+  LinkOutlined, CameraOutlined, CheckCircleFilled, MoreOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -4669,6 +4856,7 @@ const acceptDetailTemplateId = ref(null)
 const acceptDetailDefects = ref([])
 const showCreateDefectInDrawer = ref(false)
 const newAcceptDefect = ref({ description: '', severity: 'medium' })
+const newAcceptDefectFiles = ref([])
 const creatingDefect = ref(false)
 const savingAcceptDetail = ref(false)
 
@@ -4683,6 +4871,7 @@ const openAcceptDetailModal = (stage) => {
   acceptDetailDefects.value = stage.defects || []
   showCreateDefectInDrawer.value = false
   newAcceptDefect.value = { description: '', severity: 'medium' }
+  newAcceptDefectFiles.value = []
   showAcceptDetailDrawer.value = true
 }
 
@@ -4693,20 +4882,46 @@ const onAcceptDetailTemplateChange = (val) => {
 const createDefectFromDrawer = () => {
   if (!newAcceptDefect.value.description?.trim()) return
   creatingDefect.value = true
-  router.post(`/projects/${props.project.id}/defects`, {
-    description: newAcceptDefect.value.description,
-    severity: newAcceptDefect.value.severity,
-    status: 'open',
-    acceptance_stage_id: acceptDetailStage.value.id,
-    task_id: acceptDetailStage.value.task_id || null,
-  }, {
+  const formData = new FormData()
+  formData.append('description', newAcceptDefect.value.description)
+  formData.append('severity', newAcceptDefect.value.severity)
+  formData.append('status', 'open')
+  formData.append('defect_type', 'acceptance')
+  formData.append('acceptance_stage_id', acceptDetailStage.value.id)
+  if (acceptDetailStage.value.task_id) formData.append('task_id', acceptDetailStage.value.task_id)
+  // Attach files
+  newAcceptDefectFiles.value.forEach(f => formData.append('files[]', f.file))
+  router.post(`/projects/${props.project.id}/defects`, formData, {
+    forceFormData: true,
     onSuccess: () => {
       showCreateDefectInDrawer.value = false
       newAcceptDefect.value = { description: '', severity: 'medium' }
-      showAcceptDetailDrawer.value = false // close drawer to refresh
+      newAcceptDefectFiles.value = []
+      showAcceptDetailDrawer.value = false
     },
     onFinish: () => { creatingDefect.value = false },
   })
+}
+
+// Select files for defect
+const onDefectFileSelect = (event) => {
+  const files = event.target.files
+  if (!files?.length) return
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    const entry = { file, preview: null }
+    if (file.type.startsWith('image/')) {
+      entry.preview = URL.createObjectURL(file)
+    }
+    newAcceptDefectFiles.value.push(entry)
+  }
+  event.target.value = ''
+}
+
+// Navigate to defect in Defects tab
+const goToDefect = (defect) => {
+  showAcceptDetailDrawer.value = false
+  activeTab.value = 'defects'
 }
 
 const saveAcceptDetail = () => {
@@ -4718,6 +4933,192 @@ const saveAcceptDetail = () => {
     onSuccess: () => { showAcceptDetailDrawer.value = false },
     onFinish: () => { savingAcceptDetail.value = false },
   })
+}
+
+// Upload files to acceptance stage
+const uploadAcceptStageFiles = (event) => {
+  const files = event.target.files
+  if (!files?.length || !acceptDetailStage.value) return
+  const formData = new FormData()
+  for (let i = 0; i < files.length; i++) {
+    formData.append('files[]', files[i])
+  }
+  router.post(`/projects/${props.project.id}/acceptance/${acceptDetailStage.value.id}/attach-files`, formData, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => { showAcceptDetailDrawer.value = false },
+  })
+  event.target.value = ''
+}
+
+// ============ ACCEPTANCE ITEM WORKFLOW (matching APP AcceptanceItemController) ============
+const showAddAcceptItem = ref(false)
+const newAcceptItem = ref({ name: '', start_date: null, end_date: null, task_id: null, notes: '' })
+const creatingAcceptItem = ref(false)
+
+// Reject item modal
+const showRejectAcceptItemModal = ref(false)
+const rejectingAcceptItem = ref(null)
+const rejectAcceptItemReason = ref('')
+
+// Edit item modal
+const showEditAcceptItemModal = ref(false)
+const editingAcceptItemData = ref(null)
+const editAcceptItemForm = ref({ name: '', start_date: null, end_date: null, notes: '' })
+const editingAcceptItemLoading = ref(false)
+
+// Workflow step progress helper
+const getStepState = (currentStatus, stepKey) => {
+  const steps = ['submitted', 'supervisor_approved', 'project_manager_approved', 'customer_approved']
+  const currentIdx = steps.indexOf(currentStatus)
+  const stepIdx = steps.indexOf(stepKey)
+
+  // Handle pm_approved alias
+  if (currentStatus === 'pm_approved') {
+    const aliasIdx = steps.indexOf('project_manager_approved')
+    if (stepIdx < aliasIdx) return 'done'
+    if (stepIdx === aliasIdx) return 'done'
+    return 'pending'
+  }
+
+  if (currentStatus === 'rejected' || currentStatus === 'draft' || !currentStatus) return 'pending'
+  if (stepIdx < currentIdx) return 'done'
+  if (stepIdx === currentIdx) return 'done'
+  if (stepIdx === currentIdx + 1) return 'current'
+  return 'pending'
+}
+
+// Create acceptance item
+const createAcceptItem = () => {
+  if (!newAcceptItem.value.name?.trim() || !newAcceptItem.value.start_date || !newAcceptItem.value.end_date) return
+  creatingAcceptItem.value = true
+  const stageId = acceptDetailStage.value.id
+  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items`, {
+    name: newAcceptItem.value.name,
+    start_date: newAcceptItem.value.start_date,
+    end_date: newAcceptItem.value.end_date,
+    task_id: newAcceptItem.value.task_id,
+    notes: newAcceptItem.value.notes,
+  }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showAddAcceptItem.value = false
+      newAcceptItem.value = { name: '', start_date: null, end_date: null, task_id: null, notes: '' }
+      showAcceptDetailDrawer.value = false // close to refresh data
+    },
+    onFinish: () => { creatingAcceptItem.value = false },
+  })
+}
+
+// Edit acceptance item
+const editAcceptItem = (item) => {
+  editingAcceptItemData.value = item
+  editAcceptItemForm.value = {
+    name: item.name || '',
+    start_date: item.start_date ? dayjs(item.start_date).format('YYYY-MM-DD') : null,
+    end_date: item.end_date ? dayjs(item.end_date).format('YYYY-MM-DD') : null,
+    notes: item.notes || '',
+  }
+  showEditAcceptItemModal.value = true
+}
+
+const updateAcceptItemData = () => {
+  if (!editingAcceptItemData.value || !editAcceptItemForm.value.name?.trim()) return
+  editingAcceptItemLoading.value = true
+  const stageId = acceptDetailStage.value.id
+  router.put(`/projects/${props.project.id}/acceptance/${stageId}/items/${editingAcceptItemData.value.id}`, editAcceptItemForm.value, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showEditAcceptItemModal.value = false
+      showAcceptDetailDrawer.value = false // close to refresh
+    },
+    onFinish: () => { editingAcceptItemLoading.value = false },
+  })
+}
+
+// Delete acceptance item
+const deleteAcceptItem = (item) => {
+  if (!confirm(`Xóa hạng mục "${item.name}"?`)) return
+  const stageId = acceptDetailStage.value.id
+  router.delete(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}`, {
+    preserveScroll: true,
+    onSuccess: () => { showAcceptDetailDrawer.value = false },
+  })
+}
+
+// Submit for approval (draft/rejected → submitted)
+const submitAcceptItem = (item) => {
+  const stageId = acceptDetailStage.value.id
+  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/submit`, {}, {
+    preserveScroll: true,
+    onSuccess: () => { showAcceptDetailDrawer.value = false },
+  })
+}
+
+// Supervisor approve (submitted → supervisor_approved)
+const approveAcceptItemSupervisor = (item) => {
+  const stageId = acceptDetailStage.value.id
+  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-supervisor`, {}, {
+    preserveScroll: true,
+    onSuccess: () => { showAcceptDetailDrawer.value = false },
+  })
+}
+
+// PM approve (supervisor_approved → project_manager_approved)
+const approveAcceptItemPM = (item) => {
+  const stageId = acceptDetailStage.value.id
+  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-pm`, {}, {
+    preserveScroll: true,
+    onSuccess: () => { showAcceptDetailDrawer.value = false },
+  })
+}
+
+// Customer approve (project_manager_approved → customer_approved)
+const approveAcceptItemCustomer = (item) => {
+  const stageId = acceptDetailStage.value.id
+  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-customer`, {}, {
+    preserveScroll: true,
+    onSuccess: () => { showAcceptDetailDrawer.value = false },
+  })
+}
+
+// Reject item (opens modal)
+const openRejectAcceptItemModal = (item) => {
+  rejectingAcceptItem.value = item
+  rejectAcceptItemReason.value = ''
+  showRejectAcceptItemModal.value = true
+}
+
+const confirmRejectAcceptItem = () => {
+  if (!rejectingAcceptItem.value || !rejectAcceptItemReason.value.trim()) return
+  const stageId = acceptDetailStage.value.id
+  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${rejectingAcceptItem.value.id}/reject`, {
+    rejection_reason: rejectAcceptItemReason.value,
+  }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showRejectAcceptItemModal.value = false
+      showAcceptDetailDrawer.value = false // close to refresh
+    },
+  })
+}
+
+// Upload photos for acceptance item
+const uploadAcceptItemPhotos = (item, event) => {
+  const files = event.target.files
+  if (!files?.length) return
+  const stageId = acceptDetailStage.value.id
+  const formData = new FormData()
+  for (let i = 0; i < files.length; i++) {
+    formData.append('files[]', files[i])
+  }
+  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/attach-files`, formData, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => { showAcceptDetailDrawer.value = false },
+  })
+  // Clear input
+  event.target.value = ''
 }
 
 
