@@ -152,6 +152,18 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Subcontractor Acceptance (Nghiệm thu NTP)
         Route::post('/sub-acceptance/{id}/approve', [CrmApprovalController::class, 'approveSubAcceptance'])->name('sub-acceptance.approve');
         Route::post('/sub-acceptance/{id}/reject', [CrmApprovalController::class, 'rejectSubAcceptance'])->name('sub-acceptance.reject');
+
+        // Supplier Acceptance (Nghiệm thu NCC)
+        Route::post('/supplier-acceptance/{id}/approve', [CrmApprovalController::class, 'approveSupplierAcceptance'])->name('supplier-acceptance.approve');
+        Route::post('/supplier-acceptance/{id}/reject', [CrmApprovalController::class, 'rejectSupplierAcceptance'])->name('supplier-acceptance.reject');
+
+        // Construction Log (Nhật ký công trường)
+        Route::post('/construction-log/{id}/approve', [CrmApprovalController::class, 'approveConstructionLog'])->name('construction-log.approve');
+        Route::post('/construction-log/{id}/reject', [CrmApprovalController::class, 'rejectConstructionLog'])->name('construction-log.reject');
+
+        // Schedule Adjustment (Điều chỉnh tiến độ)
+        Route::post('/schedule-adjustment/{id}/approve', [CrmApprovalController::class, 'approveScheduleAdjustment'])->name('schedule-adjustment.approve');
+        Route::post('/schedule-adjustment/{id}/reject', [CrmApprovalController::class, 'rejectScheduleAdjustment'])->name('schedule-adjustment.reject');
     });
 
     // Reports (Báo cáo dự án)

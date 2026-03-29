@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Cost;
 use App\Models\AcceptanceStage;
+use App\Models\AcceptanceItem;
 use App\Models\ChangeRequest;
 use App\Models\AdditionalCost;
 use App\Models\SubcontractorPayment;
 use App\Models\Contract;
 use App\Models\ProjectPayment;
 use App\Models\SubcontractorAcceptance;
+use App\Models\SupplierAcceptance;
+use App\Models\ConstructionLog;
+use App\Models\ScheduleAdjustment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -107,6 +111,27 @@ class CrmApprovalController extends Controller
             ->get()
             ->map(fn($sa) => $this->formatSubAcceptanceItem($sa));
 
+        // ─── Nghiệm thu NCC chờ duyệt ───
+        $supplierAcceptanceItems = SupplierAcceptance::where('status', 'pending')
+            ->with(['supplier:id,name', 'project:id,name,code', 'creator:id,name'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($sa) => $this->formatSupplierAcceptanceItem($sa));
+
+        // ─── Nhật ký công trường chờ duyệt ───
+        $constructionLogItems = ConstructionLog::where('approval_status', 'pending')
+            ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
+            ->orderBy('log_date', 'desc')
+            ->get()
+            ->map(fn($log) => $this->formatConstructionLogItem($log));
+
+        // ─── Điều chỉnh tiến độ chờ duyệt ───
+        $scheduleAdjustmentItems = ScheduleAdjustment::where('status', 'pending')
+            ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($adj) => $this->formatScheduleAdjustmentItem($adj));
+
         // ─── Recently processed (last 30 items — ALL types) ───
         $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
@@ -153,6 +178,9 @@ class CrmApprovalController extends Controller
             'pending_payment' => $paymentItems->count(),
             'pending_material_bill' => $materialBillItems->count(),
             'pending_sub_acceptance' => $subAcceptanceItems->count(),
+            'pending_supplier_acceptance' => $supplierAcceptanceItems->count(),
+            'pending_construction_log' => $constructionLogItems->count(),
+            'pending_schedule_adjustment' => $scheduleAdjustmentItems->count(),
             'approved_today' => Cost::where('status', 'approved')
                 ->whereDate('updated_at', today())
                 ->count(),
@@ -174,6 +202,9 @@ class CrmApprovalController extends Controller
             'paymentItems' => $paymentItems->values(),
             'materialBillItems' => $materialBillItems->values(),
             'subAcceptanceItems' => $subAcceptanceItems->values(),
+            'supplierAcceptanceItems' => $supplierAcceptanceItems->values(),
+            'constructionLogItems' => $constructionLogItems->values(),
+            'scheduleAdjustmentItems' => $scheduleAdjustmentItems->values(),
             'recentItems' => $recentItems->values(),
             'stats' => $stats,
         ]);
@@ -866,6 +897,216 @@ class CrmApprovalController extends Controller
             'subcontractor_name' => $sa->subcontractor->name ?? null,
             'approval_level' => 'sub_acceptance',
         ];
+    }
+
+    private function formatSupplierAcceptanceItem(SupplierAcceptance $sa): array
+    {
+        return [
+            'id' => $sa->id,
+            'type' => 'supplier_acceptance',
+            'type_label' => 'NT NCC',
+            'title' => $sa->name ?? 'Nghiệm thu NCC',
+            'subtitle' => ($sa->project->code ?? '') . ' - ' . ($sa->project->name ?? 'Dự án'),
+            'amount' => (float) ($sa->amount ?? 0),
+            'status' => $sa->status,
+            'status_label' => 'Chờ duyệt',
+            'created_by' => $sa->creator->name ?? 'N/A',
+            'created_by_email' => '',
+            'created_at' => $sa->created_at?->format('d/m/Y H:i') ?? '',
+            'description' => $sa->notes ?? null,
+            'project_name' => $sa->project->name ?? null,
+            'project_id' => $sa->project_id,
+            'supplier_name' => $sa->supplier->name ?? null,
+            'approval_level' => 'supplier_acceptance',
+        ];
+    }
+
+    private function formatConstructionLogItem(ConstructionLog $log): array
+    {
+        return [
+            'id' => $log->id,
+            'type' => 'construction_log',
+            'type_label' => 'Nhật ký CT',
+            'title' => 'Nhật ký ' . ($log->log_date?->format('d/m/Y') ?? 'N/A'),
+            'subtitle' => ($log->project->code ?? '') . ' - ' . ($log->project->name ?? 'Dự án'),
+            'amount' => 0,
+            'status' => $log->approval_status,
+            'status_label' => 'Chờ duyệt',
+            'created_by' => $log->creator->name ?? 'N/A',
+            'created_by_email' => '',
+            'created_at' => $log->created_at?->format('d/m/Y H:i') ?? '',
+            'description' => $log->notes ?? ($log->task?->name ? 'Công việc: ' . $log->task->name : null),
+            'project_name' => $log->project->name ?? null,
+            'project_id' => $log->project_id,
+            'approval_level' => 'construction_log',
+        ];
+    }
+
+    private function formatScheduleAdjustmentItem(ScheduleAdjustment $adj): array
+    {
+        $delayInfo = $adj->delay_days ? "Trễ {$adj->delay_days} ngày" : null;
+        return [
+            'id' => $adj->id,
+            'type' => 'schedule_adjustment',
+            'type_label' => 'Điều chỉnh TĐ',
+            'title' => ($adj->task?->name ?? 'Điều chỉnh') . ($delayInfo ? " ({$delayInfo})" : ''),
+            'subtitle' => ($adj->project->code ?? '') . ' - ' . ($adj->project->name ?? 'Dự án'),
+            'amount' => 0,
+            'status' => $adj->status,
+            'status_label' => 'Chờ duyệt',
+            'created_by' => $adj->creator->name ?? 'N/A',
+            'created_by_email' => '',
+            'created_at' => $adj->created_at?->format('d/m/Y H:i') ?? '',
+            'description' => $adj->reason ?? $adj->impact_analysis,
+            'project_name' => $adj->project->name ?? null,
+            'project_id' => $adj->project_id,
+            'priority' => $adj->priority,
+            'approval_level' => 'schedule_adjustment',
+        ];
+    }
+
+    // =========================================================================
+    // SUPPLIER ACCEPTANCE APPROVAL
+    // =========================================================================
+
+    public function approveSupplierAcceptance(Request $request, $id)
+    {
+        $sa = SupplierAcceptance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($sa->status !== 'pending') {
+            return back()->with('error', 'Nghiệm thu NCC không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $sa->approve(null, $request->notes);
+            DB::commit();
+            return back()->with('success', 'Đã duyệt nghiệm thu NCC');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi duyệt nghiệm thu NCC');
+        }
+    }
+
+    public function rejectSupplierAcceptance(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $sa = SupplierAcceptance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($sa->status !== 'pending') {
+            return back()->with('error', 'Nghiệm thu NCC không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $sa->reject($request->reason, null);
+            DB::commit();
+            return back()->with('success', 'Đã từ chối nghiệm thu NCC');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi từ chối nghiệm thu NCC');
+        }
+    }
+
+    // =========================================================================
+    // CONSTRUCTION LOG APPROVAL
+    // =========================================================================
+
+    public function approveConstructionLog(Request $request, $id)
+    {
+        $log = ConstructionLog::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($log->approval_status !== 'pending') {
+            return back()->with('error', 'Nhật ký không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $log->forceFill([
+                'approval_status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+            ])->save();
+            DB::commit();
+            return back()->with('success', 'Đã duyệt nhật ký công trường');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi duyệt nhật ký');
+        }
+    }
+
+    public function rejectConstructionLog(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $log = ConstructionLog::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($log->approval_status !== 'pending') {
+            return back()->with('error', 'Nhật ký không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $log->forceFill([
+                'approval_status' => 'rejected',
+                'rejected_by' => $user->id,
+                'rejected_at' => now(),
+                'rejection_reason' => $request->reason,
+            ])->save();
+            DB::commit();
+            return back()->with('success', 'Đã từ chối nhật ký công trường');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi từ chối nhật ký');
+        }
+    }
+
+    // =========================================================================
+    // SCHEDULE ADJUSTMENT APPROVAL
+    // =========================================================================
+
+    public function approveScheduleAdjustment(Request $request, $id)
+    {
+        $adj = ScheduleAdjustment::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($adj->status !== 'pending') {
+            return back()->with('error', 'Điều chỉnh tiến độ không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $adj->approve(null, $request->notes);
+            DB::commit();
+            return back()->with('success', 'Đã duyệt điều chỉnh tiến độ');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi duyệt điều chỉnh tiến độ');
+        }
+    }
+
+    public function rejectScheduleAdjustment(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $adj = ScheduleAdjustment::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($adj->status !== 'pending') {
+            return back()->with('error', 'Điều chỉnh tiến độ không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $adj->reject(null, $request->reason);
+            DB::commit();
+            return back()->with('success', 'Đã từ chối điều chỉnh tiến độ');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi từ chối điều chỉnh tiến độ');
+        }
     }
 
     // =========================================================================

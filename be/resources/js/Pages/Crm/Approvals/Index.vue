@@ -322,6 +322,9 @@ const props = defineProps({
   paymentItems: { type: Array, default: () => [] },
   materialBillItems: { type: Array, default: () => [] },
   subAcceptanceItems: { type: Array, default: () => [] },
+  supplierAcceptanceItems: { type: Array, default: () => [] },
+  constructionLogItems: { type: Array, default: () => [] },
+  scheduleAdjustmentItems: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
 })
@@ -345,6 +348,9 @@ const typeColors = {
   project_payment: 'volcano',
   material_bill: 'purple',
   sub_acceptance: 'lime',
+  supplier_acceptance: 'green',
+  construction_log: 'geekblue',
+  schedule_adjustment: 'red',
 }
 
 const statusViMap = {
@@ -390,6 +396,9 @@ const roleItemsMap = computed(() => ({
     ...props.changeRequestItems.map(i => ({ ...i, _approveType: 'change_request' })),
     ...props.materialBillItems.map(i => ({ ...i, _approveType: 'material_bill' })),
     ...props.subAcceptanceItems.map(i => ({ ...i, _approveType: 'sub_acceptance' })),
+    ...props.supplierAcceptanceItems.map(i => ({ ...i, _approveType: 'supplier_acceptance' })),
+    ...props.constructionLogItems.map(i => ({ ...i, _approveType: 'construction_log' })),
+    ...props.scheduleAdjustmentItems.map(i => ({ ...i, _approveType: 'schedule_adjustment' })),
   ],
 }))
 
@@ -452,6 +461,9 @@ const approveUrlMap = {
   project_payment: (r) => `/approvals/payment/${r.id}/approve`,
   material_bill: (r) => `/approvals/material-bill/${r.id}/approve`,
   sub_acceptance: (r) => `/approvals/sub-acceptance/${r.id}/approve`,
+  supplier_acceptance: (r) => `/approvals/supplier-acceptance/${r.id}/approve`,
+  construction_log: (r) => `/approvals/construction-log/${r.id}/approve`,
+  schedule_adjustment: (r) => `/approvals/schedule-adjustment/${r.id}/approve`,
 }
 
 const approveLabels = {
@@ -466,6 +478,9 @@ const approveLabels = {
   project_payment: 'Duyệt thanh toán',
   material_bill: 'Duyệt phiếu vật tư',
   sub_acceptance: 'Duyệt nghiệm thu NTP',
+  supplier_acceptance: 'Duyệt nghiệm thu NCC',
+  construction_log: 'Duyệt nhật ký công trường',
+  schedule_adjustment: 'Duyệt điều chỉnh tiến độ',
 }
 
 const handleApproveByType = (record) => {
@@ -503,6 +518,9 @@ const rejectUrlMap = {
   project_payment: (r) => `/approvals/payment/${r.id}/reject`,
   material_bill: (r) => `/approvals/material-bill/${r.id}/reject`,
   sub_acceptance: (r) => `/approvals/sub-acceptance/${r.id}/reject`,
+  supplier_acceptance: (r) => `/approvals/supplier-acceptance/${r.id}/reject`,
+  construction_log: (r) => `/approvals/construction-log/${r.id}/reject`,
+  schedule_adjustment: (r) => `/approvals/schedule-adjustment/${r.id}/reject`,
 }
 
 const openRejectModal = (record) => {
