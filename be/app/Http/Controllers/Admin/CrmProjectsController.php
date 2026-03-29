@@ -1036,11 +1036,20 @@ class CrmProjectsController extends Controller
             }
         }
 
-        ConstructionLog::create([
+        $log = ConstructionLog::create([
             'project_id' => $project->id,
             'created_by' => $user->id,
             ...$validated,
         ]);
+
+        // BUSINESS RULE: Recalculate task progress from logs (same as mobile APP)
+        // This auto-updates status to 'completed' when 100% and creates acceptance stage
+        if ($log->task_id) {
+            $task = \App\Models\ProjectTask::find($log->task_id);
+            if ($task) {
+                app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task, true);
+            }
+        }
 
         return back()->with('success', 'Đã thêm nhật ký thi công.');
     }
@@ -1096,7 +1105,27 @@ class CrmProjectsController extends Controller
             }
         }
 
+        $oldTaskId = $log->task_id;
         $log->update($validated);
+
+        // BUSINESS RULE: Recalculate task progress from logs (same as mobile APP)
+        $service = app(\App\Services\TaskProgressService::class);
+        $newTaskId = $log->task_id;
+
+        // Recalculate new task
+        if ($newTaskId) {
+            $task = \App\Models\ProjectTask::find($newTaskId);
+            if ($task) {
+                $service->updateTaskFromLogs($task, true);
+            }
+        }
+        // If task changed, also recalculate old task
+        if ($oldTaskId && $oldTaskId !== $newTaskId) {
+            $oldTask = \App\Models\ProjectTask::find($oldTaskId);
+            if ($oldTask) {
+                $service->updateTaskFromLogs($oldTask, true);
+            }
+        }
 
         return back()->with('success', 'Đã cập nhật nhật ký.');
     }
@@ -1117,7 +1146,17 @@ class CrmProjectsController extends Controller
             $att->delete();
         }
 
+        $taskId = $log->task_id;
         $log->delete();
+
+        // BUSINESS RULE: Recalculate task progress after log deletion
+        if ($taskId) {
+            $task = \App\Models\ProjectTask::find($taskId);
+            if ($task) {
+                app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task, true);
+            }
+        }
+
         return back()->with('success', 'Đã xóa nhật ký.');
     }
 
@@ -1463,6 +1502,11 @@ class CrmProjectsController extends Controller
                 ->diffInDays(\Carbon\Carbon::parse($validated['end_date'])) + 1;
         }
 
+        $progressInput = (float) ($validated['progress_percentage'] ?? 0);
+
+        // Auto-calculate status from progress (matching APP logic)
+        $service = app(\App\Services\TaskProgressService::class);
+
         $task = \App\Models\ProjectTask::create([
             'project_id' => $project->id,
             'name' => $validated['name'],
@@ -1475,10 +1519,38 @@ class CrmProjectsController extends Controller
             'priority' => $validated['priority'] ?? 'medium',
             'assigned_to' => $validated['assigned_to'] ?? null,
             'order' => $maxOrder + 1,
-            'status' => $validated['status'] ?? 'not_started',
-            'progress_percentage' => $validated['progress_percentage'] ?? 0,
+            'status' => 'not_started', // Will be recalculated below
+            'progress_percentage' => $progressInput,
             'created_by' => $user->id,
         ]);
+
+        // BUSINESS RULE: Auto-calculate status based on progress and dates
+        $autoStatus = $service->calculateStatus($task, $progressInput);
+        if ($autoStatus !== $task->status) {
+            $task->forceFill(['status' => $autoStatus])->saveQuietly();
+        }
+
+        // Auto-create acceptance stage when root task reaches 100%
+        if ($progressInput >= 100 && !$task->parent_id) {
+            $maxOrd = \App\Models\AcceptanceStage::where('project_id', $project->id)->max('order') ?? 0;
+            \App\Models\AcceptanceStage::create([
+                'project_id' => $project->id,
+                'task_id' => $task->id,
+                'name' => $task->name . ' - Nghiệm thu',
+                'description' => '[Giai đoạn nghiệm thu được tự động tạo khi công việc đạt 100%]',
+                'order' => $maxOrd + 1,
+                'is_custom' => false,
+                'status' => 'pending',
+            ]);
+        }
+
+        // Update parent progress if this task has a parent
+        if ($task->parent_id) {
+            $parent = \App\Models\ProjectTask::find($task->parent_id);
+            if ($parent) {
+                $service->updateTaskFromLogs($parent, true);
+            }
+        }
 
         return back()->with('success', 'Đã thêm công việc.');
     }
@@ -1519,11 +1591,69 @@ class CrmProjectsController extends Controller
                 ->diffInDays(\Carbon\Carbon::parse($validated['end_date'])) + 1;
         }
 
+        // Extract progress/status from validated — will be handled by service
+        $progressInput = $validated['progress_percentage'] ?? null;
+        $statusInput = $validated['status'] ?? null;
+        unset($validated['progress_percentage'], $validated['status']);
+
         $task->update([
             ...$validated,
             'duration' => $duration,
             'updated_by' => $user->id,
         ]);
+
+        // BUSINESS RULE: Auto-calculate status and create acceptance stage
+        // This matches the mobile APP behavior
+        $service = app(\App\Services\TaskProgressService::class);
+
+        if ($progressInput !== null) {
+            // CRM admin manually set progress → apply it and auto-calculate status
+            $autoStatus = $service->calculateStatus($task, (float) $progressInput);
+
+            // If has children, check if parent can be completed
+            $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
+                ->whereNull('deleted_at')->exists();
+            if ($autoStatus === 'completed' && $hasChildren && !$service->canParentBeCompleted($task)) {
+                $autoStatus = 'in_progress';
+            }
+
+            $task->forceFill([
+                'progress_percentage' => $progressInput,
+                'status' => $statusInput ?: $autoStatus,
+            ])->saveQuietly();
+
+            // Auto-create acceptance stage when parent task reaches 100%
+            if ($progressInput >= 100 && !$task->parent_id) {
+                $existingStage = \App\Models\AcceptanceStage::where('task_id', $task->id)
+                    ->where('project_id', $task->project_id)->first();
+                if (!$existingStage) {
+                    $maxOrder = \App\Models\AcceptanceStage::where('project_id', $task->project_id)->max('order') ?? 0;
+                    \App\Models\AcceptanceStage::create([
+                        'project_id' => $task->project_id,
+                        'task_id' => $task->id,
+                        'name' => $task->name . ' - Nghiệm thu',
+                        'description' => '[Giai đoạn nghiệm thu được tự động tạo khi công việc đạt 100%]',
+                        'order' => $maxOrder + 1,
+                        'is_custom' => false,
+                        'status' => 'pending',
+                    ]);
+                }
+            }
+
+            // Update parent task if exists
+            if ($task->parent_id) {
+                $parent = \App\Models\ProjectTask::find($task->parent_id);
+                if ($parent) {
+                    $service->updateTaskFromLogs($parent, true);
+                }
+            }
+        } elseif ($statusInput !== null) {
+            // Status-only update (no progress change)
+            $task->forceFill(['status' => $statusInput])->saveQuietly();
+        } else {
+            // No progress/status input — recalculate from logs (dates may have changed)
+            $service->updateTaskFromLogs($task, true);
+        }
 
         return back()->with('success', 'Đã cập nhật công việc.');
     }
@@ -2423,7 +2553,9 @@ class CrmProjectsController extends Controller
                     'transaction_date' => $validated['transaction_date'],
                     'notes' => $item['notes'] ?? null,
                     'created_by' => $user->id ?? null,
-                    'status' => 'completed',
+                    'status' => 'approved',
+                    'approved_by' => $user->id ?? null,
+                    'approved_at' => now(),
                 ]);
 
                 // Update stock

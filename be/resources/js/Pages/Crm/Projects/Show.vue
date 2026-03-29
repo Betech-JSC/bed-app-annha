@@ -1,6 +1,13 @@
 <template>
   <Head :title="`Dự án: ${project.name}`" />
 
+  <!-- Global Loading Bar -->
+  <Transition name="loading-bar">
+    <div v-if="pageLoading" class="fixed top-0 left-0 right-0 z-[9999]">
+      <div class="h-[3px] bg-gradient-to-r from-blue-400 via-blue-600 to-indigo-600 loading-bar-animation"></div>
+    </div>
+  </Transition>
+
   <!-- Project Header (Compact Premium) -->
   <div class="bg-white rounded-2xl border border-gray-100 p-5 mb-5 shadow-sm">
     <div class="flex items-center justify-between">
@@ -731,13 +738,13 @@
               <template v-else-if="column.key === 'actions'">
                 <div class="flex gap-1">
                   <a-tooltip v-if="record.status === 'draft' && can('cost.submit')" title="Gửi duyệt">
-                    <a-button type="text" size="small" :loading="actionLoading[`submit-cost-${record.id}`]" @click="submitCostWithLoading(record)"><SendOutlined class="text-blue-500" /></a-button>
+                    <a-button type="text" size="small" :loading="actionLoading[`submit-cost-${record.id}`]" @click="submitCost(record)"><SendOutlined class="text-blue-500" /></a-button>
                   </a-tooltip>
                   <a-tooltip v-if="record.status === 'pending_management_approval' && can('cost.approve.management')" title="Duyệt (BĐH)">
-                    <a-button type="text" size="small" :loading="actionLoading[`approve-cost-mgmt-${record.id}`]" @click="approveCostMgmtWithLoading(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
+                    <a-button type="text" size="small" :loading="actionLoading[`approve-cost-mgmt-${record.id}`]" @click="approveCostMgmt(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
                   </a-tooltip>
                   <a-tooltip v-if="record.status === 'pending_accountant_approval' && can('cost.approve.accountant')" title="Xác nhận (KT)">
-                    <a-button type="text" size="small" :loading="actionLoading[`approve-cost-acct-${record.id}`]" @click="approveCostAcctWithLoading(record)"><CheckCircleOutlined class="text-green-600" /></a-button>
+                    <a-button type="text" size="small" :loading="actionLoading[`approve-cost-acct-${record.id}`]" @click="approveCostAcct(record)"><CheckCircleOutlined class="text-green-600" /></a-button>
                   </a-tooltip>
                   <a-tooltip v-if="['pending_management_approval','pending_accountant_approval'].includes(record.status) && can('cost.reject')" title="Từ chối">
                     <a-button type="text" size="small" danger @click="openRejectCostModal(record)"><CloseCircleOutlined /></a-button>
@@ -1235,7 +1242,7 @@
               <template v-else-if="column.key === 'actions'">
                 <div class="flex gap-1">
                   <a-tooltip v-if="record.status === 'pending_approval' && can('additional_cost.approve')" title="Duyệt">
-                    <a-button type="text" size="small" :loading="actionLoading[`approve-ac-${record.id}`]" @click="approveACWithLoading(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
+                    <a-button type="text" size="small" :loading="actionLoading[`approve-ac-${record.id}`]" @click="approveAC(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
                   </a-tooltip>
                   <a-tooltip v-if="record.status === 'pending_approval' && can('additional_cost.reject')" title="Từ chối">
                     <a-button type="text" size="small" danger @click="openRejectACModal(record)"><CloseCircleOutlined /></a-button>
@@ -2051,11 +2058,11 @@
   <!-- ==================== MODALS ==================== -->
 
   <!-- Edit Project Modal -->
-  <a-modal v-model:open="showEditProject" title="Chỉnh sửa dự án" :width="640" @ok="saveProject" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showEditProject" title="Chỉnh sửa dự án" :width="640" @ok="saveProject" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tên dự án" required><a-input v-model:value="projectForm.name" size="large" /></a-form-item>
+      <a-form-item label="Tên dự án" required v-bind="fieldStatus('name')"><a-input v-model:value="projectForm.name" size="large" /></a-form-item>
       <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Khách hàng"><a-select v-model:value="projectForm.customer_id" show-search option-filter-prop="label" size="large" class="w-full">
+        <a-col :span="12"><a-form-item label="Khách hàng" v-bind="fieldStatus('customer_id')"><a-select v-model:value="projectForm.customer_id" show-search option-filter-prop="label" size="large" class="w-full">
           <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }}</a-select-option>
         </a-select></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Quản lý"><a-select v-model:value="projectForm.project_manager_id" show-search option-filter-prop="label" size="large" class="w-full" allow-clear>
@@ -2069,20 +2076,20 @@
           <a-select-option value="completed">Hoàn thành</a-select-option>
           <a-select-option value="cancelled">Đã hủy</a-select-option>
         </a-select></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Ngày BĐ"><a-date-picker v-model:value="projectForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Ngày KT"><a-date-picker v-model:value="projectForm.end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Ngày BĐ" v-bind="fieldStatus('start_date')"><a-date-picker v-model:value="projectForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Ngày KT" v-bind="fieldStatus('end_date')"><a-date-picker v-model:value="projectForm.end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
       </a-row>
       <a-form-item label="Mô tả"><a-textarea v-model:value="projectForm.description" :rows="3" /></a-form-item>
     </a-form>
   </a-modal>
 
   <!-- Cost Modal -->
-  <a-modal v-model:open="showCostModal" :title="editingCost ? 'Sửa chi phí' : 'Thêm chi phí'" :width="640" @ok="saveCost" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showCostModal" :title="editingCost ? 'Sửa chi phí' : 'Thêm chi phí'" :width="640" @ok="saveCost" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tên chi phí" required><a-input v-model:value="costForm.name" size="large" /></a-form-item>
+      <a-form-item label="Tên chi phí" required v-bind="fieldStatus('name')"><a-input v-model:value="costForm.name" size="large" /></a-form-item>
       <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Số tiền" required><a-input-number v-model:value="costForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Ngày" required><a-date-picker v-model:value="costForm.cost_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="costForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Ngày" required v-bind="fieldStatus('cost_date')"><a-date-picker v-model:value="costForm.cost_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item v-if="costGroups.length" label="Nhóm chi phí"><a-select v-model:value="costForm.cost_group_id" size="large" class="w-full" allow-clear placeholder="Chọn nhóm">
@@ -2113,14 +2120,14 @@
   </a-modal>
 
   <!-- Contract Modal -->
-  <a-modal v-model:open="showContractModal" :title="editingContract ? 'Sửa hợp đồng' : 'Tạo hợp đồng'" :width="640" @ok="saveContract" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showContractModal" :title="editingContract ? 'Sửa hợp đồng' : 'Tạo hợp đồng'" :width="640" @ok="saveContract" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="Giá trị HĐ" required><a-input-number v-model:value="contractForm.contract_value" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
+          <a-form-item label="Giá trị HĐ" required v-bind="fieldStatus('contract_value')"><a-input-number v-model:value="contractForm.contract_value" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="Ngày ký"><a-date-picker v-model:value="contractForm.signed_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
+          <a-form-item label="Ngày ký" v-bind="fieldStatus('signed_date')"><a-date-picker v-model:value="contractForm.signed_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
         </a-col>
       </a-row>
       <a-form-item label="Trạng thái">
@@ -2149,7 +2156,7 @@
   </a-modal>
 
   <!-- Payment Modal -->
-  <a-modal v-model:open="showPaymentModal" title="Thêm thanh toán" :width="500" @ok="savePayment" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showPaymentModal" title="Thêm thanh toán" :width="500" @ok="savePayment" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Số phiếu thanh toán"><a-input v-model:value="paymentForm.payment_number" size="large" placeholder="TT-001" /></a-form-item></a-col>
@@ -2158,8 +2165,8 @@
         </a-select></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Số tiền" required><a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Ngày đến hạn"><a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Ngày đến hạn" v-bind="fieldStatus('due_date')"><a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
       </a-row>
       <a-form-item label="Ghi chú"><a-input v-model:value="paymentForm.notes" size="large" placeholder="Ghi chú thanh toán..." /></a-form-item>
       <!-- Inline Attachments -->
@@ -2177,7 +2184,7 @@
   </a-modal>
 
   <!-- Reject Payment Modal -->
-  <a-modal v-model:open="showRejectPaymentModal" title="Từ chối thanh toán" :width="400" @ok="rejectPaymentAction" ok-text="Từ chối" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :ok-button-props="{ danger: true, disabled: !rejectPaymentReason.trim() }">
+  <a-modal v-model:open="showRejectPaymentModal" title="Từ chối thanh toán" :width="400" @ok="rejectPaymentAction" ok-text="Từ chối" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal" :ok-button-props="{ danger: true, disabled: !rejectPaymentReason.trim() }">
     <div class="mt-4">
       <div v-if="rejectPaymentTarget" class="mb-3 p-3 bg-gray-50 rounded-xl">
         <div class="font-semibold text-gray-700">Đợt #{{ rejectPaymentTarget.payment_number }}</div>
@@ -2210,9 +2217,9 @@
   </a-modal>
 
   <!-- Personnel Modal -->
-  <a-modal v-model:open="showPersonnelModal" title="Phân công nhân sự" :width="500" @ok="savePersonnel" ok-text="Phân công" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showPersonnelModal" title="Phân công nhân sự" :width="500" @ok="savePersonnel" ok-text="Phân công" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Nhân viên" required><a-select v-model:value="personnelForm.user_id" show-search option-filter-prop="label" size="large" class="w-full" placeholder="Chọn nhân viên">
+      <a-form-item label="Nhân viên" required v-bind="fieldStatus('user_id')"><a-select v-model:value="personnelForm.user_id" show-search option-filter-prop="label" size="large" class="w-full" placeholder="Chọn nhân viên">
         <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }} ({{ u.email }})</a-select-option>
       </a-select></a-form-item>
       <a-form-item v-if="personnelRoles.length" label="Vai trò"><a-select v-model:value="personnelForm.personnel_role_id" size="large" class="w-full" allow-clear placeholder="Chọn vai trò">
@@ -2222,11 +2229,11 @@
   </a-modal>
 
   <!-- Log Modal -->
-  <a-modal v-model:open="showLogModal" :title="editingLog ? 'Cập nhật nhật ký thi công' : 'Thêm nhật ký thi công'" :width="640" @ok="saveLog" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showLogModal" :title="editingLog ? 'Cập nhật nhật ký thi công' : 'Thêm nhật ký thi công'" :width="640" @ok="saveLog" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="Ngày ghi nhật ký" required>
+          <a-form-item label="Ngày ghi nhật ký" required v-bind="fieldStatus('log_date')">
             <a-date-picker v-model:value="logForm.log_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" :disabled="!!editingLog" />
           </a-form-item>
         </a-col>
@@ -2266,11 +2273,11 @@
   </a-modal>
 
   <!-- Defect Modal -->
-  <a-modal v-model:open="showDefectModal" :title="editingDefect ? 'Sửa lỗi' : 'Báo lỗi mới'" :width="640" @ok="saveDefect" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showDefectModal" :title="editingDefect ? 'Sửa lỗi' : 'Báo lỗi mới'" :width="640" @ok="saveDefect" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Mô tả lỗi" required><a-textarea v-model:value="defectForm.description" :rows="3" placeholder="Nhập mô tả chi tiết lỗi..." /></a-form-item>
+      <a-form-item label="Mô tả lỗi" required v-bind="fieldStatus('description')"><a-textarea v-model:value="defectForm.description" :rows="3" placeholder="Nhập mô tả chi tiết lỗi..." /></a-form-item>
       <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Mức độ" required><a-select v-model:value="defectForm.severity" size="large" class="w-full">
+        <a-col :span="12"><a-form-item label="Mức độ" required v-bind="fieldStatus('severity')"><a-select v-model:value="defectForm.severity" size="large" class="w-full">
           <a-select-option value="low">Thấp</a-select-option>
           <a-select-option value="medium">Trung bình</a-select-option>
           <a-select-option value="high">Nghiêm trọng</a-select-option>
@@ -2310,12 +2317,12 @@
   </a-modal>
 
   <!-- Change Request Modal -->
-  <a-modal v-model:open="showCRModal" :title="editingCR ? 'Cập nhật yêu cầu thay đổi' : 'Tạo yêu cầu thay đổi'" :width="720" @ok="saveCR" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showCRModal" :title="editingCR ? 'Cập nhật yêu cầu thay đổi' : 'Tạo yêu cầu thay đổi'" :width="720" @ok="saveCR" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tiêu đề" required><a-input v-model:value="crForm.title" size="large" placeholder="Tiêu đề yêu cầu thay đổi" /></a-form-item>
+      <a-form-item label="Tiêu đề" required v-bind="fieldStatus('title')"><a-input v-model:value="crForm.title" size="large" placeholder="Tiêu đề yêu cầu thay đổi" /></a-form-item>
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="Loại thay đổi" required>
+          <a-form-item label="Loại thay đổi" required v-bind="fieldStatus('change_type')">
             <a-select v-model:value="crForm.change_type" size="large" class="w-full" placeholder="Chọn loại">
               <a-select-option value="scope">Phạm vi</a-select-option>
               <a-select-option value="schedule">Tiến độ</a-select-option>
@@ -2353,12 +2360,12 @@
   </a-modal>
 
   <!-- Risk Modal -->
-  <a-modal v-model:open="showRiskModal" :title="editingRisk ? 'Cập nhật rủi ro' : 'Thêm rủi ro'" :width="720" @ok="saveRisk" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showRiskModal" :title="editingRisk ? 'Cập nhật rủi ro' : 'Thêm rủi ro'" :width="720" @ok="saveRisk" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tiêu đề" required><a-input v-model:value="riskForm.title" size="large" placeholder="Tên rủi ro" /></a-form-item>
+      <a-form-item label="Tiêu đề" required v-bind="fieldStatus('title')"><a-input v-model:value="riskForm.title" size="large" placeholder="Tên rủi ro" /></a-form-item>
       <a-row :gutter="16">
         <a-col :span="8">
-          <a-form-item label="Danh mục" required>
+          <a-form-item label="Danh mục" required v-bind="fieldStatus('category')">
             <a-select v-model:value="riskForm.category" size="large" class="w-full" placeholder="Loại">
               <a-select-option value="schedule">Tiến độ</a-select-option>
               <a-select-option value="cost">Chi phí</a-select-option>
@@ -2421,9 +2428,9 @@
   </a-modal>
 
   <!-- Task Modal -->
-  <a-modal v-model:open="showTaskModal" :title="editingTask ? 'Cập nhật công việc' : 'Thêm công việc'" :width="640" @ok="saveTask" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showTaskModal" :title="editingTask ? 'Cập nhật công việc' : 'Thêm công việc'" :width="640" @ok="saveTask" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tên công việc" required><a-input v-model:value="taskForm.name" size="large" placeholder="Tên công việc" /></a-form-item>
+      <a-form-item label="Tên công việc" required v-bind="fieldStatus('name')"><a-input v-model:value="taskForm.name" size="large" placeholder="Tên công việc" /></a-form-item>
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="Công việc cha">
@@ -2613,17 +2620,17 @@
   </a-drawer>
 
   <!-- Subcontractor Modal -->
-  <a-modal v-model:open="showSubModal" :title="editingSub ? 'Sửa NTP' : 'Thêm nhà thầu phụ'" :width="640" @ok="saveSub" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showSubModal" :title="editingSub ? 'Sửa NTP' : 'Thêm nhà thầu phụ'" :width="640" @ok="saveSub" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-form-item v-if="!editingSub && globalSubcontractors.length" label="Chọn NTP có sẵn">
         <a-select v-model:value="subForm.global_subcontractor_id" show-search option-filter-prop="label" size="large" class="w-full" allow-clear placeholder="Chọn hoặc nhập mới" @change="onGlobalSubSelect">
           <a-select-option v-for="gs in globalSubcontractors" :key="gs.id" :value="gs.id" :label="gs.name">{{ gs.name }} ({{ gs.category || '—' }})</a-select-option>
         </a-select>
       </a-form-item>
-      <a-form-item label="Tên NTP" required><a-input v-model:value="subForm.name" size="large" /></a-form-item>
+      <a-form-item label="Tên NTP" required v-bind="fieldStatus('name')"><a-input v-model:value="subForm.name" size="large" /></a-form-item>
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Danh mục"><a-input v-model:value="subForm.category" size="large" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Giá trị báo giá" required><a-input-number v-model:value="subForm.total_quote" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Giá trị báo giá" required v-bind="fieldStatus('total_quote')"><a-input-number v-model:value="subForm.total_quote" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
         <a-col :span="8"><a-form-item label="Ngân hàng"><a-input v-model:value="subForm.bank_name" size="large" /></a-form-item></a-col>
@@ -2666,10 +2673,10 @@
   </a-modal>
 
   <!-- Additional Cost Modal -->
-  <a-modal v-model:open="showACModal" title="Đề xuất chi phí phát sinh" :width="500" @ok="saveAC" ok-text="Gửi" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showACModal" title="Đề xuất chi phí phát sinh" :width="500" @ok="saveAC" ok-text="Gửi" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Số tiền" required><a-input-number v-model:value="acForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
-      <a-form-item label="Mô tả" required><a-textarea v-model:value="acForm.description" :rows="3" /></a-form-item>
+      <a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="acForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
+      <a-form-item label="Mô tả" required v-bind="fieldStatus('description')"><a-textarea v-model:value="acForm.description" :rows="3" /></a-form-item>
       <!-- Inline Attachments -->
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp minh chứng</div>
@@ -2685,18 +2692,18 @@
   </a-modal>
 
   <!-- Reject Additional Cost Modal -->
-  <a-modal v-model:open="showRejectACModal" title="Từ chối CP phát sinh" :width="400" @ok="rejectAC" ok-text="Từ chối" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :ok-button-props="{ danger: true }">
+  <a-modal v-model:open="showRejectACModal" title="Từ chối CP phát sinh" :width="400" @ok="rejectAC" ok-text="Từ chối" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal" :ok-button-props="{ danger: true }">
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Lý do từ chối" required><a-textarea v-model:value="rejectACReason" :rows="3" placeholder="Nhập lý do..." /></a-form-item>
     </a-form>
   </a-modal>
 
   <!-- Budget Modal -->
-  <a-modal v-model:open="showBudgetModal" title="Tạo ngân sách" :width="700" @ok="saveBudget" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showBudgetModal" title="Tạo ngân sách" :width="700" @ok="saveBudget" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
-        <a-col :span="8"><a-form-item label="Tên ngân sách" required><a-input v-model:value="budgetForm.name" size="large" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Ngày" required><a-date-picker v-model:value="budgetForm.budget_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Tên ngân sách" required v-bind="fieldStatus('name')"><a-input v-model:value="budgetForm.name" size="large" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Ngày" required v-bind="fieldStatus('budget_date')"><a-date-picker v-model:value="budgetForm.budget_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
         <a-col :span="4"><a-form-item label="Phiên bản"><a-input v-model:value="budgetForm.version" size="large" placeholder="v1" /></a-form-item></a-col>
         <a-col :span="4"><a-form-item label="Trạng thái"><a-select v-model:value="budgetForm.status" size="large" class="w-full">
           <a-select-option value="draft">Nháp</a-select-option>
@@ -2716,7 +2723,7 @@
   </a-modal>
 
   <!-- Invoice Modal -->
-  <a-modal v-model:open="showInvoiceModal" :title="editingInvoice ? 'Sửa hóa đơn' : 'Tạo hóa đơn'" :width="640" @ok="saveInvoice" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showInvoiceModal" :title="editingInvoice ? 'Sửa hóa đơn' : 'Tạo hóa đơn'" :width="640" @ok="saveInvoice" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Ngày hóa đơn" required><a-date-picker v-model:value="invoiceForm.invoice_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
@@ -2746,9 +2753,9 @@
   </a-modal>
 
   <!-- Acceptance Create Modal -->
-  <a-modal v-model:open="showAcceptModal" title="Tạo giai đoạn nghiệm thu" :width="600" @ok="saveAccept" ok-text="Tạo" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showAcceptModal" title="Tạo giai đoạn nghiệm thu" :width="600" @ok="saveAccept" ok-text="Tạo" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tên giai đoạn" required><a-input v-model:value="acceptForm.name" size="large" placeholder="VD: Nghiệm thu phần thô, nghiệm thu hoàn thiện..." /></a-form-item>
+      <a-form-item label="Tên giai đoạn" required v-bind="fieldStatus('name')"><a-input v-model:value="acceptForm.name" size="large" placeholder="VD: Nghiệm thu phần thô, nghiệm thu hoàn thiện..." /></a-form-item>
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Công việc cha (hạng mục A)"><a-select v-model:value="acceptForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục">
           <a-select-option v-for="t in parentTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
@@ -3204,8 +3211,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, reactive } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { ref, computed, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
@@ -3284,7 +3291,121 @@ const activeTab = ref('overview')
 const activeTabGroup = ref('overview')
 const costStatusFilter = ref('all')
 const commentText = ref('')
+
+// ============ UNIVERSAL LOADING SYSTEM ============
+// pageLoading shows the top loading bar during page transitions
+const pageLoading = ref(false)
+let removeStartListener = null
+let removeFinishListener = null
+
+onMounted(() => {
+  removeStartListener = router.on('start', () => { pageLoading.value = true })
+  removeFinishListener = router.on('finish', () => { pageLoading.value = false })
+})
+onBeforeUnmount(() => {
+  removeStartListener?.()
+  removeFinishListener?.()
+})
+
+// actionLoading tracks per-item loading (e.g., actionLoading['delete-cost-123'])
 const actionLoading = reactive({})
+// savingForm tracks modal form submissions
+const savingForm = ref(false)
+
+/**
+ * Universal loading wrapper for Inertia router calls.
+ * Usage: withLoading('approve-cost-5', () => router.post(url, data, options))
+ * - Sets actionLoading[key] = true on start
+ * - Sets actionLoading[key] = false on finish (success or error)
+ * - Merges with existing onSuccess/onFinish/onError callbacks
+ */
+const withLoading = (key, routerCall) => {
+  actionLoading[key] = true
+  routerCall()
+  setTimeout(() => { actionLoading[key] = false }, 8000)
+}
+
+// ============ FORM VALIDATION SYSTEM ============
+// Stores server-side validation errors from Inertia responses
+const formErrors = reactive({})
+
+/**
+ * Returns Ant Design form-item props for field validation display.
+ * Usage: <a-form-item v-bind="fieldStatus('name')">
+ */
+const fieldStatus = (field) => {
+  const err = formErrors[field]
+  if (!err) return {}
+  return { validateStatus: 'error', help: Array.isArray(err) ? err[0] : err }
+}
+
+/** Clears all form errors. Called when opening modals. */
+const clearFormErrors = () => {
+  Object.keys(formErrors).forEach(k => delete formErrors[k])
+}
+
+/** Vietnamese error labels for common backend field names. */
+const fieldLabels = {
+  name: 'Tên', amount: 'Số tiền', cost_date: 'Ngày', description: 'Mô tả',
+  contract_value: 'Giá trị HĐ', signed_date: 'Ngày ký', content: 'Nội dung',
+  payment_number: 'Số phiếu', payment_date: 'Ngày TT', title: 'Tiêu đề',
+  user_id: 'Nhân viên', personnel_role_id: 'Vai trò', customer_id: 'Khách hàng',
+  log_date: 'Ngày', weather: 'Thời tiết', work_done: 'Nội dung công việc',
+  severity: 'Mức độ', priority: 'Ưu tiên', impact: 'Ảnh hưởng',
+  start_date: 'Ngày BĐ', end_date: 'Ngày KT', status: 'Trạng thái',
+  category: 'Loại', reason: 'Lý do', budget_date: 'Ngày NS',
+  invoice_date: 'Ngày HĐ', rejected_reason: 'Lý do từ chối',
+  phone: 'SĐT', email: 'Email', company_name: 'Tên công ty',
+  contact_person: 'Người liên hệ', contract_amount: 'Giá trị HĐ NTP',
+  subtotal: 'Tổng phụ', tax_amount: 'Thuế', cost_group_id: 'Nhóm chi phí',
+}
+
+/**
+ * Wraps a router call with proper onStart/onFinish loading callbacks.
+ * For router.post/put/delete with options objects.
+ */
+const loadingOptions = (key, extraOptions = {}) => ({
+  ...extraOptions,
+  onStart: () => { actionLoading[key] = true; extraOptions.onStart?.() },
+  onFinish: () => { actionLoading[key] = false; extraOptions.onFinish?.() },
+  onSuccess: (...args) => { actionLoading[key] = false; clearFormErrors(); extraOptions.onSuccess?.(...args) },
+  onError: (errors) => {
+    actionLoading[key] = false
+    Object.assign(formErrors, errors)
+    const firstErr = Object.values(errors)[0]
+    message.error(Array.isArray(firstErr) ? firstErr[0] : (firstErr || 'Thao tác thất bại'))
+    extraOptions.onError?.(errors)
+  },
+})
+
+/**
+ * Helper for modal form saves with loading state.
+ * Shows validation errors on form fields + toast message.
+ */
+const savingOptions = (extraOptions = {}) => ({
+  ...extraOptions,
+  onStart: () => { savingForm.value = true; clearFormErrors(); extraOptions.onStart?.() },
+  onFinish: () => { savingForm.value = false; extraOptions.onFinish?.() },
+  onSuccess: (...args) => { savingForm.value = false; clearFormErrors(); extraOptions.onSuccess?.(...args) },
+  onError: (errors) => {
+    savingForm.value = false
+    Object.assign(formErrors, errors)
+    const errorMessages = Object.entries(errors).map(([field, msg]) => {
+      const label = fieldLabels[field] || field
+      const text = Array.isArray(msg) ? msg[0] : msg
+      return `${label}: ${text}`
+    })
+    if (errorMessages.length <= 3) {
+      errorMessages.forEach(e => message.error(e, 4))
+    } else {
+      message.error(`Có ${errorMessages.length} lỗi cần sửa. Vui lòng kiểm tra các trường bắt buộc.`, 5)
+    }
+    extraOptions.onError?.(errors)
+  },
+})
+
+// Helper to check loading state
+const isLoading = (key) => !!actionLoading[key]
 
 // Tab group → sub-tab mapping
 const tabGroupTabs = {
@@ -3668,7 +3789,7 @@ const openEditProject = () => {
   projectForm.value = { name: p.name, description: p.description || '', customer_id: p.customer_id, project_manager_id: p.project_manager_id, status: p.status, start_date: p.start_date, end_date: p.end_date }
   showEditProject.value = true
 }
-const saveProject = () => { router.put(`/projects/${props.project.id}`, projectForm.value, { onSuccess: () => showEditProject.value = false }) }
+const saveProject = () => { router.put(`/projects/${props.project.id}`, projectForm.value, savingOptions({ onSuccess: () => showEditProject.value = false })) }
 
 // ============ SHARED MODAL FILES ============
 const modalFiles = ref([])
@@ -3699,52 +3820,31 @@ const openCostModal = (c) => {
 const saveCost = () => {
   const url = editingCost.value ? `/projects/${props.project.id}/costs/${editingCost.value.id}` : `/projects/${props.project.id}/costs`
   const method = editingCost.value ? 'put' : 'post'
-  router[method](url, costForm.value, {
+  router[method](url, costForm.value, savingOptions({
     onSuccess: async (page) => {
       showCostModal.value = false
       if (modalFiles.value.length) {
-        // For edits, use existing id; for creates, find the latest cost
         const costId = editingCost.value?.id || page.props?.project?.costs?.slice(-1)[0]?.id
         if (costId) await uploadModalFiles('costs', costId)
         router.reload()
       }
     },
-  })
+  }))
 }
-const deleteCost = (c) => router.delete(`/projects/${props.project.id}/costs/${c.id}`)
-const submitCost = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/submit`)
-const approveCostMgmt = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/approve-management`)
-const approveCostAcct = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/approve-accountant`)
+const deleteCost = (c) => router.delete(`/projects/${props.project.id}/costs/${c.id}`, loadingOptions(`delete-cost-${c.id}`))
+const submitCost = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/submit`, {}, loadingOptions(`submit-cost-${c.id}`))
+const approveCostMgmt = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/approve-management`, {}, loadingOptions(`approve-cost-mgmt-${c.id}`))
+const approveCostAcct = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/approve-accountant`, {}, loadingOptions(`approve-cost-acct-${c.id}`))
 const showRejectCostModal = ref(false)
 const rejectingCost = ref(null)
 const rejectCostReason = ref('')
 const openRejectCostModal = (c) => { rejectingCost.value = c; rejectCostReason.value = ''; showRejectCostModal.value = true }
-const rejectCost = () => { router.post(`/projects/${props.project.id}/costs/${rejectingCost.value.id}/reject`, { rejected_reason: rejectCostReason.value }, { onSuccess: () => showRejectCostModal.value = false }) }
+const rejectCost = () => { router.post(`/projects/${props.project.id}/costs/${rejectingCost.value.id}/reject`, { rejected_reason: rejectCostReason.value }, savingOptions({ onSuccess: () => showRejectCostModal.value = false })) }
 
 // ============ CONTRACT CRUD ============
 const showContractModal = ref(false)
 const editingContract = ref(null)
 const contractForm = ref({ contract_value: null, signed_date: null, status: 'draft' })
-const submitCostWithLoading = (record) => {
-  actionLoading[`submit-cost-${record.id}`] = true
-  submitCost(record)
-  setTimeout(() => { actionLoading[`submit-cost-${record.id}`] = false }, 3000)
-}
-const approveCostMgmtWithLoading = (record) => {
-  actionLoading[`approve-cost-mgmt-${record.id}`] = true
-  approveCostMgmt(record)
-  setTimeout(() => { actionLoading[`approve-cost-mgmt-${record.id}`] = false }, 3000)
-}
-const approveCostAcctWithLoading = (record) => {
-  actionLoading[`approve-cost-acct-${record.id}`] = true
-  approveCostAcct(record)
-  setTimeout(() => { actionLoading[`approve-cost-acct-${record.id}`] = false }, 3000)
-}
-const approveACWithLoading = (record) => {
-  actionLoading[`approve-ac-${record.id}`] = true
-  approveAC(record)
-  setTimeout(() => { actionLoading[`approve-ac-${record.id}`] = false }, 3000)
-}
 
 // ============ FILE PREVIEW (Premium Inline Viewer) ============
 const showFilePreview = ref(false)
@@ -3804,7 +3904,7 @@ const openContractModal = (c) => {
 const saveContract = () => {
   const url = `/projects/${props.project.id}/contract`
   const method = editingContract.value ? 'put' : 'post'
-  router[method](url, contractForm.value, {
+  router[method](url, contractForm.value, savingOptions({
     onSuccess: async (page) => {
       showContractModal.value = false
       if (modalFiles.value.length) {
@@ -3813,7 +3913,7 @@ const saveContract = () => {
         router.reload()
       }
     },
-  })
+  }))
 }
 
 // ============ PAYMENT CRUD ============
@@ -3827,7 +3927,7 @@ const openPaymentModal = (p = null) => {
   showPaymentModal.value = true
 }
 const savePayment = () => {
-  router.post(`/projects/${props.project.id}/payments`, paymentForm.value, {
+  router.post(`/projects/${props.project.id}/payments`, paymentForm.value, savingOptions({
     onSuccess: async (page) => {
       showPaymentModal.value = false
       if (modalFiles.value.length) {
@@ -3836,18 +3936,18 @@ const savePayment = () => {
         router.reload()
       }
     },
-  })
+  }))
 }
-const deletePayment = (p) => router.delete(`/projects/${props.project.id}/payments/${p.id}`)
-const markPaymentPaid = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/mark-paid`, { paid_date: new Date().toISOString().slice(0, 10) })
-const confirmPaymentAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/confirm`, { paid_date: new Date().toISOString().slice(0, 10) })
+const deletePayment = (p) => router.delete(`/projects/${props.project.id}/payments/${p.id}`, loadingOptions(`delete-pay-${p.id}`))
+const markPaymentPaid = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/mark-paid`, { paid_date: new Date().toISOString().slice(0, 10) }, loadingOptions(`mark-paid-${p.id}`))
+const confirmPaymentAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/confirm`, { paid_date: new Date().toISOString().slice(0, 10) }, loadingOptions(`confirm-pay-${p.id}`))
 const showRejectPaymentModal = ref(false)
 const rejectPaymentTarget = ref(null)
 const rejectPaymentReason = ref('')
 const openRejectPaymentModal = (record) => { rejectPaymentTarget.value = record; rejectPaymentReason.value = ''; showRejectPaymentModal.value = true }
 const rejectPaymentAction = () => {
   if (!rejectPaymentReason.value.trim()) return
-  router.post(`/projects/${props.project.id}/payments/${rejectPaymentTarget.value.id}/reject`, { reason: rejectPaymentReason.value.trim() }, { onSuccess: () => { showRejectPaymentModal.value = false; rejectPaymentTarget.value = null } })
+  router.post(`/projects/${props.project.id}/payments/${rejectPaymentTarget.value.id}/reject`, { reason: rejectPaymentReason.value.trim() }, savingOptions({ onSuccess: () => { showRejectPaymentModal.value = false; rejectPaymentTarget.value = null } }))
 }
 
 // ============ SHARED FILE UPLOAD ============
@@ -3869,18 +3969,18 @@ const submitAttachFiles = () => {
     payment: `/projects/${props.project.id}/payments/${attachTarget.value.id}/attach-files`,
     'additional-cost': `/projects/${props.project.id}/additional-costs/${attachTarget.value.id}/attach-files`,
   }
-  router.post(urlMap[attachType.value], formData, {
+  router.post(urlMap[attachType.value], formData, savingOptions({
     forceFormData: true,
     onSuccess: () => { showAttachModal.value = false; attachFiles.value = [] },
-  })
+  }))
 }
 
 // ============ PERSONNEL CRUD ============
 const showPersonnelModal = ref(false)
 const personnelForm = ref({ user_id: null, personnel_role_id: null })
 const openPersonnelModal = () => { personnelForm.value = { user_id: null, personnel_role_id: null }; showPersonnelModal.value = true }
-const savePersonnel = () => { router.post(`/projects/${props.project.id}/personnel`, personnelForm.value, { onSuccess: () => showPersonnelModal.value = false }) }
-const removePersonnel = (p) => router.delete(`/projects/${props.project.id}/personnel/${p.id}`)
+const savePersonnel = () => { router.post(`/projects/${props.project.id}/personnel`, personnelForm.value, savingOptions({ onSuccess: () => showPersonnelModal.value = false })) }
+const removePersonnel = (p) => router.delete(`/projects/${props.project.id}/personnel/${p.id}`, loadingOptions(`remove-person-${p.id}`))
 
 // ============ LOG CRUD ============
 const showLogModal = ref(false)
@@ -3906,13 +4006,13 @@ const openLogModal = (record = null) => {
 
 const saveLog = () => {
   if (editingLog.value) {
-    router.put(`/projects/${props.project.id}/logs/${editingLog.value.id}`, logForm.value, { preserveScroll: true, onSuccess: () => { showLogModal.value = false; editingLog.value = null } })
+    router.put(`/projects/${props.project.id}/logs/${editingLog.value.id}`, logForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showLogModal.value = false; editingLog.value = null } }))
   } else {
-    router.post(`/projects/${props.project.id}/logs`, logForm.value, { preserveScroll: true, onSuccess: () => showLogModal.value = false })
+    router.post(`/projects/${props.project.id}/logs`, logForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showLogModal.value = false }))
   }
 }
 
-const deleteLog = (l) => router.delete(`/projects/${props.project.id}/logs/${l.id}`, { preserveScroll: true })
+const deleteLog = (l) => router.delete(`/projects/${props.project.id}/logs/${l.id}`, loadingOptions(`delete-log-${l.id}`, { preserveScroll: true }))
 
 // ============ COMMENT CRUD (Threaded) ============
 const replyingTo = ref(null)
@@ -3930,15 +4030,15 @@ const addComment = (parentId = null) => {
   if (!content.trim()) return
   const data = { content: content.trim() }
   if (parentId) data.parent_id = parentId
-  router.post(`/projects/${props.project.id}/comments`, data, {
+  router.post(`/projects/${props.project.id}/comments`, data, loadingOptions(`add-comment-${parentId || 'root'}`, {
     preserveScroll: true,
     onSuccess: () => {
       if (parentId) { replyText.value = ''; replyingTo.value = null }
       else { commentText.value = '' }
     },
-  })
+  }))
 }
-const deleteComment = (c) => router.delete(`/projects/${props.project.id}/comments/${c.id}`, { preserveScroll: true })
+const deleteComment = (c) => router.delete(`/projects/${props.project.id}/comments/${c.id}`, loadingOptions(`delete-comment-${c.id}`, { preserveScroll: true }))
 
 // ============ DEFECT CRUD ============
 const showDefectModal = ref(false)
@@ -3955,7 +4055,7 @@ const openDefectModal = (d) => {
 const saveDefect = () => {
   const url = editingDefect.value ? `/projects/${props.project.id}/defects/${editingDefect.value.id}` : `/projects/${props.project.id}/defects`
   const method = editingDefect.value ? 'put' : 'post'
-  router[method](url, defectForm.value, {
+  router[method](url, defectForm.value, savingOptions({
     onSuccess: async (page) => {
       showDefectModal.value = false
       if (modalFiles.value.length) {
@@ -3964,9 +4064,9 @@ const saveDefect = () => {
         router.reload()
       }
     },
-  })
+  }))
 }
-const deleteDefect = (d) => router.delete(`/projects/${props.project.id}/defects/${d.id}`)
+const deleteDefect = (d) => router.delete(`/projects/${props.project.id}/defects/${d.id}`, loadingOptions(`delete-defect-${d.id}`))
 
 // ============ CHANGE REQUEST CRUD ============
 const showCRModal = ref(false)
@@ -3998,17 +4098,17 @@ const openChangeRequestModal = (record = null) => {
 const saveCR = () => {
   const pId = props.project.id
   if (editingCR.value) {
-    router.put(`/projects/${pId}/change-requests/${editingCR.value.id}`, crForm.value, { preserveScroll: true, onSuccess: () => { showCRModal.value = false; editingCR.value = null } })
+    router.put(`/projects/${pId}/change-requests/${editingCR.value.id}`, crForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showCRModal.value = false; editingCR.value = null } }))
   } else {
-    router.post(`/projects/${pId}/change-requests`, crForm.value, { preserveScroll: true, onSuccess: () => showCRModal.value = false })
+    router.post(`/projects/${pId}/change-requests`, crForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showCRModal.value = false }))
   }
 }
 
-const submitCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/submit`, {}, { preserveScroll: true })
-const approveCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/approve`, {}, { preserveScroll: true })
-const rejectCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/reject`, { reason: 'Không đồng ý' }, { preserveScroll: true })
-const implementCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/implement`, {}, { preserveScroll: true })
-const deleteChangeRequest = (cr) => router.delete(`/projects/${props.project.id}/change-requests/${cr.id}`, { preserveScroll: true })
+const submitCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/submit`, {}, loadingOptions(`submit-cr-${cr.id}`, { preserveScroll: true }))
+const approveCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/approve`, {}, loadingOptions(`approve-cr-${cr.id}`, { preserveScroll: true }))
+const rejectCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/reject`, { reason: 'Không đồng ý' }, loadingOptions(`reject-cr-${cr.id}`, { preserveScroll: true }))
+const implementCR = (cr) => router.post(`/projects/${props.project.id}/change-requests/${cr.id}/implement`, {}, loadingOptions(`implement-cr-${cr.id}`, { preserveScroll: true }))
+const deleteChangeRequest = (cr) => router.delete(`/projects/${props.project.id}/change-requests/${cr.id}`, loadingOptions(`delete-cr-${cr.id}`, { preserveScroll: true }))
 
 // ============ RISK CRUD ============
 const showRiskModal = ref(false)
@@ -4041,14 +4141,14 @@ const openRiskModal = (record = null) => {
 const saveRisk = () => {
   const pId = props.project.id
   if (editingRisk.value) {
-    router.put(`/projects/${pId}/risks/${editingRisk.value.id}`, riskForm.value, { preserveScroll: true, onSuccess: () => { showRiskModal.value = false; editingRisk.value = null } })
+    router.put(`/projects/${pId}/risks/${editingRisk.value.id}`, riskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showRiskModal.value = false; editingRisk.value = null } }))
   } else {
-    router.post(`/projects/${pId}/risks`, riskForm.value, { preserveScroll: true, onSuccess: () => showRiskModal.value = false })
+    router.post(`/projects/${pId}/risks`, riskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showRiskModal.value = false }))
   }
 }
 
-const resolveRisk = (r) => router.post(`/projects/${props.project.id}/risks/${r.id}/resolve`, {}, { preserveScroll: true })
-const deleteRisk = (r) => router.delete(`/projects/${props.project.id}/risks/${r.id}`, { preserveScroll: true })
+const resolveRisk = (r) => router.post(`/projects/${props.project.id}/risks/${r.id}/resolve`, {}, loadingOptions(`resolve-risk-${r.id}`, { preserveScroll: true }))
+const deleteRisk = (r) => router.delete(`/projects/${props.project.id}/risks/${r.id}`, loadingOptions(`delete-risk-${r.id}`, { preserveScroll: true }))
 
 // ============ TASK / PROGRESS ============
 const taskStatusLabels = { not_started: 'Chưa bắt đầu', in_progress: 'Đang thực hiện', delayed: 'Trễ tiến độ', completed: 'Hoàn thành' }
@@ -4126,13 +4226,13 @@ const openTaskModal = (record = null, parentId = null) => {
 const saveTask = () => {
   const pId = props.project.id
   if (editingTask.value) {
-    router.put(`/projects/${pId}/tasks/${editingTask.value.id}`, taskForm.value, { preserveScroll: true, onSuccess: () => { showTaskModal.value = false; editingTask.value = null } })
+    router.put(`/projects/${pId}/tasks/${editingTask.value.id}`, taskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showTaskModal.value = false; editingTask.value = null } }))
   } else {
-    router.post(`/projects/${pId}/tasks`, taskForm.value, { preserveScroll: true, onSuccess: () => showTaskModal.value = false })
+    router.post(`/projects/${pId}/tasks`, taskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showTaskModal.value = false }))
   }
 }
 
-const deleteTask = (t) => router.delete(`/projects/${props.project.id}/tasks/${t.id}`, { preserveScroll: true })
+const deleteTask = (t) => router.delete(`/projects/${props.project.id}/tasks/${t.id}`, loadingOptions(`delete-task-${t.id}`, { preserveScroll: true }))
 
 // ============ SUBCONTRACTOR CRUD ============
 const showSubModal = ref(false)
@@ -4160,13 +4260,13 @@ const saveSub = () => {
     Object.entries(subForm.value).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') fd.append(k, v) })
     subFiles.value.forEach(f => fd.append('files[]', f))
     if (editingSub.value) fd.append('_method', 'PUT')
-    router.post(url, fd, { forceFormData: true, preserveScroll: true, onSuccess: () => { showSubModal.value = false; subFiles.value = [] } })
+    router.post(url, fd, { forceFormData: true, preserveScroll: true, ...savingOptions({ onSuccess: () => { showSubModal.value = false; subFiles.value = [] } }) })
   } else {
-    router[method](url, subForm.value, { preserveScroll: true, onSuccess: () => showSubModal.value = false })
+    router[method](url, subForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showSubModal.value = false }))
   }
 }
-const deleteSub = (s) => router.delete(`/projects/${props.project.id}/subcontractors/${s.id}`, { preserveScroll: true })
-const approveSub = (s) => router.post(`/projects/${props.project.id}/subcontractors/${s.id}/approve`, {}, { preserveScroll: true })
+const deleteSub = (s) => router.delete(`/projects/${props.project.id}/subcontractors/${s.id}`, loadingOptions(`delete-sub-${s.id}`, { preserveScroll: true }))
+const approveSub = (s) => router.post(`/projects/${props.project.id}/subcontractors/${s.id}/approve`, {}, loadingOptions(`approve-sub-${s.id}`, { preserveScroll: true }))
 
 // ============ SUBCONTRACTOR DETAIL DRAWER ============
 const showSubDetailDrawer = ref(false)
@@ -4191,16 +4291,16 @@ const saveSubPayment = () => {
     const fd = new FormData()
     Object.entries(subPayForm.value).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') fd.append(k, v) })
     subPayFiles.value.forEach(f => fd.append('files[]', f))
-    router.post(url, fd, { forceFormData: true, preserveScroll: true, onSuccess: () => { showSubPayDrawer.value = false; subPayFiles.value = [] } })
+    router.post(url, fd, { forceFormData: true, preserveScroll: true, ...savingOptions({ onSuccess: () => { showSubPayDrawer.value = false; subPayFiles.value = [] } }) })
   } else {
-    router.post(url, subPayForm.value, { preserveScroll: true, onSuccess: () => showSubPayDrawer.value = false })
+    router.post(url, subPayForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showSubPayDrawer.value = false }))
   }
 }
-const submitSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/submit`, {}, { preserveScroll: true })
-const approveSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/approve`, {}, { preserveScroll: true })
-const rejectSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/reject`, {}, { preserveScroll: true })
-const confirmSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/confirm`, {}, { preserveScroll: true })
-const deleteSubPayment = (sub, p) => router.delete(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}`, { preserveScroll: true })
+const submitSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/submit`, {}, loadingOptions(`submit-subpay-${p.id}`, { preserveScroll: true }))
+const approveSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/approve`, {}, loadingOptions(`approve-subpay-${p.id}`, { preserveScroll: true }))
+const rejectSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/reject`, {}, loadingOptions(`reject-subpay-${p.id}`, { preserveScroll: true }))
+const confirmSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/confirm`, {}, loadingOptions(`confirm-subpay-${p.id}`, { preserveScroll: true }))
+const deleteSubPayment = (sub, p) => router.delete(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}`, loadingOptions(`delete-subpay-${p.id}`, { preserveScroll: true }))
 
 // ============ ADDITIONAL COST CRUD ============
 const showACModal = ref(false)
@@ -4213,7 +4313,7 @@ const openAdditionalCostModal = (ac = null) => {
   showACModal.value = true
 }
 const saveAC = () => {
-  router.post(`/projects/${props.project.id}/additional-costs`, acForm.value, {
+  router.post(`/projects/${props.project.id}/additional-costs`, acForm.value, savingOptions({
     onSuccess: async (page) => {
       showACModal.value = false
       if (modalFiles.value.length) {
@@ -4222,23 +4322,23 @@ const saveAC = () => {
         router.reload()
       }
     },
-  })
+  }))
 }
-const approveAC = (ac) => router.post(`/projects/${props.project.id}/additional-costs/${ac.id}/approve`)
+const approveAC = (ac) => router.post(`/projects/${props.project.id}/additional-costs/${ac.id}/approve`, {}, loadingOptions(`approve-ac-${ac.id}`))
 const showRejectACModal = ref(false)
 const rejectingAC = ref(null)
 const rejectACReason = ref('')
 const openRejectACModal = (ac) => { rejectingAC.value = ac; rejectACReason.value = ''; showRejectACModal.value = true }
-const rejectAC = () => { router.post(`/projects/${props.project.id}/additional-costs/${rejectingAC.value.id}/reject`, { rejected_reason: rejectACReason.value }, { onSuccess: () => showRejectACModal.value = false }) }
-const deleteAC = (ac) => router.delete(`/projects/${props.project.id}/additional-costs/${ac.id}`)
+const rejectAC = () => { router.post(`/projects/${props.project.id}/additional-costs/${rejectingAC.value.id}/reject`, { rejected_reason: rejectACReason.value }, savingOptions({ onSuccess: () => showRejectACModal.value = false })) }
+const deleteAC = (ac) => router.delete(`/projects/${props.project.id}/additional-costs/${ac.id}`, loadingOptions(`delete-ac-${ac.id}`))
 
 // ============ BUDGET CRUD ============
 const showBudgetModal = ref(false)
 const budgetForm = ref({ name: '', budget_date: null, version: '', status: 'draft', notes: '', items: [{ name: '', estimated_amount: 0 }] })
 const openBudgetModal = () => { budgetForm.value = { name: '', budget_date: dayjs().format('YYYY-MM-DD'), version: 'v1', status: 'draft', notes: '', items: [{ name: '', estimated_amount: 0 }] }; showBudgetModal.value = true }
-const saveBudget = () => { router.post(`/projects/${props.project.id}/budgets`, budgetForm.value, { onSuccess: () => showBudgetModal.value = false }) }
-const approveBudget = (b) => router.put(`/projects/${props.project.id}/budgets/${b.id}`, { status: 'approved' })
-const deleteBudget = (b) => router.delete(`/projects/${props.project.id}/budgets/${b.id}`)
+const saveBudget = () => { router.post(`/projects/${props.project.id}/budgets`, budgetForm.value, savingOptions({ onSuccess: () => showBudgetModal.value = false })) }
+const approveBudget = (b) => router.put(`/projects/${props.project.id}/budgets/${b.id}`, { status: 'approved' }, loadingOptions(`approve-budget-${b.id}`))
+const deleteBudget = (b) => router.delete(`/projects/${props.project.id}/budgets/${b.id}`, loadingOptions(`delete-budget-${b.id}`))
 
 // ============ INVOICE CRUD ============
 const showInvoiceModal = ref(false)
@@ -4254,17 +4354,17 @@ const openInvoiceModal = (inv) => {
 const saveInvoice = () => {
   const url = editingInvoice.value ? `/projects/${props.project.id}/invoices/${editingInvoice.value.id}` : `/projects/${props.project.id}/invoices`
   const method = editingInvoice.value ? 'put' : 'post'
-  router[method](url, invoiceForm.value, { onSuccess: () => showInvoiceModal.value = false })
+  router[method](url, invoiceForm.value, savingOptions({ onSuccess: () => showInvoiceModal.value = false }))
 }
-const deleteInvoice = (inv) => router.delete(`/projects/${props.project.id}/invoices/${inv.id}`)
+const deleteInvoice = (inv) => router.delete(`/projects/${props.project.id}/invoices/${inv.id}`, loadingOptions(`delete-invoice-${inv.id}`))
 
 // ============ ACCEPTANCE CRUD (Giống APP: AcceptanceChecklist) ============
 const showAcceptModal = ref(false)
 const acceptForm = ref({ name: '', description: '', task_id: null, acceptance_template_id: null })
 const openAcceptModal = () => { acceptForm.value = { name: '', description: '', task_id: null, acceptance_template_id: null }; showAcceptModal.value = true }
-const saveAccept = () => { router.post(`/projects/${props.project.id}/acceptance`, acceptForm.value, { onSuccess: () => showAcceptModal.value = false }) }
-const approveAccept = (stage, level) => router.post(`/projects/${props.project.id}/acceptance/${stage.id}/approve`, { level })
-const deleteAccept = (stage) => router.delete(`/projects/${props.project.id}/acceptance/${stage.id}`)
+const saveAccept = () => { router.post(`/projects/${props.project.id}/acceptance`, acceptForm.value, savingOptions({ onSuccess: () => showAcceptModal.value = false })) }
+const approveAccept = (stage, level) => router.post(`/projects/${props.project.id}/acceptance/${stage.id}/approve`, { level }, loadingOptions(`approve-accept-${stage.id}-${level}`))
+const deleteAccept = (stage) => router.delete(`/projects/${props.project.id}/acceptance/${stage.id}`, loadingOptions(`delete-accept-${stage.id}`))
 
 // Edit acceptance
 const showEditAcceptModal = ref(false)
@@ -4282,9 +4382,9 @@ const openEditAcceptModal = (stage) => {
   showEditAcceptModal.value = true
 }
 const updateAccept = () => {
-  router.put(`/projects/${props.project.id}/acceptance/${editingAcceptId.value}`, editAcceptForm.value, {
+  router.put(`/projects/${props.project.id}/acceptance/${editingAcceptId.value}`, editAcceptForm.value, savingOptions({
     onSuccess: () => { showEditAcceptModal.value = false }
-  })
+  }))
 }
 
 // Acceptance status helpers
@@ -4692,7 +4792,7 @@ const submitEquipmentAllocation = () => {
 }
 
 const returnEquipmentAction = (eq, allocation) => {
-  router.post(`/projects/${props.project.id}/equipment/${allocation.id}/return`)
+  router.post(`/projects/${props.project.id}/equipment/${allocation.id}/return`, {}, loadingOptions(`return-eq-${allocation.id}`))
 }
 </script>
 
@@ -4714,4 +4814,18 @@ const returnEquipmentAction = (eq, allocation) => {
 .file-preview-container { border-radius: 16px; overflow: hidden; }
 .file-preview-body { position: relative; min-height: 40vh; background: #f9fafb; }
 .file-preview-body iframe { display: block; }
+
+/* Global Loading Bar Animation */
+.loading-bar-animation {
+  animation: loading-shimmer 1.5s ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5), 0 0 30px rgba(59, 130, 246, 0.2);
+}
+@keyframes loading-shimmer {
+  0% { width: 0%; opacity: 1; }
+  50% { width: 70%; opacity: 1; }
+  100% { width: 100%; opacity: 0.8; }
+}
+.loading-bar-enter-active { transition: opacity 0.15s ease; }
+.loading-bar-leave-active { transition: opacity 0.4s ease; }
+.loading-bar-enter-from, .loading-bar-leave-to { opacity: 0; }
 </style>
