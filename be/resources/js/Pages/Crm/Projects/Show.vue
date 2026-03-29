@@ -924,40 +924,51 @@
               <template #icon><PlusOutlined /></template>Thêm nhật ký
             </a-button>
           </div>
-          <a-table :columns="logCols" :data-source="project.construction_logs || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'date'">{{ fmtDate(record.log_date) }}</template>
-              <template v-else-if="column.key === 'task'">{{ record.task?.name || '—' }}</template>
-              <template v-else-if="column.key === 'weather'">{{ record.weather || '—' }}</template>
-              <template v-else-if="column.key === 'personnel'">{{ record.personnel_count ?? '—' }}</template>
-              <template v-else-if="column.key === 'progress'">
-                <a-progress :percent="Number(record.completion_percentage || 0)" :size="'small'" :stroke-color="Number(record.completion_percentage) >= 100 ? '#10B981' : '#1B4F72'" />
+
+          <!-- Date-grouped logs -->
+          <div v-if="groupedLogs.length === 0" class="text-center text-gray-400 py-8">Chưa có nhật ký thi công</div>
+          <div v-for="group in groupedLogs" :key="group.date" class="mb-4">
+            <div class="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-white border border-blue-100 rounded-t-lg">
+              <CalendarOutlined class="text-blue-500" />
+              <span class="font-bold text-blue-800 text-sm">{{ fmtDate(group.date) }}</span>
+              <a-tag color="blue" class="rounded-full ml-1">{{ group.logs.length }} mục</a-tag>
+              <span class="text-xs text-gray-400 ml-auto">{{ group.weatherSummary }}</span>
+            </div>
+            <a-table :columns="logColsGrouped" :data-source="group.logs" :pagination="false" row-key="id" size="small"
+              class="crm-table [&_.ant-table]:!rounded-t-none">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'task'">{{ record.task?.name || '—' }}</template>
+                <template v-else-if="column.key === 'weather'">{{ record.weather || '—' }}</template>
+                <template v-else-if="column.key === 'personnel'">{{ record.personnel_count ?? '—' }}</template>
+                <template v-else-if="column.key === 'progress'">
+                  <a-progress :percent="Number(record.completion_percentage || 0)" :size="'small'" :stroke-color="Number(record.completion_percentage) >= 100 ? '#10B981' : '#1B4F72'" />
+                </template>
+                <template v-else-if="column.key === 'creator'">{{ record.creator?.name || '—' }}</template>
+                <template v-else-if="column.key === 'notes'">
+                  <a-tooltip v-if="record.notes" :title="record.notes"><span class="text-gray-500 truncate block max-w-[150px]">{{ record.notes }}</span></a-tooltip>
+                  <span v-else class="text-gray-300">—</span>
+                </template>
+                <template v-else-if="column.key === 'actions'">
+                  <div class="flex gap-1">
+                    <a-tooltip v-if="record.attachments?.length" :title="`${record.attachments.length} tệp đính kèm`">
+                      <a-badge :count="record.attachments.length" :number-style="{ background: '#3B82F6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }">
+                        <FileOutlined class="text-blue-500 text-xs" />
+                      </a-badge>
+                    </a-tooltip>
+                    <a-tooltip title="Upload chứng từ">
+                      <a-button type="text" size="small" @click="openAttachModal('logs', record)"><UploadOutlined class="text-gray-500" /></a-button>
+                    </a-tooltip>
+                    <a-tooltip title="Sửa">
+                      <a-button v-if="can('log.update') || can('log.create')" type="text" size="small" @click="openLogModal(record)"><EditOutlined /></a-button>
+                    </a-tooltip>
+                    <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký?" @confirm="deleteLog(record)">
+                      <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
+                    </a-popconfirm>
+                  </div>
+                </template>
               </template>
-              <template v-else-if="column.key === 'creator'">{{ record.creator?.name || '—' }}</template>
-              <template v-else-if="column.key === 'notes'">
-                <a-tooltip v-if="record.notes" :title="record.notes"><span class="text-gray-500 truncate block max-w-[150px]">{{ record.notes }}</span></a-tooltip>
-                <span v-else class="text-gray-300">—</span>
-              </template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1">
-                  <a-tooltip v-if="record.attachments?.length" :title="`${record.attachments.length} tệp đính kèm`">
-                    <a-badge :count="record.attachments.length" :number-style="{ background: '#3B82F6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }">
-                      <FileOutlined class="text-blue-500 text-xs" />
-                    </a-badge>
-                  </a-tooltip>
-                  <a-tooltip title="Upload chứng từ">
-                    <a-button type="text" size="small" @click="openAttachModal('logs', record)"><UploadOutlined class="text-gray-500" /></a-button>
-                  </a-tooltip>
-                  <a-tooltip title="Sửa">
-                    <a-button v-if="can('log.update') || can('log.create')" type="text" size="small" @click="openLogModal(record)"><EditOutlined /></a-button>
-                  </a-tooltip>
-                  <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký?" @confirm="deleteLog(record)">
-                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                </div>
-              </template>
-            </template>
-          </a-table>
+            </a-table>
+          </div>
         </div>
       </a-tab-pane>
 
@@ -4124,6 +4135,43 @@ const logCols = [
   { title: 'Người tạo', key: 'creator', width: 120 },
   { title: '', key: 'actions', width: 100, align: 'center' },
 ]
+
+// Grouped version: without date column (date is shown as section header)
+const logColsGrouped = [
+  { title: 'Công việc', key: 'task', ellipsis: true },
+  { title: 'Thời tiết', key: 'weather', width: 90 },
+  { title: 'Nhân công', key: 'personnel', width: 90, align: 'center' },
+  { title: 'Tiến độ', key: 'progress', width: 140 },
+  { title: 'Ghi chú', key: 'notes', ellipsis: true },
+  { title: 'Người tạo', key: 'creator', width: 120 },
+  { title: '', key: 'actions', width: 100, align: 'center' },
+]
+
+const groupedLogs = computed(() => {
+  const logs = props.project.construction_logs || []
+  if (!logs.length) return []
+
+  // Group by log_date
+  const groups = {}
+  logs.forEach(log => {
+    const dateKey = log.log_date || 'unknown'
+    if (!groups[dateKey]) groups[dateKey] = []
+    groups[dateKey].push(log)
+  })
+
+  // Sort dates descending, map to array
+  return Object.keys(groups)
+    .sort((a, b) => b.localeCompare(a))
+    .map(date => {
+      const dayLogs = groups[date]
+      const weathers = [...new Set(dayLogs.map(l => l.weather).filter(Boolean))]
+      return {
+        date,
+        logs: dayLogs,
+        weatherSummary: weathers.length ? weathers.join(', ') : '',
+      }
+    })
+})
 
 const defectCols = [
   { title: 'Mô tả', dataIndex: 'description', ellipsis: true },

@@ -313,6 +313,8 @@ defineOptions({ layout: CrmLayout })
 const props = defineProps({
   managementItems: { type: Array, default: () => [] },
   accountantItems: { type: Array, default: () => [] },
+  acceptanceSupervisorItems: { type: Array, default: () => [] },
+  acceptancePMItems: { type: Array, default: () => [] },
   customerAcceptanceItems: { type: Array, default: () => [] },
   changeRequestItems: { type: Array, default: () => [] },
   additionalCostItems: { type: Array, default: () => [] },
@@ -320,7 +322,8 @@ const props = defineProps({
   subPaymentAccountantItems: { type: Array, default: () => [] },
   contractItems: { type: Array, default: () => [] },
   paymentItems: { type: Array, default: () => [] },
-  materialBillItems: { type: Array, default: () => [] },
+  materialBillManagementItems: { type: Array, default: () => [] },
+  materialBillAccountantItems: { type: Array, default: () => [] },
   subAcceptanceItems: { type: Array, default: () => [] },
   supplierAcceptanceItems: { type: Array, default: () => [] },
   constructionLogItems: { type: Array, default: () => [] },
@@ -382,10 +385,12 @@ const roleItemsMap = computed(() => ({
     ...props.managementItems.map(i => ({ ...i, _approveType: 'management' })),
     ...props.subPaymentManagementItems.map(i => ({ ...i, _approveType: 'sub_payment' })),
     ...props.additionalCostItems.map(i => ({ ...i, _approveType: 'additional_cost' })),
+    ...props.materialBillManagementItems.map(i => ({ ...i, _approveType: 'material_bill' })),
   ],
   accountant: [
     ...props.accountantItems.map(i => ({ ...i, _approveType: 'accountant' })),
     ...props.subPaymentAccountantItems.map(i => ({ ...i, _approveType: 'sub_payment_confirm' })),
+    ...props.materialBillAccountantItems.map(i => ({ ...i, _approveType: 'material_bill' })),
   ],
   customer: [
     ...props.customerAcceptanceItems.map(i => ({ ...i, _approveType: 'acceptance' })),
@@ -393,8 +398,9 @@ const roleItemsMap = computed(() => ({
     ...props.paymentItems.map(i => ({ ...i, _approveType: 'project_payment' })),
   ],
   operations: [
+    ...props.acceptanceSupervisorItems.map(i => ({ ...i, _approveType: 'acceptance_supervisor' })),
+    ...props.acceptancePMItems.map(i => ({ ...i, _approveType: 'acceptance_pm' })),
     ...props.changeRequestItems.map(i => ({ ...i, _approveType: 'change_request' })),
-    ...props.materialBillItems.map(i => ({ ...i, _approveType: 'material_bill' })),
     ...props.subAcceptanceItems.map(i => ({ ...i, _approveType: 'sub_acceptance' })),
     ...props.supplierAcceptanceItems.map(i => ({ ...i, _approveType: 'supplier_acceptance' })),
     ...props.constructionLogItems.map(i => ({ ...i, _approveType: 'construction_log' })),
@@ -402,7 +408,18 @@ const roleItemsMap = computed(() => ({
   ],
 }))
 
-const activeItems = computed(() => roleItemsMap.value[activeRole.value] || [])
+// Sort by date descending so newest items always appear first
+const activeItems = computed(() => {
+  const items = roleItemsMap.value[activeRole.value] || []
+  return [...items].sort((a, b) => {
+    const dateA = a.created_at || ''
+    const dateB = b.created_at || ''
+    // Format is dd/mm/yyyy HH:mm — reverse compare to sort newest first
+    const pa = dateA.split(/[\/ :]/).reverse().join('')
+    const pb = dateB.split(/[\/ :]/).reverse().join('')
+    return pb.localeCompare(pa)
+  })
+})
 
 const totalPending = computed(() =>
   Object.values(roleItemsMap.value).reduce((sum, arr) => sum + arr.length, 0)
@@ -453,6 +470,8 @@ const approveUrlMap = {
   management: (r) => `/approvals/${r.id}/approve-management`,
   accountant: (r) => `/approvals/${r.id}/approve-accountant`,
   acceptance: (r) => `/approvals/acceptance/${r.id}/approve`,
+  acceptance_supervisor: (r) => `/approvals/acceptance-supervisor/${r.id}/approve`,
+  acceptance_pm: (r) => `/approvals/acceptance-pm/${r.id}/approve`,
   change_request: (r) => `/approvals/change-request/${r.id}/approve`,
   additional_cost: (r) => `/approvals/additional-cost/${r.id}/approve`,
   sub_payment: (r) => `/approvals/sub-payment/${r.id}/approve`,
@@ -469,7 +488,9 @@ const approveUrlMap = {
 const approveLabels = {
   management: 'BĐH duyệt',
   accountant: 'Kế Toán xác nhận',
-  acceptance: 'Duyệt nghiệm thu',
+  acceptance: 'Duyệt nghiệm thu (KH)',
+  acceptance_supervisor: 'GS duyệt nghiệm thu',
+  acceptance_pm: 'QLDA duyệt nghiệm thu',
   change_request: 'Duyệt yêu cầu thay đổi',
   additional_cost: 'Duyệt chi phí phát sinh',
   sub_payment: 'BĐH duyệt thanh toán NTP',
@@ -510,6 +531,8 @@ const rejectUrlMap = {
   management: (r) => `/approvals/${r.id}/reject`,
   accountant: (r) => `/approvals/${r.id}/reject`,
   acceptance: (r) => `/approvals/acceptance/${r.id}/reject`,
+  acceptance_supervisor: (r) => `/approvals/acceptance-supervisor/${r.id}/reject`,
+  acceptance_pm: (r) => `/approvals/acceptance-pm/${r.id}/reject`,
   change_request: (r) => `/approvals/change-request/${r.id}/reject`,
   additional_cost: (r) => `/approvals/additional-cost/${r.id}/reject`,
   sub_payment: (r) => `/approvals/sub-payment/${r.id}/reject`,

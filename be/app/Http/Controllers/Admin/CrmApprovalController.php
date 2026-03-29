@@ -45,12 +45,26 @@ class CrmApprovalController extends Controller
             ->get()
             ->map(fn($cost) => $this->formatItem($cost));
 
+        // ─── Nghiệm thu chờ GS duyệt ───
+        $acceptanceSupervisorItems = AcceptanceStage::where('status', 'pending')
+            ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ GS duyệt', 'supervisor'));
+
+        // ─── Nghiệm thu chờ QLDA duyệt ───
+        $acceptancePMItems = AcceptanceStage::where('status', 'supervisor_approved')
+            ->with(['project:id,name,code', 'supervisorApprover:id,name', 'task:id,name'])
+            ->orderBy('updated_at', 'desc')
+            ->get()
+            ->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ QLDA duyệt', 'project_manager'));
+
         // ─── Customer Acceptance (Khách hàng duyệt nghiệm thu) ───
         $customerAcceptanceItems = AcceptanceStage::where('status', 'project_manager_approved')
             ->with(['project:id,name,code', 'projectManagerApprover:id,name', 'task:id,name'])
             ->orderBy('updated_at', 'desc')
             ->get()
-            ->map(fn($stage) => $this->formatAcceptanceItem($stage));
+            ->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ KH duyệt', 'customer'));
 
         // ─── Change Requests chờ duyệt ───
         $changeRequestItems = ChangeRequest::whereIn('status', ['submitted', 'under_review'])
@@ -93,11 +107,18 @@ class CrmApprovalController extends Controller
             ->get()
             ->map(fn($p) => $this->formatPaymentItem($p));
 
-        // ─── Phiếu vật tư chờ duyệt ───
-        $materialBillItems = collect();
+        // ─── Phiếu vật tư chờ duyệt (BĐH) ───
+        $materialBillManagementItems = collect();
+        $materialBillAccountantItems = collect();
         $materialBillClass = 'App\\Models\\MaterialBill';
         if (class_exists($materialBillClass)) {
-            $materialBillItems = $materialBillClass::whereIn('status', ['pending_management', 'pending_accountant'])
+            $materialBillManagementItems = $materialBillClass::where('status', 'pending_management')
+                ->with(['creator:id,name,email', 'project:id,name,code'])
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(fn($b) => $this->formatMaterialBillItem($b));
+
+            $materialBillAccountantItems = $materialBillClass::where('status', 'pending_accountant')
                 ->with(['creator:id,name,email', 'project:id,name,code'])
                 ->orderBy('created_at', 'desc')
                 ->get()
@@ -136,7 +157,7 @@ class CrmApprovalController extends Controller
         $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
             ->orderBy('updated_at', 'desc')
-            ->limit(10)
+            ->limit(15)
             ->get()
             ->map(fn($cost) => $this->formatItem($cost));
 
@@ -161,7 +182,14 @@ class CrmApprovalController extends Controller
             ->get()
             ->map(fn($p) => $this->formatSubPaymentItem($p));
 
-        $recentItems = $recentCosts->merge($recentCR)->merge($recentAC)->merge($recentSubPayments)
+        $recentAcceptances = AcceptanceStage::whereIn('status', ['customer_approved', 'rejected'])
+            ->with(['project:id,name,code', 'task:id,name'])
+            ->orderBy('updated_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(fn($stage) => $this->formatAcceptanceItem($stage));
+
+        $recentItems = $recentCosts->merge($recentCR)->merge($recentAC)->merge($recentSubPayments)->merge($recentAcceptances)
             ->sortByDesc('created_at')
             ->take(30)
             ->values();
@@ -170,13 +198,15 @@ class CrmApprovalController extends Controller
         $stats = [
             'pending_management' => $managementItems->count(),
             'pending_accountant' => $accountantItems->count(),
+            'pending_acceptance_supervisor' => $acceptanceSupervisorItems->count(),
+            'pending_acceptance_pm' => $acceptancePMItems->count(),
             'pending_customer' => $customerAcceptanceItems->count(),
             'pending_change_request' => $changeRequestItems->count(),
             'pending_additional_cost' => $additionalCostItems->count(),
             'pending_sub_payment' => $subPaymentManagement->count() + $subPaymentAccountant->count(),
             'pending_contract' => $contractItems->count(),
             'pending_payment' => $paymentItems->count(),
-            'pending_material_bill' => $materialBillItems->count(),
+            'pending_material_bill' => $materialBillManagementItems->count() + $materialBillAccountantItems->count(),
             'pending_sub_acceptance' => $subAcceptanceItems->count(),
             'pending_supplier_acceptance' => $supplierAcceptanceItems->count(),
             'pending_construction_log' => $constructionLogItems->count(),
@@ -193,6 +223,8 @@ class CrmApprovalController extends Controller
         return Inertia::render('Crm/Approvals/Index', [
             'managementItems' => $managementItems->values(),
             'accountantItems' => $accountantItems->values(),
+            'acceptanceSupervisorItems' => $acceptanceSupervisorItems->values(),
+            'acceptancePMItems' => $acceptancePMItems->values(),
             'customerAcceptanceItems' => $customerAcceptanceItems->values(),
             'changeRequestItems' => $changeRequestItems->values(),
             'additionalCostItems' => $additionalCostItems->values(),
@@ -200,7 +232,8 @@ class CrmApprovalController extends Controller
             'subPaymentAccountantItems' => $subPaymentAccountant->values(),
             'contractItems' => $contractItems->values(),
             'paymentItems' => $paymentItems->values(),
-            'materialBillItems' => $materialBillItems->values(),
+            'materialBillManagementItems' => $materialBillManagementItems->values(),
+            'materialBillAccountantItems' => $materialBillAccountantItems->values(),
             'subAcceptanceItems' => $subAcceptanceItems->values(),
             'supplierAcceptanceItems' => $supplierAcceptanceItems->values(),
             'constructionLogItems' => $constructionLogItems->values(),
@@ -416,6 +449,105 @@ class CrmApprovalController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('CRM: Acceptance rejection failed', ['stage_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi từ chối nghiệm thu');
+        }
+    }
+
+    // =========================================================================
+    // SUPERVISOR & PM ACCEPTANCE APPROVAL
+    // Flow: pending → supervisor_approved → project_manager_approved → customer_approved
+    // =========================================================================
+
+    public function approveSupervisorAcceptance(Request $request, $id)
+    {
+        $stage = AcceptanceStage::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($stage->status !== 'pending') {
+            return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ GS duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $result = $stage->approveSupervisor($user);
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt nghiệm thu (GS)');
+            }
+            DB::commit();
+            Log::info('CRM: GS approved acceptance', ['stage_id' => $stage->id, 'approved_by' => $user->id]);
+            return back()->with('success', "GS đã duyệt nghiệm thu \"{$stage->name}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Supervisor acceptance approval failed', ['stage_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi duyệt nghiệm thu (GS)');
+        }
+    }
+
+    public function rejectSupervisorAcceptance(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $stage = AcceptanceStage::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($stage->status !== 'pending') {
+            return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái có thể từ chối');
+        }
+
+        try {
+            DB::beginTransaction();
+            $stage->reject($request->reason, $user);
+            DB::commit();
+            return back()->with('success', "Đã từ chối nghiệm thu \"{$stage->name}\" (GS)");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hệ thống khi từ chối nghiệm thu');
+        }
+    }
+
+    public function approvePMAcceptance(Request $request, $id)
+    {
+        $stage = AcceptanceStage::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($stage->status !== 'supervisor_approved') {
+            return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ QLDA duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $result = $stage->approveProjectManager($user);
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt nghiệm thu (QLDA)');
+            }
+            DB::commit();
+            Log::info('CRM: PM approved acceptance', ['stage_id' => $stage->id, 'approved_by' => $user->id]);
+            return back()->with('success', "QLDA đã duyệt nghiệm thu \"{$stage->name}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: PM acceptance approval failed', ['stage_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi duyệt nghiệm thu (QLDA)');
+        }
+    }
+
+    public function rejectPMAcceptance(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $stage = AcceptanceStage::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($stage->status !== 'supervisor_approved') {
+            return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái có thể từ chối');
+        }
+
+        try {
+            DB::beginTransaction();
+            $stage->reject($request->reason, $user);
+            DB::commit();
+            return back()->with('success', "Đã từ chối nghiệm thu \"{$stage->name}\" (QLDA)");
+        } catch (\Exception $e) {
+            DB::rollBack();
             return back()->with('error', 'Lỗi hệ thống khi từ chối nghiệm thu');
         }
     }
@@ -708,8 +840,10 @@ class CrmApprovalController extends Controller
         ];
     }
 
-    private function formatAcceptanceItem(AcceptanceStage $stage): array
+    private function formatAcceptanceItem(AcceptanceStage $stage, ?string $statusLabel = null, ?string $approvalLevel = null): array
     {
+        $creatorName = $stage->creator->name ?? ($stage->projectManagerApprover->name ?? ($stage->supervisorApprover->name ?? 'N/A'));
+
         return [
             'id' => $stage->id,
             'type' => 'acceptance',
@@ -718,15 +852,15 @@ class CrmApprovalController extends Controller
             'subtitle' => ($stage->project->code ?? '') . ' - ' . ($stage->project->name ?? 'Dự án'),
             'amount' => 0,
             'status' => $stage->status,
-            'status_label' => 'Chờ KH duyệt',
-            'created_by' => $stage->projectManagerApprover->name ?? 'N/A',
+            'status_label' => $statusLabel ?? $this->getStatusLabel($stage->status),
+            'created_by' => $creatorName,
             'created_by_email' => '',
-            'created_at' => $stage->updated_at?->format('d/m/Y H:i') ?? '',
+            'created_at' => $stage->updated_at?->format('d/m/Y H:i') ?? $stage->created_at?->format('d/m/Y H:i') ?? '',
             'description' => $stage->description,
             'project_name' => $stage->project->name ?? null,
             'project_id' => $stage->project_id,
             'task_name' => $stage->task->name ?? null,
-            'approval_level' => 'customer',
+            'approval_level' => $approvalLevel ?? 'customer',
         ];
     }
 

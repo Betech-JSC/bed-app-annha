@@ -124,6 +124,14 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/acceptance/{id}/approve', [CrmApprovalController::class, 'approveCustomerAcceptance'])->name('acceptance.approve');
         Route::post('/acceptance/{id}/reject', [CrmApprovalController::class, 'rejectCustomerAcceptance'])->name('acceptance.reject');
 
+        // Supervisor Acceptance (GS duyệt nghiệm thu)
+        Route::post('/acceptance-supervisor/{id}/approve', [CrmApprovalController::class, 'approveSupervisorAcceptance'])->name('acceptance-supervisor.approve');
+        Route::post('/acceptance-supervisor/{id}/reject', [CrmApprovalController::class, 'rejectSupervisorAcceptance'])->name('acceptance-supervisor.reject');
+
+        // PM Acceptance (QLDA duyệt nghiệm thu)
+        Route::post('/acceptance-pm/{id}/approve', [CrmApprovalController::class, 'approvePMAcceptance'])->name('acceptance-pm.approve');
+        Route::post('/acceptance-pm/{id}/reject', [CrmApprovalController::class, 'rejectPMAcceptance'])->name('acceptance-pm.reject');
+
         // Change Request
         Route::post('/change-request/{id}/approve', [CrmApprovalController::class, 'approveChangeRequest'])->name('change-request.approve');
         Route::post('/change-request/{id}/reject', [CrmApprovalController::class, 'rejectChangeRequest'])->name('change-request.reject');

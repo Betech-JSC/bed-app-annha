@@ -125,6 +125,25 @@ class MaterialBillController extends Controller
                 ]);
             }
 
+            // Create linked Cost record immediately (draft) so it shows in Chi phí tab
+            $supplierName = '';
+            if ($request->supplier_id) {
+                $supplier = \App\Models\Supplier::find($request->supplier_id);
+                $supplierName = $supplier->name ?? '';
+            }
+            Cost::create([
+                'project_id' => $projectId,
+                'cost_group_id' => $request->cost_group_id,
+                'supplier_id' => $request->supplier_id,
+                'category' => 'construction_materials',
+                'name' => "Phiếu vật liệu #" . ($bill->bill_number ?? $bill->id) . ($supplierName ? " - {$supplierName}" : ''),
+                'amount' => $totalAmount,
+                'description' => $request->notes ?? "Từ phiếu vật tư " . ($bill->bill_number ?? $bill->id),
+                'cost_date' => $request->bill_date,
+                'status' => 'draft',
+                'created_by' => $user->id,
+            ]);
+
             DB::commit();
 
             return response()->json([
@@ -273,6 +292,9 @@ class MaterialBillController extends Controller
 
         $bill->submitForManagementApproval();
 
+        // Update linked Cost status
+        $this->updateLinkedMaterialCost($projectId, $bill->bill_number ?? $bill->id, 'pending_management_approval');
+
         return response()->json([
             'success' => true,
             'message' => 'Đã gửi hóa đơn cho Ban điều hành duyệt.'
@@ -300,6 +322,12 @@ class MaterialBillController extends Controller
         }
 
         $bill->approveByManagement($user);
+
+        // Update linked Cost status
+        $this->updateLinkedMaterialCost($projectId, $bill->bill_number ?? $bill->id, 'pending_accountant_approval', [
+            'management_approved_by' => $user->id,
+            'management_approved_at' => now(),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -332,44 +360,51 @@ class MaterialBillController extends Controller
 
             $bill->approveByAccountant($user);
 
-            // LOGIC: KHÁC BIỆT CHÍNH Ở ĐÂY
-            // 1. Tạo bản ghi Cost để theo dõi công nợ NCC
-            $cost = Cost::create([
-                'project_id' => $projectId,
-                'cost_group_id' => $bill->cost_group_id,
-                'supplier_id' => $bill->supplier_id,
-                'category' => 'construction_materials',
-                'name' => "Hóa đơn vật liệu #" . ($bill->bill_number ?? $bill->id) . " - " . ($bill->supplier->name ?? ""),
-                'amount' => $bill->total_amount,
-                'description' => $bill->notes ?? "Tự động tạo từ Hóa đơn vật liệu",
-                'cost_date' => $bill->bill_date,
-                'status' => 'approved', // Tự động approved vì quy trình Bill đã xong
-                'created_by' => $bill->created_by,
-                'management_approved_by' => $bill->management_approved_by,
-                'management_approved_at' => $bill->management_approved_at,
+            // Update linked Cost record to approved (or create if missing)
+            $cost = $this->updateLinkedMaterialCost($projectId, $bill->bill_number ?? $bill->id, 'approved', [
                 'accountant_approved_by' => $user->id,
                 'accountant_approved_at' => now(),
             ]);
+
+            // If no linked cost found, create one (backward compat)
+            if (!$cost) {
+                $cost = Cost::create([
+                    'project_id' => $projectId,
+                    'cost_group_id' => $bill->cost_group_id,
+                    'supplier_id' => $bill->supplier_id,
+                    'category' => 'construction_materials',
+                    'name' => "Phiếu vật liệu #" . ($bill->bill_number ?? $bill->id) . " - " . ($bill->supplier->name ?? ""),
+                    'amount' => $bill->total_amount,
+                    'description' => $bill->notes ?? "Tự động tạo từ phiếu vật tư",
+                    'cost_date' => $bill->bill_date,
+                    'status' => 'approved',
+                    'created_by' => $bill->created_by,
+                    'management_approved_by' => $bill->management_approved_by,
+                    'management_approved_at' => $bill->management_approved_at,
+                    'accountant_approved_by' => $user->id,
+                    'accountant_approved_at' => now(),
+                ]);
+            }
 
             // Cập nhật công nợ nhà cung cấp
             if ($bill->supplier) {
                 $bill->supplier->recordDebt($bill->total_amount);
             }
 
-            // 2. Tạo MaterialTransactions để ghi nhận số lượng vật liệu nhập vào Dự án (Báo cáo)
+            // Tạo MaterialTransactions để ghi nhận số lượng vật liệu nhập vào Dự án
             foreach ($bill->items as $item) {
                 MaterialTransaction::create([
                     'material_id' => $item->material_id,
                     'project_id' => $projectId,
-                    'cost_id' => $cost->id, // Liên kết với Cost vừa tạo
-                    'type' => 'in', // Nhập vào dự án
+                    'cost_id' => $cost->id,
+                    'type' => 'in',
                     'quantity' => $item->quantity,
                     'unit_price' => $item->unit_price,
                     'total_amount' => $item->total_price,
                     'supplier_id' => $bill->supplier_id,
                     'reference_number' => $bill->bill_number,
                     'transaction_date' => $bill->bill_date,
-                    'notes' => "Nhập từ Hóa đơn vật liệu #" . ($bill->bill_number ?? $bill->id),
+                    'notes' => "Nhập từ phiếu vật tư #" . ($bill->bill_number ?? $bill->id),
                     'status' => 'approved',
                     'created_by' => $bill->created_by,
                     'approved_by' => $user->id,
@@ -422,10 +457,30 @@ class MaterialBillController extends Controller
 
         $bill->reject($request->reason, $user);
 
+        // Update linked Cost status to rejected
+        $this->updateLinkedMaterialCost($projectId, $bill->bill_number ?? $bill->id, 'rejected');
+
         return response()->json([
             'success' => true,
             'message' => 'Hóa đơn đã bị từ chối.'
         ]);
+    }
+
+    /**
+     * Helper: Find and update linked Cost record for a MaterialBill
+     */
+    private function updateLinkedMaterialCost($projectId, string $billRef, string $newStatus, array $extra = []): ?Cost
+    {
+        $cost = Cost::where('project_id', $projectId)
+            ->where('category', 'construction_materials')
+            ->where('name', 'LIKE', "%#{$billRef}%")
+            ->first();
+
+        if ($cost) {
+            $cost->update(array_merge(['status' => $newStatus], $extra));
+        }
+
+        return $cost;
     }
 
     public function destroy(string $projectId, string $id)
