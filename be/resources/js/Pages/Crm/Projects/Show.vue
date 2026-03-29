@@ -795,12 +795,10 @@
               </template>
               <template v-else-if="column.key === 'actions'">
                 <a-space :size="2">
-                  <!-- KH đánh dấu đã thanh toán (khi pending / overdue) -->
-                  <a-popconfirm v-if="['pending','overdue'].includes(record.status)" title="Đánh dấu KH đã thanh toán?" @confirm="markPaymentPaid(record)">
-                    <a-tooltip title="KH đã thanh toán">
-                      <a-button type="text" size="small" class="text-blue-500"><DollarOutlined /></a-button>
-                    </a-tooltip>
-                  </a-popconfirm>
+                  <!-- KH đánh dấu đã thanh toán — mở modal upload chứng từ (giống APP) -->
+                  <a-tooltip v-if="['pending','overdue'].includes(record.status)" title="KH đã thanh toán">
+                    <a-button type="text" size="small" class="text-blue-500" @click="openPaymentProofModal(record)"><DollarOutlined /></a-button>
+                  </a-tooltip>
                   <!-- KT xác nhận (khi customer_paid) -->
                   <a-popconfirm v-if="record.status === 'customer_paid' && can('payment.confirm')" title="KT xác nhận thanh toán?" @confirm="confirmPaymentAction(record)">
                     <a-tooltip title="KT xác nhận">
@@ -2184,6 +2182,32 @@
   </a-modal>
 
   <!-- Reject Payment Modal -->
+  <!-- Payment Proof Modal — KH upload chứng từ trước khi đánh dấu đã TT (giống APP) -->
+  <a-modal v-model:open="showPaymentProofModal" title="Xác nhận thanh toán — Tải chứng từ" :width="520" @ok="submitPaymentProof" ok-text="Xác nhận đã thanh toán" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal" :ok-button-props="{ disabled: !paymentProofFiles.length }">
+    <div class="mt-4">
+      <div v-if="paymentProofTarget" class="mb-4 p-3 bg-blue-50 rounded-xl">
+        <div class="font-semibold text-gray-700">Đợt #{{ paymentProofTarget.payment_number }}</div>
+        <div class="text-lg text-blue-600 font-bold">{{ fmt(paymentProofTarget.amount) }}</div>
+        <div v-if="paymentProofTarget.due_date" class="text-xs text-gray-500">Hạn TT: {{ fmtDate(paymentProofTarget.due_date) }}</div>
+      </div>
+      <a-form-item label="Chứng từ thanh toán" required :validate-status="!paymentProofFiles.length ? 'error' : 'success'" :help="!paymentProofFiles.length ? 'Bắt buộc tải lên ít nhất 1 file chứng từ' : `${paymentProofFiles.length} file đã chọn`">
+        <input type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" @change="onPaymentProofFileChange" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+      </a-form-item>
+      <a-row :gutter="12">
+        <a-col :span="12">
+          <a-form-item label="Ngày thanh toán">
+            <a-input v-model:value="paymentProofForm.paid_date" type="date" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Số tiền thực TT">
+            <a-input-number v-model:value="paymentProofForm.actual_amount" :min="0" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" class="w-full" placeholder="Bằng số tiền gốc nếu bỏ trống" />
+          </a-form-item>
+        </a-col>
+      </a-row>
+    </div>
+  </a-modal>
+
   <a-modal v-model:open="showRejectPaymentModal" title="Từ chối thanh toán" :width="400" @ok="rejectPaymentAction" ok-text="Từ chối" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal" :ok-button-props="{ danger: true, disabled: !rejectPaymentReason.trim() }">
     <div class="mt-4">
       <div v-if="rejectPaymentTarget" class="mb-3 p-3 bg-gray-50 rounded-xl">
@@ -3939,8 +3963,30 @@ const savePayment = () => {
     },
   }))
 }
+// Payment Proof Modal — KH phải upload chứng từ mới được đánh dấu thanh toán
+const showPaymentProofModal = ref(false)
+const paymentProofTarget = ref(null)
+const paymentProofFiles = ref([])
+const paymentProofForm = ref({ paid_date: new Date().toISOString().slice(0, 10), actual_amount: null })
+const openPaymentProofModal = (record) => {
+  paymentProofTarget.value = record
+  paymentProofFiles.value = []
+  paymentProofForm.value = { paid_date: new Date().toISOString().slice(0, 10), actual_amount: null }
+  showPaymentProofModal.value = true
+}
+const onPaymentProofFileChange = (e) => { paymentProofFiles.value = Array.from(e.target.files || []) }
+const submitPaymentProof = () => {
+  if (!paymentProofFiles.value.length || !paymentProofTarget.value) return
+  const formData = new FormData()
+  paymentProofFiles.value.forEach(f => formData.append('files[]', f))
+  if (paymentProofForm.value.paid_date) formData.append('paid_date', paymentProofForm.value.paid_date)
+  if (paymentProofForm.value.actual_amount) formData.append('actual_amount', paymentProofForm.value.actual_amount)
+  router.post(`/projects/${props.project.id}/payments/${paymentProofTarget.value.id}/mark-paid`, formData, savingOptions({
+    forceFormData: true,
+    onSuccess: () => { showPaymentProofModal.value = false; paymentProofFiles.value = []; paymentProofTarget.value = null },
+  }))
+}
 const deletePayment = (p) => router.delete(`/projects/${props.project.id}/payments/${p.id}`, loadingOptions(`delete-pay-${p.id}`))
-const markPaymentPaid = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/mark-paid`, { paid_date: new Date().toISOString().slice(0, 10) }, loadingOptions(`mark-paid-${p.id}`))
 const confirmPaymentAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/confirm`, { paid_date: new Date().toISOString().slice(0, 10) }, loadingOptions(`confirm-pay-${p.id}`))
 const showRejectPaymentModal = ref(false)
 const rejectPaymentTarget = ref(null)

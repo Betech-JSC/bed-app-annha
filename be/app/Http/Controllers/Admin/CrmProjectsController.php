@@ -590,6 +590,7 @@ class CrmProjectsController extends Controller
 
     /**
      * CRM: KH đánh dấu đã thanh toán (pending → customer_paid)
+     * Yêu cầu phải upload chứng từ thanh toán (giống luồng APP)
      */
     public function markPaymentPaidByCustomer(Request $request, string $projectId, string $paymentId)
     {
@@ -604,15 +605,42 @@ class CrmProjectsController extends Controller
         $validated = $request->validate([
             'paid_date' => 'nullable|date',
             'actual_amount' => 'nullable|numeric|min:0',
+            'files' => 'required|array|min:1',
+            'files.*' => 'required|file|max:10240|mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx',
+        ], [
+            'files.required' => 'Vui lòng tải lên chứng từ thanh toán.',
+            'files.min' => 'Cần ít nhất 1 file chứng từ thanh toán.',
         ]);
 
         try {
             DB::beginTransaction();
+
+            // Upload & attach files (chứng từ thanh toán)
+            if ($request->hasFile('files')) {
+                foreach ($request->file('files') as $file) {
+                    $path = $file->store("projects/{$project->id}/payments", 'public');
+                    \App\Models\Attachment::create([
+                        'original_name' => $file->getClientOriginalName(),
+                        'file_name' => basename($path),
+                        'file_path' => $path,
+                        'file_url' => \Illuminate\Support\Facades\Storage::disk('public')->url($path),
+                        'mime_type' => $file->getClientMimeType(),
+                        'file_size' => $file->getSize(),
+                        'type' => 'payment_proof',
+                        'attachable_type' => ProjectPayment::class,
+                        'attachable_id' => $payment->id,
+                        'uploaded_by' => $user->id,
+                    ]);
+                }
+            }
+
+            // Mark as paid by customer
             $payment->markAsPaidByCustomer(
                 $user,
                 $validated['paid_date'] ?? null,
                 $validated['actual_amount'] ?? null
             );
+
             DB::commit();
             return back()->with('success', 'Đã đánh dấu khách hàng đã thanh toán. Chờ KT xác nhận.');
         } catch (\Exception $e) {
