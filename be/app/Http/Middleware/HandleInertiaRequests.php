@@ -47,6 +47,7 @@ class HandleInertiaRequests extends Middleware
                         'role' => $user->role ?? null,
                         'avatar' => $user->avatar_url ?? null,
                         'super_admin' => $user->isSuperAdmin(),
+                        'permissions' => $user->getPermissionsArray(),
                     ] : null,
                 ];
             },

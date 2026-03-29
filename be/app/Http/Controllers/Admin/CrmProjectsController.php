@@ -219,21 +219,16 @@ class CrmProjectsController extends Controller
             ->orderBy('order')
             ->get();
 
-        // Get project materials (with usage stats) — matching mobile APP
-        $projectMaterials = [];
-        if (class_exists(\App\Models\MaterialTransaction::class)) {
-            $projectMaterials = \App\Models\Material::whereHas('transactions', function ($q) use ($project) {
-                $q->where('project_id', $project->id);
-            })->withCount(['transactions as project_transactions_count' => function ($q) use ($project) {
-                $q->where('project_id', $project->id);
-            }])->withSum(['transactions as project_total_amount' => function ($q) use ($project) {
-                $q->where('project_id', $project->id);
-            }], 'total_amount')
-            ->withSum(['transactions as project_usage' => function ($q) use ($project) {
-                $q->where('project_id', $project->id)->where('type', 'out');
-            }], 'quantity')
+        // Get project material bills (bill-based tracking) — matching mobile APP
+        $materialBills = MaterialBill::where('project_id', $project->id)
+            ->with(['items.material', 'supplier', 'creator:id,name', 'managementApprover:id,name', 'accountantApprover:id,name'])
+            ->orderByDesc('bill_date')
+            ->orderByDesc('created_at')
             ->get();
-        }
+
+        // Get suppliers for bill creation form
+        $suppliers = \App\Models\Supplier::select('id', 'name', 'phone', 'email')
+            ->orderBy('name')->get();
 
         // Get project equipment (with allocations) — matching mobile APP
         $projectEquipment = [];
@@ -246,11 +241,10 @@ class CrmProjectsController extends Controller
             ->get();
         }
 
-        // Get all equipment (available ones) for allocation form
+        // Get all equipment for allocation form (no status filter — allow any for tracking)
         $allEquipment = [];
         if (class_exists(\App\Models\Equipment::class)) {
-            $allEquipment = \App\Models\Equipment::whereIn('status', ['available', 'in_use'])
-                ->select('id', 'name', 'code', 'type', 'status', 'category')
+            $allEquipment = \App\Models\Equipment::select('id', 'name', 'code', 'type', 'status', 'category')
                 ->orderBy('name')->get();
         }
 
@@ -266,7 +260,8 @@ class CrmProjectsController extends Controller
             'allTasks' => $allTasks,
             'acceptanceTemplates' => $acceptanceTemplates,
             'parentTasks' => $parentTasks,
-            'projectMaterials' => $projectMaterials,
+            'materialBills' => $materialBills,
+            'suppliers' => $suppliers,
             'projectEquipment' => $projectEquipment,
             'allEquipment' => $allEquipment,
         ]);
@@ -3417,6 +3412,24 @@ class CrmProjectsController extends Controller
                 ]);
             }
 
+            // Create linked Cost record immediately (draft) so it shows in Chi phí tab
+            $supplierName = '';
+            if ($validated['supplier_id'] ?? null) {
+                $supplierName = \App\Models\Supplier::find($validated['supplier_id'])->name ?? '';
+            }
+            \App\Models\Cost::create([
+                'project_id' => $project->id,
+                'cost_group_id' => $validated['cost_group_id'] ?? null,
+                'supplier_id' => $validated['supplier_id'] ?? null,
+                'category' => 'construction_materials',
+                'name' => "Phiếu vật liệu #{$billNumber}" . ($supplierName ? " - {$supplierName}" : ''),
+                'amount' => $totalAmount,
+                'description' => $validated['notes'] ?? "Từ phiếu vật tư {$billNumber}",
+                'cost_date' => $validated['bill_date'],
+                'status' => 'draft',
+                'created_by' => $user->id,
+            ]);
+
             DB::commit();
             return back()->with('success', "Đã tạo phiếu vật tư {$billNumber}.");
         } catch (\Exception $e) {
@@ -3517,6 +3530,9 @@ class CrmProjectsController extends Controller
 
         $bill->submitForManagementApproval();
 
+        // Update linked Cost status
+        $this->updateLinkedMaterialCost($project->id, $bill->bill_number, 'pending_management_approval');
+
         $this->notifyFromCrm($project, 'material_bill_submit', "Phiếu vật tư {$bill->bill_number} cần BĐH duyệt.");
 
         return back()->with('success', 'Đã gửi phiếu vật tư để duyệt.');
@@ -3534,9 +3550,15 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Phiếu không ở trạng thái chờ BĐH duyệt.');
         }
 
-        // Use model method (null for Admin FK constraint)
-        $bill->approveByManagement((object) ['id' => null]);
+        // Use model method
+        $bill->approveByManagement((object) ['id' => $user->id ?? null]);
         $bill->update(['management_approved_at' => now()]);
+
+        // Update linked Cost status
+        $linkedCost = $this->updateLinkedMaterialCost($project->id, $bill->bill_number, 'pending_accountant_approval', [
+            'management_approved_by' => $user->id ?? null,
+            'management_approved_at' => now(),
+        ]);
 
         $this->notifyFromCrm($project, 'material_bill_management_approved', "Phiếu vật tư {$bill->bill_number} đã được BĐH duyệt, chờ KT xác nhận.");
 
@@ -3549,18 +3571,197 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
-        $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
+        $bill = MaterialBill::with(['items.material', 'supplier'])
+            ->where('project_id', $project->id)->findOrFail($billId);
 
         if ($bill->status !== 'pending_accountant') {
             return back()->with('error', 'Phiếu không ở trạng thái chờ KT xác nhận.');
         }
 
-        $bill->approveByAccountant((object) ['id' => null]);
-        $bill->update(['accountant_approved_at' => now()]);
+        try {
+            DB::beginTransaction();
 
-        $this->notifyFromCrm($project, 'material_bill_approved', "Phiếu vật tư {$bill->bill_number} đã được xác nhận.");
+            // 1. Update bill status
+            $bill->approveByAccountant((object) ['id' => $user->id ?? null]);
 
-        return back()->with('success', 'Đã xác nhận phiếu vật tư (KT).');
+            // 2. Update linked Cost record to approved (or create if missing)
+            $cost = $this->updateLinkedMaterialCost($project->id, $bill->bill_number, 'approved', [
+                'accountant_approved_by' => $user->id ?? null,
+                'accountant_approved_at' => now(),
+            ]);
+
+            // If no linked cost found, create one
+            if (!$cost) {
+                $cost = \App\Models\Cost::create([
+                    'project_id' => $project->id,
+                    'cost_group_id' => $bill->cost_group_id,
+                    'supplier_id' => $bill->supplier_id,
+                    'category' => 'construction_materials',
+                    'name' => "Phiếu vật liệu #" . ($bill->bill_number ?? $bill->id) . " - " . ($bill->supplier->name ?? ""),
+                    'amount' => $bill->total_amount,
+                    'description' => $bill->notes ?? "Tự động tạo từ phiếu vật tư",
+                    'cost_date' => $bill->bill_date,
+                    'status' => 'approved',
+                    'created_by' => $bill->created_by,
+                    'management_approved_by' => $bill->management_approved_by,
+                    'management_approved_at' => $bill->management_approved_at,
+                    'accountant_approved_by' => $user->id ?? null,
+                    'accountant_approved_at' => now(),
+                ]);
+            }
+
+            // 3. Update supplier debt
+            if ($bill->supplier) {
+                $bill->supplier->recordDebt($bill->total_amount);
+            }
+
+            // 4. Create MaterialTransactions per item (for reporting)
+            foreach ($bill->items as $item) {
+                \App\Models\MaterialTransaction::create([
+                    'material_id' => $item->material_id,
+                    'project_id' => $project->id,
+                    'cost_id' => $cost->id,
+                    'type' => 'in',
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                    'total_amount' => $item->total_price,
+                    'supplier_id' => $bill->supplier_id,
+                    'reference_number' => $bill->bill_number,
+                    'transaction_date' => $bill->bill_date,
+                    'notes' => "Nhập từ phiếu vật tư #" . ($bill->bill_number ?? $bill->id),
+                    'status' => 'approved',
+                    'created_by' => $bill->created_by,
+                    'approved_by' => $user->id ?? null,
+                    'approved_at' => now(),
+                ]);
+            }
+
+            DB::commit();
+
+            $this->notifyFromCrm($project, 'material_bill_approved', "Phiếu vật tư {$bill->bill_number} đã được xác nhận. Chi phí đã được ghi nhận.");
+
+            return back()->with('success', 'Đã xác nhận phiếu vật tư. Dữ liệu đã đẩy qua Chi phí dự án.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Retroactively sync Cost records for approved MaterialBills that were approved
+     * before the Cost-creation logic was implemented.
+     */
+    public function syncMaterialBillCosts(string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        // Get ALL bills for this project (not just approved)
+        $bills = MaterialBill::with(['items.material', 'supplier'])
+            ->where('project_id', $project->id)
+            ->get();
+
+        $synced = 0;
+
+        // Map bill status to cost status
+        $statusMap = [
+            'draft' => 'draft',
+            'pending_management' => 'pending_management_approval',
+            'pending_accountant' => 'pending_accountant_approval',
+            'approved' => 'approved',
+            'rejected' => 'rejected',
+        ];
+
+        foreach ($bills as $bill) {
+            // Check if a Cost record already exists for this bill
+            $existingCost = \App\Models\Cost::where('project_id', $project->id)
+                ->where('category', 'construction_materials')
+                ->where('name', 'LIKE', "%#{$bill->bill_number}%")
+                ->first();
+
+            if ($existingCost) {
+                // Update status if out of sync
+                $expectedStatus = $statusMap[$bill->status] ?? 'draft';
+                if ($existingCost->status !== $expectedStatus) {
+                    $existingCost->update(['status' => $expectedStatus]);
+                    $synced++;
+                }
+                continue;
+            }
+
+            try {
+                DB::beginTransaction();
+
+                $costStatus = $statusMap[$bill->status] ?? 'draft';
+
+                $cost = \App\Models\Cost::create([
+                    'project_id' => $project->id,
+                    'cost_group_id' => $bill->cost_group_id,
+                    'supplier_id' => $bill->supplier_id,
+                    'category' => 'construction_materials',
+                    'name' => "Phiếu vật liệu #" . ($bill->bill_number ?? $bill->id) . " - " . ($bill->supplier->name ?? ""),
+                    'amount' => $bill->total_amount,
+                    'description' => $bill->notes ?? "Đồng bộ từ phiếu vật tư",
+                    'cost_date' => $bill->bill_date,
+                    'status' => $costStatus,
+                    'created_by' => $bill->created_by,
+                    'management_approved_by' => $bill->management_approved_by,
+                    'management_approved_at' => $bill->management_approved_at,
+                    'accountant_approved_by' => $bill->accountant_approved_by,
+                    'accountant_approved_at' => $bill->accountant_approved_at,
+                ]);
+
+                // Only create transactions for approved bills
+                if ($bill->status === 'approved') {
+                    foreach ($bill->items as $item) {
+                        \App\Models\MaterialTransaction::create([
+                            'material_id' => $item->material_id,
+                            'project_id' => $project->id,
+                            'cost_id' => $cost->id,
+                            'type' => 'in',
+                            'quantity' => $item->quantity,
+                            'unit_price' => $item->unit_price,
+                            'total_amount' => $item->total_price,
+                            'supplier_id' => $bill->supplier_id,
+                            'reference_number' => $bill->bill_number,
+                            'transaction_date' => $bill->bill_date,
+                            'notes' => "Đồng bộ từ phiếu vật tư #" . ($bill->bill_number ?? $bill->id),
+                            'status' => 'approved',
+                            'created_by' => $bill->created_by,
+                        ]);
+                    }
+                }
+
+                DB::commit();
+                $synced++;
+            } catch (\Exception $e) {
+                DB::rollBack();
+                \Log::error("Sync material bill cost failed for bill #{$bill->id}: " . $e->getMessage());
+            }
+        }
+
+        if ($synced > 0) {
+            return back()->with('success', "Đã đồng bộ {$synced} phiếu vật tư sang chi phí dự án.");
+        }
+
+        return back()->with('info', 'Tất cả phiếu vật tư đã được đồng bộ.');
+    }
+
+    /**
+     * Helper: Find and update linked Cost record for a MaterialBill
+     */
+    private function updateLinkedMaterialCost(int $projectId, string $billNumber, string $newStatus, array $extra = []): ?\App\Models\Cost
+    {
+        $cost = \App\Models\Cost::where('project_id', $projectId)
+            ->where('category', 'construction_materials')
+            ->where('name', 'LIKE', "%#{$billNumber}%")
+            ->first();
+
+        if ($cost) {
+            $cost->update(array_merge(['status' => $newStatus], $extra));
+        }
+
+        return $cost;
     }
 
     public function rejectMaterialBill(Request $request, string $projectId, string $billId)

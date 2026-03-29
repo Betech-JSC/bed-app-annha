@@ -208,78 +208,109 @@ const selectedKeys = computed(() => {
 
 const openKeys = ref(['projects-group', 'hr-group', 'finance-group', 'resource-group', 'system-group'])
 
-const menuItems = [
-  {
-    key: 'dashboard',
-    icon: () => h(DashboardOutlined),
-    label: 'Tổng quan',
-  },
-  {
-    key: 'approvals',
-    icon: () => h(AuditOutlined),
-    label: 'Phê duyệt yêu cầu',
-  },
-  {
-    type: 'divider',
-  },
-  {
-    key: 'projects-group',
-    icon: () => h(ProjectOutlined),
-    label: 'Dự án & Thi công',
-    children: [
-      { key: 'projects', label: 'Danh sách dự án' },
-      { key: 'reports', label: 'Báo cáo dự án' },
-      { key: 'subcontractors', label: 'Nhà thầu phụ', icon: () => h(UsergroupAddOutlined) },
-      { key: 'acceptance-templates', label: 'Bộ TL Nghiệm thu', icon: () => h(FileProtectOutlined) },
-    ],
-  },
-  {
-    key: 'finance-group',
-    icon: () => h(DollarOutlined),
-    label: 'Tài chính & Thu chi',
-    children: [
-      { key: 'finance', label: 'Phân tích tài chính' },
-      { key: 'company-costs', label: 'Chi phí công ty' },
-      { key: 'cost-groups', label: 'Nhóm chi phí' },
-    ],
-  },
-  {
-    key: 'resource-group',
-    icon: () => h(ToolOutlined),
-    label: 'Tài nguyên & Kho',
-    children: [
-      { key: 'materials', label: 'Vật tư xây dựng' },
-      { key: 'equipment', label: 'Máy móc & Thiết bị' },
-    ],
-  },
-  {
-    key: 'hr-group',
-    icon: () => h(TeamOutlined),
-    label: 'Nhân sự & Tổ chức',
-    children: [
-      { key: 'employees', label: 'Danh sách nhân viên' },
-      { key: 'departments', label: 'Phòng ban' },
-      { key: 'org-chart', label: 'Sơ đồ tổ chức', icon: () => h(ApartmentOutlined) },
-      { key: 'kpi', label: 'KPI nhân sự', icon: () => h(AimOutlined) },
-    ],
-  },
-  {
-    type: 'divider',
-  },
-  {
-    key: 'system-group',
-    icon: () => h(SettingOutlined),
-    label: 'Hệ thống',
-    children: [
-      { key: 'files', label: 'Tổng hợp File', icon: () => h(FolderOpenOutlined) },
-      { key: 'notifications', label: 'Thông báo', icon: () => h(BellOutlined) },
-      { key: 'roles', label: 'Phân quyền', icon: () => h(SafetyOutlined) },
-      { key: 'system-logs', label: 'Nhật ký hệ thống', icon: () => h(CodeOutlined) },
-      { key: 'settings', label: 'Cấu hình chung', icon: () => h(SettingOutlined) },
-      { key: 'user-guide', label: 'Hướng dẫn sử dụng', icon: () => h(BookOutlined) },
-    ],
-  },
-]
+// Permission helper
+const userPerms = computed(() => props.auth?.user?.permissions || [])
+const isSuperAdmin = computed(() => props.auth?.user?.super_admin === true)
+const can = (perm) => isSuperAdmin.value || userPerms.value.includes(perm)
+const canAny = (...perms) => isSuperAdmin.value || perms.some(p => userPerms.value.includes(p))
+
+const menuItems = computed(() => {
+  const allItems = [
+    {
+      key: 'dashboard',
+      icon: () => h(DashboardOutlined),
+      label: 'Tổng quan',
+      // Always visible
+    },
+    {
+      key: 'approvals',
+      icon: () => h(AuditOutlined),
+      label: 'Phê duyệt yêu cầu',
+      show: canAny('cost.approve.management', 'cost.approve.accountant', 'acceptance.approve.level_1', 'acceptance.approve.level_2', 'acceptance.approve.level_3', 'log.approve', 'material.approve', 'equipment.approve'),
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'projects-group',
+      icon: () => h(ProjectOutlined),
+      label: 'Dự án & Thi công',
+      children: [
+        { key: 'projects', label: 'Danh sách dự án', perm: 'project.view' },
+        { key: 'reports', label: 'Báo cáo dự án', perm: 'report.view' },
+        { key: 'subcontractors', label: 'Nhà thầu phụ', icon: () => h(UsergroupAddOutlined), perm: 'subcontractor.view' },
+        { key: 'acceptance-templates', label: 'Bộ TL Nghiệm thu', icon: () => h(FileProtectOutlined), perm: 'acceptance.template.view' },
+      ],
+    },
+    {
+      key: 'finance-group',
+      icon: () => h(DollarOutlined),
+      label: 'Tài chính & Thu chi',
+      children: [
+        { key: 'finance', label: 'Phân tích tài chính', perm: 'finance.view' },
+        { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_financial.view' },
+        { key: 'cost-groups', label: 'Nhóm chi phí', perm: 'cost.view' },
+      ],
+    },
+    {
+      key: 'resource-group',
+      icon: () => h(ToolOutlined),
+      label: 'Tài nguyên & Kho',
+      children: [
+        { key: 'materials', label: 'Vật tư xây dựng', perm: 'material.view' },
+        { key: 'equipment', label: 'Máy móc & Thiết bị', perm: 'equipment.view' },
+      ],
+    },
+    {
+      key: 'hr-group',
+      icon: () => h(TeamOutlined),
+      label: 'Nhân sự & Tổ chức',
+      children: [
+        { key: 'employees', label: 'Danh sách nhân viên', perm: 'personnel.view' },
+        { key: 'departments', label: 'Phòng ban', perm: 'personnel.view' },
+        { key: 'org-chart', label: 'Sơ đồ tổ chức', icon: () => h(ApartmentOutlined), perm: 'personnel.view' },
+        { key: 'kpi', label: 'KPI nhân sự', icon: () => h(AimOutlined), perm: 'kpi.view' },
+      ],
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'system-group',
+      icon: () => h(SettingOutlined),
+      label: 'Hệ thống',
+      children: [
+        { key: 'files', label: 'Tổng hợp File', icon: () => h(FolderOpenOutlined), perm: 'document.view' },
+        { key: 'notifications', label: 'Thông báo', icon: () => h(BellOutlined) }, // Always visible
+        { key: 'roles', label: 'Phân quyền', icon: () => h(SafetyOutlined), perm: 'settings.manage' },
+        { key: 'system-logs', label: 'Nhật ký hệ thống', icon: () => h(CodeOutlined), perm: 'settings.manage' },
+        { key: 'settings', label: 'Cấu hình chung', icon: () => h(SettingOutlined), perm: 'settings.manage' },
+        { key: 'user-guide', label: 'Hướng dẫn sử dụng', icon: () => h(BookOutlined) }, // Always visible
+      ],
+    },
+  ]
+
+  // Filter items by permission
+  return allItems.map(item => {
+    // Dividers always pass
+    if (item.type === 'divider') return item
+
+    // Top-level items with show property
+    if (item.show !== undefined && !item.show) return null
+
+    // Items with children → filter children
+    if (item.children) {
+      const filtered = item.children.filter(child => !child.perm || can(child.perm))
+      if (filtered.length === 0) return null
+      return { ...item, children: filtered }
+    }
+
+    // Leaf items with perm
+    if (item.perm && !can(item.perm)) return null
+
+    return item
+  }).filter(Boolean)
+})
 
 const handleMenuClick = ({ key }) => {
   const routes = {

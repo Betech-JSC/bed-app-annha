@@ -370,6 +370,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/material-bills/{bill}/approve-management', [CrmProjectsController::class, 'approveMaterialBillManagement'])->name('material-bills.approve.management');
         Route::post('/{project}/material-bills/{bill}/approve-accountant', [CrmProjectsController::class, 'approveMaterialBillAccountant'])->name('material-bills.approve.accountant');
         Route::post('/{project}/material-bills/{bill}/reject', [CrmProjectsController::class, 'rejectMaterialBill'])->name('material-bills.reject');
+        Route::post('/{project}/material-bills/sync-costs', [CrmProjectsController::class, 'syncMaterialBillCosts'])->name('material-bills.sync-costs');
 
         // Material Quotas (matching APP MaterialQuotaController)
         Route::post('/{project}/material-quotas', [CrmProjectsController::class, 'storeMaterialQuota'])->name('material-quotas.store');

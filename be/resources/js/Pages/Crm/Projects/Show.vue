@@ -722,7 +722,17 @@
             <a-button :type="costStatusFilter === 'rejected' ? 'primary' : 'default'" size="small" danger ghost @click="costStatusFilter = 'rejected'">Từ chối ({{ (project.costs || []).filter(c => c.status === 'rejected').length }})</a-button>
           </div>
           <div class="flex items-center justify-between mb-3">
-            <div class="text-sm text-gray-400">Tổng: <span class="font-bold text-red-500">{{ fmt(totalCosts) }}</span></div>
+            <div class="flex items-center gap-3">
+              <div class="text-sm text-gray-400">Tổng: <span class="font-bold text-red-500">{{ fmt(totalCosts) }}</span></div>
+              <a-select v-model:value="costGroupFilter" size="small" style="min-width: 180px" allow-clear placeholder="Lọc theo nhóm">
+                <a-select-option value="all">Tất cả nhóm</a-select-option>
+                <a-select-option value="_vatlieu">Vật liệu xây dựng</a-select-option>
+                <a-select-option value="_thietbi">Thiết bị</a-select-option>
+                <a-select-option value="_ntp">Nhà thầu phụ</a-select-option>
+                <a-select-option value="_other">Khác</a-select-option>
+                <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
+              </a-select>
+            </div>
             <a-button v-if="can('cost.create')" type="primary" size="small" @click="openCostModal(null)">
               <template #icon><PlusOutlined /></template>Thêm chi phí
             </a-button>
@@ -1832,55 +1842,132 @@
         </div>
       </a-tab-pane>
 
-      <!-- ============ MATERIALS TAB (Giống APP) ============ -->
+      <!-- ============ MATERIALS TAB — Bill-based tracking (Giống APP) ============ -->
       <a-tab-pane key="materials" v-if="isTabVisible('materials')">
-        <template #tab><a-tooltip title="Quản lý vật liệu sử dụng trong dự án: ghi nhận xuất kho, chi phí vật tư" placement="bottom">Vật liệu ({{ projectMaterials?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý chi phí vật liệu theo bill nhập: theo dõi từng phiếu, duyệt thanh toán" placement="bottom">Vật liệu ({{ materialBills?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <!-- Summary Cards -->
-          <div class="grid grid-cols-2 gap-4 mb-4">
-            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100/60">
+          <div class="grid grid-cols-4 gap-3 mb-4">
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
               <div class="flex items-center gap-2 mb-1">
-                <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-sm">📦</span></div>
-                <span class="text-xs text-gray-400">Vật liệu sử dụng</span>
+                <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
+                <span class="text-[11px] text-gray-400">Tổng phiếu</span>
               </div>
-              <div class="text-xl font-bold text-gray-800">{{ projectMaterials?.length || 0 }}</div>
+              <div class="text-lg font-bold text-gray-800">{{ materialBills?.length || 0 }}</div>
             </div>
-            <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-4 border border-emerald-100/60">
+            <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
               <div class="flex items-center gap-2 mb-1">
-                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-sm">💰</span></div>
-                <span class="text-xs text-gray-400">Tổng chi phí</span>
+                <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-xs">💰</span></div>
+                <span class="text-[11px] text-gray-400">Tổng chi phí</span>
               </div>
-              <div class="text-xl font-bold text-emerald-600">{{ fmt(totalMaterialCost) }}</div>
+              <div class="text-lg font-bold text-emerald-600">{{ fmt(totalBillAmount) }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
+                <span class="text-[11px] text-gray-400">Đã duyệt</span>
+              </div>
+              <div class="text-lg font-bold text-green-600">{{ (materialBills || []).filter(b => b.status === 'approved').length }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
+                <span class="text-[11px] text-gray-400">Chờ duyệt</span>
+              </div>
+              <div class="text-lg font-bold text-amber-600">{{ (materialBills || []).filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
             </div>
           </div>
 
-          <div class="flex justify-end mb-3">
-            <a-button v-if="can('material.create')" type="primary" size="small" @click="openMaterialModal()">
-              <template #icon><PlusOutlined /></template>Thêm vật liệu
+          <div class="flex justify-end mb-3 gap-2">
+            <a-button size="small" @click="syncMaterialBillCosts()" :loading="syncingMaterialCosts">
+              <template #icon><SyncOutlined /></template>Đồng bộ chi phí
+            </a-button>
+            <a-button v-if="can('material.create')" type="primary" size="small" @click="openBillModal()">
+              <template #icon><PlusOutlined /></template>Tạo phiếu nhập VL
             </a-button>
           </div>
 
-          <a-table :columns="materialCols" :data-source="projectMaterials || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
+          <!-- Bill Table -->
+          <a-table :columns="billCols" :data-source="materialBills || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table"
+            :expandable="{ expandedRowRender: billExpandedRow }">
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'name'">
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center"><span class="text-blue-600 text-xs">📦</span></div>
-                  <div>
-                    <div class="font-semibold text-gray-800">{{ record.name }}</div>
-                    <div v-if="record.code" class="text-[10px] text-gray-400 font-mono">{{ record.code }}</div>
-                  </div>
+              <template v-if="column.key === 'bill_number'">
+                <div class="font-semibold text-blue-600">{{ record.bill_number || `#${record.id}` }}</div>
+                <div class="text-[10px] text-gray-400">{{ fmtDate(record.bill_date) }}</div>
+              </template>
+              <template v-else-if="column.key === 'supplier'">
+                <span v-if="record.supplier" class="text-sm">{{ record.supplier.name }}</span>
+                <span v-else class="text-xs text-gray-400 italic">—</span>
+              </template>
+              <template v-else-if="column.key === 'items_count'">
+                <span class="font-medium">{{ record.items?.length || 0 }} <span class="text-gray-400 text-xs">mặt hàng</span></span>
+              </template>
+              <template v-else-if="column.key === 'total'">
+                <span class="font-bold text-emerald-600">{{ fmt(record.total_amount) }}</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="billStatusColor(record.status)" class="rounded-full text-[10px]">{{ billStatusLabel(record.status) }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'actions'">
+                <div class="flex items-center gap-1 justify-end">
+                  <!-- Submit -->
+                  <a-popconfirm v-if="record.status === 'draft' && can('material.update')" title="Gửi duyệt phiếu này?" @confirm="submitBill(record)" ok-text="Gửi">
+                    <a-button size="small" type="primary" ghost><SendOutlined /> Gửi</a-button>
+                  </a-popconfirm>
+                  <!-- BDH Approve -->
+                  <a-popconfirm v-if="record.status === 'pending_management' && can('cost.approve_management')" title="BĐH duyệt phiếu này?" @confirm="approveBillManagement(record)" ok-text="Duyệt">
+                    <a-button size="small" class="!bg-cyan-50 !border-cyan-300 !text-cyan-700"><CheckOutlined /> BĐH</a-button>
+                  </a-popconfirm>
+                  <!-- KT Approve -->
+                  <a-popconfirm v-if="record.status === 'pending_accountant' && can('cost.approve_accountant')" title="Kế toán xác nhận thanh toán?" @confirm="approveBillAccountant(record)" ok-text="Xác nhận">
+                    <a-button size="small" class="!bg-emerald-50 !border-emerald-300 !text-emerald-700"><CheckCircleOutlined /> KT</a-button>
+                  </a-popconfirm>
+                  <!-- Reject -->
+                  <a-button v-if="['pending_management','pending_accountant'].includes(record.status) && can('cost.reject')" size="small" danger @click="openRejectBillModal(record)">
+                    <CloseCircleOutlined />
+                  </a-button>
+                  <!-- Delete -->
+                  <a-popconfirm v-if="record.status === 'draft' && can('material.delete')" title="Xóa phiếu này?" @confirm="deleteBill(record)" ok-text="Xóa">
+                    <a-button size="small" danger ghost><DeleteOutlined /></a-button>
+                  </a-popconfirm>
                 </div>
               </template>
-              <template v-else-if="column.key === 'usage'">
-                <span class="font-semibold text-blue-600">{{ fmtQty(Math.abs(record.project_usage || 0)) }} <span class="text-xs text-gray-400">{{ record.unit }}</span></span>
-              </template>
-              <template v-else-if="column.key === 'transactions'">{{ record.project_transactions_count || 0 }} lần</template>
-              <template v-else-if="column.key === 'total'">
-                <span class="font-semibold text-emerald-600">{{ fmt(record.project_total_amount || 0) }}</span>
-              </template>
+            </template>
+            <!-- Expanded row: items detail -->
+            <template #expandedRowRender="{ record }">
+              <div class="px-4 py-3 bg-gray-50/50">
+                <div class="text-xs font-bold text-gray-500 mb-2">Chi tiết vật liệu</div>
+                <table class="w-full text-xs">
+                  <thead><tr class="border-b border-gray-200 text-gray-500">
+                    <th class="py-1.5 text-left font-medium">Vật liệu</th>
+                    <th class="py-1.5 text-center font-medium w-20">ĐVT</th>
+                    <th class="py-1.5 text-right font-medium w-24">Số lượng</th>
+                    <th class="py-1.5 text-right font-medium w-28">Đơn giá</th>
+                    <th class="py-1.5 text-right font-medium w-32">Thành tiền</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr v-for="item in (record.items || [])" :key="item.id" class="border-b border-gray-100 last:border-0">
+                      <td class="py-2">
+                        <div class="font-semibold text-gray-800">{{ item.material?.name || '—' }}</div>
+                        <div v-if="item.material?.code" class="text-[10px] text-gray-400 font-mono">{{ item.material.code }}</div>
+                      </td>
+                      <td class="py-2 text-center text-gray-500">{{ item.material?.unit || '—' }}</td>
+                      <td class="py-2 text-right font-medium text-blue-600">{{ fmtQty(item.quantity) }}</td>
+                      <td class="py-2 text-right text-gray-600">{{ fmt(item.unit_price) }}</td>
+                      <td class="py-2 text-right font-bold text-emerald-600">{{ fmt(item.total_price) }}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot><tr class="border-t-2 border-gray-300">
+                    <td colspan="4" class="py-2 text-right font-bold text-gray-700">Tổng cộng:</td>
+                    <td class="py-2 text-right font-bold text-emerald-700 text-sm">{{ fmt(record.total_amount) }}</td>
+                  </tr></tfoot>
+                </table>
+                <div v-if="record.notes" class="mt-2 text-xs text-gray-400 italic">📝 {{ record.notes }}</div>
+                <div v-if="record.rejected_reason" class="mt-2 p-2 bg-red-50 rounded-lg text-xs text-red-600">❌ Lý do từ chối: {{ record.rejected_reason }}</div>
+              </div>
             </template>
           </a-table>
-          <a-empty v-if="!projectMaterials?.length" description="Chưa có vật liệu nào được sử dụng" />
+          <a-empty v-if="!materialBills?.length" description="Chưa có phiếu nhập vật liệu" />
         </div>
       </a-tab-pane>
 
@@ -3189,161 +3276,134 @@
     </a-form>
   </a-modal>
 
-  <!-- ==================== MATERIAL BATCH MODAL (Premium UX) ==================== -->
-  <a-modal v-model:open="showMaterialModal" :width="740" :footer="null" centered destroy-on-close class="crm-modal material-modal" :bodyStyle="{ padding: 0 }">
+  <!-- ==================== MATERIAL BILL MODAL (Bill-based) ==================== -->
+  <a-modal v-model:open="showBillModal" :width="740" :footer="null" centered destroy-on-close class="crm-modal" :bodyStyle="{ padding: 0 }">
     <template #title>
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-200/50">
           <span class="text-white text-lg">🧱</span>
         </div>
         <div>
-          <div class="text-base font-bold text-gray-800">Thêm Vật Liệu Sử Dụng</div>
-          <div class="text-xs text-gray-400 font-normal">Chọn vật liệu, nhập số lượng & đơn giá → thêm vào danh sách → xác nhận</div>
+          <div class="text-base font-bold text-gray-800">Tạo Phiếu Nhập Vật Liệu</div>
+          <div class="text-xs text-gray-400 font-normal">Tạo bill nhập vật liệu → gửi duyệt BĐH → KT xác nhận thanh toán</div>
         </div>
       </div>
     </template>
 
     <div class="p-6 space-y-5">
+      <!-- Section 1: Bill Info -->
+      <a-form layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Ngày nhập" required class="mb-3">
+              <a-date-picker v-model:value="billForm.bill_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Nhà cung cấp" class="mb-3">
+              <a-select v-model:value="billForm.supplier_id" placeholder="Chọn NCC (tùy chọn)" size="large" class="w-full" allow-clear show-search option-filter-prop="label">
+                <a-select-option v-for="s in suppliers" :key="s.id" :value="s.id" :label="s.name">{{ s.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Nhóm chi phí" class="mb-3">
+              <a-select v-model:value="billForm.cost_group_id" placeholder="Chọn nhóm chi phí" size="large" class="w-full">
+                <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Ghi chú" class="mb-3">
+              <a-input v-model:value="billForm.notes" placeholder="Ghi chú (tùy chọn)" size="large" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
 
-      <!-- ── Section 1: Thông tin chung ── -->
-      <div class="mat-section">
-        <div class="mat-section-header">
-          <div class="mat-section-accent bg-gradient-to-b from-blue-400 to-blue-600"></div>
-          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Thông tin chung</span>
-        </div>
-        <a-form layout="vertical">
-          <a-row :gutter="16">
-            <a-col :span="12">
-              <a-form-item label="Ngày giao dịch" class="mb-0">
-                <a-date-picker v-model:value="matForm.transaction_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item class="mb-0">
-                <template #label>
-                  <span>Nhóm chi phí <span class="text-red-500">*</span></span>
-                </template>
-                <a-select v-model:value="matForm.cost_group_id" placeholder="Chọn nhóm chi phí" size="large" class="w-full">
-                  <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-          </a-row>
-        </a-form>
+      <!-- Section 2: Add item inline -->
+      <div class="border border-gray-200 rounded-xl p-4 bg-gray-50/50">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Thêm vật liệu vào phiếu</div>
+        <a-row :gutter="8" align="bottom">
+          <a-col :span="8">
+            <a-form-item label="Vật liệu" class="mb-2">
+              <a-select v-model:value="billItemForm.material_id" show-search option-filter-prop="label" placeholder="Chọn VL..." size="small" class="w-full" @change="onBillMaterialSelect">
+                <a-select-option v-for="m in materials" :key="m.id" :value="m.id" :label="m.name">{{ m.name }} <span class="text-gray-400 text-[10px]">({{ m.unit }})</span></a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="4">
+            <a-form-item label="Số lượng" class="mb-2">
+              <a-input-number v-model:value="billItemForm.quantity" :min="0.01" size="small" class="w-full" @change="calcBillItemTotal" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="5">
+            <a-form-item label="Đơn giá" class="mb-2">
+              <a-input-number v-model:value="billItemForm.unit_price" :min="0" size="small" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" @change="calcBillItemTotal" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="4">
+            <a-form-item label="Thành tiền" class="mb-2">
+              <div class="text-sm font-bold text-emerald-600 leading-8">{{ fmt(billItemForm.total_price) }}</div>
+            </a-form-item>
+          </a-col>
+          <a-col :span="3">
+            <a-form-item class="mb-2" label=" ">
+              <a-button type="primary" size="small" block @click="addBillItem" :disabled="!billItemForm.material_id || !billItemForm.quantity"><PlusOutlined /></a-button>
+            </a-form-item>
+          </a-col>
+        </a-row>
       </div>
 
-      <!-- ── Section 2: Chọn & nhập vật liệu ── -->
-      <div class="mat-section">
-        <div class="mat-section-header">
-          <div class="mat-section-accent bg-gradient-to-b from-emerald-400 to-emerald-600"></div>
-          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Thêm vật liệu</span>
-        </div>
-        <a-form layout="vertical">
-          <a-form-item label="Chọn vật liệu" class="mb-3">
-            <a-select v-model:value="matForm.material_id" show-search option-filter-prop="label" placeholder="🔍 Tìm và chọn vật liệu..." size="large" class="w-full" @change="onMaterialSelect">
-              <a-select-option v-for="m in materials" :key="m.id" :value="m.id" :label="m.name">
-                {{ m.name }} <span class="text-gray-400 text-xs">({{ m.code || 'N/A' }})</span>
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-row :gutter="12">
-            <a-col :span="8">
-              <a-form-item :label="'Số lượng' + (matFormSelected?.unit ? ` (${matFormSelected.unit})` : '')" class="mb-3">
-                <a-input-number v-model:value="matForm.quantity" :min="0.01" :step="1" size="large" class="w-full" @change="calcMatAmount" />
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="Đơn giá (VNĐ)" class="mb-3">
-                <a-input-number v-model:value="matForm.unit_price" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" @change="calcMatAmount" />
-                <div v-if="matFormSelected?.unit_price" class="text-[11px] text-blue-500 mt-1 flex items-center gap-1">
-                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                  Niêm yết: {{ new Intl.NumberFormat('vi-VN').format(matFormSelected.unit_price) }} đ
-                </div>
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item label="Thành tiền (VNĐ)" class="mb-3">
-                <a-input-number v-model:value="matForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" />
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <!-- Add to batch button -->
-          <a-button type="primary" block size="large" @click="addMaterialToBatch" :disabled="!matForm.material_id || !matForm.quantity || !matForm.amount" class="mat-add-btn">
-            <template #icon><PlusOutlined /></template>
-            Thêm vào danh sách
-          </a-button>
-        </a-form>
-      </div>
-
-      <!-- ── Section 3: Danh sách chờ (Batch) ── -->
-      <div class="mat-section">
-        <div class="mat-section-header">
-          <div class="mat-section-accent bg-gradient-to-b from-amber-400 to-amber-600"></div>
-          <div class="flex items-center justify-between flex-1">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Danh sách chờ
-              <a-badge v-if="materialBatchItems.length" :count="materialBatchItems.length" :number-style="{ backgroundColor: '#2563EB', fontSize: '10px', minWidth: '18px', height: '18px', lineHeight: '18px' }" class="ml-1.5" />
-            </span>
-            <a-button v-if="materialBatchItems.length" type="text" size="small" danger @click="materialBatchItems = []" class="text-xs">
-              <DeleteOutlined /> Xóa tất cả
-            </a-button>
-          </div>
-        </div>
-
-        <!-- Empty State -->
-        <div v-if="!materialBatchItems.length" class="mat-empty-state">
-          <div class="text-3xl mb-2 opacity-40">📦</div>
-          <div class="text-sm text-gray-400">Chưa có vật liệu nào</div>
-          <div class="text-xs text-gray-300">Chọn vật liệu ở trên và nhấn "Thêm vào danh sách"</div>
-        </div>
-
-        <!-- Batch Items -->
-        <TransitionGroup v-else name="mat-item" tag="div" class="space-y-1.5">
-          <div v-for="(bi, i) in materialBatchItems" :key="bi.material.id + '-' + i" class="mat-batch-item">
+      <!-- Section 3: Items list -->
+      <div v-if="billForm.items.length">
+        <div class="text-xs font-bold text-gray-500 mb-2">Danh sách vật liệu ({{ billForm.items.length }})</div>
+        <div class="space-y-1.5 max-h-[220px] overflow-y-auto">
+          <div v-for="(bi, i) in billForm.items" :key="i" class="flex items-center justify-between p-2.5 bg-white rounded-lg border border-gray-100 hover:border-blue-200 transition">
             <div class="flex items-center gap-3 flex-1 min-w-0">
-              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 flex items-center justify-center text-xs font-bold text-orange-500 flex-shrink-0">
-                {{ i + 1 }}
-              </div>
+              <div class="w-7 h-7 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-xs font-bold text-orange-500">{{ i + 1 }}</div>
               <div class="min-w-0 flex-1">
-                <div class="text-sm font-semibold text-gray-700 truncate">{{ bi.material.name }}</div>
-                <div class="text-xs text-gray-400">{{ bi.quantity }} {{ bi.material.unit }} × {{ new Intl.NumberFormat('vi-VN').format(bi.amount / bi.quantity) }} đ</div>
+                <div class="text-sm font-semibold text-gray-700 truncate">{{ bi._name }}</div>
+                <div class="text-xs text-gray-400">{{ fmtQty(bi.quantity) }} {{ bi._unit }} × {{ fmt(bi.unit_price) }}</div>
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-sm font-bold text-emerald-600 whitespace-nowrap">{{ fmt(bi.amount) }}</span>
-              <a-button type="text" size="small" danger @click="materialBatchItems.splice(i, 1)" class="mat-delete-btn">
-                <CloseOutlined class="text-xs" />
-              </a-button>
+              <span class="text-sm font-bold text-emerald-600 whitespace-nowrap">{{ fmt(bi.quantity * bi.unit_price) }}</span>
+              <a-button type="text" size="small" danger @click="billForm.items.splice(i, 1)"><CloseOutlined class="text-xs" /></a-button>
             </div>
           </div>
-        </TransitionGroup>
-
+        </div>
         <!-- Total -->
-        <div v-if="materialBatchItems.length" class="mat-batch-total">
-          <span class="text-sm font-semibold text-gray-600">Tổng cộng ({{ materialBatchItems.length }} vật liệu)</span>
-          <span class="text-base font-extrabold text-emerald-600">{{ fmt(materialBatchItems.reduce((s,i) => s + i.amount, 0)) }}</span>
+        <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-200">
+          <span class="text-sm font-semibold text-gray-600">Tổng cộng ({{ billForm.items.length }} vật liệu)</span>
+          <span class="text-base font-extrabold text-emerald-600">{{ fmt(billForm.items.reduce((s,i) => s + i.quantity * i.unit_price, 0)) }}</span>
         </div>
       </div>
-
-      <!-- ── Submit Button ── -->
-      <a-button
-        v-if="materialBatchItems.length"
-        type="primary"
-        block
-        size="large"
-        :loading="submittingMaterial"
-        @click="submitMaterialBatch"
-        :disabled="!matForm.cost_group_id"
-        class="mat-submit-btn"
-      >
-        <CheckOutlined /> Xác nhận & Đẩy qua chi phí
-        <a-badge :count="materialBatchItems.length" :number-style="{ backgroundColor: 'rgba(255,255,255,0.3)', color: '#fff', fontSize: '11px', marginLeft: '8px' }" />
-      </a-button>
-      <div v-if="materialBatchItems.length && !matForm.cost_group_id" class="text-center text-xs text-red-400 -mt-2">
-        ⚠️ Vui lòng chọn "Nhóm chi phí" ở trên để tiếp tục
+      <div v-else class="text-center py-6">
+        <div class="text-3xl mb-2 opacity-40">📦</div>
+        <div class="text-sm text-gray-400">Chưa có vật liệu</div>
+        <div class="text-xs text-gray-300">Chọn vật liệu ở trên và nhấn nút +</div>
       </div>
+
+      <!-- Submit -->
+      <a-button v-if="billForm.items.length" type="primary" block size="large" :loading="submittingBill" @click="submitCreateBill" :disabled="!billForm.bill_date">
+        <CheckOutlined /> Tạo phiếu nhập vật liệu
+      </a-button>
     </div>
   </a-modal>
+
+  <!-- Reject Bill Modal -->
+  <a-modal v-model:open="showRejectBillModal" title="Từ chối phiếu vật liệu" @ok="confirmRejectBill" ok-text="Từ chối" cancel-text="Hủy" centered :ok-button-props="{ danger: true }" class="crm-modal">
+    <a-form layout="vertical" class="mt-4">
+      <a-form-item label="Lý do từ chối" required>
+        <a-textarea v-model:value="rejectBillReason" :rows="3" placeholder="Nhập lý do từ chối..." />
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
+
 
   <!-- ==================== EQUIPMENT ALLOCATION MODAL ==================== -->
   <a-modal v-model:open="showEquipmentModal" title="Phân Bổ Thiết Bị" :width="600" @ok="submitEquipmentAllocation" ok-text="Phân bổ" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :confirm-loading="submittingEquipment">
@@ -3558,6 +3618,7 @@ import {
   UploadOutlined, DownloadOutlined, FileOutlined,
   UserOutlined, CalendarOutlined, EyeOutlined, CheckSquareOutlined,
   LinkOutlined, CameraOutlined, CheckCircleFilled, MoreOutlined,
+  SyncOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -3575,6 +3636,8 @@ const props = defineProps({
   acceptanceTemplates: { type: Array, default: () => [] },
   parentTasks: { type: Array, default: () => [] },
   projectMaterials: { type: Array, default: () => [] },
+  materialBills: { type: Array, default: () => [] },
+  suppliers: { type: Array, default: () => [] },
   projectEquipment: { type: Array, default: () => [] },
   allEquipment: { type: Array, default: () => [] },
 })
@@ -3625,6 +3688,7 @@ const activeRisks = computed(() => (props.project.risks || []).filter(r => r.sta
 const activeTab = ref('overview')
 const activeTabGroup = ref('overview')
 const costStatusFilter = ref('all')
+const costGroupFilter = ref(null)
 const commentText = ref('')
 
 // ============ UNIVERSAL LOADING SYSTEM ============
@@ -3786,10 +3850,33 @@ watch(activeTab, (tab) => {
 })
 
 const filteredCosts = computed(() => {
-  const costs = props.project.costs || []
-  if (costStatusFilter.value === 'all') return costs
-  if (costStatusFilter.value === 'pending') return costs.filter(c => ['pending_management_approval', 'pending_accountant_approval'].includes(c.status))
-  return costs.filter(c => c.status === costStatusFilter.value)
+  let costs = props.project.costs || []
+
+  // Status filter
+  if (costStatusFilter.value === 'pending') {
+    costs = costs.filter(c => ['pending_management_approval', 'pending_accountant_approval'].includes(c.status))
+  } else if (costStatusFilter.value !== 'all') {
+    costs = costs.filter(c => c.status === costStatusFilter.value)
+  }
+
+  // Group filter
+  const gf = costGroupFilter.value
+  if (gf && gf !== 'all') {
+    if (gf === '_vatlieu') {
+      costs = costs.filter(c => c.category === 'construction_materials')
+    } else if (gf === '_thietbi') {
+      costs = costs.filter(c => c.category === 'equipment')
+    } else if (gf === '_ntp') {
+      costs = costs.filter(c => c.subcontractor_id != null)
+    } else if (gf === '_other') {
+      costs = costs.filter(c => !['construction_materials', 'equipment'].includes(c.category) && !c.subcontractor_id)
+    } else {
+      // Filter by cost_group_id
+      costs = costs.filter(c => c.cost_group_id === gf)
+    }
+  }
+
+  return costs
 })
 
 // ============ GANTT/CPM STATE (Sprint 1) ============
@@ -5331,73 +5418,141 @@ watch(activeTab, (tab) => {
   if (tab === 'labor') { loadLaborDashboard(); loadLaborRecords() }
 })
 
-// ============ MATERIALS TAB (Giống APP) ============
+// ============ MATERIALS TAB — Bill-based tracking (Giống APP) ============
 const fmtQty = (v) => new Intl.NumberFormat('vi-VN').format(v)
-const totalMaterialCost = computed(() => (props.projectMaterials || []).reduce((s, m) => s + Number(m.project_total_amount || 0), 0))
+const totalBillAmount = computed(() => (props.materialBills || []).reduce((s, b) => s + Number(b.total_amount || 0), 0))
 
-const materialCols = [
-  { title: 'Vật liệu', key: 'name', dataIndex: 'name' },
-  { title: 'Sử dụng', key: 'usage', width: 120, align: 'center' },
-  { title: 'Lần dùng', key: 'transactions', width: 90, align: 'center' },
+const billCols = [
+  { title: 'Mã phiếu', key: 'bill_number', width: 130 },
+  { title: 'Nhà cung cấp', key: 'supplier' },
+  { title: 'Mặt hàng', key: 'items_count', width: 100, align: 'center' },
   { title: 'Tổng tiền', key: 'total', width: 150, align: 'right' },
+  { title: 'Trạng thái', key: 'status', width: 140, align: 'center' },
+  { title: '', key: 'actions', width: 220, align: 'right' },
 ]
 
+const billStatusLabel = (s) => ({
+  draft: 'Nháp', pending_management: 'Chờ BĐH', pending_accountant: 'Chờ KT', approved: 'Đã duyệt', rejected: 'Từ chối'
+}[s] || s)
+const billStatusColor = (s) => ({
+  draft: 'default', pending_management: 'processing', pending_accountant: 'warning', approved: 'success', rejected: 'error'
+}[s] || 'default')
+
+const billExpandedRow = () => null // handled in template
+
+// ---- Sync Material Bill Costs (retroactive fix) ----
+const syncingMaterialCosts = ref(false)
+const syncMaterialBillCosts = () => {
+  syncingMaterialCosts.value = true
+  router.post(`/projects/${props.project.id}/material-bills/sync-costs`, {}, {
+    preserveScroll: true,
+    onFinish: () => { syncingMaterialCosts.value = false },
+  })
+}
+
+// ---- Bill Creation Modal ----
+const showBillModal = ref(false)
+const submittingBill = ref(false)
+const billForm = ref({ bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [] })
+const billItemForm = ref({ material_id: null, quantity: 1, unit_price: 0, total_price: 0 })
+
+const openBillModal = () => {
+  billForm.value = { bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [] }
+  billItemForm.value = { material_id: null, quantity: 1, unit_price: 0, total_price: 0 }
+  showBillModal.value = true
+}
+
+const onBillMaterialSelect = (id) => {
+  const m = (props.materials || []).find(x => x.id === id)
+  if (m && m.unit_price) {
+    billItemForm.value.unit_price = m.unit_price
+    billItemForm.value.total_price = billItemForm.value.quantity * m.unit_price
+  }
+}
+
+const calcBillItemTotal = () => {
+  billItemForm.value.total_price = (billItemForm.value.quantity || 0) * (billItemForm.value.unit_price || 0)
+}
+
+const addBillItem = () => {
+  const m = (props.materials || []).find(x => x.id === billItemForm.value.material_id)
+  if (!m) return
+  billForm.value.items.push({
+    material_id: m.id,
+    quantity: billItemForm.value.quantity,
+    unit_price: billItemForm.value.unit_price,
+    _name: m.name,
+    _unit: m.unit || '',
+  })
+  billItemForm.value = { material_id: null, quantity: 1, unit_price: 0, total_price: 0 }
+}
+
+const submitCreateBill = () => {
+  if (!billForm.value.items.length || !billForm.value.bill_date) return
+  submittingBill.value = true
+  router.post(`/projects/${props.project.id}/material-bills`, {
+    bill_date: billForm.value.bill_date,
+    supplier_id: billForm.value.supplier_id || undefined,
+    cost_group_id: billForm.value.cost_group_id || undefined,
+    notes: billForm.value.notes || undefined,
+    items: billForm.value.items.map(i => ({
+      material_id: i.material_id,
+      quantity: i.quantity,
+      unit_price: i.unit_price,
+    })),
+  }, {
+    onSuccess: () => { showBillModal.value = false },
+    onFinish: () => { submittingBill.value = false },
+  })
+}
+
+// ---- Bill Workflow Actions ----
+const submitBill = (bill) => {
+  router.post(`/projects/${props.project.id}/material-bills/${bill.id}/submit`, {}, { preserveScroll: true })
+}
+
+const approveBillManagement = (bill) => {
+  router.post(`/projects/${props.project.id}/material-bills/${bill.id}/approve-management`, {}, { preserveScroll: true })
+}
+
+const approveBillAccountant = (bill) => {
+  router.post(`/projects/${props.project.id}/material-bills/${bill.id}/approve-accountant`, {}, { preserveScroll: true })
+}
+
+const deleteBill = (bill) => {
+  router.delete(`/projects/${props.project.id}/material-bills/${bill.id}`, { preserveScroll: true })
+}
+
+// ---- Reject Bill ----
+const showRejectBillModal = ref(false)
+const rejectBillReason = ref('')
+const rejectingBill = ref(null)
+
+const openRejectBillModal = (bill) => {
+  rejectingBill.value = bill
+  rejectBillReason.value = ''
+  showRejectBillModal.value = true
+}
+
+const confirmRejectBill = () => {
+  if (!rejectingBill.value || !rejectBillReason.value.trim()) return
+  router.post(`/projects/${props.project.id}/material-bills/${rejectingBill.value.id}/reject`, {
+    rejected_reason: rejectBillReason.value,
+  }, {
+    preserveScroll: true,
+    onSuccess: () => { showRejectBillModal.value = false },
+  })
+}
+
+// Keep old refs for backward compatibility (won't break anything)
 const showMaterialModal = ref(false)
 const materialBatchItems = ref([])
 const submittingMaterial = ref(false)
 const matForm = ref({ material_id: null, quantity: 1, unit_price: 0, amount: 0, notes: '', transaction_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null })
 const matFormSelected = computed(() => (props.materials || []).find(m => m.id === matForm.value.material_id))
+const totalMaterialCost = computed(() => 0)
+const materialCols = []
 
-const openMaterialModal = () => {
-  matForm.value = { material_id: null, quantity: 1, unit_price: 0, amount: 0, notes: '', transaction_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null }
-  materialBatchItems.value = []
-  showMaterialModal.value = true
-}
-
-const onMaterialSelect = (id) => {
-  const m = (props.materials || []).find(x => x.id === id)
-  if (m && m.unit_price) {
-    matForm.value.unit_price = m.unit_price
-    matForm.value.amount = matForm.value.quantity * m.unit_price
-  } else {
-    matForm.value.unit_price = 0
-    matForm.value.amount = 0
-  }
-}
-
-const calcMatAmount = () => {
-  matForm.value.amount = (matForm.value.quantity || 0) * (matForm.value.unit_price || 0)
-}
-
-const addMaterialToBatch = () => {
-  const m = (props.materials || []).find(x => x.id === matForm.value.material_id)
-  if (!m) return
-  materialBatchItems.value.push({
-    material: m,
-    quantity: matForm.value.quantity,
-    amount: matForm.value.amount,
-    notes: matForm.value.notes,
-  })
-  matForm.value = { ...matForm.value, material_id: null, quantity: 1, unit_price: 0, amount: 0, notes: '' }
-}
-
-const submitMaterialBatch = () => {
-  if (!materialBatchItems.value.length || !matForm.value.cost_group_id) return
-  submittingMaterial.value = true
-  router.post(`/projects/${props.project.id}/materials/batch`, {
-    transaction_date: matForm.value.transaction_date,
-    cost_group_id: matForm.value.cost_group_id,
-    items: materialBatchItems.value.map(b => ({
-      material_id: b.material.id,
-      quantity: b.quantity,
-      amount: b.amount,
-      notes: b.notes || undefined,
-    })),
-  }, {
-    onSuccess: () => { showMaterialModal.value = false; materialBatchItems.value = [] },
-    onFinish: () => { submittingMaterial.value = false },
-  })
-}
 
 // ============ EQUIPMENT TAB (Giống APP) ============
 const eqStatusLabel = (s) => ({ available: 'Sẵn sàng', in_use: 'Đang dùng', maintenance: 'Bảo trì', retired: 'Ngừng dùng' }[s] || s)
