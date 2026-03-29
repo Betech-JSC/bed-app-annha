@@ -42,8 +42,20 @@
     </div>
   </div>
 
-  <!-- Tabs -->
+  <!-- Tab Navigation Groups -->
   <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+    <!-- Tab Group Navigation -->
+    <div class="flex items-center gap-1 px-4 pt-3 pb-2 border-b border-gray-100 bg-gray-50/50 flex-wrap">
+      <a-button size="small" :type="activeTabGroup === 'overview' ? 'primary' : 'text'" @click="activeTabGroup = 'overview'; activeTab = 'overview'" class="rounded-lg text-xs font-semibold">📊 Tổng quan</a-button>
+      <a-button size="small" :type="activeTabGroup === 'schedule' ? 'primary' : 'text'" @click="activeTabGroup = 'schedule'; activeTab = 'gantt'" class="rounded-lg text-xs font-semibold">📅 Kế hoạch</a-button>
+      <a-divider type="vertical" />
+      <a-button size="small" :type="activeTabGroup === 'finance' ? 'primary' : 'text'" @click="activeTabGroup = 'finance'; activeTab = 'contract'" class="rounded-lg text-xs font-semibold">💰 Tài Chính</a-button>
+      <a-button size="small" :type="activeTabGroup === 'expense' ? 'primary' : 'text'" @click="activeTabGroup = 'expense'; activeTab = 'materials'" class="rounded-lg text-xs font-semibold">🏗️ Chi Phí</a-button>
+      <a-button size="small" :type="activeTabGroup === 'monitor' ? 'primary' : 'text'" @click="activeTabGroup = 'monitor'; activeTab = 'logs'" class="rounded-lg text-xs font-semibold">📋 Giám sát</a-button>
+      <a-button size="small" :type="activeTabGroup === 'hr' ? 'primary' : 'text'" @click="activeTabGroup = 'hr'; activeTab = 'attendance'" class="rounded-lg text-xs font-semibold">👥 Nhân sự</a-button>
+      <a-divider type="vertical" />
+      <a-button size="small" :type="activeTabGroup === 'other' ? 'primary' : 'text'" @click="activeTabGroup = 'other'; activeTab = 'documents'" class="rounded-lg text-xs font-semibold">📁 Khác</a-button>
+    </div>
     <a-tabs v-model:activeKey="activeTab" class="crm-detail-tabs">
 
       <!-- ============ OVERVIEW TAB ============ -->
@@ -677,17 +689,25 @@
         </div>
       </a-tab-pane>
 
-      <!-- ============ COSTS TAB ============ -->
+      <!-- ============ COSTS TAB (Renamed to Phiếu chi) ============ -->
       <a-tab-pane key="costs">
-        <template #tab><a-tooltip title="Quản lý phiếu chi: tạo, gửi duyệt BĐH → KT xác nhận, đính kèm chứng từ" placement="bottom">Chi phí ({{ project.costs?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý phiếu chi: tạo, gửi duyệt BĐH → KT xác nhận, đính kèm chứng từ" placement="bottom">Phiếu chi ({{ project.costs?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
+          <!-- Status-based sub-tabs for Phiếu chi -->
+          <div class="flex gap-2 mb-3 flex-wrap">
+            <a-button :type="costStatusFilter === 'all' ? 'primary' : 'default'" size="small" @click="costStatusFilter = 'all'">Tất cả ({{ project.costs?.length || 0 }})</a-button>
+            <a-button :type="costStatusFilter === 'draft' ? 'primary' : 'default'" size="small" @click="costStatusFilter = 'draft'">Nháp ({{ (project.costs || []).filter(c => c.status === 'draft').length }})</a-button>
+            <a-button :type="costStatusFilter === 'pending' ? 'primary' : 'default'" size="small" @click="costStatusFilter = 'pending'">Chờ duyệt ({{ (project.costs || []).filter(c => ['pending_management_approval','pending_accountant_approval'].includes(c.status)).length }})</a-button>
+            <a-button :type="costStatusFilter === 'approved' ? 'primary' : 'default'" size="small" @click="costStatusFilter = 'approved'">Đã duyệt ({{ (project.costs || []).filter(c => c.status === 'approved').length }})</a-button>
+            <a-button :type="costStatusFilter === 'rejected' ? 'primary' : 'default'" size="small" danger ghost @click="costStatusFilter = 'rejected'">Từ chối ({{ (project.costs || []).filter(c => c.status === 'rejected').length }})</a-button>
+          </div>
           <div class="flex items-center justify-between mb-3">
             <div class="text-sm text-gray-400">Tổng: <span class="font-bold text-red-500">{{ fmt(totalCosts) }}</span></div>
             <a-button v-if="can('cost.create')" type="primary" size="small" @click="openCostModal(null)">
               <template #icon><PlusOutlined /></template>Thêm chi phí
             </a-button>
           </div>
-          <a-table :columns="costCols" :data-source="project.costs || []" :pagination="{ pageSize: 10, showTotal: (t) => `${t} phiếu` }" row-key="id" size="small" class="crm-table">
+          <a-table :columns="costCols" :data-source="filteredCosts" :pagination="{ pageSize: 10, showTotal: (t) => `${t} phiếu` }" row-key="id" size="small" class="crm-table">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'amount'"><span class="font-semibold text-red-500">{{ fmt(record.amount) }}</span></template>
               <template v-else-if="column.key === 'status'">
@@ -698,13 +718,13 @@
               <template v-else-if="column.key === 'actions'">
                 <div class="flex gap-1">
                   <a-tooltip v-if="record.status === 'draft' && can('cost.submit')" title="Gửi duyệt">
-                    <a-button type="text" size="small" @click="submitCost(record)"><SendOutlined class="text-blue-500" /></a-button>
+                    <a-button type="text" size="small" :loading="actionLoading[`submit-cost-${record.id}`]" @click="submitCostWithLoading(record)"><SendOutlined class="text-blue-500" /></a-button>
                   </a-tooltip>
                   <a-tooltip v-if="record.status === 'pending_management_approval' && can('cost.approve.management')" title="Duyệt (BĐH)">
-                    <a-button type="text" size="small" @click="approveCostMgmt(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
+                    <a-button type="text" size="small" :loading="actionLoading[`approve-cost-mgmt-${record.id}`]" @click="approveCostMgmtWithLoading(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
                   </a-tooltip>
                   <a-tooltip v-if="record.status === 'pending_accountant_approval' && can('cost.approve.accountant')" title="Xác nhận (KT)">
-                    <a-button type="text" size="small" @click="approveCostAcct(record)"><CheckCircleOutlined class="text-green-600" /></a-button>
+                    <a-button type="text" size="small" :loading="actionLoading[`approve-cost-acct-${record.id}`]" @click="approveCostAcctWithLoading(record)"><CheckCircleOutlined class="text-green-600" /></a-button>
                   </a-tooltip>
                   <a-tooltip v-if="['pending_management_approval','pending_accountant_approval'].includes(record.status) && can('cost.reject')" title="Từ chối">
                     <a-button type="text" size="small" danger @click="openRejectCostModal(record)"><CloseCircleOutlined /></a-button>
@@ -1202,7 +1222,7 @@
               <template v-else-if="column.key === 'actions'">
                 <div class="flex gap-1">
                   <a-tooltip v-if="record.status === 'pending_approval' && can('additional_cost.approve')" title="Duyệt">
-                    <a-button type="text" size="small" @click="approveAC(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
+                    <a-button type="text" size="small" :loading="actionLoading[`approve-ac-${record.id}`]" @click="approveACWithLoading(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
                   </a-tooltip>
                   <a-tooltip v-if="record.status === 'pending_approval' && can('additional_cost.reject')" title="Từ chối">
                     <a-button type="text" size="small" danger @click="openRejectACModal(record)"><CloseCircleOutlined /></a-button>
@@ -1903,7 +1923,7 @@
               <template v-if="column.key === 'name'">
                 <div class="flex items-center gap-2">
                   <FileOutlined class="text-blue-400" />
-                  <a :href="record.file_url" target="_blank" class="text-blue-600 hover:underline">{{ record.original_name || record.file_name }}</a>
+                  <a href="#" @click.prevent="openFilePreview(record)" class="text-blue-600 hover:underline">{{ record.original_name || record.file_name }}</a>
                 </div>
               </template>
               <template v-else-if="column.key === 'size'">{{ formatFileSize(record.file_size) }}</template>
@@ -1925,6 +1945,30 @@
 
     </a-tabs>
   </div>
+
+  <!-- ==================== FILE PREVIEW MODAL ==================== -->
+  <a-modal v-model:open="showFilePreview" :title="previewFile?.original_name || previewFile?.file_name || 'Xem file'" :width="900" :footer="null" centered destroy-on-close class="crm-modal">
+    <div v-if="previewFile" class="flex flex-col items-center">
+      <!-- Image preview -->
+      <template v-if="isImageFile(previewFile)">
+        <img :src="previewFile.file_url" :alt="previewFile.original_name" class="max-w-full max-h-[70vh] rounded-lg shadow" />
+      </template>
+      <!-- PDF preview -->
+      <template v-else-if="isPdfFile(previewFile)">
+        <iframe :src="previewFile.file_url" class="w-full h-[70vh] rounded-lg border" />
+      </template>
+      <!-- Other files: download link -->
+      <template v-else>
+        <div class="text-center py-12">
+          <FileOutlined class="text-5xl text-gray-300 mb-4" />
+          <p class="text-gray-500 mb-4">Không thể xem trực tiếp loại file này</p>
+          <a :href="previewFile.file_url" target="_blank">
+            <a-button type="primary"><DownloadOutlined /> Tải xuống</a-button>
+          </a>
+        </div>
+      </template>
+    </div>
+  </a-modal>
 
   <!-- ==================== MODALS ==================== -->
 
@@ -3082,7 +3126,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, reactive } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import { message } from 'ant-design-vue'
@@ -3158,7 +3202,31 @@ const activeRisks = computed(() => (props.project.risks || []).filter(r => r.sta
 
 // ============ STATE ============
 const activeTab = ref('overview')
+const activeTabGroup = ref('overview')
+const costStatusFilter = ref('all')
 const commentText = ref('')
+const actionLoading = reactive({})
+
+// Map activeTab to correct group
+watch(activeTab, (tab) => {
+  const groupMap = {
+    overview: 'overview',
+    gantt: 'schedule', progress: 'schedule',
+    contract: 'finance', payments: 'finance', costs: 'finance', invoices: 'finance', finance: 'finance', budgets: 'finance', additional_costs: 'finance',
+    materials: 'expense', equipment: 'expense', subcontractors: 'expense',
+    logs: 'monitor', acceptance: 'monitor', defects: 'monitor', change_requests: 'monitor', risks: 'monitor', comments: 'monitor',
+    attendance: 'hr', labor: 'hr', personnel: 'hr',
+    documents: 'other',
+  }
+  activeTabGroup.value = groupMap[tab] || 'overview'
+})
+
+const filteredCosts = computed(() => {
+  const costs = props.project.costs || []
+  if (costStatusFilter.value === 'all') return costs
+  if (costStatusFilter.value === 'pending') return costs.filter(c => ['pending_management_approval', 'pending_accountant_approval'].includes(c.status))
+  return costs.filter(c => c.status === costStatusFilter.value)
+})
 
 // ============ GANTT/CPM STATE (Sprint 1) ============
 const ganttView = ref('chart')
@@ -3550,6 +3618,37 @@ const rejectCost = () => { router.post(`/projects/${props.project.id}/costs/${re
 const showContractModal = ref(false)
 const editingContract = ref(null)
 const contractForm = ref({ contract_value: null, signed_date: null, status: 'draft' })
+const submitCostWithLoading = (record) => {
+  actionLoading[`submit-cost-${record.id}`] = true
+  submitCost(record)
+  setTimeout(() => { actionLoading[`submit-cost-${record.id}`] = false }, 3000)
+}
+const approveCostMgmtWithLoading = (record) => {
+  actionLoading[`approve-cost-mgmt-${record.id}`] = true
+  approveCostMgmt(record)
+  setTimeout(() => { actionLoading[`approve-cost-mgmt-${record.id}`] = false }, 3000)
+}
+const approveCostAcctWithLoading = (record) => {
+  actionLoading[`approve-cost-acct-${record.id}`] = true
+  approveCostAcct(record)
+  setTimeout(() => { actionLoading[`approve-cost-acct-${record.id}`] = false }, 3000)
+}
+const approveACWithLoading = (record) => {
+  actionLoading[`approve-ac-${record.id}`] = true
+  approveAC(record)
+  setTimeout(() => { actionLoading[`approve-ac-${record.id}`] = false }, 3000)
+}
+
+// ============ FILE PREVIEW ============
+const showFilePreview = ref(false)
+const previewFile = ref(null)
+const openFilePreview = (file) => {
+  previewFile.value = file
+  showFilePreview.value = true
+}
+const isImageFile = (f) => /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(f.original_name || f.file_name || '')
+const isPdfFile = (f) => /\.pdf$/i.test(f.original_name || f.file_name || '')
+
 const openContractModal = (c) => {
   editingContract.value = c
   modalFiles.value = []

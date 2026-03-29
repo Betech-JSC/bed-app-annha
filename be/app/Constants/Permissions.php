@@ -185,6 +185,7 @@ class Permissions
     public const LOG_CREATE = 'log.create';
     public const LOG_UPDATE = 'log.update';
     public const LOG_DELETE = 'log.delete';
+    public const LOG_APPROVE = 'log.approve';
 
     // ===================================================================
     // DEFECT MODULE
@@ -507,6 +508,7 @@ class Permissions
             self::LOG_CREATE,
             self::LOG_UPDATE,
             self::LOG_DELETE,
+            self::LOG_APPROVE,
 
             // Defect
             self::DEFECT_VIEW,
@@ -773,6 +775,7 @@ class Permissions
                 self::LOG_CREATE,
                 self::LOG_UPDATE,
                 self::LOG_DELETE,
+                self::LOG_APPROVE,
             ],
             'defect' => [
                 self::DEFECT_VIEW,

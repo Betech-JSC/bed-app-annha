@@ -223,6 +223,9 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/payments', [CrmProjectsController::class, 'storePayment'])->name('payments.store');
         Route::put('/{project}/payments/{payment}', [CrmProjectsController::class, 'updatePayment'])->name('payments.update');
         Route::post('/{project}/payments/{payment}/mark-paid', [CrmProjectsController::class, 'markPaymentPaidByCustomer'])->name('payments.mark-paid');
+        Route::post('/{project}/payments/{payment}/upload-proof', [CrmProjectsController::class, 'uploadPaymentProof'])->name('payments.upload-proof');
+        Route::post('/{project}/payments/{payment}/customer-approve', [CrmProjectsController::class, 'approvePaymentByCustomer'])->name('payments.customer-approve');
+        Route::post('/{project}/payments/{payment}/customer-reject', [CrmProjectsController::class, 'rejectPaymentByCustomer'])->name('payments.customer-reject');
         Route::post('/{project}/payments/{payment}/confirm', [CrmProjectsController::class, 'confirmPayment'])->name('payments.confirm');
         Route::post('/{project}/payments/{payment}/reject', [CrmProjectsController::class, 'rejectPayment'])->name('payments.reject');
         Route::delete('/{project}/payments/{payment}', [CrmProjectsController::class, 'destroyPayment'])->name('payments.destroy');
@@ -235,7 +238,9 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Construction Logs
         Route::post('/{project}/logs', [CrmProjectsController::class, 'storeLog'])->name('logs.store');
         Route::put('/{project}/logs/{log}', [CrmProjectsController::class, 'updateLog'])->name('logs.update');
+        Route::post('/{project}/logs/{log}/approve', [CrmProjectsController::class, 'approveLog'])->name('logs.approve');
         Route::delete('/{project}/logs/{log}', [CrmProjectsController::class, 'destroyLog'])->name('logs.destroy');
+        Route::post('/{project}/logs/{log}/attach-files', [CrmProjectsController::class, 'attachFilesToLog'])->name('logs.attach-files');
 
         // Comments
         Route::post('/{project}/comments', [CrmProjectsController::class, 'storeComment'])->name('comments.store');
@@ -279,6 +284,11 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::delete('/{project}/subcontractors/{sub}', [CrmProjectsController::class, 'destroySubcontractor'])->name('subcontractors.destroy');
         Route::post('/{project}/subcontractors/{sub}/attach-files', [CrmProjectsController::class, 'attachFilesToSubcontractor'])->name('subcontractors.attach-files');
 
+        // Subcontractor Items (matching APP SubcontractorItemController)
+        Route::post('/{project}/subcontractors/{sub}/items', [CrmProjectsController::class, 'storeSubcontractorItem'])->name('subcontractors.items.store');
+        Route::put('/{project}/subcontractors/{sub}/items/{item}', [CrmProjectsController::class, 'updateSubcontractorItem'])->name('subcontractors.items.update');
+        Route::delete('/{project}/subcontractors/{sub}/items/{item}', [CrmProjectsController::class, 'destroySubcontractorItem'])->name('subcontractors.items.destroy');
+
         // Subcontractor Payments
         Route::post('/{project}/subcontractors/{sub}/payments', [CrmProjectsController::class, 'storeSubPayment'])->name('subcontractors.payments.store');
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/submit', [CrmProjectsController::class, 'submitSubPayment'])->name('subcontractors.payments.submit');
@@ -310,6 +320,18 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::put('/{project}/acceptance/{stage}', [CrmProjectsController::class, 'updateAcceptance'])->name('acceptance.update');
         Route::post('/{project}/acceptance/{stage}/approve', [CrmProjectsController::class, 'approveAcceptance'])->name('acceptance.approve');
         Route::delete('/{project}/acceptance/{stage}', [CrmProjectsController::class, 'destroyAcceptance'])->name('acceptance.destroy');
+        Route::post('/{project}/acceptance/{stage}/attach-files', [CrmProjectsController::class, 'attachFilesToAcceptance'])->name('acceptance.attach-files');
+
+        // Acceptance Items (matching APP AcceptanceItemController)
+        Route::post('/{project}/acceptance/{stage}/items', [CrmProjectsController::class, 'storeAcceptanceItem'])->name('acceptance.items.store');
+        Route::put('/{project}/acceptance/{stage}/items/{item}', [CrmProjectsController::class, 'updateAcceptanceItem'])->name('acceptance.items.update');
+        Route::delete('/{project}/acceptance/{stage}/items/{item}', [CrmProjectsController::class, 'destroyAcceptanceItem'])->name('acceptance.items.destroy');
+        Route::post('/{project}/acceptance/{stage}/items/{item}/submit', [CrmProjectsController::class, 'submitAcceptanceItem'])->name('acceptance.items.submit');
+        Route::post('/{project}/acceptance/{stage}/items/{item}/approve-supervisor', [CrmProjectsController::class, 'approveAcceptanceItemSupervisor'])->name('acceptance.items.approve.supervisor');
+        Route::post('/{project}/acceptance/{stage}/items/{item}/approve-pm', [CrmProjectsController::class, 'approveAcceptanceItemPM'])->name('acceptance.items.approve.pm');
+        Route::post('/{project}/acceptance/{stage}/items/{item}/approve-customer', [CrmProjectsController::class, 'approveAcceptanceItemCustomer'])->name('acceptance.items.approve.customer');
+        Route::post('/{project}/acceptance/{stage}/items/{item}/reject', [CrmProjectsController::class, 'rejectAcceptanceItem'])->name('acceptance.items.reject');
+        Route::post('/{project}/acceptance/{stage}/items/{item}/attach-files', [CrmProjectsController::class, 'attachFilesToAcceptanceItem'])->name('acceptance.items.attach-files');
 
         // Documents
         Route::post('/{project}/documents', [CrmProjectsController::class, 'storeDocument'])->name('documents.store');
@@ -322,6 +344,20 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Project Equipment (allocation — matching mobile APP)
         Route::post('/{project}/equipment/allocate', [CrmProjectsController::class, 'storeEquipmentAllocation'])->name('equipment.allocate');
         Route::post('/{project}/equipment/{allocation}/return', [CrmProjectsController::class, 'returnEquipment'])->name('equipment.return');
+
+        // Material Bills (matching APP MaterialBillController)
+        Route::post('/{project}/material-bills', [CrmProjectsController::class, 'storeMaterialBill'])->name('material-bills.store');
+        Route::put('/{project}/material-bills/{bill}', [CrmProjectsController::class, 'updateMaterialBill'])->name('material-bills.update');
+        Route::delete('/{project}/material-bills/{bill}', [CrmProjectsController::class, 'destroyMaterialBill'])->name('material-bills.destroy');
+        Route::post('/{project}/material-bills/{bill}/submit', [CrmProjectsController::class, 'submitMaterialBill'])->name('material-bills.submit');
+        Route::post('/{project}/material-bills/{bill}/approve-management', [CrmProjectsController::class, 'approveMaterialBillManagement'])->name('material-bills.approve.management');
+        Route::post('/{project}/material-bills/{bill}/approve-accountant', [CrmProjectsController::class, 'approveMaterialBillAccountant'])->name('material-bills.approve.accountant');
+        Route::post('/{project}/material-bills/{bill}/reject', [CrmProjectsController::class, 'rejectMaterialBill'])->name('material-bills.reject');
+
+        // Material Quotas (matching APP MaterialQuotaController)
+        Route::post('/{project}/material-quotas', [CrmProjectsController::class, 'storeMaterialQuota'])->name('material-quotas.store');
+        Route::put('/{project}/material-quotas/{quota}', [CrmProjectsController::class, 'updateMaterialQuota'])->name('material-quotas.update');
+        Route::delete('/{project}/material-quotas/{quota}', [CrmProjectsController::class, 'destroyMaterialQuota'])->name('material-quotas.destroy');
     });
 
     // HR
