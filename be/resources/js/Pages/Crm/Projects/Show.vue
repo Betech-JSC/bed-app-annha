@@ -1,65 +1,78 @@
 <template>
   <Head :title="`Dự án: ${project.name}`" />
 
-  <!-- Project Header -->
-  <div class="flex items-start justify-between mb-6">
-    <div>
-      <div class="flex items-center gap-3 mb-1">
-        <a-button type="text" @click="router.visit('/projects')"><ArrowLeftOutlined /></a-button>
-        <h1 class="text-2xl font-extrabold text-gray-800">{{ project.name }}</h1>
-        <a-tag :color="statusColors[project.status]" class="rounded-full text-sm">{{ statusLabels[project.status] }}</a-tag>
+  <!-- Project Header (Compact Premium) -->
+  <div class="bg-white rounded-2xl border border-gray-100 p-5 mb-5 shadow-sm">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4 min-w-0 flex-1">
+        <a-button type="text" size="small" @click="router.visit('/projects')" class="flex-shrink-0"><ArrowLeftOutlined /></a-button>
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-200/50 flex-shrink-0">
+          <span class="text-white text-lg font-bold">{{ (project.name || '?')[0] }}</span>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-xl font-extrabold text-gray-800 truncate">{{ project.name }}</h1>
+            <a-tag :color="statusColors[project.status]" class="rounded-full text-xs flex-shrink-0">{{ statusLabels[project.status] }}</a-tag>
+          </div>
+          <div class="text-xs text-gray-400 mt-0.5 truncate">{{ project.code }} — {{ project.description || 'Chưa có mô tả' }}</div>
+        </div>
       </div>
-      <div class="text-sm text-gray-400 ml-10">{{ project.code }} — {{ project.description || 'Chưa có mô tả' }}</div>
-    </div>
-    <div class="flex gap-2">
-      <a-button v-if="can('project.update')" @click="openEditProject">
+      <a-button v-if="can('project.update')" @click="openEditProject" class="flex-shrink-0">
         <template #icon><EditOutlined /></template>Sửa
       </a-button>
     </div>
+
+    <!-- Quick Stats Bar (Inline, compact) -->
+    <div class="flex items-center gap-1 mt-4 pt-4 border-t border-gray-100 overflow-x-auto">
+      <div class="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100/60 min-w-fit">
+        <span class="text-xs text-gray-500">Giá trị HĐ</span>
+        <span class="text-sm font-bold text-gray-800">{{ fmt(project.contract?.contract_value) }}</span>
+      </div>
+      <div class="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-red-50 to-orange-50 rounded-xl border border-red-100/60 min-w-fit">
+        <span class="text-xs text-gray-500">Chi phí</span>
+        <span class="text-sm font-bold text-red-500">{{ fmt(totalCosts) }}</span>
+      </div>
+      <div class="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-100/60 min-w-fit">
+        <span class="text-xs text-gray-500">Lợi nhuận</span>
+        <span class="text-sm font-bold" :class="profitMargin >= 0 ? 'text-emerald-600' : 'text-red-500'">{{ profitMargin >= 0 ? '+' : '' }}{{ profitMargin.toFixed(1) }}%</span>
+      </div>
+      <div class="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100/60 min-w-fit">
+        <span class="text-xs text-gray-500">Tiến độ</span>
+        <span class="text-sm font-bold text-blue-600">{{ project.progress?.overall_percentage || 0 }}%</span>
+        <div class="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div class="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-700" :style="{ width: (project.progress?.overall_percentage || 0) + '%' }"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 px-3.5 py-2 bg-gray-50 rounded-xl border border-gray-100 min-w-fit">
+        <span class="text-xs text-gray-500">Nhân sự</span>
+        <span class="text-sm font-bold text-gray-700">{{ project.personnel?.length || 0 }}</span>
+      </div>
+      <div class="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100/60 min-w-fit" v-if="(project.defects?.length || 0) + (project.risks?.length || 0) > 0">
+        <span class="text-xs text-gray-500">Lỗi/Rủi ro</span>
+        <span class="text-sm font-bold text-amber-600">{{ project.defects?.length || 0 }}/{{ project.risks?.length || 0 }}</span>
+      </div>
+    </div>
   </div>
 
-  <!-- Quick Stats -->
-  <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-    <div class="bg-white rounded-xl p-4 border border-gray-100">
-      <div class="text-xs text-gray-400">Giá trị HĐ</div>
-      <div class="text-lg font-bold text-gray-800">{{ fmt(project.contract?.contract_value) }}</div>
-    </div>
-    <div class="bg-white rounded-xl p-4 border border-gray-100">
-      <div class="text-xs text-gray-400">Chi phí</div>
-      <div class="text-lg font-bold text-red-500">{{ fmt(totalCosts) }}</div>
-    </div>
-    <div class="bg-white rounded-xl p-4 border border-gray-100">
-      <div class="text-xs text-gray-400">Tiến độ</div>
-      <div class="text-lg font-bold text-blue-600">{{ project.progress?.overall_percentage || 0 }}%</div>
-    </div>
-    <div class="bg-white rounded-xl p-4 border border-gray-100">
-      <div class="text-xs text-gray-400">Nhân sự</div>
-      <div class="text-lg font-bold">{{ project.personnel?.length || 0 }}</div>
-    </div>
-    <div class="bg-white rounded-xl p-4 border border-gray-100">
-      <div class="text-xs text-gray-400">Lỗi / Rủi ro</div>
-      <div class="text-lg font-bold text-amber-600">{{ project.defects?.length || 0 }} / {{ project.risks?.length || 0 }}</div>
-    </div>
-  </div>
-
-  <!-- Tab Navigation Groups -->
-  <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-    <!-- Tab Group Navigation -->
-    <div class="flex items-center gap-1 px-4 pt-3 pb-2 border-b border-gray-100 bg-gray-50/50 flex-wrap">
-      <a-button size="small" :type="activeTabGroup === 'overview' ? 'primary' : 'text'" @click="activeTabGroup = 'overview'; activeTab = 'overview'" class="rounded-lg text-xs font-semibold">📊 Tổng quan</a-button>
-      <a-button size="small" :type="activeTabGroup === 'schedule' ? 'primary' : 'text'" @click="activeTabGroup = 'schedule'; activeTab = 'gantt'" class="rounded-lg text-xs font-semibold">📅 Kế hoạch</a-button>
-      <a-divider type="vertical" />
-      <a-button size="small" :type="activeTabGroup === 'finance' ? 'primary' : 'text'" @click="activeTabGroup = 'finance'; activeTab = 'contract'" class="rounded-lg text-xs font-semibold">💰 Tài Chính</a-button>
-      <a-button size="small" :type="activeTabGroup === 'expense' ? 'primary' : 'text'" @click="activeTabGroup = 'expense'; activeTab = 'materials'" class="rounded-lg text-xs font-semibold">🏗️ Chi Phí</a-button>
-      <a-button size="small" :type="activeTabGroup === 'monitor' ? 'primary' : 'text'" @click="activeTabGroup = 'monitor'; activeTab = 'logs'" class="rounded-lg text-xs font-semibold">📋 Giám sát</a-button>
-      <a-button size="small" :type="activeTabGroup === 'hr' ? 'primary' : 'text'" @click="activeTabGroup = 'hr'; activeTab = 'attendance'" class="rounded-lg text-xs font-semibold">👥 Nhân sự</a-button>
-      <a-divider type="vertical" />
-      <a-button size="small" :type="activeTabGroup === 'other' ? 'primary' : 'text'" @click="activeTabGroup = 'other'; activeTab = 'documents'" class="rounded-lg text-xs font-semibold">📁 Khác</a-button>
+  <!-- Tab Navigation (Optimized: Group → Filtered Sub-tabs) -->
+  <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+    <!-- Category Group Navigation (Segmented Control) -->
+    <div class="flex items-center gap-1.5 px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-white overflow-x-auto">
+      <button v-for="g in tabGroups" :key="g.key"
+        @click="activeTabGroup = g.key; activeTab = g.defaultTab"
+        class="group flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap border"
+        :class="activeTabGroup === g.key ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200/50' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600'">
+        <span class="text-sm">{{ g.icon }}</span>
+        <span>{{ g.label }}</span>
+        <span v-if="g.badge > 0"
+          class="ml-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center"
+          :class="activeTabGroup === g.key ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'">{{ g.badge > 99 ? '99+' : g.badge }}</span>
+      </button>
     </div>
     <a-tabs v-model:activeKey="activeTab" class="crm-detail-tabs">
 
       <!-- ============ OVERVIEW TAB ============ -->
-      <a-tab-pane key="overview">
+      <a-tab-pane key="overview" v-if="isTabVisible('overview')">
         <template #tab><a-tooltip title="Thông tin tổng quan dự án: trạng thái, tiến độ, ngân sách, nhân sự" placement="bottom">Tổng quan</a-tooltip></template>
         <div class="p-6 space-y-6">
 
@@ -330,7 +343,7 @@
       </a-tab-pane>
 
       <!-- ============ GANTT / CPM TAB (Sprint 1) ============ -->
-      <a-tab-pane key="gantt">
+      <a-tab-pane key="gantt" v-if="isTabVisible('gantt')">
         <template #tab><a-tooltip title="Biểu đồ Gantt, CPM đường găng, cảnh báo chậm tiến độ, đề xuất hiệu chỉnh" placement="bottom">Gantt/CPM</a-tooltip></template>
         <div class="p-4 space-y-4">
 
@@ -538,7 +551,7 @@
       </a-tab-pane>
 
       <!-- ============ PROGRESS / TASKS TAB ============ -->
-      <a-tab-pane key="progress">
+      <a-tab-pane key="progress" v-if="isTabVisible('progress')">
         <template #tab><a-tooltip title="Quản lý công việc, phân công và theo dõi tiến độ thi công theo WBS" placement="bottom">Tiến độ</a-tooltip></template>
         <div class="p-4">
           <!-- Stats Cards -->
@@ -668,7 +681,7 @@
       </a-tab-pane>
 
       <!-- ============ CONTRACT TAB ============ -->
-      <a-tab-pane key="contract">
+      <a-tab-pane key="contract" v-if="isTabVisible('contract')">
         <template #tab><a-tooltip title="Quản lý hợp đồng dự án: giá trị, ngày ký, trạng thái duyệt" placement="bottom">Hợp đồng</a-tooltip></template>
         <div class="p-6">
           <div class="flex items-center justify-between mb-4">
@@ -690,7 +703,7 @@
       </a-tab-pane>
 
       <!-- ============ COSTS TAB (Renamed to Phiếu chi) ============ -->
-      <a-tab-pane key="costs">
+      <a-tab-pane key="costs" v-if="isTabVisible('costs')">
         <template #tab><a-tooltip title="Quản lý phiếu chi: tạo, gửi duyệt BĐH → KT xác nhận, đính kèm chứng từ" placement="bottom">Phiếu chi ({{ project.costs?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <!-- Status-based sub-tabs for Phiếu chi -->
@@ -746,7 +759,7 @@
       </a-tab-pane>
 
       <!-- ============ PAYMENTS TAB ============ -->
-      <a-tab-pane key="payments">
+      <a-tab-pane key="payments" v-if="isTabVisible('payments')">
         <template #tab><a-tooltip title="Quản lý đợt thanh toán: KH đánh dấu đã thanh toán → KT xác nhận/từ chối" placement="bottom">Thanh toán ({{ project.payments?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-between items-center mb-3">
@@ -809,7 +822,7 @@
       </a-tab-pane>
 
       <!-- ============ PERSONNEL TAB ============ -->
-      <a-tab-pane key="personnel">
+      <a-tab-pane key="personnel" v-if="isTabVisible('personnel')">
         <template #tab><a-tooltip title="Phân công nhân sự tham gia dự án theo vai trò" placement="bottom">Nhân sự ({{ project.personnel?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -837,7 +850,7 @@
       </a-tab-pane>
 
       <!-- ============ SUBCONTRACTORS TAB ============ -->
-      <a-tab-pane key="subcontractors">
+      <a-tab-pane key="subcontractors" v-if="isTabVisible('subcontractors')">
         <template #tab><a-tooltip title="Quản lý nhà thầu phụ: báo giá, tiến độ, thanh toán và đối soát" placement="bottom">Nhà thầu phụ ({{ project.subcontractors?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -888,7 +901,7 @@
       </a-tab-pane>
 
       <!-- ============ LOGS TAB ============ -->
-      <a-tab-pane key="logs">
+      <a-tab-pane key="logs" v-if="isTabVisible('logs')">
         <template #tab><a-tooltip title="Nhật ký thi công: ghi chép hàng ngày về thời tiết, nhân công, tiến độ" placement="bottom">Nhật ký ({{ project.construction_logs?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -926,7 +939,7 @@
       </a-tab-pane>
 
       <!-- ============ ACCEPTANCE TAB ============ -->
-      <a-tab-pane key="acceptance">
+      <a-tab-pane key="acceptance" v-if="isTabVisible('acceptance')">
         <template #tab><a-tooltip title="Quản lý nghiệm thu: tạo giai đoạn, duyệt 3 cấp, bộ tài liệu, lỗi ghi nhận" placement="bottom">Nghiệm thu ({{ project.acceptance_stages?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3 gap-2">
@@ -1014,9 +1027,9 @@
                 <FileOutlined class="text-[10px]" /> Hình ảnh / Tài liệu nghiệm thu ({{ stage.attachments.length }})
               </div>
               <div class="flex gap-2 flex-wrap">
-                <a v-for="att in stage.attachments" :key="att.id" :href="att.file_url" target="_blank"
-                   class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition border border-blue-100">
-                  <FileOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
+                <a v-for="att in stage.attachments" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
+                   class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition border border-blue-100 cursor-pointer">
+                  <EyeOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
                 </a>
               </div>
             </div>
@@ -1045,7 +1058,7 @@
       </a-tab-pane>
 
       <!-- ============ DEFECTS TAB ============ -->
-      <a-tab-pane key="defects">
+      <a-tab-pane key="defects" v-if="isTabVisible('defects')">
         <template #tab><a-tooltip title="Báo cáo và theo dõi lỗi thi công: mức độ, trạng thái xử lý" placement="bottom">Lỗi ({{ project.defects?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -1075,7 +1088,7 @@
       </a-tab-pane>
 
       <!-- ============ CHANGE REQUESTS TAB ============ -->
-      <a-tab-pane key="change_requests">
+      <a-tab-pane key="change_requests" v-if="isTabVisible('change_requests')">
         <template #tab><a-tooltip title="Yêu cầu thay đổi: phạm vi, chi phí, tiến độ — phân tích ảnh hưởng và phê duyệt" placement="bottom">Thay đổi ({{ project.change_requests?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -1138,7 +1151,7 @@
       </a-tab-pane>
 
       <!-- ============ COMMENTS TAB ============ -->
-      <a-tab-pane key="comments">
+      <a-tab-pane key="comments" v-if="isTabVisible('comments')">
         <template #tab><a-tooltip title="Trao đổi nội bộ giữa các thành viên dự án" placement="bottom">Bình luận ({{ commentCount }})</a-tooltip></template>
         <div class="p-4">
           <!-- Root comment input -->
@@ -1204,7 +1217,7 @@
       </a-tab-pane>
 
       <!-- ============ ADDITIONAL COSTS TAB ============ -->
-      <a-tab-pane key="additional_costs">
+      <a-tab-pane key="additional_costs" v-if="isTabVisible('additional_costs')">
         <template #tab><a-tooltip title="Chi phí phát sinh ngoài báo giá: đề xuất → duyệt → ghi nhận" placement="bottom">CP Phát sinh ({{ project.additional_costs?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -1244,7 +1257,7 @@
       </a-tab-pane>
 
       <!-- ============ BUDGETS TAB ============ -->
-      <a-tab-pane key="budgets">
+      <a-tab-pane key="budgets" v-if="isTabVisible('budgets')">
         <template #tab><a-tooltip title="Quản lý ngân sách dự án: phân bổ theo hạng mục, theo dõi thực chi" placement="bottom">Ngân sách ({{ project.budgets?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -1277,7 +1290,7 @@
       </a-tab-pane>
 
       <!-- ============ FINANCE DASHBOARD TAB (Sprint 2 — Module 3) ============ -->
-      <a-tab-pane key="finance">
+      <a-tab-pane key="finance" v-if="isTabVisible('finance')">
         <template #tab><a-tooltip title="Dòng tiền, Lãi/Lỗ, Ngân sách vs Thực chi, Công nợ NTP, Bảo hành" placement="bottom">💰 Tài chính</a-tooltip></template>
         <div class="p-4 space-y-4">
           <div class="flex gap-2 flex-wrap">
@@ -1459,7 +1472,7 @@
       </a-tab-pane>
 
       <!-- ============ INVOICES TAB ============ -->
-      <a-tab-pane key="invoices">
+      <a-tab-pane key="invoices" v-if="isTabVisible('invoices')">
         <template #tab><a-tooltip title="Quản lý hóa đơn xuất cho khách hàng: tạo, gửi, theo dõi thanh toán" placement="bottom">Hóa đơn ({{ project.invoices?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -1487,7 +1500,7 @@
       </a-tab-pane>
 
       <!-- ============ RISKS TAB ============ -->
-      <a-tab-pane key="risks">
+      <a-tab-pane key="risks" v-if="isTabVisible('risks')">
         <template #tab><a-tooltip title="Đánh giá và quản lý rủi ro: xác suất, ảnh hưởng, kế hoạch giảm thiểu" placement="bottom">Rủi ro ({{ project.risks?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -1531,7 +1544,7 @@
       </a-tab-pane>
 
       <!-- ============ ATTENDANCE TAB ============ -->
-      <a-tab-pane key="attendance">
+      <a-tab-pane key="attendance" v-if="isTabVisible('attendance')">
         <template #tab><a-tooltip title="Quản lý chấm công: check-in/out, thống kê giờ làm, phân ca" placement="bottom">Chấm công</a-tooltip></template>
         <div class="p-4 space-y-4">
           <!-- Action Bar -->
@@ -1656,7 +1669,7 @@
       </a-tab-pane>
 
       <!-- ============ LABOR PRODUCTIVITY TAB ============ -->
-      <a-tab-pane key="labor">
+      <a-tab-pane key="labor" v-if="isTabVisible('labor')">
         <template #tab><a-tooltip title="Theo dõi năng suất lao động: khối lượng KH vs TT, hiệu suất nhân công" placement="bottom">Năng suất LĐ</a-tooltip></template>
         <div class="p-4 space-y-4">
           <!-- Action Bar -->
@@ -1794,7 +1807,7 @@
       </a-tab-pane>
 
       <!-- ============ MATERIALS TAB (Giống APP) ============ -->
-      <a-tab-pane key="materials">
+      <a-tab-pane key="materials" v-if="isTabVisible('materials')">
         <template #tab><a-tooltip title="Quản lý vật liệu sử dụng trong dự án: ghi nhận xuất kho, chi phí vật tư" placement="bottom">Vật liệu ({{ projectMaterials?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <!-- Summary Cards -->
@@ -1846,7 +1859,7 @@
       </a-tab-pane>
 
       <!-- ============ EQUIPMENT TAB (Giống APP) ============ -->
-      <a-tab-pane key="equipment">
+      <a-tab-pane key="equipment" v-if="isTabVisible('equipment')">
         <template #tab><a-tooltip title="Quản lý thiết bị phân bổ cho dự án: thuê, có sẵn, bàn giao" placement="bottom">Thiết bị ({{ projectEquipment?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -1910,7 +1923,7 @@
       </a-tab-pane>
 
       <!-- ============ DOCUMENTS TAB ============ -->
-      <a-tab-pane key="documents">
+      <a-tab-pane key="documents" v-if="isTabVisible('documents')">
         <template #tab><a-tooltip title="Kho tài liệu dự án: bản vẽ, hợp đồng, biên bản, hình ảnh" placement="bottom">Tài liệu ({{ project.attachments?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
@@ -1946,27 +1959,92 @@
     </a-tabs>
   </div>
 
-  <!-- ==================== FILE PREVIEW MODAL ==================== -->
-  <a-modal v-model:open="showFilePreview" :title="previewFile?.original_name || previewFile?.file_name || 'Xem file'" :width="900" :footer="null" centered destroy-on-close class="crm-modal">
-    <div v-if="previewFile" class="flex flex-col items-center">
-      <!-- Image preview -->
-      <template v-if="isImageFile(previewFile)">
-        <img :src="previewFile.file_url" :alt="previewFile.original_name" class="max-w-full max-h-[70vh] rounded-lg shadow" />
-      </template>
-      <!-- PDF preview -->
-      <template v-else-if="isPdfFile(previewFile)">
-        <iframe :src="previewFile.file_url" class="w-full h-[70vh] rounded-lg border" />
-      </template>
-      <!-- Other files: download link -->
-      <template v-else>
-        <div class="text-center py-12">
-          <FileOutlined class="text-5xl text-gray-300 mb-4" />
-          <p class="text-gray-500 mb-4">Không thể xem trực tiếp loại file này</p>
-          <a :href="previewFile.file_url" target="_blank">
-            <a-button type="primary"><DownloadOutlined /> Tải xuống</a-button>
+  <!-- ==================== FILE PREVIEW MODAL (Premium Inline Viewer) ==================== -->
+  <a-modal v-model:open="showFilePreview" :title="null" :width="1100" :footer="null" centered destroy-on-close class="crm-modal file-preview-modal" :bodyStyle="{ padding: 0 }">
+    <div v-if="previewFile" class="file-preview-container">
+      <!-- Header bar -->
+      <div class="flex items-center justify-between px-5 py-3 border-b bg-gradient-to-r from-gray-50 to-white">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-sm" :style="{ background: fileExtColor(previewFile) }">
+            {{ fileExt(previewFile).toUpperCase().slice(0, 3) }}
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-semibold text-gray-800 truncate">{{ previewFile.original_name || previewFile.file_name }}</div>
+            <div class="text-[11px] text-gray-400 flex items-center gap-2">
+              <span>{{ fileExt(previewFile).toUpperCase() }}</span>
+              <span v-if="previewFile.file_size">• {{ formatFileSize(previewFile.file_size) }}</span>
+              <span v-if="previewFile.created_at">• {{ fmtDate(previewFile.created_at) }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <a :href="previewFile.file_url" target="_blank" class="no-underline">
+            <a-button size="small" type="primary" ghost><DownloadOutlined /> Tải xuống</a-button>
+          </a>
+          <a :href="previewFile.file_url" target="_blank" class="no-underline">
+            <a-button size="small"><LinkOutlined /> Mở tab mới</a-button>
           </a>
         </div>
-      </template>
+      </div>
+
+      <!-- Preview content -->
+      <div class="file-preview-body">
+        <!-- Loading overlay -->
+        <div v-if="previewLoading" class="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+          <a-spin size="large" tip="Đang tải file..." />
+        </div>
+
+        <!-- Image preview (with zoom) -->
+        <template v-if="isImageFile(previewFile)">
+          <div class="flex items-center justify-center p-4 bg-gray-900/5 min-h-[65vh]">
+            <img :src="previewFile.file_url" :alt="previewFile.original_name"
+                 class="max-w-full max-h-[70vh] rounded-lg shadow-xl object-contain transition-transform duration-300 cursor-zoom-in"
+                 :class="{ 'scale-150 cursor-zoom-out': imageZoomed }"
+                 @click="imageZoomed = !imageZoomed"
+                 @load="previewLoading = false" />
+          </div>
+        </template>
+
+        <!-- PDF preview -->
+        <template v-else-if="isPdfFile(previewFile)">
+          <iframe :src="previewFile.file_url + '#toolbar=1'" class="w-full border-0" style="height: 75vh;" @load="previewLoading = false" />
+        </template>
+
+        <!-- Video preview (mp4, webm, mov) -->
+        <template v-else-if="isVideoFile(previewFile)">
+          <div class="flex items-center justify-center p-6 bg-black min-h-[50vh]">
+            <video controls autoplay :src="previewFile.file_url" class="max-w-full max-h-[70vh] rounded-lg shadow-xl" @loadeddata="previewLoading = false">
+              Trình duyệt không hỗ trợ phát video.
+            </video>
+          </div>
+        </template>
+
+        <!-- Word / Excel / PowerPoint via Google Docs Viewer -->
+        <template v-else-if="isOfficeFile(previewFile)">
+          <iframe :src="googleDocsViewerUrl(previewFile)" class="w-full border-0" style="height: 75vh;" @load="previewLoading = false" />
+        </template>
+
+        <!-- Text / Code files -->
+        <template v-else-if="isTextFile(previewFile)">
+          <iframe :src="previewFile.file_url" class="w-full border-0 bg-white" style="height: 75vh;" @load="previewLoading = false" />
+        </template>
+
+        <!-- Unsupported file type -->
+        <template v-else>
+          <div class="flex flex-col items-center justify-center py-20 px-8 bg-gray-50 min-h-[40vh]">
+            <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center mb-5 shadow-inner">
+              <FileOutlined class="text-3xl text-gray-500" />
+            </div>
+            <div class="text-lg font-semibold text-gray-600 mb-2">{{ previewFile.original_name || previewFile.file_name }}</div>
+            <div class="text-sm text-gray-400 mb-6">Loại file <strong>.{{ fileExt(previewFile) }}</strong> — {{ formatFileSize(previewFile.file_size) }}</div>
+            <a :href="previewFile.file_url" target="_blank" class="no-underline">
+              <a-button type="primary" size="large" class="px-8">
+                <DownloadOutlined /> Tải xuống để xem
+              </a-button>
+            </a>
+          </div>
+        </template>
+      </div>
     </div>
   </a-modal>
 
@@ -2024,8 +2102,8 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp đính kèm</div>
         <div v-if="editingCost?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingCost.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
-            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          <a v-for="a in editingCost.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
           </a>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
@@ -2060,8 +2138,8 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp hợp đồng đính kèm</div>
         <div v-if="editingContract?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingContract.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
-            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          <a v-for="a in editingContract.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
           </a>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
@@ -2088,8 +2166,8 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Chứng từ thanh toán</div>
         <div v-if="editingPayment?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingPayment.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
-            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          <a v-for="a in editingPayment.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
           </a>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
@@ -2119,7 +2197,7 @@
         <div class="text-xs font-semibold text-gray-500 mb-2">File đã đính kèm ({{ attachTarget.attachments.length }})</div>
         <div v-for="att in attachTarget.attachments" :key="att.id" class="flex items-center gap-2 py-1.5 px-3 bg-gray-50 rounded-lg mb-1 text-sm">
           <FileOutlined class="text-gray-400" />
-          <a :href="att.file_url" target="_blank" class="text-blue-600 hover:underline flex-1 truncate">{{ att.original_name || att.file_name }}</a>
+          <a href="#" @click.prevent="openFilePreview(att)" class="text-blue-600 hover:underline flex-1 truncate cursor-pointer">{{ att.original_name || att.file_name }}</a>
           <span class="text-gray-400 text-xs">{{ formatFileSize(att.file_size) }}</span>
         </div>
       </div>
@@ -2221,8 +2299,8 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Hình ảnh / File đính kèm</div>
         <div v-if="editingDefect?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingDefect.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
-            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          <a v-for="a in editingDefect.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
           </a>
         </div>
         <input type="file" multiple accept="image/*,.pdf,.doc,.docx" @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
@@ -2458,8 +2536,8 @@
       <div v-if="subDetail.attachments?.length" class="bg-white rounded-xl p-4 mb-4 border border-gray-100">
         <div class="text-sm font-bold text-gray-700 mb-3">📎 Tệp đính kèm ({{ subDetail.attachments.length }})</div>
         <div class="flex flex-wrap gap-2">
-          <a v-for="a in subDetail.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
-            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          <a v-for="a in subDetail.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
           </a>
         </div>
       </div>
@@ -2577,8 +2655,8 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Báo giá / Hồ sơ đính kèm</div>
         <div v-if="editingSub?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingSub.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
-            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          <a v-for="a in editingSub.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
           </a>
         </div>
         <input type="file" multiple @change="e => subFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
@@ -2596,8 +2674,8 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp minh chứng</div>
         <div v-if="editingAC?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingAC.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
-            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          <a v-for="a in editingAC.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
           </a>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
@@ -2657,8 +2735,8 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> File hóa đơn đính kèm</div>
         <div v-if="editingInvoice?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingInvoice.attachments" :key="a.id" :href="a.file_url" target="_blank" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition">
-            <FileOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          <a v-for="a in editingInvoice.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
           </a>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
@@ -2816,9 +2894,9 @@
       <div v-if="acceptDetailStage.attachments?.length" class="mb-5">
         <div class="text-sm font-bold text-gray-700 mb-2">📎 Tài liệu đính kèm ({{ acceptDetailStage.attachments.length }})</div>
         <div class="flex gap-2 flex-wrap">
-          <a v-for="att in acceptDetailStage.attachments" :key="att.id" :href="att.file_url" target="_blank"
-             class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition border border-blue-100">
-            <DownloadOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
+          <a v-for="att in acceptDetailStage.attachments" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
+             class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition border border-blue-100 cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
           </a>
         </div>
       </div>
@@ -3137,6 +3215,7 @@ import {
   CheckOutlined, CloseOutlined, DollarOutlined,
   UploadOutlined, DownloadOutlined, FileOutlined,
   UserOutlined, CalendarOutlined, EyeOutlined, CheckSquareOutlined,
+  LinkOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -3207,7 +3286,35 @@ const costStatusFilter = ref('all')
 const commentText = ref('')
 const actionLoading = reactive({})
 
-// Map activeTab to correct group
+// Tab group → sub-tab mapping
+const tabGroupTabs = {
+  overview: ['overview'],
+  schedule: ['gantt', 'progress'],
+  finance: ['contract', 'costs', 'payments', 'budgets', 'additional_costs', 'invoices', 'finance'],
+  expense: ['materials', 'equipment', 'subcontractors'],
+  monitor: ['logs', 'acceptance', 'defects', 'change_requests', 'risks', 'comments'],
+  hr: ['attendance', 'labor', 'personnel'],
+  other: ['documents'],
+}
+
+// Only render tab-pane if it belongs to the active group
+const isTabVisible = (tabKey) => {
+  const tabs = tabGroupTabs[activeTabGroup.value]
+  return tabs ? tabs.includes(tabKey) : false
+}
+
+// Tab groups with dynamic badge counts
+const tabGroups = computed(() => [
+  { key: 'overview', icon: '📊', label: 'Tổng quan', defaultTab: 'overview', badge: 0 },
+  { key: 'schedule', icon: '📅', label: 'Kế hoạch', defaultTab: 'gantt', badge: props.allTasks?.length || 0 },
+  { key: 'finance', icon: '💰', label: 'Tài Chính', defaultTab: 'contract', badge: (props.project.costs?.length || 0) + (props.project.payments?.length || 0) },
+  { key: 'expense', icon: '🏗️', label: 'Chi Phí', defaultTab: 'materials', badge: (props.project.subcontractors?.length || 0) },
+  { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'logs', badge: (props.project.defects?.filter(d => d.status !== 'closed')?.length || 0) },
+  { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'attendance', badge: props.project.personnel?.length || 0 },
+  { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.project.attachments?.length || 0 },
+])
+
+// Map activeTab to correct group (for when tab clicked directly)
 watch(activeTab, (tab) => {
   const groupMap = {
     overview: 'overview',
@@ -3639,15 +3746,52 @@ const approveACWithLoading = (record) => {
   setTimeout(() => { actionLoading[`approve-ac-${record.id}`] = false }, 3000)
 }
 
-// ============ FILE PREVIEW ============
+// ============ FILE PREVIEW (Premium Inline Viewer) ============
 const showFilePreview = ref(false)
 const previewFile = ref(null)
+const previewLoading = ref(false)
+const imageZoomed = ref(false)
+
 const openFilePreview = (file) => {
   previewFile.value = file
+  previewLoading.value = true
+  imageZoomed.value = false
   showFilePreview.value = true
+  // Auto-stop loading for unsupported types
+  if (!isImageFile(file) && !isPdfFile(file) && !isVideoFile(file) && !isOfficeFile(file) && !isTextFile(file)) {
+    previewLoading.value = false
+  }
 }
-const isImageFile = (f) => /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(f.original_name || f.file_name || '')
-const isPdfFile = (f) => /\.pdf$/i.test(f.original_name || f.file_name || '')
+
+const fileExt = (f) => {
+  const name = f?.original_name || f?.file_name || f?.mime_type || ''
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  return ext
+}
+
+const isImageFile = (f) => /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff)$/i.test(f.original_name || f.file_name || '') || (f.mime_type && f.mime_type.startsWith('image/'))
+const isPdfFile = (f) => /\.pdf$/i.test(f.original_name || f.file_name || '') || f.mime_type === 'application/pdf'
+const isVideoFile = (f) => /\.(mp4|webm|mov|avi|mkv|ogg)$/i.test(f.original_name || f.file_name || '') || (f.mime_type && f.mime_type.startsWith('video/'))
+const isOfficeFile = (f) => /\.(doc|docx|xls|xlsx|ppt|pptx)$/i.test(f.original_name || f.file_name || '')
+const isTextFile = (f) => /\.(txt|csv|json|xml|html|htm|css|js|md|log)$/i.test(f.original_name || f.file_name || '')
+
+const googleDocsViewerUrl = (f) => {
+  const fullUrl = f.file_url?.startsWith('http') ? f.file_url : window.location.origin + f.file_url
+  return `https://docs.google.com/gview?url=${encodeURIComponent(fullUrl)}&embedded=true`
+}
+
+const fileExtColor = (f) => {
+  const ext = fileExt(f)
+  const colors = {
+    pdf: '#E53E3E', doc: '#2B6CB0', docx: '#2B6CB0',
+    xls: '#2F855A', xlsx: '#2F855A', ppt: '#DD6B20', pptx: '#DD6B20',
+    jpg: '#805AD5', jpeg: '#805AD5', png: '#805AD5', gif: '#805AD5', webp: '#805AD5', svg: '#805AD5',
+    mp4: '#D53F8C', mov: '#D53F8C', webm: '#D53F8C', avi: '#D53F8C',
+    zip: '#718096', rar: '#718096', '7z': '#718096',
+    txt: '#4A5568', csv: '#4A5568', json: '#4A5568',
+  }
+  return colors[ext] || '#A0AEC0'
+}
 
 const openContractModal = (c) => {
   editingContract.value = c
@@ -4553,7 +4697,21 @@ const returnEquipmentAction = (eq, allocation) => {
 </script>
 
 <style scoped>
-.crm-detail-tabs :deep(.ant-tabs-nav) { padding: 0 24px; background: #FAFBFC; border-bottom: 1px solid #E8ECF1; }
-.crm-detail-tabs :deep(.ant-tabs-tab) { font-weight: 600; font-size: 13px; }
+.crm-detail-tabs :deep(.ant-tabs-nav) { padding: 0 20px; background: #FAFBFC; border-bottom: 1px solid #E8ECF1; }
+.crm-detail-tabs :deep(.ant-tabs-tab) { font-weight: 600; font-size: 13px; padding: 12px 4px; }
+.crm-detail-tabs :deep(.ant-tabs-tab-active .ant-tabs-tab-btn) { color: #2563EB !important; }
+.crm-detail-tabs :deep(.ant-tabs-ink-bar) { background: #2563EB; height: 3px; border-radius: 3px 3px 0 0; }
 .crm-modal :deep(.ant-modal-content) { border-radius: 16px; }
+
+/* File Preview Modal — Premium Inline Viewer */
+.file-preview-modal :deep(.ant-modal-content) {
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 0;
+}
+.file-preview-modal :deep(.ant-modal-header) { display: none; }
+.file-preview-modal :deep(.ant-modal-body) { padding: 0 !important; }
+.file-preview-container { border-radius: 16px; overflow: hidden; }
+.file-preview-body { position: relative; min-height: 40vh; background: #f9fafb; }
+.file-preview-body iframe { display: block; }
 </style>
