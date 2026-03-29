@@ -532,7 +532,7 @@ class CrmProjectsController extends Controller
             'contract_id' => 'nullable|exists:contracts,id',
             'notes' => 'nullable|string|max:2000',
             'amount' => 'required|numeric|min:0',
-            'due_date' => 'nullable|date',
+            'due_date' => 'required|date',
             'status' => 'nullable|string',
         ]);
 
@@ -1239,8 +1239,54 @@ class CrmProjectsController extends Controller
             'description' => 'sometimes|string',
             'severity' => 'sometimes|in:low,medium,high,critical',
             'status' => 'sometimes|string|in:open,in_progress,fixed,verified',
+            'rejection_reason' => 'nullable|string|max:1000',
         ]);
-        $defect->update($validated);
+
+        $oldStatus = $defect->status;
+
+        // BUSINESS RULE: Use model methods for status transitions (matching APP)
+        if (isset($validated['status']) && $validated['status'] !== $oldStatus) {
+            switch ($validated['status']) {
+                case 'in_progress':
+                    if ($request->has('rejection_reason') && $validated['rejection_reason']) {
+                        $defect->markAsRejected(null, $validated['rejection_reason']);
+                    } else {
+                        $defect->markAsInProgress(null);
+                    }
+                    break;
+                case 'fixed':
+                    $defect->markAsFixed(null);
+                    break;
+                case 'verified':
+                    if ($defect->status !== 'fixed') {
+                        return back()->with('error', 'Chỉ có thể xác nhận lỗi đã được sửa (trạng thái fixed).');
+                    }
+                    $defect->markAsVerified(null);
+                    // markAsVerified triggers checkAndUpdateTaskProgress + autoResubmitAcceptanceStage
+                    break;
+                default:
+                    $defect->update(['status' => $validated['status']]);
+            }
+
+            // BUSINESS RULE: Create history record (matching APP)
+            \App\Models\DefectHistory::create([
+                'defect_id' => $defect->id,
+                'action' => 'status_changed',
+                'old_status' => $oldStatus,
+                'new_status' => $validated['status'],
+                'user_id' => $user->id,
+            ]);
+
+            unset($validated['status']);
+        }
+
+        // Update other fields (description, severity)
+        unset($validated['rejection_reason']);
+        $remaining = array_filter($validated, fn($v) => $v !== null);
+        if (!empty($remaining)) {
+            $defect->update($remaining);
+        }
+
         return back()->with('success', 'Đã cập nhật lỗi.');
     }
 
@@ -2558,8 +2604,12 @@ class CrmProjectsController extends Controller
                     'approved_at' => now(),
                 ]);
 
-                // Update stock
-                $material->decrement('current_stock', abs($item['quantity']));
+                // Update stock via MaterialInventory (per-project stock tracking)
+                $inventory = \App\Models\MaterialInventory::firstOrCreate(
+                    ['project_id' => $project->id, 'material_id' => $item['material_id']],
+                    ['current_stock' => 0, 'min_stock_level' => 0]
+                );
+                $inventory->removeStock(abs($item['quantity']));
             }
         });
 
@@ -2750,11 +2800,19 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Chỉ gửi được hạng mục ở trạng thái nháp hoặc bị từ chối.');
         }
 
-        $item->update([
+        $oldStatus = $item->workflow_status;
+        $updateData = [
             'workflow_status' => 'submitted',
             'submitted_by' => $user->id,
             'submitted_at' => now(),
-        ]);
+        ];
+        // BUSINESS RULE: Clear rejection on resubmit (matching APP)
+        if ($oldStatus === 'rejected') {
+            $updateData['rejection_reason'] = null;
+            $updateData['rejected_by'] = null;
+            $updateData['rejected_at'] = null;
+        }
+        $item->update($updateData);
 
         // Send notification to supervisor
         $this->notifyFromCrm($project, 'acceptance_submit', "Hạng mục \"{$item->name}\" cần giám sát duyệt.");
@@ -2778,8 +2836,19 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Hạng mục không ở trạng thái chờ giám sát duyệt.');
         }
 
+        // BUSINESS RULE: Block if open defects exist (matching APP)
+        if ($item->task_id) {
+            $openDefects = Defect::where('project_id', $project->id)
+                ->where('task_id', $item->task_id)
+                ->whereIn('status', ['open', 'in_progress'])->count();
+            if ($openDefects > 0) {
+                return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
+            }
+        }
+
         $item->update([
             'workflow_status' => 'supervisor_approved',
+            'supervisor_approved_by' => $user->id,
             'supervisor_approved_at' => now(),
         ]);
 
@@ -2804,8 +2873,32 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Hạng mục cần được giám sát duyệt trước.');
         }
 
+        // BUSINESS RULE: Block if open defects exist (matching APP)
+        if ($item->task_id) {
+            $openDefects = Defect::where('project_id', $project->id)
+                ->where('task_id', $item->task_id)
+                ->whereIn('status', ['open', 'in_progress'])->count();
+            if ($openDefects > 0) {
+                return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
+            }
+        }
+
+        // BUSINESS RULE: Check task progress 100% (matching APP)
+        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
+            ->whereNotNull('task_id')->with('task')->get();
+        $incompleteTasks = [];
+        foreach ($stageItems as $si) {
+            if ($si->task && $si->task->progress_percentage < 100) {
+                $incompleteTasks[] = $si->task->name ?? "Hạng mục #{$si->id}";
+            }
+        }
+        if (count($incompleteTasks) > 0) {
+            return back()->with('error', 'Không thể duyệt. Chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks));
+        }
+
         $item->update([
-            'workflow_status' => 'pm_approved',
+            'workflow_status' => 'project_manager_approved', // FIXED: was 'pm_approved', must match APP
+            'project_manager_approved_by' => $user->id,
             'project_manager_approved_at' => now(),
         ]);
 
@@ -2826,17 +2919,47 @@ class CrmProjectsController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
 
-        if ($item->workflow_status !== 'pm_approved') {
+        if (!in_array($item->workflow_status, ['pm_approved', 'project_manager_approved'])) {
             return back()->with('error', 'Hạng mục cần được PM duyệt trước.');
+        }
+
+        // BUSINESS RULE: Block if open defects exist (matching APP)
+        if ($item->task_id) {
+            $openDefects = Defect::where('project_id', $project->id)
+                ->where('task_id', $item->task_id)
+                ->whereIn('status', ['open', 'in_progress'])->count();
+            if ($openDefects > 0) {
+                return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
+            }
+        }
+
+        // BUSINESS RULE: Check task progress 100% (matching APP)
+        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
+            ->whereNotNull('task_id')->with('task')->get();
+        $incompleteTasks = [];
+        foreach ($stageItems as $si) {
+            if ($si->task && $si->task->progress_percentage < 100) {
+                $incompleteTasks[] = $si->task->name ?? "Hạng mục #{$si->id}";
+            }
+        }
+        if (count($incompleteTasks) > 0) {
+            return back()->with('error', 'Không thể duyệt. Chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks));
         }
 
         $item->update([
             'workflow_status' => 'customer_approved',
+            'customer_approved_by' => $user->id,
             'customer_approved_at' => now(),
+            'acceptance_status' => 'approved',
+            'approved_by' => $user->id,
+            'approved_at' => now(),
         ]);
 
-        // Also mark acceptance_status as approved (final acceptance)
-        $item->approve(null, 'Khách hàng đã nghiệm thu');
+        // BUSINESS RULE: Update project progress (matching APP)
+        $item->updateProjectProgress();
+
+        // BUSINESS RULE: Check stage completion (matching APP)
+        $stage->checkCompletion();
 
         $this->notifyFromCrm($project, 'acceptance_customer_approved', "Hạng mục \"{$item->name}\" đã được KH nghiệm thu.");
 
@@ -2854,7 +2977,7 @@ class CrmProjectsController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
 
-        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved', 'pm_approved'])) {
+        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved', 'pm_approved', 'project_manager_approved'])) {
             return back()->with('error', 'Hạng mục không ở trạng thái chờ duyệt.');
         }
 
@@ -2869,11 +2992,12 @@ class CrmProjectsController extends Controller
             'rejection_reason' => $validated['rejection_reason'],
         ]);
 
-        // Model boot auto creates defect on workflow_status => rejected
+        // BUSINESS RULE: Auto-create defect on reject (matching APP)
+        $item->autoCreateDefectOnReject(null, $validated['rejection_reason']);
 
         $this->notifyFromCrm($project, 'acceptance_rejected', "Hạng mục \"{$item->name}\" bị từ chối: {$validated['rejection_reason']}");
 
-        return back()->with('success', 'Đã từ chối hạng mục nghiệm thu.');
+        return back()->with('success', 'Đã từ chối hạng mục nghiệm thu. Lỗi ghi nhận đã được tự động tạo.');
     }
 
     /**

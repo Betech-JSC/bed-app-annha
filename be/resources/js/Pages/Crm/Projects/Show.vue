@@ -3355,6 +3355,7 @@ const fieldLabels = {
   start_date: 'Ngày BĐ', end_date: 'Ngày KT', status: 'Trạng thái',
   category: 'Loại', reason: 'Lý do', budget_date: 'Ngày NS',
   invoice_date: 'Ngày HĐ', rejected_reason: 'Lý do từ chối',
+  
   phone: 'SĐT', email: 'Email', company_name: 'Tên công ty',
   contact_person: 'Người liên hệ', contract_amount: 'Giá trị HĐ NTP',
   subtotal: 'Tổng phụ', tax_amount: 'Thuế', cost_group_id: 'Nhóm chi phí',
@@ -4413,8 +4414,8 @@ const getAcceptCompletion = (stage) => {
 const getOpenDefects = (stage) => {
   return (stage.defects || []).filter(d => d.status !== 'verified').length
 }
-const acceptItemStatusColor = (status) => ({ pending: 'default', submitted: 'processing', project_manager_approved: 'blue', customer_approved: 'success' }[status] || 'default')
-const acceptItemStatusLabel = (status) => ({ pending: 'Chờ', submitted: 'Đã nộp', project_manager_approved: 'QLDA duyệt', customer_approved: 'KH duyệt' }[status] || status)
+const acceptItemStatusColor = (status) => ({ draft: 'default', pending: 'default', submitted: 'processing', supervisor_approved: 'cyan', project_manager_approved: 'blue', pm_approved: 'blue', customer_approved: 'success', rejected: 'error' }[status] || 'default')
+const acceptItemStatusLabel = (status) => ({ draft: 'Nháp', pending: 'Chờ', submitted: 'Đã nộp', supervisor_approved: 'GS duyệt', project_manager_approved: 'PM duyệt', pm_approved: 'PM duyệt', customer_approved: 'KH duyệt', rejected: 'Từ chối' }[status] || status)
 
 // ============ ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ============
 const showAcceptDetailDrawer = ref(false)
