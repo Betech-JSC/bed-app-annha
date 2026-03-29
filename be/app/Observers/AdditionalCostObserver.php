@@ -103,7 +103,7 @@ class AdditionalCostObserver
                 $title = "Khách hàng đã thanh toán chi phí phát sinh";
                 $body = "Khách hàng đã thanh toán cho chi phí phát sinh '{$additionalCost->description}' trong dự án '{$projectName}'. Cần xác nhận.";
 
-                // Notify Accountant (Actionable)
+                // Notify Accountant only (Actionable) — avoid duplicate with team
                 $this->notificationService->sendToPermissionUsers(
                     Permissions::ADDITIONAL_COST_CONFIRM,
                     $additionalCost->project_id,
@@ -113,19 +113,6 @@ class AdditionalCostObserver
                     $body,
                     ['cost_id' => $additionalCost->id, 'project_id' => $additionalCost->project_id],
                     Notification::PRIORITY_HIGH,
-                    "/projects/{$additionalCost->project_id}/additional-costs/{$additionalCost->id}",
-                    true
-                );
-
-                // Notify Team (Informational)
-                $this->notificationService->sendToProjectTeam(
-                    $additionalCost->project_id,
-                    Notification::TYPE_SYSTEM,
-                    Notification::CATEGORY_STATUS_CHANGE,
-                    $title,
-                    $body,
-                    ['cost_id' => $additionalCost->id, 'project_id' => $additionalCost->project_id],
-                    Notification::PRIORITY_MEDIUM,
                     "/projects/{$additionalCost->project_id}/additional-costs/{$additionalCost->id}",
                     true
                 );

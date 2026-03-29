@@ -179,10 +179,6 @@ class AdditionalCost extends Model
     {
         $this->status = 'rejected';
         $this->rejected_reason = $reason;
-        if ($user) {
-            $this->rejected_by = $user->id;
-            $this->rejected_at = now();
-        }
         return $this->save();
     }
 
