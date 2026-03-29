@@ -27,8 +27,8 @@ class AdditionalCostObserver
             $title = "Đề xuất chi phí phát sinh mới"; // New Additional Cost Proposal
             $body = "Có đề xuất chi phí phát sinh mới '{$additionalCost->description}' trong dự án '{$projectName}'";
 
-            // 1. Notify Approvers (Actionable) - Assuming PM handles this or specific permission
-            // Using ADDITIONAL_COST_APPROVE permission
+            // Notify Approvers only (one notification per user, not duplicate)
+            // Team members will be notified via the updated() event when status changes
             $this->notificationService->sendToPermissionUsers(
                 Permissions::ADDITIONAL_COST_APPROVE,
                 $additionalCost->project_id,
@@ -42,25 +42,6 @@ class AdditionalCostObserver
                     'amount' => $additionalCost->amount,
                 ],
                 Notification::PRIORITY_HIGH,
-                "/projects/{$additionalCost->project_id}/additional-costs/{$additionalCost->id}",
-                true,
-                [$additionalCost->proposed_by] // Exclude proposer
-            );
-
-            // 2. Notify Project Team (Informational) - New requirement: "All related accounts receive notification"
-            // This informs everyone that a new cost has been proposed.
-            $this->notificationService->sendToProjectTeam(
-                $additionalCost->project_id,
-                Notification::TYPE_SYSTEM,
-                Notification::CATEGORY_NEW_ITEM,
-                $title,
-                $body,
-                [
-                    'cost_id' => $additionalCost->id,
-                    'project_id' => $additionalCost->project_id,
-                    'amount' => $additionalCost->amount,
-                ],
-                Notification::PRIORITY_MEDIUM, // Lower priority for team
                 "/projects/{$additionalCost->project_id}/additional-costs/{$additionalCost->id}",
                 true,
                 [$additionalCost->proposed_by] // Exclude proposer
