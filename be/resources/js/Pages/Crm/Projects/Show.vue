@@ -930,6 +930,14 @@
               </template>
               <template v-else-if="column.key === 'actions'">
                 <div class="flex gap-1">
+                  <a-tooltip v-if="record.attachments?.length" :title="`${record.attachments.length} tệp đính kèm`">
+                    <a-badge :count="record.attachments.length" :number-style="{ background: '#3B82F6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }">
+                      <FileOutlined class="text-blue-500 text-xs" />
+                    </a-badge>
+                  </a-tooltip>
+                  <a-tooltip title="Upload chứng từ">
+                    <a-button type="text" size="small" @click="openAttachModal('logs', record)"><UploadOutlined class="text-gray-500" /></a-button>
+                  </a-tooltip>
                   <a-tooltip title="Sửa">
                     <a-button v-if="can('log.update') || can('log.create')" type="text" size="small" @click="openLogModal(record)"><EditOutlined /></a-button>
                   </a-tooltip>
@@ -2287,9 +2295,12 @@
         </a-col>
       </a-row>
       <a-form-item label="Công việc liên quan">
-        <a-select v-model:value="logForm.task_id" size="large" class="w-full" placeholder="Chọn công việc (tùy chọn)" allow-clear show-search :filter-option="(input, opt) => opt.label?.toLowerCase().includes(input.toLowerCase())">
+        <a-select v-model:value="logForm.task_id" size="large" class="w-full" placeholder="Chọn công việc (tùy chọn)" allow-clear show-search :filter-option="(input, opt) => opt.label?.toLowerCase().includes(input.toLowerCase())" @change="onLogTaskChange">
           <a-select-option v-for="t in projectTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
         </a-select>
+        <div v-if="logForm.task_id && logTaskCurrentProgress !== null" class="text-xs text-blue-500 mt-1">
+          Tiến độ hiện tại: <strong>{{ logTaskCurrentProgress }}%</strong>
+        </div>
       </a-form-item>
       <a-row :gutter="16">
         <a-col :span="12">
@@ -2299,13 +2310,24 @@
         </a-col>
         <a-col :span="12">
           <a-form-item label="Phần trăm hoàn thành">
-            <a-slider v-model:value="logForm.completion_percentage" :min="0" :max="100" :step="5" :marks="{ 0: '0%', 25: '25%', 50: '50%', 75: '75%', 100: '100%' }" />
+            <a-slider v-model:value="logForm.completion_percentage" :min="logTaskMinProgress" :max="100" :step="5" :marks="{ [logTaskMinProgress]: `${logTaskMinProgress}%`, 50: '50%', 75: '75%', 100: '100%' }" />
           </a-form-item>
         </a-col>
       </a-row>
       <a-form-item label="Ghi chú">
         <a-textarea v-model:value="logForm.notes" :rows="4" placeholder="Mô tả công việc đã thực hiện trong ngày..." :maxlength="2000" show-count />
       </a-form-item>
+      <!-- Inline Attachments (giống Cost/Defect modal) -->
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Chứng từ / Hình ảnh đính kèm</div>
+        <div v-if="editingLog?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
+          <a v-for="a in editingLog.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+          </a>
+        </div>
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -2528,7 +2550,8 @@
         </a-col>
       </a-row>
       <a-form-item label="Tiến độ (%)">
-        <a-slider v-model:value="taskForm.progress_percentage" :min="0" :max="100" :marks="{0:'0%', 25:'25%', 50:'50%', 75:'75%', 100:'100%'}" />
+        <a-slider v-model:value="taskForm.progress_percentage" :min="0" :max="100" :marks="{0:'0%', 25:'25%', 50:'50%', 75:'75%', 100:'100%'}" disabled />
+        <div class="text-xs text-gray-400 mt-1">⚡ Tiến độ được tự động tính từ nhật ký thi công</div>
       </a-form-item>
       <a-form-item label="Mô tả"><a-textarea v-model:value="taskForm.description" :rows="3" placeholder="Mô tả công việc..." :maxlength="5000" show-count /></a-form-item>
     </a-form>
@@ -3384,7 +3407,7 @@ const totalCosts = computed(() => (props.project.costs || []).reduce((s, c) => s
 const totalAdditionalCosts = computed(() => (props.project.additional_costs || []).reduce((s, c) => s + Number(c.amount || 0), 0))
 const totalSubPayments = computed(() => {
   const subs = props.project.subcontractors || []
-  return subs.reduce((sum, s) => sum + (s.payments || []).reduce((ps, p) => ps + Number(p.amount || 0), 0), 0)
+  return subs.reduce((sum, s) => sum + (s.payments || []).filter(p => p.status === 'paid').reduce((ps, p) => ps + Number(p.amount || 0), 0), 0)
 })
 const contractValue = computed(() => Number(props.project.contract?.contract_value || 0))
 const profitMargin = computed(() => {
@@ -4136,6 +4159,8 @@ const editingLog = ref(null)
 const logForm = ref({ log_date: null, task_id: null, weather: null, personnel_count: null, completion_percentage: 0, notes: '' })
 
 const openLogModal = (record = null) => {
+  modalFiles.value = []
+  logTaskCurrentProgress.value = null
   if (record) {
     editingLog.value = record
     logForm.value = {
@@ -4145,6 +4170,14 @@ const openLogModal = (record = null) => {
       completion_percentage: Number(record.completion_percentage || 0),
       notes: record.notes || '',
     }
+    // Prefill current progress from task's logs
+    if (record.task_id) {
+      const taskLogs = (props.project.construction_logs || props.project.constructionLogs || []).filter(l => l.task_id === record.task_id && l.completion_percentage != null)
+      if (taskLogs.length) {
+        const maxPct = Math.max(...taskLogs.map(l => Number(l.completion_percentage)))
+        logTaskCurrentProgress.value = maxPct
+      }
+    }
   } else {
     editingLog.value = null
     logForm.value = { log_date: dayjs().format('YYYY-MM-DD'), task_id: null, weather: null, personnel_count: null, completion_percentage: 0, notes: '' }
@@ -4152,11 +4185,55 @@ const openLogModal = (record = null) => {
   showLogModal.value = true
 }
 
+// When user selects/changes a task, auto-fill completion_percentage with latest progress
+const logTaskCurrentProgress = ref(null)
+const logTaskMinProgress = computed(() => logTaskCurrentProgress.value ?? 0)
+const onLogTaskChange = (taskId) => {
+  if (!taskId) {
+    logTaskCurrentProgress.value = null
+    logForm.value.completion_percentage = 0
+    return
+  }
+  const logs = (props.project.construction_logs || props.project.constructionLogs || []).filter(
+    l => l.task_id === taskId && l.completion_percentage != null
+  )
+  if (logs.length) {
+    const maxPct = Math.max(...logs.map(l => Number(l.completion_percentage)))
+    logTaskCurrentProgress.value = maxPct
+    // Auto-fill: set slider to current progress (user can increase from here)
+    logForm.value.completion_percentage = maxPct
+  } else {
+    logTaskCurrentProgress.value = null
+    logForm.value.completion_percentage = 0
+  }
+}
+
 const saveLog = () => {
   if (editingLog.value) {
-    router.put(`/projects/${props.project.id}/logs/${editingLog.value.id}`, logForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showLogModal.value = false; editingLog.value = null } }))
+    router.put(`/projects/${props.project.id}/logs/${editingLog.value.id}`, logForm.value, savingOptions({
+      preserveScroll: true,
+      onSuccess: async () => {
+        if (modalFiles.value.length) {
+          await uploadModalFiles('logs', editingLog.value.id)
+          router.reload()
+        }
+        showLogModal.value = false
+        editingLog.value = null
+      },
+    }))
   } else {
-    router.post(`/projects/${props.project.id}/logs`, logForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showLogModal.value = false }))
+    router.post(`/projects/${props.project.id}/logs`, logForm.value, savingOptions({
+      preserveScroll: true,
+      onSuccess: async (page) => {
+        if (modalFiles.value.length) {
+          const logs = page.props?.project?.construction_logs || page.props?.project?.constructionLogs || []
+          const logId = logs.length ? logs[0]?.id : null // latest log (sorted desc)
+          if (logId) await uploadModalFiles('logs', logId)
+          router.reload()
+        }
+        showLogModal.value = false
+      },
+    }))
   }
 }
 

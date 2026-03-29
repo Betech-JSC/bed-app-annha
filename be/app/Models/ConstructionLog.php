@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ConstructionLog extends Model
@@ -91,33 +92,41 @@ class ConstructionLog extends Model
         });
 
         // BUSINESS RULE: When log is created/updated/deleted, recalculate task progress
+        // Use afterCommit to ensure the log data is fully saved before recalculating
         static::created(function ($log) {
             if ($log->task_id) {
-                $task = ProjectTask::find($log->task_id);
-                if ($task) {
-                    $service = app(\App\Services\TaskProgressService::class);
-                    $service->updateTaskFromLogs($task, true);
-                }
+                // Defer to after the current transaction commits (avoids nested transaction issues)
+                DB::afterCommit(function () use ($log) {
+                    $task = ProjectTask::find($log->task_id);
+                    if ($task) {
+                        $service = app(\App\Services\TaskProgressService::class);
+                        $service->updateTaskFromLogs($task, true);
+                    }
+                });
             }
         });
 
         static::updated(function ($log) {
             if ($log->task_id) {
-                $task = ProjectTask::find($log->task_id);
-                if ($task) {
-                    $service = app(\App\Services\TaskProgressService::class);
-                    $service->updateTaskFromLogs($task, true);
-                }
+                DB::afterCommit(function () use ($log) {
+                    $task = ProjectTask::find($log->task_id);
+                    if ($task) {
+                        $service = app(\App\Services\TaskProgressService::class);
+                        $service->updateTaskFromLogs($task, true);
+                    }
+                });
             }
         });
 
         static::deleted(function ($log) {
             if ($log->task_id) {
-                $task = ProjectTask::find($log->task_id);
-                if ($task) {
-                    $service = app(\App\Services\TaskProgressService::class);
-                    $service->updateTaskFromLogs($task, true);
-                }
+                DB::afterCommit(function () use ($log) {
+                    $task = ProjectTask::find($log->task_id);
+                    if ($task) {
+                        $service = app(\App\Services\TaskProgressService::class);
+                        $service->updateTaskFromLogs($task, true);
+                    }
+                });
             }
         });
     }

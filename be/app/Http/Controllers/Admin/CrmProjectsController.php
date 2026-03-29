@@ -124,7 +124,7 @@ class CrmProjectsController extends Controller
             'subcontractors.attachments',
             'subcontractors.approver',
             'constructionLogs' => function ($q) {
-                $q->with(['creator:id,name', 'task:id,name'])->latest('log_date');
+                $q->with(['creator:id,name', 'task:id,name', 'attachments'])->latest('log_date');
             },
             'acceptanceStages' => function ($q) {
                 $q->with([
@@ -1101,14 +1101,9 @@ class CrmProjectsController extends Controller
             ...$validated,
         ]);
 
-        // BUSINESS RULE: Recalculate task progress from logs (same as mobile APP)
-        // This auto-updates status to 'completed' when 100% and creates acceptance stage
-        if ($log->task_id) {
-            $task = \App\Models\ProjectTask::find($log->task_id);
-            if ($task) {
-                app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task, true);
-            }
-        }
+        // NOTE: TaskProgressService::updateTaskFromLogs() is automatically called
+        // by ConstructionLog model's `created` boot event — no need to call it again here.
+        // The boot event handles: calculate progress → update task status → update parent.
 
         return back()->with('success', 'Đã thêm nhật ký thi công.');
     }
@@ -2187,10 +2182,13 @@ class CrmProjectsController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        // Check if amount exceeds remaining
-        $remaining = $sub->total_quote - $sub->total_paid;
+        // Check if amount exceeds remaining (account for pending/approved-but-not-paid payments)
+        $pendingPaymentsTotal = $sub->payments()
+            ->whereNotIn('status', ['rejected', 'cancelled', 'paid'])
+            ->sum('amount');
+        $remaining = $sub->total_quote - $sub->total_paid - $pendingPaymentsTotal;
         if ($validated['amount'] > $remaining) {
-            return back()->with('error', 'Số tiền thanh toán vượt quá số tiền còn lại (' . number_format($remaining) . ').');
+            return back()->with('error', 'Số tiền thanh toán vượt quá số tiền còn lại (' . number_format(max(0, $remaining)) . '). Đã có ' . number_format($pendingPaymentsTotal) . ' đang chờ duyệt.');
         }
 
         DB::beginTransaction();
@@ -2246,6 +2244,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $admin = auth('admin')->user();
+        $this->crmRequire($admin, Permissions::COST_APPROVE_MANAGEMENT, $project);
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
         if ($payment->status !== 'pending_management_approval') {
@@ -2254,7 +2253,12 @@ class CrmProjectsController extends Controller
 
         DB::beginTransaction();
         try {
-            $payment->approve(null); // null to avoid FK violation
+            // Record approver info directly (Admin model != User model, so we set fields manually)
+            $payment->approved_by = $admin->id;
+            $payment->approved_at = now();
+            $payment->status = 'pending_accountant_confirmation';
+            $payment->save();
+
             DB::commit();
             return back()->with('success', 'Đã duyệt phiếu thanh toán NTP.');
         } catch (\Exception $e) {
@@ -2275,7 +2279,12 @@ class CrmProjectsController extends Controller
 
         DB::beginTransaction();
         try {
-            $payment->reject(null, $request->input('rejection_reason'));
+            $payment->rejected_by = $admin->id;
+            $payment->rejected_at = now();
+            $payment->rejection_reason = $request->input('rejection_reason');
+            $payment->status = 'rejected';
+            $payment->save();
+
             DB::commit();
             return back()->with('success', 'Đã từ chối phiếu thanh toán.');
         } catch (\Exception $e) {
@@ -2288,6 +2297,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $admin = auth('admin')->user();
+        $this->crmRequire($admin, Permissions::COST_APPROVE_ACCOUNTANT, $project);
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
         if ($payment->status !== 'pending_accountant_confirmation') {
@@ -2296,7 +2306,32 @@ class CrmProjectsController extends Controller
 
         DB::beginTransaction();
         try {
-            $payment->markAsPaid(null); // null to avoid FK violation
+            // Set payer info directly (Admin model != User model)
+            $payment->paid_by = $admin->id;
+            $payment->paid_at = now();
+            $payment->status = 'paid';
+            $payment->save();
+
+            // Recalculate subcontractor financials from payments table (single source of truth)
+            $payment->subcontractor->recalculateFinancials();
+
+            // Auto-create Cost record for cash flow sync
+            Cost::create([
+                'project_id' => $payment->project_id,
+                'subcontractor_id' => $payment->subcontractor_id,
+                'subcontractor_payment_id' => $payment->id,
+                'name' => "Thanh toán thầu phụ: " . ($payment->subcontractor->name ?? 'N/A') . " - Đợt: " . ($payment->payment_stage ?? 'N/A'),
+                'amount' => $payment->amount,
+                'cost_date' => $payment->payment_date ?: now(),
+                'category' => 'other',
+                'cost_group_id' => 5,
+                'description' => $payment->description ?: "Tự động tạo từ phiếu chi thầu phụ " . $payment->payment_number,
+                'status' => 'approved',
+                'created_by' => $admin->id,
+                'accountant_approved_by' => $admin->id,
+                'accountant_approved_at' => now(),
+            ]);
+
             DB::commit();
             return back()->with('success', 'Đã xác nhận thanh toán.');
         } catch (\Exception $e) {
