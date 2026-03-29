@@ -1080,7 +1080,20 @@
                 <a-tag :color="defectStatusColors[record.status]" class="rounded-full">{{ defectStatusLabels[record.status] || record.status }}</a-tag>
               </template>
               <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1">
+                <div class="flex gap-1 flex-wrap">
+                  <!-- Workflow Actions based on status -->
+                  <a-popconfirm v-if="record.status === 'open' && can('defect.update')" title="Nhận xử lý lỗi này?" @confirm="defectAction(record, 'mark-in-progress')" ok-text="Nhận" cancel-text="Hủy">
+                    <a-button size="small" type="primary" ghost class="text-xs">🔧 Nhận XL</a-button>
+                  </a-popconfirm>
+                  <a-popconfirm v-if="record.status === 'in_progress' && can('defect.update')" title="Đánh dấu lỗi đã sửa xong?" @confirm="defectAction(record, 'mark-fixed')" ok-text="Đã sửa" cancel-text="Hủy">
+                    <a-button size="small" class="text-xs" style="color:#16a34a;border-color:#16a34a">✅ Đã sửa</a-button>
+                  </a-popconfirm>
+                  <a-popconfirm v-if="record.status === 'fixed' && can('defect.update')" title="Xác nhận lỗi đã sửa xong?" @confirm="defectAction(record, 'verify')" ok-text="Xác nhận" cancel-text="Hủy">
+                    <a-button size="small" class="text-xs" style="color:#0891b2;border-color:#0891b2">✔ Xác nhận</a-button>
+                  </a-popconfirm>
+                  <a-button v-if="record.status === 'fixed' && can('defect.update')" size="small" danger class="text-xs" @click="openRejectDefectModal(record)">✗ Từ chối</a-button>
+                  <a-tag v-if="record.status === 'verified'" color="cyan" class="text-xs">✓ Đã xác nhận</a-tag>
+                  <!-- Edit / Delete -->
                   <a-button v-if="can('defect.update')" type="text" size="small" @click="openDefectModal(record)"><EditOutlined /></a-button>
                   <a-popconfirm v-if="can('defect.delete')" title="Xóa?" @confirm="deleteDefect(record)">
                     <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
@@ -2340,6 +2353,14 @@
     </a-form>
   </a-modal>
 
+  <!-- Reject Defect Fix Modal -->
+  <a-modal v-model:open="showRejectDefectModal" title="Từ chối sửa lỗi" :width="480" @ok="confirmRejectDefect" ok-text="Từ chối" cancel-text="Hủy" ok-button-props="{ danger: true }" centered destroy-on-close class="crm-modal">
+    <div class="mt-4">
+      <p class="text-sm text-gray-600 mb-3">Lý do từ chối sửa lỗi <strong>"{{ rejectDefectRecord?.description?.substring(0, 50) }}..."</strong>:</p>
+      <a-textarea v-model:value="rejectDefectReason" :rows="3" placeholder="Nhập lý do từ chối — lỗi này cần sửa lại như thế nào?" />
+    </div>
+  </a-modal>
+
   <!-- Change Request Modal -->
   <a-modal v-model:open="showCRModal" :title="editingCR ? 'Cập nhật yêu cầu thay đổi' : 'Tạo yêu cầu thay đổi'" :width="720" @ok="saveCR" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
@@ -2958,79 +2979,159 @@
     </a-form>
   </a-modal>
 
-  <!-- ==================== MATERIAL BATCH MODAL ==================== -->
-  <a-modal v-model:open="showMaterialModal" title="Thêm Vật Liệu Sử Dụng" :width="700" :footer="null" centered destroy-on-close class="crm-modal">
-    <div class="mt-4 space-y-4">
-      <!-- Batch List Header -->
-      <div v-if="materialBatchItems.length" class="bg-blue-50 rounded-xl p-3 border border-blue-100">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-semibold text-blue-800">Danh sách chờ ({{ materialBatchItems.length }})</span>
-          <a-button type="text" size="small" danger @click="materialBatchItems = []">Xóa tất cả</a-button>
+  <!-- ==================== MATERIAL BATCH MODAL (Premium UX) ==================== -->
+  <a-modal v-model:open="showMaterialModal" :width="740" :footer="null" centered destroy-on-close class="crm-modal material-modal" :bodyStyle="{ padding: 0 }">
+    <template #title>
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-200/50">
+          <span class="text-white text-lg">🧱</span>
         </div>
-        <div v-for="(bi, i) in materialBatchItems" :key="i" class="flex items-center justify-between px-2 py-1.5 bg-white rounded-lg mb-1 text-xs">
-          <span class="font-semibold">{{ bi.material.name }}</span>
-          <span class="text-gray-500">{{ bi.quantity }} {{ bi.material.unit }} — {{ fmt(bi.amount) }}</span>
-          <a-button type="text" size="small" danger @click="materialBatchItems.splice(i, 1)"><DeleteOutlined /></a-button>
+        <div>
+          <div class="text-base font-bold text-gray-800">Thêm Vật Liệu Sử Dụng</div>
+          <div class="text-xs text-gray-400 font-normal">Chọn vật liệu, nhập số lượng & đơn giá → thêm vào danh sách → xác nhận</div>
         </div>
-        <div class="flex items-center justify-between pt-2 border-t border-blue-100 mt-2">
-          <span class="text-sm font-bold text-gray-700">Tổng cộng:</span>
-          <span class="text-sm font-bold text-emerald-600">{{ fmt(materialBatchItems.reduce((s,i) => s + i.amount, 0)) }}</span>
+      </div>
+    </template>
+
+    <div class="p-6 space-y-5">
+
+      <!-- ── Section 1: Thông tin chung ── -->
+      <div class="mat-section">
+        <div class="mat-section-header">
+          <div class="mat-section-accent bg-gradient-to-b from-blue-400 to-blue-600"></div>
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Thông tin chung</span>
+        </div>
+        <a-form layout="vertical">
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item label="Ngày giao dịch" class="mb-0">
+                <a-date-picker v-model:value="matForm.transaction_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item class="mb-0">
+                <template #label>
+                  <span>Nhóm chi phí <span class="text-red-500">*</span></span>
+                </template>
+                <a-select v-model:value="matForm.cost_group_id" placeholder="Chọn nhóm chi phí" size="large" class="w-full">
+                  <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </a-form>
+      </div>
+
+      <!-- ── Section 2: Chọn & nhập vật liệu ── -->
+      <div class="mat-section">
+        <div class="mat-section-header">
+          <div class="mat-section-accent bg-gradient-to-b from-emerald-400 to-emerald-600"></div>
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Thêm vật liệu</span>
+        </div>
+        <a-form layout="vertical">
+          <a-form-item label="Chọn vật liệu" class="mb-3">
+            <a-select v-model:value="matForm.material_id" show-search option-filter-prop="label" placeholder="🔍 Tìm và chọn vật liệu..." size="large" class="w-full" @change="onMaterialSelect">
+              <a-select-option v-for="m in materials" :key="m.id" :value="m.id" :label="m.name">
+                {{ m.name }} <span class="text-gray-400 text-xs">({{ m.code || 'N/A' }})</span>
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-row :gutter="12">
+            <a-col :span="8">
+              <a-form-item :label="'Số lượng' + (matFormSelected?.unit ? ` (${matFormSelected.unit})` : '')" class="mb-3">
+                <a-input-number v-model:value="matForm.quantity" :min="0.01" :step="1" size="large" class="w-full" @change="calcMatAmount" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="8">
+              <a-form-item label="Đơn giá (VNĐ)" class="mb-3">
+                <a-input-number v-model:value="matForm.unit_price" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" @change="calcMatAmount" />
+                <div v-if="matFormSelected?.unit_price" class="text-[11px] text-blue-500 mt-1 flex items-center gap-1">
+                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                  Niêm yết: {{ new Intl.NumberFormat('vi-VN').format(matFormSelected.unit_price) }} đ
+                </div>
+              </a-form-item>
+            </a-col>
+            <a-col :span="8">
+              <a-form-item label="Thành tiền (VNĐ)" class="mb-3">
+                <a-input-number v-model:value="matForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <!-- Add to batch button -->
+          <a-button type="primary" block size="large" @click="addMaterialToBatch" :disabled="!matForm.material_id || !matForm.quantity || !matForm.amount" class="mat-add-btn">
+            <template #icon><PlusOutlined /></template>
+            Thêm vào danh sách
+          </a-button>
+        </a-form>
+      </div>
+
+      <!-- ── Section 3: Danh sách chờ (Batch) ── -->
+      <div class="mat-section">
+        <div class="mat-section-header">
+          <div class="mat-section-accent bg-gradient-to-b from-amber-400 to-amber-600"></div>
+          <div class="flex items-center justify-between flex-1">
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Danh sách chờ
+              <a-badge v-if="materialBatchItems.length" :count="materialBatchItems.length" :number-style="{ backgroundColor: '#2563EB', fontSize: '10px', minWidth: '18px', height: '18px', lineHeight: '18px' }" class="ml-1.5" />
+            </span>
+            <a-button v-if="materialBatchItems.length" type="text" size="small" danger @click="materialBatchItems = []" class="text-xs">
+              <DeleteOutlined /> Xóa tất cả
+            </a-button>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div v-if="!materialBatchItems.length" class="mat-empty-state">
+          <div class="text-3xl mb-2 opacity-40">📦</div>
+          <div class="text-sm text-gray-400">Chưa có vật liệu nào</div>
+          <div class="text-xs text-gray-300">Chọn vật liệu ở trên và nhấn "Thêm vào danh sách"</div>
+        </div>
+
+        <!-- Batch Items -->
+        <TransitionGroup v-else name="mat-item" tag="div" class="space-y-1.5">
+          <div v-for="(bi, i) in materialBatchItems" :key="bi.material.id + '-' + i" class="mat-batch-item">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 flex items-center justify-center text-xs font-bold text-orange-500 flex-shrink-0">
+                {{ i + 1 }}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="text-sm font-semibold text-gray-700 truncate">{{ bi.material.name }}</div>
+                <div class="text-xs text-gray-400">{{ bi.quantity }} {{ bi.material.unit }} × {{ new Intl.NumberFormat('vi-VN').format(bi.amount / bi.quantity) }} đ</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-bold text-emerald-600 whitespace-nowrap">{{ fmt(bi.amount) }}</span>
+              <a-button type="text" size="small" danger @click="materialBatchItems.splice(i, 1)" class="mat-delete-btn">
+                <CloseOutlined class="text-xs" />
+              </a-button>
+            </div>
+          </div>
+        </TransitionGroup>
+
+        <!-- Total -->
+        <div v-if="materialBatchItems.length" class="mat-batch-total">
+          <span class="text-sm font-semibold text-gray-600">Tổng cộng ({{ materialBatchItems.length }} vật liệu)</span>
+          <span class="text-base font-extrabold text-emerald-600">{{ fmt(materialBatchItems.reduce((s,i) => s + i.amount, 0)) }}</span>
         </div>
       </div>
 
-      <!-- Select Material -->
-      <a-form layout="vertical">
-        <a-form-item label="Chọn vật liệu">
-          <a-select v-model:value="matForm.material_id" show-search option-filter-prop="label" placeholder="Tìm và chọn vật liệu..." size="large" class="w-full" @change="onMaterialSelect">
-            <a-select-option v-for="m in materials" :key="m.id" :value="m.id" :label="m.name">
-              {{ m.name }} <span class="text-gray-400 text-xs">({{ m.code || 'N/A' }})</span>
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-row :gutter="12">
-          <a-col :span="6">
-            <a-form-item :label="'Số lượng' + (matFormSelected?.unit ? ` (${matFormSelected.unit})` : '')">
-              <a-input-number v-model:value="matForm.quantity" :min="0.01" :step="1" size="large" class="w-full" @change="calcMatAmount" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="Đơn giá (VNĐ)">
-              <a-input-number v-model:value="matForm.unit_price" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" @change="calcMatAmount" />
-              <div v-if="matFormSelected?.unit_price" class="text-xs text-gray-400 mt-1">Niêm yết: {{ new Intl.NumberFormat('vi-VN').format(matFormSelected.unit_price) }} đ</div>
-            </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="Thành tiền (VNĐ)">
-              <a-input-number v-model:value="matForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label=" ">
-              <a-button type="dashed" block size="large" @click="addMaterialToBatch" :disabled="!matForm.material_id || !matForm.quantity || !matForm.amount">
-                <PlusOutlined /> Thêm vào danh sách
-              </a-button>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-row :gutter="12">
-          <a-col :span="12">
-            <a-form-item label="Ngày giao dịch">
-              <a-date-picker v-model:value="matForm.transaction_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="Nhóm chi phí" required>
-              <a-select v-model:value="matForm.cost_group_id" placeholder="Chọn nhóm chi phí" size="large" class="w-full">
-                <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-      </a-form>
-
-      <a-button v-if="materialBatchItems.length" type="primary" block size="large" :loading="submittingMaterial" @click="submitMaterialBatch">
-        <CheckOutlined /> Xác nhận & Đẩy qua chi phí ({{ materialBatchItems.length }} vật liệu)
+      <!-- ── Submit Button ── -->
+      <a-button
+        v-if="materialBatchItems.length"
+        type="primary"
+        block
+        size="large"
+        :loading="submittingMaterial"
+        @click="submitMaterialBatch"
+        :disabled="!matForm.cost_group_id"
+        class="mat-submit-btn"
+      >
+        <CheckOutlined /> Xác nhận & Đẩy qua chi phí
+        <a-badge :count="materialBatchItems.length" :number-style="{ backgroundColor: 'rgba(255,255,255,0.3)', color: '#fff', fontSize: '11px', marginLeft: '8px' }" />
       </a-button>
+      <div v-if="materialBatchItems.length && !matForm.cost_group_id" class="text-center text-xs text-red-400 -mt-2">
+        ⚠️ Vui lòng chọn "Nhóm chi phí" ở trên để tiếp tục
+      </div>
     </div>
   </a-modal>
 
@@ -3731,7 +3832,7 @@ const defectCols = [
   { title: 'Mô tả', dataIndex: 'description', ellipsis: true },
   { title: 'Mức độ', key: 'severity', width: 120 },
   { title: 'Trạng thái', key: 'status', width: 120 },
-  { title: '', key: 'actions', width: 100, align: 'center' },
+  { title: '', key: 'actions', width: 220, align: 'center' },
 ]
 
 const crCols = [
@@ -4114,6 +4215,27 @@ const saveDefect = () => {
   }))
 }
 const deleteDefect = (d) => router.delete(`/projects/${props.project.id}/defects/${d.id}`, loadingOptions(`delete-defect-${d.id}`))
+
+// ============ DEFECT WORKFLOW ACTIONS ============
+const defectAction = (record, action) => {
+  router.post(`/projects/${props.project.id}/defects/${record.id}/${action}`, {}, loadingOptions(`defect-action-${record.id}`))
+}
+const rejectDefectRecord = ref(null)
+const rejectDefectReason = ref('')
+const showRejectDefectModal = ref(false)
+const openRejectDefectModal = (record) => {
+  rejectDefectRecord.value = record
+  rejectDefectReason.value = ''
+  showRejectDefectModal.value = true
+}
+const confirmRejectDefect = () => {
+  if (!rejectDefectReason.value?.trim()) return
+  router.post(`/projects/${props.project.id}/defects/${rejectDefectRecord.value.id}/reject-fix`, {
+    rejection_reason: rejectDefectReason.value
+  }, loadingOptions(`reject-defect-${rejectDefectRecord.value.id}`, {
+    onSuccess: () => { showRejectDefectModal.value = false; rejectDefectRecord.value = null }
+  }))
+}
 
 // ============ CHANGE REQUEST CRUD ============
 const showCRModal = ref(false)
@@ -4849,6 +4971,109 @@ const returnEquipmentAction = (eq, allocation) => {
 .crm-detail-tabs :deep(.ant-tabs-tab-active .ant-tabs-tab-btn) { color: #2563EB !important; }
 .crm-detail-tabs :deep(.ant-tabs-ink-bar) { background: #2563EB; height: 3px; border-radius: 3px 3px 0 0; }
 .crm-modal :deep(.ant-modal-content) { border-radius: 16px; }
+
+/* Material Modal — Premium UX */
+.material-modal :deep(.ant-modal-header) {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.mat-section {
+  background: #fafbfc;
+  border-radius: 14px;
+  border: 1px solid #e8ecf1;
+  padding: 16px;
+}
+.mat-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.mat-section-accent {
+  width: 3px;
+  height: 16px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.mat-add-btn {
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  height: 42px !important;
+  background: linear-gradient(135deg, #2563EB 0%, #4F46E5 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+  transition: all 0.2s ease !important;
+}
+.mat-add-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+}
+.mat-add-btn:disabled {
+  background: #e2e8f0 !important;
+  box-shadow: none !important;
+}
+.mat-empty-state {
+  text-align: center;
+  padding: 24px 16px;
+  border: 2px dashed #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.mat-batch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #e8ecf1;
+  transition: all 0.2s ease;
+}
+.mat-batch-item:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+}
+.mat-delete-btn {
+  opacity: 0.4;
+  transition: opacity 0.15s ease !important;
+}
+.mat-batch-item:hover .mat-delete-btn {
+  opacity: 1;
+}
+.mat-batch-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  margin-top: 10px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border-radius: 10px;
+  border: 1px solid #bbf7d0;
+}
+.mat-submit-btn {
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+  height: 48px !important;
+  font-size: 15px !important;
+  background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+.mat-submit-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4) !important;
+}
+.mat-submit-btn:disabled {
+  background: #d1d5db !important;
+  box-shadow: none !important;
+}
+/* Batch item transition animations */
+.mat-item-enter-active { transition: all 0.3s ease; }
+.mat-item-leave-active { transition: all 0.2s ease; }
+.mat-item-enter-from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+.mat-item-leave-to { opacity: 0; transform: translateX(20px) scale(0.95); }
+.mat-item-move { transition: transform 0.25s ease; }
 
 /* File Preview Modal — Premium Inline Viewer */
 .file-preview-modal :deep(.ant-modal-content) {

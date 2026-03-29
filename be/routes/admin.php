@@ -251,6 +251,11 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::put('/{project}/defects/{defect}', [CrmProjectsController::class, 'updateDefect'])->name('defects.update');
         Route::delete('/{project}/defects/{defect}', [CrmProjectsController::class, 'destroyDefect'])->name('defects.destroy');
         Route::post('/{project}/defects/{defect}/attach-files', [CrmProjectsController::class, 'attachFilesToDefect'])->name('defects.attach-files');
+        // Defect Workflow Actions (matching APP)
+        Route::post('/{project}/defects/{defect}/mark-in-progress', [CrmProjectsController::class, 'markDefectInProgress'])->name('defects.mark-in-progress');
+        Route::post('/{project}/defects/{defect}/mark-fixed', [CrmProjectsController::class, 'markDefectFixed'])->name('defects.mark-fixed');
+        Route::post('/{project}/defects/{defect}/verify', [CrmProjectsController::class, 'verifyDefect'])->name('defects.verify');
+        Route::post('/{project}/defects/{defect}/reject-fix', [CrmProjectsController::class, 'rejectDefectFix'])->name('defects.reject-fix');
 
         // Change Requests
         Route::post('/{project}/change-requests', [CrmProjectsController::class, 'storeChangeRequest'])->name('change-requests.store');

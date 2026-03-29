@@ -131,7 +131,8 @@ class ProjectPayment extends Model
      */
     public function markAsPaidByCustomer(?User $user = null, ?string $paidDate = null, ?float $actualAmount = null): bool
     {
-        if ($this->status !== 'pending') {
+        // FIX BUG 4: Also accept 'overdue' payments (controller already checks both)
+        if (!in_array($this->status, ['pending', 'overdue'])) {
             return false;
         }
 

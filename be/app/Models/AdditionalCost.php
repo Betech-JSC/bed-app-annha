@@ -162,8 +162,9 @@ class AdditionalCost extends Model
             return $this->confirm($user);
         }
 
-        // Workflow cũ: pending_approval → approved
-        if ($this->status === 'pending_approval') {
+        // FIX BUG 5: Handle 'pending' status directly (from Approval Center)
+        // Workflow: pending → approved (skip pending_approval intermediate step)
+        if (in_array($this->status, ['pending', 'pending_approval'])) {
             $this->status = 'approved';
             if ($user) {
                 $this->approved_by = $user->id;
@@ -179,6 +180,11 @@ class AdditionalCost extends Model
     {
         $this->status = 'rejected';
         $this->rejected_reason = $reason;
+        // FIX BUG 7: Record who rejected for audit trail
+        if ($user) {
+            $this->approved_by = $user->id;
+            $this->approved_at = now();
+        }
         return $this->save();
     }
 

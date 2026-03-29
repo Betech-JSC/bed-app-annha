@@ -364,7 +364,7 @@ class CrmApprovalController extends Controller
         $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
 
-        if (!in_array($stage->status, ['project_manager_approved', 'customer_approved'])) {
+        if ($stage->status !== 'project_manager_approved') {
             return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái có thể từ chối');
         }
 
@@ -479,13 +479,8 @@ class CrmApprovalController extends Controller
         try {
             DB::beginTransaction();
 
-            // AdditionalCost::approve() handles both pending_approval and customer_paid flows
-            // For 'pending' status, we need to move to pending_approval first then approve
-            if ($ac->status === 'pending') {
-                $ac->status = 'pending_approval';
-                $ac->save();
-            }
-
+            // FIX BUG 5: Handle 'pending' status directly in approve() without intermediate save
+            // The model's approve() method now handles 'pending' → 'approved' directly
             $result = $ac->approve($user);
 
             if (!$result) {
@@ -963,7 +958,11 @@ class CrmApprovalController extends Controller
 
         try {
             DB::beginTransaction();
-            $payment->update(['status' => 'rejected', 'rejected_reason' => $request->reason]);
+            // FIX BUG 3: Reset to 'pending' (not 'rejected') to allow re-upload, matching CrmProjectsController
+            $payment->update([
+                'status' => 'pending',
+                'notes' => ($payment->notes ? $payment->notes . "\n\n" : '') . "KH từ chối — " . $request->reason,
+            ]);
             DB::commit();
             return back()->with('success', 'Đã từ chối đợt thanh toán');
         } catch (\Exception $e) {

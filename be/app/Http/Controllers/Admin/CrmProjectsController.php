@@ -459,11 +459,13 @@ class CrmProjectsController extends Controller
         if ($cost->status !== 'pending_management_approval') {
             return back()->with('error', 'Phiếu chi không ở trạng thái chờ BĐH duyệt.');
         }
-        // Use model method with null user (Admin model FK constraint)
-        // Model method handles status transition properly
-        $cost->approveByManagement(null);
-        // Set approved_at even though we can't set the FK user
-        $cost->update(['management_approved_at' => now()]);
+
+        // FIX BUG 1+2: Admin model can't be FK to users table.
+        // Use forceFill to set status + timestamps directly, avoiding FK violation.
+        $cost->forceFill([
+            'status' => 'pending_accountant_approval',
+            'management_approved_at' => now(),
+        ])->save();
 
         $this->notifyFromCrm($project, 'cost_management_approved', "Phiếu chi \"{$cost->name}\" đã được BĐH duyệt, chờ KT xác nhận.");
 
@@ -480,14 +482,35 @@ class CrmProjectsController extends Controller
         if ($cost->status !== 'pending_accountant_approval') {
             return back()->with('error', 'Phiếu chi không ở trạng thái chờ KT xác nhận.');
         }
-        // Call model method (null user = Admin FK constraint workaround)
-        // CRITICAL: This method triggers side effects:
-        //   - updateSubcontractorStatus() → sync total_paid, payment_status
-        //   - MaterialInventoryService → create material transactions
-        //   - BudgetSyncService → update budget actual amounts
-        $cost->approveByAccountant(null);
-        // Record approved timestamp
-        $cost->update(['accountant_approved_at' => now()]);
+
+        try {
+            DB::beginTransaction();
+
+            // FIX BUG 1+2: Set status + timestamp via forceFill (Admin FK constraint)
+            $cost->forceFill([
+                'status' => 'approved',
+                'accountant_approved_at' => now(),
+            ])->save();
+
+            // CRITICAL: Trigger side effects that model method normally does
+            // 1. Update subcontractor total_paid + payment_status
+            if ($cost->subcontractor_id) {
+                $this->syncSubcontractorPaymentFromCost($cost);
+            }
+            // 2. Create material transaction
+            if ($cost->material_id && class_exists(\App\Services\MaterialInventoryService::class)) {
+                app(\App\Services\MaterialInventoryService::class)->createTransactionFromCost($cost);
+            }
+            // 3. Sync budget items
+            if ($cost->project_id && class_exists(\App\Services\BudgetSyncService::class)) {
+                app(\App\Services\BudgetSyncService::class)->syncProjectBudgets($project);
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi xác nhận: ' . $e->getMessage());
+        }
 
         $this->notifyFromCrm($project, 'cost_accountant_approved', "Phiếu chi \"{$cost->name}\" đã được KT xác nhận.");
 
@@ -505,11 +528,9 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Phiếu chi không ở trạng thái chờ duyệt.');
         }
         $validated = $request->validate(['rejected_reason' => 'required|string|max:500']);
-        // Use model method (null user = Admin FK constraint)
-        // CRITICAL: This method triggers side effects:
-        //   - Reverts subcontractor total_paid if cost was previously approved
-        //   - Deletes MaterialTransaction if cost was approved
-        //   - Re-syncs budget items
+
+        // FIX BUG 1+2: Use model method which handles side effects (rollback subcontractor, material, budget)
+        // Pass null for user (Admin FK constraint) — model handles gracefully
         $cost->reject($validated['rejected_reason'], null);
 
         $this->notifyFromCrm($project, 'cost_rejected', "Phiếu chi \"{$cost->name}\" bị từ chối: {$validated['rejected_reason']}");
@@ -845,11 +866,21 @@ class CrmProjectsController extends Controller
         if ($log->task_id && $log->completion_percentage) {
             $task = \App\Models\ProjectTask::find($log->task_id);
             if ($task && $log->completion_percentage > ($task->progress_percentage ?? 0)) {
-                $task->update(['progress_percentage' => $log->completion_percentage]);
+                // BUSINESS RULE: Auto-calculate status based on progress
+                $service = app(\App\Services\TaskProgressService::class);
+                $autoStatus = $service->calculateStatus($task, (float) $log->completion_percentage);
+
+                $task->forceFill([
+                    'progress_percentage' => $log->completion_percentage,
+                    'status' => $autoStatus,
+                ])->saveQuietly();
 
                 // Trigger hierarchical progress recalculation
-                if (class_exists(\App\Services\TaskProgressService::class)) {
-                    app(\App\Services\TaskProgressService::class)->recalculateProjectProgress($project->id);
+                if ($task->parent_id) {
+                    $parent = \App\Models\ProjectTask::find($task->parent_id);
+                    if ($parent) {
+                        $service->updateTaskFromLogs($parent, true);
+                    }
                 }
             }
         }
@@ -1329,6 +1360,154 @@ class CrmProjectsController extends Controller
     }
 
     // ===================================================================
+    // DEFECT WORKFLOW ACTIONS (matching APP flow)
+    // Flow: open → in_progress → fixed → verified
+    //       ↑ rejectFix ←─────────────┘
+    // ===================================================================
+
+    /**
+     * Nhận xử lý lỗi (open → in_progress)
+     */
+    public function markDefectInProgress(Request $request, string $projectId, string $defectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
+
+        $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
+        if (!in_array($defect->status, ['open'])) {
+            return back()->with('error', 'Lỗi không ở trạng thái có thể nhận xử lý.');
+        }
+
+        $validated = $request->validate([
+            'expected_completion_date' => 'nullable|date',
+        ]);
+
+        $oldStatus = $defect->status;
+        $defect->markAsInProgress(null);
+
+        if (!empty($validated['expected_completion_date'])) {
+            $defect->update(['expected_completion_date' => $validated['expected_completion_date']]);
+        }
+
+        \App\Models\DefectHistory::create([
+            'defect_id' => $defect->id,
+            'action' => 'status_changed',
+            'old_status' => $oldStatus,
+            'new_status' => 'in_progress',
+            'user_id' => $user->id,
+        ]);
+
+        $this->notifyFromCrm($project, 'defect_in_progress', "Lỗi \"{$defect->description}\" đã được nhận xử lý.");
+
+        return back()->with('success', 'Đã nhận xử lý lỗi.');
+    }
+
+    /**
+     * Đánh dấu đã sửa lỗi (in_progress → fixed)
+     * BUSINESS RULE: Matching APP — requires after images
+     */
+    public function markDefectFixed(Request $request, string $projectId, string $defectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
+
+        $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
+        if ($defect->status !== 'in_progress') {
+            return back()->with('error', 'Lỗi phải đang ở trạng thái "Đang xử lý" mới có thể đánh dấu đã sửa.');
+        }
+
+        $oldStatus = $defect->status;
+        $defect->markAsFixed(null); // null user (Admin FK constraint)
+
+        \App\Models\DefectHistory::create([
+            'defect_id' => $defect->id,
+            'action' => 'status_changed',
+            'old_status' => $oldStatus,
+            'new_status' => 'fixed',
+            'user_id' => $user->id,
+        ]);
+
+        $this->notifyFromCrm($project, 'defect_fixed', "Lỗi \"{$defect->description}\" đã được sửa, chờ xác nhận.");
+
+        return back()->with('success', 'Đã đánh dấu lỗi đã sửa — chờ xác nhận.');
+    }
+
+    /**
+     * Xác nhận lỗi đã xử lý xong (fixed → verified)
+     * BUSINESS RULE: Triggers checkAndUpdateTaskProgress + autoResubmitAcceptanceStage
+     */
+    public function verifyDefect(Request $request, string $projectId, string $defectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
+
+        $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
+        if ($defect->status !== 'fixed') {
+            return back()->with('error', 'Chỉ có thể xác nhận lỗi đã được sửa (trạng thái "Đã sửa").');
+        }
+
+        $oldStatus = $defect->status;
+        // markAsVerified triggers:
+        // 1. checkAndUpdateTaskProgress (complete task if all defects verified)
+        // 2. autoResubmitAcceptanceStage (reset rejected items to draft)
+        $result = $defect->markAsVerified(null);
+
+        if (!$result) {
+            return back()->with('error', 'Không thể xác nhận lỗi.');
+        }
+
+        \App\Models\DefectHistory::create([
+            'defect_id' => $defect->id,
+            'action' => 'status_changed',
+            'old_status' => $oldStatus,
+            'new_status' => 'verified',
+            'user_id' => $user->id,
+        ]);
+
+        $this->notifyFromCrm($project, 'defect_verified', "Lỗi \"{$defect->description}\" đã được xác nhận sửa xong.");
+
+        return back()->with('success', 'Đã xác nhận lỗi đã sửa xong.');
+    }
+
+    /**
+     * Từ chối sửa lỗi (fixed → in_progress, yêu cầu sửa lại)
+     */
+    public function rejectDefectFix(Request $request, string $projectId, string $defectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
+
+        $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
+        if ($defect->status !== 'fixed') {
+            return back()->with('error', 'Chỉ có thể từ chối lỗi đang ở trạng thái "Đã sửa".');
+        }
+
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|max:1000',
+        ]);
+
+        $oldStatus = $defect->status;
+        $defect->markAsRejected(null, $validated['rejection_reason']);
+
+        \App\Models\DefectHistory::create([
+            'defect_id' => $defect->id,
+            'action' => 'status_changed',
+            'old_status' => $oldStatus,
+            'new_status' => 'in_progress',
+            'user_id' => $user->id,
+            'notes' => 'Từ chối: ' . $validated['rejection_reason'],
+        ]);
+
+        $this->notifyFromCrm($project, 'defect_rejected', "Lỗi \"{$defect->description}\" bị từ chối sửa: {$validated['rejection_reason']}");
+
+        return back()->with('success', 'Đã từ chối sửa lỗi — yêu cầu sửa lại.');
+    }
+
+    // ===================================================================
     // SUB-ITEM CRUD — Change Requests
     // ===================================================================
 
@@ -1691,9 +1870,15 @@ class CrmProjectsController extends Controller
                 $autoStatus = 'in_progress';
             }
 
+            // BUSINESS RULE: When progress >= 100%, always use auto-calculated status
+            // to ensure task is marked 'completed'. Otherwise, respect user's status choice.
+            $finalStatus = ((float) $progressInput >= 100)
+                ? $autoStatus
+                : ($statusInput ?: $autoStatus);
+
             $task->forceFill([
                 'progress_percentage' => $progressInput,
-                'status' => $statusInput ?: $autoStatus,
+                'status' => $finalStatus,
             ])->saveQuietly();
 
             // Auto-create acceptance stage when parent task reaches 100%
@@ -2465,13 +2650,22 @@ class CrmProjectsController extends Controller
 
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
 
+        // FIX BUG 6: Check if all items in the stage are completed before allowing stage approval
+        $items = \App\Models\AcceptanceItem::where('acceptance_stage_id', $stage->id)->get();
+        if ($items->isNotEmpty()) {
+            $incompleteItems = $items->filter(fn($item) => !in_array($item->workflow_status, ['customer_approved']));
+            if ($incompleteItems->isNotEmpty() && $validated['level'] === '3') {
+                $names = $incompleteItems->pluck('name')->join(', ');
+                return back()->with('error', "Không thể duyệt KH. Còn hạng mục chưa hoàn thành: {$names}");
+            }
+        }
+
         // Don't pass Admin to model methods — FK columns reference users table
-        // Call without user param to avoid FK violation
         $result = false;
         switch ($validated['level']) {
             case '1':
                 $this->crmRequire($admin, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project);
-                $result = $stage->approveSupervisor(); // null user — avoids FK violation
+                $result = $stage->approveSupervisor();
                 break;
             case '2':
                 $this->crmRequire($admin, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project);
@@ -2865,13 +3059,18 @@ class CrmProjectsController extends Controller
         }
 
         // BUSINESS RULE: Block if open defects exist (matching APP)
-        if ($item->task_id) {
-            $openDefects = Defect::where('project_id', $project->id)
-                ->where('task_id', $item->task_id)
-                ->whereIn('status', ['open', 'in_progress'])->count();
-            if ($openDefects > 0) {
-                return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
-            }
+        // Check by BOTH task_id (task-linked defects) AND acceptance_stage_id (auto-created from rejection)
+        $openDefectsQuery = Defect::where('project_id', $project->id)
+            ->whereIn('status', ['open', 'in_progress'])
+            ->where(function ($q) use ($item, $stage) {
+                if ($item->task_id) {
+                    $q->where('task_id', $item->task_id);
+                }
+                $q->orWhere('acceptance_stage_id', $stage->id);
+            });
+        $openDefects = $openDefectsQuery->count();
+        if ($openDefects > 0) {
+            return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
         }
 
         $item->update([
@@ -2902,13 +3101,18 @@ class CrmProjectsController extends Controller
         }
 
         // BUSINESS RULE: Block if open defects exist (matching APP)
-        if ($item->task_id) {
-            $openDefects = Defect::where('project_id', $project->id)
-                ->where('task_id', $item->task_id)
-                ->whereIn('status', ['open', 'in_progress'])->count();
-            if ($openDefects > 0) {
-                return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
-            }
+        // Check by BOTH task_id AND acceptance_stage_id
+        $openDefectsQuery = Defect::where('project_id', $project->id)
+            ->whereIn('status', ['open', 'in_progress'])
+            ->where(function ($q) use ($item, $stage) {
+                if ($item->task_id) {
+                    $q->where('task_id', $item->task_id);
+                }
+                $q->orWhere('acceptance_stage_id', $stage->id);
+            });
+        $openDefects = $openDefectsQuery->count();
+        if ($openDefects > 0) {
+            return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
         }
 
         // BUSINESS RULE: Check task progress 100% (matching APP)
@@ -2952,13 +3156,18 @@ class CrmProjectsController extends Controller
         }
 
         // BUSINESS RULE: Block if open defects exist (matching APP)
-        if ($item->task_id) {
-            $openDefects = Defect::where('project_id', $project->id)
-                ->where('task_id', $item->task_id)
-                ->whereIn('status', ['open', 'in_progress'])->count();
-            if ($openDefects > 0) {
-                return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
-            }
+        // Check by BOTH task_id AND acceptance_stage_id
+        $openDefectsQuery = Defect::where('project_id', $project->id)
+            ->whereIn('status', ['open', 'in_progress'])
+            ->where(function ($q) use ($item, $stage) {
+                if ($item->task_id) {
+                    $q->where('task_id', $item->task_id);
+                }
+                $q->orWhere('acceptance_stage_id', $stage->id);
+            });
+        $openDefects = $openDefectsQuery->count();
+        if ($openDefects > 0) {
+            return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
         }
 
         // BUSINESS RULE: Check task progress 100% (matching APP)
@@ -3396,6 +3605,33 @@ class CrmProjectsController extends Controller
     // ===================================================================
     // HELPER — CRM Notification dispatch (matching APP NotificationService)
     // ===================================================================
+
+    /**
+     * Sync subcontractor total_paid + payment_status after cost approval
+     * Replicates Cost model's updateSubcontractorStatus() for Admin context
+     */
+    private function syncSubcontractorPaymentFromCost(Cost $cost): void
+    {
+        if (!$cost->subcontractor_id) return;
+
+        $sub = \App\Models\Subcontractor::find($cost->subcontractor_id);
+        if (!$sub) return;
+
+        $totalPaid = Cost::where('subcontractor_id', $sub->id)
+            ->where('status', 'approved')
+            ->sum('amount');
+
+        $sub->total_paid = $totalPaid;
+        $sub->payment_status = $totalPaid >= $sub->total_quote
+            ? 'completed'
+            : ($totalPaid > 0 ? 'partial' : 'pending');
+
+        if (in_array($sub->progress_status, ['not_started', null])) {
+            $sub->progress_status = 'in_progress';
+        }
+
+        $sub->save();
+    }
 
     /**
      * Send notification from CRM to project team
