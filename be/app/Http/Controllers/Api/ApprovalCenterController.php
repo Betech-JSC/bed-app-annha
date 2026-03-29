@@ -210,7 +210,85 @@ class ApprovalCenterController extends Controller
         }
 
         // ================================================================
-        // 4. ACCEPTANCE STAGES (Nghiệm thu - chờ KH duyệt)
+        // 4a. ACCEPTANCE STAGES — chờ GS duyệt (pending)
+        // ================================================================
+        if ($type === 'all' || $type === 'acceptance_supervisor') {
+            $acceptanceSupervisor = AcceptanceStage::where('status', 'pending')
+                ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            if ($acceptanceSupervisor->isNotEmpty()) {
+                $result['summary'][] = [
+                    'type' => 'acceptance_supervisor',
+                    'label' => 'NT chờ GS',
+                    'icon' => 'eye-outline',
+                    'color' => '#0D9488',
+                    'total' => $acceptanceSupervisor->count(),
+                ];
+
+                foreach ($acceptanceSupervisor as $stage) {
+                    $result['items'][] = [
+                        'id' => $stage->id,
+                        'type' => 'acceptance_supervisor',
+                        'title' => $stage->name,
+                        'subtitle' => ($stage->project->code ?? '') . ' - ' . ($stage->project->name ?? 'Dự án'),
+                        'amount' => 0,
+                        'status' => $stage->status,
+                        'status_label' => 'Chờ GS duyệt',
+                        'created_by' => $stage->creator->name ?? 'N/A',
+                        'created_at' => $stage->created_at->toISOString(),
+                        'description' => $stage->description ?? null,
+                        'project_id' => $stage->project_id,
+                        'route' => "/projects/{$stage->project_id}/acceptance",
+                        'can_approve' => true,
+                        'approval_level' => 'supervisor',
+                    ];
+                }
+            }
+        }
+
+        // ================================================================
+        // 4b. ACCEPTANCE STAGES — chờ QLDA duyệt (supervisor_approved)
+        // ================================================================
+        if ($type === 'all' || $type === 'acceptance_pm') {
+            $acceptancePM = AcceptanceStage::where('status', 'supervisor_approved')
+                ->with(['project:id,name,code', 'supervisorApprover:id,name', 'task:id,name'])
+                ->orderBy('updated_at', 'desc')
+                ->get();
+
+            if ($acceptancePM->isNotEmpty()) {
+                $result['summary'][] = [
+                    'type' => 'acceptance_pm',
+                    'label' => 'NT chờ QLDA',
+                    'icon' => 'person-outline',
+                    'color' => '#3B82F6',
+                    'total' => $acceptancePM->count(),
+                ];
+
+                foreach ($acceptancePM as $stage) {
+                    $result['items'][] = [
+                        'id' => $stage->id,
+                        'type' => 'acceptance_pm',
+                        'title' => $stage->name,
+                        'subtitle' => ($stage->project->code ?? '') . ' - ' . ($stage->project->name ?? 'Dự án'),
+                        'amount' => 0,
+                        'status' => $stage->status,
+                        'status_label' => 'Chờ QLDA duyệt',
+                        'created_by' => $stage->supervisorApprover->name ?? 'GS',
+                        'created_at' => $stage->updated_at->toISOString(),
+                        'description' => $stage->description ?? null,
+                        'project_id' => $stage->project_id,
+                        'route' => "/projects/{$stage->project_id}/acceptance",
+                        'can_approve' => true,
+                        'approval_level' => 'project_manager',
+                    ];
+                }
+            }
+        }
+
+        // ================================================================
+        // 4c. ACCEPTANCE STAGES — chờ KH duyệt (project_manager_approved)
         // ================================================================
         if ($type === 'all' || $type === 'acceptance') {
             $acceptanceStages = AcceptanceStage::where('status', 'project_manager_approved')
@@ -685,7 +763,7 @@ class ApprovalCenterController extends Controller
     public function quickApprove(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment',
+            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment',
             'id' => 'required|integer',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -765,6 +843,34 @@ class ApprovalCenterController extends Controller
                     }
                     DB::commit();
                     return response()->json(['success' => true, 'message' => 'Đã duyệt nghiệm thu (Khách hàng)']);
+
+                // ─── Acceptance Supervisor (GS duyệt) ───
+                case 'acceptance_supervisor':
+                    $stage = AcceptanceStage::findOrFail($id);
+                    if ($stage->status !== 'pending') {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Nghiệm thu không ở trạng thái chờ GS duyệt'], 400);
+                    }
+                    if (!$stage->approveSupervisor($user)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Không thể duyệt nghiệm thu (GS)'], 400);
+                    }
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'GS đã duyệt nghiệm thu']);
+
+                // ─── Acceptance PM (QLDA duyệt) ───
+                case 'acceptance_pm':
+                    $stage = AcceptanceStage::findOrFail($id);
+                    if ($stage->status !== 'supervisor_approved') {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Nghiệm thu không ở trạng thái chờ QLDA duyệt'], 400);
+                    }
+                    if (!$stage->approveProjectManager($user)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Không thể duyệt nghiệm thu (QLDA)'], 400);
+                    }
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'QLDA đã duyệt nghiệm thu']);
 
                 // ─── Change Request ───
                 case 'change_request':
@@ -935,7 +1041,7 @@ class ApprovalCenterController extends Controller
     public function quickReject(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment',
+            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment',
             'id' => 'required|integer',
             'reason' => 'required|string|max:500',
         ]);
@@ -985,6 +1091,26 @@ class ApprovalCenterController extends Controller
                     }
                     DB::commit();
                     return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu']);
+
+                case 'acceptance_supervisor':
+                    $stage = AcceptanceStage::findOrFail($request->id);
+                    if ($stage->status !== 'pending') {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Nghiệm thu không ở trạng thái chờ GS duyệt'], 400);
+                    }
+                    $stage->reject($request->reason, $user);
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu (GS)']);
+
+                case 'acceptance_pm':
+                    $stage = AcceptanceStage::findOrFail($request->id);
+                    if ($stage->status !== 'supervisor_approved') {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Nghiệm thu không ở trạng thái chờ QLDA duyệt'], 400);
+                    }
+                    $stage->reject($request->reason, $user);
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu (QLDA)']);
 
                 case 'change_request':
                     $cr = ChangeRequest::findOrFail($request->id);
@@ -1130,6 +1256,24 @@ class ApprovalCenterController extends Controller
                 }
                 break;
 
+            case 'acceptance_supervisor':
+                if (!$user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bạn không có quyền duyệt nghiệm thu (Giám sát).'
+                    ], 403);
+                }
+                break;
+
+            case 'acceptance_pm':
+                if (!$user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bạn không có quyền duyệt nghiệm thu (QLDA).'
+                    ], 403);
+                }
+                break;
+
             case 'change_request':
                 if (!$user->hasPermission(Permissions::CHANGE_REQUEST_APPROVE)) {
                     return response()->json([
@@ -1252,6 +1396,7 @@ class ApprovalCenterController extends Controller
             'pending_accountant_confirmation' => 'Chờ KT xác nhận',
             'pending_customer_approval', 'customer_pending_approval' => 'Chờ KH duyệt',
             'project_manager_approved' => 'Chờ KH duyệt',
+            'supervisor_approved' => 'Chờ QLDA duyệt',
             'submitted' => 'Đã gửi',
             'under_review' => 'Đang xem xét',
             'approved', 'customer_approved' => 'Đã duyệt',
@@ -1288,6 +1433,20 @@ class ApprovalCenterController extends Controller
                 'required_role_short' => 'KH',
                 'required_role_icon' => 'people-outline',
                 'required_role_color' => '#10B981',
+            ],
+            'supervisor' => [
+                'required_role' => 'site_supervisor',
+                'required_role_label' => 'Giám sát',
+                'required_role_short' => 'GS',
+                'required_role_icon' => 'eye-outline',
+                'required_role_color' => '#0D9488',
+            ],
+            'project_manager' => [
+                'required_role' => 'project_manager',
+                'required_role_label' => 'Quản lý Dự án',
+                'required_role_short' => 'QLDA',
+                'required_role_icon' => 'person-outline',
+                'required_role_color' => '#3B82F6',
             ],
             'change_request' => [
                 'required_role' => 'project_manager',
