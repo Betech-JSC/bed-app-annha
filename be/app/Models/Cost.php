@@ -18,6 +18,7 @@ class Cost extends Model
         'acceptance_stage_id',
         'category',
         'cost_group_id',
+        'budget_item_id',
         'payroll_id',
         'subcontractor_id',
         'subcontractor_payment_id',
@@ -102,6 +103,11 @@ class Cost extends Model
     public function costGroup(): BelongsTo
     {
         return $this->belongsTo(CostGroup::class, 'cost_group_id');
+    }
+
+    public function budgetItem(): BelongsTo
+    {
+        return $this->belongsTo(BudgetItem::class, 'budget_item_id');
     }
 
     // Payroll relationship removed - HR module deleted

@@ -117,6 +117,7 @@ class CrmProjectsController extends Controller
             'costs.costGroup',
             'costs.subcontractor',
             'costs.attachments',
+            'costs.budgetItem',
             'personnel.user',
             'personnel.personnelRole',
             'subcontractors.payments',
@@ -359,6 +360,7 @@ class CrmProjectsController extends Controller
             'description' => 'nullable|string',
             'cost_date' => 'required|date',
             'cost_group_id' => 'nullable|exists:cost_groups,id',
+            'budget_item_id' => 'nullable|exists:budget_items,id',
             'subcontractor_id' => 'nullable|exists:subcontractors,id',
             'material_id' => 'nullable|exists:materials,id',
             'quantity' => 'nullable|numeric|min:0.01',
@@ -405,6 +407,7 @@ class CrmProjectsController extends Controller
             'description' => 'nullable|string',
             'cost_date' => 'sometimes|date',
             'cost_group_id' => 'nullable|exists:cost_groups,id',
+            'budget_item_id' => 'nullable|exists:budget_items,id',
             'subcontractor_id' => 'nullable|exists:subcontractors,id',
             'material_id' => 'nullable|exists:materials,id',
             'quantity' => 'nullable|numeric|min:0.01',
@@ -432,7 +435,7 @@ class CrmProjectsController extends Controller
         return back()->with('success', 'Đã xóa phiếu chi.');
     }
 
-    public function submitCost(string $projectId, string $costId)
+    public function submitCost(Request $request, string $projectId, string $costId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
@@ -442,7 +445,31 @@ class CrmProjectsController extends Controller
         if ($cost->status !== 'draft') {
             return back()->with('error', 'Chỉ có thể gửi duyệt phiếu chi ở trạng thái nháp.');
         }
-        $cost->submitForManagementApproval();
+
+        DB::beginTransaction();
+        try {
+            // Nếu có file upload kèm theo, lưu file trước
+            if ($request->hasFile('files')) {
+                $request->validate([
+                    'files.*' => 'required|file|max:20480',
+                ]);
+                $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$cost->id}");
+            }
+
+            // BẮT BUỘC: Phải có ít nhất 1 file chứng từ mới được gửi duyệt
+            $cost->load('attachments');
+            if ($cost->attachments->isEmpty()) {
+                DB::rollBack();
+                return back()->with('error', 'Bắt buộc phải upload chứng từ trước khi gửi duyệt phiếu chi.');
+            }
+
+            $cost->submitForManagementApproval();
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi gửi duyệt: ' . $e->getMessage());
+        }
+
         return back()->with('success', 'Đã gửi phiếu chi để duyệt.');
     }
 
@@ -469,7 +496,7 @@ class CrmProjectsController extends Controller
         return back()->with('success', 'Đã duyệt phiếu chi (Ban điều hành).');
     }
 
-    public function approveCostAccountant(string $projectId, string $costId)
+    public function approveCostAccountant(Request $request, string $projectId, string $costId)
     {
         $project = Project::findOrFail($projectId);
         $admin = auth('admin')->user();
@@ -478,6 +505,13 @@ class CrmProjectsController extends Controller
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
         if ($cost->status !== 'pending_accountant_approval') {
             return back()->with('error', 'Phiếu chi không ở trạng thái chờ KT xác nhận.');
+        }
+
+        // KT chỉ cần xác nhận — file chứng từ đã được upload từ lúc gửi duyệt
+        // Verify chứng từ tồn tại
+        $cost->load('attachments');
+        if ($cost->attachments->isEmpty()) {
+            return back()->with('error', 'Phiếu chi chưa có chứng từ đính kèm. Không thể xác nhận.');
         }
 
         try {

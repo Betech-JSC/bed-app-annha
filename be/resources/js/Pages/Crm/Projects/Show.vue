@@ -704,6 +704,30 @@
             <div class="flex justify-between"><span class="text-gray-400">Giá trị</span><span class="font-bold text-lg">{{ fmt(project.contract.contract_value) }}</span></div>
             <div class="flex justify-between"><span class="text-gray-400">Ngày ký</span><span>{{ fmtDate(project.contract.signed_date) }}</span></div>
             <div class="flex justify-between"><span class="text-gray-400">Trạng thái</span><a-tag :color="contractStatusColors[project.contract.status]" class="rounded-full">{{ contractStatusLabels[project.contract.status] || project.contract.status }}</a-tag></div>
+
+            <!-- Contract File Attachments -->
+            <div v-if="project.contract.attachments?.length" class="mt-4 pt-4 border-t border-gray-100">
+              <div class="text-xs font-semibold text-gray-600 mb-3 flex items-center gap-1.5">
+                <FileOutlined class="text-blue-500" /> Tệp hợp đồng đính kèm ({{ project.contract.attachments.length }})
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <a v-for="att in project.contract.attachments" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
+                   class="inline-flex items-center gap-2 text-xs bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 transition border border-blue-100 cursor-pointer group">
+                  <span class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[9px] font-bold"
+                    :style="{ backgroundColor: fileExtColor(att) }">{{ fileExt(att).toUpperCase().slice(0,3) }}</span>
+                  <div class="flex flex-col">
+                    <span class="font-medium group-hover:underline truncate max-w-[180px]">{{ att.original_name || att.file_name }}</span>
+                    <span v-if="att.file_size" class="text-[10px] text-gray-400">{{ formatFileSize(att.file_size) }}</span>
+                  </div>
+                  <EyeOutlined class="text-blue-400 ml-1" />
+                </a>
+              </div>
+            </div>
+            <div v-else class="mt-4 pt-4 border-t border-gray-100">
+              <div class="text-xs text-gray-400 flex items-center gap-1">
+                <FileOutlined /> Chưa có tệp đính kèm — bấm "Sửa" để upload file hợp đồng
+              </div>
+            </div>
           </div>
           <a-empty v-else description="Chưa có hợp đồng" />
         </div>
@@ -747,15 +771,25 @@
               <template v-else-if="column.key === 'date'">{{ fmtDate(record.cost_date) }}</template>
               <template v-else-if="column.key === 'actions'">
                 <div class="flex gap-1">
-                  <a-tooltip v-if="record.status === 'draft' && can('cost.submit')" title="Gửi duyệt">
-                    <a-button type="text" size="small" :loading="actionLoading[`submit-cost-${record.id}`]" @click="submitCost(record)"><SendOutlined class="text-blue-500" /></a-button>
+                  <a-tooltip title="Xem chi tiết">
+                    <a-button type="text" size="small" @click="openCostDetail(record)"><EyeOutlined class="text-blue-500" /></a-button>
                   </a-tooltip>
+                  <!-- Gửi duyệt: check có file chưa -->
+                  <a-tooltip v-if="record.status === 'draft' && can('cost.submit')" :title="record.attachments?.length ? 'Gửi duyệt' : 'Upload chứng từ & Gửi duyệt'">
+                    <a-button type="text" size="small" :loading="actionLoading[`submit-cost-${record.id}`]" @click="handleSubmitCost(record)">
+                      <SendOutlined class="text-blue-500" />
+                    </a-button>
+                  </a-tooltip>
+                  <!-- BĐH duyệt -->
                   <a-tooltip v-if="record.status === 'pending_management_approval' && can('cost.approve.management')" title="Duyệt (BĐH)">
                     <a-button type="text" size="small" :loading="actionLoading[`approve-cost-mgmt-${record.id}`]" @click="approveCostMgmt(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
                   </a-tooltip>
-                  <a-tooltip v-if="record.status === 'pending_accountant_approval' && can('cost.approve.accountant')" title="Xác nhận (KT)">
-                    <a-button type="text" size="small" :loading="actionLoading[`approve-cost-acct-${record.id}`]" @click="approveCostAcct(record)"><CheckCircleOutlined class="text-green-600" /></a-button>
-                  </a-tooltip>
+                  <!-- KT xác nhận (simple popconfirm — chứng từ đã có sẵn) -->
+                  <a-popconfirm v-if="record.status === 'pending_accountant_approval' && can('cost.approve.accountant')" :title="`Xác nhận phiếu chi? (${record.attachments?.length || 0} chứng từ đính kèm)`" @confirm="approveCostAcct(record)">
+                    <a-tooltip title="KT xác nhận">
+                      <a-button type="text" size="small" :loading="actionLoading[`approve-cost-acct-${record.id}`]"><CheckCircleOutlined class="text-green-600" /></a-button>
+                    </a-tooltip>
+                  </a-popconfirm>
                   <a-tooltip v-if="['pending_management_approval','pending_accountant_approval'].includes(record.status) && can('cost.reject')" title="Từ chối">
                     <a-button type="text" size="small" danger @click="openRejectCostModal(record)"><CloseCircleOutlined /></a-button>
                   </a-tooltip>
@@ -927,47 +961,121 @@
 
           <!-- Date-grouped logs -->
           <div v-if="groupedLogs.length === 0" class="text-center text-gray-400 py-8">Chưa có nhật ký thi công</div>
-          <div v-for="group in groupedLogs" :key="group.date" class="mb-4">
-            <div class="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-white border border-blue-100 rounded-t-lg">
-              <CalendarOutlined class="text-blue-500" />
-              <span class="font-bold text-blue-800 text-sm">{{ fmtDate(group.date) }}</span>
-              <a-tag color="blue" class="rounded-full ml-1">{{ group.logs.length }} mục</a-tag>
-              <span class="text-xs text-gray-400 ml-auto">{{ group.weatherSummary }}</span>
+          <div v-for="group in groupedLogs" :key="group.date" class="mb-6 relative">
+            <div class="sticky top-0 z-10 flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-md border border-gray-100 rounded-xl mb-3 shadow-sm">
+              <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 shadow-sm">
+                <CalendarOutlined class="text-blue-600 text-sm" />
+              </div>
+              <span class="font-extrabold text-gray-800">{{ fmtDate(group.date) }}</span>
+              <a-tag color="blue" class="rounded-full ml-1 border-0 bg-blue-50 text-blue-600 font-bold">{{ group.logs.length }} mục</a-tag>
+              <div class="ml-auto flex items-center gap-2 text-xs font-semibold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100" v-if="group.weatherSummary">
+                <CloudOutlined class="text-amber-500" /> {{ group.weatherSummary }}
+              </div>
             </div>
-            <a-table :columns="logColsGrouped" :data-source="group.logs" :pagination="false" row-key="id" size="small"
-              class="crm-table [&_.ant-table]:!rounded-t-none">
-              <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'task'">{{ record.task?.name || '—' }}</template>
-                <template v-else-if="column.key === 'weather'">{{ record.weather || '—' }}</template>
-                <template v-else-if="column.key === 'personnel'">{{ record.personnel_count ?? '—' }}</template>
-                <template v-else-if="column.key === 'progress'">
-                  <a-progress :percent="Number(record.completion_percentage || 0)" :size="'small'" :stroke-color="Number(record.completion_percentage) >= 100 ? '#10B981' : '#1B4F72'" />
-                </template>
-                <template v-else-if="column.key === 'creator'">{{ record.creator?.name || '—' }}</template>
-                <template v-else-if="column.key === 'notes'">
-                  <a-tooltip v-if="record.notes" :title="record.notes"><span class="text-gray-500 truncate block max-w-[150px]">{{ record.notes }}</span></a-tooltip>
-                  <span v-else class="text-gray-300">—</span>
-                </template>
-                <template v-else-if="column.key === 'actions'">
-                  <div class="flex gap-1">
-                    <a-tooltip v-if="record.attachments?.length" :title="`${record.attachments.length} tệp đính kèm`">
-                      <a-badge :count="record.attachments.length" :number-style="{ background: '#3B82F6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }">
-                        <FileOutlined class="text-blue-500 text-xs" />
-                      </a-badge>
-                    </a-tooltip>
-                    <a-tooltip title="Upload chứng từ">
-                      <a-button type="text" size="small" @click="openAttachModal('logs', record)"><UploadOutlined class="text-gray-500" /></a-button>
-                    </a-tooltip>
-                    <a-tooltip title="Sửa">
-                      <a-button v-if="can('log.update') || can('log.create')" type="text" size="small" @click="openLogModal(record)"><EditOutlined /></a-button>
-                    </a-tooltip>
-                    <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký?" @confirm="deleteLog(record)">
-                      <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                    </a-popconfirm>
+
+            <!-- Log Cards Timeline -->
+            <div class="px-2 md:px-4 space-y-4">
+              <div v-for="log in group.logs" :key="log.id" class="relative pl-6 before:absolute before:left-2 before:top-2 before:bottom-[-2rem] before:w-[2px] before:bg-gray-100 last:before:hidden">
+                <div class="absolute left-[3px] top-1.5 w-[10px] h-[10px] rounded-full bg-blue-400 border-[2px] border-white ring-2 ring-blue-50"></div>
+                
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group/log">
+                  <!-- Header -->
+                  <div class="flex items-start justify-between p-4 pb-3 border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-white">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-inner text-white font-bold text-sm ring-2 ring-white">
+                        <UserOutlined v-if="!log.creator?.name" />
+                        <span v-else>{{ log.creator.name[0] }}</span>
+                      </div>
+                      <div>
+                        <div class="font-bold text-gray-800 text-sm">{{ log.creator?.name || 'Vô danh' }} <span class="text-gray-400 font-normal text-xs ml-1">ghi nhận nhật ký</span></div>
+                        <div class="text-[11px] text-gray-500 font-medium flex items-center gap-2 mt-0.5">
+                          <span class="flex items-center"><ClockCircleOutlined class="mr-1" />{{ log.created_at ? dayjs(log.created_at).format('HH:mm') : '—' }}</span>
+                          <span v-if="log.task" class="px-2 py-0.5 rounded border border-gray-200 bg-white text-gray-600 flex items-center truncate max-w-[250px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]"><ProjectOutlined class="mr-1 text-blue-500"/> {{ log.task.name }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Actions Menu Context -->
+                    <div class="opacity-0 group-hover/log:opacity-100 transition-opacity flex items-center gap-1">
+                      <a-tooltip title="Sửa">
+                        <a-button v-if="can('log.update')" type="text" size="small" @click="openLogModal(log)" class="text-gray-400 hover:text-blue-600 hover:bg-blue-50"><EditOutlined /></a-button>
+                      </a-tooltip>
+                      <a-tooltip title="Upload chứng từ hình ảnh">
+                        <a-button type="text" size="small" @click="openAttachModal('logs', log)" class="text-gray-400 hover:text-blue-600 hover:bg-blue-50"><UploadOutlined /></a-button>
+                      </a-tooltip>
+                      <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký này?" @confirm="deleteLog(log)">
+                        <a-button type="text" size="small" danger class="text-gray-400 hover:text-red-500 hover:bg-red-50"><DeleteOutlined /></a-button>
+                      </a-popconfirm>
+                    </div>
                   </div>
-                </template>
-              </template>
-            </a-table>
+
+                  <!-- Content body -->
+                  <div class="p-4">
+                    <p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed" :class="log.notes ? '' : 'italic text-gray-400'">{{ log.notes || 'Không có ghi chú mô tả...' }}</p>
+                    
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                      <!-- Weather -->
+                      <div class="bg-gray-50 rounded-xl p-3 flex items-center gap-3 border border-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-sm transition">
+                        <div class="w-10 h-10 rounded-lg bg-orange-100/50 flex items-center justify-center text-orange-500"><CloudOutlined class="text-lg" /></div>
+                        <div>
+                          <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Thời tiết</p>
+                          <p class="text-xs font-bold text-gray-800 mb-0">{{ log.weather || '—' }}</p>
+                        </div>
+                      </div>
+                      <!-- Personnel -->
+                      <div class="bg-gray-50 rounded-xl p-3 flex items-center gap-3 border border-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-sm transition">
+                        <div class="w-10 h-10 rounded-lg bg-blue-100/50 flex items-center justify-center text-blue-500"><TeamOutlined class="text-lg" /></div>
+                        <div>
+                          <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Nhân lực</p>
+                          <p class="text-xs font-bold text-gray-800 mb-0">{{ log.personnel_count ?? '—' }} <span class="text-[10px] font-medium text-gray-500">người</span></p>
+                        </div>
+                      </div>
+                      <!-- Progress -->
+                      <div class="bg-gray-50 rounded-xl p-3 flex flex-col justify-center border border-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-sm transition">
+                        <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex justify-between items-center">
+                          <span class="flex items-center gap-1"><CheckCircleOutlined class="text-emerald-500" /> Tiến độ</span>
+                          <span class="text-emerald-600 text-[11px] font-bold">{{ log.completion_percentage || 0 }}%</span>
+                        </p>
+                        <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-0.5 shadow-inner">
+                          <div class="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full" :style="{ width: `${log.completion_percentage || 0}%` }"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Images Gallery -->
+                    <div v-if="log.attachments?.length" class="mt-5 border-t border-gray-100 pt-4">
+                      <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1">
+                        <PictureOutlined class="text-blue-500" /> Hình ảnh / Tài liệu thực tế ({{ log.attachments.length }})
+                      </div>
+                      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        <a-image-preview-group>
+                          <template v-for="att in log.attachments" :key="att.id">
+                           <div class="aspect-square rounded-xl overflow-hidden border border-gray-200 group/img relative shadow-sm hover:shadow-md transition-all cursor-pointer bg-gray-50">
+                             <!-- Fixed image fill mapping for a-image -->
+                             <a-image 
+                               v-if="att.mime_type?.startsWith('image/')" 
+                               :src="att.file_url" 
+                               :fallback="'/images/fallback-image.png'" 
+                               class="!w-full !h-full object-cover [&>.ant-image-img]:!w-full [&>.ant-image-img]:!h-full [&>.ant-image-img]:object-cover group-hover/img:scale-110 transition duration-500" 
+                             />
+                             <!-- Non-image attachments -->
+                             <a v-else :href="att.file_url" target="_blank" class="absolute inset-0 flex flex-col items-center justify-center hover:bg-blue-50 transition text-gray-400 hover:text-blue-500 z-10 p-2">
+                               <FilePdfOutlined v-if="att.mime_type?.includes('pdf')" class="text-3xl mb-2 text-red-400" />
+                               <FileWordOutlined v-else-if="att.mime_type?.includes('word')" class="text-3xl mb-2 text-blue-500" />
+                               <FileExcelOutlined v-else-if="att.mime_type?.includes('spreadsheet')" class="text-3xl mb-2 text-green-500" />
+                               <FileOutlined v-else class="text-3xl mb-2" />
+                               <span class="text-[10px] text-center px-1 font-medium truncate w-full" :title="att.original_name">{{ att.original_name }}</span>
+                             </a>
+                           </div>
+                          </template>
+                        </a-image-preview-group>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </a-tab-pane>
@@ -1312,27 +1420,77 @@
               <template #icon><PlusOutlined /></template>Tạo ngân sách
             </a-button>
           </div>
-          <a-table :columns="budgetCols" :data-source="project.budgets || []" :pagination="false" row-key="id" size="small" class="crm-table">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'total'"><span class="font-semibold">{{ fmt(record.total_budget) }}</span></template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="budgetStatusColors[record.status]" class="rounded-full text-xs">{{ budgetStatusLabels[record.status] || record.status }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'creator'">{{ record.creator?.name || '—' }}</template>
-              <template v-else-if="column.key === 'date'">{{ fmtDate(record.budget_date) }}</template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1">
-                  <a-tooltip v-if="can('budgets.update') && record.status === 'draft'" title="Duyệt">
-                    <a-button type="text" size="small" @click="approveBudget(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
-                  </a-tooltip>
-                  <a-popconfirm v-if="can('budgets.delete') && !['approved','archived'].includes(record.status)" title="Xóa?" @confirm="deleteBudget(record)">
-                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                  </a-popconfirm>
+          <!-- Budget Cards -->
+          <div v-if="project.budgets?.length" class="space-y-4">
+            <div v-for="budget in project.budgets" :key="budget.id" class="border border-gray-200 rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
+              <!-- Budget Header -->
+              <div class="p-4 bg-gray-50 cursor-pointer flex items-center justify-between" @click="toggleBudgetExpand(budget.id)">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm" :class="budget.status === 'approved' ? 'bg-green-500' : 'bg-gray-400'">NS</div>
+                  <div>
+                    <div class="font-semibold text-gray-800">{{ budget.name }}</div>
+                    <div class="text-xs text-gray-400 flex gap-3">
+                      <span>{{ fmtDate(budget.budget_date) }}</span>
+                      <span v-if="budget.version">{{ budget.version }}</span>
+                      <span>{{ budget.creator?.name || '—' }}</span>
+                    </div>
+                  </div>
                 </div>
-              </template>
-            </template>
-          </a-table>
-          <a-empty v-if="!project.budgets?.length" description="Chưa có ngân sách" />
+                <div class="flex items-center gap-4">
+                  <div class="text-right">
+                    <div class="text-lg font-bold text-blue-600">{{ fmt(budget.total_budget) }}</div>
+                    <div class="text-xs text-gray-400">{{ budget.items?.length || 0 }} hạng mục</div>
+                  </div>
+                  <a-tag :color="budgetStatusColors[budget.status]" class="rounded-full text-xs">{{ budgetStatusLabels[budget.status] || budget.status }}</a-tag>
+                  <div class="flex gap-1">
+                    <a-tooltip v-if="can('budgets.update') && budget.status === 'draft'" title="Duyệt">
+                      <a-button type="text" size="small" @click.stop="approveBudget(budget)"><CheckCircleOutlined class="text-green-500" /></a-button>
+                    </a-tooltip>
+                    <a-popconfirm v-if="can('budgets.delete') && !['approved','archived'].includes(budget.status)" title="Xóa?" @confirm="deleteBudget(budget)">
+                      <a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button>
+                    </a-popconfirm>
+                  </div>
+                  <DownOutlined :class="{ 'rotate-180': expandedBudgets.includes(budget.id) }" class="text-gray-400 transition-transform duration-200" />
+                </div>
+              </div>
+              <!-- Budget Items (Expandable) -->
+              <div v-if="expandedBudgets.includes(budget.id)" class="border-t">
+                <div v-if="budget.items?.length" class="divide-y">
+                  <div v-for="item in budget.items" :key="item.id" class="px-4 py-3 flex items-center justify-between hover:bg-blue-50/40 transition">
+                    <div class="flex-1">
+                      <div class="font-medium text-gray-700 text-sm">{{ item.name }}</div>
+                      <div v-if="item.description" class="text-xs text-gray-400 mt-0.5">{{ item.description }}</div>
+                    </div>
+                    <div class="flex items-center gap-6 text-sm">
+                      <div class="text-right">
+                        <div class="text-xs text-gray-400">Dự toán</div>
+                        <div class="font-semibold text-blue-600">{{ fmt(item.estimated_amount) }}</div>
+                      </div>
+                      <div class="text-right">
+                        <div class="text-xs text-gray-400">Thực chi</div>
+                        <div class="font-semibold" :class="(item.actual_amount || 0) > item.estimated_amount ? 'text-red-500' : 'text-green-600'">{{ fmt(item.actual_amount || 0) }}</div>
+                      </div>
+                      <div class="text-right">
+                        <div class="text-xs text-gray-400">Còn lại</div>
+                        <div class="font-semibold" :class="(item.remaining_amount || item.estimated_amount) < 0 ? 'text-red-500' : 'text-gray-600'">{{ fmt(item.remaining_amount ?? item.estimated_amount) }}</div>
+                      </div>
+                      <div class="w-24">
+                        <a-progress :percent="Math.min(100, Math.round(((item.actual_amount || 0) / (item.estimated_amount || 1)) * 100))" :stroke-color="((item.actual_amount || 0) / (item.estimated_amount || 1)) > 1 ? '#ef4444' : ((item.actual_amount || 0) / (item.estimated_amount || 1)) > 0.8 ? '#f59e0b' : '#10b981'" size="small" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="p-4 text-center text-xs text-gray-400">Chưa có hạng mục phân bổ</div>
+                <!-- Budget Summary Bar -->
+                <div class="p-3 bg-gray-50 border-t flex items-center justify-between text-xs">
+                  <span class="text-gray-400">Tổng thực chi: <span class="font-bold" :class="budget.actual_cost > budget.total_budget ? 'text-red-500' : 'text-gray-700'">{{ fmt(budget.actual_cost || 0) }}</span> / {{ fmt(budget.total_budget) }}</span>
+                  <a-tag v-if="budget.actual_cost > budget.total_budget" color="red" class="rounded-full">⚠ VƯỢT NGÂN SÁCH</a-tag>
+                  <a-tag v-else color="green" class="rounded-full">✓ TRONG NGÂN SÁCH</a-tag>
+                </div>
+              </div>
+            </div>
+          </div>
+          <a-empty v-else description="Chưa có ngân sách" />
         </div>
       </a-tab-pane>
 
@@ -1652,7 +1810,10 @@
                 </template>
                 <template v-else-if="column.key === 'hours'">
                   <span class="font-semibold">{{ record.hours_worked || 0 }}h</span>
-                  <span v-if="record.overtime_hours > 0" class="text-amber-500 text-xs ml-1">(+{{ record.overtime_hours }}h OT)</span>
+                </template>
+                <template v-else-if="column.key === 'overtime'">
+                  <span v-if="record.overtime_hours > 0" class="text-amber-600 font-bold">{{ record.overtime_hours }}h</span>
+                  <span v-else class="text-gray-300">—</span>
                 </template>
                 <template v-else-if="column.key === 'status'">
                   <a-tag :color="attendanceStatusColors[record.status]" class="rounded-full text-[10px]">{{ attendanceStatusLabels[record.status] || record.status }}</a-tag>
@@ -2205,7 +2366,7 @@
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Tên chi phí" required v-bind="fieldStatus('name')"><a-input v-model:value="costForm.name" size="large" /></a-form-item>
       <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="costForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="costForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Ngày" required v-bind="fieldStatus('cost_date')"><a-date-picker v-model:value="costForm.cost_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
@@ -2216,6 +2377,20 @@
           <a-select-option v-for="s in (project.subcontractors || [])" :key="s.id" :value="s.id" :label="s.name">{{ s.name }}</a-select-option>
         </a-select></a-form-item></a-col>
       </a-row>
+      <!-- Budget Item Selector -->
+      <a-form-item v-if="budgetItemOptions.length" label="Ngân sách liên kết">
+        <a-select v-model:value="costForm.budget_item_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục ngân sách để theo dõi chi tiêu">
+          <a-select-option v-for="bi in budgetItemOptions" :key="bi.id" :value="bi.id" :label="bi.label">
+            <div class="flex justify-between items-center">
+              <span>{{ bi.label }}</span>
+              <span class="text-xs" :class="bi.remaining < 0 ? 'text-red-500' : 'text-green-500'">{{ bi.remaining < 0 ? 'Vượt ' + fmt(Math.abs(bi.remaining)) : 'Còn ' + fmt(bi.remaining) }}</span>
+            </div>
+          </a-select-option>
+        </a-select>
+        <div v-if="costForm.budget_item_id" class="mt-1 text-xs text-gray-400">
+          {{ (() => { const bi = budgetItemOptions.find(b => b.id === costForm.budget_item_id); return bi ? `Dự toán: ${fmt(bi.estimated)} — Đã chi: ${fmt(bi.actual)} — Còn: ${fmt(bi.remaining)}` : '' })() }}
+        </div>
+      </a-form-item>
       <a-row :gutter="16">
         <a-col :span="8"><a-form-item label="Vật tư"><a-input v-model:value="costForm.material_id" size="large" placeholder="Mã vật tư" /></a-form-item></a-col>
         <a-col :span="8"><a-form-item label="Số lượng"><a-input-number v-model:value="costForm.quantity" :min="0" size="large" class="w-full" /></a-form-item></a-col>
@@ -2241,7 +2416,7 @@
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="Giá trị HĐ" required v-bind="fieldStatus('contract_value')"><a-input-number v-model:value="contractForm.contract_value" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
+          <a-form-item label="Giá trị HĐ" required v-bind="fieldStatus('contract_value')"><a-input-number v-model:value="contractForm.contract_value" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item>
         </a-col>
         <a-col :span="12">
           <a-form-item label="Ngày ký" v-bind="fieldStatus('signed_date')"><a-date-picker v-model:value="contractForm.signed_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
@@ -2282,7 +2457,7 @@
         </a-select></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Ngày đến hạn" v-bind="fieldStatus('due_date')"><a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
       </a-row>
       <a-form-item label="Ghi chú"><a-input v-model:value="paymentForm.notes" size="large" placeholder="Ghi chú thanh toán..." /></a-form-item>
@@ -2657,6 +2832,9 @@
 
   <!-- ==================== NTP DETAIL DRAWER ==================== -->
   <a-drawer v-model:open="showSubDetailDrawer" :title="subDetail ? `NTP: ${subDetail.name}` : 'Chi tiết NTP'" :width="640" placement="right" destroy-on-close class="sub-detail-drawer">
+    <template #extra v-if="subDetail && can('subcontractor.update')">
+      <a-button type="link" @click="openSubModal(subDetail)" class="p-0 border-0 shadow-none"><EditOutlined /> Sửa thông tin</a-button>
+    </template>
     <template v-if="subDetail">
       <!-- Financial Summary Card -->
       <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-4 border border-blue-100">
@@ -2759,7 +2937,7 @@
   <a-drawer v-model:open="showSubPayDrawer" :title="`Tạo phiếu TT: ${subPayTarget?.name || ''}`" :width="500" placement="right" destroy-on-close>
     <a-form layout="vertical" class="mt-2">
       <a-form-item label="Đợt thanh toán"><a-input v-model:value="subPayForm.payment_stage" size="large" placeholder="VD: Đợt 1, Nghiệm thu lần 1..." /></a-form-item>
-      <a-form-item label="Số tiền" required><a-input-number v-model:value="subPayForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
+      <a-form-item label="Số tiền" required><a-input-number v-model:value="subPayForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item>
       <a-form-item label="Ngày thanh toán"><a-date-picker v-model:value="subPayForm.payment_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
       <a-form-item label="Phương thức">
         <a-radio-group v-model:value="subPayForm.payment_method" button-style="solid" size="small">
@@ -2796,7 +2974,7 @@
       <a-form-item label="Tên NTP" required v-bind="fieldStatus('name')"><a-input v-model:value="subForm.name" size="large" /></a-form-item>
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Danh mục"><a-input v-model:value="subForm.category" size="large" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Giá trị báo giá" required v-bind="fieldStatus('total_quote')"><a-input-number v-model:value="subForm.total_quote" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Giá trị báo giá" required v-bind="fieldStatus('total_quote')"><a-input-number v-model:value="subForm.total_quote" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
         <a-col :span="8"><a-form-item label="Ngân hàng"><a-input v-model:value="subForm.bank_name" size="large" /></a-form-item></a-col>
@@ -2841,7 +3019,7 @@
   <!-- Additional Cost Modal -->
   <a-modal v-model:open="showACModal" title="Đề xuất chi phí phát sinh" :width="500" @ok="saveAC" ok-text="Gửi" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="acForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item>
+      <a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="acForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item>
       <a-form-item label="Mô tả" required v-bind="fieldStatus('description')"><a-textarea v-model:value="acForm.description" :rows="3" /></a-form-item>
       <!-- Inline Attachments -->
       <div class="border-t pt-3 mt-2">
@@ -2881,12 +3059,171 @@
       <div class="mb-2 font-bold text-sm text-gray-700">Hạng mục</div>
       <div v-for="(item, idx) in budgetForm.items" :key="idx" class="flex gap-2 mb-2 items-end">
         <a-input v-model:value="item.name" placeholder="Tên hạng mục" size="small" class="flex-1" />
-        <a-input-number v-model:value="item.estimated_amount" :min="0" placeholder="Số tiền" size="small" style="width: 160px" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" />
+        <a-input-number v-model:value="item.estimated_amount" :min="0" placeholder="Số tiền" size="small" style="width: 160px" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" />
         <a-button type="text" size="small" danger @click="budgetForm.items.splice(idx, 1)" :disabled="budgetForm.items.length <= 1"><DeleteOutlined /></a-button>
       </div>
       <a-button type="dashed" size="small" @click="budgetForm.items.push({ name: '', estimated_amount: 0 })"><PlusOutlined /> Thêm hạng mục</a-button>
     </a-form>
   </a-modal>
+
+  <!-- Reject Cost Modal -->
+  <a-modal v-model:open="showRejectCostModal" title="Từ chối phiếu chi" :width="480" @ok="rejectCost" ok-text="Từ chối" cancel-text="Hủy" :confirm-loading="savingForm" :ok-button-props="{ danger: true }" centered destroy-on-close class="crm-modal">
+    <div class="mt-4">
+      <div v-if="rejectingCost" class="mb-3 p-3 bg-red-50 rounded-lg border border-red-100">
+        <div class="font-medium text-red-800">{{ rejectingCost.name }}</div>
+        <div class="text-xs text-red-600">{{ fmt(rejectingCost.amount) }} — {{ costStatusLabels[rejectingCost.status] }}</div>
+      </div>
+      <a-form-item label="Lý do từ chối" required>
+        <a-textarea v-model:value="rejectCostReason" :rows="3" placeholder="Nhập lý do từ chối phiếu chi..." />
+      </a-form-item>
+    </div>
+  </a-modal>
+
+  <!-- Submit Cost Modal — bắt buộc upload chứng từ trước khi gửi duyệt -->
+  <a-modal v-model:open="showSubmitCostModal" title="Upload chứng từ & Gửi duyệt" :width="520" :footer="null" centered destroy-on-close class="crm-modal">
+    <div class="mt-4">
+      <div v-if="submitCostTarget" class="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+        <div class="flex justify-between items-start">
+          <div>
+            <div class="font-semibold text-blue-800 text-lg">{{ submitCostTarget.name }}</div>
+            <div class="text-xs text-blue-600 mt-1">{{ submitCostTarget.cost_group?.name || '—' }} • {{ fmtDate(submitCostTarget.cost_date) }}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-xl font-bold text-red-500">{{ fmt(submitCostTarget.amount) }}</div>
+          </div>
+        </div>
+        <div v-if="submitCostTarget.description" class="mt-2 text-xs text-gray-500 bg-white/60 p-2 rounded">{{ submitCostTarget.description }}</div>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex items-start gap-2">
+        <ExclamationCircleOutlined class="text-amber-500 mt-0.5" />
+        <div>
+          <div class="font-semibold text-amber-800 text-sm">Bắt buộc upload chứng từ</div>
+          <div class="text-xs text-amber-600 mt-0.5">Phải đính kèm ít nhất 1 chứng từ (hóa đơn, phiếu chi, UNC...) để BĐH và Kế toán xem xét trước khi duyệt.</div>
+        </div>
+      </div>
+
+      <div class="border-2 border-dashed rounded-xl p-4 text-center transition" :class="submitCostFiles.length ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400'">
+        <input type="file" multiple @change="onSubmitCostFileChange" class="block w-full text-sm cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 file:cursor-pointer" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+        <div v-if="submitCostFiles.length" class="mt-2 space-y-1">
+          <div v-for="(f, i) in submitCostFiles" :key="i" class="text-xs text-green-700 flex items-center gap-1 justify-center">
+            <CheckCircleOutlined class="text-green-500" /> {{ f.name }} <span class="text-gray-400">({{ (f.size / 1024).toFixed(0) }} KB)</span>
+          </div>
+        </div>
+        <div v-else class="mt-1 text-xs text-gray-400">Kéo thả hoặc chọn file chứng từ</div>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-4">
+        <a-button @click="showSubmitCostModal = false">Hủy</a-button>
+        <a-button type="primary" :disabled="!submitCostFiles.length" :loading="savingForm" @click="doSubmitCostWithFiles">
+          <template #icon><SendOutlined /></template>
+          Upload chứng từ & Gửi duyệt
+        </a-button>
+      </div>
+    </div>
+  </a-modal>
+
+  <!-- Cost Detail Drawer -->
+  <a-drawer v-model:open="showCostDetail" title="Chi tiết phiếu chi" :width="560" placement="right" destroy-on-close class="crm-drawer">
+    <template v-if="costDetailRecord">
+      <!-- Header Card -->
+      <div class="bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl p-5 mb-4 border">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-xl font-bold text-gray-800">{{ costDetailRecord.name }}</h3>
+            <div class="text-sm text-gray-500 mt-1">{{ fmtDate(costDetailRecord.cost_date) }}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-2xl font-bold text-red-500">{{ fmt(costDetailRecord.amount) }}</div>
+            <a-tag :color="costStatusColors[costDetailRecord.status]" class="rounded-full mt-1">{{ costStatusLabels[costDetailRecord.status] || costDetailRecord.status }}</a-tag>
+          </div>
+        </div>
+      </div>
+
+      <!-- Info Grid -->
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <div class="bg-gray-50 rounded-xl p-3">
+          <div class="text-xs text-gray-400 mb-1">Nhóm chi phí</div>
+          <div class="font-medium text-gray-700">{{ costDetailRecord.cost_group?.name || '—' }}</div>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3">
+          <div class="text-xs text-gray-400 mb-1">Người tạo</div>
+          <div class="font-medium text-gray-700">{{ costDetailRecord.creator?.name || '—' }}</div>
+        </div>
+        <div v-if="costDetailRecord.subcontractor" class="bg-gray-50 rounded-xl p-3">
+          <div class="text-xs text-gray-400 mb-1">Nhà thầu phụ</div>
+          <div class="font-medium text-gray-700">{{ costDetailRecord.subcontractor?.name || '—' }}</div>
+        </div>
+        <div v-if="costDetailRecord.quantity" class="bg-gray-50 rounded-xl p-3">
+          <div class="text-xs text-gray-400 mb-1">Số lượng</div>
+          <div class="font-medium text-gray-700">{{ costDetailRecord.quantity }} {{ costDetailRecord.unit || '' }}</div>
+        </div>
+        <div v-if="costDetailRecord.budget_item" class="bg-blue-50 rounded-xl p-3 col-span-2">
+          <div class="text-xs text-blue-400 mb-1">Ngân sách liên kết</div>
+          <div class="font-medium text-blue-700">{{ costDetailRecord.budget_item?.name || '—' }}</div>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div v-if="costDetailRecord.description" class="mb-4">
+        <div class="text-xs font-semibold text-gray-400 mb-1">Mô tả</div>
+        <div class="bg-gray-50 rounded-xl p-3 text-sm text-gray-600 whitespace-pre-wrap">{{ costDetailRecord.description }}</div>
+      </div>
+
+      <!-- Approval Timeline -->
+      <div class="mb-4">
+        <div class="text-xs font-semibold text-gray-400 mb-2">Lịch sử duyệt</div>
+        <div class="space-y-2">
+          <div class="flex items-center gap-3 text-sm">
+            <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center"><EditOutlined class="text-blue-500 text-xs" /></div>
+            <div>
+              <div class="font-medium text-gray-700">Tạo phiếu</div>
+              <div class="text-xs text-gray-400">{{ costDetailRecord.creator?.name || '—' }} • {{ fmtDate(costDetailRecord.created_at) }}</div>
+            </div>
+          </div>
+          <div v-if="costDetailRecord.management_approved_at" class="flex items-center gap-3 text-sm">
+            <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center"><CheckCircleOutlined class="text-green-500 text-xs" /></div>
+            <div>
+              <div class="font-medium text-gray-700">Ban điều hành duyệt</div>
+              <div class="text-xs text-gray-400">{{ fmtDate(costDetailRecord.management_approved_at) }}</div>
+            </div>
+          </div>
+          <div v-if="costDetailRecord.accountant_approved_at" class="flex items-center gap-3 text-sm">
+            <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center"><CheckCircleOutlined class="text-emerald-500 text-xs" /></div>
+            <div>
+              <div class="font-medium text-gray-700">Kế toán xác nhận</div>
+              <div class="text-xs text-gray-400">{{ fmtDate(costDetailRecord.accountant_approved_at) }}</div>
+            </div>
+          </div>
+          <div v-if="costDetailRecord.status === 'rejected'" class="flex items-center gap-3 text-sm">
+            <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center"><CloseCircleOutlined class="text-red-500 text-xs" /></div>
+            <div>
+              <div class="font-medium text-red-700">Từ chối</div>
+              <div class="text-xs text-red-400">{{ costDetailRecord.rejected_reason || '—' }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attachments -->
+      <div v-if="costDetailRecord.attachments?.length">
+        <div class="text-xs font-semibold text-gray-400 mb-2">Tệp đính kèm ({{ costDetailRecord.attachments.length }})</div>
+        <div class="space-y-2">
+          <a v-for="a in costDetailRecord.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-blue-50 transition cursor-pointer">
+            <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+              <FileOutlined class="text-blue-500" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-gray-700 truncate">{{ a.original_name || a.file_name }}</div>
+              <div class="text-xs text-gray-400">{{ a.mime_type || 'File' }}</div>
+            </div>
+            <EyeOutlined class="text-blue-400" />
+          </a>
+        </div>
+      </div>
+      <div v-else class="text-center text-xs text-gray-400 mt-4">Chưa có tệp đính kèm</div>
+    </template>
+  </a-drawer>
 
   <!-- Invoice Modal -->
   <a-modal v-model:open="showInvoiceModal" :title="editingInvoice ? 'Sửa hóa đơn' : 'Tạo hóa đơn'" :width="640" @ok="saveInvoice" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
@@ -2898,9 +3235,9 @@
         </a-select></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
-        <a-col :span="8"><a-form-item label="Giá trước thuế" required><a-input-number v-model:value="invoiceForm.subtotal" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Thuế"><a-input-number v-model:value="invoiceForm.tax_amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Giảm giá"><a-input-number v-model:value="invoiceForm.discount_amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Giá trước thuế" required><a-input-number v-model:value="invoiceForm.subtotal" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Thuế"><a-input-number v-model:value="invoiceForm.tax_amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Giảm giá"><a-input-number v-model:value="invoiceForm.discount_amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item></a-col>
       </a-row>
       <a-form-item label="Mô tả"><a-textarea v-model:value="invoiceForm.description" :rows="2" /></a-form-item>
       <a-form-item label="Ghi chú"><a-textarea v-model:value="invoiceForm.notes" :rows="2" /></a-form-item>
@@ -3442,7 +3779,7 @@
 
       <!-- Rent fields -->
       <a-form-item v-if="eqForm.allocation_type === 'rent'" label="Tổng phí thuê (VNĐ)" required>
-        <a-input-number v-model:value="eqForm.rental_fee" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" />
+        <a-input-number v-model:value="eqForm.rental_fee" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" />
       </a-form-item>
 
       <!-- Buy fields -->
@@ -3496,7 +3833,9 @@
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Nhân viên" required>
         <a-select v-model:value="attendanceForm.user_id" size="large" class="w-full" placeholder="Chọn nhân viên" show-search :filter-option="filterOption">
-          <a-select-option v-for="u in (project.personnel || []).map(p => p.user)" :key="u?.id" :value="u?.id">{{ u?.name }}</a-select-option>
+          <a-select-option v-for="u in (users || [])" :key="u.id" :value="u.id">
+            {{ u.name }} <span class="text-gray-400 text-xs">— {{ u.phone || u.email }}</span>
+          </a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item label="Ngày làm việc" required>
@@ -3521,8 +3860,8 @@
             <a-select-option value="holiday">Nghỉ lễ</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="OT (giờ)">
-          <a-input-number v-model:value="attendanceForm.overtime_hours" size="large" class="w-full" :min="0" :max="12" :step="0.5" />
+        <a-form-item label="Tăng ca (giờ)">
+          <a-input-number v-model:value="attendanceForm.overtime_hours" size="large" class="w-full" :min="0" :max="12" :step="0.5" placeholder="0" />
         </a-form-item>
       </div>
       <a-form-item label="Ghi chú">
@@ -3562,9 +3901,18 @@
   <!-- ============ LABOR PRODUCTIVITY MODAL ============ -->
   <a-modal v-model:open="showLaborModal" title="Ghi nhận năng suất lao động" :width="560" @ok="submitLaborRecord" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :confirm-loading="laborSaving">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Hạng mục công việc" required>
-        <a-input v-model:value="laborForm.work_item" size="large" placeholder="VD: Đổ sàn tầng 3, Xây tường ngăn" />
-      </a-form-item>
+      <div class="grid grid-cols-2 gap-3">
+        <a-form-item label="Hạng mục công việc" required>
+          <a-input v-model:value="laborForm.work_item" size="large" placeholder="VD: Đổ sàn tầng 3, Xây tường ngăn" />
+        </a-form-item>
+        <a-form-item label="Người thực hiện/Phụ trách">
+          <a-select v-model:value="laborForm.user_id" size="large" class="w-full" placeholder="Chọn nhân viên" show-search :filter-option="filterOption">
+            <a-select-option v-for="u in (users || [])" :key="u.id" :value="u.id">
+              {{ u.name }} <span class="text-gray-400 text-xs">— {{ u.phone || u.email }}</span>
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+      </div>
       <div class="grid grid-cols-3 gap-3">
         <a-form-item label="Đơn vị" required>
           <a-select v-model:value="laborForm.unit" size="large" class="w-full">
@@ -3629,7 +3977,9 @@ import {
   UploadOutlined, DownloadOutlined, FileOutlined,
   UserOutlined, CalendarOutlined, EyeOutlined, CheckSquareOutlined,
   LinkOutlined, CameraOutlined, CheckCircleFilled, MoreOutlined,
-  SyncOutlined,
+  SyncOutlined, DownOutlined, ExclamationCircleOutlined,
+  ProjectOutlined, CloudOutlined, TeamOutlined, PictureOutlined,
+  FilePdfOutlined, FileWordOutlined, FileExcelOutlined, ClockCircleOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -4281,11 +4631,11 @@ const uploadModalFiles = (entityType, entityId) => {
 // ============ COST CRUD ============
 const showCostModal = ref(false)
 const editingCost = ref(null)
-const costForm = ref({ name: '', amount: null, cost_date: null, cost_group_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '' })
+const costForm = ref({ name: '', amount: null, cost_date: null, cost_group_id: null, budget_item_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '' })
 const openCostModal = (c) => {
   editingCost.value = c
   modalFiles.value = []
-  costForm.value = c ? { name: c.name, amount: c.amount, cost_date: c.cost_date, cost_group_id: c.cost_group_id, subcontractor_id: c.subcontractor_id || null, material_id: c.material_id || null, quantity: c.quantity || null, unit: c.unit || '', description: c.description || '' } : { name: '', amount: null, cost_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '' }
+  costForm.value = c ? { name: c.name, amount: c.amount, cost_date: c.cost_date, cost_group_id: c.cost_group_id, budget_item_id: c.budget_item_id || null, subcontractor_id: c.subcontractor_id || null, material_id: c.material_id || null, quantity: c.quantity || null, unit: c.unit || '', description: c.description || '' } : { name: '', amount: null, cost_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, budget_item_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '' }
   showCostModal.value = true
 }
 const saveCost = () => {
@@ -4303,9 +4653,73 @@ const saveCost = () => {
   }))
 }
 const deleteCost = (c) => router.delete(`/projects/${props.project.id}/costs/${c.id}`, loadingOptions(`delete-cost-${c.id}`))
-const submitCost = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/submit`, {}, loadingOptions(`submit-cost-${c.id}`))
+
+// Gửi duyệt: nếu đã có file → submit, nếu chưa có → mở modal upload
+const showSubmitCostModal = ref(false)
+const submitCostTarget = ref(null)
+const submitCostFiles = ref([])
+
+const handleSubmitCost = (c) => {
+  if (c.attachments?.length > 0) {
+    // Đã có chứng từ → gửi duyệt trực tiếp
+    router.post(`/projects/${props.project.id}/costs/${c.id}/submit`, {}, loadingOptions(`submit-cost-${c.id}`))
+  } else {
+    // Chưa có chứng từ → mở modal bắt upload
+    submitCostTarget.value = c
+    submitCostFiles.value = []
+    showSubmitCostModal.value = true
+  }
+}
+
+const onSubmitCostFileChange = (e) => { submitCostFiles.value = Array.from(e.target.files || []) }
+
+const doSubmitCostWithFiles = () => {
+  if (!submitCostFiles.value.length || !submitCostTarget.value) return
+  const formData = new FormData()
+  submitCostFiles.value.forEach(f => formData.append('files[]', f))
+  router.post(`/projects/${props.project.id}/costs/${submitCostTarget.value.id}/submit`, formData, savingOptions({
+    forceFormData: true,
+    onSuccess: () => { showSubmitCostModal.value = false; submitCostFiles.value = [] },
+  }))
+}
+
 const approveCostMgmt = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/approve-management`, {}, loadingOptions(`approve-cost-mgmt-${c.id}`))
+
+// KT xác nhận — simple approve (chứng từ đã có từ lúc gửi duyệt)
 const approveCostAcct = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/approve-accountant`, {}, loadingOptions(`approve-cost-acct-${c.id}`))
+
+// Cost Detail Drawer
+const showCostDetail = ref(false)
+const costDetailRecord = ref(null)
+const openCostDetail = (c) => { costDetailRecord.value = c; showCostDetail.value = true }
+
+// Budget Item Options for cost form selector
+const budgetItemOptions = computed(() => {
+  if (!props.project.budgets?.length) return []
+  const options = []
+  for (const b of props.project.budgets) {
+    if (b.status !== 'approved' && b.status !== 'draft') continue
+    for (const item of (b.items || [])) {
+      options.push({
+        id: item.id,
+        label: `${b.name} → ${item.name}`,
+        estimated: item.estimated_amount || 0,
+        actual: item.actual_amount || 0,
+        remaining: (item.remaining_amount ?? item.estimated_amount) || 0,
+      })
+    }
+  }
+  return options
+})
+
+// Budget expand state
+const expandedBudgets = ref([])
+const toggleBudgetExpand = (id) => {
+  const idx = expandedBudgets.value.indexOf(id)
+  if (idx >= 0) expandedBudgets.value.splice(idx, 1)
+  else expandedBudgets.value.push(id)
+}
+
 const showRejectCostModal = ref(false)
 const rejectingCost = ref(null)
 const rejectCostReason = ref('')
@@ -4822,13 +5236,21 @@ const saveSub = () => {
   const url = editingSub.value ? `/projects/${props.project.id}/subcontractors/${editingSub.value.id}` : `/projects/${props.project.id}/subcontractors`
   const method = editingSub.value ? 'put' : 'post'
 
-  // Use FormData if files are attached
-  if (subFiles.value.length > 0) {
+  // Use FormData if files are attached or we need to ensure boolean transmission
+  if (subFiles.value.length > 0 || !editingSub.value) {
     const fd = new FormData()
-    Object.entries(subForm.value).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') fd.append(k, v) })
+    Object.entries(subForm.value).forEach(([k, v]) => { 
+      if (v === true) fd.append(k, '1')
+      else if (v === false) fd.append(k, '0')
+      else if (v !== null && v !== undefined && v !== '') fd.append(k, v) 
+    })
     subFiles.value.forEach(f => fd.append('files[]', f))
-    if (editingSub.value) fd.append('_method', 'PUT')
-    router.post(url, fd, { forceFormData: true, preserveScroll: true, ...savingOptions({ onSuccess: () => { showSubModal.value = false; subFiles.value = [] } }) })
+    if (editingSub.value) {
+      fd.append('_method', 'PUT')
+      router.post(url, fd, { forceFormData: true, preserveScroll: true, ...savingOptions({ onSuccess: () => { showSubModal.value = false; subFiles.value = [] } }) })
+    } else {
+      router.post(url, fd, { forceFormData: true, preserveScroll: true, ...savingOptions({ onSuccess: () => { showSubModal.value = false; subFiles.value = [] } }) })
+    }
   } else {
     router[method](url, subForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showSubModal.value = false }))
   }
@@ -4859,9 +5281,29 @@ const saveSubPayment = () => {
     const fd = new FormData()
     Object.entries(subPayForm.value).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') fd.append(k, v) })
     subPayFiles.value.forEach(f => fd.append('files[]', f))
-    router.post(url, fd, { forceFormData: true, preserveScroll: true, ...savingOptions({ onSuccess: () => { showSubPayDrawer.value = false; subPayFiles.value = [] } }) })
+    router.post(url, fd, { 
+      forceFormData: true, 
+      preserveScroll: true, 
+      onSuccess: () => { 
+        showSubPayDrawer.value = false; 
+        subPayFiles.value = [];
+        message.success('Đã tạo phiếu thanh toán');
+      },
+      onError: () => {
+        message.error('Lỗi khi tạo phiếu thanh toán');
+      }
+    })
   } else {
-    router.post(url, subPayForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showSubPayDrawer.value = false }))
+    router.post(url, subPayForm.value, {
+      preserveScroll: true, 
+      onSuccess: () => {
+        showSubPayDrawer.value = false;
+        message.success('Đã tạo phiếu thanh toán');
+      },
+      onError: () => {
+        message.error('Lỗi khi tạo phiếu thanh toán');
+      }
+    })
   }
 }
 const submitSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/submit`, {}, loadingOptions(`submit-subpay-${p.id}`, { preserveScroll: true }))
@@ -5296,7 +5738,8 @@ const attendanceCols = [
   { title: 'Ngày', key: 'date', width: 100, align: 'center' },
   { title: 'Vào', key: 'check_in', width: 70, align: 'center' },
   { title: 'Ra', key: 'check_out', width: 70, align: 'center' },
-  { title: 'Giờ làm', key: 'hours', width: 130 },
+  { title: 'Giờ làm', key: 'hours', width: 90, align: 'center' },
+  { title: 'Tăng ca', key: 'overtime', width: 90, align: 'center' },
   { title: 'Trạng thái', key: 'status', width: 100, align: 'center' },
   { title: '', key: 'actions', width: 60, align: 'center' },
 ]
@@ -5406,7 +5849,7 @@ const shiftForm = ref({
   break_hours: 1, overtime_multiplier: 1.5, is_overtime_shift: false,
 })
 const laborForm = ref({
-  work_item: '', unit: 'm²', planned_quantity: null, actual_quantity: null,
+  work_item: '', user_id: null, unit: 'm²', planned_quantity: null, actual_quantity: null,
   workers_count: 1, hours_spent: 8, record_date: null, note: '',
 })
 
@@ -5416,16 +5859,23 @@ const submitManualAttendance = async () => {
   }
   try {
     attendanceSaving.value = true
-    await axios.post('/api/attendance', {
+    const res = await axios.post('/api/attendance', {
       ...attendanceForm.value,
       project_id: props.project.id,
       check_in_method: 'manual',
     })
-    message.success('Đã chấm công thủ công')
+    message.success(res.data?.message || 'Đã chấm công thủ công')
     showAttendanceModal.value = false
     attendanceForm.value = { user_id: null, work_date: null, check_in: null, check_out: null, status: 'present', overtime_hours: 0, note: '' }
     loadAttendanceData()
-  } catch (e) { message.error(e.response?.data?.message || 'Lỗi chấm công') }
+  } catch (e) {
+    console.error('Attendance error:', e)
+    const errorMsg = e.response?.data?.message || e.message || 'Lỗi chấm công'
+    message.error(errorMsg)
+    if (e.response?.data?.errors) {
+      Object.values(e.response.data.errors).flat().forEach(err => message.error(err))
+    }
+  }
   finally { attendanceSaving.value = false }
 }
 
@@ -5450,13 +5900,20 @@ const submitLaborRecord = async () => {
   }
   try {
     laborSaving.value = true
-    await axios.post(`/api/projects/${props.project.id}/labor-productivity`, laborForm.value)
-    message.success('Đã ghi nhận năng suất')
+    const res = await axios.post(`/api/projects/${props.project.id}/labor-productivity`, laborForm.value)
+    message.success(res.data?.message || 'Đã ghi nhận năng suất')
     showLaborModal.value = false
-    laborForm.value = { work_item: '', unit: 'm²', planned_quantity: null, actual_quantity: null, workers_count: 1, hours_spent: 8, record_date: null, note: '' }
+    laborForm.value = { work_item: '', user_id: null, unit: 'm²', planned_quantity: null, actual_quantity: null, workers_count: 1, hours_spent: 8, record_date: dayjs().format('YYYY-MM-DD'), note: '' }
     loadLaborDashboard()
     loadLaborRecords()
-  } catch (e) { message.error(e.response?.data?.message || 'Lỗi ghi nhận') }
+  } catch (e) {
+    console.error('Labor error:', e)
+    const errorMsg = e.response?.data?.message || e.message || 'Lỗi ghi nhận'
+    message.error(errorMsg)
+    if (e.response?.data?.errors) {
+      Object.values(e.response.data.errors).flat().forEach(err => message.error(err))
+    }
+  }
   finally { laborSaving.value = false }
 }
 

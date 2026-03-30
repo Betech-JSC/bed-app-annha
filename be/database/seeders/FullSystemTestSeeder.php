@@ -392,12 +392,13 @@ class FullSystemTestSeeder extends Seeder
         ];
 
         foreach ($stages as $i => [$desc, $pct, $status]) {
+            $paymentNum = 'TT-' . str_pad($i + 1, 3, '0', STR_PAD_LEFT);
             ProjectPayment::firstOrCreate(
-                ['project_id' => $project->id, 'payment_number' => $i + 1],
+                ['project_id' => $project->id, 'payment_number' => $paymentNum],
                 [
                     'project_id' => $project->id,
                     'contract_id' => $contract->id,
-                    'payment_number' => $i + 1,
+                    'payment_number' => $paymentNum,
                     'amount' => $contract->contract_value * $pct,
                     'notes' => $desc,
                     'due_date' => ($project->start_date ?? now())->copy()->addMonths($i * 2),

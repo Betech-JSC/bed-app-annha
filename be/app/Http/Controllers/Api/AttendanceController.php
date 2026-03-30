@@ -84,11 +84,13 @@ class AttendanceController extends Controller
         }
 
         $checkOut = Carbon::now()->format('H:i:s');
+        $attendance->update(['check_out' => $checkOut]);
+
+        // Recalculate after update
         $hoursWorked = $attendance->calculateHours();
         $overtimeHours = max(0, $hoursWorked - 8);
 
         $attendance->update([
-            'check_out' => $checkOut,
             'hours_worked' => $hoursWorked,
             'overtime_hours' => $overtimeHours,
         ]);
@@ -102,34 +104,57 @@ class AttendanceController extends Controller
     /** Tạo/Chỉnh sửa chấm công thủ công (admin) */
     public function store(Request $request): JsonResponse
     {
-        $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'project_id' => 'nullable|exists:projects,id',
-            'work_date' => 'required|date',
-            'check_in' => 'nullable|date_format:H:i',
-            'check_out' => 'nullable|date_format:H:i',
-            'status' => 'required|in:present,absent,late,half_day,leave,holiday',
-            'note' => 'nullable|string|max:500',
-        ]);
+        try {
+            \Log::info('Manual Attendance Store:', $request->all());
 
-        $data = $request->only(['user_id', 'project_id', 'work_date', 'check_in', 'check_out', 'status', 'note']);
+            $request->validate([
+                'user_id' => 'required|exists:users,id',
+                'project_id' => 'nullable|exists:projects,id',
+                'work_date' => 'required|date',
+                'check_in' => 'nullable|date_format:H:i',
+                'check_out' => 'nullable|date_format:H:i',
+                'status' => 'required|in:present,absent,late,half_day,leave,holiday',
+                'note' => 'nullable|string|max:500',
+            ]);
 
-        if ($data['check_in'] && $data['check_out']) {
-            $start = Carbon::parse($data['check_in']);
-            $end = Carbon::parse($data['check_out']);
-            $data['hours_worked'] = round($end->diffInMinutes($start) / 60, 2);
-            $data['overtime_hours'] = max(0, $data['hours_worked'] - 8);
+            $data = $request->only(['user_id', 'project_id', 'work_date', 'check_in', 'check_out', 'status', 'note', 'check_in_method', 'overtime_hours']);
+
+            if ($request->filled(['check_in', 'check_out'])) {
+                try {
+                    $start = Carbon::parse($request->check_in);
+                    $end = Carbon::parse($request->check_out);
+                    $data['hours_worked'] = round($end->diffInMinutes($start) / 60, 2);
+
+                    // If overtime_hours was sent from frontend (manual), use it; otherwise calculate
+                    if (!$request->has('overtime_hours') || $request->overtime_hours == 0) {
+                        $data['overtime_hours'] = max(0, $data['hours_worked'] - 8);
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Time parsing failed: ' . $e->getMessage());
+                }
+            }
+
+            $attendance = Attendance::updateOrCreate(
+                ['user_id' => $data['user_id'], 'work_date' => $data['work_date']],
+                $data
+            );
+
+            return response()->json([
+                'message' => 'Lưu chấm công thành công',
+                'data' => $attendance->load(['user:id,name', 'project:id,name']),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Attendance Validation Error:', $e->errors());
+            return response()->json([
+                'message' => 'Dữ liệu không hợp lệ',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Attendance Store Error: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $attendance = Attendance::updateOrCreate(
-            ['user_id' => $data['user_id'], 'work_date' => $data['work_date']],
-            $data
-        );
-
-        return response()->json([
-            'message' => 'Lưu chấm công thành công',
-            'data' => $attendance->load(['user:id,name', 'project:id,name']),
-        ]);
     }
 
     /** Duyệt chấm công */

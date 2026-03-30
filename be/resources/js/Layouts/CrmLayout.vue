@@ -166,6 +166,7 @@ import {
   AuditOutlined,
   AimOutlined,
   UsergroupAddOutlined,
+  ShopOutlined,
   CodeOutlined,
   QuestionCircleOutlined,
   BookOutlined,
@@ -189,6 +190,7 @@ const selectedKeys = computed(() => {
   if (url.startsWith('/acceptance-templates')) return ['acceptance-templates']
   if (url.startsWith('/projects')) return ['projects']
   if (url.startsWith('/subcontractors')) return ['subcontractors']
+  if (url.startsWith('/suppliers')) return ['suppliers']
   if (url.startsWith('/hr/kpi')) return ['kpi']
   if (url.startsWith('/hr/org-chart')) return ['org-chart']
   if (url.startsWith('/hr/departments')) return ['departments']
@@ -259,6 +261,7 @@ const menuItems = computed(() => {
       children: [
         { key: 'materials', label: 'Vật tư xây dựng', perm: 'material.view' },
         { key: 'equipment', label: 'Máy móc & Thiết bị', perm: 'equipment.view' },
+        { key: 'suppliers', label: 'Nhà cung cấp', icon: () => h(ShopOutlined), perm: 'material.view' },
       ],
     },
     {
@@ -328,6 +331,7 @@ const handleMenuClick = ({ key }) => {
     kpi: '/hr/kpi',
     'org-chart': '/hr/org-chart',
     subcontractors: '/subcontractors',
+    suppliers: '/suppliers',
     'acceptance-templates': '/acceptance-templates',
     notifications: '/notifications',
     settings: '/settings',

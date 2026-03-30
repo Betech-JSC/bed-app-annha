@@ -1,0 +1,128 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Supplier;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Illuminate\Support\Str;
+
+class CrmSupplierController extends Controller
+{
+    public function index(Request $request)
+    {
+        $query = Supplier::withCount(['contracts', 'acceptances'])->orderByDesc('created_at');
+
+        // Filters
+        if ($search = $request->get('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('code', 'like', "%{$search}%")
+                  ->orWhere('category', 'like', "%{$search}%")
+                  ->orWhere('contact_person', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        if ($status = $request->get('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($category = $request->get('category')) {
+            $query->where('category', $category);
+        }
+
+        $suppliers = $query->paginate(20)->withQueryString();
+
+        // Stats
+        $stats = [
+            'totalSuppliers' => Supplier::count(),
+            'totalDebt' => Supplier::sum('total_debt') ?: 0,
+            'totalPaid' => Supplier::sum('total_paid') ?: 0,
+            'activeSuppliers' => Supplier::where('status', 'active')->count(),
+        ];
+
+        // Categories for filter
+        $categories = Supplier::whereNotNull('category')->distinct()->pluck('category');
+
+        return Inertia::render('Crm/Suppliers/Index', [
+            'suppliers' => $suppliers,
+            'stats' => $stats,
+            'categories' => $categories,
+            'filters' => [
+                'search' => $request->get('search', ''),
+                'status' => $request->get('status', 'active'),
+                'category' => $request->get('category', ''),
+            ],
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'code' => 'required|string|max:50|unique:suppliers,code',
+            'category' => 'nullable|string|max:255',
+            'contact_person' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255',
+            'address' => 'nullable|string|max:500',
+            'tax_code' => 'nullable|string|max:50',
+            'bank_name' => 'nullable|string|max:255',
+            'bank_account' => 'nullable|string|max:50',
+            'bank_account_holder' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'status' => 'required|in:active,inactive',
+        ]);
+
+        Supplier::create([
+            ...$validated,
+            'uuid' => (string) Str::uuid(),
+            'total_debt' => 0,
+            'total_paid' => 0,
+        ]);
+
+        return redirect()->back()->with('success', 'Đã thêm nhà cung cấp.');
+    }
+
+    public function update(Request $request, $id)
+    {
+        $supplier = Supplier::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'code' => 'required|string|max:50|unique:suppliers,code,' . $id,
+            'category' => 'nullable|string|max:255',
+            'contact_person' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255',
+            'address' => 'nullable|string|max:500',
+            'tax_code' => 'nullable|string|max:50',
+            'bank_name' => 'nullable|string|max:255',
+            'bank_account' => 'nullable|string|max:50',
+            'bank_account_holder' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'status' => 'required|in:active,inactive',
+        ]);
+
+        $supplier->update($validated);
+
+        return redirect()->back()->with('success', 'Đã cập nhật nhà cung cấp.');
+    }
+
+    public function destroy($id)
+    {
+        $supplier = Supplier::findOrFail($id);
+
+        // Optional: check if supplier has contracts/acceptances before deleting
+        if ($supplier->contracts()->exists() || $supplier->acceptances()->exists()) {
+            return redirect()->back()->with('error', 'Không thể xóa nhà cung cấp đã có hợp đồng hoặc nghiệm thu.');
+        }
+
+        $supplier->delete();
+
+        return redirect()->back()->with('success', 'Đã xóa nhà cung cấp.');
+    }
+}

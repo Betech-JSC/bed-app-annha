@@ -106,6 +106,7 @@ use App\Http\Controllers\Admin\CrmNotificationController;
 use App\Http\Controllers\Admin\CrmFilesController;
 use App\Http\Controllers\Admin\CrmKpiController;
 use App\Http\Controllers\Admin\CrmSubcontractorController;
+use App\Http\Controllers\Admin\CrmSupplierController;
 use App\Http\Controllers\Admin\CrmAcceptanceTemplateController;
 
 Route::name('crm.')->middleware(['auth:admin'])->group(function () {
@@ -416,6 +417,14 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/', [CrmSubcontractorController::class, 'store'])->name('store');
         Route::put('/{id}', [CrmSubcontractorController::class, 'update'])->name('update');
         Route::delete('/{id}', [CrmSubcontractorController::class, 'destroy'])->name('destroy');
+    });
+
+    // Suppliers
+    Route::prefix('suppliers')->name('suppliers.')->group(function () {
+        Route::get('/', [CrmSupplierController::class, 'index'])->name('index');
+        Route::post('/', [CrmSupplierController::class, 'store'])->name('store');
+        Route::put('/{id}', [CrmSupplierController::class, 'update'])->name('update');
+        Route::delete('/{id}', [CrmSupplierController::class, 'destroy'])->name('destroy');
     });
 
     // Acceptance Templates (Bộ tài liệu nghiệm thu)
