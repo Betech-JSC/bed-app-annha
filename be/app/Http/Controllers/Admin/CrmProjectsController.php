@@ -103,29 +103,33 @@ class CrmProjectsController extends Controller
     {
         $project = Project::with([
             'customer',
-            'projectManager',
-            'creator',
-            'contract.attachments',
             'payments.attachments',
+            'payments.confirmer',
+            'payments.customerApprover',
             'additionalCosts.proposer',
             'additionalCosts.approver',
             'additionalCosts.attachments',
             'costs' => function ($q) {
-                $q->orderByDesc('created_at');
+                $q->with([
+                    'creator',
+                    'costGroup',
+                    'subcontractor',
+                    'attachments',
+                    'budgetItem',
+                    'managementApprover',
+                    'accountantApprover'
+                ])->orderByDesc('created_at');
             },
-            'costs.creator',
-            'costs.costGroup',
-            'costs.subcontractor',
-            'costs.attachments',
-            'costs.budgetItem',
             'personnel.user',
             'personnel.personnelRole',
-            'subcontractors.payments',
+            'subcontractors.payments' => function ($q) {
+                $q->with(['attachments', 'creator', 'approver', 'payer', 'rejector']);
+            },
             'subcontractors.items',
             'subcontractors.attachments',
             'subcontractors.approver',
             'constructionLogs' => function ($q) {
-                $q->with(['creator:id,name', 'task:id,name', 'attachments'])->latest('log_date');
+                $q->with(['creator', 'task', 'attachments'])->latest('log_date');
             },
             'acceptanceStages' => function ($q) {
                 $q->with([
@@ -135,7 +139,7 @@ class CrmProjectsController extends Controller
                     'task:id,name,parent_id',
                     'acceptanceTemplate',
                     'defects' => function ($dq) {
-                        $dq->whereIn('status', ['open', 'in_progress', 'resolved', 'verified']);
+                        $dq->whereIn('status', ['open', 'in_progress', 'resolved', 'verified'])->with('attachments');
                     },
                     'attachments',
                 ])->orderBy('order');
@@ -145,6 +149,7 @@ class CrmProjectsController extends Controller
             'progress',
             'changeRequests.requester',
             'changeRequests.approver',
+            'changeRequests.attachments',
             'invoices.attachments',
             'budgets.items',
             'budgets.creator',
@@ -152,7 +157,7 @@ class CrmProjectsController extends Controller
                 $q->whereNull('parent_id')->with(['user', 'replies.user'])->orderByDesc('created_at');
             },
             'risks.owner',
-            'risks.identifier',
+            'contract.attachments',
             'attachments' => function ($q) {
                 $q->latest();
             },
@@ -361,6 +366,7 @@ class CrmProjectsController extends Controller
             'cost_date' => 'required|date',
             'cost_group_id' => 'nullable|exists:cost_groups,id',
             'budget_item_id' => 'nullable|exists:budget_items,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
             'subcontractor_id' => 'nullable|exists:subcontractors,id',
             'material_id' => 'nullable|exists:materials,id',
             'quantity' => 'nullable|numeric|min:0.01',
@@ -371,7 +377,7 @@ class CrmProjectsController extends Controller
         $costData = [
             'project_id' => $project->id,
             'created_by' => $user->id,
-            'status' => 'draft',
+            'status' => 'pending_management_approval',
             ...$validated,
         ];
 
@@ -383,9 +389,19 @@ class CrmProjectsController extends Controller
             $costData['category'] = $autoDetectService->detectCategory($costData);
         }
 
-        Cost::create($costData);
+        DB::beginTransaction();
+        try {
+            $cost = Cost::create($costData);
 
-        return back()->with('success', 'Đã tạo phiếu chi.');
+            // Handle file uploads directly in the same request - MANDATORY for costs
+            $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$cost->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo phiếu chi.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi tạo phiếu chi: ' . $e->getMessage());
+        }
     }
 
     public function updateCost(Request $request, string $projectId, string $costId)
@@ -408,14 +424,26 @@ class CrmProjectsController extends Controller
             'cost_date' => 'sometimes|date',
             'cost_group_id' => 'nullable|exists:cost_groups,id',
             'budget_item_id' => 'nullable|exists:budget_items,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
             'subcontractor_id' => 'nullable|exists:subcontractors,id',
             'material_id' => 'nullable|exists:materials,id',
             'quantity' => 'nullable|numeric|min:0.01',
             'unit' => 'nullable|string|max:20',
         ]);
 
-        $cost->update($validated);
-        return back()->with('success', 'Đã cập nhật phiếu chi.');
+        DB::beginTransaction();
+        try {
+            $cost->update($validated);
+
+            // Handle file uploads during update
+            $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$cost->id}", false);
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật phiếu chi.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi cập nhật phiếu chi: ' . $e->getMessage());
+        }
     }
 
     public function destroyCost(string $projectId, string $costId)
@@ -594,12 +622,28 @@ class CrmProjectsController extends Controller
             $validated['payment_number'] = $count + 1;
         }
 
-        ProjectPayment::create([
-            'project_id' => $project->id,
-            ...$validated,
-        ]);
+        DB::beginTransaction();
+        try {
+            $payment = ProjectPayment::create([
+                'project_id' => $project->id,
+                ...$validated,
+                // CRM: Tạo xong đẩy thẳng sang KT xác nhận (skip bước KH đánh dấu)
+                'status' => 'customer_paid',
+                'paid_date' => now()->toDateString(),
+                'customer_approved_by' => $user->id,
+                'customer_approved_at' => now(),
+                'payment_proof_uploaded_at' => now(),
+            ]);
 
-        return back()->with('success', 'Đã thêm thanh toán.');
+            // Handle file uploads - MANDATORY
+            $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã thêm đợt thanh toán và gửi cho Kế toán xác nhận.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi thêm thanh toán: ' . $e->getMessage());
+        }
     }
 
     public function destroyPayment(string $projectId, string $paymentId)
@@ -636,8 +680,19 @@ class CrmProjectsController extends Controller
             'due_date' => 'sometimes|date',
         ]);
 
-        $payment->update($validated);
-        return back()->with('success', 'Đã cập nhật thanh toán.');
+        DB::beginTransaction();
+        try {
+            $payment->update($validated);
+
+            // Handle file uploads during update
+            $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", false);
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật thanh toán.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi cập nhật thanh toán: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -669,13 +724,15 @@ class CrmProjectsController extends Controller
 
             // Upload & attach files (chứng từ thanh toán)
             if ($request->hasFile('files')) {
+                /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+                $disk = \Illuminate\Support\Facades\Storage::disk('public');
                 foreach ($request->file('files') as $file) {
                     $path = $file->store("projects/{$project->id}/payments", 'public');
                     \App\Models\Attachment::create([
                         'original_name' => $file->getClientOriginalName(),
                         'file_name' => basename($path),
                         'file_path' => $path,
-                        'file_url' => \Illuminate\Support\Facades\Storage::disk('public')->url($path),
+                        'file_url' => $disk->url($path),
                         'mime_type' => $file->getClientMimeType(),
                         'file_size' => $file->getSize(),
                         'type' => 'payment_proof',
@@ -928,12 +985,18 @@ class CrmProjectsController extends Controller
     /**
      * Helper: Attach uploaded files to any attachable model
      */
-    private function attachFilesToEntity(Request $request, $entity, string $storagePath): int
+    private function attachFilesToEntity(Request $request, $entity, string $storagePath, bool $validate = true): int
     {
-        $request->validate([
-            'files' => 'required|array|min:1',
-            'files.*' => 'required|file|max:20480', // max 20MB each
-        ]);
+        if ($validate || $request->hasFile('files')) {
+            $request->validate([
+                'files' => ($validate ? 'required|' : 'nullable|') . 'array' . ($validate ? '|min:1' : ''),
+                'files.*' => 'required|file|max:20480', // max 20MB each
+            ]);
+        }
+
+        if (!$request->hasFile('files')) {
+            return 0;
+        }
 
         $user = auth('admin')->user();
         $count = 0;
@@ -1126,17 +1189,23 @@ class CrmProjectsController extends Controller
             }
         }
 
-        $log = ConstructionLog::create([
-            'project_id' => $project->id,
-            'created_by' => $user->id,
-            ...$validated,
-        ]);
+        DB::beginTransaction();
+        try {
+            $log = ConstructionLog::create([
+                'project_id' => $project->id,
+                'created_by' => $user->id,
+                ...$validated,
+            ]);
 
-        // NOTE: TaskProgressService::updateTaskFromLogs() is automatically called
-        // by ConstructionLog model's `created` boot event — no need to call it again here.
-        // The boot event handles: calculate progress → update task status → update parent.
+            // Handle file uploads during log creation
+            $this->attachFilesToEntity($request, $log, "logs/{$project->id}", false);
 
-        return back()->with('success', 'Đã thêm nhật ký thi công.');
+            DB::commit();
+            return back()->with('success', 'Đã thêm nhật ký thi công.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi thêm nhật ký: ' . $e->getMessage());
+        }
     }
 
     public function updateLog(Request $request, string $projectId, string $logId)
@@ -1191,28 +1260,28 @@ class CrmProjectsController extends Controller
         }
 
         $oldTaskId = $log->task_id;
-        $log->update($validated);
 
-        // BUSINESS RULE: Recalculate task progress from logs (same as mobile APP)
-        $service = app(\App\Services\TaskProgressService::class);
-        $newTaskId = $log->task_id;
+        DB::beginTransaction();
+        try {
+            $log->update($validated);
 
-        // Recalculate new task
-        if ($newTaskId) {
-            $task = \App\Models\ProjectTask::find($newTaskId);
-            if ($task) {
-                $service->updateTaskFromLogs($task, true);
+            // Handle file uploads during update
+            $this->attachFilesToEntity($request, $log, "logs/{$project->id}", false);
+
+            DB::commit();
+            
+            // Recalculate progress logic (manually triggered if needed, though model usually handles)
+            if (class_exists(\App\Services\TaskProgressService::class)) {
+                $service = app(\App\Services\TaskProgressService::class);
+                if ($log->task_id) $service->updateTaskFromLogs($log->task_id);
+                if ($oldTaskId && $oldTaskId != $log->task_id) $service->updateTaskFromLogs($oldTaskId);
             }
-        }
-        // If task changed, also recalculate old task
-        if ($oldTaskId && $oldTaskId !== $newTaskId) {
-            $oldTask = \App\Models\ProjectTask::find($oldTaskId);
-            if ($oldTask) {
-                $service->updateTaskFromLogs($oldTask, true);
-            }
-        }
 
-        return back()->with('success', 'Đã cập nhật nhật ký.');
+            return back()->with('success', 'Đã cập nhật nhật ký thi công.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi cập nhật nhật ký: ' . $e->getMessage());
+        }
     }
 
     public function destroyLog(string $projectId, string $logId)
@@ -1299,23 +1368,28 @@ class CrmProjectsController extends Controller
             'defect_type' => 'nullable|in:standard_violation,acceptance,other',
         ]);
 
-        $defect = Defect::create([
-            'project_id' => $project->id,
-            'reported_by' => $user->id,
-            'description' => $validated['description'],
-            'severity' => $validated['severity'],
-            'status' => $validated['status'] ?? 'open',
-            'task_id' => $validated['task_id'] ?? null,
-            'acceptance_stage_id' => $validated['acceptance_stage_id'] ?? null,
-            'defect_type' => $validated['defect_type'] ?? null,
-        ]);
+        DB::beginTransaction();
+        try {
+            $defect = Defect::create([
+                'project_id' => $project->id,
+                'reported_by' => $user->id,
+                'description' => $validated['description'],
+                'severity' => $validated['severity'],
+                'status' => $validated['status'] ?? 'open',
+                'task_id' => $validated['task_id'] ?? null,
+                'acceptance_stage_id' => $validated['acceptance_stage_id'] ?? null,
+                'defect_type' => $validated['defect_type'] ?? null,
+            ]);
 
-        // Attach files if provided
-        if ($request->hasFile('files')) {
-            $this->attachFilesToEntity($request, $defect, "defects/{$project->id}/{$defect->id}");
+            // Handle file uploads during creation
+            $this->attachFilesToEntity($request, $defect, "defects/{$project->id}", false);
+
+            DB::commit();
+            return back()->with('success', 'Đã ghi nhận lỗi/sai sót.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi ghi nhận lỗi: ' . $e->getMessage());
         }
-
-        return back()->with('success', 'Đã báo cáo lỗi.');
     }
 
     public function updateDefect(Request $request, string $projectId, string $defectId)
@@ -1334,50 +1408,60 @@ class CrmProjectsController extends Controller
 
         $oldStatus = $defect->status;
 
-        // BUSINESS RULE: Use model methods for status transitions (matching APP)
-        if (isset($validated['status']) && $validated['status'] !== $oldStatus) {
-            switch ($validated['status']) {
-                case 'in_progress':
-                    if ($request->has('rejection_reason') && $validated['rejection_reason']) {
-                        $defect->markAsRejected(null, $validated['rejection_reason']);
-                    } else {
-                        $defect->markAsInProgress(null);
-                    }
-                    break;
-                case 'fixed':
-                    $defect->markAsFixed(null);
-                    break;
-                case 'verified':
-                    if ($defect->status !== 'fixed') {
-                        return back()->with('error', 'Chỉ có thể xác nhận lỗi đã được sửa (trạng thái fixed).');
-                    }
-                    $defect->markAsVerified(null);
-                    // markAsVerified triggers checkAndUpdateTaskProgress + autoResubmitAcceptanceStage
-                    break;
-                default:
-                    $defect->update(['status' => $validated['status']]);
+        DB::beginTransaction();
+        try {
+            // BUSINESS RULE: Use model methods for status transitions (matching APP)
+            if (isset($validated['status']) && $validated['status'] !== $oldStatus) {
+                switch ($validated['status']) {
+                    case 'in_progress':
+                        if ($request->has('rejection_reason') && $validated['rejection_reason']) {
+                            $defect->markAsRejected(null, $validated['rejection_reason']);
+                        } else {
+                            $defect->markAsInProgress(null);
+                        }
+                        break;
+                    case 'fixed':
+                        $defect->markAsFixed(null);
+                        break;
+                    case 'verified':
+                        if ($defect->status !== 'fixed') {
+                            return back()->with('error', 'Chỉ có thể xác nhận lỗi đã được sửa (trạng thái fixed).');
+                        }
+                        $defect->markAsVerified(null);
+                        // markAsVerified triggers checkAndUpdateTaskProgress + autoResubmitAcceptanceStage
+                        break;
+                    default:
+                        $defect->update(['status' => $validated['status']]);
+                }
+
+                // BUSINESS RULE: Create history record (matching APP)
+                \App\Models\DefectHistory::create([
+                    'defect_id' => $defect->id,
+                    'action' => 'status_changed',
+                    'old_status' => $oldStatus,
+                    'new_status' => $validated['status'],
+                    'user_id' => $user->id,
+                ]);
+
+                unset($validated['status']);
             }
 
-            // BUSINESS RULE: Create history record (matching APP)
-            \App\Models\DefectHistory::create([
-                'defect_id' => $defect->id,
-                'action' => 'status_changed',
-                'old_status' => $oldStatus,
-                'new_status' => $validated['status'],
-                'user_id' => $user->id,
-            ]);
+            // Update other fields (description, severity)
+            unset($validated['rejection_reason']);
+            $remaining = array_filter($validated, fn($v) => $v !== null);
+            if (!empty($remaining)) {
+                $defect->update($remaining);
+            }
 
-            unset($validated['status']);
+            // Handle file uploads during update
+            $this->attachFilesToEntity($request, $defect, "defects/{$project->id}", false);
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật thông tin lỗi.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi cập nhật lỗi: ' . $e->getMessage());
         }
-
-        // Update other fields (description, severity)
-        unset($validated['rejection_reason']);
-        $remaining = array_filter($validated, fn($v) => $v !== null);
-        if (!empty($remaining)) {
-            $defect->update($remaining);
-        }
-
-        return back()->with('success', 'Đã cập nhật lỗi.');
     }
 
     public function destroyDefect(string $projectId, string $defectId)
@@ -1988,12 +2072,22 @@ class CrmProjectsController extends Controller
             'status' => 'nullable|string',
         ]);
 
-        Contract::create([
-            'project_id' => $project->id,
-            ...$validated,
-        ]);
+        DB::beginTransaction();
+        try {
+            $contract = Contract::create([
+                'project_id' => $project->id,
+                ...$validated,
+            ]);
 
-        return back()->with('success', 'Đã tạo hợp đồng.');
+            // Handle file uploads
+            $this->attachFilesToEntity($request, $contract, "contracts/{$project->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo hợp đồng.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi tạo hợp đồng: ' . $e->getMessage());
+        }
     }
 
     public function updateContract(Request $request, string $projectId)
@@ -2008,8 +2102,19 @@ class CrmProjectsController extends Controller
             'signed_date' => 'nullable|date',
             'status' => 'nullable|string',
         ]);
-        $contract->update($validated);
-        return back()->with('success', 'Đã cập nhật hợp đồng.');
+        DB::beginTransaction();
+        try {
+            $contract->update($validated);
+
+            // Handle file uploads during update
+            $this->attachFilesToEntity($request, $contract, "contracts/{$project->id}", false);
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật hợp đồng.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi cập nhật hợp đồng: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -2058,6 +2163,18 @@ class CrmProjectsController extends Controller
             $validated['bank_name'] = $validated['bank_name'] ?? $gs->bank_name;
             $validated['bank_account_number'] = $validated['bank_account_number'] ?? $gs->bank_account_number;
             $validated['bank_account_name'] = $validated['bank_account_name'] ?? $gs->bank_account_name;
+        } else {
+            // Auto-create GlobalSubcontractor for future reuse
+            $gs = GlobalSubcontractor::firstOrCreate(
+                ['name' => $validated['name']],
+                [
+                    'category' => $validated['category'] ?? null,
+                    'bank_name' => $validated['bank_name'] ?? null,
+                    'bank_account_number' => $validated['bank_account_number'] ?? null,
+                    'bank_account_name' => $validated['bank_account_name'] ?? null,
+                ]
+            );
+            $validated['global_subcontractor_id'] = $gs->id;
         }
 
         DB::beginTransaction();
@@ -2104,22 +2221,7 @@ class CrmProjectsController extends Controller
             }
 
             // Handle file uploads
-            if ($request->hasFile('files')) {
-                foreach ($request->file('files') as $file) {
-                    $path = $file->store("subcontractors/{$project->id}/{$subcontractor->id}", 'public');
-                    Attachment::create([
-                        'attachable_type' => Subcontractor::class,
-                        'attachable_id' => $subcontractor->id,
-                        'original_name' => $file->getClientOriginalName(),
-                        'file_name' => $file->getClientOriginalName(),
-                        'file_path' => $path,
-                        'file_url' => '/storage/' . $path,
-                        'file_size' => $file->getSize(),
-                        'mime_type' => $file->getClientMimeType(),
-                        'uploaded_by' => $user->id,
-                    ]);
-                }
-            }
+            $this->attachFilesToEntity($request, $subcontractor, "subcontractors/{$project->id}/{$subcontractor->id}", false);
 
             DB::commit();
             return back()->with('success', 'Đã thêm nhà thầu phụ.');
@@ -2151,22 +2253,7 @@ class CrmProjectsController extends Controller
         $sub->update([...$validated, 'updated_by' => $user->id]);
 
         // Handle file uploads on update
-        if ($request->hasFile('files')) {
-            foreach ($request->file('files') as $file) {
-                $path = $file->store("subcontractors/{$project->id}/{$sub->id}", 'public');
-                Attachment::create([
-                    'attachable_type' => Subcontractor::class,
-                    'attachable_id' => $sub->id,
-                    'original_name' => $file->getClientOriginalName(),
-                    'file_name' => $file->getClientOriginalName(),
-                    'file_path' => $path,
-                    'file_url' => '/storage/' . $path,
-                    'file_size' => $file->getSize(),
-                    'mime_type' => $file->getClientMimeType(),
-                    'uploaded_by' => $user->id,
-                ]);
-            }
-        }
+        $this->attachFilesToEntity($request, $sub, "subcontractors/{$project->id}/{$sub->id}", false);
 
         return back()->with('success', 'Đã cập nhật nhà thầu phụ.');
     }
@@ -2233,27 +2320,12 @@ class CrmProjectsController extends Controller
                 'subcontractor_id' => $sub->id,
                 'project_id' => $project->id,
                 ...$validated,
-                'status' => 'draft',
+                'status' => 'pending_management_approval',
                 'created_by' => $user->id,
             ]);
 
-            // Handle file uploads
-            if ($request->hasFile('files')) {
-                foreach ($request->file('files') as $file) {
-                    $path = $file->store("sub-payments/{$project->id}/{$payment->id}", 'public');
-                    Attachment::create([
-                        'attachable_type' => SubcontractorPayment::class,
-                        'attachable_id' => $payment->id,
-                        'original_name' => $file->getClientOriginalName(),
-                        'file_name' => $file->getClientOriginalName(),
-                        'file_path' => $path,
-                        'file_url' => '/storage/' . $path,
-                        'file_size' => $file->getSize(),
-                        'mime_type' => $file->getClientMimeType(),
-                        'uploaded_by' => $user->id,
-                    ]);
-                }
-            }
+            // Handle file uploads - MANDATORY
+            $this->attachFilesToEntity($request, $payment, "sub-payments/{$project->id}/{$payment->id}", true);
 
             DB::commit();
             return back()->with('success', 'Đã tạo phiếu thanh toán NTP.');
@@ -2416,14 +2488,24 @@ class CrmProjectsController extends Controller
             'description' => 'required|string|max:1000',
         ]);
 
-        AdditionalCost::create([
-            'project_id' => $project->id,
-            'proposed_by' => $user->id,
-            'status' => 'pending_approval',
-            ...$validated,
-        ]);
+        DB::beginTransaction();
+        try {
+            $cost = AdditionalCost::create([
+                'project_id' => $project->id,
+                'proposed_by' => $user->id,
+                'status' => 'pending_approval',
+                ...$validated,
+            ]);
 
-        return back()->with('success', 'Đã tạo chi phí phát sinh.');
+            // Handle file uploads if any
+            $this->attachFilesToEntity($request, $cost, "additional-costs/{$project->id}/{$cost->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo chi phí phát sinh.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi tạo chi phí phát sinh: ' . $e->getMessage());
+        }
     }
 
     public function approveAdditionalCost(string $projectId, string $id)
@@ -2556,8 +2638,14 @@ class CrmProjectsController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
+            'budget_date' => 'sometimes|date',
+            'version' => 'nullable|string|max:50',
             'notes' => 'nullable|string',
-            'status' => 'sometimes|in:draft,approved,active,archived',
+            'status' => 'sometimes|in:draft,approved,active,revised,archived',
+            'items' => 'sometimes|array',
+            'items.*.name' => 'required_with:items|string|max:255',
+            'items.*.estimated_amount' => 'required_with:items|numeric|min:0',
+            'items.*.description' => 'nullable|string|max:500',
         ]);
 
         if (($validated['status'] ?? null) === 'approved' && !$budget->approved_by) {
@@ -2565,8 +2653,38 @@ class CrmProjectsController extends Controller
             $validated['approved_at'] = now();
         }
 
-        $budget->update($validated);
-        return back()->with('success', 'Đã cập nhật ngân sách.');
+        DB::beginTransaction();
+        try {
+            // Update budget fields (exclude items from direct update)
+            $budgetFields = collect($validated)->except('items')->toArray();
+
+            // Recalculate total if items provided
+            if (isset($validated['items'])) {
+                $budgetFields['total_budget'] = collect($validated['items'])->sum('estimated_amount');
+            }
+
+            $budget->update($budgetFields);
+
+            // Sync items if provided
+            if (isset($validated['items'])) {
+                // Remove old items
+                $budget->items()->delete();
+                // Create new items
+                foreach ($validated['items'] as $itemData) {
+                    $budget->items()->create([
+                        'name' => $itemData['name'],
+                        'estimated_amount' => $itemData['estimated_amount'],
+                        'description' => $itemData['description'] ?? null,
+                    ]);
+                }
+            }
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật ngân sách.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi cập nhật: ' . $e->getMessage());
+        }
     }
 
     public function destroyBudget(string $projectId, string $id)
@@ -2605,15 +2723,25 @@ class CrmProjectsController extends Controller
 
         $totalAmount = $validated['subtotal'] + ($validated['tax_amount'] ?? 0) - ($validated['discount_amount'] ?? 0);
 
-        Invoice::create([
-            'project_id' => $project->id,
-            'customer_id' => $project->customer_id,
-            'total_amount' => $totalAmount,
-            'created_by' => $user->id,
-            ...$validated,
-        ]);
+        DB::beginTransaction();
+        try {
+            $invoice = Invoice::create([
+                'project_id' => $project->id,
+                'customer_id' => $project->customer_id,
+                'total_amount' => $totalAmount,
+                'created_by' => $user->id,
+                ...$validated,
+            ]);
 
-        return back()->with('success', 'Đã tạo hóa đơn.');
+            // Handle file uploads - MANDATORY
+            $this->attachFilesToEntity($request, $invoice, "invoices/{$project->id}/{$invoice->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo hóa đơn/chi phí.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi tạo hóa đơn: ' . $e->getMessage());
+        }
     }
 
     public function updateInvoice(Request $request, string $projectId, string $id)
@@ -2640,8 +2768,19 @@ class CrmProjectsController extends Controller
             $validated['total_amount'] = $subtotal + $tax - $discount;
         }
 
-        $invoice->update($validated);
-        return back()->with('success', 'Đã cập nhật hóa đơn.');
+        DB::beginTransaction();
+        try {
+            $invoice->update($validated);
+
+            // Handle file uploads during update
+            $this->attachFilesToEntity($request, $invoice, "invoices/{$project->id}", false);
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật hóa đơn.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi cập nhật hóa đơn: ' . $e->getMessage());
+        }
     }
 
     public function destroyInvoice(string $projectId, string $id)
@@ -2674,18 +2813,28 @@ class CrmProjectsController extends Controller
 
         $maxOrder = $project->acceptanceStages()->max('order') ?? 0;
 
-        AcceptanceStage::create([
-            'project_id' => $project->id,
-            'name' => $validated['name'],
-            'description' => $validated['description'] ?? null,
-            'task_id' => $validated['task_id'] ?? null,
-            'acceptance_template_id' => $validated['acceptance_template_id'] ?? null,
-            'order' => $validated['order'] ?? ($maxOrder + 1),
-            'is_custom' => true,
-            'status' => 'pending',
-        ]);
+        DB::beginTransaction();
+        try {
+            $stage = AcceptanceStage::create([
+                'project_id' => $project->id,
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'task_id' => $validated['task_id'] ?? null,
+                'acceptance_template_id' => $validated['acceptance_template_id'] ?? null,
+                'order' => $validated['order'] ?? ($maxOrder + 1),
+                'is_custom' => true,
+                'status' => 'pending',
+            ]);
 
-        return back()->with('success', 'Đã tạo giai đoạn nghiệm thu.');
+            // Handle file uploads
+            $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stage->id}", false);
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo giai đoạn nghiệm thu.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi tạo giai đoạn nghiệm thu: ' . $e->getMessage());
+        }
     }
 
 
@@ -2705,9 +2854,19 @@ class CrmProjectsController extends Controller
             'order' => 'nullable|integer|min:0',
         ]);
 
-        $stage->update($validated);
+        DB::beginTransaction();
+        try {
+            $stage->update($validated);
 
-        return back()->with('success', 'Đã cập nhật giai đoạn nghiệm thu.');
+            // Handle file uploads during update
+            $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stage->id}", false);
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật giai đoạn nghiệm thu.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi cập nhật giai đoạn nghiệm thu: ' . $e->getMessage());
+        }
     }
 
     public function approveAcceptance(Request $request, string $projectId, string $id)
@@ -3446,6 +3605,9 @@ class CrmProjectsController extends Controller
                 ]);
             }
 
+            // Handle file uploads - MANDATORY for material bills
+            $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", true);
+
             // Create linked Cost record immediately (draft) so it shows in Chi phí tab
             $supplierName = '';
             if ($validated['supplier_id'] ?? null) {
@@ -3934,5 +4096,104 @@ class CrmProjectsController extends Controller
             \Illuminate\Support\Facades\Log::warning('CRM notification failed: ' . $e->getMessage());
             // Don't throw — notifications are non-critical
         }
+    }
+
+    // ===================================================================
+    // CRM PROXY — Attendance, Shifts, Labor Productivity
+    // These routes exist in api.php under auth:sanctum for mobile APP.
+    // CRM admin users need the same endpoints under auth:admin.
+    // ===================================================================
+
+    public function getAttendance(Request $request, string $projectId)
+    {
+        $request->merge(['project_id' => $projectId]);
+        return app(\App\Http\Controllers\Api\AttendanceController::class)->index($request);
+    }
+
+    public function storeAttendance(Request $request, string $projectId)
+    {
+        $request->merge(['project_id' => $projectId]);
+        return app(\App\Http\Controllers\Api\AttendanceController::class)->store($request);
+    }
+
+    public function approveAttendance(Request $request, string $projectId, string $id)
+    {
+        // Fake $request->user() for the API controller by merging admin user
+        $admin = auth('admin')->user();
+        $request->merge(['_admin_approver_id' => $admin->id]);
+
+        $attendance = \App\Models\Attendance::findOrFail($id);
+        $attendance->update([
+            'approved_by' => $admin->id,
+            'approved_at' => now(),
+        ]);
+        return response()->json(['message' => 'Đã duyệt chấm công', 'data' => $attendance]);
+    }
+
+    public function attendanceStatistics(Request $request, string $projectId)
+    {
+        $request->merge(['project_id' => $projectId]);
+        return app(\App\Http\Controllers\Api\AttendanceController::class)->statistics($request);
+    }
+
+    public function getShifts(Request $request, string $projectId)
+    {
+        $request->merge(['project_id' => $projectId]);
+        return app(\App\Http\Controllers\Api\AttendanceController::class)->shifts($request);
+    }
+
+    public function storeShift(Request $request, string $projectId)
+    {
+        $request->merge(['project_id' => $projectId]);
+        return app(\App\Http\Controllers\Api\AttendanceController::class)->createShift($request);
+    }
+
+    public function getLaborProductivity(Request $request, string $projectId)
+    {
+        return app(\App\Http\Controllers\Api\LaborProductivityController::class)->index($request, $projectId);
+    }
+
+    public function storeLaborProductivity(Request $request, string $projectId)
+    {
+        // LaborProductivityController::store uses $request->user()->id for created_by
+        // Under auth:admin, $request->user() is null. We need to handle this.
+        $admin = auth('admin')->user();
+
+        $request->validate([
+            'user_id' => 'nullable|exists:users,id',
+            'task_id' => 'nullable|exists:project_tasks,id',
+            'record_date' => 'required|date',
+            'work_item' => 'required|string|max:255',
+            'unit' => 'required|string|max:20',
+            'planned_quantity' => 'required|numeric|min:0',
+            'actual_quantity' => 'required|numeric|min:0',
+            'workers_count' => 'required|integer|min:1',
+            'hours_spent' => 'required|numeric|min:0.5|max:24',
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        $record = \App\Models\LaborProductivity::create(array_merge(
+            $request->all(),
+            [
+                'project_id' => $projectId,
+                'created_by' => $admin->id,
+            ]
+        ));
+
+        return response()->json([
+            'message' => 'Ghi nhận năng suất thành công',
+            'data' => $record->load(['user:id,name', 'task:id,name']),
+        ], 201);
+    }
+
+    public function destroyLaborProductivity(string $projectId, string $id)
+    {
+        \App\Models\LaborProductivity::where('project_id', $projectId)->findOrFail($id)->delete();
+        return response()->json(['message' => 'Đã xóa']);
+    }
+
+    public function laborProductivityDashboard(Request $request, string $projectId)
+    {
+        return app(\App\Http\Controllers\Api\LaborProductivityController::class)->dashboard($request, $projectId);
     }
 }

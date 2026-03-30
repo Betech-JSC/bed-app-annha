@@ -211,7 +211,7 @@ class AcceptanceStage extends Model
     // METHODS
     // ==================================================================
 
-    public function approveInternal(?User $user = null): bool
+    public function approveInternal($user = null): bool
     {
         if ($this->status !== 'pending') {
             return false;
@@ -228,7 +228,7 @@ class AcceptanceStage extends Model
      * Supervisor approve (Giám sát duyệt)
      * Workflow: pending → supervisor_approved
      */
-    public function approveSupervisor(?User $user = null): bool
+    public function approveSupervisor($user = null): bool
     {
         if ($this->status !== 'pending') {
             return false;
@@ -245,7 +245,7 @@ class AcceptanceStage extends Model
      * Project Manager approve (Quản lý dự án duyệt)
      * Workflow: supervisor_approved → project_manager_approved
      */
-    public function approveProjectManager(?User $user = null): bool
+    public function approveProjectManager($user = null): bool
     {
         if ($this->status !== 'supervisor_approved') {
             return false;
@@ -262,7 +262,7 @@ class AcceptanceStage extends Model
      * Customer approve (Khách hàng duyệt)
      * Workflow: project_manager_approved → customer_approved
      */
-    public function approveCustomer(?User $user = null): bool
+    public function approveCustomer($user = null): bool
     {
         if ($this->status !== 'project_manager_approved') {
             return false;
@@ -284,7 +284,7 @@ class AcceptanceStage extends Model
         return $saved;
     }
 
-    public function approveDesign(?User $user = null): bool
+    public function approveDesign($user = null): bool
     {
         if ($this->status !== 'customer_approved') {
             return false;
@@ -297,7 +297,7 @@ class AcceptanceStage extends Model
         return $this->save();
     }
 
-    public function approveOwner(?User $user = null): bool
+    public function approveOwner($user = null): bool
     {
         if ($this->status !== 'design_approved') {
             return false;
@@ -321,7 +321,7 @@ class AcceptanceStage extends Model
         return $saved;
     }
 
-    public function reject(string $reason, ?User $user = null): bool
+    public function reject(string $reason, $user = null): bool
     {
         // Only allow rejection from non-final states
         $rejectableStatuses = ['pending', 'internal_approved', 'supervisor_approved', 'project_manager_approved'];
@@ -418,7 +418,7 @@ class AcceptanceStage extends Model
      * BUSINESS RULE: Tự động tạo lỗi nghiệm thu khi nghiệm thu KHÔNG ĐẠT
      * Được gọi khi reject stage hoặc khi acceptability_status = "not_acceptable"
      */
-    public function autoCreateDefectIfNotAcceptable(?User $user = null, ?string $reason = null): ?\App\Models\Defect
+    public function autoCreateDefectIfNotAcceptable($user = null, ?string $reason = null): ?\App\Models\Defect
     {
         try {
             // Kiểm tra xem đã có defect nào chưa được verified chưa

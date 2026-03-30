@@ -77,7 +77,7 @@ class Contract extends Model
     // METHODS
     // ==================================================================
 
-    public function approve(?User $user = null): bool
+    public function approve($user = null): bool
     {
         $this->status = 'approved';
         if ($user) {
@@ -87,7 +87,7 @@ class Contract extends Model
         return $this->save();
     }
 
-    public function reject(string $reason): bool
+    public function reject(string $reason, $user = null): bool
     {
         $this->status = 'rejected';
         $this->rejected_reason = $reason;

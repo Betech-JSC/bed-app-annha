@@ -323,7 +323,7 @@ const categories = [
   },
   {
     key: 'approvals',
-    title: 'Phê duyệt yêu cầu',
+    title: 'Trung tâm duyệt',
     icon: markRaw(AuditOutlined),
     gradient: 'linear-gradient(135deg, #b91c1c, #ef4444)',
     articles: [
@@ -331,7 +331,7 @@ const categories = [
         title: 'Quy trình duyệt chi phí',
         steps: [
           'Nhân viên tạo chi phí → <strong>Gửi duyệt</strong>',
-          'Ban quản lý nhận thông báo → Vào <strong>Phê duyệt yêu cầu</strong> → Duyệt hoặc Từ chối',
+          'Ban quản lý nhận thông báo → Vào <strong>Trung tâm duyệt</strong> → Duyệt hoặc Từ chối',
           'Nếu duyệt, Kế toán nhận thông báo → Xác nhận thanh toán',
           'Chi phí được đánh dấu "Đã thanh toán" khi hoàn tất',
         ],
@@ -339,11 +339,11 @@ const categories = [
       {
         title: 'Duyệt yêu cầu hàng loạt',
         steps: [
-          'Vào <strong>Phê duyệt yêu cầu</strong> từ menu hoặc Dashboard',
+          'Vào <strong>Trung tâm duyệt</strong> từ menu hoặc Dashboard',
           'Xem tất cả yêu cầu đang chờ duyệt (Chi phí, Vật tư, Thiết bị...)',
           'Duyệt từng yêu cầu hoặc chọn nhiều để duyệt đồng loạt',
         ],
-        tips: 'Badge đỏ trên menu "Phê duyệt yêu cầu" cho biết số yêu cầu đang chờ.',
+        tips: 'Badge đỏ trên menu "Trung tâm duyệt" cho biết số yêu cầu đang chờ.',
       },
     ],
   },

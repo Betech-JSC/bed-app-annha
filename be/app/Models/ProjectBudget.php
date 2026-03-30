@@ -59,6 +59,11 @@ class ProjectBudget extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function attachments(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(Attachment::class, 'attachable');
+    }
+
     // ==================================================================
     // BOOT
     // ==================================================================

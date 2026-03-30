@@ -236,6 +236,47 @@
         <div class="detail-label">Lý do từ chối</div>
         <a-alert type="error" :message="detailItem.rejected_reason" show-icon class="rounded-xl" />
       </div>
+
+      <!-- Attachments Section -->
+      <a-divider />
+      <div class="detail-section">
+        <div class="flex items-center justify-between mb-2">
+          <div class="detail-label !mb-0">Tệp chứng từ đính kèm</div>
+          <a-tag v-if="detailItem.attachments_count" color="blue" class="rounded-full">{{ detailItem.attachments_count }}</a-tag>
+        </div>
+        
+        <div v-if="detailItem.attachments && detailItem.attachments.length > 0" class="flex flex-col gap-2">
+          <a 
+            v-for="file in detailItem.attachments" 
+            :key="file.id" 
+            :href="file.url" 
+            target="_blank"
+            class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-emerald-50 border border-transparent hover:border-emerald-200 rounded-xl transition-all group"
+          >
+            <div class="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-white rounded-lg shadow-sm border border-gray-100 group-hover:border-emerald-100">
+              <FilePdfOutlined v-if="file.name.toLowerCase().endsWith('.pdf')" class="text-red-500 text-lg" />
+              <FileExcelOutlined v-else-if="file.name.toLowerCase().match(/\.(xlsx|xls|csv)$/)" class="text-emerald-600 text-lg" />
+              <FileImageOutlined v-else-if="file.name.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif)$/)" class="text-blue-500 text-lg" />
+              <PaperClipOutlined v-else class="text-gray-400 text-lg" />
+            </div>
+            <div class="flex-grow min-w-0">
+              <div class="text-sm font-medium text-gray-700 truncate group-hover:text-emerald-700">{{ file.name }}</div>
+              <div class="text-xs text-gray-400 uppercase tracking-wider">{{ file.size || 'N/A' }}</div>
+            </div>
+            <DownloadOutlined class="text-gray-300 group-hover:text-emerald-500 transition-colors" />
+          </a>
+        </div>
+        
+        <div v-else class="p-4 border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center text-center">
+          <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-2">
+            <PaperClipOutlined class="text-gray-300 text-xl" />
+          </div>
+          <div class="text-sm text-gray-400">Không có tệp đính kèm</div>
+          <div v-if="['project_cost', 'sub_payment'].includes(detailItem.type)" class="mt-2">
+            <a-alert type="warning" message="Yêu cầu tài chính bắt buộc có chứng từ" banner class="text-[10px] py-1 px-2 rounded-lg" />
+          </div>
+        </div>
+      </div>
       <a-divider />
       <div class="flex gap-3">
         <a-button type="primary" block size="large" class="rounded-xl ac-btn-approve" @click="handleApproveByType(detailItem); detailItem = null;">
@@ -305,6 +346,11 @@ import {
   SafetyCertificateOutlined,
   ToolOutlined,
   TeamOutlined,
+  FilePdfOutlined,
+  FileExcelOutlined,
+  FileImageOutlined,
+  PaperClipOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -321,7 +367,8 @@ const props = defineProps({
   subPaymentManagementItems: { type: Array, default: () => [] },
   subPaymentAccountantItems: { type: Array, default: () => [] },
   contractItems: { type: Array, default: () => [] },
-  paymentItems: { type: Array, default: () => [] },
+  pendingPaymentItems: { type: Array, default: () => [] },
+  paidPaymentItems: { type: Array, default: () => [] },
   materialBillManagementItems: { type: Array, default: () => [] },
   materialBillAccountantItems: { type: Array, default: () => [] },
   subAcceptanceItems: { type: Array, default: () => [] },
@@ -329,6 +376,7 @@ const props = defineProps({
   constructionLogItems: { type: Array, default: () => [] },
   scheduleAdjustmentItems: { type: Array, default: () => [] },
   defectItems: { type: Array, default: () => [] },
+  budgetItems: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
 })
@@ -356,6 +404,7 @@ const typeColors = {
   construction_log: 'geekblue',
   schedule_adjustment: 'red',
   defect: 'volcano',
+  budget: 'blue',
 }
 
 const statusViMap = {
@@ -389,16 +438,18 @@ const roleItemsMap = computed(() => ({
     ...props.subPaymentManagementItems.map(i => ({ ...i, _approveType: 'sub_payment' })),
     ...props.additionalCostItems.map(i => ({ ...i, _approveType: 'additional_cost' })),
     ...props.materialBillManagementItems.map(i => ({ ...i, _approveType: 'material_bill' })),
+    ...props.budgetItems.map(i => ({ ...i, _approveType: 'budget' })),
   ],
   accountant: [
     ...props.accountantItems.map(i => ({ ...i, _approveType: 'accountant' })),
     ...props.subPaymentAccountantItems.map(i => ({ ...i, _approveType: 'sub_payment_confirm' })),
+    ...props.paidPaymentItems.map(i => ({ ...i, _approveType: 'project_payment_confirm' })),
     ...props.materialBillAccountantItems.map(i => ({ ...i, _approveType: 'material_bill' })),
   ],
   customer: [
     ...props.customerAcceptanceItems.map(i => ({ ...i, _approveType: 'acceptance' })),
     ...props.contractItems.map(i => ({ ...i, _approveType: 'contract' })),
-    ...props.paymentItems.map(i => ({ ...i, _approveType: 'project_payment' })),
+    ...props.pendingPaymentItems.map(i => ({ ...i, _approveType: 'project_payment' })),
   ],
   operations: [
     ...props.acceptanceSupervisorItems.map(i => ({ ...i, _approveType: 'acceptance_supervisor' })),
@@ -482,12 +533,14 @@ const approveUrlMap = {
   sub_payment_confirm: (r) => `/approvals/sub-payment/${r.id}/confirm`,
   contract: (r) => `/approvals/contract/${r.id}/approve`,
   project_payment: (r) => `/approvals/payment/${r.id}/approve`,
+  project_payment_confirm: (r) => `/approvals/payment/${r.id}/confirm`,
   material_bill: (r) => `/approvals/material-bill/${r.id}/approve`,
   sub_acceptance: (r) => `/approvals/sub-acceptance/${r.id}/approve`,
   supplier_acceptance: (r) => `/approvals/supplier-acceptance/${r.id}/approve`,
   construction_log: (r) => `/approvals/construction-log/${r.id}/approve`,
   schedule_adjustment: (r) => `/approvals/schedule-adjustment/${r.id}/approve`,
   defect_verify: (r) => `/approvals/defect/${r.id}/verify`,
+  budget: (r) => `/approvals/budget/${r.id}/approve`,
 }
 
 const approveLabels = {
@@ -502,12 +555,14 @@ const approveLabels = {
   sub_payment_confirm: 'KT xác nhận thanh toán NTP',
   contract: 'Duyệt hợp đồng',
   project_payment: 'Duyệt thanh toán',
+  project_payment_confirm: 'KT xác nhận thanh toán DA',
   material_bill: 'Duyệt phiếu vật tư',
   sub_acceptance: 'Duyệt nghiệm thu NTP',
   supplier_acceptance: 'Duyệt nghiệm thu NCC',
   construction_log: 'Duyệt nhật ký công trường',
   schedule_adjustment: 'Duyệt điều chỉnh tiến độ',
   defect_verify: 'Xác nhận lỗi đã sửa',
+  budget: 'Duyệt ngân sách dự án',
 }
 
 const handleApproveByType = (record) => {
@@ -515,6 +570,17 @@ const handleApproveByType = (record) => {
   const label = approveLabels[type] || 'Duyệt'
   const urlFn = approveUrlMap[type]
   if (!urlFn) return
+
+  // Enforce mandatory attachments for Accountant level on financial items
+  if (activeRole.value === 'accountant' && (record.attachments_count === 0 || !record.attachments_count)) {
+    Modal.warning({
+      title: 'Thiếu chứng từ đính kèm',
+      content: 'Cảnh báo: Yêu cầu tài chính này chưa có tệp chứng từ đính kèm. Kế toán bắt buộc phải kiểm tra chứng từ trước khi xác nhận để đảm bảo tính chính xác của dòng tiền.',
+      okText: 'Tôi đã hiểu',
+      centered: true
+    })
+    return
+  }
 
   Modal.confirm({
     title: label,
@@ -545,12 +611,14 @@ const rejectUrlMap = {
   sub_payment_confirm: (r) => `/approvals/sub-payment/${r.id}/reject`,
   contract: (r) => `/approvals/contract/${r.id}/reject`,
   project_payment: (r) => `/approvals/payment/${r.id}/reject`,
+  project_payment_confirm: (r) => `/approvals/payment/${r.id}/reject`,
   material_bill: (r) => `/approvals/material-bill/${r.id}/reject`,
   sub_acceptance: (r) => `/approvals/sub-acceptance/${r.id}/reject`,
   supplier_acceptance: (r) => `/approvals/supplier-acceptance/${r.id}/reject`,
   construction_log: (r) => `/approvals/construction-log/${r.id}/reject`,
   schedule_adjustment: (r) => `/approvals/schedule-adjustment/${r.id}/reject`,
   defect_verify: (r) => `/approvals/defect/${r.id}/reject`,
+  budget: (r) => `/approvals/budget/${r.id}/reject`,
 }
 
 const openRejectModal = (record) => {

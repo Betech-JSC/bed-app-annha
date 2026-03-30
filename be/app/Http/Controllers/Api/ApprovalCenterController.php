@@ -15,10 +15,13 @@ use App\Models\Contract;
 use App\Models\ProjectPayment;
 use App\Models\SubcontractorAcceptance;
 use App\Models\SupplierAcceptance;
+use App\Models\Defect;
+use App\Models\ProjectBudget;
 use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ApprovalCenterController extends Controller
 {
@@ -64,6 +67,7 @@ class ApprovalCenterController extends Controller
                 $acctPending = Cost::companyCosts()
                     ->where('status', 'pending_accountant_approval')
                     ->with(['creator:id,name,email', 'costGroup:id,name', 'managementApprover:id,name'])
+                    ->withCount('attachments')
                     ->orderBy('created_at', 'desc')
                     ->get();
                 $companyCosts = $companyCosts->merge($acctPending);
@@ -95,6 +99,7 @@ class ApprovalCenterController extends Controller
                         'description' => $cost->description,
                         'management_approved_by' => $cost->managementApprover->name ?? null,
                         'management_approved_at' => $cost->management_approved_at,
+                        'attachments_count' => (int) ($cost->attachments_count ?? 0),
                         'route' => "/company-costs/{$cost->id}",
                         'can_approve' => ($cost->status === 'pending_management_approval' && $canApproveManagement) ||
                                         ($cost->status === 'pending_accountant_approval' && $canApproveAccountant),
@@ -123,6 +128,7 @@ class ApprovalCenterController extends Controller
                 $acctPending = Cost::whereNotNull('project_id')
                     ->where('status', 'pending_accountant_approval')
                     ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
+                    ->withCount('attachments')
                     ->orderBy('created_at', 'desc')
                     ->get();
                 $projectCosts = $projectCosts->merge($acctPending);
@@ -155,6 +161,7 @@ class ApprovalCenterController extends Controller
                         'project_id' => $cost->project_id,
                         'project_name' => $cost->project->name ?? null,
                         'management_approved_by' => $cost->managementApprover->name ?? null,
+                        'attachments_count' => (int) ($cost->attachments_count ?? 0),
                         'route' => "/projects/{$cost->project_id}",
                         'can_approve' => ($cost->status === 'pending_management_approval' && $canApproveManagement) ||
                                         ($cost->status === 'pending_accountant_approval' && $canApproveAccountant),
@@ -172,6 +179,7 @@ class ApprovalCenterController extends Controller
             if (class_exists($materialBillClass)) {
                 $materialBills = $materialBillClass::whereIn('status', ['pending_management', 'pending_accountant'])
                     ->with(['creator:id,name,email', 'project:id,name,code'])
+                    ->withCount('attachments')
                     ->orderBy('created_at', 'desc')
                     ->get();
 
@@ -199,6 +207,7 @@ class ApprovalCenterController extends Controller
                             'created_at' => $bill->created_at->toISOString(),
                             'description' => $bill->note ?? null,
                             'project_id' => $bill->project_id,
+                            'attachments_count' => (int) ($bill->attachments_count ?? 0),
                             'route' => "/projects/{$bill->project_id}",
                             'can_approve' => ($bill->status === 'pending_management' && $canApproveManagement) ||
                                             ($bill->status === 'pending_accountant' && $canApproveAccountant),
@@ -372,6 +381,7 @@ class ApprovalCenterController extends Controller
         if ($type === 'all' || $type === 'additional_cost') {
             $additionalCosts = AdditionalCost::whereIn('status', ['pending', 'pending_approval'])
                 ->with(['project:id,name,code', 'proposer:id,name,email'])
+                ->withCount('attachments')
                 ->orderBy('created_at', 'desc')
                 ->get();
 
@@ -397,6 +407,7 @@ class ApprovalCenterController extends Controller
                         'created_at' => $ac->created_at->toISOString(),
                         'description' => $ac->description,
                         'project_id' => $ac->project_id,
+                        'attachments_count' => (int) ($ac->attachments_count ?? 0),
                         'route' => "/projects/{$ac->project_id}/additional-costs",
                         'can_approve' => true,
                         'approval_level' => 'additional_cost',
@@ -411,6 +422,7 @@ class ApprovalCenterController extends Controller
         if ($type === 'all' || $type === 'sub_payment') {
             $subPayments = SubcontractorPayment::whereIn('status', ['pending_management_approval', 'pending_accountant_confirmation'])
                 ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'approver:id,name'])
+                ->withCount('attachments')
                 ->orderBy('created_at', 'desc')
                 ->get();
 
@@ -440,6 +452,7 @@ class ApprovalCenterController extends Controller
                         'project_id' => $payment->project_id,
                         'subcontractor_name' => $payment->subcontractor->name ?? null,
                         'management_approved_by' => $payment->approver->name ?? null,
+                        'attachments_count' => (int) ($payment->attachments_count ?? 0),
                         'route' => "/projects/{$payment->project_id}/subcontractor-payments",
                         'can_approve' => ($payment->status === 'pending_management_approval' && $canApproveManagement) ||
                                         ($payment->status === 'pending_accountant_confirmation' && $canApproveAccountant),
@@ -494,6 +507,7 @@ class ApprovalCenterController extends Controller
         if ($type === 'all' || $type === 'payment') {
             $payments = ProjectPayment::where('status', 'customer_pending_approval')
                 ->with(['project:id,name,code', 'contract:id,uuid,contract_value'])
+                ->withCount('attachments')
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
@@ -519,6 +533,7 @@ class ApprovalCenterController extends Controller
                         'created_at' => $payment->updated_at->toISOString(),
                         'description' => $payment->description ?? ('HĐ: ' . ($payment->contract->uuid ?? 'N/A')),
                         'project_id' => $payment->project_id,
+                        'attachments_count' => (int) ($payment->attachments_count ?? 0),
                         'route' => "/projects/{$payment->project_id}/payments",
                         'can_approve' => true,
                         'approval_level' => 'customer',
@@ -692,7 +707,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'schedule_adjustment') {
             $adjustments = ScheduleAdjustment::where('status', 'pending')
-                ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
+                ->with(['project:id,name,code', 'creator:id,name,email', 'task:id,name'])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
@@ -723,6 +738,85 @@ class ApprovalCenterController extends Controller
                         'route' => "/projects/{$adj->project_id}",
                         'can_approve' => true,
                         'approval_level' => 'schedule_adjustment',
+                    ];
+                }
+            }
+        }
+
+        // ================================================================
+        // 15. DEFECTS (Lỗi chờ xác nhận đã sửa)
+        // ================================================================
+        if ($type === 'all' || $type === 'defect') {
+            $defects = \App\Models\Defect::where('status', 'fixed')
+                ->with(['project:id,name,code', 'fixer:id,name', 'reporter:id,name'])
+                ->orderBy('fixed_at', 'desc')
+                ->get();
+
+            if ($defects->isNotEmpty()) {
+                $result['summary'][] = [
+                    'type' => 'defect',
+                    'label' => 'Xác nhận sửa lỗi',
+                    'icon' => 'bug-outline',
+                    'color' => '#F43F5E',
+                    'total' => $defects->count(),
+                ];
+
+                foreach ($defects as $defect) {
+                    $result['items'][] = [
+                        'id' => $defect->id,
+                        'type' => 'defect',
+                        'title' => 'Lỗi: ' . Str::limit($defect->description, 50),
+                        'subtitle' => ($defect->project->code ?? '') . ' - ' . ($defect->project->name ?? 'Dự án'),
+                        'amount' => 0,
+                        'status' => $defect->status,
+                        'status_label' => 'Đã sửa - Chờ xác nhận',
+                        'created_by' => $defect->fixer->name ?? 'N/A',
+                        'created_at' => $defect->fixed_at?->toISOString() ?? $defect->updated_at->toISOString(),
+                        'description' => $defect->description,
+                        'project_id' => $defect->project_id,
+                        'priority' => $defect->severity, // Map severity to priority for UI consistency
+                        'route' => "/projects/{$defect->project_id}/defects",
+                        'can_approve' => true,
+                        'approval_level' => 'defect_verify',
+                    ];
+                }
+            }
+        }
+
+        // ================================================================
+        // 16. PROJECT BUDGETS (Duyệt ngân sách dự án)
+        // ================================================================
+        if ($type === 'all' || $type === 'budget') {
+            $budgets = \App\Models\ProjectBudget::where('status', 'draft')
+                ->with(['project:id,name,code', 'creator:id,name'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            if ($budgets->isNotEmpty()) {
+                $result['summary'][] = [
+                    'type' => 'budget',
+                    'label' => 'Ngân sách dự án',
+                    'icon' => 'pie-chart-outline',
+                    'color' => '#8B5CF6',
+                    'total' => $budgets->count(),
+                ];
+
+                foreach ($budgets as $budget) {
+                    $result['items'][] = [
+                        'id' => $budget->id,
+                        'type' => 'budget',
+                        'title' => $budget->name ?? ("Ngân sách v" . ($budget->version ?? '1.0')),
+                        'subtitle' => ($budget->project->code ?? '') . ' - ' . ($budget->project->name ?? 'Dự án'),
+                        'amount' => (float) ($budget->total_budget ?? 0),
+                        'status' => $budget->status,
+                        'status_label' => 'Bản nháp - Chờ duyệt',
+                        'created_by' => $budget->creator->name ?? 'N/A',
+                        'created_at' => $budget->created_at->toISOString(),
+                        'description' => $budget->notes,
+                        'project_id' => $budget->project_id,
+                        'route' => "/projects/{$budget->project_id}/budgets",
+                        'can_approve' => $canApproveManagement,
+                        'approval_level' => 'management',
                     ];
                 }
             }
@@ -763,7 +857,7 @@ class ApprovalCenterController extends Controller
     public function quickApprove(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment',
+            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment,defect,budget',
             'id' => 'required|integer',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -1020,6 +1114,35 @@ class ApprovalCenterController extends Controller
                     }
                     DB::commit();
                     return response()->json(['success' => true, 'message' => 'Đã duyệt điều chỉnh tiến độ']);
+
+                // ─── Defect Verification ───
+                case 'defect':
+                    $defect = Defect::findOrFail($id);
+                    if ($defect->status !== 'fixed') {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Lỗi chưa được báo đã sửa'], 400);
+                    }
+                    if (!$defect->markAsVerified($user)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Không thể xác nhận lỗi'], 400);
+                    }
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã xác nhận lỗi đã sửa']);
+
+                // ─── Project Budget ───
+                case 'budget':
+                    $budget = ProjectBudget::findOrFail($id);
+                    if ($budget->status === 'approved') {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Ngân sách đã được duyệt từ trước'], 400);
+                    }
+                    $budget->update([
+                        'status' => 'approved',
+                        'approved_by' => $user->id,
+                        'approved_at' => now(),
+                    ]);
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã duyệt ngân sách dự án']);
             }
 
             DB::rollBack();
@@ -1041,7 +1164,7 @@ class ApprovalCenterController extends Controller
     public function quickReject(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment',
+            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment,defect,budget',
             'id' => 'required|integer',
             'reason' => 'required|string|max:500',
         ]);
@@ -1381,6 +1504,24 @@ class ApprovalCenterController extends Controller
                     ], 403);
                 }
                 break;
+
+            case 'defect':
+                if (!$user->hasPermission(Permissions::DEFECT_VERIFY)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bạn không có quyền xác nhận sửa lỗi.'
+                    ], 403);
+                }
+                break;
+
+            case 'budget':
+                if (!$user->hasPermission(Permissions::BUDGET_APPROVE)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bạn không có quyền duyệt ngân sách.'
+                    ], 403);
+                }
+                break;
         }
 
         return true;
@@ -1402,6 +1543,7 @@ class ApprovalCenterController extends Controller
             'approved', 'customer_approved' => 'Đã duyệt',
             'paid', 'customer_paid' => 'Đã thanh toán',
             'rejected' => 'Từ chối',
+            'fixed' => 'Đã sửa - Chờ xác nhận',
             default => $status,
         };
     }
@@ -1496,6 +1638,13 @@ class ApprovalCenterController extends Controller
                 'required_role_short' => 'QL',
                 'required_role_icon' => 'calendar-outline',
                 'required_role_color' => '#E11D48',
+            ],
+            'defect_verify' => [
+                'required_role' => 'site_supervisor',
+                'required_role_label' => 'Giám sát / QLDA',
+                'required_role_short' => 'GS',
+                'required_role_icon' => 'bug-outline',
+                'required_role_color' => '#F43F5E',
             ],
             default => [
                 'required_role' => 'admin',

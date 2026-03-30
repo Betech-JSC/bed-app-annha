@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Cost;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -81,6 +82,11 @@ class SubcontractorPayment extends Model
     public function rejector(): BelongsTo
     {
         return $this->belongsTo(User::class, 'rejected_by');
+    }
+
+    public function attachments(): MorphMany
+    {
+        return $this->morphMany(Attachment::class, 'attachable');
     }
 
     // ==================================================================

@@ -16,7 +16,12 @@ return [
 
     'paths' => ['api/*'], // Đây là các đường dẫn sẽ áp dụng CORS. Bạn có thể thay đổi thành bất kỳ đường dẫn nào cần thiết.
     'allowed_methods' => ['*'], // Cho phép tất cả các phương thức HTTP như GET, POST, PUT, DELETE.
-    'allowed_origins' => ['*'], // Cho phép tất cả các domain. Bạn có thể thay bằng URL của frontend nếu muốn hạn chế.
+    'allowed_origins' => [
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+    ],
     'allowed_origins_patterns' => [],
     'allowed_headers' => ['*'], // Cho phép tất cả các headers.
     'exposed_headers' => [],

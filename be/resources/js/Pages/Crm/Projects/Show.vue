@@ -378,7 +378,7 @@
             <div v-else-if="ganttTasks.length === 0" class="py-12 text-center text-gray-400">
               <a-empty description="Chưa có dữ liệu Gantt — vui lòng tạo công việc hoặc import WBS template" />
             </div>
-            <div v-else class="border rounded-xl overflow-x-auto">
+            <div v-else class="border rounded-xl overflow-hidden">
               <table class="w-full text-xs">
                 <thead>
                   <tr class="bg-gradient-to-r from-blue-50 to-indigo-50 text-gray-600 border-b">
@@ -600,91 +600,73 @@
             <table class="w-full text-sm">
               <thead>
                 <tr class="bg-gray-50 text-gray-500 text-xs border-b">
-                  <th class="text-left py-2 px-3 w-[35%]">Tên công việc</th>
+                  <th class="text-left py-2 px-3 w-[40%]">Tên công việc</th>
                   <th class="text-center py-2 px-3 w-[10%]">Ưu tiên</th>
                   <th class="text-center py-2 px-3 w-[10%]">Trạng thái</th>
-                  <th class="text-center py-2 px-3 w-[10%]">Nghiệm thu</th>
                   <th class="text-center py-2 px-3 w-[15%]">Tiến độ</th>
                   <th class="text-center py-2 px-3 w-[10%]">Thời gian</th>
                   <th class="text-center py-2 px-3 w-[8%]">Người GV</th>
-                  <th class="text-center py-2 px-3 w-[2%]"></th>
+                  <th class="text-center py-2 px-3 w-[7%]"></th>
                 </tr>
               </thead>
-              <tbody>
-                <template v-if="rootTasks.length">
-                  <template v-for="task in rootTasks" :key="task.id">
-                    <!-- Parent Row -->
-                    <tr class="border-b hover:bg-blue-50/50 transition-colors cursor-pointer" :class="task.children?.length ? 'bg-blue-50/30 font-semibold' : ''" @click="toggleExpand(task.id)">
-                      <td class="py-2 px-3">
-                        <div class="flex items-center gap-2">
-                          <span v-if="task.children?.length" class="text-gray-400 text-xs transition-transform" :class="expandedTasks.has(task.id) ? 'rotate-90' : ''">▶</span>
-                          <span v-else class="w-3"></span>
-                          <span>{{ task.name }}</span>
-                          <span v-if="task.children?.length" class="text-xs text-gray-400">({{ task.children.length }})</span>
+              <tbody v-if="rootTasks.length">
+                <template v-for="task in rootTasks" :key="task.id">
+                  <!-- Parent Row -->
+                  <tr class="border-b hover:bg-blue-50/50 transition-colors cursor-pointer" :class="task.children?.length ? 'bg-blue-50/30 font-semibold' : ''" @click="toggleExpand(task.id)">
+                    <td class="py-2 px-3">
+                      <div class="flex items-center gap-2">
+                        <span v-if="task.children?.length" class="text-gray-400 text-xs transition-transform" :class="expandedTasks.has(task.id) ? 'rotate-90' : ''">▶</span>
+                        <span v-else class="w-3"></span>
+                        <span>{{ task.name }}</span>
+                        <span v-if="task.children?.length" class="text-xs text-gray-400">({{ task.children.length }})</span>
+                      </div>
+                    </td>
+                    <td class="text-center py-2 px-3"><a-tag :color="priorityColors[task.priority]" class="rounded-full text-xs">{{ priorityLabels[task.priority] || task.priority }}</a-tag></td>
+                    <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[task.status]" class="rounded-full text-xs">{{ taskStatusLabels[task.status] || task.status }}</a-tag></td>
+                    <td class="py-2 px-3"><a-progress :percent="parseFloat(task.progress_percentage || 0)" size="small" :stroke-color="parseFloat(task.progress_percentage || 0) >= 100 ? '#27AE60' : '#1B4F72'" /></td>
+                    <td class="text-center py-2 px-3 text-xs text-gray-500">
+                      <span v-if="task.start_date">{{ fmtDate(task.start_date) }}</span>
+                      <span v-if="task.start_date && task.end_date"> ~ </span>
+                      <span v-if="task.end_date">{{ fmtDate(task.end_date) }}</span>
+                      <span v-if="!task.start_date && !task.end_date" class="text-gray-300">—</span>
+                    </td>
+                    <td class="text-center py-2 px-3 text-xs">{{ task.assigned_user?.name || '—' }}</td>
+                    <td class="text-center py-2 px-3" @click.stop>
+                      <div class="flex gap-1 justify-center">
+                        <a-tooltip title="Sửa"><a-button type="text" size="small" @click.stop="openTaskModal(task)"><EditOutlined /></a-button></a-tooltip>
+                        <a-popconfirm title="Xóa công việc?" @confirm="deleteTask(task)"><a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button></a-popconfirm>
+                      </div>
+                    </td>
+                  </tr>
+                  <!-- Children Rows -->
+                  <template v-if="expandedTasks.has(task.id) && task.children?.length">
+                    <tr v-for="child in task.children" :key="child.id" class="border-b hover:bg-gray-50 transition-colors">
+                      <td class="py-2 px-3 pl-10">
+                        <div class="flex items-center gap-1 text-gray-600">
+                          <span class="text-gray-300 mr-1">└</span>
+                          {{ child.name }}
                         </div>
                       </td>
-                      <td class="text-center py-2 px-3"><a-tag :color="priorityColors[task.priority]" class="rounded-full text-xs">{{ priorityLabels[task.priority] || task.priority }}</a-tag></td>
-                      <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[task.status]" class="rounded-full text-xs">{{ taskStatusLabels[task.status] || task.status }}</a-tag></td>
-                      <td class="text-center py-2 px-3">
-                        <template v-if="getTaskAcceptanceStatus(task)">
-                          <a-tag :color="acceptItemStatusColor(getTaskAcceptanceStatus(task))" class="rounded-full text-[10px]">
-                            {{ acceptItemStatusLabel(getTaskAcceptanceStatus(task)) }}
-                          </a-tag>
-                        </template>
-                        <span v-else class="text-gray-300">—</span>
-                      </td>
-                      <td class="py-2 px-3"><a-progress :percent="parseFloat(task.progress_percentage || 0)" size="small" :stroke-color="parseFloat(task.progress_percentage || 0) >= 100 ? '#27AE60' : '#1B4F72'" /></td>
+                      <td class="text-center py-2 px-3"><a-tag :color="priorityColors[child.priority]" class="rounded-full text-xs">{{ priorityLabels[child.priority] || child.priority }}</a-tag></td>
+                      <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[child.status]" class="rounded-full text-xs">{{ taskStatusLabels[child.status] || child.status }}</a-tag></td>
+                      <td class="py-2 px-3"><a-progress :percent="parseFloat(child.progress_percentage || 0)" size="small" :stroke-color="parseFloat(child.progress_percentage || 0) >= 100 ? '#27AE60' : '#2E86C1'" /></td>
                       <td class="text-center py-2 px-3 text-xs text-gray-500">
-                        <span v-if="task.start_date">{{ fmtDate(task.start_date) }}</span>
-                        <span v-if="task.start_date && task.end_date"> ~ </span>
-                        <span v-if="task.end_date">{{ fmtDate(task.end_date) }}</span>
-                        <span v-if="!task.start_date && !task.end_date" class="text-gray-300">—</span>
+                        <span v-if="child.start_date">{{ fmtDate(child.start_date) }}</span>
+                        <span v-if="child.start_date && child.end_date"> ~ </span>
+                        <span v-if="child.end_date">{{ fmtDate(child.end_date) }}</span>
+                        <span v-if="!child.start_date && !child.end_date" class="text-gray-300">—</span>
                       </td>
-                      <td class="text-center py-2 px-3 text-xs">{{ task.assigned_user?.name || '—' }}</td>
+                      <td class="text-center py-2 px-3 text-xs">{{ child.assigned_user?.name || '—' }}</td>
                       <td class="text-center py-2 px-3" @click.stop>
                         <div class="flex gap-1 justify-center">
-                          <a-tooltip title="Sửa"><a-button type="text" size="small" @click.stop="openTaskModal(task)"><EditOutlined /></a-button></a-tooltip>
-                          <a-popconfirm title="Xóa công việc?" @confirm="deleteTask(task)"><a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button></a-popconfirm>
+                          <a-tooltip title="Sửa"><a-button type="text" size="small" @click="openTaskModal(child)"><EditOutlined /></a-button></a-tooltip>
+                          <a-popconfirm title="Xóa?" @confirm="deleteTask(child)"><a-button type="text" size="small" danger><DeleteOutlined /></a-button></a-popconfirm>
                         </div>
                       </td>
                     </tr>
-                    <!-- Children Rows -->
-                    <template v-if="expandedTasks.has(task.id) && task.children?.length">
-                      <tr v-for="child in task.children" :key="child.id" class="border-b hover:bg-gray-50 transition-colors">
-                        <td class="py-2 px-3 pl-10">
-                          <div class="flex items-center gap-1 text-gray-600">
-                            <span class="text-gray-300 mr-1">└</span>
-                            {{ child.name }}
-                          </div>
-                        </td>
-                        <td class="text-center py-2 px-3"><a-tag :color="priorityColors[child.priority]" class="rounded-full text-xs">{{ priorityLabels[child.priority] || child.priority }}</a-tag></td>
-                        <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[child.status]" class="rounded-full text-xs">{{ taskStatusLabels[child.status] || child.status }}</a-tag></td>
-                        <td class="text-center py-2 px-3">
-                          <template v-if="getTaskAcceptanceStatus(child)">
-                            <a-tag :color="acceptItemStatusColor(getTaskAcceptanceStatus(child))" class="rounded-full text-[10px]">
-                              {{ acceptItemStatusLabel(getTaskAcceptanceStatus(child)) }}
-                            </a-tag>
-                          </template>
-                          <span v-else class="text-gray-300">—</span>
-                        </td>
-                        <td class="py-2 px-3"><a-progress :percent="parseFloat(child.progress_percentage || 0)" size="small" :stroke-color="parseFloat(child.progress_percentage || 0) >= 100 ? '#27AE60' : '#2E86C1'" /></td>
-                        <td class="text-center py-2 px-3 text-xs text-gray-500">
-                          <span v-if="child.start_date">{{ fmtDate(child.start_date) }}</span>
-                          <span v-if="child.start_date && child.end_date"> ~ </span>
-                          <span v-if="child.end_date">{{ fmtDate(child.end_date) }}</span>
-                          <span v-if="!child.start_date && !child.end_date" class="text-gray-300">—</span>
-                        </td>
-                        <td class="text-center py-2 px-3 text-xs">{{ child.assigned_user?.name || '—' }}</td>
-                        <td class="text-center py-2 px-3" @click.stop>
-                          <div class="flex gap-1 justify-center">
-                            <a-tooltip title="Sửa"><a-button type="text" size="small" @click="openTaskModal(child)"><EditOutlined /></a-button></a-tooltip>
-                            <a-popconfirm title="Xóa?" @confirm="deleteTask(child)"><a-button type="text" size="small" danger><DeleteOutlined /></a-button></a-popconfirm>
-                          </div>
-                        </td>
-                      </tr>
                       <!-- Add child task row -->
                       <tr v-if="can('project.task.create')" class="border-b">
-                        <td class="py-1 px-3 pl-10" colspan="8">
+                        <td class="py-1 px-3 pl-10" colspan="7">
                           <a-button type="dashed" size="small" class="text-xs text-blue-500" @click="openTaskModal(null, task.id)">
                             <template #icon><PlusOutlined /></template>Thêm công việc con
                           </a-button>
@@ -692,13 +674,17 @@
                       </tr>
                     </template>
                   </template>
-                </template>
-                <tr v-else>
-                  <td colspan="8" class="py-12 text-center text-gray-400">
-                    <a-empty description="Chưa có công việc nào" />
-                  </td>
-                </tr>
-              </tbody>
+                </tbody>
+                <tbody v-else>
+                  <tr>
+                    <td colspan="7" class="py-12 text-center text-gray-400">
+                      <div class="flex flex-col items-center justify-center gap-2">
+                        <InboxOutlined class="text-3xl" />
+                        <span>Không có công việc nào trong dự án này</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
             </table>
           </div>
         </div>
@@ -789,59 +775,34 @@
               {{ s === 'all' ? 'Tất cả' : s === 'draft' ? 'Nháp' : s === 'pending' ? 'Chờ duyệt' : s === 'approved' ? 'Đã duyệt' : 'Từ chối' }}
             </button>
           </div>
-          <a-table :columns="costCols" :data-source="filteredCosts" :pagination="{ pageSize: 10, showTotal: (t) => `${t} phiếu` }" row-key="id" size="small" class="crm-table">
+          <a-table :columns="costCols" :data-source="filteredCosts" :pagination="{ pageSize: 10, showTotal: (t) => `${t} phiếu` }" row-key="id" size="small" class="crm-table hover-row" :custom-row="(record) => ({ onClick: () => openCostDetail(record), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'amount'"><span class="font-semibold text-red-500">{{ fmt(record.amount) }}</span></template>
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="costStatusColors[record.status]" class="rounded-full text-xs">{{ costStatusLabels[record.status] || record.status }}</a-tag>
               </template>
-              <template v-else-if="column.key === 'creator'">{{ record.creator?.name || '—' }}</template>
-              <template v-else-if="column.key === 'date'">{{ fmtDate(record.cost_date) }}</template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex flex-wrap justify-end gap-1">
-                  <!-- Actions for Draft -->
-                  <template v-if="record.status === 'draft'">
-                    <a-button type="primary" size="small" ghost :loading="actionLoading[`submit-cost-${record.id}`]" @click="handleSubmitCost(record)" class="text-[11px] h-7 px-2">
-                       <SendOutlined /> Gửi Duyệt
-                    </a-button>
-                    <a-button size="small" @click="openCostModal(record)" class="text-[11px] h-7 px-2"><EditOutlined /> Sửa</a-button>
-                  </template>
-
-                  <!-- BĐH duyệt -->
-                  <template v-if="record.status === 'pending_management_approval' && can('cost.approve.management')">
-                    <a-button type="primary" size="small" :loading="actionLoading[`approve-cost-mgmt-${record.id}`]" @click="approveCostMgmt(record)" class="text-[11px] h-7 px-2 bg-green-600 border-green-600 hover:bg-green-700">
-                      <CheckCircleOutlined /> Duyệt (BĐH)
-                    </a-button>
-                  </template>
-
-                  <!-- KT xác nhận -->
-                  <template v-if="record.status === 'pending_accountant_approval' && can('cost.approve.accountant')">
-                    <a-popconfirm :title="`Xác nhận phiếu chi? (${record.attachments?.length || 0} chứng từ đính kèm)`" @confirm="approveCostAcct(record)">
-                      <a-button size="small" type="primary" class="text-[11px] h-7 px-2 bg-green-600 border-green-600" :loading="actionLoading[`approve-cost-acct-${record.id}`]">
-                        <CheckCircleOutlined /> KT Xác nhận
-                      </a-button>
-                    </a-popconfirm>
-                  </template>
-
-                  <!-- Từ chối -->
-                  <template v-if="['pending_management_approval','pending_accountant_approval'].includes(record.status) && can('cost.reject')">
-                    <a-button size="small" danger ghost @click="openRejectCostModal(record)" class="text-[11px] h-7 px-2"><CloseCircleOutlined /> Từ chối</a-button>
-                  </template>
-
-                  <!-- Standard actions -->
-                  <a-tooltip title="Xem chi chiết">
-                    <a-button type="text" size="small" @click="openCostDetail(record)" class="text-blue-500 h-7 w-7 flex items-center justify-center p-0"><EyeOutlined /></a-button>
-                  </a-tooltip>
-                  <a-tooltip title="Upload chứng từ">
-                    <a-badge :count="record.attachments?.length || 0" :number-style="{ backgroundColor: '#3b82f6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }" :offset="[-2, 2]">
-                      <a-button type="text" size="small" @click="openAttachModal('cost', record)" class="text-gray-500 h-7 w-7 flex items-center justify-center p-0"><UploadOutlined /></a-button>
-                    </a-badge>
-                  </a-tooltip>
-                  <a-popconfirm v-if="can('cost.delete') && record.status === 'draft'" title="Xóa chi phí?" @confirm="deleteCost(record)">
-                    <a-button type="text" size="small" danger class="h-7 w-7 flex items-center justify-center p-0"><DeleteOutlined /></a-button>
-                  </a-popconfirm>
+              <template v-else-if="column.key === 'creator'">
+                <div class="text-[11px]">
+                  <div class="font-medium text-gray-700">{{ record.creator?.name || '—' }}</div>
+                  <div class="text-gray-400 text-[10px]">{{ fmtDate(record.created_at) }}</div>
                 </div>
               </template>
+              <template v-else-if="column.key === 'approver'">
+                <div v-if="record.management_approver || record.accountant_approver" class="text-[10px] space-y-0.5">
+                  <div v-if="record.management_approver" class="flex items-center gap-1">
+                    <CheckCircleOutlined class="text-green-500 text-[9px]" /> 
+                    <span class="text-gray-500">BĐH:</span> 
+                    <span class="font-medium text-gray-700">{{ record.management_approver.name }}</span>
+                  </div>
+                  <div v-if="record.accountant_approver" class="flex items-center gap-1">
+                    <CheckSquareOutlined class="text-blue-500 text-[9px]" /> 
+                    <span class="text-gray-500">KT:</span> 
+                    <span class="font-medium text-gray-700">{{ record.accountant_approver.name }}</span>
+                  </div>
+                </div>
+                <span v-else class="text-gray-300">—</span>
+              </template>
+              <template v-else-if="column.key === 'date'">{{ fmtDate(record.cost_date) }}</template>
             </template>
           </a-table>
         </div>
@@ -858,11 +819,11 @@
               <div class="text-xl font-bold text-gray-800">{{ fmt(project.total_value) }}</div>
             </div>
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
-              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Đã thu hồi</div>
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Dòng tiền thu hồi</div>
               <div class="text-xl font-bold text-green-600">{{ fmt(project.total_paid_receivable || 0) }}</div>
             </div>
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
-              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Còn lại</div>
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Phải thu còn lại</div>
               <div class="text-xl font-bold text-orange-500">{{ fmt(project.total_value - (project.total_paid_receivable || 0)) }}</div>
             </div>
             <div class="flex items-center justify-end">
@@ -872,7 +833,7 @@
             </div>
           </div>
           <div class="text-[10px] text-gray-400 bg-gray-50 p-2 rounded-lg border border-dashed mb-4">Lưu ý: KH đánh dấu TT → KT xác nhận chứng từ → Ghi nhận doanh thu thực tế</div>
-          <a-table :columns="paymentCols" :data-source="project.payments || []" :pagination="{ pageSize: 10, showTotal: (t) => `${t} đợt` }" row-key="id" size="small" class="crm-table">
+          <a-table :columns="paymentCols" :data-source="project.payments || []" :pagination="{ pageSize: 10, showTotal: (t) => `${t} đợt` }" row-key="id" size="small" class="crm-table hover-row" :custom-row="(record) => ({ onClick: () => openPaymentDetail(record), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'payment_number'">
                 <span class="font-semibold text-gray-700">#{{ record.payment_number }}</span>
@@ -886,40 +847,6 @@
                 <a-tag :color="paymentTagColors[record.status]" class="rounded-full text-xs">{{ paymentStatusLabelsMap[record.status] || record.status }}</a-tag>
               </template>
               <template v-else-if="column.key === 'date'">{{ fmtDate(record.due_date) }}</template>
-              <template v-else-if="column.key === 'paid_date'">
-                <span v-if="record.paid_date" class="text-green-600">{{ fmtDate(record.paid_date) }}</span>
-                <span v-else class="text-gray-300">—</span>
-              </template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex items-center justify-end gap-1.5">
-                  <!-- KT Phê duyệt (Row 1 Primary) -->
-                  <template v-if="record.status === 'customer_paid' && can('payment.confirm')">
-                    <a-popconfirm title="KT xác nhận thanh toán?" @confirm="confirmPaymentAction(record)">
-                      <a-button size="small" type="primary" class="text-[11px] h-7 px-2 bg-green-600 border-green-600">
-                        <CheckCircleOutlined /> KT Xác nhận
-                      </a-button>
-                    </a-popconfirm>
-                    <a-button size="small" danger ghost @click="openRejectPaymentModal(record)" class="text-[11px] h-7 px-2"><CloseCircleOutlined /> Từ chối</a-button>
-                  </template>
-
-                  <!-- KH đánh dấu (Row 1 Primary) -->
-                  <template v-else-if="['pending','overdue'].includes(record.status)">
-                    <a-button type="primary" ghost size="small" @click="openPaymentProofModal(record)" class="text-[11px] h-7 px-2 border-blue-400 text-blue-500">
-                      <DollarOutlined /> KH đã TT
-                    </a-button>
-                  </template>
-
-                  <!-- Secondary Actions -->
-                  <a-tooltip title="Upload chứng từ/ảnh">
-                    <a-badge :count="record.attachments?.length || 0" :number-style="{ backgroundColor: '#3b82f6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }" :offset="[-2, 2]">
-                      <a-button type="text" size="small" @click="openAttachModal('payment', record)" class="text-gray-500 h-7 w-7 p-0 flex items-center justify-center"><UploadOutlined /></a-button>
-                    </a-badge>
-                  </a-tooltip>
-                  <a-popconfirm v-if="can('payment.delete') && !['confirmed','paid'].includes(record.status)" title="Xóa?" @confirm="deletePayment(record)">
-                    <a-button type="text" size="small" danger class="h-7 w-7 p-0 flex items-center justify-center font-bold"><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                </div>
-              </template>
             </template>
           </a-table>
           <a-empty v-if="!project.payments?.length" description="Chưa có thanh toán" />
@@ -985,18 +912,6 @@
                 <div class="text-xs text-gray-500">
                   <div v-if="record.progress_start_date">{{ fmtDate(record.progress_start_date) }}</div>
                   <div v-if="record.progress_end_date" class="text-gray-400">→ {{ fmtDate(record.progress_end_date) }}</div>
-                </div>
-              </template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1" @click.stop>
-                  <a-tooltip title="Xem chi tiết"><a-button type="text" size="small" @click.stop="openSubDetail(record)"><EyeOutlined /></a-button></a-tooltip>
-                  <a-button v-if="can('subcontractor.update')" type="text" size="small" @click.stop="openSubModal(record)"><EditOutlined /></a-button>
-                  <a-popconfirm v-if="can('subcontractor.update') && !record.approved_at" title="Duyệt NTP này?" @confirm="approveSub(record)" ok-text="Duyệt" cancel-text="Hủy">
-                    <a-button type="text" size="small" class="text-green-600" @click.stop><CheckCircleOutlined /></a-button>
-                  </a-popconfirm>
-                  <a-popconfirm v-if="can('subcontractor.delete')" title="Xóa NTP?" @confirm="deleteSub(record)">
-                    <a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button>
-                  </a-popconfirm>
                 </div>
               </template>
             </template>
@@ -1161,13 +1076,10 @@
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-bold text-gray-800">{{ stage.name }}</span>
                     <!-- Acceptability Status Badge (Giống APP) -->
-                    <span v-if="getAcceptability(stage) === 'acceptable' && stage.status === 'owner_approved'" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      Đạt
-                    </span>
-                    <span v-else-if="getAcceptability(stage) !== 'acceptable'" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">
-                      <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                      Chưa đạt
+                    <span :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold',
+                      getAcceptability(stage) === 'acceptable' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
+                      <span :class="['w-1.5 h-1.5 rounded-full', getAcceptability(stage) === 'acceptable' ? 'bg-emerald-500' : 'bg-red-500']"></span>
+                      {{ getAcceptability(stage) === 'acceptable' ? 'Đạt' : 'Chưa đạt' }}
                     </span>
                   </div>
                   <!-- Task info (linked parent task) -->
@@ -1238,21 +1150,18 @@
             <!-- Checklist Items (hạng mục nghiệm thu) -->
             <div v-if="stage.items?.length" class="px-4 pt-3 pb-1">
               <div class="text-xs font-semibold text-gray-600 mb-2">Hạng mục ({{ stage.items.length }})</div>
-              <div v-for="item in stage.items" :key="item.id" class="flex items-center gap-2 text-sm py-1.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors group px-2 -mx-2 rounded-lg cursor-pointer" @click="openAcceptDetailModal(stage)">
+              <div v-for="item in stage.items" :key="item.id" class="flex items-center gap-2 text-sm py-1.5 border-b border-gray-50 last:border-0">
                 <a-checkbox :checked="item.workflow_status === 'customer_approved'" disabled />
                 <span :class="item.workflow_status === 'customer_approved' ? 'text-gray-400 line-through' : 'text-gray-700'">{{ item.name }}</span>
-                <div class="ml-auto flex items-center gap-2">
-                  <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px] mr-0">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
-                  <EyeOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
-                </div>
+                <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px] ml-auto">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
               </div>
             </div>
 
             <!-- Action button (Giống APP: "Nghiệm thu giai đoạn") -->
-            <div class="px-4 py-3 border-t border-gray-100 mt-2 flex items-center justify-between">
-              <div class="text-[11px] text-gray-400 italic">Nhấn để xem chi tiết & thực hiện nghiệm thu</div>
-              <a-button type="primary" size="small" ghost @click="openAcceptDetailModal(stage)" class="text-[11px] h-7 px-3 border-blue-400 text-blue-600">
-                <CheckCircleOutlined /> {{ can('acceptance.update') ? 'Thực hiện' : 'Xem chi tiết' }}
+            <div class="px-4 py-3 border-t border-gray-100 mt-2">
+              <a-button type="link" block size="small" @click="openAcceptDetailModal(stage)" class="!text-blue-600 !font-semibold">
+                <CheckCircleOutlined /> {{ can('acceptance.update') ? 'Nghiệm thu giai đoạn' : 'Xem chi tiết nghiệm thu' }}
+                <span class="ml-1">→</span>
               </a-button>
             </div>
           </div>
@@ -1270,54 +1179,13 @@
               <template #icon><PlusOutlined /></template>Báo lỗi
             </a-button>
           </div>
-          <a-table :columns="defectCols" :data-source="project.defects || []" :pagination="false" row-key="id" size="small" class="crm-table">
+          <a-table :columns="defectCols" :data-source="project.defects || []" :pagination="false" row-key="id" size="small" :custom-row="(record) => ({ onClick: () => openDefectDetail(record), class: 'cursor-pointer hover-row' })" class="crm-table">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'severity'">
                 <a-tag :color="severityColors[record.severity]" class="rounded-full">{{ severityLabels[record.severity] || record.severity }}</a-tag>
               </template>
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="defectStatusColors[record.status]" class="rounded-full">{{ defectStatusLabels[record.status] || record.status }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex items-center justify-end gap-1.5">
-                  <!-- Workflow Actions (Standardized Action + Label) -->
-                  <template v-if="record.status === 'open' && can('defect.update')">
-                    <a-popconfirm title="Nhận xử lý lỗi này?" @confirm="defectAction(record, 'mark-in-progress')">
-                      <a-button size="small" type="primary" ghost class="text-[11px] h-7 px-2 border-blue-400 text-blue-500">
-                        <ToolOutlined /> Nhận XL
-                      </a-button>
-                    </a-popconfirm>
-                  </template>
-
-                  <template v-if="record.status === 'in_progress' && can('defect.update')">
-                    <a-popconfirm title="Đánh dấu lỗi đã sửa xong?" @confirm="defectAction(record, 'mark-fixed')">
-                      <a-button size="small" type="primary" ghost class="text-[11px] h-7 px-2 border-green-500 text-green-600">
-                        <CheckOutlined /> Đã sửa
-                      </a-button>
-                    </a-popconfirm>
-                  </template>
-
-                  <template v-if="record.status === 'fixed' && can('defect.update')">
-                    <a-popconfirm title="Xác nhận lỗi đã sửa đạt yêu cầu?" @confirm="defectAction(record, 'verify')">
-                      <a-button size="small" type="primary" class="text-[11px] h-7 px-2 bg-green-600 border-green-600">
-                        <CheckCircleOutlined /> Xác nhận
-                      </a-button>
-                    </a-popconfirm>
-                    <a-button size="small" danger ghost @click="openRejectDefectModal(record)" class="text-[11px] h-7 px-2">
-                       <CloseCircleOutlined /> Từ chối
-                    </a-button>
-                  </template>
-
-                  <a-tag v-if="record.status === 'verified'" color="success" class="rounded-full text-[10px] px-2 py-0 border-0 font-bold uppercase">Hoàn thành</a-tag>
-
-                  <!-- Standard Icon Actions -->
-                  <div class="flex items-center gap-1 ml-2 border-l pl-2 border-gray-100">
-                    <a-button v-if="can('defect.update')" type="text" size="small" @click="openDefectModal(record)" class="h-7 w-7 p-0 flex items-center justify-center text-gray-400 hover:text-blue-500"><EditOutlined /></a-button>
-                    <a-popconfirm v-if="can('defect.delete')" title="Xóa lỗi?" @confirm="deleteDefect(record)">
-                      <a-button type="text" size="small" danger class="h-7 w-7 p-0 flex items-center justify-center"><DeleteOutlined /></a-button>
-                    </a-popconfirm>
-                  </div>
-                </div>
               </template>
             </template>
           </a-table>
@@ -1333,7 +1201,7 @@
               <template #icon><PlusOutlined /></template>Yêu cầu thay đổi
             </a-button>
           </div>
-          <a-table :columns="crCols" :data-source="project.change_requests || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
+          <a-table :columns="crCols" :data-source="project.change_requests || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" :custom-row="(record) => ({ onClick: () => openChangeRequestDetail(record), class: 'cursor-pointer hover-row' })" class="crm-table">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'change_type'">
                 <a-tag class="rounded-full">{{ crTypeLabels[record.change_type] || record.change_type }}</a-tag>
@@ -1351,36 +1219,6 @@
               </template>
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="crStatusColors[record.status]" class="rounded-full">{{ crStatusLabels[record.status] || record.status }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1 flex-wrap justify-center">
-                  <a-tooltip title="Sửa" v-if="['draft','pending'].includes(record.status)">
-                    <a-button type="text" size="small" @click="openChangeRequestModal(record)"><EditOutlined /></a-button>
-                  </a-tooltip>
-                  <a-tooltip title="Gửi duyệt" v-if="record.status === 'draft'">
-                    <a-popconfirm title="Gửi yêu cầu để duyệt?" @confirm="submitCR(record)">
-                      <a-button type="text" size="small" class="text-blue-600"><SendOutlined /></a-button>
-                    </a-popconfirm>
-                  </a-tooltip>
-                  <a-tooltip title="Duyệt" v-if="record.status === 'pending' && can('change_request.approve')">
-                    <a-popconfirm title="Duyệt yêu cầu thay đổi?" @confirm="approveCR(record)">
-                      <a-button type="text" size="small" class="text-green-600"><CheckOutlined /></a-button>
-                    </a-popconfirm>
-                  </a-tooltip>
-                  <a-tooltip title="Từ chối" v-if="record.status === 'pending' && can('change_request.approve')">
-                    <a-popconfirm title="Từ chối yêu cầu?" @confirm="rejectCR(record)">
-                      <a-button type="text" size="small" class="text-red-600"><CloseOutlined /></a-button>
-                    </a-popconfirm>
-                  </a-tooltip>
-                  <a-tooltip title="Đánh dấu đã triển khai" v-if="record.status === 'approved'">
-                    <a-popconfirm title="Đánh dấu đã triển khai?" @confirm="implementCR(record)">
-                      <a-button type="text" size="small" class="text-purple-600"><CheckCircleOutlined /></a-button>
-                    </a-popconfirm>
-                  </a-tooltip>
-                  <a-popconfirm v-if="['draft','cancelled'].includes(record.status) && can('change_request.delete')" title="Xóa?" @confirm="deleteChangeRequest(record)">
-                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                </div>
               </template>
             </template>
           </a-table>
@@ -1472,32 +1310,13 @@
               </a-button>
             </div>
           </div>
-          <a-table :columns="acCols" :data-source="project.additional_costs || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
+          <a-table :columns="acCols" :data-source="project.additional_costs || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+            :custom-row="(record) => ({ onClick: () => openAdditionalCostDetail(record), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'amount'"><span class="font-semibold text-red-500">{{ fmt(record.amount) }}</span></template>
               <template v-else-if="column.key === 'proposer'">{{ record.proposer?.name || '—' }}</template>
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="acStatusColors[record.status]" class="rounded-full text-xs">{{ acStatusLabels[record.status] || record.status }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex flex-wrap justify-end gap-1">
-                  <!-- Duyệt CP phát sinh -->
-                  <template v-if="record.status === 'pending_approval' && can('additional_cost.approve')">
-                    <a-button type="primary" size="small" :loading="actionLoading[`approve-ac-${record.id}`]" @click="approveAC(record)" class="text-[11px] h-7 px-2 bg-green-600 border-green-600 hover:bg-green-700">
-                      <CheckCircleOutlined /> Duyệt
-                    </a-button>
-                    <a-button size="small" danger ghost @click="openRejectACModal(record)" class="text-[11px] h-7 px-2"><CloseCircleOutlined /> Từ chối</a-button>
-                  </template>
-
-                  <a-tooltip title="Tệp đính kèm">
-                    <a-badge :count="record.attachments?.length || 0" :number-style="{ backgroundColor: '#3b82f6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }" :offset="[-2, 2]">
-                      <a-button type="text" size="small" @click="openAttachModal('additional-cost', record)" class="text-gray-500 h-7 w-7 p-0 flex items-center justify-center"><UploadOutlined /></a-button>
-                    </a-badge>
-                  </a-tooltip>
-                  <a-popconfirm v-if="can('additional_cost.delete') && ['pending_approval','rejected'].includes(record.status)" title="Xóa?" @confirm="deleteAC(record)">
-                    <a-button type="text" size="small" danger class="h-7 w-7 p-0 flex items-center justify-center"><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                </div>
               </template>
             </template>
           </a-table>
@@ -1537,6 +1356,9 @@
                   </div>
                   <a-tag :color="budgetStatusColors[budget.status]" class="rounded-full text-xs">{{ budgetStatusLabels[budget.status] || budget.status }}</a-tag>
                   <div class="flex gap-1">
+                    <a-tooltip v-if="can('budgets.update') && !['approved','archived'].includes(budget.status)" title="Sửa">
+                      <a-button type="text" size="small" @click.stop="openBudgetModal(budget)"><EditOutlined class="text-blue-500" /></a-button>
+                    </a-tooltip>
                     <a-tooltip v-if="can('budgets.update') && budget.status === 'draft'" title="Duyệt">
                       <a-button type="text" size="small" @click.stop="approveBudget(budget)"><CheckCircleOutlined class="text-green-500" /></a-button>
                     </a-tooltip>
@@ -1590,7 +1412,7 @@
 
       <!-- ============ FINANCE DASHBOARD TAB (Sprint 2 — Module 3) ============ -->
       <a-tab-pane key="finance" v-if="isTabVisible('finance')">
-        <template #tab><a-tooltip title="Dòng tiền, Lãi/Lỗ, Ngân sách vs Thực chi, Công nợ NTP, Bảo hành" placement="bottom">💰 Tài chính</a-tooltip></template>
+        <template #tab><a-tooltip title="Dòng tiền, Lãi/Lỗ, Ngân sách vs Thực chi, Công nợ NTP, Bảo hành" placement="bottom">Tổng hợp TC</a-tooltip></template>
         <div class="p-4 space-y-4">
           <div class="flex gap-2 flex-wrap">
             <a-button size="small" :type="financeView === 'cashflow' ? 'primary' : 'default'" @click="financeView = 'cashflow'">Dòng tiền</a-button>
@@ -1779,19 +1601,11 @@
               <template #icon><PlusOutlined /></template>Tạo hóa đơn
             </a-button>
           </div>
-          <a-table :columns="invoiceCols" :data-source="project.invoices || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
+          <a-table :columns="invoiceCols" :data-source="project.invoices || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" :custom-row="(record) => ({ onClick: () => openInvoiceDetail(record), class: 'cursor-pointer hover-row' })" class="crm-table">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'subtotal'"><span class="font-semibold">{{ fmt(record.subtotal) }}</span></template>
               <template v-else-if="column.key === 'total'"><span class="font-bold text-green-600">{{ fmt(record.total_amount) }}</span></template>
               <template v-else-if="column.key === 'date'">{{ fmtDate(record.invoice_date) }}</template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1">
-                  <a-button v-if="can('invoice.update')" type="text" size="small" @click="openInvoiceModal(record)"><EditOutlined /></a-button>
-                  <a-popconfirm v-if="can('invoice.delete')" title="Xóa?" @confirm="deleteInvoice(record)">
-                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                </div>
-              </template>
             </template>
           </a-table>
           <a-empty v-if="!project.invoices?.length" description="Chưa có hóa đơn" />
@@ -1807,7 +1621,7 @@
               <template #icon><PlusOutlined /></template>Thêm rủi ro
             </a-button>
           </div>
-          <a-table :columns="riskCols" :data-source="project.risks || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
+          <a-table :columns="riskCols" :data-source="project.risks || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" :custom-row="(record) => ({ onClick: () => openRiskDetail(record), class: 'cursor-pointer hover-row' })" class="crm-table">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'category'">
                 <a-tag class="rounded-full">{{ riskCategoryLabels[record.category] || record.category }}</a-tag>
@@ -1822,21 +1636,6 @@
                 <a-tag :color="riskStatusColors[record.status]" class="rounded-full">{{ riskStatusLabels[record.status] || record.status }}</a-tag>
               </template>
               <template v-else-if="column.key === 'owner'">{{ record.owner?.name || '—' }}</template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1 justify-center">
-                  <a-tooltip title="Sửa">
-                    <a-button type="text" size="small" @click="openRiskModal(record)"><EditOutlined /></a-button>
-                  </a-tooltip>
-                  <a-tooltip title="Đánh dấu đã xử lý" v-if="record.status !== 'closed'">
-                    <a-popconfirm title="Đánh dấu rủi ro đã xử lý?" @confirm="resolveRisk(record)">
-                      <a-button type="text" size="small" class="text-green-600"><CheckCircleOutlined /></a-button>
-                    </a-popconfirm>
-                  </a-tooltip>
-                  <a-popconfirm v-if="can('project.risk.delete')" title="Xóa?" @confirm="deleteRisk(record)">
-                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                </div>
-              </template>
             </template>
           </a-table>
         </div>
@@ -2144,9 +1943,15 @@
             </div>
           </div>
 
+          <div class="flex justify-end mb-3">
+            <a-button v-if="can('material.create') || can('material.update')" type="primary" size="small" @click="openBillModal()">
+              <template #icon><PlusOutlined /></template>Tạo phiếu nhập
+            </a-button>
+          </div>
+
           <!-- Bill Table -->
-          <a-table :columns="billCols" :data-source="materialBills || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table"
-            :expandable="{ expandedRowRender: billExpandedRow }">
+          <a-table :columns="billCols" :data-source="materialBills || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+            :custom-row="(record) => ({ onClick: () => openMaterialDetail(record), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'bill_number'">
                 <div class="font-semibold text-blue-600">{{ record.bill_number || `#${record.id}` }}</div>
@@ -2165,63 +1970,6 @@
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="billStatusColor(record.status)" class="rounded-full text-[10px]">{{ billStatusLabel(record.status) }}</a-tag>
               </template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex items-center gap-1 justify-end">
-                  <!-- Submit -->
-                  <a-popconfirm v-if="record.status === 'draft' && can('material.update')" title="Gửi duyệt phiếu này?" @confirm="submitBill(record)" ok-text="Gửi">
-                    <a-button size="small" type="primary" ghost><SendOutlined /> Gửi</a-button>
-                  </a-popconfirm>
-                  <!-- BDH Approve -->
-                  <a-popconfirm v-if="record.status === 'pending_management' && can('cost.approve_management')" title="BĐH duyệt phiếu này?" @confirm="approveBillManagement(record)" ok-text="Duyệt">
-                    <a-button size="small" class="!bg-cyan-50 !border-cyan-300 !text-cyan-700"><CheckOutlined /> BĐH</a-button>
-                  </a-popconfirm>
-                  <!-- KT Approve -->
-                  <a-popconfirm v-if="record.status === 'pending_accountant' && can('cost.approve_accountant')" title="Kế toán xác nhận thanh toán?" @confirm="approveBillAccountant(record)" ok-text="Xác nhận">
-                    <a-button size="small" class="!bg-emerald-50 !border-emerald-300 !text-emerald-700"><CheckCircleOutlined /> KT</a-button>
-                  </a-popconfirm>
-                  <!-- Reject -->
-                  <a-button v-if="['pending_management','pending_accountant'].includes(record.status) && can('cost.reject')" size="small" danger @click="openRejectBillModal(record)">
-                    <CloseCircleOutlined />
-                  </a-button>
-                  <!-- Delete -->
-                  <a-popconfirm v-if="record.status === 'draft' && can('material.delete')" title="Xóa phiếu này?" @confirm="deleteBill(record)" ok-text="Xóa">
-                    <a-button size="small" danger ghost><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                </div>
-              </template>
-            </template>
-            <!-- Expanded row: items detail -->
-            <template #expandedRowRender="{ record }">
-              <div class="px-4 py-3 bg-gray-50/50">
-                <div class="text-xs font-bold text-gray-500 mb-2">Chi tiết vật liệu</div>
-                <table class="w-full text-xs">
-                  <thead><tr class="border-b border-gray-200 text-gray-500">
-                    <th class="py-1.5 text-left font-medium">Vật liệu</th>
-                    <th class="py-1.5 text-center font-medium w-20">ĐVT</th>
-                    <th class="py-1.5 text-right font-medium w-24">Số lượng</th>
-                    <th class="py-1.5 text-right font-medium w-28">Đơn giá</th>
-                    <th class="py-1.5 text-right font-medium w-32">Thành tiền</th>
-                  </tr></thead>
-                  <tbody>
-                    <tr v-for="item in (record.items || [])" :key="item.id" class="border-b border-gray-100 last:border-0">
-                      <td class="py-2">
-                        <div class="font-semibold text-gray-800">{{ item.material?.name || '—' }}</div>
-                        <div v-if="item.material?.code" class="text-[10px] text-gray-400 font-mono">{{ item.material.code }}</div>
-                      </td>
-                      <td class="py-2 text-center text-gray-500">{{ item.material?.unit || '—' }}</td>
-                      <td class="py-2 text-right font-medium text-blue-600">{{ fmtQty(item.quantity) }}</td>
-                      <td class="py-2 text-right text-gray-600">{{ fmt(item.unit_price) }}</td>
-                      <td class="py-2 text-right font-bold text-emerald-600">{{ fmt(item.total_price) }}</td>
-                    </tr>
-                  </tbody>
-                  <tfoot><tr class="border-t-2 border-gray-300">
-                    <td colspan="4" class="py-2 text-right font-bold text-gray-700">Tổng cộng:</td>
-                    <td class="py-2 text-right font-bold text-emerald-700 text-sm">{{ fmt(record.total_amount) }}</td>
-                  </tr></tfoot>
-                </table>
-                <div v-if="record.notes" class="mt-2 text-xs text-gray-400 italic">📝 {{ record.notes }}</div>
-                <div v-if="record.rejected_reason" class="mt-2 p-2 bg-red-50 rounded-lg text-xs text-red-600">❌ Lý do từ chối: {{ record.rejected_reason }}</div>
-              </div>
             </template>
           </a-table>
           <a-empty v-if="!materialBills?.length" description="Chưa có phiếu nhập vật liệu" />
@@ -2238,7 +1986,8 @@
             </a-button>
           </div>
 
-          <a-table :columns="equipmentCols" :data-source="projectEquipment || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table" :expandable="{ expandedRowRender: eqExpandedRow }">
+          <a-table :columns="equipmentCols" :data-source="projectEquipment || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+            :custom-row="(record) => ({ onClick: () => openEquipmentDetail(record), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'name'">
                 <div class="flex items-center gap-2">
@@ -2274,18 +2023,6 @@
                   </template>
                 </div>
               </template>
-            </template>
-            <template #expandedRowRender="{ record }">
-              <div class="px-4 py-2 bg-gray-50/50 rounded-lg">
-                <div v-for="a in record.allocations" :key="a.id" class="flex items-center gap-4 py-2 border-b border-gray-100 last:border-0 text-xs">
-                  <a-tag :color="a.status === 'active' ? 'green' : 'default'" class="rounded-full">{{ a.status === 'active' ? 'Đang dùng' : 'Đã trả' }}</a-tag>
-                  <span>{{ a.allocation_type === 'rent' ? 'Thuê' : 'Có sẵn' }} — SL: {{ a.quantity }}</span>
-                  <span>{{ fmtDate(a.start_date) }} → {{ a.return_date ? fmtDate(a.return_date) : (a.end_date ? fmtDate(a.end_date) : '...') }}</span>
-                  <span v-if="a.rental_fee" class="text-emerald-600 font-semibold">{{ fmt(a.rental_fee) }}</span>
-                  <span v-if="a.manager" class="text-gray-500">👤 {{ a.manager.name }}</span>
-                  <span v-if="a.notes" class="text-gray-400 italic">{{ a.notes }}</span>
-                </div>
-              </div>
             </template>
           </a-table>
           <a-empty v-if="!projectEquipment?.length" description="Chưa có thiết bị nào trong dự án" />
@@ -2462,6 +2199,11 @@
           <a-select-option v-for="s in (project.subcontractors || [])" :key="s.id" :value="s.id" :label="s.name">{{ s.name }}</a-select-option>
         </a-select></a-form-item></a-col>
       </a-row>
+      <a-form-item label="Nhà cung cấp">
+        <a-select v-model:value="costForm.supplier_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn Nhà cung cấp (Vật tư/Thiết bị)">
+          <a-select-option v-for="s in suppliers" :key="s.id" :value="s.id" :label="s.name">{{ s.name }}</a-select-option>
+        </a-select>
+      </a-form-item>
       <!-- Budget Item Selector -->
       <a-form-item v-if="budgetItemOptions.length" label="Ngân sách liên kết">
         <a-select v-model:value="costForm.budget_item_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục ngân sách để theo dõi chi tiêu">
@@ -2961,80 +2703,855 @@
     </a-form>
   </a-modal>
 
-  <!-- ==================== NTP DETAIL DRAWER ==================== -->
-  <a-drawer v-model:open="showSubDetailDrawer" :title="subDetail ? `NTP: ${subDetail.name}` : 'Chi tiết NTP'" :width="640" placement="right" destroy-on-close class="sub-detail-drawer">
-    <template #extra v-if="subDetail && can('subcontractor.update')">
-      <a-button type="link" @click="openSubModal(subDetail)" class="p-0 border-0 shadow-none"><EditOutlined /> Sửa thông tin</a-button>
-    </template>
-    <template v-if="subDetail">
-      <!-- Financial Summary Card -->
-      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-4 border border-blue-100">
-        <div class="text-sm font-bold text-gray-700 mb-3">💰 Tổng quan tài chính</div>
-        <a-row :gutter="12">
-          <a-col :span="8">
-            <div class="text-center">
-              <div class="text-xs text-gray-500 mb-1">Hợp đồng</div>
-              <div class="text-lg font-bold text-gray-800">{{ fmt(subDetail.total_quote) }}</div>
-            </div>
-          </a-col>
-          <a-col :span="8">
-            <div class="text-center">
-              <div class="text-xs text-gray-500 mb-1">Đã thanh toán</div>
-              <div class="text-lg font-bold text-green-500">{{ fmt(subDetail.total_paid || 0) }}</div>
-            </div>
-          </a-col>
-          <a-col :span="8">
-            <div class="text-center">
-              <div class="text-xs text-gray-500 mb-1">Còn lại</div>
-              <div class="text-lg font-bold text-red-500">{{ fmt(subDetail.total_quote - (subDetail.total_paid || 0)) }}</div>
-            </div>
-          </a-col>
-        </a-row>
-        <a-progress :percent="subDetail.total_quote > 0 ? Math.round((subDetail.total_paid || 0) / subDetail.total_quote * 100) : 0" :stroke-color="{ from: '#3B82F6', to: '#10B981' }" class="mt-3" />
-      </div>
 
-      <!-- Progress Info -->
-      <div class="bg-white rounded-xl p-4 mb-4 border border-gray-100">
-        <div class="text-sm font-bold text-gray-700 mb-3">📋 Thông tin & Tiến độ</div>
-        <a-descriptions :column="2" size="small" bordered>
-          <a-descriptions-item label="Danh mục">{{ subDetail.category || '—' }}</a-descriptions-item>
-          <a-descriptions-item label="Trạng thái"><a-tag :color="subProgressColors[subDetail.progress_status]">{{ subProgressLabels[subDetail.progress_status] || '—' }}</a-tag></a-descriptions-item>
-          <a-descriptions-item label="Ngày bắt đầu">{{ subDetail.progress_start_date ? fmtDate(subDetail.progress_start_date) : '—' }}</a-descriptions-item>
-          <a-descriptions-item label="Ngày kết thúc">{{ subDetail.progress_end_date ? fmtDate(subDetail.progress_end_date) : '—' }}</a-descriptions-item>
-        </a-descriptions>
-      </div>
-
-      <!-- Bank Info -->
-      <div v-if="subDetail.bank_name || subDetail.bank_account_number" class="bg-white rounded-xl p-4 mb-4 border border-gray-100">
-        <div class="text-sm font-bold text-gray-700 mb-3">🏦 Thông tin ngân hàng</div>
-        <a-descriptions :column="1" size="small" bordered>
-          <a-descriptions-item label="Ngân hàng">{{ subDetail.bank_name || '—' }}</a-descriptions-item>
-          <a-descriptions-item label="Số tài khoản"><span class="text-blue-600 font-mono">{{ subDetail.bank_account_number || '—' }}</span></a-descriptions-item>
-          <a-descriptions-item label="Chủ tài khoản"><strong>{{ subDetail.bank_account_name || '—' }}</strong></a-descriptions-item>
-        </a-descriptions>
-      </div>
-
-      <!-- Attachments -->
-      <div v-if="subDetail.attachments?.length" class="bg-white rounded-xl p-4 mb-4 border border-gray-100">
-        <div class="text-sm font-bold text-gray-700 mb-3">📎 Tệp đính kèm ({{ subDetail.attachments.length }})</div>
-        <div class="flex flex-wrap gap-2">
-          <a v-for="a in subDetail.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-          </a>
+  <!-- SUBCONTRACTOR DETAIL DRAWER -->
+  <a-drawer v-model:open="showSubDetailDrawer" title="Chi tiết Nhà thầu phụ" :width="560" @close="subDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="subDetail" class="space-y-6 pb-24">
+      <!-- Subcontractor Info -->
+      <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-lg">{{ (subDetail.name || '?').charAt(0) }}</div>
+        <div class="flex-1">
+          <div class="text-xs text-gray-400 uppercase font-bold tracking-wider mb-0.5">Nhà thầu phụ</div>
+          <div class="text-lg font-bold text-gray-800">{{ subDetail.name }}</div>
+          <div class="flex items-center gap-2 mt-1">
+             <a-tag class="rounded-full text-[10px]">{{ subDetail.category || 'N/A' }}</a-tag>
+             <a-tag :color="subProgressColors[subDetail.progress_status]" class="rounded-full text-[10px]">{{ subProgressLabels[subDetail.progress_status] || subDetail.progress_status }}</a-tag>
+          </div>
         </div>
       </div>
 
-      <!-- Payments History -->
-      <div class="bg-white rounded-xl p-4 mb-4 border border-gray-100">
+      <!-- Financial Status -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+          <div class="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1">Tổng giá trị hợp đồng</div>
+          <div class="text-lg font-bold text-blue-600">{{ fmt(subDetail.total_quote) }}</div>
+        </div>
+        <div class="bg-green-50 p-4 rounded-2xl border border-green-100">
+          <div class="text-[10px] text-green-400 font-bold uppercase tracking-wider mb-1">Đã quyết toán</div>
+          <div class="text-lg font-bold text-green-600">{{ fmt(subDetail.total_paid || 0) }}</div>
+        </div>
+      </div>
+
+      <!-- Payment Progress Bar -->
+      <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex justify-between items-center mb-2">
+           <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Tiến độ thanh toán</span>
+           <span class="text-xs font-bold text-blue-600">{{ Math.round(((subDetail.total_paid || 0) / (subDetail.total_quote || 1)) * 100) }}%</span>
+        </div>
+        <a-progress :percent="Math.round(((subDetail.total_paid || 0) / (subDetail.total_quote || 1)) * 100)" :stroke-width="12" stroke-color="#3b82f6" trail-color="#f3f4f6" />
+      </div>
+
+      <!-- Bank Account Information -->
+      <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><BankOutlined /> Thông tin thanh toán</div>
+        <div class="grid grid-cols-1 gap-3 text-sm">
+          <div class="flex justify-between items-center py-2 border-b border-gray-50">
+            <span class="text-gray-400">Ngân hàng</span>
+            <span class="font-medium text-gray-700">{{ subDetail.bank_name || '—' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-gray-50">
+            <span class="text-gray-400">Số tài khoản</span>
+            <span class="font-bold text-blue-600">{{ subDetail.bank_account_number || '—' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2">
+            <span class="text-gray-400">Chủ tài khoản</span>
+            <span class="font-medium text-gray-700 uppercase">{{ subDetail.bank_account_name || '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date Information -->
+      <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><CalendarOutlined /> Thời gian dự kiến</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Ngày bắt đầu</div>
+            <div class="text-sm font-medium text-gray-700">{{ fmtDate(subDetail.progress_start_date) || '—' }}</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Ngày hoàn thành</div>
+            <div class="text-sm font-medium text-gray-700">{{ fmtDate(subDetail.progress_end_date) || '—' }}</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <a-popconfirm v-if="can('subcontractor.delete')" title="Xóa NTP này khỏi dự án?" @confirm="deleteSub(subDetail)">
+          <a-button danger type="text" class="px-0"><DeleteOutlined /> Gỡ khỏi dự án</a-button>
+        </a-popconfirm>
+        <div class="flex gap-2">
+          <a-button type="primary" size="small" ghost @click="openSubPaymentHistory(subDetail)"><HistoryOutlined /> TT Nhà thầu</a-button>
+          <a-button type="link" @click="openSubModal(subDetail)" class="p-0 border-0 shadow-none"><EditOutlined /> Sửa thông tin</a-button>
+          <a-button v-if="subDetail.progress_status === 'not_started'" type="primary" size="small" @click="approveSub(subDetail)">Bắt đầu</a-button>
+        </div>
+      </div>
+
+    </div>
+  </a-drawer>
+
+  <!-- COST DETAIL DRAWER -->
+  <a-drawer v-model:open="showCostDetail" title="Chi tiết Phiếu chi" :width="560" @close="costDetailRecord = null" destroy-on-close class="crm-drawer">
+    <div v-if="costDetailRecord" class="space-y-6">
+      <!-- Status Header -->
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-red-100"><DollarOutlined class="text-2xl" /></div>
+          <div>
+             <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã số: #{{ costDetailRecord.id }}</div>
+             <div class="text-lg font-bold text-gray-800">{{ costDetailRecord.name }}</div>
+          </div>
+        </div>
+        <a-tag :color="costStatusColors[costDetailRecord.status]" class="rounded-full px-4 py-1 text-xs font-semibold">{{ costStatusLabels[costDetailRecord.status] || costDetailRecord.status }}</a-tag>
+      </div>
+
+      <!-- Financial summary -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><LineChartOutlined /> Thông tin thanh toán</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Số tiền chi</span>
+            <span class="text-xl font-bold text-red-500">{{ fmt(costDetailRecord.amount) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Ngày chi</span>
+            <span class="font-medium text-gray-700">{{ fmtDate(costDetailRecord.cost_date) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">Nhóm chi phí</span>
+            <a-tag class="rounded-full bg-blue-50 text-blue-600 border-blue-100">{{ costDetailRecord.cost_group?.name || '—' }}</a-tag>
+          </div>
+        </div>
+      </div>
+
+      <!-- People Information -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><TeamOutlined /> Nhân sự liên quan</div>
+        <div class="grid grid-cols-1 gap-3">
+          <div class="flex items-center gap-3">
+            <a-avatar size="small" class="bg-gray-400">{{ costDetailRecord.creator?.name?.charAt(0) }}</a-avatar>
+            <div class="flex-1">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Người tạo phiếu</div>
+              <div class="text-sm font-medium text-gray-700">{{ costDetailRecord.creator?.name || '—' }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDate(costDetailRecord.created_at) }}</span></div>
+            </div>
+          </div>
+          <div v-if="costDetailRecord.management_approver" class="flex items-center gap-3 pt-3 border-t border-gray-50">
+            <a-avatar size="small" class="bg-green-500">{{ costDetailRecord.management_approver.name.charAt(0) }}</a-avatar>
+            <div class="flex-1">
+              <div class="text-[10px] text-green-500 uppercase font-bold tracking-wider">Ban điều hành duyệt</div>
+              <div class="text-sm font-medium text-gray-700">{{ costDetailRecord.management_approver.name }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDate(costDetailRecord.management_approved_at) }}</span></div>
+            </div>
+          </div>
+          <div v-if="costDetailRecord.accountant_approver" class="flex items-center gap-3 pt-3 border-t border-gray-50">
+            <a-avatar size="small" class="bg-blue-500">{{ costDetailRecord.accountant_approver.name.charAt(0) }}</a-avatar>
+            <div class="flex-1">
+              <div class="text-[10px] text-blue-500 uppercase font-bold tracking-wider">Kế toán xác nhận</div>
+              <div class="text-sm font-medium text-gray-700">{{ costDetailRecord.accountant_approver.name }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDate(costDetailRecord.accountant_approved_at) }}</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attachments Section -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+           <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileProtectOutlined /> Chứng từ đính kèm ({{ costDetailRecord.attachments?.length || 0 }})</div>
+           <a-button type="link" size="small" @click="openAttachModal('cost', costDetailRecord)" class="p-0">Thêm tệp</a-button>
+        </div>
+        <div v-if="costDetailRecord.attachments?.length" class="flex flex-wrap gap-2">
+           <div v-for="att in costDetailRecord.attachments" :key="att.id" 
+                class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                @click="openFilePreview(att)">
+             <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+             <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+               {{ fileExt(att).toUpperCase() }}
+             </div>
+             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+               <EyeOutlined class="text-white text-lg" />
+             </div>
+           </div>
+        </div>
+        <a-empty v-else :image="null" description="Chưa có chứng từ" class="text-gray-300 my-0 py-2" />
+      </div>
+
+      <!-- Action Footer -->
+      <div class="pt-6 mt-6 border-t border-gray-100 flex flex-wrap justify-between items-center bg-white sticky bottom-0 z-10 py-4">
+        <div class="flex gap-2">
+           <a-popconfirm v-if="can('cost.delete') && costDetailRecord.status === 'draft'" title="Xóa phiếu chi này?" @confirm="deleteCost(costDetailRecord)">
+             <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
+           </a-popconfirm>
+           <a-button v-if="costDetailRecord.status === 'draft'" size="small" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
+        </div>
+        <div class="flex gap-2">
+          <template v-if="costDetailRecord.status === 'draft'">
+            <a-button type="primary" :loading="actionLoading[`submit-cost-${costDetailRecord.id}`]" @click="handleSubmitCost(costDetailRecord)">Gửi duyệt</a-button>
+          </template>
+          <template v-if="costDetailRecord.status === 'pending_management_approval' && can('cost.approve.management')">
+            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveCostMgmt(costDetailRecord)">BĐH Duyệt</a-button>
+            <a-button danger ghost @click="openRejectCostModal(costDetailRecord)">Từ chối</a-button>
+          </template>
+          <template v-if="costDetailRecord.status === 'pending_accountant_approval' && can('cost.approve.accountant')">
+            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveCostAcct(costDetailRecord)">KT Xác nhận</a-button>
+            <a-button danger ghost @click="openRejectCostModal(costDetailRecord)">Từ chối</a-button>
+          </template>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- MATERIAL DETAIL DRAWER -->
+  <a-drawer v-model:open="showMaterialDetailDrawer" title="Chi tiết Phiếu nhập vật liệu" :width="560" @close="materialDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="materialDetail" class="space-y-6 pb-24">
+      <!-- Header -->
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-100"><FileOutlined class="text-2xl" /></div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Số phiếu: {{ materialDetail.bill_number || `#${materialDetail.id}` }}</div>
+            <div class="text-lg font-bold text-gray-800">Phiếu nhập vật liệu</div>
+          </div>
+        </div>
+        <a-tag :color="billStatusColor(materialDetail.status)" class="rounded-full px-4 py-1 text-xs font-semibold">{{ billStatusLabel(materialDetail.status) }}</a-tag>
+      </div>
+
+      <!-- Financial summary -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Tổng tiền</div>
+          <div class="text-xl font-bold text-emerald-600">{{ fmt(materialDetail.total_amount) }}</div>
+        </div>
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Số mặt hàng</div>
+          <div class="text-xl font-bold text-blue-600">{{ materialDetail.items?.length || 0 }} <span class="text-xs font-normal text-gray-400">mục</span></div>
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><BankOutlined /> Thông tin chung</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Nhà cung cấp</span>
+            <span class="font-bold text-gray-800">{{ materialDetail.supplier?.name || '—' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Ngày nhập</span>
+            <span class="font-medium text-gray-700">{{ fmtDate(materialDetail.bill_date) }}</span>
+          </div>
+          <div v-if="materialDetail.notes" class="py-2.5">
+            <span class="text-gray-400 block mb-1">Ghi chú:</span>
+            <div class="text-sm text-gray-600 italic whitespace-pre-wrap">{{ materialDetail.notes }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><HistoryOutlined /> Chi tiết vật liệu</div>
+        <table class="w-full text-xs">
+          <thead><tr class="border-b border-gray-100 text-gray-400"><th class="text-left pb-2">Vật liệu</th><th class="text-right pb-2">SL</th><th class="text-right pb-2">Thành tiền</th></tr></thead>
+          <tbody class="divide-y divide-gray-50">
+            <tr v-for="item in (materialDetail.items || [])" :key="item.id">
+              <td class="py-3">
+                <div class="font-bold text-gray-700">{{ item.material?.name || '—' }}</div>
+                <div class="text-[10px] text-gray-400">{{ item.material?.unit }}</div>
+              </td>
+              <td class="py-3 text-right">
+                <div class="font-medium text-blue-600">{{ fmtQty(item.quantity) }}</div>
+                <div class="text-[10px] text-gray-400">{{ fmt(item.unit_price) }}</div>
+              </td>
+              <td class="py-3 text-right font-bold text-emerald-600">{{ fmt(item.total_price) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Rejected Reason -->
+      <div v-if="materialDetail.rejected_reason" class="p-5 bg-red-50 rounded-2xl border border-red-100">
+        <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-2"><CloseCircleOutlined /> Lý do từ chối</div>
+        <div class="text-sm text-red-700">{{ materialDetail.rejected_reason }}</div>
+      </div>
+
+      <!-- Attachments -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ nhập hàng ({{ materialDetail.attachments?.length || 0 }})</div>
+          <a-button type="link" size="small" @click="openAttachModal('material_bill', materialDetail)" class="p-0">Thêm tệp</a-button>
+        </div>
+        <div v-if="materialDetail.attachments?.length" class="flex flex-wrap gap-2">
+          <div v-for="att in materialDetail.attachments" :key="att.id" 
+               class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+               @click="openFilePreview(att)">
+            <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+              {{ fileExt(att).toUpperCase() }}
+            </div>
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+              <EyeOutlined class="text-white text-lg" />
+            </div>
+          </div>
+        </div>
+        <a-empty v-else :image="null" description="Chưa có ảnh chứng từ" class="text-gray-300 my-0 py-2" />
+      </div>
+
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <div class="flex gap-2">
+          <a-popconfirm v-if="materialDetail.status === 'draft' && can('material.delete')" title="Xóa phiếu nhập này?" @confirm="deleteBill(materialDetail)">
+            <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
+          </a-popconfirm>
+          <a-button v-if="materialDetail.status === 'draft'" size="small" @click="openBillModal(materialDetail)"><EditOutlined /> Sửa</a-button>
+        </div>
+        <div class="flex gap-2">
+          <template v-if="materialDetail.status === 'draft' && can('material.update')">
+            <a-button type="primary" @click="submitBill(materialDetail)">Gửi duyệt</a-button>
+          </template>
+          <template v-if="materialDetail.status === 'pending_management' && can('cost.approve_management')">
+            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveBillManagement(materialDetail)">BĐH Duyệt</a-button>
+            <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
+          </template>
+          <template v-if="materialDetail.status === 'pending_accountant' && can('cost.approve_accountant')">
+            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveBillAccountant(materialDetail)">KT Xác nhận</a-button>
+            <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
+          </template>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- EQUIPMENT DETAIL DRAWER -->
+  <a-drawer v-model:open="showEquipmentDetailDrawer" title="Chi tiết Thiết bị" :width="560" @close="equipmentDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="equipmentDetail" class="space-y-6 pb-24">
+      <!-- Header -->
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-amber-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-amber-100">🏗️</div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã TB: {{ equipmentDetail.code || '—' }}</div>
+            <div class="text-lg font-bold text-gray-800">{{ equipmentDetail.name }}</div>
+          </div>
+        </div>
+        <a-tag :color="eqStatusColor(equipmentDetail.status)" class="rounded-full px-4 py-1 text-xs font-semibold">{{ eqStatusLabel(equipmentDetail.status) }}</a-tag>
+      </div>
+
+      <!-- Summary -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-amber-500"><TeamOutlined /> Thông tin phân bổ</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Loại thiết bị</span>
+            <a-tag class="rounded-full text-xs">{{ eqTypeLabel(equipmentDetail.type) }}</a-tag>
+          </div>
+          <div class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">Trạng thái dự án</span>
+            <span class="font-bold text-gray-700">{{ equipmentDetail.allocations?.filter(x => x.status === 'active').length ? 'Đang sử dụng' : 'Đã hoàn trả' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Allocations History -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-amber-500"><HistoryOutlined /> Lịch sử phân bổ</div>
+        <div v-if="equipmentDetail.allocations?.length" class="space-y-4">
+          <div v-for="a in equipmentDetail.allocations" :key="a.id" class="p-4 rounded-xl border border-gray-50 bg-gray-50/30 relative group">
+            <div class="flex justify-between items-start mb-2">
+              <a-tag :color="a.allocation_type === 'rent' ? 'blue' : 'green'" class="rounded-full text-[10px]">{{ a.allocation_type === 'rent' ? 'Thuê' : 'Có sẵn' }}</a-tag>
+              <a-tag :color="a.status === 'active' ? 'green' : 'default'" class="rounded-full text-[10px]">{{ a.status === 'active' ? 'Đang dùng' : 'Đã trả' }}</a-tag>
+            </div>
+            <div class="grid grid-cols-2 gap-y-2 text-xs">
+              <div class="text-gray-400">Số lượng: <span class="text-gray-700 font-bold ml-1">{{ a.quantity }}</span></div>
+              <div v-if="a.rental_fee" class="text-gray-400">Phí: <span class="text-emerald-600 font-bold ml-1">{{ fmt(a.rental_fee) }}</span></div>
+              <div class="text-gray-400">Bắt đầu: <span class="text-gray-700 ml-1">{{ fmtDate(a.start_date) }}</span></div>
+              <div class="text-gray-400">Kết thúc: <span class="text-gray-700 ml-1">{{ a.return_date ? fmtDate(a.return_date) : (a.end_date ? fmtDate(a.end_date) : '...') }}</span></div>
+              <div v-if="a.manager" class="text-gray-400 col-span-2">Phụ trách: <span class="text-gray-700 ml-1">{{ a.manager.name }}</span></div>
+            </div>
+            <div v-if="a.notes" class="mt-2 text-[11px] text-gray-400 italic">📝 {{ a.notes }}</div>
+            
+            <!-- Context Action -->
+            <div v-if="a.status === 'active'" class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition">
+               <a-popconfirm title="Hoàn trả thiết bị?" @confirm="returnEquipmentAction(equipmentDetail, a)">
+                  <a-button size="small" type="primary" ghost danger>Hoàn trả</a-button>
+               </a-popconfirm>
+            </div>
+          </div>
+        </div>
+        <a-empty v-else :image="null" description="Chưa có dữ liệu" />
+      </div>
+
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <div class="flex gap-2">
+           <a-button type="text" @click="equipmentDetail = null">Đóng</a-button>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- ADDITIONAL COST DETAIL DRAWER -->
+  <a-drawer v-model:open="showAdditionalCostDetailDrawer" title="Chi tiết Chi phí Phát sinh" :width="560" @close="additionalCostDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="additionalCostDetail" class="space-y-6 pb-24">
+      <!-- Header -->
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-red-100">💰</div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã đề xuất: #{{ additionalCostDetail.id }}</div>
+            <div class="text-lg font-bold text-gray-800">Chi phí phát sinh</div>
+          </div>
+        </div>
+        <a-tag :color="acStatusColors[additionalCostDetail.status]" class="rounded-full px-4 py-1 text-xs font-semibold">{{ acStatusLabels[additionalCostDetail.status] || additionalCostDetail.status }}</a-tag>
+      </div>
+
+      <!-- Financial summary -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Số tiền đề xuất</div>
+        <div class="text-2xl font-bold text-red-600">{{ fmt(additionalCostDetail.amount) }}</div>
+      </div>
+
+      <!-- Info -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><UserOutlined /> Thông tin đề xuất</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Người đề xuất</span>
+            <span class="font-bold text-gray-800">{{ additionalCostDetail.proposer?.name || '—' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Ngày đề xuất</span>
+            <span class="font-medium text-gray-700">{{ fmtDate(additionalCostDetail.created_at) }}</span>
+          </div>
+          <div class="py-2.5">
+            <span class="text-gray-400 block mb-1">Nội dung / Lý do:</span>
+            <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-100">{{ additionalCostDetail.description || 'Không có mô tả' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attachments -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ / Ảnh chụp ({{ additionalCostDetail.attachments?.length || 0 }})</div>
+          <a-button type="link" size="small" @click="openAttachModal('additional-cost', additionalCostDetail)" class="p-0">Thêm tệp</a-button>
+        </div>
+        <div v-if="additionalCostDetail.attachments?.length" class="flex flex-wrap gap-2">
+          <div v-for="att in additionalCostDetail.attachments" :key="att.id" 
+               class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+               @click="openFilePreview(att)">
+            <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+              {{ fileExt(att).toUpperCase() }}
+            </div>
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+              <EyeOutlined class="text-white text-lg" />
+            </div>
+          </div>
+        </div>
+        <a-empty v-else :image="null" description="Chưa có ảnh chứng từ" class="text-gray-300 my-0 py-2" />
+      </div>
+
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <div class="flex gap-2">
+          <a-popconfirm v-if="can('additional_cost.delete') && ['pending_approval','rejected'].includes(additionalCostDetail.status)" title="Xóa đề xuất?" @confirm="deleteAC(additionalCostDetail)">
+            <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
+          </a-popconfirm>
+        </div>
+        <div class="flex gap-2">
+          <template v-if="additionalCostDetail.status === 'pending_approval' && can('additional_cost.approve')">
+            <template v-if="additionalCostDetail.attachments?.length > 0">
+              <a-button type="primary" class="bg-green-600 border-green-600" @click="approveAC(additionalCostDetail)">Duyệt chi phí</a-button>
+            </template>
+            <template v-else>
+              <a-tooltip title="Cần đính kèm chứng từ trước khi duyệt">
+                <a-button disabled><WarningOutlined /> Thiếu chứng từ</a-button>
+              </a-tooltip>
+            </template>
+            <a-button danger ghost @click="openRejectACModal(additionalCostDetail)">Từ chối</a-button>
+          </template>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- INVOICE DETAIL DRAWER -->
+  <a-drawer v-model:open="showInvoiceDetailDrawer" title="Chi tiết Hóa đơn" :width="560" @close="invoiceDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="invoiceDetail" class="space-y-6">
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-indigo-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-100"><FileTextOutlined class="text-xl" /></div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã Hóa Đơn: #{{ invoiceDetail.id }}</div>
+            <div class="text-lg font-bold text-gray-800">Hóa đơn bán hàng</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><BankOutlined /> Giá trị hóa đơn</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Giá trước thuế</span>
+            <span class="font-semibold text-gray-800">{{ fmt(invoiceDetail.subtotal) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Thuế ({{ invoiceDetail.tax_rate || 0 }}%)</span>
+            <span class="font-medium text-gray-600">{{ fmt(invoiceDetail.tax_amount || 0) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400 font-bold">Tổng cộng</span>
+            <span class="text-xl font-bold text-green-600">{{ fmt(invoiceDetail.total_amount) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">Ngày xuất</span>
+            <span class="font-medium text-gray-700">{{ fmtDate(invoiceDetail.invoice_date) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm pb-24">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><AlignLeftOutlined /> Mô tả</div>
+        <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-100">{{ invoiceDetail.description || 'Không có mô tả' }}</div>
+      </div>
+
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <div class="flex gap-2">
+          <a-popconfirm v-if="can('invoice.delete')" title="Xóa hóa đơn?" @confirm="deleteInvoice(invoiceDetail)">
+            <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
+          </a-popconfirm>
+        </div>
+        <div class="flex gap-2">
+          <a-button v-if="can('invoice.update')" type="primary" ghost @click="openInvoiceModal(invoiceDetail)"><EditOutlined /> Sửa hóa đơn</a-button>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- DEFECT DETAIL DRAWER -->
+  <a-drawer v-model:open="showDefectDetailDrawer" title="Chi tiết Lỗi / Sai sót" :width="560" @close="defectDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="defectDetail" class="space-y-6">
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-orange-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-orange-100"><BugOutlined class="text-xl" /></div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã lỗi: #{{ defectDetail.id }}</div>
+            <div class="text-lg font-bold text-gray-800">Thông tin lỗi thi công</div>
+          </div>
+        </div>
+        <a-tag :color="defectStatusColors[defectDetail.status]" class="rounded-full px-4 py-1 text-xs font-semibold">{{ defectStatusLabels[defectDetail.status] || defectDetail.status }}</a-tag>
+      </div>
+
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm pb-24">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><InfoCircleOutlined /> Chi tiết lỗi</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Mức độ</span>
+            <a-tag :color="severityColors[defectDetail.severity]" class="rounded-full m-0">{{ severityLabels[defectDetail.severity] || defectDetail.severity }}</a-tag>
+          </div>
+          <div class="py-2.5 border-b border-gray-50">
+            <span class="text-gray-400 block mb-1">Mô tả lỗi:</span>
+            <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-100">{{ defectDetail.description || 'Không có mô tả' }}</div>
+          </div>
+          <div class="py-2.5 border-b border-gray-50" v-if="defectDetail.rectification_plan">
+            <span class="text-gray-400 block mb-1">Kế hoạch khắc phục:</span>
+            <div class="text-sm text-gray-800 whitespace-pre-wrap bg-blue-50 p-3 rounded-lg border border-blue-100">{{ defectDetail.rectification_plan }}</div>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50" v-if="defectDetail.deadline">
+             <span class="text-gray-400">Hạn chót xử lý</span>
+             <span class="font-bold text-red-500">{{ fmtDate(defectDetail.deadline) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5">
+             <span class="text-gray-400">Người báo cáo</span>
+             <span class="font-medium text-gray-700">{{ defectDetail.reporter?.name || '—' }} ({{ fmtDate(defectDetail.created_at) }})</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <div class="flex gap-2">
+           <a-popconfirm v-if="can('defect.delete')" title="Xóa?" @confirm="deleteDefect(defectDetail)">
+             <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
+           </a-popconfirm>
+           <a-button v-if="can('defect.update')" type="text" @click="openDefectModal(defectDetail)"><EditOutlined /> Sửa</a-button>
+        </div>
+        <div class="flex gap-2">
+           <a-popconfirm v-if="defectDetail.status === 'open' && can('defect.update')" title="Nhận xử lý lỗi này?" @confirm="defectAction(defectDetail, 'mark-in-progress')" ok-text="Nhận" cancel-text="Hủy">
+             <a-button type="primary" ghost>🔧 Nhận xử lý</a-button>
+           </a-popconfirm>
+           <a-popconfirm v-if="defectDetail.status === 'in_progress' && can('defect.update')" title="Đánh dấu lỗi đã sửa xong?" @confirm="defectAction(defectDetail, 'mark-fixed')" ok-text="Đã sửa" cancel-text="Hủy">
+             <a-button class="text-green-600 border-green-600 hover:bg-green-50">✅ Báo cáo xong</a-button>
+           </a-popconfirm>
+           <template v-if="defectDetail.status === 'fixed' && can('defect.update')">
+             <a-button danger ghost @click="openRejectDefectModal(defectDetail)">✗ Từ chối KQ</a-button>
+             <a-popconfirm title="Xác nhận lỗi đã sửa xong?" @confirm="defectAction(defectDetail, 'verify')" ok-text="Xác nhận" cancel-text="Hủy">
+               <a-button class="text-cyan-600 border-cyan-600 hover:bg-cyan-50">✔ Nghiệm thu sửa lỗi</a-button>
+             </a-popconfirm>
+           </template>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- CHANGE REQUEST DETAIL DRAWER -->
+  <a-drawer v-model:open="showChangeRequestDetailDrawer" title="Chi tiết Yêu cầu thay đổi" :width="560" @close="changeRequestDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="changeRequestDetail" class="space-y-6">
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-purple-100"><SwapOutlined class="text-xl" /></div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã YC: #{{ changeRequestDetail.id }}</div>
+            <div class="text-lg font-bold text-gray-800">{{ changeRequestDetail.title }}</div>
+          </div>
+        </div>
+        <a-tag :color="crStatusColors[changeRequestDetail.status]" class="rounded-full px-4 py-1 text-xs font-semibold">{{ crStatusLabels[changeRequestDetail.status] || changeRequestDetail.status }}</a-tag>
+      </div>
+
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm pb-24">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><ControlOutlined /> Thông tin thay đổi</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Loại</span>
+            <a-tag class="rounded-full m-0">{{ crTypeLabels[changeRequestDetail.change_type] || changeRequestDetail.change_type }}</a-tag>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Mức ưu tiên</span>
+            <a-tag :color="priorityColors[changeRequestDetail.priority]" class="rounded-full m-0">{{ priorityLabels[changeRequestDetail.priority] || changeRequestDetail.priority }}</a-tag>
+          </div>
+          <div class="py-2.5 border-b border-gray-50">
+            <span class="text-gray-400 block mb-1">Mô tả chi tiết:</span>
+            <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-100">{{ changeRequestDetail.description || 'Không có mô tả' }}</div>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400 font-bold">Ảnh hưởng chi phí</span>
+            <span class="text-lg font-bold text-red-600">{{ changeRequestDetail.estimated_cost_impact ? fmt(changeRequestDetail.estimated_cost_impact) : 'Không' }}</span>
+          </div>
+           <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400 font-bold">Ảnh hưởng tiến độ</span>
+            <span class="text-md font-bold text-orange-600">{{ changeRequestDetail.estimated_schedule_impact_days ? `${changeRequestDetail.estimated_schedule_impact_days} ngày` : 'Không' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5">
+             <span class="text-gray-400">Người yêu cầu</span>
+             <span class="font-medium text-gray-700">{{ changeRequestDetail.requester?.name || '—' }} ({{ fmtDate(changeRequestDetail.requested_date) }})</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <div class="flex gap-2">
+           <a-popconfirm v-if="['draft','cancelled'].includes(changeRequestDetail.status) && can('change_request.delete')" title="Xóa?" @confirm="deleteChangeRequest(changeRequestDetail)">
+             <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
+           </a-popconfirm>
+           <a-button v-if="['draft','pending'].includes(changeRequestDetail.status)" type="text" @click="openChangeRequestModal(changeRequestDetail)"><EditOutlined /> Sửa</a-button>
+        </div>
+        <div class="flex gap-2">
+           <a-popconfirm v-if="changeRequestDetail.status === 'draft'" title="Gửi yêu cầu để duyệt?" @confirm="submitCR(changeRequestDetail)">
+             <a-button type="primary" ghost>Gửi duyệt</a-button>
+           </a-popconfirm>
+           <template v-if="changeRequestDetail.status === 'pending' && can('change_request.approve')">
+             <a-popconfirm title="Từ chối yêu cầu?" @confirm="rejectCR(changeRequestDetail)">
+               <a-button danger ghost>Từ chối</a-button>
+             </a-popconfirm>
+             <a-popconfirm title="Duyệt yêu cầu thay đổi?" @confirm="approveCR(changeRequestDetail)">
+               <a-button class="text-green-600 border-green-600 hover:bg-green-50">✅ Phê duyệt</a-button>
+             </a-popconfirm>
+           </template>
+           <a-popconfirm v-if="changeRequestDetail.status === 'approved'" title="Đánh dấu đã triển khai?" @confirm="implementCR(changeRequestDetail)">
+             <a-button class="text-purple-600 border-purple-600 hover:bg-purple-50">✔ Đã triển khai</a-button>
+           </a-popconfirm>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- RISK DETAIL DRAWER -->
+  <a-drawer v-model:open="showRiskDetailDrawer" title="Chi tiết Rủi ro" :width="560" @close="riskDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="riskDetail" class="space-y-6">
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-pink-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-pink-100"><WarningOutlined class="text-xl" /></div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã rủi ro: #{{ riskDetail.id }}</div>
+            <div class="text-lg font-bold text-gray-800">{{ riskDetail.title }}</div>
+          </div>
+        </div>
+        <a-tag :color="riskStatusColors[riskDetail.status]" class="rounded-full px-4 py-1 text-xs font-semibold">{{ riskStatusLabels[riskDetail.status] || riskDetail.status }}</a-tag>
+      </div>
+
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm pb-24">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><SafetyCertificateOutlined /> Đánh giá rủi ro</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Danh mục</span>
+            <a-tag class="rounded-full m-0">{{ riskCategoryLabels[riskDetail.category] || riskDetail.category }}</a-tag>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Xác suất</span>
+            <a-tag :color="riskLevelColors[riskDetail.probability]" class="rounded-full m-0">{{ riskLevelLabels[riskDetail.probability] || riskDetail.probability }}</a-tag>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Ảnh hưởng</span>
+            <a-tag :color="riskLevelColors[riskDetail.impact]" class="rounded-full m-0">{{ riskLevelLabels[riskDetail.impact] || riskDetail.impact }}</a-tag>
+          </div>
+          <div class="py-2.5 border-b border-gray-50">
+            <span class="text-gray-400 block mb-1">Mô tả rủi ro:</span>
+            <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-100">{{ riskDetail.description || 'Không có mô tả' }}</div>
+          </div>
+          <div class="py-2.5 border-b border-gray-50" v-if="riskDetail.mitigation_plan">
+            <span class="text-gray-400 block mb-1">Kế hoạch giảm thiểu:</span>
+            <div class="text-sm text-gray-800 whitespace-pre-wrap bg-blue-50 p-3 rounded-lg border border-blue-100">{{ riskDetail.mitigation_plan }}</div>
+          </div>
+          <div class="flex justify-between items-center py-2.5">
+             <span class="text-gray-400">Người xử lý</span>
+             <span class="font-medium text-gray-700">{{ riskDetail.owner?.name || 'Chưa phân công' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <div class="flex gap-2">
+           <a-popconfirm v-if="can('project.risk.delete')" title="Xóa?" @confirm="deleteRisk(riskDetail)">
+             <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
+           </a-popconfirm>
+           <a-button type="text" @click="openRiskModal(riskDetail)"><EditOutlined /> Sửa</a-button>
+        </div>
+        <div class="flex gap-2">
+           <a-popconfirm v-if="riskDetail.status !== 'closed'" title="Đánh dấu rủi ro đã xử lý?" @confirm="resolveRisk(riskDetail)">
+             <a-button class="text-green-600 border-green-600 hover:bg-green-50">✅ Đã xử lý xong</a-button>
+           </a-popconfirm>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- PAYMENT DETAIL DRAWER -->
+  <a-drawer v-model:open="showPaymentDetail" title="Chi tiết Đợt thanh toán" :width="560" @close="paymentDetailRecord = null" destroy-on-close class="crm-drawer">
+    <div v-if="paymentDetailRecord" class="space-y-6">
+      <!-- Status Header -->
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-green-100"><DollarOutlined class="text-2xl" /></div>
+          <div>
+             <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Đợt số: #{{ paymentDetailRecord.payment_number }}</div>
+             <div class="text-lg font-bold text-gray-800">Thanh toán đợt {{ paymentDetailRecord.payment_number }}</div>
+          </div>
+        </div>
+        <a-tag :color="paymentTagColors[paymentDetailRecord.status]" class="rounded-full px-4 py-1 text-xs font-semibold">{{ paymentStatusLabelsMap[paymentDetailRecord.status] || paymentDetailRecord.status }}</a-tag>
+      </div>
+
+      <!-- Financial summary -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><BankOutlined /> Giá trị thanh toán</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Số tiền phải thu (Dự kiến)</span>
+            <span class="text-lg font-bold text-gray-800">{{ fmt(paymentDetailRecord.amount) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400 font-bold">Số tiền thực thu</span>
+            <span class="text-xl font-bold text-green-600">{{ fmt(paymentDetailRecord.actual_amount || 0) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Ngày đến hạn</span>
+            <span class="font-medium text-gray-700">{{ fmtDate(paymentDetailRecord.due_date) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">Ngày thực thu</span>
+            <span v-if="paymentDetailRecord.paid_date" class="font-bold text-green-600">{{ fmtDate(paymentDetailRecord.paid_date) }}</span>
+            <span v-else class="text-gray-300">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confirmers -->
+      <div v-if="paymentDetailRecord.customer_approver || paymentDetailRecord.confirmer" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><TeamOutlined /> Phê duyệt & Đối soát</div>
+        <div class="space-y-4">
+          <div v-if="paymentDetailRecord.customer_approver" class="flex items-center gap-3">
+             <a-avatar size="small" class="bg-orange-400">{{ paymentDetailRecord.customer_approver.name.charAt(0) }}</a-avatar>
+             <div>
+                <div class="text-[10px] text-orange-500 uppercase font-bold tracking-wider">Khách hàng xác nhận</div>
+                <div class="text-sm font-medium text-gray-700">{{ paymentDetailRecord.customer_approver.name }}</div>
+             </div>
+          </div>
+          <div v-if="paymentDetailRecord.confirmer" class="flex items-center gap-3 pt-3 border-t border-gray-50">
+             <a-avatar size="small" class="bg-blue-500">{{ paymentDetailRecord.confirmer.name.charAt(0) }}</a-avatar>
+             <div>
+                <div class="text-[10px] text-blue-500 uppercase font-bold tracking-wider">Kế toán đối soát</div>
+                <div class="text-sm font-medium text-gray-700">{{ paymentDetailRecord.confirmer.name }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDate(paymentDetailRecord.confirmed_at) }}</span></div>
+             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div v-if="paymentDetailRecord.notes" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ghi chú thanh toán</div>
+        <div class="text-sm text-gray-600 leading-relaxed">{{ paymentDetailRecord.notes }}</div>
+      </div>
+
+      <!-- Attachments -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+           <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ thanh toán ({{ paymentDetailRecord.attachments?.length || 0 }})</div>
+           <a-button type="link" size="small" @click="openAttachModal('payment', paymentDetailRecord)" class="p-0">Thêm tệp</a-button>
+        </div>
+        <div v-if="paymentDetailRecord.attachments?.length" class="flex flex-wrap gap-2">
+           <div v-for="att in paymentDetailRecord.attachments" :key="att.id" 
+                class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                @click="openFilePreview(att)">
+             <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+             <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+               {{ fileExt(att).toUpperCase() }}
+             </div>
+             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+               <EyeOutlined class="text-white text-lg" />
+             </div>
+           </div>
+        </div>
+        <a-empty v-else :image="null" description="Chưa có ảnh chứng từ / UNC" class="text-gray-300 my-0 py-2" />
+      </div>
+
+      <!-- Action Footer -->
+      <div class="pt-6 mt-6 border-t border-gray-100 flex flex-wrap justify-between items-center bg-white sticky bottom-0 z-10 py-4">
+        <div class="flex gap-2">
+           <a-popconfirm v-if="can('payment.delete') && !['confirmed','paid'].includes(paymentDetailRecord.status)" title="Xóa đợt thanh toán này?" @confirm="deletePayment(paymentDetailRecord)">
+             <a-button danger type="text"><DeleteOutlined /> Xóa đợt</a-button>
+           </a-popconfirm>
+           <a-button size="small" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Thay đổi NS</a-button>
+        </div>
+        <div class="flex gap-2">
+          <template v-if="paymentDetailRecord.status === 'customer_paid' && can('payment.confirm')">
+             <a-button type="primary" class="bg-green-600 border-green-600" @click="confirmPaymentAction(paymentDetailRecord)">KT Xác nhận</a-button>
+             <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
+          </template>
+          <template v-else-if="['pending','overdue'].includes(paymentDetailRecord.status)">
+            <a-button type="primary" @click="openPaymentProofModal(paymentDetailRecord)">Báo cáo KH đã TT</a-button>
+          </template>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <a-drawer v-model:open="showSubPayDrawer" title="Ghi nhận thanh toán NTP" :width="520" @close="showSubPayDrawer = false" destroy-on-close class="crm-drawer">
+     <div v-if="subDetail" class="bg-white rounded-xl p-4 mb-4 border border-gray-100">
         <div class="flex items-center justify-between mb-3">
           <div class="text-sm font-bold text-gray-700">💳 Lịch sử thanh toán ({{ subDetail.payments?.length || 0 }})</div>
           <a-button type="primary" size="small" @click="openSubPaymentDrawer(subDetail)"><PlusOutlined /> Tạo phiếu TT</a-button>
         </div>
-        <div v-if="subDetail.payments?.length">
+        <div v-if="subDetail.payments?.length" class="space-y-3">
           <div v-for="p in subDetail.payments" :key="p.id" class="flex items-center justify-between py-2 border-b border-gray-50 last:border-b-0">
             <div>
               <div class="text-sm font-medium">{{ p.payment_stage || 'Thanh toán' }}</div>
               <div class="text-xs text-gray-400">{{ p.payment_date ? fmtDate(p.payment_date) : '—' }} · {{ subPayMethodLabels[p.payment_method] || p.payment_method }}</div>
+              <div class="text-[10px] text-gray-400 mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                <span v-if="p.creator">👤 Tạo: {{ p.creator.name }}</span>
+                <span v-if="p.approver" class="text-green-600">✅ Duyệt: {{ p.approver.name }}</span>
+                <span v-if="p.payer" class="text-blue-600">💰 Chi: {{ p.payer.name }}</span>
+                <span v-if="p.rejector" class="text-red-500">❌ Từ chối: {{ p.rejector.name }}</span>
+              </div>
             </div>
             <div class="text-right">
               <div class="font-semibold text-sm">{{ fmt(p.amount) }}</div>
@@ -3060,12 +3577,11 @@
           </div>
         </div>
         <a-empty v-else description="Chưa có phiếu thanh toán" :image="null" class="py-4" />
-      </div>
-    </template>
+     </div>
   </a-drawer>
 
   <!-- ==================== NTP PAYMENT CREATE DRAWER ==================== -->
-  <a-drawer v-model:open="showSubPayDrawer" :title="`Tạo phiếu TT: ${subPayTarget?.name || ''}`" :width="500" placement="right" destroy-on-close>
+  <a-drawer v-model:open="showSubPayCreateDrawer" :title="`Tạo phiếu TT: ${subPayTarget?.name || ''}`" :width="500" placement="right" destroy-on-close>
     <a-form layout="vertical" class="mt-2">
       <a-form-item label="Đợt thanh toán"><a-input v-model:value="subPayForm.payment_stage" size="large" placeholder="VD: Đợt 1, Nghiệm thu lần 1..." /></a-form-item>
       <a-form-item label="Số tiền" required><a-input-number v-model:value="subPayForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item>
@@ -3074,48 +3590,97 @@
         <a-radio-group v-model:value="subPayForm.payment_method" button-style="solid" size="small">
           <a-radio-button value="bank_transfer">Chuyển khoản</a-radio-button>
           <a-radio-button value="cash">Tiền mặt</a-radio-button>
-          <a-radio-button value="check">Séc</a-radio-button>
           <a-radio-button value="other">Khác</a-radio-button>
         </a-radio-group>
       </a-form-item>
-      <a-form-item label="Số tham chiếu"><a-input v-model:value="subPayForm.reference_number" size="large" placeholder="Số chứng từ..." /></a-form-item>
       <a-form-item label="Ghi chú"><a-textarea v-model:value="subPayForm.description" :rows="3" placeholder="Nhập ghi chú..." /></a-form-item>
-      <div class="border-t pt-3 mt-2">
-        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp minh chứng</div>
-        <input type="file" multiple @change="e => subPayFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-        <div v-if="subPayFiles.length" class="text-[10px] text-green-600 mt-1">{{ subPayFiles.length }} tệp đã chọn</div>
-      </div>
+      <a-form-item label="Chứng từ đính kèm" required>
+        <div class="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-blue-300 rounded-xl bg-blue-50 hover:bg-blue-100/50 transition-colors p-4">
+          <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" @change="e => subPayFiles = [...(subPayFiles || []), ...(e.target.files || [])]" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+          <svg class="w-8 h-8 text-blue-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+          <p class="text-sm font-semibold text-blue-700 m-0">Click hoặc Kéo thả tệp vào đây</p>
+          <p class="text-xs text-blue-400 mt-1 mb-0">(Chấp nhận: Ảnh, PDF, Word, Excel...)</p>
+          <div v-if="subPayFiles?.length" class="w-full mt-3 space-y-1 relative z-20">
+            <div v-for="(f, i) in subPayFiles" :key="i" class="flex justify-between items-center bg-white border border-blue-200 rounded px-2 py-1.5 text-xs text-slate-700 shadow-sm">
+              <span class="truncate pr-2 font-medium">{{ f.name }}</span>
+              <button @click.prevent="subPayFiles.splice(i, 1)" class="text-red-500 hover:text-red-700 shrink-0 p-1 rounded hover:bg-red-50 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </a-form-item>
     </a-form>
     <template #footer>
       <div class="flex justify-end gap-2">
-        <a-button @click="showSubPayDrawer = false">Hủy</a-button>
+        <a-button @click="showSubPayCreateDrawer = false">Hủy</a-button>
         <a-button type="primary" @click="saveSubPayment">Tạo phiếu</a-button>
       </div>
     </template>
   </a-drawer>
 
-  <!-- Subcontractor Modal -->
-  <a-modal v-model:open="showSubModal" :title="editingSub ? 'Sửa NTP' : 'Thêm nhà thầu phụ'" :width="640" @ok="saveSub" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showSubModal" :title="editingSub ? 'Sửa NTP' : 'Thêm nhà thầu phụ'" :width="680" @ok="saveSub" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item v-if="!editingSub && globalSubcontractors.length" label="Chọn NTP có sẵn">
-        <a-select v-model:value="subForm.global_subcontractor_id" show-search option-filter-prop="label" size="large" class="w-full" allow-clear placeholder="Chọn hoặc nhập mới" @change="onGlobalSubSelect">
+      <a-form-item v-if="globalSubcontractors.length > 0" label="Tên NTP (Chọn từ danh sách)" required v-bind="fieldStatus('global_subcontractor_id')">
+        <a-select v-model:value="subForm.global_subcontractor_id" 
+                  show-search 
+                  :filter-option="(input, option) => option.label.toLowerCase().indexOf(input.toLowerCase()) >= 0"
+                  size="large" class="w-full" allow-clear placeholder="Tìm kiếm nhà thầu phụ từ hệ thống..." @change="onGlobalSubSelect">
           <a-select-option v-for="gs in globalSubcontractors" :key="gs.id" :value="gs.id" :label="gs.name">{{ gs.name }} ({{ gs.category || '—' }})</a-select-option>
         </a-select>
+        <div class="mt-1.5">
+          <a class="text-xs text-blue-500 cursor-pointer" @click="subForm.global_subcontractor_id = null">Hoặc nhập tên NTP mới ↓</a>
+        </div>
       </a-form-item>
-      <a-form-item label="Tên NTP" required v-bind="fieldStatus('name')"><a-input v-model:value="subForm.name" size="large" /></a-form-item>
+      
+      <a-form-item v-if="!subForm.global_subcontractor_id" :label="globalSubcontractors.length > 0 ? 'Nhập tên mới' : 'Tên nhà thầu phụ'" required v-bind="fieldStatus('name')">
+        <a-input v-model:value="subForm.name" size="large" placeholder="Nhập tên nhà thầu phụ..." />
+      </a-form-item>
+      
       <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Danh mục"><a-input v-model:value="subForm.category" size="large" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Giá trị báo giá" required v-bind="fieldStatus('total_quote')"><a-input-number v-model:value="subForm.total_quote" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item></a-col>
+        <a-col :span="12">
+          <a-form-item label="Danh mục">
+            <a-input v-model:value="subForm.category" size="large" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Giá trị báo giá" required v-bind="fieldStatus('total_quote')">
+            <a-input-number v-model:value="subForm.total_quote" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" />
+          </a-form-item>
+        </a-col>
       </a-row>
+
+      <a-row :gutter="12">
+        <a-col :span="8">
+          <a-form-item label="Ngân hàng">
+            <a-input v-model:value="subForm.bank_name" size="large" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Số TK">
+            <a-input v-model:value="subForm.bank_account_number" size="large" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Chủ TK">
+            <a-input v-model:value="subForm.bank_account_name" size="large" />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
       <a-row :gutter="16">
-        <a-col :span="8"><a-form-item label="Ngân hàng"><a-input v-model:value="subForm.bank_name" size="large" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Số TK"><a-input v-model:value="subForm.bank_account_number" size="large" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Chủ TK"><a-input v-model:value="subForm.bank_account_name" size="large" /></a-form-item></a-col>
+        <a-col :span="12">
+          <a-form-item label="Ngày bắt đầu">
+            <a-date-picker v-model:value="subForm.progress_start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Select date" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Ngày kết thúc">
+            <a-date-picker v-model:value="subForm.progress_end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Select date" />
+          </a-form-item>
+        </a-col>
       </a-row>
-      <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Ngày bắt đầu"><a-date-picker v-model:value="subForm.progress_start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Ngày kết thúc"><a-date-picker v-model:value="subForm.progress_end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-      </a-row>
+
       <a-form-item label="Trạng thái tiến độ">
         <a-select v-model:value="subForm.progress_status" size="large" class="w-full">
           <a-select-option value="not_started">Chưa bắt đầu</a-select-option>
@@ -3124,25 +3689,38 @@
           <a-select-option value="delayed">Trễ tiến độ</a-select-option>
         </a-select>
       </a-form-item>
+
       <!-- Auto-create Cost (matching APP) -->
-      <div v-if="!editingSub" class="border-t pt-3 mt-2">
-        <a-checkbox v-model:checked="subForm.create_cost" class="mb-2">Tự động tạo chi phí dự án cho NTP này</a-checkbox>
-        <a-form-item v-if="subForm.create_cost && costGroups.length" label="Nhóm chi phí">
+      <div v-if="!editingSub" class="border-t pt-4 mt-4">
+        <a-checkbox v-model:checked="subForm.create_cost" class="mb-2 text-sm font-medium">Tự động tạo chi phí dự án cho NTP này</a-checkbox>
+        <a-form-item v-if="subForm.create_cost" label="Nhóm chi phí">
           <a-select v-model:value="subForm.cost_group_id" size="large" class="w-full" allow-clear placeholder="Tự động tìm nhóm 'Nhà thầu phụ'">
             <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
           </a-select>
         </a-form-item>
       </div>
-      <!-- File Upload -->
-      <div class="border-t pt-3 mt-2">
-        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Báo giá / Hồ sơ đính kèm</div>
-        <div v-if="editingSub?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingSub.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-          </a>
+
+      <!-- File Upload area updated to match screenshot style -->
+      <div class="border-t pt-4 mt-4">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+          <FileOutlined /> Báo giá / Hồ sơ đính kèm
         </div>
-        <input type="file" multiple @change="e => subFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-        <div v-if="subFiles.length" class="text-[10px] text-green-600 mt-1">{{ subFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+        
+        <div class="border-2 border-dashed border-gray-200 rounded-xl p-4 transition-colors hover:border-blue-400 bg-gray-50/30">
+          <div v-if="editingSub?.attachments?.length" class="flex flex-wrap gap-2 mb-3">
+            <a v-for="a in editingSub.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition cursor-pointer">
+              <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
+            </a>
+          </div>
+          
+          <input type="file" multiple @change="e => subFiles = [...(e.target.files || [])]" class="block w-full text-sm cursor-pointer file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border file:border-gray-300 file:text-xs file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-50" />
+          
+          <div v-if="subFiles.length" class="mt-3 space-y-1">
+            <div v-for="(f, i) in subFiles" :key="i" class="text-[11px] text-green-600 flex items-center gap-2">
+              <CheckCircleOutlined /> {{ f.name }} <span class="text-gray-400">({{ (f.size / 1024).toFixed(1) }} KB)</span>
+            </div>
+          </div>
+        </div>
       </div>
     </a-form>
   </a-modal>
@@ -3174,7 +3752,7 @@
   </a-modal>
 
   <!-- Budget Modal -->
-  <a-modal v-model:open="showBudgetModal" title="Tạo ngân sách" :width="700" @ok="saveBudget" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showBudgetModal" :title="editingBudget ? 'Chỉnh sửa ngân sách' : 'Tạo ngân sách'" :width="700" @ok="saveBudget" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
         <a-col :span="8"><a-form-item label="Tên ngân sách" required v-bind="fieldStatus('name')"><a-input v-model:value="budgetForm.name" size="large" /></a-form-item></a-col>
@@ -3254,107 +3832,6 @@
     </div>
   </a-modal>
 
-  <!-- Cost Detail Drawer -->
-  <a-drawer v-model:open="showCostDetail" title="Chi tiết phiếu chi" :width="560" placement="right" destroy-on-close class="crm-drawer">
-    <template v-if="costDetailRecord">
-      <!-- Header Card -->
-      <div class="bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl p-5 mb-4 border">
-        <div class="flex justify-between items-start">
-          <div>
-            <h3 class="text-xl font-bold text-gray-800">{{ costDetailRecord.name }}</h3>
-            <div class="text-sm text-gray-500 mt-1">{{ fmtDate(costDetailRecord.cost_date) }}</div>
-          </div>
-          <div class="text-right">
-            <div class="text-2xl font-bold text-red-500">{{ fmt(costDetailRecord.amount) }}</div>
-            <a-tag :color="costStatusColors[costDetailRecord.status]" class="rounded-full mt-1">{{ costStatusLabels[costDetailRecord.status] || costDetailRecord.status }}</a-tag>
-          </div>
-        </div>
-      </div>
-
-      <!-- Info Grid -->
-      <div class="grid grid-cols-2 gap-3 mb-4">
-        <div class="bg-gray-50 rounded-xl p-3">
-          <div class="text-xs text-gray-400 mb-1">Nhóm chi phí</div>
-          <div class="font-medium text-gray-700">{{ costDetailRecord.cost_group?.name || '—' }}</div>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3">
-          <div class="text-xs text-gray-400 mb-1">Người tạo</div>
-          <div class="font-medium text-gray-700">{{ costDetailRecord.creator?.name || '—' }}</div>
-        </div>
-        <div v-if="costDetailRecord.subcontractor" class="bg-gray-50 rounded-xl p-3">
-          <div class="text-xs text-gray-400 mb-1">Nhà thầu phụ</div>
-          <div class="font-medium text-gray-700">{{ costDetailRecord.subcontractor?.name || '—' }}</div>
-        </div>
-        <div v-if="costDetailRecord.quantity" class="bg-gray-50 rounded-xl p-3">
-          <div class="text-xs text-gray-400 mb-1">Số lượng</div>
-          <div class="font-medium text-gray-700">{{ costDetailRecord.quantity }} {{ costDetailRecord.unit || '' }}</div>
-        </div>
-        <div v-if="costDetailRecord.budget_item" class="bg-blue-50 rounded-xl p-3 col-span-2">
-          <div class="text-xs text-blue-400 mb-1">Ngân sách liên kết</div>
-          <div class="font-medium text-blue-700">{{ costDetailRecord.budget_item?.name || '—' }}</div>
-        </div>
-      </div>
-
-      <!-- Description -->
-      <div v-if="costDetailRecord.description" class="mb-4">
-        <div class="text-xs font-semibold text-gray-400 mb-1">Mô tả</div>
-        <div class="bg-gray-50 rounded-xl p-3 text-sm text-gray-600 whitespace-pre-wrap">{{ costDetailRecord.description }}</div>
-      </div>
-
-      <!-- Approval Timeline -->
-      <div class="mb-4">
-        <div class="text-xs font-semibold text-gray-400 mb-2">Lịch sử duyệt</div>
-        <div class="space-y-2">
-          <div class="flex items-center gap-3 text-sm">
-            <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center"><EditOutlined class="text-blue-500 text-xs" /></div>
-            <div>
-              <div class="font-medium text-gray-700">Tạo phiếu</div>
-              <div class="text-xs text-gray-400">{{ costDetailRecord.creator?.name || '—' }} • {{ fmtDate(costDetailRecord.created_at) }}</div>
-            </div>
-          </div>
-          <div v-if="costDetailRecord.management_approved_at" class="flex items-center gap-3 text-sm">
-            <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center"><CheckCircleOutlined class="text-green-500 text-xs" /></div>
-            <div>
-              <div class="font-medium text-gray-700">Ban điều hành duyệt</div>
-              <div class="text-xs text-gray-400">{{ fmtDate(costDetailRecord.management_approved_at) }}</div>
-            </div>
-          </div>
-          <div v-if="costDetailRecord.accountant_approved_at" class="flex items-center gap-3 text-sm">
-            <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center"><CheckCircleOutlined class="text-emerald-500 text-xs" /></div>
-            <div>
-              <div class="font-medium text-gray-700">Kế toán xác nhận</div>
-              <div class="text-xs text-gray-400">{{ fmtDate(costDetailRecord.accountant_approved_at) }}</div>
-            </div>
-          </div>
-          <div v-if="costDetailRecord.status === 'rejected'" class="flex items-center gap-3 text-sm">
-            <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center"><CloseCircleOutlined class="text-red-500 text-xs" /></div>
-            <div>
-              <div class="font-medium text-red-700">Từ chối</div>
-              <div class="text-xs text-red-400">{{ costDetailRecord.rejected_reason || '—' }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Attachments -->
-      <div v-if="costDetailRecord.attachments?.length">
-        <div class="text-xs font-semibold text-gray-400 mb-2">Tệp đính kèm ({{ costDetailRecord.attachments.length }})</div>
-        <div class="space-y-2">
-          <a v-for="a in costDetailRecord.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-blue-50 transition cursor-pointer">
-            <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <FileOutlined class="text-blue-500" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="text-sm font-medium text-gray-700 truncate">{{ a.original_name || a.file_name }}</div>
-              <div class="text-xs text-gray-400">{{ a.mime_type || 'File' }}</div>
-            </div>
-            <EyeOutlined class="text-blue-400" />
-          </a>
-        </div>
-      </div>
-      <div v-else class="text-center text-xs text-gray-400 mt-4">Chưa có tệp đính kèm</div>
-    </template>
-  </a-drawer>
 
   <!-- Invoice Modal -->
   <a-modal v-model:open="showInvoiceModal" :title="editingInvoice ? 'Sửa hóa đơn' : 'Tạo hóa đơn'" :width="640" @ok="saveInvoice" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
@@ -3433,11 +3910,9 @@
       <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-4 border border-blue-100">
         <div class="flex items-center justify-between mb-2">
           <span class="font-bold text-gray-800 text-base">{{ acceptDetailStage.name }}</span>
-          <span v-if="getAcceptability(acceptDetailStage) === 'acceptable' && acceptDetailStage.status === 'owner_approved'" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
-            ✅ Đạt
-          </span>
-          <span v-else-if="getAcceptability(acceptDetailStage) !== 'acceptable'" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">
-            ❌ Chưa đạt
+          <span :class="['inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold',
+            getAcceptability(acceptDetailStage) === 'acceptable' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
+            {{ getAcceptability(acceptDetailStage) === 'acceptable' ? '✅ Đạt' : '❌ Chưa đạt' }}
           </span>
         </div>
         <div class="text-xs text-gray-500 space-y-1">
@@ -3485,82 +3960,29 @@
           </a-button>
         </div>
 
-        <!-- Defects list (Matching Cost Approval Style) -->
-        <div v-for="d in acceptDetailDefects" :key="d.id" 
-             class="p-4 mb-3 rounded-xl border transition-all hover:shadow-md cursor-pointer group relative" 
-             :class="d.status === 'verified' ? 'bg-emerald-50/30 border-emerald-100' : d.status === 'fixed' ? 'bg-blue-50/30 border-blue-100' : 'bg-white border-gray-100'"
-             @click="goToDefect(d)">
-          
-          <div class="flex items-start justify-between gap-3 mb-3">
+        <!-- Defects list -->
+        <div v-for="d in acceptDetailDefects" :key="d.id" class="p-3 mb-2 rounded-lg border cursor-pointer hover:shadow-sm transition" :class="d.status === 'verified' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'"
+          @click="goToDefect(d)">
+          <div class="flex items-start justify-between">
             <div class="flex-1">
-              <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-                <a-tag :color="d.severity === 'high' ? 'red' : d.severity === 'low' ? 'green' : 'orange'" class="rounded-full text-[10px] font-bold px-2 py-0">
-                  {{ { low: 'NHẸ', medium: 'TRUNG BÌNH', high: 'NẶNG' }[d.severity] || d.severity }}
-                </a-tag>
-                <a-tag :color="{ open: 'default', in_progress: 'processing', resolved: 'blue', fixed: 'blue', verified: 'success' }[d.status] || 'default'" class="rounded-full text-[10px] font-bold px-2 py-0 border-0">
-                  {{ { open: 'MỞ', in_progress: 'ĐANG XỬ LÝ', fixed: 'ĐÃ SỬA (CHỜ DUYỆT)', verified: 'ĐÃ XÁC NHẬN' }[d.status] || d.status }}
-                </a-tag>
+              <div class="text-sm font-semibold" :class="d.status === 'verified' ? 'text-green-700 line-through' : 'text-red-700'">{{ d.description }}</div>
+              <div class="flex items-center gap-2 mt-1">
+                <a-tag :color="d.severity === 'high' ? 'red' : d.severity === 'low' ? 'green' : 'orange'" class="rounded-full text-[10px]">{{ { low: 'Nhẹ', medium: 'TB', high: 'Nặng' }[d.severity] || d.severity }}</a-tag>
+                <a-tag :color="{ open: 'default', in_progress: 'processing', resolved: 'blue', verified: 'success' }[d.status] || 'default'" class="rounded-full text-[10px]">{{ { open: 'Mở', in_progress: 'Đang xử lý', resolved: 'Đã sửa', verified: 'Đã xác nhận' }[d.status] || d.status }}</a-tag>
               </div>
-              <div class="text-sm font-semibold text-gray-800 leading-snug" :class="d.status === 'verified' ? 'line-through opacity-50' : ''">
-                {{ d.description }}
+              <!-- Defect attachments thumbnails -->
+              <div v-if="d.attachments?.length" class="flex gap-1 mt-2 flex-wrap">
+                <a v-for="att in d.attachments.slice(0, 4)" :key="att.id" href="#" @click.stop.prevent="openFilePreview(att)"
+                  class="w-10 h-10 rounded-md overflow-hidden border border-gray-200 hover:border-blue-400 transition">
+                  <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
+                  <div v-else class="w-full h-full flex items-center justify-center bg-gray-50"><FileOutlined class="text-gray-400 text-xs" /></div>
+                </a>
+                <span v-if="d.attachments.length > 4" class="w-10 h-10 rounded-md bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 border border-gray-200">+{{ d.attachments.length - 4 }}</span>
               </div>
             </div>
-            <div class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-               <a-tooltip title="Xem chi tiết tại Module Lỗi"><LinkOutlined class="text-blue-500" /></a-tooltip>
-            </div>
-          </div>
-
-          <!-- Attachments Section -->
-          <div v-if="d.attachments?.length" class="flex gap-2 flex-wrap mb-3 p-2 bg-gray-50/50 rounded-lg">
-            <a v-for="att in d.attachments.slice(0, 5)" :key="att.id" href="#" @click.stop.prevent="openFilePreview(att)"
-               class="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 transition-all hover:scale-105 shadow-sm">
-              <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
-              <div v-else class="w-full h-full flex items-center justify-center bg-gray-50"><FileOutlined class="text-gray-400 text-xs" /></div>
-            </a>
-            <div v-if="d.attachments.length > 5" class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 border border-gray-200">+{{ d.attachments.length - 5 }}</div>
-          </div>
-
-          <!-- Rejection Reason (If any) -->
-          <div v-if="d.status === 'in_progress' && d.rejection_reason" class="mb-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100 text-[11px]">
-            <span class="font-bold text-red-600 block mb-0.5">⚠️ Lý do sửa lại:</span>
-            <span class="text-red-700">{{ d.rejection_reason }}</span>
-          </div>
-
-          <!-- Action Buttons (Matching Cost Approval Pattern) -->
-          <div class="flex items-center justify-end gap-1.5 pt-2 border-t border-gray-50 mt-1" @click.stop>
-            <!-- 1. Fix Action: Worker marks as fixed -->
-            <template v-if="['open', 'in_progress'].includes(d.status) && can('defect.update')">
-               <a-popconfirm title="Xác nhận đã sửa xong lỗi này?" @confirm="markDefectFixed(d)">
-                 <a-button type="primary" size="small" ghost class="text-[11px] h-7 px-3 border-blue-400 text-blue-600 hover:bg-blue-50">
-                    <CheckOutlined /> Xác nhận Đã sửa
-                 </a-button>
-               </a-popconfirm>
-            </template>
-
-            <!-- 2. Review Actions: PM/Admin verify or reject -->
-            <template v-if="d.status === 'fixed' && can('defect.update')">
-               <a-popconfirm title="Phê duyệt lỗi này đã được fix đạt yêu cầu?" @confirm="verifyDefect(d)">
-                 <a-button type="primary" size="small" class="text-[11px] h-7 px-3 bg-green-600 border-green-600 hover:bg-green-700 shadow-sm shadow-green-100">
-                    <CheckCircleOutlined /> Đồng ý Duyệt
-                 </a-button>
-               </a-popconfirm>
-               <a-button size="small" danger ghost @click="openRejectDefectModal(d)" class="text-[11px] h-7 px-3">
-                 <CloseCircleOutlined /> Từ chối Fix
-               </a-button>
-            </template>
-
-            <!-- Support Actions -->
-            <a-tooltip title="Upload thêm ảnh/chứng từ">
-              <a-button type="text" size="small" @click="openAttachModal('defect', d)" class="h-7 w-7 p-0 flex items-center justify-center text-gray-500 hover:text-blue-500">
-                <UploadOutlined />
-              </a-button>
+            <a-tooltip title="Xem tại Module Lỗi">
+              <LinkOutlined class="text-gray-400 hover:text-blue-500 text-sm ml-2 mt-1" />
             </a-tooltip>
-            
-            <a-popconfirm v-if="can('defect.delete') && d.status === 'open'" title="Xóa lỗi ghi nhận?" @confirm="deleteDefect(d)">
-              <a-button type="text" size="small" danger class="h-7 w-7 p-0 flex items-center justify-center">
-                <DeleteOutlined />
-              </a-button>
-            </a-popconfirm>
           </div>
         </div>
         <a-empty v-if="!acceptDetailDefects.length" :image="null" description="Không có lỗi nào — tuyệt vời!" class="py-2" />
@@ -3604,157 +4026,6 @@
             </a-button>
           </a-form>
         </div>
-      </div>
-
-      <!-- 3. Hạng mục nghiệm thu (items) — Full workflow UI matching APP -->
-      <div class="mb-5">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-sm font-bold text-gray-700">📋 Hạng mục nghiệm thu ({{ acceptDetailStage.items?.length || 0 }})</div>
-        </div>
-
-        <!-- Items List with Full Workflow -->
-        <div v-for="item in (acceptDetailStage.items || [])" :key="item.id"
-             class="mb-3 rounded-xl border overflow-hidden transition-all"
-             :class="item.workflow_status === 'customer_approved' ? 'bg-green-50 border-green-200' : item.workflow_status === 'rejected' ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'">
-          <!-- Item Header -->
-          <div class="px-4 py-3">
-            <div class="flex items-start justify-between gap-2 mb-2">
-              <div class="flex-1">
-                <div class="font-semibold text-sm" :class="item.workflow_status === 'customer_approved' ? 'text-green-700' : 'text-gray-800'">
-                  <CheckCircleFilled v-if="item.workflow_status === 'customer_approved'" class="text-green-500 mr-1" />
-                  {{ item.name }}
-                </div>
-                <div v-if="item.task" class="text-xs text-gray-400 mt-0.5">📐 {{ item.task.name }}
-                  <span v-if="item.task.progress_percentage != null" class="ml-1">({{ item.task.progress_percentage }}%)</span>
-                </div>
-                <div v-if="item.start_date || item.end_date" class="text-xs text-gray-400 mt-0.5">
-                  📅 {{ item.start_date ? fmtDate(item.start_date) : '—' }} → {{ item.end_date ? fmtDate(item.end_date) : '—' }}
-                </div>
-              </div>
-              <!-- Status Tag + Actions -->
-              <div class="flex items-center gap-1 shrink-0">
-                <a-tag :color="acceptItemStatusColor(item.workflow_status || 'draft')" class="rounded-full text-[10px]">{{ acceptItemStatusLabel(item.workflow_status || 'draft') }}</a-tag>
-                <a-dropdown v-if="can('acceptance.update') && item.workflow_status !== 'customer_approved'" :trigger="['click']">
-                  <a-button type="text" size="small"><MoreOutlined /></a-button>
-                  <template #overlay>
-                    <a-menu>
-                      <a-menu-item @click="editAcceptItem(item)"><EditOutlined class="mr-1" /> Sửa</a-menu-item>
-                      <a-menu-item danger @click="deleteAcceptItem(item)"><DeleteOutlined class="mr-1" /> Xóa</a-menu-item>
-                    </a-menu>
-                  </template>
-                </a-dropdown>
-              </div>
-            </div>
-
-            <!-- Workflow Steps Progress (matching APP 4-step: Nộp → GS → PM → KH) -->
-            <div class="flex items-center gap-0.5 mb-2">
-              <div v-for="(step, idx) in [
-                { key: 'submitted', label: 'Nộp', icon: '📤' },
-                { key: 'supervisor_approved', label: 'GS', icon: '👷' },
-                { key: 'project_manager_approved', label: 'PM', icon: '👔' },
-                { key: 'customer_approved', label: 'KH', icon: '🏠' }
-              ]" :key="step.key" class="flex items-center gap-0.5">
-                <div class="flex flex-col items-center"
-                  :class="getStepState(item.workflow_status, step.key) === 'done' ? 'opacity-100' : getStepState(item.workflow_status, step.key) === 'current' ? 'opacity-100' : 'opacity-40'">
-                  <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-all"
-                    :class="getStepState(item.workflow_status, step.key) === 'done' ? 'bg-green-500 border-green-500 text-white' : getStepState(item.workflow_status, step.key) === 'current' ? 'bg-blue-500 border-blue-500 text-white animate-pulse' : 'bg-gray-100 border-gray-300 text-gray-400'">
-                    <span v-if="getStepState(item.workflow_status, step.key) === 'done'">✓</span>
-                    <span v-else>{{ idx + 1 }}</span>
-                  </div>
-                  <span class="text-[9px] mt-0.5 font-medium" :class="getStepState(item.workflow_status, step.key) === 'done' ? 'text-green-600' : getStepState(item.workflow_status, step.key) === 'current' ? 'text-blue-600' : 'text-gray-400'">{{ step.label }}</span>
-                </div>
-                <div v-if="idx < 3" class="w-4 h-0.5 mt-[-10px]" :class="getStepState(item.workflow_status, step.key) === 'done' ? 'bg-green-400' : 'bg-gray-200'"></div>
-              </div>
-            </div>
-
-            <!-- Rejection Reason -->
-            <div v-if="item.workflow_status === 'rejected' && item.rejection_reason" class="p-2.5 mb-2 bg-red-100 rounded-lg border border-red-200">
-              <div class="text-xs font-semibold text-red-700 mb-0.5">❌ Lý do từ chối:</div>
-              <div class="text-xs text-red-600">{{ item.rejection_reason }}</div>
-            </div>
-
-            <!-- Photos / Attachments -->
-            <div v-if="item.attachments?.length" class="flex gap-1.5 flex-wrap mb-2">
-              <a v-for="att in item.attachments" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
-                class="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 transition">
-                <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full flex items-center justify-center bg-gray-50 text-gray-400 text-[10px]">📄</div>
-              </a>
-            </div>
-
-            <!-- Upload Photos for Item -->
-            <div v-if="can('acceptance.update') && item.workflow_status !== 'customer_approved'" class="mb-2">
-              <label :for="`accept-item-upload-${item.id}`"
-                class="inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 cursor-pointer py-1 px-2 rounded-lg hover:bg-blue-50 transition">
-                <CameraOutlined /> Upload ảnh thực tế
-              </label>
-              <input :id="`accept-item-upload-${item.id}`" type="file" multiple accept="image/*" class="hidden" @change="(e) => uploadAcceptItemPhotos(item, e)" />
-            </div>
-
-            <!-- Workflow Action Buttons -->
-            <div class="flex flex-wrap gap-1.5">
-              <!-- Draft/Rejected: Submit for approval -->
-              <a-popconfirm v-if="['draft','rejected'].includes(item.workflow_status || 'draft')" title="Gửi duyệt hạng mục này?" @confirm="submitAcceptItem(item)" ok-text="Gửi duyệt">
-                <a-button type="primary" size="small" ghost><SendOutlined /> Gửi duyệt</a-button>
-              </a-popconfirm>
-
-              <!-- Submitted: Supervisor approve -->
-              <a-popconfirm v-if="item.workflow_status === 'submitted' && can('acceptance.approve_level_1')" title="Giám sát duyệt hạng mục này?" @confirm="approveAcceptItemSupervisor(item)" ok-text="Duyệt GS">
-                <a-button type="primary" size="small" class="!bg-cyan-500 !border-cyan-500"><CheckCircleOutlined /> GS Duyệt</a-button>
-              </a-popconfirm>
-
-              <!-- Supervisor approved: PM approve -->
-              <a-popconfirm v-if="item.workflow_status === 'supervisor_approved' && can('acceptance.approve_level_2')" title="PM duyệt hạng mục này?" @confirm="approveAcceptItemPM(item)" ok-text="Duyệt PM">
-                <a-button type="primary" size="small"><CheckCircleOutlined /> PM Duyệt</a-button>
-              </a-popconfirm>
-
-              <!-- PM approved: Customer approve -->
-              <a-popconfirm v-if="['pm_approved','project_manager_approved'].includes(item.workflow_status) && can('acceptance.approve_level_3')" title="Khách hàng nghiệm thu hạng mục này?" @confirm="approveAcceptItemCustomer(item)" ok-text="Nghiệm thu">
-                <a-button type="primary" size="small" class="!bg-emerald-500 !border-emerald-500"><CheckCircleOutlined /> KH Nghiệm thu</a-button>
-              </a-popconfirm>
-
-              <!-- Reject (available at any pending approval step) -->
-              <a-button v-if="['submitted','supervisor_approved','pm_approved','project_manager_approved'].includes(item.workflow_status)" size="small" danger @click="openRejectAcceptItemModal(item)">
-                <CloseCircleOutlined /> Từ chối
-              </a-button>
-            </div>
-          </div>
-        </div>
-
-        <a-empty v-if="!acceptDetailStage.items?.length" :image="null" description="Chưa có hạng mục nghiệm thu" class="py-4" />
-      </div>
-
-      <!-- 4. Chứng từ / Tài liệu nghiệm thu -->
-      <div class="mb-5">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-sm font-bold text-gray-700">📎 Chứng từ nghiệm thu ({{ acceptDetailStage.attachments?.length || 0 }})</div>
-          <label v-if="can('acceptance.update')" :for="`accept-stage-upload-${acceptDetailStage.id}`"
-            class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 cursor-pointer py-1.5 px-3 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 transition font-medium">
-            <UploadOutlined /> Upload chứng từ
-          </label>
-          <input :id="`accept-stage-upload-${acceptDetailStage.id}`" type="file" multiple class="hidden" @change="uploadAcceptStageFiles" />
-        </div>
-        <!-- Existing attachments -->
-        <div v-if="acceptDetailStage.attachments?.length" class="flex gap-2 flex-wrap">
-          <a v-for="att in acceptDetailStage.attachments" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
-            class="group relative overflow-hidden rounded-lg border border-gray-200 hover:border-blue-400 transition shadow-sm hover:shadow-md">
-            <!-- Image thumbnail -->
-            <template v-if="att.mime_type?.startsWith('image/')">
-              <img :src="att.file_url" class="w-16 h-16 object-cover" />
-              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
-                <EyeOutlined class="text-white opacity-0 group-hover:opacity-100 transition text-sm" />
-              </div>
-            </template>
-            <!-- File chip -->
-            <template v-else>
-              <div class="w-16 h-16 flex flex-col items-center justify-center bg-gray-50 group-hover:bg-blue-50 transition p-1">
-                <FileOutlined class="text-gray-400 text-lg mb-0.5" />
-                <span class="text-[8px] text-gray-400 text-center leading-tight line-clamp-2">{{ att.original_name || att.file_name }}</span>
-              </div>
-            </template>
-          </a>
-        </div>
-        <div v-else class="text-xs text-gray-400 italic py-2">Chưa có chứng từ. Hãy upload hình ảnh / tài liệu nghiệm thu.</div>
       </div>
 
       <!-- Save Button -->
@@ -3919,6 +4190,16 @@
         <div class="text-3xl mb-2 opacity-40">📦</div>
         <div class="text-sm text-gray-400">Chưa có vật liệu</div>
         <div class="text-xs text-gray-300">Chọn vật liệu ở trên và nhấn nút +</div>
+      </div>
+
+      <!-- Section 4: File Attachments -->
+      <div class="border-t border-dashed pt-4">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <FileOutlined /> Chứng từ đính kèm (Ảnh chụp phiếu/hóa đơn)
+        </div>
+        <input type="file" multiple @change="e => billFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="billFiles.length" class="text-[10px] text-green-600 mt-1">{{ billFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+        <div v-else class="text-[10px] text-amber-500 mt-1 italic">Bắt buộc đính kèm ít nhất một ảnh/file</div>
       </div>
 
       <!-- Submit -->
@@ -4154,8 +4435,10 @@
 import { ref, computed, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
+import { message, Modal } from 'ant-design-vue'
 import axios from 'axios'
-import { message } from 'ant-design-vue'
+axios.defaults.withCredentials = true
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 import dayjs from 'dayjs'
 import {
   ArrowLeftOutlined, EditOutlined, PlusOutlined, DeleteOutlined,
@@ -4164,9 +4447,10 @@ import {
   UploadOutlined, DownloadOutlined, FileOutlined,
   UserOutlined, CalendarOutlined, EyeOutlined, CheckSquareOutlined,
   LinkOutlined, CameraOutlined, CheckCircleFilled, MoreOutlined,
-  SyncOutlined, DownOutlined, ExclamationCircleOutlined,
+  SyncOutlined, DownOutlined, ExclamationCircleOutlined, WarningOutlined,
   ProjectOutlined, CloudOutlined, TeamOutlined, PictureOutlined,
-  FilePdfOutlined, FileWordOutlined, FileExcelOutlined, ClockCircleOutlined
+  FilePdfOutlined, FileWordOutlined, FileExcelOutlined, ClockCircleOutlined,
+  LineChartOutlined, FileProtectOutlined, BankOutlined, HistoryOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -4238,6 +4522,72 @@ const activeTabGroup = ref('overview')
 const costStatusFilter = ref('all')
 const costGroupFilter = ref(null)
 const commentText = ref('')
+
+// Drawer Detail Refs
+const showCostDetail = ref(false)
+const costDetailRecord = ref(null)
+const showPaymentDetail = ref(false)
+const paymentDetailRecord = ref(null)
+const showSubDetailDrawer = ref(false)
+const subDetail = ref(null)
+const showMaterialDetailDrawer = ref(false)
+const materialDetail = ref(null)
+const showEquipmentDetailDrawer = ref(false)
+const equipmentDetail = ref(null)
+const showAdditionalCostDetailDrawer = ref(false)
+const additionalCostDetail = ref(null)
+const showInvoiceDetailDrawer = ref(false)
+const invoiceDetail = ref(null)
+const showDefectDetailDrawer = ref(false)
+const defectDetail = ref(null)
+const showChangeRequestDetailDrawer = ref(false)
+const changeRequestDetail = ref(null)
+const showRiskDetailDrawer = ref(false)
+const riskDetail = ref(null)
+
+// ============ SYNC DRAWERS WITH PROPS ============
+watch(() => props, (newProps) => {
+  if (showCostDetail.value && costDetailRecord.value) {
+    const updated = newProps.project?.costs?.find(x => x.id === costDetailRecord.value.id)
+    if (updated) costDetailRecord.value = updated; else showCostDetail.value = false;
+  }
+  if (showPaymentDetail.value && paymentDetailRecord.value) {
+    const updated = newProps.project?.payments?.find(x => x.id === paymentDetailRecord.value.id)
+    if (updated) paymentDetailRecord.value = updated; else showPaymentDetail.value = false;
+  }
+  if (showSubDetailDrawer.value && subDetail.value) {
+    const updated = newProps.project?.subcontractors?.find(x => x.id === subDetail.value.id)
+    if (updated) subDetail.value = updated; else showSubDetailDrawer.value = false;
+  }
+  if (showMaterialDetailDrawer.value && materialDetail.value) {
+    const updated = newProps.materialBills?.find(x => x.id === materialDetail.value.id)
+    if (updated) materialDetail.value = updated; else showMaterialDetailDrawer.value = false;
+  }
+  if (showEquipmentDetailDrawer.value && equipmentDetail.value) {
+    const updated = newProps.projectEquipment?.find(x => x.id === equipmentDetail.value.id)
+    if (updated) equipmentDetail.value = updated; else showEquipmentDetailDrawer.value = false;
+  }
+  if (showAdditionalCostDetailDrawer.value && additionalCostDetail.value) {
+    const updated = newProps.project?.additional_costs?.find(x => x.id === additionalCostDetail.value.id)
+    if (updated) additionalCostDetail.value = updated; else showAdditionalCostDetailDrawer.value = false;
+  }
+  if (showInvoiceDetailDrawer.value && invoiceDetail.value) {
+    const updated = newProps.project?.invoices?.find(x => x.id === invoiceDetail.value.id)
+    if (updated) invoiceDetail.value = updated; else showInvoiceDetailDrawer.value = false;
+  }
+  if (showDefectDetailDrawer.value && defectDetail.value) {
+    const updated = newProps.project?.defects?.find(x => x.id === defectDetail.value.id)
+    if (updated) defectDetail.value = updated; else showDefectDetailDrawer.value = false;
+  }
+  if (showChangeRequestDetailDrawer.value && changeRequestDetail.value) {
+    const updated = newProps.project?.change_requests?.find(x => x.id === changeRequestDetail.value.id)
+    if (updated) changeRequestDetail.value = updated; else showChangeRequestDetailDrawer.value = false;
+  }
+  if (showRiskDetailDrawer.value && riskDetail.value) {
+    const updated = newProps.project?.risks?.find(x => x.id === riskDetail.value.id)
+    if (updated) riskDetail.value = updated; else showRiskDetailDrawer.value = false;
+  }
+}, { deep: true })
 
 // ============ UNIVERSAL LOADING SYSTEM ============
 // pageLoading shows the top loading bar during page transitions
@@ -4359,10 +4709,10 @@ const isLoading = (key) => !!actionLoading[key]
 const tabGroupTabs = {
   overview: ['overview'],
   schedule: ['gantt', 'progress'],
-  finance: ['contract', 'costs', 'payments', 'budgets', 'additional_costs', 'invoices', 'finance'],
-  expense: ['materials', 'equipment', 'subcontractors'],
-  monitor: ['logs', 'acceptance', 'defects', 'change_requests', 'risks', 'comments'],
-  hr: ['attendance', 'labor', 'personnel'],
+  finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
+  expense: ['subcontractors', 'materials', 'equipment'],
+  monitor: ['logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
+  hr: ['personnel', 'attendance', 'labor'],
   other: ['documents'],
 }
 
@@ -4376,10 +4726,10 @@ const isTabVisible = (tabKey) => {
 const tabGroups = computed(() => [
   { key: 'overview', icon: '📊', label: 'Tổng quan', defaultTab: 'overview', badge: 0 },
   { key: 'schedule', icon: '📅', label: 'Kế hoạch', defaultTab: 'gantt', badge: props.allTasks?.length || 0 },
-  { key: 'finance', icon: '💰', label: 'Tài Chính', defaultTab: 'contract', badge: (props.project.costs?.length || 0) + (props.project.payments?.length || 0) },
-  { key: 'expense', icon: '🏗️', label: 'Chi Phí', defaultTab: 'materials', badge: (props.project.subcontractors?.length || 0) },
+  { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.project.costs?.length || 0) + (props.project.payments?.length || 0) },
+  { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: (props.project.subcontractors?.length || 0) },
   { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'logs', badge: (props.project.defects?.filter(d => d.status !== 'closed')?.length || 0) },
-  { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'attendance', badge: props.project.personnel?.length || 0 },
+  { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.project.personnel?.length || 0 },
   { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.project.attachments?.length || 0 },
 ])
 
@@ -4388,10 +4738,10 @@ watch(activeTab, (tab) => {
   const groupMap = {
     overview: 'overview',
     gantt: 'schedule', progress: 'schedule',
-    contract: 'finance', payments: 'finance', costs: 'finance', invoices: 'finance', finance: 'finance', budgets: 'finance', additional_costs: 'finance',
-    materials: 'expense', equipment: 'expense', subcontractors: 'expense',
-    logs: 'monitor', acceptance: 'monitor', defects: 'monitor', change_requests: 'monitor', risks: 'monitor', comments: 'monitor',
-    attendance: 'hr', labor: 'hr', personnel: 'hr',
+    contract: 'finance', costs: 'finance', payments: 'finance', additional_costs: 'finance', budgets: 'finance', finance: 'finance', invoices: 'finance',
+    subcontractors: 'expense', materials: 'expense', equipment: 'expense',
+    logs: 'monitor', acceptance: 'monitor', defects: 'monitor', change_requests: 'monitor', comments: 'monitor', risks: 'monitor',
+    personnel: 'hr', attendance: 'hr', labor: 'hr',
     documents: 'other',
   }
   activeTabGroup.value = groupMap[tab] || 'overview'
@@ -4637,21 +4987,21 @@ const acceptStatusLabels = { pending: 'Chờ duyệt', supervisor_approved: 'GS 
 // ============ TABLE COLUMNS ============
 const costCols = [
   { title: 'Tên', dataIndex: 'name', ellipsis: true },
-  { title: 'Nhóm', dataIndex: ['cost_group', 'name'], width: 140 }, // Moved up
+  { title: 'Nhóm', dataIndex: ['cost_group', 'name'], width: 130 },
   { title: 'Trạng thái', key: 'status', width: 130 },
-  { title: 'Số tiền', key: 'amount', align: 'right', width: 140 },
+  { title: 'Số tiền', key: 'amount', align: 'right', width: 130 },
   { title: 'Người tạo', key: 'creator', width: 130 },
-  { title: 'Ngày', key: 'date', width: 110 },
-  { title: 'Thao tác', key: 'actions', width: 220, align: 'right' }, // Increased width for Action+Label
+  { title: 'Người duyệt', key: 'approver', width: 160 },
+  { title: 'Ngày', key: 'date', width: 100 },
 ]
 
 const paymentCols = [
   { title: 'Đợt TT', key: 'payment_number', width: 80, align: 'center' },
-  { title: 'Ghi chú', dataIndex: 'notes', ellipsis: true },
+  { title: 'Diễn giải / Ghi chú', dataIndex: 'notes', ellipsis: true },
   { title: 'Trạng thái', key: 'status', width: 140 },
-  { title: 'Số tiền', key: 'amount', align: 'right', width: 140 },
-  { title: 'Ngày TT', key: 'paid_date', width: 110 },
-  { title: 'Thao tác', key: 'actions', width: 220, align: 'right' },
+  { title: 'Phải thu', key: 'amount', align: 'right', width: 130 },
+  { title: 'Thực thu', key: 'actual_amount', align: 'right', width: 130 },
+  { title: 'Hạn TT', key: 'date', width: 100 },
 ]
 
 const personnelCols = [
@@ -4709,10 +5059,9 @@ const groupedLogs = computed(() => {
 })
 
 const defectCols = [
-  { title: 'Mô tả lỗi', dataIndex: 'description', ellipsis: true },
-  { title: 'Mức độ', key: 'severity', width: 120, align: 'center' },
-  { title: 'Trạng thái', key: 'status', width: 150, align: 'center' },
-  { title: 'Thao tác', key: 'actions', width: 280, align: 'right' },
+  { title: 'Mô tả', dataIndex: 'description', ellipsis: true },
+  { title: 'Mức độ', key: 'severity', width: 120 },
+  { title: 'Trạng thái', key: 'status', width: 120 },
 ]
 
 const crCols = [
@@ -4722,7 +5071,6 @@ const crCols = [
   { title: 'CP ảnh hưởng', key: 'cost', align: 'right', width: 140 },
   { title: 'TĐ (ngày)', key: 'schedule', align: 'center', width: 90 },
   { title: 'Trạng thái', key: 'status', width: 130 },
-  { title: '', key: 'actions', width: 180, align: 'center' },
 ]
 
 const riskCols = [
@@ -4732,7 +5080,6 @@ const riskCols = [
   { title: 'Ảnh hưởng', key: 'impact', width: 90 },
   { title: 'Trạng thái', key: 'status', width: 130 },
   { title: 'Người xử lý', key: 'owner', width: 120 },
-  { title: '', key: 'actions', width: 130, align: 'center' },
 ]
 
 const subCols = [
@@ -4743,7 +5090,6 @@ const subCols = [
   { title: '% TT', key: 'paidPercent', width: 110 },
   { title: 'Tiến độ', key: 'progress', width: 120 },
   { title: 'Thời gian', key: 'dates', width: 120 },
-  { title: '', key: 'actions', width: 150, align: 'center' },
 ]
 
 const acCols = [
@@ -4751,7 +5097,6 @@ const acCols = [
   { title: 'Trạng thái', key: 'status', width: 140 },
   { title: 'Số tiền', key: 'amount', align: 'right', width: 140 },
   { title: 'Người đề xuất', key: 'proposer', width: 150 },
-  { title: 'Thao tác', key: 'actions', width: 220, align: 'right' },
 ]
 
 const budgetCols = [
@@ -4768,7 +5113,6 @@ const invoiceCols = [
   { title: 'Giá trước thuế', key: 'subtotal', align: 'right', width: 150 },
   { title: 'Tổng', key: 'total', align: 'right', width: 150 },
   { title: 'Ngày', key: 'date', width: 110 },
-  { title: '', key: 'actions', width: 100, align: 'center' },
 ]
 
 const docCols = [
@@ -4799,19 +5143,7 @@ const saveProject = () => { router.put(`/projects/${props.project.id}`, projectF
 
 // ============ SHARED MODAL FILES ============
 const modalFiles = ref([])
-const uploadModalFiles = (entityType, entityId) => {
-  return new Promise((resolve) => {
-    if (!modalFiles.value.length) return resolve()
-    const formData = new FormData()
-    modalFiles.value.forEach(f => formData.append('files[]', f))
-    router.post(`/projects/${props.project.id}/${entityType}/${entityId}/attach-files`, formData, {
-      forceFormData: true,
-      preserveScroll: true,
-      onSuccess: () => { modalFiles.value = []; resolve() },
-      onError: () => { modalFiles.value = []; resolve() },
-    })
-  })
-}
+// uploadModalFiles removed - unified into single request logic
 
 // ============ COST CRUD ============
 const showCostModal = ref(false)
@@ -4824,16 +5156,19 @@ const openCostModal = (c) => {
   showCostModal.value = true
 }
 const saveCost = () => {
+  if (!modalFiles.value.length && (!editingCost.value || !editingCost.value.attachments?.length)) {
+    return Modal.warning({ title: 'Hành động bị chặn', content: 'Vui lòng đính kèm ít nhất một chứng từ (ảnh phiếu chi, hóa đơn...) để kế toán có thể đối soát.' })
+  }
   const url = editingCost.value ? `/projects/${props.project.id}/costs/${editingCost.value.id}` : `/projects/${props.project.id}/costs`
-  const method = editingCost.value ? 'put' : 'post'
-  router[method](url, costForm.value, savingOptions({
-    onSuccess: async (page) => {
+  const data = { ...costForm.value }
+  if (editingCost.value) data._method = 'PUT'
+  if (modalFiles.value.length) data.files = modalFiles.value
+
+  router.post(url, data, savingOptions({
+    forceFormData: true,
+    onSuccess: () => {
       showCostModal.value = false
-      if (modalFiles.value.length) {
-        const costId = editingCost.value?.id || page.props?.project?.costs?.slice(-1)[0]?.id
-        if (costId) await uploadModalFiles('costs', costId)
-        router.reload()
-      }
+      modalFiles.value = []
     },
   }))
 }
@@ -4871,12 +5206,19 @@ const doSubmitCostWithFiles = () => {
 const approveCostMgmt = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/approve-management`, {}, loadingOptions(`approve-cost-mgmt-${c.id}`))
 
 // KT xác nhận — simple approve (chứng từ đã có từ lúc gửi duyệt)
-const approveCostAcct = (c) => router.post(`/projects/${props.project.id}/costs/${c.id}/approve-accountant`, {}, loadingOptions(`approve-cost-acct-${c.id}`))
+const approveCostAcct = (c) => {
+  if (!c.attachments?.length && !(c.attachments_count > 0)) {
+    return Modal.warning({
+      title: 'Thiếu chứng từ',
+      content: 'Kế toán chỉ có thể xác nhận khi đã có tệp chứng từ đính kèm để đối chiếu.'
+    })
+  }
+  router.post(`/projects/${props.project.id}/costs/${c.id}/approve-accountant`, {}, loadingOptions(`approve-cost-acct-${c.id}`))
+}
 
-// Cost Detail Drawer
-const showCostDetail = ref(false)
-const costDetailRecord = ref(null)
+// Drawer Openers
 const openCostDetail = (c) => { costDetailRecord.value = c; showCostDetail.value = true }
+const openPaymentDetail = (p) => { paymentDetailRecord.value = p; showPaymentDetail.value = true }
 
 // Budget Item Options for cost form selector
 const budgetItemOptions = computed(() => {
@@ -4972,16 +5314,21 @@ const openContractModal = (c) => {
   showContractModal.value = true
 }
 const saveContract = () => {
+  if (!modalFiles.value.length && (!editingContract.value || !editingContract.value.attachments?.length)) {
+    return Modal.warning({ title: 'Thiếu tệp hợp đồng', content: 'Vui lòng đính kèm file hợp đồng bản scan hoặc ảnh chụp để tiếp tục.' })
+  }
   const url = `/projects/${props.project.id}/contract`
   const method = editingContract.value ? 'put' : 'post'
-  router[method](url, contractForm.value, savingOptions({
-    onSuccess: async (page) => {
+  const formData = new FormData()
+  Object.entries(contractForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  modalFiles.value.forEach(f => formData.append('files[]', f))
+  if (editingContract.value) formData.append('_method', 'PUT')
+  
+  router.post(url, formData, savingOptions({
+    forceFormData: true,
+    onSuccess: () => {
       showContractModal.value = false
-      if (modalFiles.value.length) {
-        const contractId = page.props?.project?.contract?.id
-        if (contractId) await uploadModalFiles('contracts', contractId)
-        router.reload()
-      }
+      modalFiles.value = []
     },
   }))
 }
@@ -4997,14 +5344,18 @@ const openPaymentModal = (p = null) => {
   showPaymentModal.value = true
 }
 const savePayment = () => {
-  router.post(`/projects/${props.project.id}/payments`, paymentForm.value, savingOptions({
-    onSuccess: async (page) => {
+  if (!modalFiles.value.length && (!editingPayment.value || !editingPayment.value.attachments?.length)) {
+    return Modal.warning({ title: 'Yêu cầu chứng từ', content: 'Mọi đợt thanh toán đều cần đính kèm ảnh chụp ủy nhiệm chi hoặc biên lai để xác nhận.' })
+  }
+  const formData = new FormData()
+  Object.entries(paymentForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  modalFiles.value.forEach(f => formData.append('files[]', f))
+  
+  router.post(`/projects/${props.project.id}/payments`, formData, savingOptions({
+    forceFormData: true,
+    onSuccess: () => {
       showPaymentModal.value = false
-      if (modalFiles.value.length) {
-        const payId = page.props?.project?.payments?.slice(-1)[0]?.id
-        if (payId) await uploadModalFiles('payments', payId)
-        router.reload()
-      }
+      modalFiles.value = []
     },
   }))
 }
@@ -5130,32 +5481,20 @@ const onLogTaskChange = (taskId) => {
 }
 
 const saveLog = () => {
-  if (editingLog.value) {
-    router.put(`/projects/${props.project.id}/logs/${editingLog.value.id}`, logForm.value, savingOptions({
-      preserveScroll: true,
-      onSuccess: async () => {
-        if (modalFiles.value.length) {
-          await uploadModalFiles('logs', editingLog.value.id)
-          router.reload()
-        }
-        showLogModal.value = false
-        editingLog.value = null
-      },
-    }))
-  } else {
-    router.post(`/projects/${props.project.id}/logs`, logForm.value, savingOptions({
-      preserveScroll: true,
-      onSuccess: async (page) => {
-        if (modalFiles.value.length) {
-          const logs = page.props?.project?.construction_logs || page.props?.project?.constructionLogs || []
-          const logId = logs.length ? logs[0]?.id : null // latest log (sorted desc)
-          if (logId) await uploadModalFiles('logs', logId)
-          router.reload()
-        }
-        showLogModal.value = false
-      },
-    }))
-  }
+  const url = editingLog.value ? `/projects/${props.project.id}/logs/${editingLog.value.id}` : `/projects/${props.project.id}/logs`
+  const formData = new FormData()
+  Object.entries(logForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  modalFiles.value.forEach(f => formData.append('files[]', f))
+  if (editingLog.value) formData.append('_method', 'PUT')
+
+  router.post(url, formData, savingOptions({
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      showLogModal.value = false
+      modalFiles.value = []
+    },
+  }))
 }
 
 const deleteLog = (l) => router.delete(`/projects/${props.project.id}/logs/${l.id}`, loadingOptions(`delete-log-${l.id}`, { preserveScroll: true }))
@@ -5200,15 +5539,16 @@ const openDefectModal = (d) => {
 }
 const saveDefect = () => {
   const url = editingDefect.value ? `/projects/${props.project.id}/defects/${editingDefect.value.id}` : `/projects/${props.project.id}/defects`
-  const method = editingDefect.value ? 'put' : 'post'
-  router[method](url, defectForm.value, savingOptions({
-    onSuccess: async (page) => {
+  const formData = new FormData()
+  Object.entries(defectForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  modalFiles.value.forEach(f => formData.append('files[]', f))
+  if (editingDefect.value) formData.append('_method', 'PUT')
+
+  router.post(url, formData, savingOptions({
+    forceFormData: true,
+    onSuccess: () => {
       showDefectModal.value = false
-      if (modalFiles.value.length) {
-        const defectId = editingDefect.value?.id || page.props?.project?.defects?.slice(-1)[0]?.id
-        if (defectId) await uploadModalFiles('defects', defectId)
-        router.reload()
-      }
+      modalFiles.value = []
     },
   }))
 }
@@ -5267,7 +5607,7 @@ const saveCR = () => {
   if (editingCR.value) {
     router.put(`/projects/${pId}/change-requests/${editingCR.value.id}`, crForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showCRModal.value = false; editingCR.value = null } }))
   } else {
-    router.post(`/projects/${pId}/change-requests`, crForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showCRModal.value = false }))
+    router.post(`/projects/${pId}/change-requests`, crForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showCRModal.value = false } }))
   }
 }
 
@@ -5310,7 +5650,7 @@ const saveRisk = () => {
   if (editingRisk.value) {
     router.put(`/projects/${pId}/risks/${editingRisk.value.id}`, riskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showRiskModal.value = false; editingRisk.value = null } }))
   } else {
-    router.post(`/projects/${pId}/risks`, riskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showRiskModal.value = false }))
+    router.post(`/projects/${pId}/risks`, riskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showRiskModal.value = false } }))
   }
 }
 
@@ -5395,7 +5735,7 @@ const saveTask = () => {
   if (editingTask.value) {
     router.put(`/projects/${pId}/tasks/${editingTask.value.id}`, taskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showTaskModal.value = false; editingTask.value = null } }))
   } else {
-    router.post(`/projects/${pId}/tasks`, taskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showTaskModal.value = false }))
+    router.post(`/projects/${pId}/tasks`, taskForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showTaskModal.value = false } }))
   }
 }
 
@@ -5414,8 +5754,18 @@ const openSubModal = (s) => {
   showSubModal.value = true
 }
 const onGlobalSubSelect = (id) => {
+  if (!id) {
+    subForm.value.name = '';
+    return;
+  }
   const gs = props.globalSubcontractors.find(g => g.id === id)
-  if (gs) { subForm.value.name = gs.name; subForm.value.bank_name = gs.bank_name || ''; subForm.value.bank_account_number = gs.bank_account_number || ''; subForm.value.bank_account_name = gs.bank_account_name || ''; subForm.value.category = gs.category || '' }
+  if (gs) { 
+    subForm.value.name = gs.name; 
+    subForm.value.bank_name = gs.bank_name || ''; 
+    subForm.value.bank_account_number = gs.bank_account_number || ''; 
+    subForm.value.bank_account_name = gs.bank_account_name || ''; 
+    subForm.value.category = gs.category || '' 
+  }
 }
 const saveSub = () => {
   const url = editingSub.value ? `/projects/${props.project.id}/subcontractors/${editingSub.value.id}` : `/projects/${props.project.id}/subcontractors`
@@ -5437,29 +5787,41 @@ const saveSub = () => {
       router.post(url, fd, { forceFormData: true, preserveScroll: true, ...savingOptions({ onSuccess: () => { showSubModal.value = false; subFiles.value = [] } }) })
     }
   } else {
-    router[method](url, subForm.value, savingOptions({ preserveScroll: true, onSuccess: () => showSubModal.value = false }))
+    router[method](url, subForm.value, savingOptions({ preserveScroll: true, onSuccess: () => { showSubModal.value = false } }))
   }
 }
 const deleteSub = (s) => router.delete(`/projects/${props.project.id}/subcontractors/${s.id}`, loadingOptions(`delete-sub-${s.id}`, { preserveScroll: true }))
 const approveSub = (s) => router.post(`/projects/${props.project.id}/subcontractors/${s.id}/approve`, {}, loadingOptions(`approve-sub-${s.id}`, { preserveScroll: true }))
 
-// ============ SUBCONTRACTOR DETAIL DRAWER ============
-const showSubDetailDrawer = ref(false)
-const subDetail = ref(null)
 const openSubDetail = (s) => { subDetail.value = s; showSubDetailDrawer.value = true }
+const openMaterialDetail = (m) => { materialDetail.value = m; showMaterialDetailDrawer.value = true }
+const openEquipmentDetail = (e) => { equipmentDetail.value = e; showEquipmentDetailDrawer.value = true }
+const openAdditionalCostDetail = (ac) => { additionalCostDetail.value = ac; showAdditionalCostDetailDrawer.value = true }
+const openInvoiceDetail = (inv) => { invoiceDetail.value = inv; showInvoiceDetailDrawer.value = true }
+const openDefectDetail = (d) => { defectDetail.value = d; showDefectDetailDrawer.value = true }
+const openChangeRequestDetail = (cr) => { changeRequestDetail.value = cr; showChangeRequestDetailDrawer.value = true }
+const openRiskDetail = (r) => { riskDetail.value = r; showRiskDetailDrawer.value = true }
 
 // ============ SUBCONTRACTOR PAYMENT MANAGEMENT ============
 const showSubPayDrawer = ref(false)
+const showSubPayCreateDrawer = ref(false)
 const subPayTarget = ref(null)
 const subPayFiles = ref([])
 const subPayForm = ref({ payment_stage: '', amount: null, payment_date: null, payment_method: 'bank_transfer', reference_number: '', description: '' })
+const openSubPaymentHistory = (sub) => {
+  subDetail.value = sub
+  showSubPayDrawer.value = true
+}
 const openSubPaymentDrawer = (sub) => {
   subPayTarget.value = sub
   subPayFiles.value = []
   subPayForm.value = { payment_stage: '', amount: null, payment_date: dayjs().format('YYYY-MM-DD'), payment_method: 'bank_transfer', reference_number: '', description: '' }
-  showSubPayDrawer.value = true
+  showSubPayCreateDrawer.value = true
 }
 const saveSubPayment = () => {
+  if (!subPayFiles.value.length) {
+    return Modal.warning({ title: 'Thiếu chứng từ NTP', content: 'Vui lòng đính kèm chứng từ thanh toán cho nhà thầu phụ.' })
+  }
   if (!subPayTarget.value) return
   const url = `/projects/${props.project.id}/subcontractors/${subPayTarget.value.id}/payments`
   if (subPayFiles.value.length > 0) {
@@ -5470,7 +5832,7 @@ const saveSubPayment = () => {
       forceFormData: true, 
       preserveScroll: true, 
       onSuccess: () => { 
-        showSubPayDrawer.value = false; 
+        showSubPayCreateDrawer.value = false; 
         subPayFiles.value = [];
         message.success('Đã tạo phiếu thanh toán');
       },
@@ -5482,7 +5844,7 @@ const saveSubPayment = () => {
     router.post(url, subPayForm.value, {
       preserveScroll: true, 
       onSuccess: () => {
-        showSubPayDrawer.value = false;
+        showSubPayCreateDrawer.value = false;
         message.success('Đã tạo phiếu thanh toán');
       },
       onError: () => {
@@ -5494,7 +5856,15 @@ const saveSubPayment = () => {
 const submitSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/submit`, {}, loadingOptions(`submit-subpay-${p.id}`, { preserveScroll: true }))
 const approveSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/approve`, {}, loadingOptions(`approve-subpay-${p.id}`, { preserveScroll: true }))
 const rejectSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/reject`, {}, loadingOptions(`reject-subpay-${p.id}`, { preserveScroll: true }))
-const confirmSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/confirm`, {}, loadingOptions(`confirm-subpay-${p.id}`, { preserveScroll: true }))
+const confirmSubPayment = (sub, p) => {
+  if (!p.attachments?.length && !(p.attachments_count > 0)) {
+    return Modal.warning({
+      title: 'Thiếu chứng từ',
+      content: 'Kế toán chỉ có thể xác nhận khi đã có tệp chứng từ đính kèm để đối chiếu.'
+    })
+  }
+  router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/confirm`, {}, loadingOptions(`confirm-subpay-${p.id}`, { preserveScroll: true }))
+}
 const deleteSubPayment = (sub, p) => router.delete(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}`, loadingOptions(`delete-subpay-${p.id}`, { preserveScroll: true }))
 
 // ============ ADDITIONAL COST CRUD ============
@@ -5508,14 +5878,19 @@ const openAdditionalCostModal = (ac = null) => {
   showACModal.value = true
 }
 const saveAC = () => {
-  router.post(`/projects/${props.project.id}/additional-costs`, acForm.value, savingOptions({
-    onSuccess: async (page) => {
+  if (!modalFiles.value.length) {
+    return Modal.warning({ title: 'Yêu cầu minh chứng', content: 'Chi phí phát sinh bắt buộc phải có ảnh chụp hiện trường hoặc phiếu đề xuất có chữ ký.' })
+  }
+  const data = { ...acForm.value }
+  if (modalFiles.value.length) {
+    data.files = modalFiles.value
+  }
+
+  router.post(`/projects/${props.project.id}/additional-costs`, data, savingOptions({
+    forceFormData: true,
+    onSuccess: () => {
       showACModal.value = false
-      if (modalFiles.value.length) {
-        const acId = page.props?.project?.additional_costs?.slice(-1)[0]?.id
-        if (acId) await uploadModalFiles('additional-costs', acId)
-        router.reload()
-      }
+      modalFiles.value = []
     },
   }))
 }
@@ -5529,9 +5904,33 @@ const deleteAC = (ac) => router.delete(`/projects/${props.project.id}/additional
 
 // ============ BUDGET CRUD ============
 const showBudgetModal = ref(false)
+const editingBudget = ref(null)
 const budgetForm = ref({ name: '', budget_date: null, version: '', status: 'draft', notes: '', items: [{ name: '', estimated_amount: 0 }] })
-const openBudgetModal = () => { budgetForm.value = { name: '', budget_date: dayjs().format('YYYY-MM-DD'), version: 'v1', status: 'draft', notes: '', items: [{ name: '', estimated_amount: 0 }] }; showBudgetModal.value = true }
-const saveBudget = () => { router.post(`/projects/${props.project.id}/budgets`, budgetForm.value, savingOptions({ onSuccess: () => showBudgetModal.value = false })) }
+const openBudgetModal = (budget = null) => {
+  editingBudget.value = budget
+  if (budget) {
+    budgetForm.value = {
+      name: budget.name || '',
+      budget_date: budget.budget_date || dayjs().format('YYYY-MM-DD'),
+      version: budget.version || '',
+      status: budget.status || 'draft',
+      notes: budget.notes || '',
+      items: budget.items?.length
+        ? budget.items.map(i => ({ name: i.name, estimated_amount: i.estimated_amount, description: i.description || '' }))
+        : [{ name: '', estimated_amount: 0 }],
+    }
+  } else {
+    budgetForm.value = { name: '', budget_date: dayjs().format('YYYY-MM-DD'), version: 'v1', status: 'draft', notes: '', items: [{ name: '', estimated_amount: 0 }] }
+  }
+  showBudgetModal.value = true
+}
+const saveBudget = () => {
+  if (editingBudget.value) {
+    router.put(`/projects/${props.project.id}/budgets/${editingBudget.value.id}`, budgetForm.value, savingOptions({ onSuccess: () => { showBudgetModal.value = false; editingBudget.value = null } }))
+  } else {
+    router.post(`/projects/${props.project.id}/budgets`, budgetForm.value, savingOptions({ onSuccess: () => showBudgetModal.value = false }))
+  }
+}
 const approveBudget = (b) => router.put(`/projects/${props.project.id}/budgets/${b.id}`, { status: 'approved' }, loadingOptions(`approve-budget-${b.id}`))
 const deleteBudget = (b) => router.delete(`/projects/${props.project.id}/budgets/${b.id}`, loadingOptions(`delete-budget-${b.id}`))
 
@@ -5547,9 +5946,22 @@ const openInvoiceModal = (inv) => {
   showInvoiceModal.value = true
 }
 const saveInvoice = () => {
+  if (!modalFiles.value.length && (!editingInvoice.value || !editingInvoice.value.attachments?.length)) {
+    return Modal.warning({ title: 'Thiếu tệp hóa đơn', content: 'Vui lòng đính kèm bản scan hóa đơn để lưu trữ.' })
+  }
   const url = editingInvoice.value ? `/projects/${props.project.id}/invoices/${editingInvoice.value.id}` : `/projects/${props.project.id}/invoices`
-  const method = editingInvoice.value ? 'put' : 'post'
-  router[method](url, invoiceForm.value, savingOptions({ onSuccess: () => showInvoiceModal.value = false }))
+  const formData = new FormData()
+  Object.entries(invoiceForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  modalFiles.value.forEach(f => formData.append('files[]', f))
+  if (editingInvoice.value) formData.append('_method', 'PUT')
+
+  router.post(url, formData, savingOptions({
+    forceFormData: true,
+    onSuccess: () => {
+      showInvoiceModal.value = false
+      modalFiles.value = []
+    },
+  }))
 }
 const deleteInvoice = (inv) => router.delete(`/projects/${props.project.id}/invoices/${inv.id}`, loadingOptions(`delete-invoice-${inv.id}`))
 
@@ -5557,7 +5969,19 @@ const deleteInvoice = (inv) => router.delete(`/projects/${props.project.id}/invo
 const showAcceptModal = ref(false)
 const acceptForm = ref({ name: '', description: '', task_id: null, acceptance_template_id: null })
 const openAcceptModal = () => { acceptForm.value = { name: '', description: '', task_id: null, acceptance_template_id: null }; showAcceptModal.value = true }
-const saveAccept = () => { router.post(`/projects/${props.project.id}/acceptance`, acceptForm.value, savingOptions({ onSuccess: () => showAcceptModal.value = false })) }
+const saveAccept = () => {
+  const formData = new FormData()
+  Object.entries(acceptForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  modalFiles.value.forEach(f => formData.append('files[]', f))
+
+  router.post(`/projects/${props.project.id}/acceptance`, formData, savingOptions({
+    forceFormData: true,
+    onSuccess: () => {
+      showAcceptModal.value = false
+      modalFiles.value = []
+    },
+  }))
+}
 const approveAccept = (stage, level) => router.post(`/projects/${props.project.id}/acceptance/${stage.id}/approve`, { level }, loadingOptions(`approve-accept-${stage.id}-${level}`))
 const deleteAccept = (stage) => router.delete(`/projects/${props.project.id}/acceptance/${stage.id}`, loadingOptions(`delete-accept-${stage.id}`))
 
@@ -5610,18 +6034,6 @@ const getOpenDefects = (stage) => {
 }
 const acceptItemStatusColor = (status) => ({ draft: 'default', pending: 'default', submitted: 'processing', supervisor_approved: 'cyan', project_manager_approved: 'blue', pm_approved: 'blue', customer_approved: 'success', rejected: 'error' }[status] || 'default')
 const acceptItemStatusLabel = (status) => ({ draft: 'Nháp', pending: 'Chờ', submitted: 'Đã nộp', supervisor_approved: 'GS duyệt', project_manager_approved: 'PM duyệt', pm_approved: 'PM duyệt', customer_approved: 'KH duyệt', rejected: 'Từ chối' }[status] || status)
-
-const getTaskAcceptanceStatus = (task) => {
-  const stages = props.project.acceptance_stages || []
-  for (const stage of stages) {
-    // Check if task is linked to stage directly
-    if (stage.task_id === task.id && stage.status === 'owner_approved') return 'customer_approved'
-    // Check if task is linked to any item in stage
-    const item = (stage.items || []).find(i => i.task_id === task.id)
-    if (item) return item.workflow_status
-  }
-  return null
-}
 
 // ============ ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ============
 const showAcceptDetailDrawer = ref(false)
@@ -5948,7 +6360,7 @@ const loadAttendanceData = async () => {
       params.year = attendanceDate.value.year()
       params.month = attendanceDate.value.month() + 1
     }
-    const res = await axios.get('/api/attendance', { params })
+    const res = await axios.get(`/projects/${props.project.id}/attendance`, { params })
     attendanceList.value = res.data?.data || res.data || []
     // Also load stats
     loadAttendanceStats()
@@ -5963,7 +6375,7 @@ const loadAttendanceStats = async () => {
       month: (attendanceDate.value?.month() + 1) || (now.getMonth() + 1),
       project_id: props.project.id,
     }
-    const res = await axios.get('/api/attendance/statistics', { params })
+    const res = await axios.get(`/projects/${props.project.id}/attendance/statistics`, { params })
     attendanceSummary.value = res.data?.summary || null
     attendanceByUser.value = res.data?.by_user || []
   } catch (e) { console.error('Load attendance stats:', e) }
@@ -5971,7 +6383,7 @@ const loadAttendanceStats = async () => {
 
 const approveAttendance = async (id) => {
   try {
-    await axios.post(`/api/attendance/${id}/approve`)
+    await axios.post(`/projects/${props.project.id}/attendance/${id}/approve`)
     message.success('Đã duyệt chấm công')
     loadAttendanceData()
   } catch (e) { message.error('Lỗi duyệt chấm công') }
@@ -5979,7 +6391,7 @@ const approveAttendance = async (id) => {
 
 const loadShifts = async () => {
   try {
-    const res = await axios.get('/api/shifts', { params: { project_id: props.project.id } })
+    const res = await axios.get(`/projects/${props.project.id}/shifts`)
     shiftsList.value = res.data || []
   } catch (e) { console.error('Load shifts:', e) }
 }
@@ -6010,21 +6422,21 @@ const laborItemCols = [
 
 const loadLaborDashboard = async () => {
   try {
-    const res = await axios.get(`/api/projects/${props.project.id}/labor-productivity/dashboard`)
+    const res = await axios.get(`/projects/${props.project.id}/labor-productivity/dashboard`)
     laborDashboard.value = res.data || null
   } catch (e) { console.error('Load labor dashboard:', e) }
 }
 
 const loadLaborRecords = async () => {
   try {
-    const res = await axios.get(`/api/projects/${props.project.id}/labor-productivity`)
+    const res = await axios.get(`/projects/${props.project.id}/labor-productivity`)
     laborRecords.value = res.data?.data || res.data || []
   } catch (e) { console.error('Load labor records:', e) }
 }
 
 const deleteLaborRecord = async (id) => {
   try {
-    await axios.delete(`/api/projects/${props.project.id}/labor-productivity/${id}`)
+    await axios.delete(`/projects/${props.project.id}/labor-productivity/${id}`)
     message.success('Đã xóa')
     loadLaborRecords()
     loadLaborDashboard()
@@ -6056,7 +6468,7 @@ const submitManualAttendance = async () => {
   }
   try {
     attendanceSaving.value = true
-    const res = await axios.post('/api/attendance', {
+    const res = await axios.post(`/projects/${props.project.id}/attendance`, {
       ...attendanceForm.value,
       project_id: props.project.id,
       check_in_method: 'manual',
@@ -6072,8 +6484,7 @@ const submitManualAttendance = async () => {
     if (e.response?.data?.errors) {
       Object.values(e.response.data.errors).flat().forEach(err => message.error(err))
     }
-  }
-  finally { attendanceSaving.value = false }
+  } finally { attendanceSaving.value = false }
 }
 
 const submitShift = async () => {
@@ -6082,13 +6493,19 @@ const submitShift = async () => {
   }
   try {
     shiftSaving.value = true
-    await axios.post('/api/shifts', { ...shiftForm.value, project_id: props.project.id })
+    await axios.post(`/projects/${props.project.id}/shifts`, shiftForm.value)
     message.success('Đã tạo ca làm việc')
     showShiftModal.value = false
     shiftForm.value = { name: '', start_time: null, end_time: null, break_hours: 1, overtime_multiplier: 1.5, is_overtime_shift: false }
     loadShifts()
-  } catch (e) { message.error(e.response?.data?.message || 'Lỗi tạo ca') }
-  finally { shiftSaving.value = false }
+  } catch (e) {
+    console.error('Shift error:', e)
+    const errorMsg = e.response?.data?.message || e.message || 'Lỗi tạo ca'
+    message.error(errorMsg)
+    if (e.response?.data?.errors) {
+      Object.values(e.response.data.errors).flat().forEach(err => message.error(err))
+    }
+  } finally { shiftSaving.value = false }
 }
 
 const submitLaborRecord = async () => {
@@ -6097,7 +6514,7 @@ const submitLaborRecord = async () => {
   }
   try {
     laborSaving.value = true
-    const res = await axios.post(`/api/projects/${props.project.id}/labor-productivity`, laborForm.value)
+    const res = await axios.post(`/projects/${props.project.id}/labor-productivity`, laborForm.value)
     message.success(res.data?.message || 'Đã ghi nhận năng suất')
     showLaborModal.value = false
     laborForm.value = { work_item: '', user_id: null, unit: 'm²', planned_quantity: null, actual_quantity: null, workers_count: 1, hours_spent: 8, record_date: dayjs().format('YYYY-MM-DD'), note: '' }
@@ -6130,7 +6547,6 @@ const billCols = [
   { title: 'Mặt hàng', key: 'items_count', width: 100, align: 'center' },
   { title: 'Tổng tiền', key: 'total', width: 150, align: 'right' },
   { title: 'Trạng thái', key: 'status', width: 140, align: 'center' },
-  { title: '', key: 'actions', width: 220, align: 'right' },
 ]
 
 const billStatusLabel = (s) => ({
@@ -6155,6 +6571,7 @@ const syncMaterialBillCosts = () => {
 // ---- Bill Creation Modal ----
 const showBillModal = ref(false)
 const submittingBill = ref(false)
+const billFiles = ref([])
 const billForm = ref({ bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [] })
 const billItemForm = ref({ material_id: null, quantity: 1, unit_price: 0, total_price: 0 })
 
@@ -6191,6 +6608,9 @@ const addBillItem = () => {
 
 const submitCreateBill = () => {
   if (!billForm.value.items.length || !billForm.value.bill_date) return
+  if (!billFiles.value.length) {
+    return Modal.warning({ title: 'Yêu cầu chứng từ', content: 'Vui lòng đính kèm ảnh chụp phiếu nhập hoặc hóa đơn từ nhà cung cấp.' })
+  }
   submittingBill.value = true
   router.post(`/projects/${props.project.id}/material-bills`, {
     bill_date: billForm.value.bill_date,
@@ -6218,6 +6638,12 @@ const approveBillManagement = (bill) => {
 }
 
 const approveBillAccountant = (bill) => {
+  if (!bill.attachments?.length && !(bill.attachments_count > 0)) {
+    return Modal.warning({
+      title: 'Thiếu chứng từ',
+      content: 'Kế toán chỉ có thể xác nhận khi đã có tệp chứng từ đính kèm để đối chiếu.'
+    })
+  }
   router.post(`/projects/${props.project.id}/material-bills/${bill.id}/approve-accountant`, {}, { preserveScroll: true })
 }
 
@@ -6266,7 +6692,6 @@ const equipmentCols = [
   { title: 'Loại', key: 'type', width: 100, align: 'center' },
   { title: 'Trạng thái', key: 'status', width: 100, align: 'center' },
   { title: 'Phân bổ', key: 'allocation', width: 250 },
-  { title: '', key: 'actions', width: 100, align: 'center' },
 ]
 
 const showEquipmentModal = ref(false)
@@ -6423,6 +6848,10 @@ const returnEquipmentAction = (eq, allocation) => {
 
 .crm-table :deep(.ant-table-tbody > tr:hover > td) {
   background: #f8fafc !important;
+}
+.hover-row :deep(.ant-table-tbody > tr:hover > td) {
+  background: #eff6ff !important;
+  cursor: pointer;
 }
 /* Batch item transition animations */
 .mat-item-enter-active { transition: all 0.3s ease; }

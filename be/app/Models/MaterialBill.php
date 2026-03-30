@@ -73,6 +73,11 @@ class MaterialBill extends Model
         return $this->hasMany(MaterialBillItem::class);
     }
 
+    public function attachments(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(Attachment::class, 'attachable');
+    }
+
     // Methods
     public function submitForManagementApproval()
     {

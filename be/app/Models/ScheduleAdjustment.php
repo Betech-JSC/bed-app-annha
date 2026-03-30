@@ -50,11 +50,16 @@ class ScheduleAdjustment extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function attachments(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(Attachment::class, 'attachable');
+    }
+
     // ==================================================================
     // METHODS
     // ==================================================================
 
-    public function approve(User $user, ?string $notes = null): bool
+    public function approve($user, ?string $notes = null): bool
     {
         $this->status = 'approved';
         $this->approved_by = $user->id;
@@ -78,7 +83,7 @@ class ScheduleAdjustment extends Model
         return false;
     }
 
-    public function reject(User $user, ?string $notes = null): bool
+    public function reject($user, ?string $notes = null): bool
     {
         $this->status = 'rejected';
         $this->approved_by = $user->id;

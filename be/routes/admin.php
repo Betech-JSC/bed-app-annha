@@ -152,6 +152,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
 
         // Project Payment (KH duyệt thanh toán)
         Route::post('/payment/{id}/approve', [CrmApprovalController::class, 'approvePayment'])->name('payment.approve');
+        Route::post('/payment/{id}/confirm', [CrmApprovalController::class, 'confirmProjectPayment'])->name('payment.confirm');
         Route::post('/payment/{id}/reject', [CrmApprovalController::class, 'rejectPayment'])->name('payment.reject');
 
         // Material Bill (Phiếu vật tư)
@@ -177,6 +178,10 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Defect Verify (Xác nhận lỗi đã sửa)
         Route::post('/defect/{id}/verify', [CrmApprovalController::class, 'verifyDefectFromApproval'])->name('defect.verify');
         Route::post('/defect/{id}/reject', [CrmApprovalController::class, 'rejectDefectFromApproval'])->name('defect.reject');
+
+        // Project Budget (Ngân sách dự án)
+        Route::post('/budget/{id}/approve', [CrmApprovalController::class, 'approveBudget'])->name('budget.approve');
+        Route::post('/budget/{id}/reject', [CrmApprovalController::class, 'rejectBudget'])->name('budget.reject');
     });
 
     // Reports (Báo cáo dự án)
@@ -389,6 +394,22 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/material-quotas', [CrmProjectsController::class, 'storeMaterialQuota'])->name('material-quotas.store');
         Route::put('/{project}/material-quotas/{quota}', [CrmProjectsController::class, 'updateMaterialQuota'])->name('material-quotas.update');
         Route::delete('/{project}/material-quotas/{quota}', [CrmProjectsController::class, 'destroyMaterialQuota'])->name('material-quotas.destroy');
+
+        // Attendance (CRM proxy for API AttendanceController — auth:admin)
+        Route::get('/{project}/attendance/statistics', [CrmProjectsController::class, 'attendanceStatistics'])->name('attendance.statistics');
+        Route::get('/{project}/attendance', [CrmProjectsController::class, 'getAttendance'])->name('attendance.index');
+        Route::post('/{project}/attendance/{id}/approve', [CrmProjectsController::class, 'approveAttendance'])->name('attendance.approve');
+        Route::post('/{project}/attendance', [CrmProjectsController::class, 'storeAttendance'])->name('attendance.store');
+
+        // Shifts (CRM proxy)
+        Route::get('/{project}/shifts', [CrmProjectsController::class, 'getShifts'])->name('shifts.index');
+        Route::post('/{project}/shifts', [CrmProjectsController::class, 'storeShift'])->name('shifts.store');
+
+        // Labor Productivity (CRM proxy)
+        Route::get('/{project}/labor-productivity/dashboard', [CrmProjectsController::class, 'laborProductivityDashboard'])->name('labor-productivity.dashboard');
+        Route::get('/{project}/labor-productivity', [CrmProjectsController::class, 'getLaborProductivity'])->name('labor-productivity.index');
+        Route::post('/{project}/labor-productivity', [CrmProjectsController::class, 'storeLaborProductivity'])->name('labor-productivity.store');
+        Route::delete('/{project}/labor-productivity/{id}', [CrmProjectsController::class, 'destroyLaborProductivity'])->name('labor-productivity.destroy');
     });
 
     // HR

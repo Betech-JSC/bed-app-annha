@@ -266,7 +266,7 @@ const menuItems = computed(() => {
     {
       key: 'approvals',
       icon: () => h(AuditOutlined),
-      label: 'Phê duyệt yêu cầu',
+      label: 'Trung tâm duyệt',
       show: canAny('cost.approve.management', 'cost.approve.accountant', 'acceptance.approve.level_1', 'acceptance.approve.level_2', 'acceptance.approve.level_3', 'log.approve', 'material.approve', 'equipment.approve'),
     },
     {
