@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Alert,
   TextInput,
   ScrollView,
+  Dimensions,
+  Animated,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { projectApi, Project } from "@/api/projectApi";
@@ -23,1887 +25,829 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 import { NotificationBadge } from "@/components";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
+import { BlurView } from "expo-blur";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// ─────────────────────────────────────────────────
+// Constants & Types
+// ─────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
+  planning: { label: "Lập kế hoạch", color: "#6366F1", bgColor: "#EEF2FF", icon: "calendar-outline" },
+  in_progress: { label: "Đang thi công", color: "#10B981", bgColor: "#ECFDF5", icon: "construct-outline" },
+  completed: { label: "Hoàn thành", color: "#3B82F6", bgColor: "#EFF6FF", icon: "checkmark-circle-outline" },
+  cancelled: { label: "Đã hủy", color: "#EF4444", bgColor: "#FEF2F2", icon: "close-circle-outline" },
+};
+
+const DEFAULT_STATUS = { label: "N/A", color: "#6B7280", bgColor: "#F3F4F6", icon: "help-circle-outline" };
+
+// ─────────────────────────────────────────────────
+// Project Card Component (Optimized)
+// ─────────────────────────────────────────────────
+
+const ProjectCard = React.memo(({
+  item,
+  monitoring,
+  prediction,
+  latestComment,
+  onPress,
+  onEdit,
+  onDelete
+}: {
+  item: Project;
+  monitoring?: ProjectMonitoringData;
+  prediction?: any;
+  latestComment?: any;
+  onPress: () => void;
+  onEdit: (e: any) => void;
+  onDelete: (e: any) => void;
+}) => {
+  const status = STATUS_CONFIG[item.status] || DEFAULT_STATUS;
+  const progressValue = item.progress?.overall_percentage || 0;
+
+  // Risks & Warnings
+  const hasDelayRisk = prediction?.delay_risk?.risk_level === 'high' || prediction?.delay_risk?.risk_level === 'critical';
+  const hasCostRisk = prediction?.cost_risk?.risk_level === 'high' || prediction?.cost_risk?.risk_level === 'critical';
+  const overdueTasks = monitoring?.metrics?.overdue_tasks || 0;
+
+  return (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onPress}
+      activeOpacity={0.9}
+    >
+      {/* Risk Indicators (Pills at top right) */}
+      <View style={styles.cardBadges}>
+        {hasDelayRisk && (
+          <View style={[styles.badgePill, { backgroundColor: '#FEE2E2' }]}>
+            <Ionicons name="time" size={12} color="#EF4444" />
+            <Text style={[styles.badgeText, { color: '#EF4444' }]}>Chậm</Text>
+          </View>
+        )}
+        {overdueTasks > 0 && (
+          <View style={[styles.badgePill, { backgroundColor: '#FFF7ED' }]}>
+            <Ionicons name="alert-circle" size={12} color="#F97316" />
+            <Text style={[styles.badgeText, { color: '#F97316' }]}>{overdueTasks} Quá hạn</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.cardHeader}>
+        <View style={styles.cardStatusContainer}>
+          <View style={[styles.statusIcon, { backgroundColor: status.bgColor }]}>
+            <Ionicons name={status.icon as any} size={20} color={status.color} />
+          </View>
+          <View>
+            <Text style={styles.projectCode}>{item.code}</Text>
+            <Text style={styles.projectName} numberOfLines={1}>{item.name}</Text>
+          </View>
+        </View>
+
+        <View style={styles.cardActions}>
+          <PermissionGuard permission={Permissions.PROJECT_UPDATE}>
+            <TouchableOpacity style={styles.cardActionBtn} onPress={onEdit}>
+              <Ionicons name="pencil-outline" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          </PermissionGuard>
+          <PermissionGuard permission={Permissions.PROJECT_DELETE}>
+            <TouchableOpacity style={styles.cardActionBtn} onPress={onDelete}>
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            </TouchableOpacity>
+          </PermissionGuard>
+        </View>
+      </View>
+
+      {item.description ? (
+        <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
+      ) : null}
+
+      <View style={styles.progressContainer}>
+        <View style={styles.progressHeader}>
+          <Text style={styles.progressLabel}>Tiến độ tổng thể</Text>
+          <Text style={[styles.progressValue, { color: status.color }]}>{progressValue}%</Text>
+        </View>
+        <View style={styles.progressBarBg}>
+          <View
+            style={[
+              styles.progressBarFill,
+              { width: `${progressValue}%`, backgroundColor: status.color }
+            ]}
+          />
+        </View>
+      </View>
+
+      <View style={styles.cardFooter}>
+        <View style={styles.footerInfo}>
+          <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+          <Text style={styles.footerInfoText}>
+            {item.start_date ? new Date(item.start_date).toLocaleDateString("vi-VN") : "N/A"}
+          </Text>
+        </View>
+
+        <View style={styles.footerInfo}>
+          <Ionicons name="people-outline" size={14} color="#6B7280" />
+          <Text style={styles.footerInfoText}>
+            {item.project_manager?.name || "Chưa gán"}
+          </Text>
+        </View>
+
+        <View style={[styles.statusTag, { backgroundColor: status.bgColor }]}>
+          <Text style={[styles.statusTagText, { color: status.color }]}>{status.label}</Text>
+        </View>
+      </View>
+
+      {/* Smallest Comment Preview */}
+      {latestComment && (
+        <View style={styles.commentLine}>
+          <Ionicons name="chatbox-ellipses-outline" size={12} color="#9CA3AF" />
+          <Text style={styles.commentText} numberOfLines={1}>
+            <Text style={{ fontWeight: '600' }}>{latestComment.user?.name}: </Text>
+            {latestComment.content}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+});
+
+// ─────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────
 
 export default function ProjectsListScreen() {
   const router = useRouter();
   const tabBarHeight = useTabBarHeight();
-  // Chỉ load unread count khi cần, không polling (CustomTabBar đã polling rồi)
   const { unreadCount } = useUnreadCount({ autoRefresh: false });
+
+  // Data States
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Monitoring/Predictions (Lazy Loaded)
   const [monitoringData, setMonitoringData] = useState<Record<number, ProjectMonitoringData>>({});
   const [predictions, setPredictions] = useState<Record<number, any>>({});
   const [latestComments, setLatestComments] = useState<Record<number, any>>({});
+
+  // Filter States
   const [searchText, setSearchText] = useState("");
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
-  const [showYearFilter, setShowYearFilter] = useState(false);
-  const [showStatusFilter, setShowStatusFilter] = useState(false);
-  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [activeFilters, setActiveFilters] = useState({
+    year: null as number | null,
+    status: null as string | null,
+    hasRisk: false,
+    minProgress: 0,
+  });
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [perPage] = useState(3);
-
-  // Advanced filter states
-  const [minProgress, setMinProgress] = useState<string>("");
-  const [maxProgress, setMaxProgress] = useState<string>("");
-  const [startDateFrom, setStartDateFrom] = useState<string>("");
-  const [startDateTo, setStartDateTo] = useState<string>("");
-  const [endDateFrom, setEndDateFrom] = useState<string>("");
-  const [endDateTo, setEndDateTo] = useState<string>("");
-  const [hasDelayRisk, setHasDelayRisk] = useState<boolean | null>(null);
-  const [hasCostRisk, setHasCostRisk] = useState<boolean | null>(null);
-  const [hasOverdueTasks, setHasOverdueTasks] = useState<boolean | null>(null);
+  // Animation
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadProjects();
   }, []);
 
-  // Reload data when screen comes into focus
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       loadProjects();
     }, [])
   );
 
   const loadProjects = async () => {
     try {
-      setLoading(true);
+      if (!refreshing) setLoading(true);
       const response = await projectApi.getProjects();
       if (response.success) {
-        const projectsList = response.data?.data || response.data || [];
-        setProjects(projectsList);
-        applyFilters(
-          projectsList,
-          selectedYear,
-          selectedStatus,
-          searchText,
-          {
-            minProgress,
-            maxProgress,
-            startDateFrom,
-            startDateTo,
-            endDateFrom,
-            endDateTo,
-            hasDelayRisk,
-            hasCostRisk,
-            hasOverdueTasks,
-          }
-        );
-
-        // Monitoring data và comments sẽ được load trong useEffect khi paginatedProjects thay đổi
+        const list = response.data?.data || response.data || [];
+        setProjects(list);
       }
-    } catch (error: any) {
-      console.error("Error loading projects:", error);
-      if (error.response?.status === 401) {
-        // Token expired - interceptor will redirect
-      }
+    } catch (error) {
+      console.error("[ProjectsList] Error:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // Cache để tránh gọi lại quá thường xuyên (5 phút)
-  const monitoringCache = useRef<{
-    data: Record<number, ProjectMonitoringData>;
-    predictions: Record<number, any>;
-    timestamp: number;
-  }>({
-    data: {},
-    predictions: {},
-    timestamp: 0,
-  });
+  // ─────────────────────────────────────────────────
+  // Advanced filtering logic (memoized)
+  // ─────────────────────────────────────────────────
+  useEffect(() => {
+    let list = [...projects];
 
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 phút
-
-  const loadMonitoringData = async (projectsList: Project[]) => {
-    const now = Date.now();
-
-    // Chỉ load lại nếu cache đã hết hạn
-    if (now - monitoringCache.current.timestamp < CACHE_DURATION &&
-      Object.keys(monitoringCache.current.data).length > 0) {
-      setMonitoringData(monitoringCache.current.data);
-      setPredictions(monitoringCache.current.predictions);
-      return;
+    if (searchText.trim()) {
+      const q = searchText.toLowerCase();
+      list = list.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.code.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q)
+      );
     }
 
-    // Chỉ load cho 10 projects đầu tiên để tránh quá tải
-    const projectsToLoad = projectsList.slice(0, 10);
-
-    // Batch requests: chỉ gọi 3 requests cùng lúc
-    const BATCH_SIZE = 3;
-    const monitoringMap: Record<number, ProjectMonitoringData> = {};
-    const predictionsMap: Record<number, any> = {};
-
-    for (let i = 0; i < projectsToLoad.length; i += BATCH_SIZE) {
-      const batch = projectsToLoad.slice(i, i + BATCH_SIZE);
-
-      const batchPromises = batch.map(async (project) => {
-        try {
-          const [monitoringResponse, predictionResponse] = await Promise.all([
-            monitoringApi.getProjectMonitoring(project.id).catch(() => null),
-            predictiveAnalyticsApi.getFullAnalysis(project.id).catch(() => null),
-          ]);
-
-          return {
-            projectId: project.id,
-            monitoring: monitoringResponse?.success ? monitoringResponse.data : null,
-            prediction: predictionResponse?.success ? predictionResponse.data : null,
-          };
-        } catch (error: any) {
-          // Bỏ qua lỗi 429 và các lỗi khác
-          if (error.response?.status === 429) {
-            console.warn(`Rate limit hit for project ${project.id}, skipping...`);
-          }
-          return {
-            projectId: project.id,
-            monitoring: null,
-            prediction: null,
-          };
-        }
-      });
-
-      const batchResults = await Promise.all(batchPromises);
-
-      batchResults.forEach((result) => {
-        if (result.monitoring) {
-          monitoringMap[result.projectId] = result.monitoring;
-        }
-        if (result.prediction) {
-          predictionsMap[result.projectId] = result.prediction;
-        }
-      });
-
-      // Thêm delay nhỏ giữa các batch để tránh rate limit
-      if (i + BATCH_SIZE < projectsToLoad.length) {
-        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay
-      }
+    if (activeFilters.status) {
+      list = list.filter(p => p.status === activeFilters.status);
     }
 
-    // Update cache
-    monitoringCache.current = {
-      data: monitoringMap,
-      predictions: predictionsMap,
-      timestamp: now,
-    };
+    if (activeFilters.year) {
+      list = list.filter(p => {
+        if (!p.start_date) return false;
+        return new Date(p.start_date).getFullYear() === activeFilters.year;
+      });
+    }
 
-    setMonitoringData(monitoringMap);
-    setPredictions(predictionsMap);
-  };
+    if (activeFilters.minProgress > 0) {
+      list = list.filter(p => (p.progress?.overall_percentage || 0) >= activeFilters.minProgress);
+    }
 
-  const loadLatestComments = async (projectsList: Project[]) => {
-    const commentPromises = projectsList.map(async (project) => {
+    setFilteredProjects(list);
+  }, [projects, searchText, activeFilters]);
+
+  // ─────────────────────────────────────────────────
+  // Lazy data loading for visible items
+  // ─────────────────────────────────────────────────
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    const visibleIds = viewableItems.map((item: any) => item.item.id);
+    loadExtraDataForIds(visibleIds);
+  }).current;
+
+  const loadExtraDataForIds = async (ids: number[]) => {
+    // Only load what's missing
+    const idsToLoad = ids.filter(id => !monitoringData[id]);
+    if (idsToLoad.length === 0) return;
+
+    idsToLoad.forEach(async (id) => {
       try {
-        const response = await projectCommentApi.getLatestComment(project.id);
-        return {
-          projectId: project.id,
-          comment: response?.success ? response.data : null,
-        };
-      } catch (error) {
-        return {
-          projectId: project.id,
-          comment: null,
-        };
+        const [monitoring, pred, comment] = await Promise.all([
+          monitoringApi.getProjectMonitoring(id).catch(() => null),
+          predictiveAnalyticsApi.getFullAnalysis(id).catch(() => null),
+          projectCommentApi.getLatestComment(id).catch(() => null),
+        ]);
+
+        if (monitoring?.success) setMonitoringData(prev => ({ ...prev, [id]: monitoring.data }));
+        if (pred?.success) setPredictions(prev => ({ ...prev, [id]: pred.data }));
+        if (comment?.success) setLatestComments(prev => ({ ...prev, [id]: comment.data }));
+      } catch (err) {
+        // Silent fail for extra data
       }
     });
-
-    const results = await Promise.all(commentPromises);
-    const commentsMap: Record<number, any> = {};
-
-    results.forEach((result) => {
-      if (result.comment) {
-        commentsMap[result.projectId] = result.comment;
-      }
-    });
-
-    setLatestComments(commentsMap);
   };
 
-  const applyFilters = (
-    projectsList: Project[],
-    year: number | null,
-    status: string | null,
-    search: string = "",
-    filters: {
-      minProgress?: string;
-      maxProgress?: string;
-      startDateFrom?: string;
-      startDateTo?: string;
-      endDateFrom?: string;
-      endDateTo?: string;
-      hasDelayRisk?: boolean | null;
-      hasCostRisk?: boolean | null;
-      hasOverdueTasks?: boolean | null;
-    } = {}
-  ) => {
-    let filtered = [...projectsList];
-
-    // Search filter - tìm theo tên, mã, mô tả
-    if (search.trim()) {
-      const searchLower = search.toLowerCase().trim();
-      filtered = filtered.filter((project) => {
-        const nameMatch = project.name?.toLowerCase().includes(searchLower);
-        const codeMatch = project.code?.toLowerCase().includes(searchLower);
-        const descMatch = project.description?.toLowerCase().includes(searchLower);
-        return nameMatch || codeMatch || descMatch;
-      });
-    }
-
-    // Filter theo năm
-    if (year) {
-      filtered = filtered.filter((project) => {
-        if (project.start_date) {
-          const projectYear = new Date(project.start_date).getFullYear();
-          return projectYear === year;
-        }
-        return false;
-      });
-    }
-
-    // Filter theo trạng thái
-    if (status) {
-      if (status === "in_progress") {
-        filtered = filtered.filter((p) => p.status === "in_progress");
-      } else if (status === "completed") {
-        filtered = filtered.filter((p) => p.status === "completed");
-      } else if (status === "planning") {
-        filtered = filtered.filter((p) => p.status === "planning");
-      } else if (status === "cancelled") {
-        filtered = filtered.filter((p) => p.status === "cancelled");
-      }
-    }
-
-    // Filter theo tiến độ
-    if (filters.minProgress) {
-      const min = parseFloat(filters.minProgress);
-      if (!isNaN(min)) {
-        filtered = filtered.filter((p) => {
-          const progress = p.progress?.overall_percentage || 0;
-          return progress >= min;
-        });
-      }
-    }
-    if (filters.maxProgress) {
-      const max = parseFloat(filters.maxProgress);
-      if (!isNaN(max)) {
-        filtered = filtered.filter((p) => {
-          const progress = p.progress?.overall_percentage || 0;
-          return progress <= max;
-        });
-      }
-    }
-
-    // Filter theo ngày bắt đầu
-    if (filters.startDateFrom) {
-      const fromDate = new Date(filters.startDateFrom);
-      filtered = filtered.filter((p) => {
-        if (!p.start_date) return false;
-        return new Date(p.start_date) >= fromDate;
-      });
-    }
-    if (filters.startDateTo) {
-      const toDate = new Date(filters.startDateTo);
-      toDate.setHours(23, 59, 59, 999);
-      filtered = filtered.filter((p) => {
-        if (!p.start_date) return false;
-        return new Date(p.start_date) <= toDate;
-      });
-    }
-
-    // Filter theo ngày kết thúc
-    if (filters.endDateFrom) {
-      const fromDate = new Date(filters.endDateFrom);
-      filtered = filtered.filter((p) => {
-        if (!p.end_date) return false;
-        return new Date(p.end_date) >= fromDate;
-      });
-    }
-    if (filters.endDateTo) {
-      const toDate = new Date(filters.endDateTo);
-      toDate.setHours(23, 59, 59, 999);
-      filtered = filtered.filter((p) => {
-        if (!p.end_date) return false;
-        return new Date(p.end_date) <= toDate;
-      });
-    }
-
-    // Filter theo cảnh báo delay risk
-    if (filters.hasDelayRisk !== null) {
-      filtered = filtered.filter((p) => {
-        const prediction = predictions[p.id];
-        const hasDelay = prediction?.delay_risk?.risk_level === 'high' ||
-          prediction?.delay_risk?.risk_level === 'critical' ||
-          (prediction?.delay_risk?.delay_days && prediction.delay_risk.delay_days > 0);
-        return filters.hasDelayRisk ? hasDelay : !hasDelay;
-      });
-    }
-
-    // Filter theo cảnh báo cost risk
-    if (filters.hasCostRisk !== null) {
-      filtered = filtered.filter((p) => {
-        const prediction = predictions[p.id];
-        const hasCost = prediction?.cost_risk?.risk_level === 'high' ||
-          prediction?.cost_risk?.risk_level === 'critical' ||
-          (prediction?.cost_risk?.overrun_percentage && prediction.cost_risk.overrun_percentage > 0);
-        return filters.hasCostRisk ? hasCost : !hasCost;
-      });
-    }
-
-    // Filter theo overdue tasks
-    if (filters.hasOverdueTasks !== null) {
-      filtered = filtered.filter((p) => {
-        const monitoring = monitoringData[p.id];
-        const hasOverdue = (monitoring?.metrics?.overdue_tasks || 0) > 0;
-        return filters.hasOverdueTasks ? hasOverdue : !hasOverdue;
-      });
-    }
-
-    setFilteredProjects(filtered);
-    // Reset về trang 1 khi filter thay đổi
-    setCurrentPage(1);
-  };
-
-  useEffect(() => {
-    applyFilters(
-      projects,
-      selectedYear,
-      selectedStatus,
-      searchText,
-      {
-        minProgress,
-        maxProgress,
-        startDateFrom,
-        startDateTo,
-        endDateFrom,
-        endDateTo,
-        hasDelayRisk,
-        hasCostRisk,
-        hasOverdueTasks,
-      }
-    );
-  }, [
-    selectedYear,
-    selectedStatus,
-    projects,
-    searchText,
-    minProgress,
-    maxProgress,
-    startDateFrom,
-    startDateTo,
-    endDateFrom,
-    endDateTo,
-    hasDelayRisk,
-    hasCostRisk,
-    hasOverdueTasks,
-    predictions,
-    monitoringData,
-  ]);
-
-  // Tính toán phân trang
-  const totalPages = Math.ceil(filteredProjects.length / perPage);
-  const startIndex = (currentPage - 1) * perPage;
-  const endIndex = startIndex + perPage;
-  const paginatedProjects = filteredProjects.slice(startIndex, endIndex);
-  const [pageLoading, setPageLoading] = useState(false);
-
-  // Load monitoring data chỉ cho projects đang hiển thị
-  useEffect(() => {
-    if (paginatedProjects.length > 0) {
-      loadMonitoringData(paginatedProjects);
-      loadLatestComments(paginatedProjects);
-    }
-  }, [currentPage, paginatedProjects.length]);
-
-  const handlePageChange = (page: number) => {
-    if (page >= 1 && page <= totalPages && page !== currentPage) {
-      setPageLoading(true);
-      setCurrentPage(page);
-      // Scroll to top khi chuyển trang
-      setTimeout(() => {
-        setPageLoading(false);
-      }, 300);
-    }
-  };
-
+  // ─────────────────────────────────────────────────
+  // Interaction Handlers
+  // ─────────────────────────────────────────────────
   const onRefresh = () => {
     setRefreshing(true);
     loadProjects();
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "in_progress":
-        return "#10B981";
-      case "completed":
-        return "#3B82F6";
-      case "cancelled":
-        return "#EF4444";
-      default:
-        return "#6B7280";
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "planning":
-        return "Lập kế hoạch";
-      case "in_progress":
-        return "Đang thi công";
-      case "completed":
-        return "Hoàn thành";
-      case "cancelled":
-        return "Đã hủy";
-      default:
-        return status;
-    }
+  const handleDelete = (project: Project, e: any) => {
+    e?.stopPropagation();
+    Alert.alert("Xác nhận", `Xóa dự án ${project.code}?`, [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Xóa",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await projectApi.deleteProject(project.id);
+            loadProjects();
+          } catch (error) {
+            Alert.alert("Lỗi", "Không thể xóa dự án");
+          }
+        }
+      }
+    ]);
   };
 
   const handleEdit = (project: Project, e: any) => {
-    e?.stopPropagation?.();
-    router.push(`/projects/${project.id}/edit`);
+    e?.stopPropagation();
+    router.push(`/projects/${project.id}/edit` as any);
   };
 
-  const handleDelete = async (project: Project, e: any) => {
-    e?.stopPropagation?.();
-    Alert.alert(
-      "Xác nhận xóa",
-      `Bạn có chắc chắn muốn xóa dự án "${project.name}"? Hành động này không thể hoàn tác.`,
-      [
-        {
-          text: "Hủy",
-          style: "cancel",
-        },
-        {
-          text: "Xóa",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await projectApi.deleteProject(project.id);
-              Alert.alert("Thành công", "Dự án đã được xóa.");
-              loadProjects();
-            } catch (error: any) {
-              Alert.alert(
-                "Lỗi",
-                error.response?.data?.message || "Không thể xóa dự án."
-              );
-            }
-          },
-        },
-      ]
-    );
-  };
+  // ─────────────────────────────────────────────────
+  // Render Components
+  // ─────────────────────────────────────────────────
 
-  const renderProjectItem = ({ item }: { item: Project }) => {
-    const monitoring = monitoringData[item.id];
-    const prediction = predictions[item.id];
-    const latestComment = latestComments[item.id];
+  const renderFilterStrip = () => (
+    <View style={styles.filterStrip}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+        <TouchableOpacity
+          style={[styles.filterPill, activeFilters.status === null && styles.filterPillActive]}
+          onPress={() => setActiveFilters(prev => ({ ...prev, status: null }))}
+        >
+          <Text style={[styles.filterPillText, activeFilters.status === null && styles.filterPillTextActive]}>Tất cả</Text>
+        </TouchableOpacity>
 
-    // Tính toán các indicators
-    const hasDelayRisk = prediction?.delay_risk?.risk_level === 'high' || prediction?.delay_risk?.risk_level === 'critical';
-    const hasCostRisk = prediction?.cost_risk?.risk_level === 'high' || prediction?.cost_risk?.risk_level === 'critical';
-    const highRisksCount = monitoring?.metrics?.high_risks || 0;
-    const alertsCount = monitoring?.alerts?.length || 0;
-    const overdueTasks = monitoring?.metrics?.overdue_tasks || 0;
-
-    // Tính toán giá trị hiển thị
-    const delayDays = prediction?.delay_risk?.delay_days || 0;
-    const delayDaysText = typeof delayDays === 'number' ? delayDays.toFixed(2) : delayDays;
-    const overrunPercentage = prediction?.cost_risk?.overrun_percentage;
-    const overrunPercentageText = overrunPercentage != null && typeof overrunPercentage === 'number' && overrunPercentage > 0
-      ? overrunPercentage.toFixed(1)
-      : null;
-
-    // Tính overall risk
-    const overallRisk = prediction?.overall_risk_level || 'low';
-    const showWarning = hasDelayRisk || hasCostRisk || highRisksCount > 0 || alertsCount > 0 || overdueTasks > 0;
-
-    return (
-      <TouchableOpacity
-        style={styles.projectCard}
-        onPress={() => router.push(`/projects/${item.id}`)}
-      >
-
-
-        <View style={styles.projectHeader}>
-          <View style={styles.projectInfo}>
-            <Text style={styles.projectName}>{item.name}</Text>
-            <Text style={styles.projectCode}>{item.code}</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <View
-              style={[
-                styles.statusBadge,
-                { backgroundColor: getStatusColor(item.status) + "20" },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  { color: getStatusColor(item.status) },
-                ]}
-              >
-                {getStatusText(item.status)}
-              </Text>
-            </View>
-            <View style={styles.actionButtons}>
-              <PermissionGuard permission={Permissions.PROJECT_UPDATE}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={(e) => handleEdit(item, e)}
-                >
-                  <Ionicons name="create-outline" size={18} color="#3B82F6" />
-                </TouchableOpacity>
-              </PermissionGuard>
-              <PermissionGuard permission={Permissions.PROJECT_DELETE}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={(e) => handleDelete(item, e)}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                </TouchableOpacity>
-              </PermissionGuard>
-            </View>
-          </View>
-        </View>
-        {item.description && (
-          <Text style={styles.description} numberOfLines={2}>
-            {item.description}
-          </Text>
-        )}
-        <View style={styles.projectFooter}>
-          <View style={styles.footerItem}>
-            <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-            <Text style={styles.footerText}>
-              {item.start_date
-                ? new Date(item.start_date).toLocaleDateString("vi-VN")
-                : "Chưa có"}
-            </Text>
-          </View>
-          {item.progress && (
-            <View style={[styles.footerItem, styles.progressItem]}>
-              <Ionicons name="trending-up-outline" size={18} color="#3B82F6" />
-              <Text style={styles.progressText}>
-                {item.progress.overall_percentage}%
-              </Text>
-            </View>
-          )}
-
-          {/* Tổng thời gian thi công */}
-          {item.start_date && item.end_date && (
-            <View style={styles.footerItem}>
-              <Ionicons name="time-outline" size={16} color="#6B7280" />
-              <Text style={styles.footerText}>
-                {Math.ceil((new Date(item.end_date).getTime() - new Date(item.start_date).getTime()) / (1000 * 60 * 60 * 24))} ngày
-              </Text>
-            </View>
-          )}
-        </View>
-
-
-        {/* Cảnh báo - Tối ưu hiển thị */}
-        {(delayDays > 0 || overrunPercentageText || (monitoring?.metrics?.overdue_tasks > 0)) && (
-          <View style={styles.warningsSection}>
-            <View style={styles.warningsHeader}>
-              <Ionicons name="warning" size={16} color="#DC2626" />
-              <Text style={styles.warningsHeaderText}>
-                Cảnh báo ({[delayDays > 0, overrunPercentageText, monitoring?.metrics?.overdue_tasks > 0].filter(Boolean).length})
-              </Text>
-            </View>
-            <View style={styles.warningsContainer}>
-              {delayDays > 0 && (
-                <View style={[styles.warningItem, styles.warningItemDelay]}>
-                  <View style={[styles.warningIconContainer, { backgroundColor: "#FEE2E2" }]}>
-                    <Ionicons name="time-outline" size={18} color="#DC2626" />
-                  </View>
-                  <View style={styles.warningContent}>
-                    <Text style={[styles.warningLabel, { color: "#991B1B" }]}>Tiến độ chậm</Text>
-                    <Text style={[styles.warningValue, { color: "#7F1D1D" }]}>
-                      {delayDaysText} ngày so với kế hoạch
-                    </Text>
-                  </View>
-                </View>
-              )}
-              {overrunPercentageText && (
-                <View style={[styles.warningItem, styles.warningItemCost]}>
-                  <View style={[styles.warningIconContainer, { backgroundColor: "#FEF3C7" }]}>
-                    <Ionicons name="cash-outline" size={18} color="#D97706" />
-                  </View>
-                  <View style={styles.warningContent}>
-                    <Text style={[styles.warningLabel, { color: "#92400E" }]}>Vượt ngân sách</Text>
-                    <Text style={[styles.warningValue, { color: "#78350F" }]}>
-                      {overrunPercentageText}% so với kế hoạch
-                    </Text>
-                  </View>
-                </View>
-              )}
-              {monitoring && monitoring.metrics && monitoring.metrics.overdue_tasks > 0 && (
-                <View style={[styles.warningItem, styles.warningItemOverdue]}>
-                  <View style={[styles.warningIconContainer, { backgroundColor: "#FFEDD5" }]}>
-                    <Ionicons name="alert-circle-outline" size={18} color="#EA580C" />
-                  </View>
-                  <View style={styles.warningContent}>
-                    <Text style={[styles.warningLabel, { color: "#9A3412" }]}>Công việc quá hạn</Text>
-                    <Text style={[styles.warningValue, { color: "#7C2D12" }]}>
-                      {monitoring.metrics.overdue_tasks} việc cần xử lý
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* Comment mới nhất */}
-        {latestComment && (
+        {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
           <TouchableOpacity
-            style={styles.commentSection}
-            onPress={() => router.push(`/projects/${item.id}`)}
+            key={key}
+            style={[styles.filterPill, activeFilters.status === key && { backgroundColor: cfg.color }]}
+            onPress={() => setActiveFilters(prev => ({ ...prev, status: key }))}
           >
-            <View style={styles.commentHeader}>
-              <Ionicons name="chatbubble-outline" size={16} color="#6B7280" />
-              <Text style={styles.commentLabel}>Bình luận mới nhất:</Text>
-            </View>
-            <View style={styles.commentContent}>
-              <Text style={styles.commentAuthor}>
-                {latestComment.user?.name || "Người dùng"}
-              </Text>
-              <Text style={styles.commentText} numberOfLines={2}>
-                {latestComment.content}
-              </Text>
-              <Text style={styles.commentTime}>
-                {new Date(latestComment.created_at).toLocaleDateString("vi-VN", {
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </Text>
-            </View>
+            <Text style={[styles.filterPillText, activeFilters.status === key && styles.filterPillTextActive]}>{cfg.label}</Text>
           </TouchableOpacity>
-        )}
+        ))}
+      </ScrollView>
+
+      <TouchableOpacity style={styles.advancedFilterBtn} onPress={() => setShowFilters(true)}>
+        <Ionicons name="options-outline" size={20} color="#3B82F6" />
+        {Object.values(activeFilters).some(v => v !== null && v !== 0 && v !== false) && <View style={styles.filterDot} />}
       </TouchableOpacity>
-    );
-  };
-
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.container}>
-        <ScreenHeader title="Danh Sách Dự Án" />
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
-        </View>
-      </View>
-    );
-  }
-
-  const clearAllFilters = () => {
-    setSearchText("");
-    setSelectedYear(null);
-    setSelectedStatus(null);
-    setMinProgress("");
-    setMaxProgress("");
-    setStartDateFrom("");
-    setStartDateTo("");
-    setEndDateFrom("");
-    setEndDateTo("");
-    setHasDelayRisk(null);
-    setHasCostRisk(null);
-    setHasOverdueTasks(null);
-  };
-
-  const hasActiveFilters = () => {
-    return !!(
-      searchText ||
-      selectedYear ||
-      selectedStatus ||
-      minProgress ||
-      maxProgress ||
-      startDateFrom ||
-      startDateTo ||
-      endDateFrom ||
-      endDateTo ||
-      hasDelayRisk !== null ||
-      hasCostRisk !== null ||
-      hasOverdueTasks !== null
-    );
-  };
+    </View>
+  );
 
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Danh Sách Dự Án"
+        title="Dự Án"
         rightComponent={
-          <View style={styles.headerActions}>
-            {/* Notification Button */}
-            <TouchableOpacity
-              style={styles.notificationButton}
-              onPress={() => router.push("/notifications")}
-            >
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={() => router.push("/notifications")}>
               <Ionicons name="notifications-outline" size={24} color="#3B82F6" />
-              {unreadCount > 0 && (
-                <NotificationBadge count={unreadCount} size="small" style={styles.headerNotificationBadge} />
-              )}
-            </TouchableOpacity>
-            {/* Filter Buttons */}
-            <TouchableOpacity
-              style={[styles.filterButton, selectedYear && styles.filterButtonActive]}
-              onPress={() => setShowYearFilter(true)}
-            >
-              <Ionicons name="calendar-outline" size={20} color={selectedYear ? "#FFFFFF" : "#3B82F6"} />
-              {selectedYear && <Text style={styles.filterButtonText}>{selectedYear}</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, selectedStatus && styles.filterButtonActive]}
-              onPress={() => setShowStatusFilter(true)}
-            >
-              <Ionicons name="filter-outline" size={20} color={selectedStatus ? "#FFFFFF" : "#3B82F6"} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, hasActiveFilters() && styles.filterButtonActive]}
-              onPress={() => setShowAdvancedFilter(true)}
-            >
-              <Ionicons name="options-outline" size={20} color={hasActiveFilters() ? "#FFFFFF" : "#3B82F6"} />
+              {unreadCount > 0 && <NotificationBadge count={unreadCount} size="small" style={styles.notificationBadge} />}
             </TouchableOpacity>
             <PermissionGuard permission={Permissions.PROJECT_CREATE}>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => router.push("/projects/create")}
-              >
-                <Ionicons name="add" size={24} color="#FFFFFF" />
+              <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/projects/create")}>
+                <Ionicons name="add" size={24} color="#FFF" />
               </TouchableOpacity>
             </PermissionGuard>
           </View>
         }
       />
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={20} color="#6B7280" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm kiếm theo tên, mã, mô tả..."
-          placeholderTextColor="#9CA3AF"
-          value={searchText}
-          onChangeText={setSearchText}
-        />
-        {searchText.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearSearchButton}>
-            <Ionicons name="close-circle" size={20} color="#6B7280" />
-          </TouchableOpacity>
-        )}
+      {/* Modern Search & Filter */}
+      <View style={styles.topActions}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color="#9CA3AF" />
+          <TextInput
+            placeholder="Tìm theo tên, mã dự án..."
+            style={styles.searchInput}
+            value={searchText}
+            onChangeText={setSearchText}
+          />
+          {searchText ? (
+            <TouchableOpacity onPress={() => setSearchText("")}>
+              <Ionicons name="close-circle" size={18} color="#D1D5DB" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {renderFilterStrip()}
       </View>
 
-      {/* Year Filter Modal */}
-      {showYearFilter && (
-        <View style={styles.filterModalOverlay}>
-          <View style={styles.filterModal}>
-            <View style={styles.filterModalHeader}>
-              <Text style={styles.filterModalTitle}>Chọn Năm</Text>
-              <TouchableOpacity onPress={() => setShowYearFilter(false)}>
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => {
-                setSelectedYear(null);
-                setShowYearFilter(false);
-              }}
-            >
-              <Text style={!selectedYear ? styles.filterOptionActive : styles.filterOptionText}>
-                Tất cả
-              </Text>
-            </TouchableOpacity>
-            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((year) => (
-              <TouchableOpacity
-                key={year}
-                style={styles.filterOption}
-                onPress={() => {
-                  setSelectedYear(year);
-                  setShowYearFilter(false);
-                }}
-              >
-                <Text style={selectedYear === year ? styles.filterOptionActive : styles.filterOptionText}>
-                  {year}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+      {loading && !refreshing ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#3B82F6" />
         </View>
+      ) : (
+        <FlatList
+          data={filteredProjects}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <ProjectCard
+              item={item}
+              monitoring={monitoringData[item.id]}
+              prediction={predictions[item.id]}
+              latestComment={latestComments[item.id]}
+              onPress={() => router.push(`/projects/${item.id}` as any)}
+              onEdit={(e) => handleEdit(item, e)}
+              onDelete={(e) => handleDelete(item, e)}
+            />
+          )}
+          contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + 20 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Ionicons name="folder-open-outline" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyText}>Không tìm thấy dự án nào</Text>
+            </View>
+          }
+        />
       )}
 
-      {/* Status Filter Modal */}
-      {showStatusFilter && (
-        <View style={styles.filterModalOverlay}>
-          <View style={styles.filterModal}>
-            <View style={styles.filterModalHeader}>
-              <Text style={styles.filterModalTitle}>Lọc Theo Trạng Thái</Text>
-              <TouchableOpacity onPress={() => setShowStatusFilter(false)}>
+      {/* Advanced Filter Modal (Simplified for now) */}
+      {showFilters && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Bộ lọc nâng cao</Text>
+              <TouchableOpacity onPress={() => setShowFilters(false)}>
                 <Ionicons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => {
-                setSelectedStatus(null);
-                setShowStatusFilter(false);
-              }}
-            >
-              <Text style={!selectedStatus ? styles.filterOptionActive : styles.filterOptionText}>
-                Tất cả
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => {
-                setSelectedStatus("planning");
-                setShowStatusFilter(false);
-              }}
-            >
-              <Text style={selectedStatus === "planning" ? styles.filterOptionActive : styles.filterOptionText}>
-                Lập kế hoạch
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => {
-                setSelectedStatus("in_progress");
-                setShowStatusFilter(false);
-              }}
-            >
-              <Text style={selectedStatus === "in_progress" ? styles.filterOptionActive : styles.filterOptionText}>
-                Đang thi công
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => {
-                setSelectedStatus("completed");
-                setShowStatusFilter(false);
-              }}
-            >
-              <Text style={selectedStatus === "completed" ? styles.filterOptionActive : styles.filterOptionText}>
-                Đã hoàn thành
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => {
-                setSelectedStatus("cancelled");
-                setShowStatusFilter(false);
-              }}
-            >
-              <Text style={selectedStatus === "cancelled" ? styles.filterOptionActive : styles.filterOptionText}>
-                Đã hủy
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
 
-      {/* Advanced Filter Modal */}
-      {showAdvancedFilter && (
-        <View style={styles.filterModalOverlay}>
-          <View style={[styles.filterModal, styles.advancedFilterModal]}>
-            <View style={styles.filterModalHeader}>
-              <Text style={styles.filterModalTitle}>Bộ Lọc Nâng Cao</Text>
-              <TouchableOpacity onPress={() => setShowAdvancedFilter(false)}>
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.advancedFilterContent} showsVerticalScrollIndicator={false}>
-              {/* Tiến độ */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Tiến độ (%)</Text>
-                <View style={styles.rangeInputContainer}>
-                  <View style={styles.rangeInput}>
-                    <Text style={styles.rangeLabel}>Từ:</Text>
-                    <TextInput
-                      style={styles.rangeInputField}
-                      placeholder="0"
-                      keyboardType="numeric"
-                      value={minProgress}
-                      onChangeText={setMinProgress}
-                    />
-                  </View>
-                  <View style={styles.rangeInput}>
-                    <Text style={styles.rangeLabel}>Đến:</Text>
-                    <TextInput
-                      style={styles.rangeInputField}
-                      placeholder="100"
-                      keyboardType="numeric"
-                      value={maxProgress}
-                      onChangeText={setMaxProgress}
-                    />
-                  </View>
-                </View>
+            <ScrollView>
+              <Text style={styles.filterGroupTitle}>Theo năm bắt đầu</Text>
+              <View style={styles.filterOptionsGrid}>
+                {[2024, 2025, 2026].map(year => (
+                  <TouchableOpacity
+                    key={year}
+                    style={[styles.optionBtn, activeFilters.year === year && styles.optionBtnActive]}
+                    onPress={() => setActiveFilters(p => ({ ...p, year: p.year === year ? null : year }))}
+                  >
+                    <Text style={[styles.optionBtnText, activeFilters.year === year && styles.optionBtnTextActive]}>{year}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
-              {/* Ngày bắt đầu */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Ngày bắt đầu</Text>
-                <View style={styles.dateInputContainer}>
-                  <DatePickerInput
-                    label="Từ:"
-                    value={startDateFrom ? new Date(startDateFrom) : undefined}
-                    onChange={(date) => {
-                      if (date) {
-                        setStartDateFrom(date.toISOString().split('T')[0]);
-                      } else {
-                        setStartDateFrom("");
-                      }
-                    }}
-                    placeholder="Chọn ngày"
-                    containerStyle={{ marginBottom: 12 }}
-                  />
-                  <DatePickerInput
-                    label="Đến:"
-                    value={startDateTo ? new Date(startDateTo) : undefined}
-                    onChange={(date) => {
-                      if (date) {
-                        setStartDateTo(date.toISOString().split('T')[0]);
-                      } else {
-                        setStartDateTo("");
-                      }
-                    }}
-                    placeholder="Chọn ngày"
-                  />
-                </View>
-              </View>
-
-              {/* Ngày kết thúc */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Ngày kết thúc</Text>
-                <View style={styles.dateInputContainer}>
-                  <DatePickerInput
-                    label="Từ:"
-                    value={endDateFrom ? new Date(endDateFrom) : undefined}
-                    onChange={(date) => {
-                      if (date) {
-                        setEndDateFrom(date.toISOString().split('T')[0]);
-                      } else {
-                        setEndDateFrom("");
-                      }
-                    }}
-                    placeholder="Chọn ngày"
-                    containerStyle={{ marginBottom: 12 }}
-                  />
-                  <DatePickerInput
-                    label="Đến:"
-                    value={endDateTo ? new Date(endDateTo) : undefined}
-                    onChange={(date) => {
-                      if (date) {
-                        setEndDateTo(date.toISOString().split('T')[0]);
-                      } else {
-                        setEndDateTo("");
-                      }
-                    }}
-                    placeholder="Chọn ngày"
-                  />
-                </View>
-              </View>
-
-              {/* Cảnh báo */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Cảnh báo</Text>
-                <TouchableOpacity
-                  style={[styles.toggleOption, hasDelayRisk === true && styles.toggleOptionActive]}
-                  onPress={() => setHasDelayRisk(hasDelayRisk === true ? null : true)}
-                >
-                  <Text style={[styles.toggleOptionText, hasDelayRisk === true && styles.toggleOptionTextActive]}>
-                    Có cảnh báo chậm tiến độ
-                  </Text>
-                  {hasDelayRisk === true && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.toggleOption, hasCostRisk === true && styles.toggleOptionActive]}
-                  onPress={() => setHasCostRisk(hasCostRisk === true ? null : true)}
-                >
-                  <Text style={[styles.toggleOptionText, hasCostRisk === true && styles.toggleOptionTextActive]}>
-                    Có cảnh báo vượt ngân sách
-                  </Text>
-                  {hasCostRisk === true && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.toggleOption, hasOverdueTasks === true && styles.toggleOptionActive]}
-                  onPress={() => setHasOverdueTasks(hasOverdueTasks === true ? null : true)}
-                >
-                  <Text style={[styles.toggleOptionText, hasOverdueTasks === true && styles.toggleOptionTextActive]}>
-                    Có công việc quá hạn
-                  </Text>
-                  {hasOverdueTasks === true && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
-                </TouchableOpacity>
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.filterActions}>
-                <TouchableOpacity
-                  style={[styles.filterActionButton, styles.clearButton]}
-                  onPress={() => {
-                    clearAllFilters();
-                    setShowAdvancedFilter(false);
-                  }}
-                >
-                  <Text style={styles.clearButtonText}>Xóa tất cả</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.filterActionButton, styles.applyButton]}
-                  onPress={() => setShowAdvancedFilter(false)}
-                >
-                  <Text style={styles.applyButtonText}>Áp dụng</Text>
-                </TouchableOpacity>
+              <Text style={styles.filterGroupTitle}>Tiến độ tối thiểu (%)</Text>
+              <View style={styles.filterOptionsGrid}>
+                {[0, 25, 50, 75].map(v => (
+                  <TouchableOpacity
+                    key={v}
+                    style={[styles.optionBtn, activeFilters.minProgress === v && styles.optionBtnActive]}
+                    onPress={() => setActiveFilters(p => ({ ...p, minProgress: v }))}
+                  >
+                    <Text style={[styles.optionBtnText, activeFilters.minProgress === v && styles.optionBtnTextActive]}>{v}%+</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </ScrollView>
-          </View>
-        </View>
-      )}
 
-      {pageLoading && (
-        <View style={styles.pageLoadingOverlay}>
-          <ActivityIndicator size="small" color="#3B82F6" />
-        </View>
-      )}
-      <FlatList
-        data={paginatedProjects}
-        renderItem={renderProjectItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: tabBarHeight + 80 },
-          pageLoading && styles.listContentLoading,
-        ]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="folder-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>
-              {hasActiveFilters() ? "Không tìm thấy dự án phù hợp" : "Chưa có dự án nào"}
-            </Text>
-            {hasActiveFilters() && (
+            <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={styles.clearFiltersButton}
-                onPress={clearAllFilters}
+                style={styles.resetBtn}
+                onPress={() => {
+                  setActiveFilters({ year: null, status: null, hasRisk: false, minProgress: 0 });
+                  setShowFilters(false);
+                }}
               >
-                <Text style={styles.clearFiltersButtonText}>Xóa bộ lọc</Text>
+                <Text style={styles.resetBtnText}>Xóa tất cả</Text>
               </TouchableOpacity>
-            )}
-            {!hasActiveFilters() && (
-              <PermissionGuard permission={Permissions.PROJECT_CREATE}>
-                <TouchableOpacity
-                  style={styles.emptyButton}
-                  onPress={() => router.push("/projects/create")}
-                >
-                  <Text style={styles.emptyButtonText}>Tạo dự án mới</Text>
-                </TouchableOpacity>
-              </PermissionGuard>
-            )}
-          </View>
-        }
-        ListFooterComponent={
-          filteredProjects.length > 0 && totalPages > 1 ? (
-            <View style={styles.paginationContainer}>
-              <View style={styles.paginationInfo}>
-                <Text style={styles.paginationText}>
-                  Trang {currentPage} / {totalPages}
-                </Text>
-                <Text style={styles.paginationSubtext}>
-                  {filteredProjects.length} dự án • {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} hiển thị
-                </Text>
-              </View>
-              <View style={styles.paginationControls}>
-                <TouchableOpacity
-                  style={[
-                    styles.paginationButton,
-                    currentPage === 1 && styles.paginationButtonDisabled,
-                  ]}
-                  onPress={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1 || pageLoading}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="chevron-back"
-                    size={18}
-                    color={currentPage === 1 ? "#9CA3AF" : "#3B82F6"}
-                  />
-                  <Text
-                    style={[
-                      styles.paginationButtonText,
-                      currentPage === 1 && styles.paginationButtonTextDisabled,
-                    ]}
-                  >
-                    Trước
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Page numbers */}
-                <View style={styles.pageNumbers}>
-                  {totalPages <= 7 ? (
-                    // Hiển thị tất cả số trang nếu <= 7
-                    Array.from({ length: totalPages }, (_, i) => {
-                      const pageNum = i + 1;
-                      return (
-                        <TouchableOpacity
-                          key={pageNum}
-                          style={[
-                            styles.pageNumberButton,
-                            currentPage === pageNum && styles.pageNumberButtonActive,
-                          ]}
-                          onPress={() => handlePageChange(pageNum)}
-                          disabled={pageLoading}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.pageNumberText,
-                              currentPage === pageNum && styles.pageNumberTextActive,
-                            ]}
-                          >
-                            {pageNum}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })
-                  ) : (
-                    // Hiển thị với ellipsis nếu > 7
-                    <>
-                      {currentPage > 3 && (
-                        <>
-                          <TouchableOpacity
-                            style={styles.pageNumberButton}
-                            onPress={() => handlePageChange(1)}
-                            disabled={pageLoading}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.pageNumberText}>1</Text>
-                          </TouchableOpacity>
-                          {currentPage > 4 && (
-                            <Text style={styles.pageEllipsis}>...</Text>
-                          )}
-                        </>
-                      )}
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum: number;
-                        if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
-                        if (pageNum < 1 || pageNum > totalPages) return null;
-                        return (
-                          <TouchableOpacity
-                            key={pageNum}
-                            style={[
-                              styles.pageNumberButton,
-                              currentPage === pageNum && styles.pageNumberButtonActive,
-                            ]}
-                            onPress={() => handlePageChange(pageNum)}
-                            disabled={pageLoading}
-                            activeOpacity={0.7}
-                          >
-                            <Text
-                              style={[
-                                styles.pageNumberText,
-                                currentPage === pageNum && styles.pageNumberTextActive,
-                              ]}
-                            >
-                              {pageNum}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                      {currentPage < totalPages - 2 && (
-                        <>
-                          {currentPage < totalPages - 3 && (
-                            <Text style={styles.pageEllipsis}>...</Text>
-                          )}
-                          <TouchableOpacity
-                            style={styles.pageNumberButton}
-                            onPress={() => handlePageChange(totalPages)}
-                            disabled={pageLoading}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.pageNumberText}>{totalPages}</Text>
-                          </TouchableOpacity>
-                        </>
-                      )}
-                    </>
-                  )}
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    styles.paginationButton,
-                    currentPage === totalPages && styles.paginationButtonDisabled,
-                  ]}
-                  onPress={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages || pageLoading}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.paginationButtonText,
-                      currentPage === totalPages && styles.paginationButtonTextDisabled,
-                    ]}
-                  >
-                    Sau
-                  </Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={currentPage === totalPages ? "#9CA3AF" : "#3B82F6"}
-                  />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity style={styles.applyBtn} onPress={() => setShowFilters(false)}>
+                <Text style={styles.applyBtnText}>Áp dụng</Text>
+              </TouchableOpacity>
             </View>
-          ) : null
-        }
-      />
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
+// ─────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F3F4F6",
   },
-  centerContainer: {
+  center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  notificationButton: {
-    position: "relative",
-    padding: 8,
-  },
-  headerNotificationBadge: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#3B82F6",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  listContent: {
-    padding: 16,
-  },
-  projectCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    position: "relative",
-    overflow: "visible",
-  },
-  monitoringIndicators: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    zIndex: 10,
-  },
-  indicatorBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
-  },
-  indicatorBadgeCritical: {
-    backgroundColor: "#DC2626",
-  },
-  indicatorBadgeHigh: {
-    backgroundColor: "#EF4444",
-  },
-  indicatorBadgeAlert: {
-    backgroundColor: "#F59E0B",
-  },
-  indicatorBadgeOverdue: {
-    backgroundColor: "#F97316",
-  },
-  indicatorText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  quickMonitoring: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-  },
-  quickInfoItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: "#FEF2F2",
-    borderRadius: 8,
-  },
-  quickInfoText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#DC2626",
-  },
-  projectHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  projectInfo: {
-    flex: 1,
-    marginRight: 12,
   },
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 16,
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+  },
+  addBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#3B82F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Top Actions
+  topActions: {
+    backgroundColor: "#FFF",
+    paddingTop: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    marginHorizontal: 16,
+    paddingHorizontal: 12,
+    height: 44,
+    borderRadius: 12,
     gap: 8,
   },
-  actionButtons: {
-    flexDirection: "row",
-    gap: 4,
-  },
-  actionButton: {
-    padding: 6,
-  },
-  projectName: {
-    fontSize: 18,
-    fontWeight: "600",
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
     color: "#1F2937",
-    marginBottom: 4,
+  },
+  filterStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingLeft: 16,
+  },
+  filterScroll: {
+    gap: 8,
+    paddingRight: 60,
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  filterPillActive: {
+    backgroundColor: "#1F2937",
+  },
+  filterPillText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
+  filterPillTextActive: {
+    color: "#FFF",
+  },
+  advancedFilterBtn: {
+    position: "absolute",
+    right: 0,
+    top: 12,
+    bottom: 12,
+    width: 50,
+    backgroundColor: "#FFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderLeftWidth: 1,
+    borderLeftColor: "#F3F4F6",
+  },
+  filterDot: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
+    borderWidth: 1.5,
+    borderColor: "#FFF",
+  },
+
+  // List & Cards
+  list: {
+    padding: 16,
+  },
+  card: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  cardBadges: {
+    position: "absolute",
+    top: -8,
+    right: 16,
+    flexDirection: "row",
+    gap: 6,
+  },
+  badgePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#FFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  cardStatusContainer: {
+    flexDirection: "row",
+    gap: 12,
+    flex: 1,
+  },
+  statusIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
   projectCode: {
-    fontSize: 14,
-    color: "#6B7280",
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  statusText: {
     fontSize: 12,
+    color: "#9CA3AF",
     fontWeight: "600",
+    textTransform: "uppercase",
+  },
+  projectName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  cardActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  cardActionBtn: {
+    padding: 4,
   },
   description: {
     fontSize: 14,
     color: "#6B7280",
-    marginBottom: 12,
     lineHeight: 20,
+    marginBottom: 16,
   },
-  projectFooter: {
+  progressContainer: {
+    marginBottom: 16,
+  },
+  progressHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    marginBottom: 8,
   },
-  footerItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  footerText: {
-    fontSize: 14,
-    color: "#6B7280",
-  },
-  progressItem: {
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 64,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#6B7280",
-    marginTop: 16,
-    marginBottom: 24,
-  },
-  emptyButton: {
-    backgroundColor: "#3B82F6",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  emptyButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
+  progressLabel: {
+    fontSize: 12,
+    color: "#9CA3AF",
     fontWeight: "600",
   },
-  filterButton: {
+  progressValue: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  cardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  footerInfo: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#3B82F6",
-    backgroundColor: "#FFFFFF",
   },
-  filterButtonActive: {
-    backgroundColor: "#3B82F6",
+  footerInfoText: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontWeight: "500",
   },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#FFFFFF",
+  statusTag: {
+    marginLeft: "auto",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  filterModalOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
+  statusTagText: {
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  commentLine: {
+    flexDirection: "row",
     alignItems: "center",
-    zIndex: 1000,
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    opacity: 0.8,
   },
-  filterModal: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    width: "80%",
-    maxHeight: "60%",
-    padding: 20,
+  commentText: {
+    fontSize: 12,
+    color: "#6B7280",
+    flex: 1,
   },
-  filterModalHeader: {
+
+  // Modal
+  modalOverlay: {
+    position: "absolute",
+    inset: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+    zIndex: 2000,
+  },
+  modalContent: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: "80%",
+  },
+  modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
   },
-  filterModalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
     color: "#1F2937",
   },
-  filterOption: {
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: "#F9FAFB",
-  },
-  filterOptionText: {
-    fontSize: 16,
-    color: "#1F2937",
-  },
-  filterOptionActive: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#3B82F6",
-  },
-  progressText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#3B82F6",
-  },
-
-  // Warning Section Styles
-  warningsSection: {
-    marginTop: 14,
-    padding: 14,
-    backgroundColor: "#FEF2F2",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FEE2E2",
-  },
-  warningsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 12,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#FEE2E2",
-  },
-  warningsHeaderText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#991B1B",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  warningsContainer: {
-    gap: 10,
-  },
-  warningItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  warningIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  warningContent: {
-    flex: 1,
-  },
-  warningLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    marginBottom: 4,
-    letterSpacing: 0.3,
-  },
-  warningValue: {
+  filterGroupTitle: {
     fontSize: 14,
-    lineHeight: 20,
-  },
-  warningItemDelay: {
-    borderColor: "#FCA5A5",
-  },
-  warningItemCost: {
-    borderColor: "#FCD34D",
-  },
-  warningItemOverdue: {
-    borderColor: "#FDBA74",
-  },
-  commentSection: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  commentHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
-  },
-  commentLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6B7280",
-    textTransform: "uppercase",
-  },
-  commentContent: {
-    marginLeft: 22,
-  },
-  commentAuthor: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#1F2937",
-    marginBottom: 4,
-  },
-  commentText: {
-    fontSize: 14,
-    color: "#374151",
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  commentTime: {
-    fontSize: 12,
-    color: "#9CA3AF",
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#1F2937",
-    padding: 0,
-  },
-  clearSearchButton: {
-    marginLeft: 8,
-  },
-  advancedFilterModal: {
-    maxHeight: "80%",
-    width: "90%",
-  },
-  advancedFilterContent: {
-    maxHeight: 500,
-  },
-  filterSection: {
-    marginBottom: 24,
-  },
-  filterSectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1F2937",
+    marginTop: 16,
     marginBottom: 12,
   },
-  rangeInputContainer: {
+  filterOptionsGrid: {
     flexDirection: "row",
-    gap: 12,
-  },
-  rangeInput: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
     gap: 8,
   },
-  rangeLabel: {
-    fontSize: 14,
-    color: "#6B7280",
-    minWidth: 40,
-  },
-  rangeInputField: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 8,
-    paddingHorizontal: 12,
+  optionBtn: {
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    fontSize: 14,
-    color: "#1F2937",
-    backgroundColor: "#FFFFFF",
-  },
-  dateInputContainer: {
-    gap: 12,
-  },
-  dateInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  dateLabel: {
-    fontSize: 14,
-    color: "#6B7280",
-    minWidth: 50,
-  },
-  dateInputField: {
-    flex: 1,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: "#1F2937",
-    backgroundColor: "#FFFFFF",
+    borderColor: "transparent",
   },
-  toggleOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    marginBottom: 8,
-  },
-  toggleOptionActive: {
+  optionBtnActive: {
     backgroundColor: "#EFF6FF",
     borderColor: "#3B82F6",
   },
-  toggleOptionText: {
+  optionBtnText: {
     fontSize: 14,
-    color: "#1F2937",
-  },
-  toggleOptionTextActive: {
-    color: "#3B82F6",
     fontWeight: "600",
+    color: "#4B5563",
   },
-  filterActions: {
+  optionBtnTextActive: {
+    color: "#3B82F6",
+  },
+  modalFooter: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 32,
+    paddingBottom: 20,
   },
-  filterActionButton: {
+  resetBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  clearButton: {
-    backgroundColor: "#F3F4F6",
-  },
-  clearButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#6B7280",
-  },
-  applyButton: {
-    backgroundColor: "#3B82F6",
-  },
-  applyButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  clearFiltersButton: {
-    backgroundColor: "#F3F4F6",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  clearFiltersButtonText: {
-    color: "#6B7280",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  pageLoadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    height: 50,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 1000,
+    backgroundColor: "#F3F4F6",
   },
-  listContentLoading: {
-    opacity: 0.5,
-  },
-  paginationContainer: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    marginTop: 12,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  paginationInfo: {
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  paginationText: {
+  resetBtnText: {
     fontSize: 15,
-    color: "#1F2937",
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  paginationSubtext: {
-    fontSize: 12,
+    fontWeight: "700",
     color: "#6B7280",
   },
-  paginationControls: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-  },
-  paginationButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: "#F3F4F6",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  paginationButtonDisabled: {
-    opacity: 0.5,
-  },
-  paginationButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#3B82F6",
-  },
-  paginationButtonTextDisabled: {
-    color: "#9CA3AF",
-  },
-  pageNumbers: {
-    flexDirection: "row",
-    gap: 8,
-    flex: 1,
-    justifyContent: "center",
-  },
-  pageNumberButton: {
-    minWidth: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+  applyBtn: {
+    flex: 2,
+    height: 50,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-  },
-  pageNumberButtonActive: {
     backgroundColor: "#3B82F6",
-    borderColor: "#3B82F6",
   },
-  pageNumberText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6B7280",
+  applyBtnText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFF",
   },
-  pageNumberTextActive: {
-    color: "#FFFFFF",
+
+  empty: {
+    alignItems: "center",
+    paddingVertical: 100,
   },
-  pageEllipsis: {
-    fontSize: 14,
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
     color: "#9CA3AF",
-    paddingHorizontal: 4,
   },
 });

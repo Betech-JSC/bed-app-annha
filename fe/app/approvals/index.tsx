@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
-    FlatList,
+    SectionList,
     StyleSheet,
     TouchableOpacity,
     ActivityIndicator,
@@ -14,189 +14,162 @@ import {
     Platform,
     TouchableWithoutFeedback,
     Keyboard,
-    Animated,
+    ScrollView,
     Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { approvalCenterApi, ApprovalItem, ApprovalSummary, ApprovalCenterData } from '@/api/approvalCenterApi';
-import { ScreenHeader, PermissionGuard } from '@/components';
-import { Permissions } from '@/constants/Permissions';
+import { approvalCenterApi, ApprovalItem, ApprovalCenterData } from '@/api/approvalCenterApi';
+import { ScreenHeader } from '@/components';
 import { useTabBarHeight } from '@/hooks/useTabBarHeight';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─────────────────────────────────────────────────
-// Type Config Map
+// Simplified Group Config (role-based like CRM)
 // ─────────────────────────────────────────────────
-const TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; bgColor: string }> = {
-    company_cost: {
-        label: 'Chi phí công ty',
-        icon: 'wallet-outline',
-        color: '#F59E0B',
-        bgColor: '#FEF3C7',
+const GROUP_CONFIG: Record<string, {
+    label: string;
+    shortLabel: string;
+    icon: string;
+    color: string;
+    bgColor: string;
+    order: number;
+}> = {
+    management: {
+        label: 'Ban Điều Hành duyệt',
+        shortLabel: 'BĐH',
+        icon: 'ribbon-outline',
+        color: '#F97316',
+        bgColor: '#FFF7ED',
+        order: 1,
     },
-    project_cost: {
-        label: 'Chi phí dự án',
-        icon: 'construct-outline',
+    accountant: {
+        label: 'Kế Toán xác nhận',
+        shortLabel: 'KT',
+        icon: 'calculator-outline',
+        color: '#06B6D4',
+        bgColor: '#ECFEFF',
+        order: 2,
+    },
+    supervisor: {
+        label: 'Giám sát duyệt',
+        shortLabel: 'GS',
+        icon: 'eye-outline',
+        color: '#0D9488',
+        bgColor: '#CCFBF1',
+        order: 3,
+    },
+    project_manager: {
+        label: 'QLDA duyệt',
+        shortLabel: 'QLDA',
+        icon: 'person-outline',
         color: '#3B82F6',
         bgColor: '#DBEAFE',
+        order: 4,
     },
-    material_bill: {
-        label: 'Phiếu xuất vật tư',
-        icon: 'cube-outline',
-        color: '#8B5CF6',
-        bgColor: '#EDE9FE',
-    },
-    acceptance: {
-        label: 'Nghiệm thu KH',
-        icon: 'checkmark-done-outline',
+    customer: {
+        label: 'Khách hàng duyệt',
+        shortLabel: 'KH',
+        icon: 'people-outline',
         color: '#10B981',
         bgColor: '#D1FAE5',
+        order: 5,
     },
     change_request: {
         label: 'Yêu cầu thay đổi',
+        shortLabel: 'CR',
         icon: 'git-compare-outline',
         color: '#EC4899',
         bgColor: '#FCE7F3',
+        order: 6,
     },
     additional_cost: {
-        label: 'CP Phát sinh',
+        label: 'Chi phí phát sinh',
+        shortLabel: 'CPPS',
         icon: 'trending-up-outline',
         color: '#F97316',
         bgColor: '#FFF7ED',
-    },
-    sub_payment: {
-        label: 'Thanh toán NTP',
-        icon: 'card-outline',
-        color: '#0EA5E9',
-        bgColor: '#E0F2FE',
-    },
-    contract: {
-        label: 'HĐ chờ KH',
-        icon: 'document-text-outline',
-        color: '#6366F1',
-        bgColor: '#E0E7FF',
-    },
-    payment: {
-        label: 'TT chờ KH',
-        icon: 'cash-outline',
-        color: '#D946EF',
-        bgColor: '#FAE8FF',
+        order: 7,
     },
     sub_acceptance: {
-        label: 'NT NTP',
+        label: 'Nghiệm thu NTP',
+        shortLabel: 'NT NTP',
         icon: 'checkbox-outline',
         color: '#0D9488',
         bgColor: '#CCFBF1',
+        order: 8,
     },
     supplier_acceptance: {
-        label: 'NT NCC',
+        label: 'Nghiệm thu NCC',
+        shortLabel: 'NT NCC',
         icon: 'storefront-outline',
         color: '#84CC16',
         bgColor: '#ECFCCB',
-    },
-    acceptance_item: {
-        label: 'NT Hạng mục',
-        icon: 'list-outline',
-        color: '#14B8A6',
-        bgColor: '#CCFBF1',
+        order: 9,
     },
     construction_log: {
-        label: 'Nhật ký CT',
+        label: 'Nhật ký công trường',
+        shortLabel: 'NK',
         icon: 'newspaper-outline',
         color: '#A855F7',
         bgColor: '#F3E8FF',
+        order: 10,
     },
     schedule_adjustment: {
-        label: 'Điều chỉnh TĐ',
+        label: 'Điều chỉnh tiến độ',
+        shortLabel: 'TĐ',
         icon: 'calendar-outline',
         color: '#E11D48',
         bgColor: '#FFE4E6',
+        order: 11,
+    },
+    contract: {
+        label: 'Hợp đồng',
+        shortLabel: 'HĐ',
+        icon: 'document-text-outline',
+        color: '#6366F1',
+        bgColor: '#E0E7FF',
+        order: 12,
+    },
+    project_payment: {
+        label: 'Thanh toán dự án',
+        shortLabel: 'TT',
+        icon: 'cash-outline',
+        color: '#D946EF',
+        bgColor: '#FAE8FF',
+        order: 13,
     },
 };
 
-const APPROVAL_LEVEL_CONFIG: Record<string, { label: string; shortLabel: string; color: string; bgColor: string }> = {
-    management: {
-        label: 'Ban Điều Hành',
-        shortLabel: 'BĐH',
-        color: '#F97316',
-        bgColor: '#FFF7ED',
-    },
-    accountant: {
-        label: 'Kế Toán',
-        shortLabel: 'KT',
-        color: '#06B6D4',
-        bgColor: '#ECFEFF',
-    },
-    customer: {
-        label: 'Khách Hàng',
-        shortLabel: 'KH',
-        color: '#10B981',
-        bgColor: '#D1FAE5',
-    },
-    change_request: {
-        label: 'Yêu Cầu Thay Đổi',
-        shortLabel: 'CR',
-        color: '#EC4899',
-        bgColor: '#FCE7F3',
-    },
-    additional_cost: {
-        label: 'CP Phát Sinh',
-        shortLabel: 'CPPS',
-        color: '#F97316',
-        bgColor: '#FFF7ED',
-    },
-    sub_acceptance: {
-        label: 'Nghiệm Thu NTP',
-        shortLabel: 'NT',
-        color: '#0D9488',
-        bgColor: '#CCFBF1',
-    },
-    supplier_acceptance: {
-        label: 'Nghiệm Thu NCC',
-        shortLabel: 'NCC',
-        color: '#84CC16',
-        bgColor: '#ECFCCB',
-    },
-    acceptance_item: {
-        label: 'NT Hạng Mục',
-        shortLabel: 'HM',
-        color: '#14B8A6',
-        bgColor: '#CCFBF1',
-    },
-    construction_log: {
-        label: 'Nhật Ký CT',
-        shortLabel: 'NK',
-        color: '#A855F7',
-        bgColor: '#F3E8FF',
-    },
-    schedule_adjustment: {
-        label: 'Điều Chỉnh TĐ',
-        shortLabel: 'TĐ',
-        color: '#E11D48',
-        bgColor: '#FFE4E6',
-    },
-};
-
-const DEFAULT_LEVEL_CONFIG = {
-    label: 'Duyệt',
-    shortLabel: 'Duyệt',
+const DEFAULT_GROUP = {
+    label: 'Khác',
+    shortLabel: 'Khác',
+    icon: 'ellipsis-horizontal-outline',
     color: '#6B7280',
     bgColor: '#F3F4F6',
+    order: 99,
 };
 
-// ─────────────────────────────────────────────────
-// Role Filter Config
-// ─────────────────────────────────────────────────
-const ROLE_FILTERS: { key: string; label: string; icon: string; color: string }[] = [
-    { key: 'all', label: 'Tất cả', icon: 'grid-outline', color: '#6B7280' },
-    { key: 'project_owner', label: 'Giám đốc', icon: 'ribbon-outline', color: '#F97316' },
-    { key: 'accountant', label: 'Kế toán', icon: 'calculator-outline', color: '#06B6D4' },
-    { key: 'client', label: 'Khách hàng', icon: 'people-outline', color: '#10B981' },
-    { key: 'project_manager', label: 'QLDA', icon: 'person-outline', color: '#3B82F6' },
-    { key: 'site_supervisor', label: 'Giám sát', icon: 'eye-outline', color: '#0D9488' },
-];
+// Type icon mapping for cards
+const TYPE_ICON: Record<string, { icon: string; color: string }> = {
+    company_cost: { icon: 'wallet-outline', color: '#F59E0B' },
+    project_cost: { icon: 'construct-outline', color: '#3B82F6' },
+    material_bill: { icon: 'cube-outline', color: '#8B5CF6' },
+    acceptance: { icon: 'checkmark-done-outline', color: '#10B981' },
+    acceptance_supervisor: { icon: 'eye-outline', color: '#0D9488' },
+    acceptance_pm: { icon: 'person-outline', color: '#3B82F6' },
+    acceptance_customer: { icon: 'people-outline', color: '#10B981' },
+    change_request: { icon: 'git-compare-outline', color: '#EC4899' },
+    additional_cost: { icon: 'trending-up-outline', color: '#F97316' },
+    sub_payment: { icon: 'card-outline', color: '#0EA5E9' },
+    contract: { icon: 'document-text-outline', color: '#6366F1' },
+    payment: { icon: 'cash-outline', color: '#D946EF' },
+    sub_acceptance: { icon: 'checkbox-outline', color: '#0D9488' },
+    supplier_acceptance: { icon: 'storefront-outline', color: '#84CC16' },
+    construction_log: { icon: 'newspaper-outline', color: '#A855F7' },
+    schedule_adjustment: { icon: 'calendar-outline', color: '#E11D48' },
+};
 
 export default function ApprovalCenterScreen() {
     const router = useRouter();
@@ -205,35 +178,22 @@ export default function ApprovalCenterScreen() {
     const [data, setData] = useState<ApprovalCenterData | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [selectedType, setSelectedType] = useState<string>('all');
-    const [selectedRole, setSelectedRole] = useState<string>('all');
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectTarget, setRejectTarget] = useState<ApprovalItem | null>(null);
     const [rejectReason, setRejectReason] = useState('');
     const [actionLoading, setActionLoading] = useState<number | null>(null);
-
-    // Animated values for card entry
-    const fadeAnim = useState(new Animated.Value(0))[0];
+    const [selectedGroup, setSelectedGroup] = useState<string>('all');
 
     useEffect(() => {
         loadApprovals();
-    }, [selectedType]);
+    }, []);
 
     const loadApprovals = async () => {
         try {
             setLoading(true);
-            const params = selectedType !== 'all' ? { type: selectedType } : {};
-            const response = await approvalCenterApi.getApprovals(params);
-
+            const response = await approvalCenterApi.getApprovals();
             if (response.success) {
                 setData(response.data);
-                // Animate in
-                fadeAnim.setValue(0);
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 400,
-                    useNativeDriver: true,
-                }).start();
             }
         } catch (error: any) {
             console.error('[ApprovalCenter] Error:', error);
@@ -249,12 +209,70 @@ export default function ApprovalCenterScreen() {
         loadApprovals();
     };
 
-    const handleQuickApprove = async (item: ApprovalItem) => {
-        const levelLabel = (APPROVAL_LEVEL_CONFIG[item.approval_level] || DEFAULT_LEVEL_CONFIG).label;
+    // ─────────────────────────────────────────────────
+    // Group items by approval_level into sections
+    // ─────────────────────────────────────────────────
+    const sections = useMemo(() => {
+        if (!data?.items) return [];
 
+        const grouped: Record<string, ApprovalItem[]> = {};
+        for (const item of data.items) {
+            const groupKey = item.approval_level || 'other';
+            if (!grouped[groupKey]) grouped[groupKey] = [];
+            grouped[groupKey].push(item);
+        }
+
+        const result = Object.entries(grouped)
+            .map(([key, items]) => {
+                const config = GROUP_CONFIG[key] || DEFAULT_GROUP;
+                return {
+                    key,
+                    title: config.label,
+                    shortLabel: config.shortLabel,
+                    icon: config.icon,
+                    color: config.color,
+                    bgColor: config.bgColor,
+                    order: config.order,
+                    data: items,
+                };
+            })
+            .sort((a, b) => a.order - b.order);
+
+        // If a group filter is active, only show that group
+        if (selectedGroup !== 'all') {
+            return result.filter(s => s.key === selectedGroup);
+        }
+
+        return result;
+    }, [data?.items, selectedGroup]);
+
+    // Group counts for the tab strip
+    const groupCounts = useMemo(() => {
+        if (!data?.items) return {};
+        const counts: Record<string, number> = {};
+        for (const item of data.items) {
+            const key = item.approval_level || 'other';
+            counts[key] = (counts[key] || 0) + 1;
+        }
+        return counts;
+    }, [data?.items]);
+
+    const groupKeys = useMemo(() => {
+        return Object.keys(groupCounts).sort((a, b) => {
+            const orderA = GROUP_CONFIG[a]?.order ?? 99;
+            const orderB = GROUP_CONFIG[b]?.order ?? 99;
+            return orderA - orderB;
+        });
+    }, [groupCounts]);
+
+    // ─────────────────────────────────────────────────
+    // Actions
+    // ─────────────────────────────────────────────────
+    const handleQuickApprove = async (item: ApprovalItem) => {
+        const groupConfig = GROUP_CONFIG[item.approval_level] || DEFAULT_GROUP;
         Alert.alert(
             'Xác nhận duyệt',
-            `Duyệt "${item.title}" (${levelLabel})?\n\nSố tiền: ${formatCurrency(item.amount)}`,
+            `Duyệt "${item.title}"?\n\n${item.amount > 0 ? `Số tiền: ${formatCurrency(item.amount)}` : ''}`,
             [
                 { text: 'Hủy', style: 'cancel' },
                 {
@@ -322,9 +340,11 @@ export default function ApprovalCenterScreen() {
     // Formatters
     // ─────────────────────────────────────────────────
     const formatCurrency = (amount: number) => {
+        if (amount === 0) return '';
         return new Intl.NumberFormat('vi-VN', {
             style: 'currency',
             currency: 'VND',
+            maximumFractionDigits: 0,
         }).format(amount);
     };
 
@@ -336,225 +356,133 @@ export default function ApprovalCenterScreen() {
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
         if (diffHours < 1) return 'Vừa xong';
-        if (diffHours < 24) return `${diffHours} giờ trước`;
-        if (diffDays < 7) return `${diffDays} ngày trước`;
-        return date.toLocaleDateString('vi-VN');
+        if (diffHours < 24) return `${diffHours}h trước`;
+        if (diffDays < 7) return `${diffDays}d trước`;
+        return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
     };
 
     // ─────────────────────────────────────────────────
-    // Summary Cards
+    // Group Filter Strip
     // ─────────────────────────────────────────────────
-    const renderSummarySection = () => {
-        if (!data || data.summary.length === 0) return null;
+    const renderGroupStrip = () => {
+        if (!data || data.grand_total === 0) return null;
 
         return (
-            <View style={styles.summarySection}>
-                {/* Grand Total Banner */}
-                <View style={styles.grandTotalBanner}>
-                    <View style={styles.grandTotalLeft}>
-                        <View style={styles.grandTotalIconContainer}>
-                            <Ionicons name="shield-checkmark" size={28} color="#FFFFFF" />
-                        </View>
-                        <View>
-                            <Text style={styles.grandTotalLabel}>Yêu cầu chờ duyệt</Text>
-                            <Text style={styles.grandTotalValue}>{data.grand_total}</Text>
-                        </View>
+            <View style={styles.stripContainer}>
+                {/* Total Badge */}
+                <TouchableOpacity
+                    style={[
+                        styles.stripItem,
+                        selectedGroup === 'all' && styles.stripItemActive,
+                    ]}
+                    onPress={() => setSelectedGroup('all')}
+                    activeOpacity={0.7}
+                >
+                    <View style={[styles.stripBadge, selectedGroup === 'all' && { backgroundColor: '#1B4F72' }]}>
+                        <Text style={[styles.stripBadgeText, selectedGroup === 'all' && { color: '#FFF' }]}>
+                            {data.grand_total}
+                        </Text>
                     </View>
-                    <View style={styles.grandTotalBadge}>
-                        <Ionicons name="notifications" size={16} color="#F59E0B" />
-                    </View>
-                </View>
+                    <Text style={[styles.stripLabel, selectedGroup === 'all' && styles.stripLabelActive]}>
+                        Tất cả
+                    </Text>
+                </TouchableOpacity>
 
-                {/* Category Cards */}
-                <View style={styles.summaryCardsRow}>
-                    {data.summary.map((s) => {
-                        const config = TYPE_CONFIG[s.type] || TYPE_CONFIG.company_cost;
-                        return (
-                            <TouchableOpacity
-                                key={s.type}
-                                style={[
-                                    styles.summaryCard,
-                                    selectedType === s.type && styles.summaryCardActive,
-                                    { borderColor: config.color + '40' },
-                                ]}
-                                onPress={() => setSelectedType(selectedType === s.type ? 'all' : s.type)}
-                                activeOpacity={0.7}
-                            >
-                                <View style={[styles.summaryCardIcon, { backgroundColor: config.bgColor }]}>
-                                    <Ionicons name={config.icon as any} size={20} color={config.color} />
-                                </View>
-                                <Text style={styles.summaryCardCount}>{s.total}</Text>
-                                <Text style={styles.summaryCardLabel} numberOfLines={1}>{s.label}</Text>
-                                <View style={styles.summaryCardBreakdown}>
-                                    {s.pending_management > 0 && (
-                                        <View style={[styles.miniTag, { backgroundColor: '#FFF7ED' }]}>
-                                            <Text style={[styles.miniTagText, { color: '#F97316' }]}>
-                                                BĐH: {s.pending_management}
-                                            </Text>
-                                        </View>
-                                    )}
-                                    {s.pending_accountant > 0 && (
-                                        <View style={[styles.miniTag, { backgroundColor: '#ECFEFF' }]}>
-                                            <Text style={[styles.miniTagText, { color: '#06B6D4' }]}>
-                                                KT: {s.pending_accountant}
-                                            </Text>
-                                        </View>
-                                    )}
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
+                {groupKeys.map((key) => {
+                    const config = GROUP_CONFIG[key] || DEFAULT_GROUP;
+                    const count = groupCounts[key] || 0;
+                    const isActive = selectedGroup === key;
+
+                    return (
+                        <TouchableOpacity
+                            key={key}
+                            style={[
+                                styles.stripItem,
+                                isActive && { backgroundColor: config.color + '15', borderColor: config.color },
+                            ]}
+                            onPress={() => setSelectedGroup(isActive ? 'all' : key)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[styles.stripBadge, { backgroundColor: isActive ? config.color : config.bgColor }]}>
+                                <Text style={[styles.stripBadgeText, { color: isActive ? '#FFF' : config.color }]}>
+                                    {count}
+                                </Text>
+                            </View>
+                            <Text style={[styles.stripLabel, isActive && { color: config.color, fontWeight: '700' }]}>
+                                {config.shortLabel}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        );
+    };
+
+    // ─────────────────────────────────────────────────
+    // Section Header
+    // ─────────────────────────────────────────────────
+    const renderSectionHeader = ({ section }: { section: any }) => {
+        const config = GROUP_CONFIG[section.key] || DEFAULT_GROUP;
+        return (
+            <View style={[styles.sectionHeader, { borderLeftColor: section.color }]}>
+                <View style={[styles.sectionIcon, { backgroundColor: section.bgColor }]}>
+                    <Ionicons name={section.icon as any} size={18} color={section.color} />
+                </View>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <View style={[styles.sectionCount, { backgroundColor: section.color }]}>
+                    <Text style={styles.sectionCountText}>{section.data.length}</Text>
                 </View>
             </View>
         );
     };
 
     // ─────────────────────────────────────────────────
-    // Approval Item Card
+    // Approval Item Card (simplified)
     // ─────────────────────────────────────────────────
-    // Check if user has the required role
-    const userHasRole = (requiredRole: string): boolean => {
-        if (!data?.user_roles) return true; // fallback: show all
-        if (data.user_roles.includes('super_admin') || data.user_roles.includes('admin')) return true;
-        return data.user_roles.includes(requiredRole);
-    };
-
-    // Filter items by selected role
-    const getFilteredItems = (): ApprovalItem[] => {
-        if (!data?.items) return [];
-        let items = data.items;
-        if (selectedRole !== 'all') {
-            items = items.filter(item => item.required_role === selectedRole);
-        }
-        return items;
-    };
-
-    const renderApprovalItem = ({ item, index }: { item: ApprovalItem; index: number }) => {
-        const typeConfig = TYPE_CONFIG[item.type] || TYPE_CONFIG.company_cost;
-        const levelConfig = APPROVAL_LEVEL_CONFIG[item.approval_level] || DEFAULT_LEVEL_CONFIG;
+    const renderApprovalItem = ({ item }: { item: ApprovalItem }) => {
+        const typeIcon = TYPE_ICON[item.type] || { icon: 'document-outline', color: '#6B7280' };
         const isLoading = actionLoading === item.id;
-        const hasRole = userHasRole(item.required_role);
 
         return (
-            <Animated.View
-                style={[
-                    styles.approvalCard,
-                    !hasRole && styles.approvalCardDimmed,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{
-                            translateY: fadeAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [20, 0],
-                            }),
-                        }],
-                    },
-                ]}
-            >
-                {/* Card Header */}
+            <View style={styles.card}>
+                {/* Card Content */}
                 <TouchableOpacity
-                    style={styles.cardHeader}
+                    style={styles.cardContent}
                     onPress={() => handleNavigateToDetail(item)}
                     activeOpacity={0.7}
                 >
-                    <View style={[styles.typeIcon, { backgroundColor: typeConfig.bgColor }]}>
-                        <Ionicons name={typeConfig.icon as any} size={22} color={typeConfig.color} />
+                    <View style={[styles.cardIcon, { backgroundColor: typeIcon.color + '15' }]}>
+                        <Ionicons name={typeIcon.icon as any} size={20} color={typeIcon.color} />
                     </View>
-                    <View style={styles.cardHeaderContent}>
-                        <Text style={styles.cardTitle} numberOfLines={2}>
-                            {item.title}
-                        </Text>
-                        <Text style={styles.cardSubtitle} numberOfLines={1}>
-                            {item.subtitle}
-                        </Text>
+                    <View style={styles.cardInfo}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+                        <Text style={styles.cardSubtitle} numberOfLines={1}>{item.subtitle}</Text>
+                        <View style={styles.cardMeta}>
+                            {item.amount > 0 && (
+                                <Text style={styles.cardAmount}>{formatCurrency(item.amount)}</Text>
+                            )}
+                            <Text style={styles.cardTime}>
+                                <Ionicons name="time-outline" size={11} color="#9CA3AF" /> {formatDate(item.created_at)}
+                            </Text>
+                        </View>
                     </View>
-                    <View style={[styles.levelBadge, { backgroundColor: levelConfig.bgColor }]}>
-                        <Text style={[styles.levelBadgeText, { color: levelConfig.color }]}>
-                            {levelConfig.shortLabel}
-                        </Text>
-                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
                 </TouchableOpacity>
 
-                {/* Required Role Badge */}
-                <View style={styles.roleBadgeRow}>
-                    <View style={[styles.roleBadge, { backgroundColor: (item.required_role_color || '#6B7280') + '15' }]}>
-                        <Ionicons
-                            name={(item.required_role_icon || 'shield-outline') as any}
-                            size={13}
-                            color={item.required_role_color || '#6B7280'}
-                        />
-                        <Text style={[styles.roleBadgeText, { color: item.required_role_color || '#6B7280' }]}>
-                            Cần: {item.required_role_label || 'N/A'}
-                        </Text>
-                    </View>
-                    {hasRole ? (
-                        <View style={styles.roleMatchBadge}>
-                            <Ionicons name="checkmark-circle" size={13} color="#10B981" />
-                            <Text style={styles.roleMatchText}>Có quyền</Text>
-                        </View>
-                    ) : (
-                        <View style={styles.roleNoMatchBadge}>
-                            <Ionicons name="lock-closed" size={13} color="#EF4444" />
-                            <Text style={styles.roleNoMatchText}>Không có quyền</Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* Card Body */}
-                <View style={styles.cardBody}>
-                    <View style={styles.cardInfoRow}>
-                        <View style={styles.cardInfoItem}>
-                            <Ionicons name="cash-outline" size={14} color="#6B7280" />
-                            <Text style={styles.cardAmount}>{formatCurrency(item.amount)}</Text>
-                        </View>
-                        <View style={styles.cardInfoItem}>
-                            <Ionicons name="time-outline" size={14} color="#6B7280" />
-                            <Text style={styles.cardTime}>{formatDate(item.created_at)}</Text>
-                        </View>
-                    </View>
-                    <View style={styles.cardInfoRow}>
-                        <View style={styles.cardInfoItem}>
-                            <Ionicons name="person-outline" size={14} color="#6B7280" />
-                            <Text style={styles.cardCreator}>{item.created_by}</Text>
-                        </View>
-                        {item.management_approved_by && (
-                            <View style={styles.cardInfoItem}>
-                                <Ionicons name="checkmark-circle-outline" size={14} color="#10B981" />
-                                <Text style={[styles.cardCreator, { color: '#10B981' }]}>
-                                    BĐH: {item.management_approved_by}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                    {item.description && (
-                        <Text style={styles.cardDescription} numberOfLines={2}>
-                            {item.description}
-                        </Text>
-                    )}
-                </View>
-
-                {/* Card Actions */}
-                {item.can_approve && hasRole && (
+                {/* Quick Actions */}
+                {item.can_approve && (
                     <View style={styles.cardActions}>
                         <TouchableOpacity
-                            style={[styles.cardActionBtn, styles.rejectBtn]}
+                            style={styles.rejectBtn}
                             onPress={() => handleOpenReject(item)}
                             disabled={isLoading}
                         >
-                            <Ionicons name="close-circle-outline" size={18} color="#EF4444" />
+                            <Ionicons name="close-circle-outline" size={17} color="#EF4444" />
                             <Text style={styles.rejectBtnText}>Từ chối</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.cardActionBtn, styles.viewBtn]}
-                            onPress={() => handleNavigateToDetail(item)}
-                        >
-                            <Ionicons name="eye-outline" size={18} color="#6B7280" />
-                            <Text style={styles.viewBtnText}>Xem</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.cardActionBtn, styles.approveBtn]}
+                            style={styles.approveBtn}
                             onPress={() => handleQuickApprove(item)}
                             disabled={isLoading}
                         >
@@ -562,27 +490,14 @@ export default function ApprovalCenterScreen() {
                                 <ActivityIndicator size="small" color="#FFFFFF" />
                             ) : (
                                 <>
-                                    <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                                    <Ionicons name="checkmark-circle" size={17} color="#FFFFFF" />
                                     <Text style={styles.approveBtnText}>Duyệt</Text>
                                 </>
                             )}
                         </TouchableOpacity>
                     </View>
                 )}
-
-                {/* View-only for users without role */}
-                {(!hasRole || !item.can_approve) && (
-                    <View style={styles.cardActions}>
-                        <TouchableOpacity
-                            style={[styles.cardActionBtn, { flex: 1 }]}
-                            onPress={() => handleNavigateToDetail(item)}
-                        >
-                            <Ionicons name="eye-outline" size={18} color="#6B7280" />
-                            <Text style={styles.viewBtnText}>Xem chi tiết</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-            </Animated.View>
+            </View>
         );
     };
 
@@ -591,39 +506,13 @@ export default function ApprovalCenterScreen() {
     // ─────────────────────────────────────────────────
     const renderEmpty = () => (
         <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-                <Ionicons name="checkmark-done-circle-outline" size={80} color="#10B981" />
+            <View style={styles.emptyIconBg}>
+                <Ionicons name="checkmark-done-circle-outline" size={64} color="#10B981" />
             </View>
             <Text style={styles.emptyTitle}>Tuyệt vời! 🎉</Text>
-            <Text style={styles.emptyText}>
-                Không có yêu cầu nào đang chờ duyệt
-            </Text>
-            <Text style={styles.emptySubtext}>
-                Bạn đã xử lý tất cả các yêu cầu
-            </Text>
+            <Text style={styles.emptyText}>Không có yêu cầu nào chờ duyệt</Text>
         </View>
     );
-
-    // ─────────────────────────────────────────────────
-    // Type Filters
-    // ─────────────────────────────────────────────────
-    const typeFilters = [
-        { key: 'all', label: 'Tất cả', icon: 'grid-outline' },
-        { key: 'company_cost', label: 'CP Công ty', icon: 'wallet-outline' },
-        { key: 'project_cost', label: 'CP Dự án', icon: 'construct-outline' },
-        { key: 'material_bill', label: 'Vật tư', icon: 'cube-outline' },
-        { key: 'acceptance', label: 'Nghiệm thu', icon: 'checkmark-done-outline' },
-        { key: 'change_request', label: 'Thay đổi', icon: 'git-compare-outline' },
-        { key: 'additional_cost', label: 'Phát sinh', icon: 'trending-up-outline' },
-        { key: 'sub_payment', label: 'TT NTP', icon: 'card-outline' },
-        { key: 'contract', label: 'Hợp đồng', icon: 'document-text-outline' },
-        { key: 'payment', label: 'TT KH', icon: 'cash-outline' },
-        { key: 'sub_acceptance', label: 'NT NTP', icon: 'checkbox-outline' },
-        { key: 'supplier_acceptance', label: 'NT NCC', icon: 'storefront-outline' },
-        { key: 'acceptance_item', label: 'NT HM', icon: 'list-outline' },
-        { key: 'construction_log', label: 'Nhật ký', icon: 'newspaper-outline' },
-        { key: 'schedule_adjustment', label: 'Tiến độ', icon: 'calendar-outline' },
-    ];
 
     return (
         <View style={styles.container}>
@@ -645,104 +534,36 @@ export default function ApprovalCenterScreen() {
                 }
             />
 
-            {/* Type Filter Bar */}
-            <View style={styles.filterBar}>
-                <FlatList
-                    horizontal
-                    data={typeFilters}
-                    keyExtractor={(item) => item.key}
-                    showsHorizontalScrollIndicator={false}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity
-                            style={[
-                                styles.filterChip,
-                                selectedType === item.key && styles.filterChipActive,
-                            ]}
-                            onPress={() => setSelectedType(item.key)}
-                        >
-                            <Ionicons
-                                name={item.icon as any}
-                                size={16}
-                                color={selectedType === item.key ? '#FFFFFF' : '#6B7280'}
-                            />
-                            <Text
-                                style={[
-                                    styles.filterChipText,
-                                    selectedType === item.key && styles.filterChipTextActive,
-                                ]}
-                            >
-                                {item.label}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-                />
-            </View>
-
-            {/* Role Filter Bar */}
-            <View style={styles.roleFilterBar}>
-                <View style={styles.roleFilterHeader}>
-                    <Ionicons name="people-outline" size={14} color="#6B7280" />
-                    <Text style={styles.roleFilterLabel}>Theo vai trò:</Text>
-                </View>
-                <FlatList
-                    horizontal
-                    data={ROLE_FILTERS}
-                    keyExtractor={(item) => item.key}
-                    showsHorizontalScrollIndicator={false}
-                    renderItem={({ item: roleItem }) => {
-                        const isActive = selectedRole === roleItem.key;
-                        const isUserRole = data?.user_roles?.includes(roleItem.key) || (roleItem.key === 'all');
-                        return (
-                            <TouchableOpacity
-                                style={[
-                                    styles.roleChip,
-                                    isActive && { backgroundColor: roleItem.color, borderColor: roleItem.color },
-                                    isUserRole && !isActive && styles.roleChipHighlight,
-                                ]}
-                                onPress={() => setSelectedRole(roleItem.key)}
-                            >
-                                <Ionicons
-                                    name={roleItem.icon as any}
-                                    size={14}
-                                    color={isActive ? '#FFFFFF' : roleItem.color}
-                                />
-                                <Text
-                                    style={[
-                                        styles.roleChipText,
-                                        isActive && { color: '#FFFFFF' },
-                                        !isActive && { color: roleItem.color },
-                                    ]}
-                                >
-                                    {roleItem.label}
-                                </Text>
-                                {isUserRole && !isActive && roleItem.key !== 'all' && (
-                                    <View style={styles.roleChipDot} />
-                                )}
-                            </TouchableOpacity>
-                        );
-                    }}
-                />
-            </View>
+            {/* Group Filter Strip */}
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.stripScroll}
+                contentContainerStyle={styles.stripScrollContent}
+            >
+                {renderGroupStrip()}
+            </ScrollView>
 
             {loading && !refreshing ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#3B82F6" />
-                    <Text style={styles.loadingText}>Đang tải yêu cầu...</Text>
+                    <Text style={styles.loadingText}>Đang tải...</Text>
                 </View>
             ) : (
-                <FlatList
-                    data={getFilteredItems()}
-                    renderItem={renderApprovalItem}
+                <SectionList
+                    sections={sections}
                     keyExtractor={(item) => `${item.type}-${item.id}`}
-                    ListHeaderComponent={renderSummarySection}
+                    renderItem={renderApprovalItem}
+                    renderSectionHeader={renderSectionHeader}
                     ListEmptyComponent={renderEmpty}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                     }
                     contentContainerStyle={{
                         paddingBottom: tabBarHeight + 24,
-                        flexGrow: 1,
+                        flexGrow: sections.length === 0 ? 1 : undefined,
                     }}
+                    stickySectionHeadersEnabled={false}
                     showsVerticalScrollIndicator={false}
                 />
             )}
@@ -761,7 +582,6 @@ export default function ApprovalCenterScreen() {
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                         <View style={styles.modalOverlayInner}>
                             <View style={styles.modalContent}>
-                                {/* Modal Header */}
                                 <View style={styles.modalHeader}>
                                     <View style={styles.modalIconBg}>
                                         <Ionicons name="alert-circle" size={32} color="#EF4444" />
@@ -772,15 +592,11 @@ export default function ApprovalCenterScreen() {
                                             "{rejectTarget.title}"
                                         </Text>
                                     )}
-                                    <Text style={styles.modalSubtitle}>
-                                        Nhập lý do từ chối để người tạo chỉnh sửa lại
-                                    </Text>
                                 </View>
 
-                                {/* Reason Input */}
                                 <TextInput
                                     style={styles.modalInput}
-                                    placeholder="Nhập lý do từ chối (bắt buộc)..."
+                                    placeholder="Nhập lý do từ chối..."
                                     placeholderTextColor="#9CA3AF"
                                     value={rejectReason}
                                     onChangeText={setRejectReason}
@@ -790,7 +606,6 @@ export default function ApprovalCenterScreen() {
                                     autoFocus
                                 />
 
-                                {/* Modal Actions */}
                                 <View style={styles.modalActions}>
                                     <TouchableOpacity
                                         style={[styles.modalBtn, styles.modalCancelBtn]}
@@ -835,43 +650,68 @@ export default function ApprovalCenterScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F0F2F5',
+        backgroundColor: '#F3F4F6',
     },
     refreshBtn: {
         padding: 4,
     },
 
-    // Filter Bar
-    filterBar: {
+    // ─── Strip Filter ───
+    stripScroll: {
         backgroundColor: '#FFFFFF',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#E5E7EB',
+        maxHeight: 60,
     },
-    filterChip: {
+    stripScrollContent: {
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    stripContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
+    },
+    stripItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
         borderRadius: 20,
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1.5,
+        borderColor: '#E5E7EB',
+    },
+    stripItemActive: {
+        backgroundColor: '#EFF6FF',
+        borderColor: '#1B4F72',
+    },
+    stripBadge: {
+        minWidth: 22,
+        height: 22,
+        borderRadius: 11,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 5,
         backgroundColor: '#F3F4F6',
-        marginRight: 8,
     },
-    filterChipActive: {
-        backgroundColor: '#1B4F72',
+    stripBadgeText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#374151',
     },
-    filterChipText: {
-        fontSize: 13,
+    stripLabel: {
+        fontSize: 12,
         fontWeight: '600',
         color: '#6B7280',
     },
-    filterChipTextActive: {
-        color: '#FFFFFF',
+    stripLabelActive: {
+        color: '#1B4F72',
+        fontWeight: '700',
     },
 
-    // Loading
+    // ─── Loading ───
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -883,343 +723,139 @@ const styles = StyleSheet.create({
         color: '#9CA3AF',
     },
 
-    // Summary Section
-    summarySection: {
-        padding: 16,
-        paddingBottom: 8,
-    },
-    grandTotalBanner: {
+    // ─── Section Header ───
+    sectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#1B4F72',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 16,
-        shadowColor: '#1B4F72',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
-    },
-    grandTotalLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-    },
-    grandTotalIconContainer: {
-        width: 52,
-        height: 52,
-        borderRadius: 14,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    grandTotalLabel: {
-        fontSize: 13,
-        color: 'rgba(255,255,255,0.7)',
-        marginBottom: 2,
-    },
-    grandTotalValue: {
-        fontSize: 32,
-        fontWeight: '800',
-        color: '#FFFFFF',
-    },
-    grandTotalBadge: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-
-    // Summary Cards
-    summaryCardsRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        paddingTop: 20,
         gap: 10,
-    },
-    summaryCard: {
-        width: (SCREEN_WIDTH - 32 - 20) / 3,
+        borderLeftWidth: 3,
+        borderLeftColor: '#3B82F6',
+        marginLeft: 16,
+        marginRight: 16,
+        marginTop: 8,
         backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        padding: 14,
-        alignItems: 'center',
-        borderWidth: 1.5,
-        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        borderTopLeftRadius: 0,
+        borderBottomLeftRadius: 0,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.04,
         shadowRadius: 3,
         elevation: 1,
     },
-    summaryCardActive: {
-        borderColor: '#1B4F72',
-        shadowColor: '#1B4F72',
-        shadowOpacity: 0.15,
-        elevation: 3,
-    },
-    summaryCardIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    summaryCardCount: {
-        fontSize: 24,
-        fontWeight: '800',
-        color: '#1F2937',
-        marginBottom: 2,
-    },
-    summaryCardLabel: {
-        fontSize: 11,
-        color: '#6B7280',
-        fontWeight: '500',
-        textAlign: 'center',
-        marginBottom: 6,
-    },
-    summaryCardBreakdown: {
-        flexDirection: 'row',
-        gap: 4,
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-    },
-    miniTag: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6,
-    },
-    miniTagText: {
-        fontSize: 9,
-        fontWeight: '700',
-    },
-
-    // Approval Card
-    approvalCard: {
-        backgroundColor: '#FFFFFF',
-        marginHorizontal: 16,
-        marginTop: 12,
-        borderRadius: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 6,
-        elevation: 2,
-        overflow: 'hidden',
-    },
-    approvalCardDimmed: {
-        opacity: 0.65,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-    },
-
-    // Role Badge Row (inside card)
-    roleBadgeRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingBottom: 8,
-    },
-    roleBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    roleBadgeText: {
-        fontSize: 11,
-        fontWeight: '700',
-    },
-    roleMatchBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        backgroundColor: '#D1FAE5',
-    },
-    roleMatchText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#10B981',
-    },
-    roleNoMatchBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        backgroundColor: '#FEE2E2',
-    },
-    roleNoMatchText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#EF4444',
-    },
-
-    // Role Filter Bar
-    roleFilterBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-        gap: 8,
-    },
-    roleFilterHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    roleFilterLabel: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: '#6B7280',
-    },
-    roleChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 16,
-        backgroundColor: '#F3F4F6',
-        marginRight: 6,
-        borderWidth: 1.5,
-        borderColor: 'transparent',
-    },
-    roleChipHighlight: {
-        borderColor: '#D1D5DB',
-        backgroundColor: '#F9FAFB',
-    },
-    roleChipText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    roleChipDot: {
-        width: 5,
-        height: 5,
-        borderRadius: 3,
-        backgroundColor: '#10B981',
-        marginLeft: 2,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        paddingBottom: 12,
-        gap: 12,
-    },
-    typeIcon: {
-        width: 46,
-        height: 46,
-        borderRadius: 13,
+    sectionIcon: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    cardHeaderContent: {
+    sectionTitle: {
         flex: 1,
-    },
-    cardTitle: {
         fontSize: 15,
         fontWeight: '700',
         color: '#1F2937',
-        marginBottom: 3,
+    },
+    sectionCount: {
+        minWidth: 26,
+        height: 26,
+        borderRadius: 13,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 6,
+    },
+    sectionCountText: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#FFFFFF',
+    },
+
+    // ─── Card ───
+    card: {
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 16,
+        marginTop: 8,
+        borderRadius: 14,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 1,
+        overflow: 'hidden',
+    },
+    cardContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        gap: 12,
+    },
+    cardIcon: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    cardInfo: {
+        flex: 1,
+    },
+    cardTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1F2937',
+        marginBottom: 2,
     },
     cardSubtitle: {
         fontSize: 12,
         color: '#6B7280',
+        marginBottom: 4,
     },
-    levelBadge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    levelBadgeText: {
-        fontSize: 11,
-        fontWeight: '800',
-    },
-
-    // Card Body
-    cardBody: {
-        paddingHorizontal: 16,
-        paddingBottom: 12,
-    },
-    cardInfoRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 6,
-    },
-    cardInfoItem: {
+    cardMeta: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 10,
     },
     cardAmount: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '700',
         color: '#10B981',
     },
     cardTime: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#9CA3AF',
-    },
-    cardCreator: {
-        fontSize: 12,
-        color: '#6B7280',
-    },
-    cardDescription: {
-        fontSize: 12,
-        color: '#9CA3AF',
-        fontStyle: 'italic',
-        marginTop: 4,
     },
 
-    // Card Actions
+    // ─── Card Actions ───
     cardActions: {
         flexDirection: 'row',
         borderTopWidth: 1,
         borderTopColor: '#F3F4F6',
     },
-    cardActionBtn: {
+    rejectBtn: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 12,
-        gap: 6,
-    },
-    rejectBtn: {
-        borderRightWidth: 1,
-        borderRightColor: '#F3F4F6',
+        paddingVertical: 11,
+        gap: 5,
     },
     rejectBtnText: {
         fontSize: 13,
         fontWeight: '600',
         color: '#EF4444',
     },
-    viewBtn: {
-        borderRightWidth: 1,
-        borderRightColor: '#F3F4F6',
-    },
-    viewBtnText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#6B7280',
-    },
     approveBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 11,
+        gap: 5,
         backgroundColor: '#10B981',
-        borderBottomRightRadius: 16,
+        borderBottomRightRadius: 14,
     },
     approveBtnText: {
         fontSize: 13,
@@ -1227,36 +863,31 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
     },
 
-    // Empty State
+    // ─── Empty State ───
     emptyContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         paddingVertical: 80,
     },
-    emptyIconContainer: {
-        marginBottom: 20,
+    emptyIconBg: {
+        marginBottom: 16,
     },
     emptyTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '800',
         color: '#1F2937',
-        marginBottom: 8,
+        marginBottom: 6,
     },
     emptyText: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#6B7280',
-        marginBottom: 4,
-    },
-    emptySubtext: {
-        fontSize: 13,
-        color: '#9CA3AF',
     },
 
-    // Reject Modal
+    // ─── Reject Modal ───
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     modalOverlayInner: {
         flex: 1,
@@ -1276,31 +907,24 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     modalIconBg: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
         backgroundColor: '#FEE2E2',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 12,
     },
     modalTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
         color: '#1F2937',
-        marginBottom: 6,
+        marginBottom: 4,
     },
     modalItemName: {
-        fontSize: 14,
+        fontSize: 13,
         color: '#3B82F6',
         fontWeight: '600',
-        marginBottom: 8,
-    },
-    modalSubtitle: {
-        fontSize: 13,
-        color: '#6B7280',
-        textAlign: 'center',
-        lineHeight: 19,
     },
     modalInput: {
         borderWidth: 1.5,
@@ -1308,9 +932,9 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         padding: 14,
         fontSize: 15,
-        height: 110,
+        height: 100,
         textAlignVertical: 'top',
-        marginBottom: 20,
+        marginBottom: 16,
         backgroundColor: '#F9FAFB',
     },
     modalActions: {
@@ -1319,7 +943,7 @@ const styles = StyleSheet.create({
     },
     modalBtn: {
         flex: 1,
-        paddingVertical: 14,
+        paddingVertical: 13,
         borderRadius: 12,
         alignItems: 'center',
     },
