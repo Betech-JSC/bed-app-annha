@@ -47,21 +47,21 @@ class CrmApprovalController extends Controller
 
         // ─── Nghiệm thu chờ GS duyệt ───
         $acceptanceSupervisorItems = AcceptanceStage::where('status', 'pending')
-            ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
+            ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ GS duyệt', 'supervisor'));
 
         // ─── Nghiệm thu chờ QLDA duyệt ───
         $acceptancePMItems = AcceptanceStage::where('status', 'supervisor_approved')
-            ->with(['project:id,name,code', 'supervisorApprover:id,name', 'task:id,name'])
+            ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'supervisorApprover:id,name', 'task:id,name'])
             ->orderBy('updated_at', 'desc')
             ->get()
             ->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ QLDA duyệt', 'project_manager'));
 
         // ─── Customer Acceptance (Khách hàng duyệt nghiệm thu) ───
         $customerAcceptanceItems = AcceptanceStage::where('status', 'project_manager_approved')
-            ->with(['project:id,name,code', 'projectManagerApprover:id,name', 'task:id,name'])
+            ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'projectManagerApprover:id,name', 'task:id,name'])
             ->orderBy('updated_at', 'desc')
             ->get()
             ->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ KH duyệt', 'customer'));
@@ -183,7 +183,7 @@ class CrmApprovalController extends Controller
             ->map(fn($p) => $this->formatSubPaymentItem($p));
 
         $recentAcceptances = AcceptanceStage::whereIn('status', ['customer_approved', 'rejected'])
-            ->with(['project:id,name,code', 'task:id,name'])
+            ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get()
