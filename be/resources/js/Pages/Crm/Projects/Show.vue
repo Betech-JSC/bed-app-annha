@@ -600,13 +600,14 @@
             <table class="w-full text-sm">
               <thead>
                 <tr class="bg-gray-50 text-gray-500 text-xs border-b">
-                  <th class="text-left py-2 px-3 w-[40%]">Tên công việc</th>
+                  <th class="text-left py-2 px-3 w-[35%]">Tên công việc</th>
                   <th class="text-center py-2 px-3 w-[10%]">Ưu tiên</th>
                   <th class="text-center py-2 px-3 w-[10%]">Trạng thái</th>
+                  <th class="text-center py-2 px-3 w-[10%]">Nghiệm thu</th>
                   <th class="text-center py-2 px-3 w-[15%]">Tiến độ</th>
                   <th class="text-center py-2 px-3 w-[10%]">Thời gian</th>
                   <th class="text-center py-2 px-3 w-[8%]">Người GV</th>
-                  <th class="text-center py-2 px-3 w-[7%]"></th>
+                  <th class="text-center py-2 px-3 w-[2%]"></th>
                 </tr>
               </thead>
               <tbody>
@@ -624,6 +625,14 @@
                       </td>
                       <td class="text-center py-2 px-3"><a-tag :color="priorityColors[task.priority]" class="rounded-full text-xs">{{ priorityLabels[task.priority] || task.priority }}</a-tag></td>
                       <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[task.status]" class="rounded-full text-xs">{{ taskStatusLabels[task.status] || task.status }}</a-tag></td>
+                      <td class="text-center py-2 px-3">
+                        <template v-if="getTaskAcceptanceStatus(task)">
+                          <a-tag :color="acceptItemStatusColor(getTaskAcceptanceStatus(task))" class="rounded-full text-[10px]">
+                            {{ acceptItemStatusLabel(getTaskAcceptanceStatus(task)) }}
+                          </a-tag>
+                        </template>
+                        <span v-else class="text-gray-300">—</span>
+                      </td>
                       <td class="py-2 px-3"><a-progress :percent="parseFloat(task.progress_percentage || 0)" size="small" :stroke-color="parseFloat(task.progress_percentage || 0) >= 100 ? '#27AE60' : '#1B4F72'" /></td>
                       <td class="text-center py-2 px-3 text-xs text-gray-500">
                         <span v-if="task.start_date">{{ fmtDate(task.start_date) }}</span>
@@ -650,6 +659,14 @@
                         </td>
                         <td class="text-center py-2 px-3"><a-tag :color="priorityColors[child.priority]" class="rounded-full text-xs">{{ priorityLabels[child.priority] || child.priority }}</a-tag></td>
                         <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[child.status]" class="rounded-full text-xs">{{ taskStatusLabels[child.status] || child.status }}</a-tag></td>
+                        <td class="text-center py-2 px-3">
+                          <template v-if="getTaskAcceptanceStatus(child)">
+                            <a-tag :color="acceptItemStatusColor(getTaskAcceptanceStatus(child))" class="rounded-full text-[10px]">
+                              {{ acceptItemStatusLabel(getTaskAcceptanceStatus(child)) }}
+                            </a-tag>
+                          </template>
+                          <span v-else class="text-gray-300">—</span>
+                        </td>
                         <td class="py-2 px-3"><a-progress :percent="parseFloat(child.progress_percentage || 0)" size="small" :stroke-color="parseFloat(child.progress_percentage || 0) >= 100 ? '#27AE60' : '#2E86C1'" /></td>
                         <td class="text-center py-2 px-3 text-xs text-gray-500">
                           <span v-if="child.start_date">{{ fmtDate(child.start_date) }}</span>
@@ -667,7 +684,7 @@
                       </tr>
                       <!-- Add child task row -->
                       <tr v-if="can('project.task.create')" class="border-b">
-                        <td class="py-1 px-3 pl-10" colspan="7">
+                        <td class="py-1 px-3 pl-10" colspan="8">
                           <a-button type="dashed" size="small" class="text-xs text-blue-500" @click="openTaskModal(null, task.id)">
                             <template #icon><PlusOutlined /></template>Thêm công việc con
                           </a-button>
@@ -677,7 +694,7 @@
                   </template>
                 </template>
                 <tr v-else>
-                  <td colspan="7" class="py-12 text-center text-gray-400">
+                  <td colspan="8" class="py-12 text-center text-gray-400">
                     <a-empty description="Chưa có công việc nào" />
                   </td>
                 </tr>
@@ -737,18 +754,18 @@
       <a-tab-pane key="costs" v-if="isTabVisible('costs')">
         <template #tab><a-tooltip title="Quản lý phiếu chi: tạo, gửi duyệt BĐH → KT xác nhận, đính kèm chứng từ" placement="bottom">Phiếu chi ({{ project.costs?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
-          <!-- Status-based sub-tabs for Phiếu chi -->
-          <div class="flex gap-2 mb-3 flex-wrap">
-            <a-button :type="costStatusFilter === 'all' ? 'primary' : 'default'" size="small" @click="costStatusFilter = 'all'">Tất cả ({{ project.costs?.length || 0 }})</a-button>
-            <a-button :type="costStatusFilter === 'draft' ? 'primary' : 'default'" size="small" @click="costStatusFilter = 'draft'">Nháp ({{ (project.costs || []).filter(c => c.status === 'draft').length }})</a-button>
-            <a-button :type="costStatusFilter === 'pending' ? 'primary' : 'default'" size="small" @click="costStatusFilter = 'pending'">Chờ duyệt ({{ (project.costs || []).filter(c => ['pending_management_approval','pending_accountant_approval'].includes(c.status)).length }})</a-button>
-            <a-button :type="costStatusFilter === 'approved' ? 'primary' : 'default'" size="small" @click="costStatusFilter = 'approved'">Đã duyệt ({{ (project.costs || []).filter(c => c.status === 'approved').length }})</a-button>
-            <a-button :type="costStatusFilter === 'rejected' ? 'primary' : 'default'" size="small" danger ghost @click="costStatusFilter = 'rejected'">Từ chối ({{ (project.costs || []).filter(c => c.status === 'rejected').length }})</a-button>
-          </div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-3">
-              <div class="text-sm text-gray-400">Tổng: <span class="font-bold text-red-500">{{ fmt(totalCosts) }}</span></div>
-              <a-select v-model:value="costGroupFilter" size="small" style="min-width: 180px" allow-clear placeholder="Lọc theo nhóm">
+          <!-- Premium Header for Phiếu chi -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Tổng chi phí</div>
+              <div class="text-xl font-bold text-red-500">{{ fmt(totalCosts) }}</div>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Chờ duyệt</div>
+              <div class="text-xl font-bold text-orange-500">{{ (project.costs || []).filter(c => ['pending_management_approval','pending_accountant_approval'].includes(c.status)).length }} <span class="text-xs font-normal text-gray-400">phiếu</span></div>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-center">
+              <a-select v-model:value="costGroupFilter" size="small" class="w-full" allow-clear placeholder="Lọc theo nhóm">
                 <a-select-option value="all">Tất cả nhóm</a-select-option>
                 <a-select-option value="_vatlieu">Vật liệu xây dựng</a-select-option>
                 <a-select-option value="_thietbi">Thiết bị</a-select-option>
@@ -757,9 +774,20 @@
                 <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
               </a-select>
             </div>
-            <a-button v-if="can('cost.create')" type="primary" size="small" @click="openCostModal(null)">
-              <template #icon><PlusOutlined /></template>Thêm chi phí
-            </a-button>
+            <div class="flex items-center justify-end">
+              <a-button v-if="can('cost.create')" type="primary" class="h-10 rounded-lg shadow-blue-100 shadow-lg" @click="openCostModal(null)">
+                <template #icon><PlusOutlined /></template>Thêm phiếu chi
+              </a-button>
+            </div>
+          </div>
+
+          <!-- Status Filters -->
+          <div class="flex gap-1.5 mb-4 overflow-x-auto pb-1 no-scrollbar">
+            <button v-for="s in ['all','draft','pending','approved','rejected']" :key="s" @click="costStatusFilter = s" 
+                    :class="[costStatusFilter === s ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100']"
+                    class="px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap">
+              {{ s === 'all' ? 'Tất cả' : s === 'draft' ? 'Nháp' : s === 'pending' ? 'Chờ duyệt' : s === 'approved' ? 'Đã duyệt' : 'Từ chối' }}
+            </button>
           </div>
           <a-table :columns="costCols" :data-source="filteredCosts" :pagination="{ pageSize: 10, showTotal: (t) => `${t} phiếu` }" row-key="id" size="small" class="crm-table">
             <template #bodyCell="{ column, record }">
@@ -770,38 +798,48 @@
               <template v-else-if="column.key === 'creator'">{{ record.creator?.name || '—' }}</template>
               <template v-else-if="column.key === 'date'">{{ fmtDate(record.cost_date) }}</template>
               <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1">
-                  <a-tooltip title="Xem chi tiết">
-                    <a-button type="text" size="small" @click="openCostDetail(record)"><EyeOutlined class="text-blue-500" /></a-button>
-                  </a-tooltip>
-                  <!-- Gửi duyệt: check có file chưa -->
-                  <a-tooltip v-if="record.status === 'draft' && can('cost.submit')" :title="record.attachments?.length ? 'Gửi duyệt' : 'Upload chứng từ & Gửi duyệt'">
-                    <a-button type="text" size="small" :loading="actionLoading[`submit-cost-${record.id}`]" @click="handleSubmitCost(record)">
-                      <SendOutlined class="text-blue-500" />
+                <div class="flex flex-wrap justify-end gap-1">
+                  <!-- Actions for Draft -->
+                  <template v-if="record.status === 'draft'">
+                    <a-button type="primary" size="small" ghost :loading="actionLoading[`submit-cost-${record.id}`]" @click="handleSubmitCost(record)" class="text-[11px] h-7 px-2">
+                       <SendOutlined /> Gửi Duyệt
                     </a-button>
-                  </a-tooltip>
+                    <a-button size="small" @click="openCostModal(record)" class="text-[11px] h-7 px-2"><EditOutlined /> Sửa</a-button>
+                  </template>
+
                   <!-- BĐH duyệt -->
-                  <a-tooltip v-if="record.status === 'pending_management_approval' && can('cost.approve.management')" title="Duyệt (BĐH)">
-                    <a-button type="text" size="small" :loading="actionLoading[`approve-cost-mgmt-${record.id}`]" @click="approveCostMgmt(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
+                  <template v-if="record.status === 'pending_management_approval' && can('cost.approve.management')">
+                    <a-button type="primary" size="small" :loading="actionLoading[`approve-cost-mgmt-${record.id}`]" @click="approveCostMgmt(record)" class="text-[11px] h-7 px-2 bg-green-600 border-green-600 hover:bg-green-700">
+                      <CheckCircleOutlined /> Duyệt (BĐH)
+                    </a-button>
+                  </template>
+
+                  <!-- KT xác nhận -->
+                  <template v-if="record.status === 'pending_accountant_approval' && can('cost.approve.accountant')">
+                    <a-popconfirm :title="`Xác nhận phiếu chi? (${record.attachments?.length || 0} chứng từ đính kèm)`" @confirm="approveCostAcct(record)">
+                      <a-button size="small" type="primary" class="text-[11px] h-7 px-2 bg-green-600 border-green-600" :loading="actionLoading[`approve-cost-acct-${record.id}`]">
+                        <CheckCircleOutlined /> KT Xác nhận
+                      </a-button>
+                    </a-popconfirm>
+                  </template>
+
+                  <!-- Từ chối -->
+                  <template v-if="['pending_management_approval','pending_accountant_approval'].includes(record.status) && can('cost.reject')">
+                    <a-button size="small" danger ghost @click="openRejectCostModal(record)" class="text-[11px] h-7 px-2"><CloseCircleOutlined /> Từ chối</a-button>
+                  </template>
+
+                  <!-- Standard actions -->
+                  <a-tooltip title="Xem chi chiết">
+                    <a-button type="text" size="small" @click="openCostDetail(record)" class="text-blue-500 h-7 w-7 flex items-center justify-center p-0"><EyeOutlined /></a-button>
                   </a-tooltip>
-                  <!-- KT xác nhận (simple popconfirm — chứng từ đã có sẵn) -->
-                  <a-popconfirm v-if="record.status === 'pending_accountant_approval' && can('cost.approve.accountant')" :title="`Xác nhận phiếu chi? (${record.attachments?.length || 0} chứng từ đính kèm)`" @confirm="approveCostAcct(record)">
-                    <a-tooltip title="KT xác nhận">
-                      <a-button type="text" size="small" :loading="actionLoading[`approve-cost-acct-${record.id}`]"><CheckCircleOutlined class="text-green-600" /></a-button>
-                    </a-tooltip>
-                  </a-popconfirm>
-                  <a-tooltip v-if="['pending_management_approval','pending_accountant_approval'].includes(record.status) && can('cost.reject')" title="Từ chối">
-                    <a-button type="text" size="small" danger @click="openRejectCostModal(record)"><CloseCircleOutlined /></a-button>
-                  </a-tooltip>
-                  <a-button v-if="can('cost.update') && record.status === 'draft'" type="text" size="small" @click="openCostModal(record)"><EditOutlined /></a-button>
-                  <a-popconfirm v-if="can('cost.delete')" title="Xóa chi phí?" @confirm="deleteCost(record)">
-                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                  <a-tooltip title="Đính kèm file">
-                    <a-badge :count="record.attachments?.length || 0" :offset="[-2, 2]" size="small">
-                      <a-button type="text" size="small" @click="openAttachModal('cost', record)"><UploadOutlined class="text-gray-500" /></a-button>
+                  <a-tooltip title="Upload chứng từ">
+                    <a-badge :count="record.attachments?.length || 0" :number-style="{ backgroundColor: '#3b82f6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }" :offset="[-2, 2]">
+                      <a-button type="text" size="small" @click="openAttachModal('cost', record)" class="text-gray-500 h-7 w-7 flex items-center justify-center p-0"><UploadOutlined /></a-button>
                     </a-badge>
                   </a-tooltip>
+                  <a-popconfirm v-if="can('cost.delete') && record.status === 'draft'" title="Xóa chi phí?" @confirm="deleteCost(record)">
+                    <a-button type="text" size="small" danger class="h-7 w-7 flex items-center justify-center p-0"><DeleteOutlined /></a-button>
+                  </a-popconfirm>
                 </div>
               </template>
             </template>
@@ -813,12 +851,27 @@
       <a-tab-pane key="payments" v-if="isTabVisible('payments')">
         <template #tab><a-tooltip title="Quản lý đợt thanh toán: KH đánh dấu đã thanh toán → KT xác nhận/từ chối" placement="bottom">Thanh toán ({{ project.payments?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
-          <div class="flex justify-between items-center mb-3">
-            <div class="text-xs text-gray-400">Luồng: Chờ TT → KH đánh dấu TT → KT xác nhận → Hoàn tất</div>
-            <a-button v-if="can('payment.create')" type="primary" size="small" @click="openPaymentModal()">
-              <template #icon><PlusOutlined /></template>Thêm thanh toán
-            </a-button>
+          <!-- Premium Header for Payments -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Giá trị dự án</div>
+              <div class="text-xl font-bold text-gray-800">{{ fmt(project.total_value) }}</div>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Đã thu hồi</div>
+              <div class="text-xl font-bold text-green-600">{{ fmt(project.total_paid_receivable || 0) }}</div>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Còn lại</div>
+              <div class="text-xl font-bold text-orange-500">{{ fmt(project.total_value - (project.total_paid_receivable || 0)) }}</div>
+            </div>
+            <div class="flex items-center justify-end">
+              <a-button v-if="can('payment.create')" type="primary" class="h-10 rounded-lg shadow-blue-100 shadow-lg" @click="openPaymentModal()">
+                <template #icon><PlusOutlined /></template>Thêm đợt thu
+              </a-button>
+            </div>
           </div>
+          <div class="text-[10px] text-gray-400 bg-gray-50 p-2 rounded-lg border border-dashed mb-4">Lưu ý: KH đánh dấu TT → KT xác nhận chứng từ → Ghi nhận doanh thu thực tế</div>
           <a-table :columns="paymentCols" :data-source="project.payments || []" :pagination="{ pageSize: 10, showTotal: (t) => `${t} đợt` }" row-key="id" size="small" class="crm-table">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'payment_number'">
@@ -838,31 +891,34 @@
                 <span v-else class="text-gray-300">—</span>
               </template>
               <template v-else-if="column.key === 'actions'">
-                <a-space :size="2">
-                  <!-- KH đánh dấu đã thanh toán — mở modal upload chứng từ (giống APP) -->
-                  <a-tooltip v-if="['pending','overdue'].includes(record.status)" title="KH đã thanh toán">
-                    <a-button type="text" size="small" class="text-blue-500" @click="openPaymentProofModal(record)"><DollarOutlined /></a-button>
-                  </a-tooltip>
-                  <!-- KT xác nhận (khi customer_paid) -->
-                  <a-popconfirm v-if="record.status === 'customer_paid' && can('payment.confirm')" title="KT xác nhận thanh toán?" @confirm="confirmPaymentAction(record)">
-                    <a-tooltip title="KT xác nhận">
-                      <a-button type="text" size="small" class="text-green-500"><CheckCircleOutlined /></a-button>
-                    </a-tooltip>
-                  </a-popconfirm>
-                  <!-- KT từ chối (khi customer_paid) -->
-                  <a-tooltip v-if="record.status === 'customer_paid' && can('payment.confirm')" title="KT từ chối">
-                    <a-button type="text" size="small" danger @click="openRejectPaymentModal(record)"><CloseCircleOutlined /></a-button>
-                  </a-tooltip>
-                  <!-- Xóa (khi chưa confirmed) -->
-                  <a-popconfirm v-if="can('payment.delete') && !['confirmed','paid'].includes(record.status)" title="Xóa?" @confirm="deletePayment(record)">
-                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                  <a-tooltip title="Đính kèm chứng từ">
-                    <a-badge :count="record.attachments?.length || 0" :offset="[-2, 2]" size="small">
-                      <a-button type="text" size="small" @click="openAttachModal('payment', record)"><UploadOutlined class="text-gray-500" /></a-button>
+                <div class="flex items-center justify-end gap-1.5">
+                  <!-- KT Phê duyệt (Row 1 Primary) -->
+                  <template v-if="record.status === 'customer_paid' && can('payment.confirm')">
+                    <a-popconfirm title="KT xác nhận thanh toán?" @confirm="confirmPaymentAction(record)">
+                      <a-button size="small" type="primary" class="text-[11px] h-7 px-2 bg-green-600 border-green-600">
+                        <CheckCircleOutlined /> KT Xác nhận
+                      </a-button>
+                    </a-popconfirm>
+                    <a-button size="small" danger ghost @click="openRejectPaymentModal(record)" class="text-[11px] h-7 px-2"><CloseCircleOutlined /> Từ chối</a-button>
+                  </template>
+
+                  <!-- KH đánh dấu (Row 1 Primary) -->
+                  <template v-else-if="['pending','overdue'].includes(record.status)">
+                    <a-button type="primary" ghost size="small" @click="openPaymentProofModal(record)" class="text-[11px] h-7 px-2 border-blue-400 text-blue-500">
+                      <DollarOutlined /> KH đã TT
+                    </a-button>
+                  </template>
+
+                  <!-- Secondary Actions -->
+                  <a-tooltip title="Upload chứng từ/ảnh">
+                    <a-badge :count="record.attachments?.length || 0" :number-style="{ backgroundColor: '#3b82f6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }" :offset="[-2, 2]">
+                      <a-button type="text" size="small" @click="openAttachModal('payment', record)" class="text-gray-500 h-7 w-7 p-0 flex items-center justify-center"><UploadOutlined /></a-button>
                     </a-badge>
                   </a-tooltip>
-                </a-space>
+                  <a-popconfirm v-if="can('payment.delete') && !['confirmed','paid'].includes(record.status)" title="Xóa?" @confirm="deletePayment(record)">
+                    <a-button type="text" size="small" danger class="h-7 w-7 p-0 flex items-center justify-center font-bold"><DeleteOutlined /></a-button>
+                  </a-popconfirm>
+                </div>
               </template>
             </template>
           </a-table>
@@ -1105,10 +1161,13 @@
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-bold text-gray-800">{{ stage.name }}</span>
                     <!-- Acceptability Status Badge (Giống APP) -->
-                    <span :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold',
-                      getAcceptability(stage) === 'acceptable' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
-                      <span :class="['w-1.5 h-1.5 rounded-full', getAcceptability(stage) === 'acceptable' ? 'bg-emerald-500' : 'bg-red-500']"></span>
-                      {{ getAcceptability(stage) === 'acceptable' ? 'Đạt' : 'Chưa đạt' }}
+                    <span v-if="getAcceptability(stage) === 'acceptable' && stage.status === 'owner_approved'" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      Đạt
+                    </span>
+                    <span v-else-if="getAcceptability(stage) !== 'acceptable'" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">
+                      <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                      Chưa đạt
                     </span>
                   </div>
                   <!-- Task info (linked parent task) -->
@@ -1179,18 +1238,21 @@
             <!-- Checklist Items (hạng mục nghiệm thu) -->
             <div v-if="stage.items?.length" class="px-4 pt-3 pb-1">
               <div class="text-xs font-semibold text-gray-600 mb-2">Hạng mục ({{ stage.items.length }})</div>
-              <div v-for="item in stage.items" :key="item.id" class="flex items-center gap-2 text-sm py-1.5 border-b border-gray-50 last:border-0">
+              <div v-for="item in stage.items" :key="item.id" class="flex items-center gap-2 text-sm py-1.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors group px-2 -mx-2 rounded-lg cursor-pointer" @click="openAcceptDetailModal(stage)">
                 <a-checkbox :checked="item.workflow_status === 'customer_approved'" disabled />
                 <span :class="item.workflow_status === 'customer_approved' ? 'text-gray-400 line-through' : 'text-gray-700'">{{ item.name }}</span>
-                <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px] ml-auto">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
+                <div class="ml-auto flex items-center gap-2">
+                  <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px] mr-0">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
+                  <EyeOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+                </div>
               </div>
             </div>
 
             <!-- Action button (Giống APP: "Nghiệm thu giai đoạn") -->
-            <div class="px-4 py-3 border-t border-gray-100 mt-2">
-              <a-button type="link" block size="small" @click="openAcceptDetailModal(stage)" class="!text-blue-600 !font-semibold">
-                <CheckCircleOutlined /> {{ can('acceptance.update') ? 'Nghiệm thu giai đoạn' : 'Xem chi tiết nghiệm thu' }}
-                <span class="ml-1">→</span>
+            <div class="px-4 py-3 border-t border-gray-100 mt-2 flex items-center justify-between">
+              <div class="text-[11px] text-gray-400 italic">Nhấn để xem chi tiết & thực hiện nghiệm thu</div>
+              <a-button type="primary" size="small" ghost @click="openAcceptDetailModal(stage)" class="text-[11px] h-7 px-3 border-blue-400 text-blue-600">
+                <CheckCircleOutlined /> {{ can('acceptance.update') ? 'Thực hiện' : 'Xem chi tiết' }}
               </a-button>
             </div>
           </div>
@@ -1217,24 +1279,44 @@
                 <a-tag :color="defectStatusColors[record.status]" class="rounded-full">{{ defectStatusLabels[record.status] || record.status }}</a-tag>
               </template>
               <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1 flex-wrap">
-                  <!-- Workflow Actions based on status -->
-                  <a-popconfirm v-if="record.status === 'open' && can('defect.update')" title="Nhận xử lý lỗi này?" @confirm="defectAction(record, 'mark-in-progress')" ok-text="Nhận" cancel-text="Hủy">
-                    <a-button size="small" type="primary" ghost class="text-xs">🔧 Nhận XL</a-button>
-                  </a-popconfirm>
-                  <a-popconfirm v-if="record.status === 'in_progress' && can('defect.update')" title="Đánh dấu lỗi đã sửa xong?" @confirm="defectAction(record, 'mark-fixed')" ok-text="Đã sửa" cancel-text="Hủy">
-                    <a-button size="small" class="text-xs" style="color:#16a34a;border-color:#16a34a">✅ Đã sửa</a-button>
-                  </a-popconfirm>
-                  <a-popconfirm v-if="record.status === 'fixed' && can('defect.update')" title="Xác nhận lỗi đã sửa xong?" @confirm="defectAction(record, 'verify')" ok-text="Xác nhận" cancel-text="Hủy">
-                    <a-button size="small" class="text-xs" style="color:#0891b2;border-color:#0891b2">✔ Xác nhận</a-button>
-                  </a-popconfirm>
-                  <a-button v-if="record.status === 'fixed' && can('defect.update')" size="small" danger class="text-xs" @click="openRejectDefectModal(record)">✗ Từ chối</a-button>
-                  <a-tag v-if="record.status === 'verified'" color="cyan" class="text-xs">✓ Đã xác nhận</a-tag>
-                  <!-- Edit / Delete -->
-                  <a-button v-if="can('defect.update')" type="text" size="small" @click="openDefectModal(record)"><EditOutlined /></a-button>
-                  <a-popconfirm v-if="can('defect.delete')" title="Xóa?" @confirm="deleteDefect(record)">
-                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                  </a-popconfirm>
+                <div class="flex items-center justify-end gap-1.5">
+                  <!-- Workflow Actions (Standardized Action + Label) -->
+                  <template v-if="record.status === 'open' && can('defect.update')">
+                    <a-popconfirm title="Nhận xử lý lỗi này?" @confirm="defectAction(record, 'mark-in-progress')">
+                      <a-button size="small" type="primary" ghost class="text-[11px] h-7 px-2 border-blue-400 text-blue-500">
+                        <ToolOutlined /> Nhận XL
+                      </a-button>
+                    </a-popconfirm>
+                  </template>
+
+                  <template v-if="record.status === 'in_progress' && can('defect.update')">
+                    <a-popconfirm title="Đánh dấu lỗi đã sửa xong?" @confirm="defectAction(record, 'mark-fixed')">
+                      <a-button size="small" type="primary" ghost class="text-[11px] h-7 px-2 border-green-500 text-green-600">
+                        <CheckOutlined /> Đã sửa
+                      </a-button>
+                    </a-popconfirm>
+                  </template>
+
+                  <template v-if="record.status === 'fixed' && can('defect.update')">
+                    <a-popconfirm title="Xác nhận lỗi đã sửa đạt yêu cầu?" @confirm="defectAction(record, 'verify')">
+                      <a-button size="small" type="primary" class="text-[11px] h-7 px-2 bg-green-600 border-green-600">
+                        <CheckCircleOutlined /> Xác nhận
+                      </a-button>
+                    </a-popconfirm>
+                    <a-button size="small" danger ghost @click="openRejectDefectModal(record)" class="text-[11px] h-7 px-2">
+                       <CloseCircleOutlined /> Từ chối
+                    </a-button>
+                  </template>
+
+                  <a-tag v-if="record.status === 'verified'" color="success" class="rounded-full text-[10px] px-2 py-0 border-0 font-bold uppercase">Hoàn thành</a-tag>
+
+                  <!-- Standard Icon Actions -->
+                  <div class="flex items-center gap-1 ml-2 border-l pl-2 border-gray-100">
+                    <a-button v-if="can('defect.update')" type="text" size="small" @click="openDefectModal(record)" class="h-7 w-7 p-0 flex items-center justify-center text-gray-400 hover:text-blue-500"><EditOutlined /></a-button>
+                    <a-popconfirm v-if="can('defect.delete')" title="Xóa lỗi?" @confirm="deleteDefect(record)">
+                      <a-button type="text" size="small" danger class="h-7 w-7 p-0 flex items-center justify-center"><DeleteOutlined /></a-button>
+                    </a-popconfirm>
+                  </div>
                 </div>
               </template>
             </template>
@@ -1375,10 +1457,20 @@
       <a-tab-pane key="additional_costs" v-if="isTabVisible('additional_costs')">
         <template #tab><a-tooltip title="Chi phí phát sinh ngoài báo giá: đề xuất → duyệt → ghi nhận" placement="bottom">CP Phát sinh ({{ project.additional_costs?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
-          <div class="flex justify-end mb-3">
-            <a-button v-if="can('additional_cost.create')" type="primary" size="small" @click="openAdditionalCostModal()">
-              <template #icon><PlusOutlined /></template>Đề xuất CP
-            </a-button>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Tổng phát sinh</div>
+              <div class="text-xl font-bold text-red-500">{{ fmt(project.additional_costs?.reduce((a, b) => a + Number(b.amount || 0), 0) || 0) }}</div>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Phiếu đã duyệt</div>
+              <div class="text-xl font-bold text-green-600">{{ project.additional_costs?.filter(ac => ac.status === 'approved').length || 0 }} <span class="text-xs font-normal text-gray-400">phiếu</span></div>
+            </div>
+            <div class="flex items-center justify-end">
+              <a-button v-if="can('additional_cost.create')" type="primary" class="h-10 rounded-lg shadow-blue-100 shadow-lg" @click="openAdditionalCostModal()">
+                <template #icon><PlusOutlined /></template>Đề xuất CP phát sinh
+              </a-button>
+            </div>
           </div>
           <a-table :columns="acCols" :data-source="project.additional_costs || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table">
             <template #bodyCell="{ column, record }">
@@ -1388,21 +1480,23 @@
                 <a-tag :color="acStatusColors[record.status]" class="rounded-full text-xs">{{ acStatusLabels[record.status] || record.status }}</a-tag>
               </template>
               <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1">
-                  <a-tooltip v-if="record.status === 'pending_approval' && can('additional_cost.approve')" title="Duyệt">
-                    <a-button type="text" size="small" :loading="actionLoading[`approve-ac-${record.id}`]" @click="approveAC(record)"><CheckCircleOutlined class="text-green-500" /></a-button>
-                  </a-tooltip>
-                  <a-tooltip v-if="record.status === 'pending_approval' && can('additional_cost.reject')" title="Từ chối">
-                    <a-button type="text" size="small" danger @click="openRejectACModal(record)"><CloseCircleOutlined /></a-button>
-                  </a-tooltip>
-                  <a-popconfirm v-if="can('additional_cost.delete') && ['pending_approval','rejected'].includes(record.status)" title="Xóa?" @confirm="deleteAC(record)">
-                    <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                  </a-popconfirm>
-                  <a-tooltip title="Đính kèm file">
-                    <a-badge :count="record.attachments?.length || 0" :offset="[-2, 2]" size="small">
-                      <a-button type="text" size="small" @click="openAttachModal('additional-cost', record)"><UploadOutlined class="text-gray-500" /></a-button>
+                <div class="flex flex-wrap justify-end gap-1">
+                  <!-- Duyệt CP phát sinh -->
+                  <template v-if="record.status === 'pending_approval' && can('additional_cost.approve')">
+                    <a-button type="primary" size="small" :loading="actionLoading[`approve-ac-${record.id}`]" @click="approveAC(record)" class="text-[11px] h-7 px-2 bg-green-600 border-green-600 hover:bg-green-700">
+                      <CheckCircleOutlined /> Duyệt
+                    </a-button>
+                    <a-button size="small" danger ghost @click="openRejectACModal(record)" class="text-[11px] h-7 px-2"><CloseCircleOutlined /> Từ chối</a-button>
+                  </template>
+
+                  <a-tooltip title="Tệp đính kèm">
+                    <a-badge :count="record.attachments?.length || 0" :number-style="{ backgroundColor: '#3b82f6', fontSize: '9px', minWidth: '14px', height: '14px', lineHeight: '14px' }" :offset="[-2, 2]">
+                      <a-button type="text" size="small" @click="openAttachModal('additional-cost', record)" class="text-gray-500 h-7 w-7 p-0 flex items-center justify-center"><UploadOutlined /></a-button>
                     </a-badge>
                   </a-tooltip>
+                  <a-popconfirm v-if="can('additional_cost.delete') && ['pending_approval','rejected'].includes(record.status)" title="Xóa?" @confirm="deleteAC(record)">
+                    <a-button type="text" size="small" danger class="h-7 w-7 p-0 flex items-center justify-center"><DeleteOutlined /></a-button>
+                  </a-popconfirm>
                 </div>
               </template>
             </template>
@@ -2050,15 +2144,6 @@
             </div>
           </div>
 
-          <div class="flex justify-end mb-3 gap-2">
-            <a-button size="small" @click="syncMaterialBillCosts()" :loading="syncingMaterialCosts">
-              <template #icon><SyncOutlined /></template>Đồng bộ chi phí
-            </a-button>
-            <a-button v-if="can('material.create')" type="primary" size="small" @click="openBillModal()">
-              <template #icon><PlusOutlined /></template>Tạo phiếu nhập VL
-            </a-button>
-          </div>
-
           <!-- Bill Table -->
           <a-table :columns="billCols" :data-source="materialBills || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table"
             :expandable="{ expandedRowRender: billExpandedRow }">
@@ -2448,29 +2533,75 @@
   </a-modal>
 
   <!-- Payment Modal -->
-  <a-modal v-model:open="showPaymentModal" title="Thêm thanh toán" :width="500" @ok="savePayment" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
-    <a-form layout="vertical" class="mt-4">
-      <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Số phiếu thanh toán"><a-input v-model:value="paymentForm.payment_number" size="large" placeholder="TT-001" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Hợp đồng liên kết" v-if="project.contract"><a-select v-model:value="paymentForm.contract_id" size="large" class="w-full" allow-clear>
-          <a-select-option :value="project.contract.id">HĐ #{{ project.contract.id }} — {{ fmt(project.contract.contract_value) }}</a-select-option>
-        </a-select></a-form-item></a-col>
+  <a-modal v-model:open="showPaymentModal" :title="editingPayment ? 'Cập nhật thanh toán' : 'Thêm đợt thanh toán'" :width="560" @ok="savePayment" ok-text="Lưu lại" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
+    <a-form layout="vertical" class="mt-4 px-1">
+      <a-row :gutter="20">
+        <a-col :span="12">
+          <a-form-item label="Đợt thanh toán số">
+            <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Đợt thanh toán số</span></template>
+            <a-input-number v-model:value="paymentForm.payment_number" :min="1" size="large" placeholder="VD: 1, 2, 3..." class="w-full rounded-xl border-gray-200">
+              <template #prefix><FileTextOutlined class="text-gray-400" /></template>
+            </a-input-number>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12" v-if="project.contract">
+          <a-form-item label="Hợp đồng liên kết">
+            <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Hợp đồng liên kết</span></template>
+            <a-select v-model:value="paymentForm.contract_id" size="large" class="w-full" allow-clear dropdown-class-name="rounded-xl overflow-hidden">
+              <template #prefix><AuditOutlined class="text-gray-400" /></template>
+              <a-select-option :value="project.contract.id" class="py-2 px-3">HĐ #{{ project.contract.id }} — {{ fmt(project.contract.contract_value) }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
       </a-row>
-      <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Ngày đến hạn" v-bind="fieldStatus('due_date')"><a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+
+      <a-row :gutter="20" class="mt-2">
+        <a-col :span="12">
+          <a-form-item label="Số tiền" required v-bind="fieldStatus('amount')">
+            <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Số tiền đợt này</span></template>
+            <a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full rounded-xl border-gray-200" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')">
+              <template #prefix><span class="text-blue-500 mr-1">₫</span></template>
+            </a-input-number>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Ngày đến hạn" v-bind="fieldStatus('due_date')">
+            <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Ngày đến hạn</span></template>
+            <a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full rounded-xl border-gray-200" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Chọn ngày hạn" />
+          </a-form-item>
+        </a-col>
       </a-row>
-      <a-form-item label="Ghi chú"><a-input v-model:value="paymentForm.notes" size="large" placeholder="Ghi chú thanh toán..." /></a-form-item>
-      <!-- Inline Attachments -->
-      <div class="border-t pt-3 mt-2">
-        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Chứng từ thanh toán</div>
-        <div v-if="editingPayment?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingPayment.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-          </a>
+
+      <a-form-item label="Ghi chú đợt TT" class="mt-2">
+        <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Nội dung ghi chú</span></template>
+        <a-textarea v-model:value="paymentForm.notes" :rows="2" placeholder="Nhập ghi chú chi tiết cho đợt thanh toán này..." class="rounded-xl border-gray-200 py-3" />
+      </a-form-item>
+
+      <!-- Premium Upload Section -->
+      <div class="mt-2 pt-4 border-t border-dashed border-gray-200">
+        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center justify-between">
+          <span>Chứng từ đính kèm (Ảnh/PDF)</span>
+          <span v-if="modalFiles.length" class="text-green-500">{{ modalFiles.length }} file mới</span>
         </div>
-        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+        
+        <div v-if="editingPayment?.attachments?.length" class="flex flex-wrap gap-2 mb-3">
+          <div v-for="a in editingPayment.attachments" :key="a.id" @click="openFilePreview(a)" class="group relative flex items-center gap-2 text-xs bg-gray-50 border border-gray-100 px-3 py-2 rounded-xl hover:bg-white hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer">
+            <FileTextOutlined class="text-blue-500" /> 
+            <span class="max-w-[120px] truncate text-gray-600 font-medium">{{ a.original_name || a.file_name }}</span>
+            <EyeOutlined class="text-gray-300 group-hover:text-blue-400 ml-1" />
+          </div>
+        </div>
+
+        <div class="relative group">
+          <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+          <div class="border-2 border-dashed border-gray-100 group-hover:border-blue-200 group-hover:bg-blue-50/30 rounded-2xl p-4 transition-all flex flex-col items-center justify-center text-center">
+            <div class="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mb-2 group-hover:bg-blue-100 transition-colors">
+              <UploadOutlined class="text-gray-400 group-hover:text-blue-500" />
+            </div>
+            <div class="text-xs font-medium text-gray-500">Tải lên chứng từ hoặc hình ảnh</div>
+            <div class="text-[10px] text-gray-300 mt-1">Dung lượng tối đa 10MB mỗi file</div>
+          </div>
+        </div>
       </div>
     </a-form>
   </a-modal>
@@ -3302,9 +3433,11 @@
       <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-4 border border-blue-100">
         <div class="flex items-center justify-between mb-2">
           <span class="font-bold text-gray-800 text-base">{{ acceptDetailStage.name }}</span>
-          <span :class="['inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold',
-            getAcceptability(acceptDetailStage) === 'acceptable' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
-            {{ getAcceptability(acceptDetailStage) === 'acceptable' ? '✅ Đạt' : '❌ Chưa đạt' }}
+          <span v-if="getAcceptability(acceptDetailStage) === 'acceptable' && acceptDetailStage.status === 'owner_approved'" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+            ✅ Đạt
+          </span>
+          <span v-else-if="getAcceptability(acceptDetailStage) !== 'acceptable'" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">
+            ❌ Chưa đạt
           </span>
         </div>
         <div class="text-xs text-gray-500 space-y-1">
@@ -3352,29 +3485,82 @@
           </a-button>
         </div>
 
-        <!-- Defects list -->
-        <div v-for="d in acceptDetailDefects" :key="d.id" class="p-3 mb-2 rounded-lg border cursor-pointer hover:shadow-sm transition" :class="d.status === 'verified' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'"
-          @click="goToDefect(d)">
-          <div class="flex items-start justify-between">
+        <!-- Defects list (Matching Cost Approval Style) -->
+        <div v-for="d in acceptDetailDefects" :key="d.id" 
+             class="p-4 mb-3 rounded-xl border transition-all hover:shadow-md cursor-pointer group relative" 
+             :class="d.status === 'verified' ? 'bg-emerald-50/30 border-emerald-100' : d.status === 'fixed' ? 'bg-blue-50/30 border-blue-100' : 'bg-white border-gray-100'"
+             @click="goToDefect(d)">
+          
+          <div class="flex items-start justify-between gap-3 mb-3">
             <div class="flex-1">
-              <div class="text-sm font-semibold" :class="d.status === 'verified' ? 'text-green-700 line-through' : 'text-red-700'">{{ d.description }}</div>
-              <div class="flex items-center gap-2 mt-1">
-                <a-tag :color="d.severity === 'high' ? 'red' : d.severity === 'low' ? 'green' : 'orange'" class="rounded-full text-[10px]">{{ { low: 'Nhẹ', medium: 'TB', high: 'Nặng' }[d.severity] || d.severity }}</a-tag>
-                <a-tag :color="{ open: 'default', in_progress: 'processing', resolved: 'blue', verified: 'success' }[d.status] || 'default'" class="rounded-full text-[10px]">{{ { open: 'Mở', in_progress: 'Đang xử lý', resolved: 'Đã sửa', verified: 'Đã xác nhận' }[d.status] || d.status }}</a-tag>
+              <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                <a-tag :color="d.severity === 'high' ? 'red' : d.severity === 'low' ? 'green' : 'orange'" class="rounded-full text-[10px] font-bold px-2 py-0">
+                  {{ { low: 'NHẸ', medium: 'TRUNG BÌNH', high: 'NẶNG' }[d.severity] || d.severity }}
+                </a-tag>
+                <a-tag :color="{ open: 'default', in_progress: 'processing', resolved: 'blue', fixed: 'blue', verified: 'success' }[d.status] || 'default'" class="rounded-full text-[10px] font-bold px-2 py-0 border-0">
+                  {{ { open: 'MỞ', in_progress: 'ĐANG XỬ LÝ', fixed: 'ĐÃ SỬA (CHỜ DUYỆT)', verified: 'ĐÃ XÁC NHẬN' }[d.status] || d.status }}
+                </a-tag>
               </div>
-              <!-- Defect attachments thumbnails -->
-              <div v-if="d.attachments?.length" class="flex gap-1 mt-2 flex-wrap">
-                <a v-for="att in d.attachments.slice(0, 4)" :key="att.id" href="#" @click.stop.prevent="openFilePreview(att)"
-                  class="w-10 h-10 rounded-md overflow-hidden border border-gray-200 hover:border-blue-400 transition">
-                  <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
-                  <div v-else class="w-full h-full flex items-center justify-center bg-gray-50"><FileOutlined class="text-gray-400 text-xs" /></div>
-                </a>
-                <span v-if="d.attachments.length > 4" class="w-10 h-10 rounded-md bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 border border-gray-200">+{{ d.attachments.length - 4 }}</span>
+              <div class="text-sm font-semibold text-gray-800 leading-snug" :class="d.status === 'verified' ? 'line-through opacity-50' : ''">
+                {{ d.description }}
               </div>
             </div>
-            <a-tooltip title="Xem tại Module Lỗi">
-              <LinkOutlined class="text-gray-400 hover:text-blue-500 text-sm ml-2 mt-1" />
+            <div class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+               <a-tooltip title="Xem chi tiết tại Module Lỗi"><LinkOutlined class="text-blue-500" /></a-tooltip>
+            </div>
+          </div>
+
+          <!-- Attachments Section -->
+          <div v-if="d.attachments?.length" class="flex gap-2 flex-wrap mb-3 p-2 bg-gray-50/50 rounded-lg">
+            <a v-for="att in d.attachments.slice(0, 5)" :key="att.id" href="#" @click.stop.prevent="openFilePreview(att)"
+               class="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 transition-all hover:scale-105 shadow-sm">
+              <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full flex items-center justify-center bg-gray-50"><FileOutlined class="text-gray-400 text-xs" /></div>
+            </a>
+            <div v-if="d.attachments.length > 5" class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 border border-gray-200">+{{ d.attachments.length - 5 }}</div>
+          </div>
+
+          <!-- Rejection Reason (If any) -->
+          <div v-if="d.status === 'in_progress' && d.rejection_reason" class="mb-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100 text-[11px]">
+            <span class="font-bold text-red-600 block mb-0.5">⚠️ Lý do sửa lại:</span>
+            <span class="text-red-700">{{ d.rejection_reason }}</span>
+          </div>
+
+          <!-- Action Buttons (Matching Cost Approval Pattern) -->
+          <div class="flex items-center justify-end gap-1.5 pt-2 border-t border-gray-50 mt-1" @click.stop>
+            <!-- 1. Fix Action: Worker marks as fixed -->
+            <template v-if="['open', 'in_progress'].includes(d.status) && can('defect.update')">
+               <a-popconfirm title="Xác nhận đã sửa xong lỗi này?" @confirm="markDefectFixed(d)">
+                 <a-button type="primary" size="small" ghost class="text-[11px] h-7 px-3 border-blue-400 text-blue-600 hover:bg-blue-50">
+                    <CheckOutlined /> Xác nhận Đã sửa
+                 </a-button>
+               </a-popconfirm>
+            </template>
+
+            <!-- 2. Review Actions: PM/Admin verify or reject -->
+            <template v-if="d.status === 'fixed' && can('defect.update')">
+               <a-popconfirm title="Phê duyệt lỗi này đã được fix đạt yêu cầu?" @confirm="verifyDefect(d)">
+                 <a-button type="primary" size="small" class="text-[11px] h-7 px-3 bg-green-600 border-green-600 hover:bg-green-700 shadow-sm shadow-green-100">
+                    <CheckCircleOutlined /> Đồng ý Duyệt
+                 </a-button>
+               </a-popconfirm>
+               <a-button size="small" danger ghost @click="openRejectDefectModal(d)" class="text-[11px] h-7 px-3">
+                 <CloseCircleOutlined /> Từ chối Fix
+               </a-button>
+            </template>
+
+            <!-- Support Actions -->
+            <a-tooltip title="Upload thêm ảnh/chứng từ">
+              <a-button type="text" size="small" @click="openAttachModal('defect', d)" class="h-7 w-7 p-0 flex items-center justify-center text-gray-500 hover:text-blue-500">
+                <UploadOutlined />
+              </a-button>
             </a-tooltip>
+            
+            <a-popconfirm v-if="can('defect.delete') && d.status === 'open'" title="Xóa lỗi ghi nhận?" @confirm="deleteDefect(d)">
+              <a-button type="text" size="small" danger class="h-7 w-7 p-0 flex items-center justify-center">
+                <DeleteOutlined />
+              </a-button>
+            </a-popconfirm>
           </div>
         </div>
         <a-empty v-if="!acceptDetailDefects.length" :image="null" description="Không có lỗi nào — tuyệt vời!" class="py-2" />
@@ -3968,6 +4154,7 @@
 import { ref, computed, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
+import axios from 'axios'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import {
@@ -4450,23 +4637,21 @@ const acceptStatusLabels = { pending: 'Chờ duyệt', supervisor_approved: 'GS 
 // ============ TABLE COLUMNS ============
 const costCols = [
   { title: 'Tên', dataIndex: 'name', ellipsis: true },
-  { title: 'Số tiền', key: 'amount', align: 'right', width: 150 },
-  { title: 'Nhóm', dataIndex: ['cost_group', 'name'], width: 130 },
-  { title: 'Trạng thái', key: 'status', width: 120 },
-  { title: 'Người tạo', key: 'creator', width: 120 },
+  { title: 'Nhóm', dataIndex: ['cost_group', 'name'], width: 140 }, // Moved up
+  { title: 'Trạng thái', key: 'status', width: 130 },
+  { title: 'Số tiền', key: 'amount', align: 'right', width: 140 },
+  { title: 'Người tạo', key: 'creator', width: 130 },
   { title: 'Ngày', key: 'date', width: 110 },
-  { title: '', key: 'actions', width: 160, align: 'center' },
+  { title: 'Thao tác', key: 'actions', width: 220, align: 'right' }, // Increased width for Action+Label
 ]
 
 const paymentCols = [
-  { title: 'Đợt', key: 'payment_number', width: 60, align: 'center' },
+  { title: 'Đợt TT', key: 'payment_number', width: 80, align: 'center' },
   { title: 'Ghi chú', dataIndex: 'notes', ellipsis: true },
-  { title: 'Số tiền', key: 'amount', align: 'right', width: 140 },
-  { title: 'Thực TT', key: 'actual_amount', align: 'right', width: 140 },
-  { title: 'Đến hạn', key: 'date', width: 110 },
-  { title: 'Ngày TT', key: 'paid_date', width: 110 },
   { title: 'Trạng thái', key: 'status', width: 140 },
-  { title: '', key: 'actions', width: 160, align: 'center' },
+  { title: 'Số tiền', key: 'amount', align: 'right', width: 140 },
+  { title: 'Ngày TT', key: 'paid_date', width: 110 },
+  { title: 'Thao tác', key: 'actions', width: 220, align: 'right' },
 ]
 
 const personnelCols = [
@@ -4524,10 +4709,10 @@ const groupedLogs = computed(() => {
 })
 
 const defectCols = [
-  { title: 'Mô tả', dataIndex: 'description', ellipsis: true },
-  { title: 'Mức độ', key: 'severity', width: 120 },
-  { title: 'Trạng thái', key: 'status', width: 120 },
-  { title: '', key: 'actions', width: 220, align: 'center' },
+  { title: 'Mô tả lỗi', dataIndex: 'description', ellipsis: true },
+  { title: 'Mức độ', key: 'severity', width: 120, align: 'center' },
+  { title: 'Trạng thái', key: 'status', width: 150, align: 'center' },
+  { title: 'Thao tác', key: 'actions', width: 280, align: 'right' },
 ]
 
 const crCols = [
@@ -4563,10 +4748,10 @@ const subCols = [
 
 const acCols = [
   { title: 'Mô tả', dataIndex: 'description', ellipsis: true },
-  { title: 'Số tiền', key: 'amount', align: 'right', width: 150 },
-  { title: 'Người đề xuất', key: 'proposer', width: 140 },
-  { title: 'Trạng thái', key: 'status', width: 120 },
-  { title: '', key: 'actions', width: 120, align: 'center' },
+  { title: 'Trạng thái', key: 'status', width: 140 },
+  { title: 'Số tiền', key: 'amount', align: 'right', width: 140 },
+  { title: 'Người đề xuất', key: 'proposer', width: 150 },
+  { title: 'Thao tác', key: 'actions', width: 220, align: 'right' },
 ]
 
 const budgetCols = [
@@ -4808,7 +4993,7 @@ const paymentForm = ref({ payment_number: '', contract_id: null, notes: '', amou
 const openPaymentModal = (p = null) => {
   editingPayment.value = p
   modalFiles.value = []
-  paymentForm.value = p ? { payment_number: p.payment_number || '', contract_id: p.contract_id || null, notes: p.notes || '', amount: p.amount, due_date: p.due_date } : { payment_number: '', contract_id: props.project.contract?.id || null, notes: '', amount: null, due_date: null }
+  paymentForm.value = p ? { payment_number: p.payment_number, contract_id: p.contract_id || null, notes: p.notes || '', amount: p.amount, due_date: p.due_date } : { payment_number: (props.project.payments?.length || 0) + 1, contract_id: props.project.contract?.id || null, notes: '', amount: null, due_date: null }
   showPaymentModal.value = true
 }
 const savePayment = () => {
@@ -5425,6 +5610,18 @@ const getOpenDefects = (stage) => {
 }
 const acceptItemStatusColor = (status) => ({ draft: 'default', pending: 'default', submitted: 'processing', supervisor_approved: 'cyan', project_manager_approved: 'blue', pm_approved: 'blue', customer_approved: 'success', rejected: 'error' }[status] || 'default')
 const acceptItemStatusLabel = (status) => ({ draft: 'Nháp', pending: 'Chờ', submitted: 'Đã nộp', supervisor_approved: 'GS duyệt', project_manager_approved: 'PM duyệt', pm_approved: 'PM duyệt', customer_approved: 'KH duyệt', rejected: 'Từ chối' }[status] || status)
+
+const getTaskAcceptanceStatus = (task) => {
+  const stages = props.project.acceptance_stages || []
+  for (const stage of stages) {
+    // Check if task is linked to stage directly
+    if (stage.task_id === task.id && stage.status === 'owner_approved') return 'customer_approved'
+    // Check if task is linked to any item in stage
+    const item = (stage.items || []).find(i => i.task_id === task.id)
+    if (item) return item.workflow_status
+  }
+  return null
+}
 
 // ============ ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ============
 const showAcceptDetailDrawer = ref(false)
@@ -6205,6 +6402,27 @@ const returnEquipmentAction = (eq, allocation) => {
 .mat-submit-btn:disabled {
   background: #d1d5db !important;
   box-shadow: none !important;
+}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.crm-table :deep(.ant-table-thead > tr > th) {
+  background: #f8fafc !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: #64748b !important;
+  font-weight: 700 !important;
+  border-bottom: 2px solid #f1f5f9 !important;
+}
+
+.crm-table :deep(.ant-table-tbody > tr > td) {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #f8fafc !important;
+}
+
+.crm-table :deep(.ant-table-tbody > tr:hover > td) {
+  background: #f8fafc !important;
 }
 /* Batch item transition animations */
 .mat-item-enter-active { transition: all 0.3s ease; }

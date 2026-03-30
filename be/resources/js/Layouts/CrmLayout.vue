@@ -113,24 +113,60 @@
 
       <!-- Content -->
       <a-layout-content style="background: var(--crm-bg);">
-        <!-- Flash messages -->
-        <div v-if="$page.props.flash?.success || $page.props.flash?.error" class="px-8 pt-4">
-          <a-alert
-            v-if="$page.props.flash?.success"
-            :message="$page.props.flash.success"
-            type="success"
-            show-icon
-            closable
-            class="mb-3 rounded-xl"
-          />
-          <a-alert
-            v-if="$page.props.flash?.error"
-            :message="$page.props.flash.error"
-            type="error"
-            show-icon
-            closable
-            class="rounded-xl"
-          />
+        <!-- Premium Floating Notifications -->
+        <div class="fixed top-20 right-6 z-[9999] flex flex-col gap-3 pointer-events-none min-w-[320px] max-w-[420px]">
+          <TransitionGroup
+            enter-active-class="transform transition duration-500 ease-out"
+            enter-from-class="translate-x-full opacity-0 scale-95"
+            enter-to-class="translate-x-0 opacity-100 scale-100"
+            leave-active-class="transition duration-300 ease-in"
+            leave-from-class="opacity-100 scale-100"
+            leave-to-class="opacity-0 scale-90"
+          >
+            <!-- Success Alert -->
+            <div
+              v-if="$page.props.flash?.success"
+              key="success-alert"
+              class="pointer-events-auto group relative overflow-hidden bg-white/80 backdrop-blur-xl border border-emerald-100 p-4 rounded-2xl shadow-2xl shadow-emerald-500/10 flex items-start gap-4"
+            >
+              <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500"></div>
+              <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0 text-emerald-600 border border-emerald-100/50">
+                <CheckCircleFilled style="font-size: 20px" />
+              </div>
+              <div class="flex-1 pr-6">
+                <div class="text-sm font-bold text-gray-900 mb-0.5">Thành công</div>
+                <div class="text-xs text-gray-500 leading-relaxed">{{ $page.props.flash.success }}</div>
+              </div>
+              <button
+                @click="$page.props.flash.success = null"
+                class="absolute top-3 right-3 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <CloseOutlined style="font-size: 12px" />
+              </button>
+            </div>
+
+            <!-- Error Alert -->
+            <div
+              v-if="$page.props.flash?.error"
+              key="error-alert"
+              class="pointer-events-auto group relative overflow-hidden bg-white/80 backdrop-blur-xl border border-rose-100 p-4 rounded-2xl shadow-2xl shadow-rose-500/10 flex items-start gap-4"
+            >
+              <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-rose-500"></div>
+              <div class="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center flex-shrink-0 text-rose-600 border border-rose-100/50">
+                <CloseCircleFilled style="font-size: 20px" />
+              </div>
+              <div class="flex-1 pr-6">
+                <div class="text-sm font-bold text-gray-900 mb-0.5">Thông báo lỗi</div>
+                <div class="text-xs text-gray-500 leading-relaxed">{{ $page.props.flash.error }}</div>
+              </div>
+              <button
+                @click="$page.props.flash.error = null"
+                class="absolute top-3 right-3 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <CloseOutlined style="font-size: 12px" />
+              </button>
+            </div>
+          </TransitionGroup>
         </div>
 
         <div class="crm-page">
@@ -172,6 +208,9 @@ import {
   BookOutlined,
   ApartmentOutlined,
   FileProtectOutlined,
+  CheckCircleFilled,
+  CloseCircleFilled,
+  CloseOutlined
 } from '@ant-design/icons-vue'
 
 const props = defineProps({

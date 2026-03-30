@@ -15,6 +15,7 @@ use App\Models\SubcontractorAcceptance;
 use App\Models\SupplierAcceptance;
 use App\Models\ConstructionLog;
 use App\Models\ScheduleAdjustment;
+use App\Models\Defect;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -35,77 +36,77 @@ class CrmApprovalController extends Controller
         $managementItems = Cost::whereIn('status', ['pending_management_approval'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($cost) => $this->formatItem($cost));
+            ->get();
+        $managementItemsFormatted = $managementItems->map(fn($cost) => $this->formatItem($cost));
 
         // ─── Accountant Level (KT) ───
         $accountantItems = Cost::whereIn('status', ['pending_accountant_approval'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($cost) => $this->formatItem($cost));
+            ->get();
+        $accountantItemsFormatted = $accountantItems->map(fn($cost) => $this->formatItem($cost));
 
         // ─── Nghiệm thu chờ GS duyệt ───
         $acceptanceSupervisorItems = AcceptanceStage::where('status', 'pending')
             ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ GS duyệt', 'supervisor'));
+            ->get();
+        $acceptanceSupervisorItemsFormatted = $acceptanceSupervisorItems->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ GS duyệt', 'supervisor'));
 
         // ─── Nghiệm thu chờ QLDA duyệt ───
         $acceptancePMItems = AcceptanceStage::where('status', 'supervisor_approved')
             ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'supervisorApprover:id,name', 'task:id,name'])
             ->orderBy('updated_at', 'desc')
-            ->get()
-            ->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ QLDA duyệt', 'project_manager'));
+            ->get();
+        $acceptancePMItemsFormatted = $acceptancePMItems->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ QLDA duyệt', 'project_manager'));
 
         // ─── Customer Acceptance (Khách hàng duyệt nghiệm thu) ───
         $customerAcceptanceItems = AcceptanceStage::where('status', 'project_manager_approved')
             ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'projectManagerApprover:id,name', 'task:id,name'])
             ->orderBy('updated_at', 'desc')
-            ->get()
-            ->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ KH duyệt', 'customer'));
+            ->get();
+        $customerAcceptanceItemsFormatted = $customerAcceptanceItems->map(fn($stage) => $this->formatAcceptanceItem($stage, 'Chờ KH duyệt', 'customer'));
 
         // ─── Change Requests chờ duyệt ───
         $changeRequestItems = ChangeRequest::whereIn('status', ['submitted', 'under_review'])
             ->with(['project:id,name,code', 'requester:id,name,email'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($cr) => $this->formatChangeRequestItem($cr));
+            ->get();
+        $changeRequestItemsFormatted = $changeRequestItems->map(fn($cr) => $this->formatChangeRequestItem($cr));
 
         // ─── Additional Costs chờ duyệt ───
         $additionalCostItems = AdditionalCost::whereIn('status', ['pending', 'pending_approval'])
             ->with(['project:id,name,code', 'proposer:id,name,email'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($ac) => $this->formatAdditionalCostItem($ac));
+            ->get();
+        $additionalCostItemsFormatted = $additionalCostItems->map(fn($ac) => $this->formatAdditionalCostItem($ac));
 
         // ─── Subcontractor Payments chờ duyệt ───
         $subPaymentManagement = SubcontractorPayment::where('status', 'pending_management_approval')
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($p) => $this->formatSubPaymentItem($p));
+            ->get();
+        $subPaymentManagementFormatted = $subPaymentManagement->map(fn($p) => $this->formatSubPaymentItem($p));
 
         $subPaymentAccountant = SubcontractorPayment::where('status', 'pending_accountant_confirmation')
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'approver:id,name'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($p) => $this->formatSubPaymentItem($p));
+            ->get();
+        $subPaymentAccountantFormatted = $subPaymentAccountant->map(fn($p) => $this->formatSubPaymentItem($p));
 
         // ─── Hợp đồng chờ Khách hàng duyệt ───
         $contractItems = Contract::where('status', 'pending_customer_approval')
             ->with(['project:id,name,code'])
             ->orderBy('updated_at', 'desc')
-            ->get()
-            ->map(fn($c) => $this->formatContractItem($c));
+            ->get();
+        $contractItemsFormatted = $contractItems->map(fn($c) => $this->formatContractItem($c));
 
         // ─── Thanh toán dự án chờ Khách hàng duyệt ───
         $paymentItems = ProjectPayment::where('status', 'customer_pending_approval')
             ->with(['project:id,name,code', 'contract:id,contract_value'])
             ->orderBy('updated_at', 'desc')
-            ->get()
-            ->map(fn($p) => $this->formatPaymentItem($p));
+            ->get();
+        $paymentItemsFormatted = $paymentItems->map(fn($p) => $this->formatPaymentItem($p));
 
         // ─── Phiếu vật tư chờ duyệt (BĐH) ───
         $materialBillManagementItems = collect();
@@ -129,70 +130,84 @@ class CrmApprovalController extends Controller
         $subAcceptanceItems = SubcontractorAcceptance::where('status', 'pending')
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($sa) => $this->formatSubAcceptanceItem($sa));
+            ->get();
+        $subAcceptanceItemsFormatted = $subAcceptanceItems->map(fn($sa) => $this->formatSubAcceptanceItem($sa));
 
         // ─── Nghiệm thu NCC chờ duyệt ───
         $supplierAcceptanceItems = SupplierAcceptance::where('status', 'pending')
             ->with(['supplier:id,name', 'project:id,name,code', 'creator:id,name'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($sa) => $this->formatSupplierAcceptanceItem($sa));
+            ->get();
+        $supplierAcceptanceItemsFormatted = $supplierAcceptanceItems->map(fn($sa) => $this->formatSupplierAcceptanceItem($sa));
 
         // ─── Nhật ký công trường chờ duyệt ───
         $constructionLogItems = ConstructionLog::where('approval_status', 'pending')
             ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
             ->orderBy('log_date', 'desc')
-            ->get()
-            ->map(fn($log) => $this->formatConstructionLogItem($log));
+            ->get();
+        $constructionLogItemsFormatted = $constructionLogItems->map(fn($log) => $this->formatConstructionLogItem($log));
 
         // ─── Điều chỉnh tiến độ chờ duyệt ───
         $scheduleAdjustmentItems = ScheduleAdjustment::where('status', 'pending')
             ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($adj) => $this->formatScheduleAdjustmentItem($adj));
+            ->get();
+        $scheduleAdjustmentItemsFormatted = $scheduleAdjustmentItems->map(fn($adj) => $this->formatScheduleAdjustmentItem($adj));
+
+        // ─── Lỗi nghiệm thu chờ xác nhận (fixed → chờ GS/QLDA verify) ───
+        $defectItems = Defect::where('status', 'fixed')
+            ->with(['project:id,name,code', 'reporter:id,name', 'fixer:id,name', 'task:id,name', 'acceptanceStage:id,name'])
+            ->orderBy('fixed_at', 'desc')
+            ->get();
+        $defectItemsFormatted = $defectItems->map(fn($d) => $this->formatDefectItem($d));
 
         // ─── Recently processed (last 30 items — ALL types) ───
         $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
             ->orderBy('updated_at', 'desc')
             ->limit(15)
-            ->get()
-            ->map(fn($cost) => $this->formatItem($cost));
+            ->get();
 
         $recentCR = ChangeRequest::whereIn('status', ['approved', 'rejected'])
             ->with(['project:id,name,code', 'requester:id,name,email'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
-            ->get()
-            ->map(fn($cr) => $this->formatChangeRequestItem($cr));
+            ->get();
 
         $recentAC = AdditionalCost::whereIn('status', ['approved', 'rejected'])
             ->with(['project:id,name,code', 'proposer:id,name,email'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
-            ->get()
-            ->map(fn($ac) => $this->formatAdditionalCostItem($ac));
+            ->get();
 
         $recentSubPayments = SubcontractorPayment::whereIn('status', ['paid', 'rejected'])
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
-            ->get()
-            ->map(fn($p) => $this->formatSubPaymentItem($p));
+            ->get();
 
         $recentAcceptances = AcceptanceStage::whereIn('status', ['customer_approved', 'rejected'])
             ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
-            ->get()
-            ->map(fn($stage) => $this->formatAcceptanceItem($stage));
+            ->get();
 
-        $recentItems = $recentCosts->merge($recentCR)->merge($recentAC)->merge($recentSubPayments)->merge($recentAcceptances)
-            ->sortByDesc('created_at')
+        $recentItems = $recentCosts->toBase()
+            ->merge($recentCR->toBase())
+            ->merge($recentAC->toBase())
+            ->merge($recentSubPayments->toBase())
+            ->merge($recentAcceptances->toBase())
+            ->sortByDesc(fn($item) => $item->updated_at ?? $item->created_at)
             ->take(30)
-            ->values();
+            ->values()
+            ->map(function ($item) {
+                if ($item instanceof Cost) return $this->formatItem($item);
+                if ($item instanceof ChangeRequest) return $this->formatChangeRequestItem($item);
+                if ($item instanceof AdditionalCost) return $this->formatAdditionalCostItem($item);
+                if ($item instanceof SubcontractorPayment) return $this->formatSubPaymentItem($item);
+                if ($item instanceof AcceptanceStage) return $this->formatAcceptanceItem($item);
+                return [];
+            });
 
         // ─── Stats ───
         $stats = [
@@ -211,6 +226,7 @@ class CrmApprovalController extends Controller
             'pending_supplier_acceptance' => $supplierAcceptanceItems->count(),
             'pending_construction_log' => $constructionLogItems->count(),
             'pending_schedule_adjustment' => $scheduleAdjustmentItems->count(),
+            'pending_defect' => $defectItems->count(),
             'approved_today' => Cost::where('status', 'approved')
                 ->whereDate('updated_at', today())
                 ->count(),
@@ -221,23 +237,24 @@ class CrmApprovalController extends Controller
         ];
 
         return Inertia::render('Crm/Approvals/Index', [
-            'managementItems' => $managementItems->values(),
-            'accountantItems' => $accountantItems->values(),
-            'acceptanceSupervisorItems' => $acceptanceSupervisorItems->values(),
-            'acceptancePMItems' => $acceptancePMItems->values(),
-            'customerAcceptanceItems' => $customerAcceptanceItems->values(),
-            'changeRequestItems' => $changeRequestItems->values(),
-            'additionalCostItems' => $additionalCostItems->values(),
-            'subPaymentManagementItems' => $subPaymentManagement->values(),
-            'subPaymentAccountantItems' => $subPaymentAccountant->values(),
-            'contractItems' => $contractItems->values(),
-            'paymentItems' => $paymentItems->values(),
+            'managementItems' => $managementItemsFormatted->values(),
+            'accountantItems' => $accountantItemsFormatted->values(),
+            'acceptanceSupervisorItems' => $acceptanceSupervisorItemsFormatted->values(),
+            'acceptancePMItems' => $acceptancePMItemsFormatted->values(),
+            'customerAcceptanceItems' => $customerAcceptanceItemsFormatted->values(),
+            'changeRequestItems' => $changeRequestItemsFormatted->values(),
+            'additionalCostItems' => $additionalCostItemsFormatted->values(),
+            'subPaymentManagementItems' => $subPaymentManagementFormatted->values(),
+            'subPaymentAccountantItems' => $subPaymentAccountantFormatted->values(),
+            'contractItems' => $contractItemsFormatted->values(),
+            'paymentItems' => $paymentItemsFormatted->values(),
             'materialBillManagementItems' => $materialBillManagementItems->values(),
             'materialBillAccountantItems' => $materialBillAccountantItems->values(),
-            'subAcceptanceItems' => $subAcceptanceItems->values(),
-            'supplierAcceptanceItems' => $supplierAcceptanceItems->values(),
-            'constructionLogItems' => $constructionLogItems->values(),
-            'scheduleAdjustmentItems' => $scheduleAdjustmentItems->values(),
+            'subAcceptanceItems' => $subAcceptanceItemsFormatted->values(),
+            'supplierAcceptanceItems' => $supplierAcceptanceItemsFormatted->values(),
+            'constructionLogItems' => $constructionLogItemsFormatted->values(),
+            'scheduleAdjustmentItems' => $scheduleAdjustmentItemsFormatted->values(),
+            'defectItems' => $defectItemsFormatted->values(),
             'recentItems' => $recentItems->values(),
             'stats' => $stats,
         ]);
@@ -1455,6 +1472,113 @@ class CrmApprovalController extends Controller
         }
     }
 
+    // =========================================================================
+    // DEFECT VERIFICATION (Xác nhận lỗi đã sửa)
+    // Flow: open → in_progress → fixed → verified (hoặc rejected → open lại)
+    // =========================================================================
+
+    public function verifyDefectFromApproval(Request $request, $id)
+    {
+        $defect = Defect::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($defect->status !== 'fixed') {
+            return back()->with('error', 'Lỗi không ở trạng thái chờ xác nhận');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $defect->markAsVerified($user);
+
+            DB::commit();
+
+            Log::info('CRM Approval: Defect verified', [
+                'defect_id' => $defect->id,
+                'verified_by' => $user->id,
+                'project_id' => $defect->project_id,
+            ]);
+
+            return back()->with('success', "Đã xác nhận lỗi đã sửa xong");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM Approval: Defect verify failed', ['defect_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi xác nhận lỗi');
+        }
+    }
+
+    public function rejectDefectFromApproval(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+
+        $defect = Defect::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if ($defect->status !== 'fixed') {
+            return back()->with('error', 'Lỗi không ở trạng thái có thể từ chối');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $defect->update([
+                'status' => 'open',
+                'rejection_reason' => $request->reason,
+                'fixed_by' => null,
+                'fixed_at' => null,
+            ]);
+
+            DB::commit();
+
+            Log::info('CRM Approval: Defect fix rejected', [
+                'defect_id' => $defect->id,
+                'rejected_by' => $user->id,
+                'reason' => $request->reason,
+            ]);
+
+            return back()->with('success', "Đã từ chối fix lỗi — lỗi được mở lại");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM Approval: Defect reject failed', ['defect_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi từ chối fix lỗi');
+        }
+    }
+
+    // =========================================================================
+    // FORMAT HELPERS
+    // =========================================================================
+
+    private function formatDefectItem(Defect $defect): array
+    {
+        $severityLabels = [
+            'critical' => 'Nghiêm trọng', 'major' => 'Lớn',
+            'minor' => 'Nhỏ', 'cosmetic' => 'Thẩm mỹ',
+        ];
+
+        return [
+            'id' => $defect->id,
+            'type' => 'defect',
+            'type_label' => 'Lỗi nghiệm thu',
+            'title' => Str::limit($defect->description, 80),
+            'subtitle' => ($defect->project->code ?? '') . ' - ' . ($defect->project->name ?? 'Dự án'),
+            'amount' => 0,
+            'status' => $defect->status,
+            'status_label' => 'Chờ xác nhận fix',
+            'created_by' => $defect->fixer->name ?? ($defect->reporter->name ?? 'N/A'),
+            'created_by_email' => '',
+            'created_at' => $defect->fixed_at?->format('d/m/Y H:i') ?? $defect->created_at?->format('d/m/Y H:i') ?? '',
+            'description' => $defect->description,
+            'project_name' => $defect->project->name ?? null,
+            'project_id' => $defect->project_id,
+            'task_name' => $defect->task->name ?? null,
+            'acceptance_stage' => $defect->acceptanceStage->name ?? null,
+            'severity' => $defect->severity,
+            'severity_label' => $severityLabels[$defect->severity] ?? $defect->severity,
+            'rejection_reason' => $defect->rejection_reason ?? null,
+            'approval_level' => 'defect_verify',
+        ];
+    }
+
     private function getStatusLabel(string $status): string
     {
         return match ($status) {
@@ -1467,6 +1591,8 @@ class CrmApprovalController extends Controller
             'approved', 'customer_approved' => 'Đã duyệt',
             'paid', 'customer_paid' => 'Đã thanh toán',
             'rejected' => 'Từ chối',
+            'fixed' => 'Đã sửa — Chờ xác nhận',
+            'verified' => 'Đã xác nhận',
             default => $status,
         };
     }

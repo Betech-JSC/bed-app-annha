@@ -328,6 +328,7 @@ const props = defineProps({
   supplierAcceptanceItems: { type: Array, default: () => [] },
   constructionLogItems: { type: Array, default: () => [] },
   scheduleAdjustmentItems: { type: Array, default: () => [] },
+  defectItems: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
 })
@@ -354,6 +355,7 @@ const typeColors = {
   supplier_acceptance: 'green',
   construction_log: 'geekblue',
   schedule_adjustment: 'red',
+  defect: 'volcano',
 }
 
 const statusViMap = {
@@ -369,6 +371,7 @@ const statusViMap = {
   confirmed: 'Đã xác nhận', implemented: 'Đã triển khai', cancelled: 'Đã hủy',
   active: 'Đang hiệu lực', expired: 'Hết hạn', terminated: 'Đã thanh lý',
   project_manager_approved: 'QLDA đã duyệt', supervisor_approved: 'GS đã duyệt', owner_approved: 'CĐT đã duyệt',
+  fixed: 'Đã sửa — Chờ xác nhận', verified: 'Đã xác nhận',
 }
 
 const historyStatusColor = (status) => {
@@ -405,6 +408,7 @@ const roleItemsMap = computed(() => ({
     ...props.supplierAcceptanceItems.map(i => ({ ...i, _approveType: 'supplier_acceptance' })),
     ...props.constructionLogItems.map(i => ({ ...i, _approveType: 'construction_log' })),
     ...props.scheduleAdjustmentItems.map(i => ({ ...i, _approveType: 'schedule_adjustment' })),
+    ...props.defectItems.map(i => ({ ...i, _approveType: 'defect_verify' })),
   ],
 }))
 
@@ -483,6 +487,7 @@ const approveUrlMap = {
   supplier_acceptance: (r) => `/approvals/supplier-acceptance/${r.id}/approve`,
   construction_log: (r) => `/approvals/construction-log/${r.id}/approve`,
   schedule_adjustment: (r) => `/approvals/schedule-adjustment/${r.id}/approve`,
+  defect_verify: (r) => `/approvals/defect/${r.id}/verify`,
 }
 
 const approveLabels = {
@@ -502,6 +507,7 @@ const approveLabels = {
   supplier_acceptance: 'Duyệt nghiệm thu NCC',
   construction_log: 'Duyệt nhật ký công trường',
   schedule_adjustment: 'Duyệt điều chỉnh tiến độ',
+  defect_verify: 'Xác nhận lỗi đã sửa',
 }
 
 const handleApproveByType = (record) => {
@@ -544,6 +550,7 @@ const rejectUrlMap = {
   supplier_acceptance: (r) => `/approvals/supplier-acceptance/${r.id}/reject`,
   construction_log: (r) => `/approvals/construction-log/${r.id}/reject`,
   schedule_adjustment: (r) => `/approvals/schedule-adjustment/${r.id}/reject`,
+  defect_verify: (r) => `/approvals/defect/${r.id}/reject`,
 }
 
 const openRejectModal = (record) => {

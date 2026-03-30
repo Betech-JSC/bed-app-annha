@@ -580,7 +580,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_CREATE, $project);
 
         $validated = $request->validate([
-            'payment_number' => 'nullable|string|max:50',
+            'payment_number' => 'nullable|max:50', // Allow string or integer
             'contract_id' => 'nullable|exists:contracts,id',
             'notes' => 'nullable|string|max:2000',
             'amount' => 'required|numeric|min:0',
@@ -588,10 +588,10 @@ class CrmProjectsController extends Controller
             'status' => 'nullable|string',
         ]);
 
-        // Auto-generate payment_number if not provided
+        // Auto-generate payment_number if not provided (must be integer for DB)
         if (empty($validated['payment_number'])) {
             $count = ProjectPayment::where('project_id', $project->id)->count();
-            $validated['payment_number'] = 'TT-' . str_pad($count + 1, 3, '0', STR_PAD_LEFT);
+            $validated['payment_number'] = $count + 1;
         }
 
         ProjectPayment::create([

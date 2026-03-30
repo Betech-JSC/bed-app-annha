@@ -92,17 +92,17 @@ class ProjectPaymentController extends Controller
         }
 
         $validated = $request->validate([
-            'payment_number' => 'nullable|string|max:50',
+            'payment_number' => 'nullable|max:50', // Allow string or integer
             'amount' => 'required|numeric|min:0',
             'notes' => 'nullable|string|max:2000',
             'due_date' => 'required|date',
             'contract_id' => 'nullable|exists:contracts,id',
         ]);
 
-        // Auto-generate payment_number if not provided
+        // Auto-generate payment_number if not provided (must be integer for DB)
         if (empty($validated['payment_number'])) {
             $count = ProjectPayment::where('project_id', $project->id)->count();
-            $validated['payment_number'] = 'TT-' . str_pad($count + 1, 3, '0', STR_PAD_LEFT);
+            $validated['payment_number'] = $count + 1;
         }
 
         try {

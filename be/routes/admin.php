@@ -173,6 +173,10 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Schedule Adjustment (Điều chỉnh tiến độ)
         Route::post('/schedule-adjustment/{id}/approve', [CrmApprovalController::class, 'approveScheduleAdjustment'])->name('schedule-adjustment.approve');
         Route::post('/schedule-adjustment/{id}/reject', [CrmApprovalController::class, 'rejectScheduleAdjustment'])->name('schedule-adjustment.reject');
+
+        // Defect Verify (Xác nhận lỗi đã sửa)
+        Route::post('/defect/{id}/verify', [CrmApprovalController::class, 'verifyDefectFromApproval'])->name('defect.verify');
+        Route::post('/defect/{id}/reject', [CrmApprovalController::class, 'rejectDefectFromApproval'])->name('defect.reject');
     });
 
     // Reports (Báo cáo dự án)
