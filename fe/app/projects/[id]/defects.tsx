@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -75,6 +75,25 @@ export default function DefectsScreen() {
   const [permissionMessage, setPermissionMessage] = useState("");
 
   const canVerify = hasPermission(Permissions.DEFECT_VERIFY);
+
+  // Filter tabs state
+  const [filterVerification, setFilterVerification] = useState<"all" | "unverified" | "verified">("all");
+
+  // Computed filtered defects
+  const filteredDefects = useMemo(() => {
+    switch (filterVerification) {
+      case "verified":
+        return defects.filter(d => d.status === "verified");
+      case "unverified":
+        return defects.filter(d => d.status !== "verified");
+      default:
+        return defects;
+    }
+  }, [defects, filterVerification]);
+
+  // Counts for tab badges
+  const verifiedCount = useMemo(() => defects.filter(d => d.status === "verified").length, [defects]);
+  const unverifiedCount = useMemo(() => defects.filter(d => d.status !== "verified").length, [defects]);
 
   useEffect(() => {
     loadDefects();
@@ -402,8 +421,53 @@ export default function DefectsScreen() {
         }
       />
 
+      {/* Filter Tabs */}
+      <View style={styles.filterTabsContainer}>
+        <TouchableOpacity
+          style={[styles.filterTab, filterVerification === "all" && styles.filterTabActive]}
+          onPress={() => setFilterVerification("all")}
+        >
+          <Text style={[styles.filterTabText, filterVerification === "all" && styles.filterTabTextActive]}>
+            Tất cả
+          </Text>
+          <View style={[styles.filterTabBadge, filterVerification === "all" && styles.filterTabBadgeActive]}>
+            <Text style={[styles.filterTabBadgeText, filterVerification === "all" && styles.filterTabBadgeTextActive]}>
+              {defects.length}
+            </Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, filterVerification === "unverified" && styles.filterTabActiveWarning]}
+          onPress={() => setFilterVerification("unverified")}
+        >
+          <Ionicons name="alert-circle-outline" size={16} color={filterVerification === "unverified" ? "#FFFFFF" : "#F59E0B"} />
+          <Text style={[styles.filterTabText, filterVerification === "unverified" && styles.filterTabTextActive]}>
+            Chưa xác nhận
+          </Text>
+          <View style={[styles.filterTabBadge, filterVerification === "unverified" && styles.filterTabBadgeActive]}>
+            <Text style={[styles.filterTabBadgeText, filterVerification === "unverified" && styles.filterTabBadgeTextActive]}>
+              {unverifiedCount}
+            </Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, filterVerification === "verified" && styles.filterTabActiveSuccess]}
+          onPress={() => setFilterVerification("verified")}
+        >
+          <Ionicons name="checkmark-circle-outline" size={16} color={filterVerification === "verified" ? "#FFFFFF" : "#10B981"} />
+          <Text style={[styles.filterTabText, filterVerification === "verified" && styles.filterTabTextActive]}>
+            Đã xác nhận
+          </Text>
+          <View style={[styles.filterTabBadge, filterVerification === "verified" && styles.filterTabBadgeActive]}>
+            <Text style={[styles.filterTabBadgeText, filterVerification === "verified" && styles.filterTabBadgeTextActive]}>
+              {verifiedCount}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
-        data={defects}
+        data={filteredDefects}
         renderItem={({ item }) => (
           <DefectItem
             defect={item}
@@ -419,7 +483,13 @@ export default function DefectsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="checkmark-circle-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>Không có lỗi nào</Text>
+            <Text style={styles.emptyText}>
+              {filterVerification === "verified"
+                ? "Chưa có lỗi đã xác nhận"
+                : filterVerification === "unverified"
+                  ? "Không có lỗi chưa xác nhận"
+                  : "Không có lỗi nào"}
+            </Text>
           </View>
         }
       />
@@ -2061,6 +2131,67 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     marginTop: 2,
     fontWeight: "500",
+  },
+  filterTabsContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  filterTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  filterTabActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  filterTabActiveWarning: {
+    backgroundColor: "#F59E0B",
+    borderColor: "#F59E0B",
+  },
+  filterTabActiveSuccess: {
+    backgroundColor: "#10B981",
+    borderColor: "#10B981",
+  },
+  filterTabText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
+  filterTabTextActive: {
+    color: "#FFFFFF",
+  },
+  filterTabBadge: {
+    backgroundColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    minWidth: 22,
+    alignItems: "center",
+  },
+  filterTabBadgeActive: {
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  filterTabBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#4B5563",
+  },
+  filterTabBadgeTextActive: {
+    color: "#FFFFFF",
   },
 });
 

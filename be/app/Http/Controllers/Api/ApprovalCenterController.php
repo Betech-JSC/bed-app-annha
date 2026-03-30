@@ -214,7 +214,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'acceptance_supervisor') {
             $acceptanceSupervisor = AcceptanceStage::where('status', 'pending')
-                ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
+                ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name'])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
@@ -236,7 +236,7 @@ class ApprovalCenterController extends Controller
                         'amount' => 0,
                         'status' => $stage->status,
                         'status_label' => 'Chờ GS duyệt',
-                        'created_by' => $stage->creator->name ?? 'N/A',
+                        'created_by' => $stage->project?->projectManager?->name ?? 'N/A',
                         'created_at' => $stage->created_at->toISOString(),
                         'description' => $stage->description ?? null,
                         'project_id' => $stage->project_id,

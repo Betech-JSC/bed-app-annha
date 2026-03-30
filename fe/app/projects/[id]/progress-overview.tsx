@@ -49,6 +49,18 @@ export default function ProgressOverviewScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
+
+      // SYNC FIX: Recalculate all task progress from daily logs first
+      // This ensures progress-overview shows the same data as construction progress
+      try {
+        await ganttApi.recalculateAllTasks(id!);
+        // Small delay to ensure backend has finished updating
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } catch (error) {
+        console.warn("Error recalculating tasks (non-critical):", error);
+        // Continue even if recalculate fails
+      }
+
       const [phasesResponse, tasksResponse] = await Promise.all([
         ganttApi.getPhases(id!),
         ganttApi.getTasks(id!),
@@ -58,7 +70,22 @@ export default function ProgressOverviewScreen() {
         setPhases(phasesResponse.data || []);
       }
       if (tasksResponse.success) {
-        setTasks(tasksResponse.data || []);
+        const tasksData = tasksResponse.data || [];
+        // Normalize progress_percentage - ensure it's a number (same as progress.tsx)
+        const normalizedTasks = tasksData.map((task: any) => {
+          if (task.progress_percentage != null) {
+            if (typeof task.progress_percentage === 'string') {
+              task.progress_percentage = parseFloat(task.progress_percentage);
+            }
+            if (task.status === 'completed' && task.progress_percentage !== 100) {
+              task.progress_percentage = 100;
+            }
+          } else if (task.status === 'completed') {
+            task.progress_percentage = 100;
+          }
+          return task;
+        });
+        setTasks(normalizedTasks);
       }
     } catch (error: any) {
       if (error.response?.status === 403) {

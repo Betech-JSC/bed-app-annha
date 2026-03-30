@@ -842,7 +842,7 @@ class CrmApprovalController extends Controller
 
     private function formatAcceptanceItem(AcceptanceStage $stage, ?string $statusLabel = null, ?string $approvalLevel = null): array
     {
-        $creatorName = $stage->creator->name ?? ($stage->projectManagerApprover->name ?? ($stage->supervisorApprover->name ?? 'N/A'));
+        $creatorName = $stage->project?->projectManager?->name ?? ($stage->projectManagerApprover?->name ?? ($stage->supervisorApprover?->name ?? 'N/A'));
 
         return [
             'id' => $stage->id,

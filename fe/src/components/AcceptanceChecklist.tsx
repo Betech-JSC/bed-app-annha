@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -26,6 +26,15 @@ import { defectApi, Defect, CreateDefectData } from "@/api/defectApi";
 import { useRouter } from "expo-router";
 import { AcceptanceTemplate } from "@/api/acceptanceApi";
 import { Permissions } from "@/constants/Permissions";
+import { API_URL } from "@env";
+
+// Helper to build storage URL from API_URL instead of hardcoded localhost
+const getStorageUrl = (filePath: string): string => {
+  if (!filePath) return '';
+  if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
+  const baseUrl = (API_URL || 'http://localhost:8000/api').replace(/\/api\/?$/, '');
+  return `${baseUrl}/storage/${filePath}`;
+};
 
 interface AcceptanceChecklistProps {
   stages: AcceptanceStage[];
@@ -82,6 +91,7 @@ export default function AcceptanceChecklist({
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Modal nghiệm thu giai đoạn
   const [acceptanceModalVisible, setAcceptanceModalVisible] = useState(false);
@@ -244,17 +254,17 @@ export default function AcceptanceChecklist({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "owner_approved":
-        return { name: "checkmark-circle", color: "#10B981" };
+        return { name: "checkmark-circle", color: "#10B981", label: "CĐT đã duyệt" };
       case "design_approved":
-        return { name: "checkmark-circle", color: "#3B82F6" };
+        return { name: "checkmark-circle", color: "#3B82F6", label: "TK đã duyệt" };
       case "customer_approved":
-        return { name: "checkmark-circle", color: "#8B5CF6" };
+        return { name: "checkmark-circle", color: "#8B5CF6", label: "KH đã duyệt" };
       case "internal_approved":
-        return { name: "checkmark-circle", color: "#F59E0B" };
+        return { name: "checkmark-circle", color: "#F59E0B", label: "Nội bộ duyệt" };
       case "rejected":
-        return { name: "close-circle", color: "#EF4444" };
+        return { name: "close-circle", color: "#EF4444", label: "Từ chối" };
       default:
-        return { name: "ellipse-outline", color: "#9CA3AF" };
+        return { name: "ellipse-outline", color: "#9CA3AF", label: "Chờ duyệt" };
     }
   };
 
@@ -279,6 +289,9 @@ export default function AcceptanceChecklist({
 
     setAcceptingStage(stage);
     setAcceptabilityStatus(stage.acceptability_status || "acceptable");
+
+    // Scroll to top when opening acceptance modal
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
 
     // Load và set template đã chọn (nếu có)
     await loadAcceptanceTemplates();
@@ -401,6 +414,7 @@ export default function AcceptanceChecklist({
   return (
     <>
       <ScrollView
+        ref={scrollViewRef}
         style={styles.container}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100, flexGrow: 1 }}
       >
@@ -493,6 +507,49 @@ export default function AcceptanceChecklist({
                   )}
                 </View>
 
+                {/* Completion Progress Bar */}
+                {totalItems > 0 && (
+                  <View style={styles.completionSection}>
+                    <View style={styles.completionHeader}>
+                      <Text style={styles.completionLabel}>Tiến độ nghiệm thu</Text>
+                      <Text style={[styles.completionValue, { color: icon.color }]}>
+                        {approvedItems}/{totalItems} ({Math.round(completionPercentage)}%)
+                      </Text>
+                    </View>
+                    <View style={styles.completionBarBg}>
+                      <View style={[styles.completionBarFill, { width: `${completionPercentage}%`, backgroundColor: icon.color }]} />
+                    </View>
+                  </View>
+                )}
+
+                {/* Workflow Status Badge */}
+                <View style={styles.workflowStatusRow}>
+                  <View style={[styles.workflowStatusBadge, { backgroundColor: icon.color + '15', borderColor: icon.color + '40' }]}>
+                    <Ionicons name={icon.name as any} size={16} color={icon.color} />
+                    <Text style={[styles.workflowStatusText, { color: icon.color }]}>
+                      {icon.label}
+                    </Text>
+                  </View>
+                  {/* Acceptability badge */}
+                  <View style={[
+                    styles.workflowStatusBadge,
+                    { backgroundColor: acceptabilityStatus === "acceptable" ? "#10B98115" : "#EF444415",
+                      borderColor: acceptabilityStatus === "acceptable" ? "#10B98140" : "#EF444440" }
+                  ]}>
+                    <Ionicons
+                      name={acceptabilityStatus === "acceptable" ? "checkmark-circle" : "alert-circle"}
+                      size={16}
+                      color={acceptabilityStatus === "acceptable" ? "#10B981" : "#EF4444"}
+                    />
+                    <Text style={[
+                      styles.workflowStatusText,
+                      { color: acceptabilityStatus === "acceptable" ? "#10B981" : "#EF4444" }
+                    ]}>
+                      {acceptabilityStatus === "acceptable" ? "Đạt" : "Chưa đạt"}
+                    </Text>
+                  </View>
+                </View>
+
 
                 {/* BUSINESS RULE: Warning Box - Show based on acceptability_status */}
                 {acceptabilityStatus === "not_acceptable" && (
@@ -534,7 +591,7 @@ export default function AcceptanceChecklist({
                     >
                       {stage.attachments.map((attachment: any, index: number) => {
                         const imageUrl = attachment.file_url || attachment.url ||
-                          (attachment.file_path ? `http://localhost:8000/storage/${attachment.file_path}` : null);
+                          (attachment.file_path ? getStorageUrl(attachment.file_path) : null);
                         if (!imageUrl) return null;
                         return (
                           <TouchableOpacity
@@ -2552,5 +2609,55 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.5,
     backgroundColor: "#F3F4F6",
+  },
+  completionSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  completionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  completionLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  completionValue: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  completionBarBg: {
+    height: 6,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  completionBarFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  workflowStatusRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+  },
+  workflowStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  workflowStatusText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

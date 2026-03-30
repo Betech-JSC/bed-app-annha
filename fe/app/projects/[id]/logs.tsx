@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
-  FlatList,
+  SectionList,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
@@ -27,6 +27,17 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 import { useProjectPermissions } from "@/hooks/usePermissions";
+import { API_URL } from "@env";
+
+// Helper to build storage URL from API_URL instead of hardcoded localhost
+const getStorageUrl = (filePath: string): string => {
+  if (!filePath) return '';
+  // If already a full URL, return as-is
+  if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
+  // Build from API_URL: remove /api suffix and append /storage/
+  const baseUrl = (API_URL || 'http://localhost:8000/api').replace(/\/api\/?$/, '');
+  return `${baseUrl}/storage/${filePath}`;
+};
 
 const DAYS_OF_WEEK = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const WEATHER_OPTIONS = ["Nắng", "Mưa"];
@@ -93,15 +104,17 @@ export default function ConstructionLogsScreen() {
   // Sync animated value with state
   useEffect(() => {
     const currentValue = getCompletionPercentage(formData.completion_percentage);
-    const ratio = (currentValue - minCompletionPercentage) / (100 - minCompletionPercentage);
-    const targetValue = isNaN(ratio) ? 0 : ratio;
+    const range = 100 - minCompletionPercentage;
+    const ratio = range > 0 ? (currentValue - minCompletionPercentage) / range : 0;
+    const targetValue = isNaN(ratio) ? 0 : Math.max(0, Math.min(1, ratio));
 
     // Use spring for external updates (like text input or initial load)
     Animated.spring(animatedCompletion, {
       toValue: targetValue,
       useNativeDriver: false,
-      friction: 8,
-      tension: 50,
+      friction: 12,
+      tension: 40,
+      overshootClamping: true,
     }).start();
   }, [formData.completion_percentage, minCompletionPercentage]);
 
@@ -336,7 +349,7 @@ export default function ConstructionLogsScreen() {
         file_path: att.file_path,
         file_size: att.file_size,
         mime_type: att.mime_type,
-        file_url: att.file_path ? `http://localhost:8000/storage/${att.file_path}` : att.file_url,
+        file_url: att.file_path ? getStorageUrl(att.file_path) : att.file_url,
       }))
     );
     setModalVisible(true);
@@ -399,7 +412,8 @@ export default function ConstructionLogsScreen() {
         personnel_count: formData.personnel_count
           ? parseInt(formData.personnel_count)
           : undefined,
-        completion_percentage: formData.completion_percentage > 0
+        // FIXED: Always send completion_percentage when a task is selected
+        completion_percentage: formData.task_id != null
           ? formData.completion_percentage
           : undefined,
         notes: formData.notes || undefined,
@@ -524,6 +538,27 @@ export default function ConstructionLogsScreen() {
     });
     return map;
   }, [logs]);
+
+  // Group logs into sections by date for SectionList (newest first)
+  const logSections = useMemo(() => {
+    const dateKeys = Object.keys(logsByDate).sort((a, b) => b.localeCompare(a)); // newest first
+    return dateKeys.map(dateKey => {
+      const dateLogs = logsByDate[dateKey];
+      const dateObj = new Date(dateKey);
+      const dayName = dateObj.toLocaleDateString("vi-VN", { weekday: "long" });
+      const dateFormatted = dateObj.toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+      return {
+        title: `${dayName}, ${dateFormatted}`,
+        dateKey,
+        count: dateLogs.length,
+        data: dateLogs,
+      };
+    });
+  }, [logsByDate]);
 
   // Tạo calendar data
   const calendarData = useMemo(() => {
@@ -721,8 +756,19 @@ export default function ConstructionLogsScreen() {
           </View>
         </ScrollView>
       ) : (
-        <FlatList
-          data={logs}
+        <SectionList
+          sections={logSections}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <Ionicons name="calendar" size={16} color="#3B82F6" />
+                <Text style={styles.sectionHeaderTitle}>{section.title}</Text>
+              </View>
+              <View style={styles.sectionHeaderBadge}>
+                <Text style={styles.sectionHeaderCount}>{section.count}</Text>
+              </View>
+            </View>
+          )}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.logCard}
@@ -745,24 +791,24 @@ export default function ConstructionLogsScreen() {
                                 .filter((a: any) => a.mime_type?.startsWith("image/"))
                                 .map((a: any) => ({
                                   uri: a.file_path
-                                    ? `http://localhost:8000/storage/${a.file_path}`
+                                    ? getStorageUrl(a.file_path)
                                     : a.file_url,
                                   name: a.file_name
                                 }));
-                              const index = images.findIndex((img: any) =>
+                              const imgIndex = images.findIndex((img: any) =>
                                 img.uri === (attachment.file_path
-                                  ? `http://localhost:8000/storage/${attachment.file_path}`
+                                  ? getStorageUrl(attachment.file_path)
                                   : attachment.file_url)
                               );
                               setViewerImages(images);
-                              setViewerIndex(index >= 0 ? index : 0);
+                              setViewerIndex(imgIndex >= 0 ? imgIndex : 0);
                               setViewerVisible(true);
                             }}
                           >
                             <Image
                               source={{
                                 uri: attachment.file_path
-                                  ? `http://localhost:8000/storage/${attachment.file_path}`
+                                  ? getStorageUrl(attachment.file_path)
                                   : attachment.file_url
                               }}
                               style={styles.logCardAttachmentImage}
@@ -788,19 +834,9 @@ export default function ConstructionLogsScreen() {
 
                 {/* Nội dung bên phải - Optimized Layout */}
                 <View style={styles.logCardRight}>
-                  {/* Header: Date & Progress */}
+                  {/* Header: Actions */}
                   <View style={styles.logHeader}>
-                    <View style={styles.dateBadge}>
-                      <Ionicons name="calendar-outline" size={14} color="#FFFFFF" />
-                      <Text style={styles.dateBadgeText}>
-                        {new Date(item.log_date).toLocaleDateString("vi-VN", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric"
-                        })}
-                      </Text>
-                    </View>
-
+                    <View style={{ flex: 1 }} />
                     <View style={styles.logActions}>
                       <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
                         <TouchableOpacity
@@ -885,15 +921,15 @@ export default function ConstructionLogsScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-          )
-          }
+          )}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
+          stickySectionHeadersEnabled={true}
           ListEmptyComponent={
-            < View style={styles.emptyContainer} >
+            <View style={styles.emptyContainer}>
               <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
               <Text style={styles.emptyText}>Chưa có nhật ký nào</Text>
-            </View >
+            </View>
           }
         />
       )}
@@ -1398,13 +1434,13 @@ export default function ConstructionLogsScreen() {
                                     .filter((a: any) => a.mime_type?.startsWith("image/"))
                                     .map((a: any) => ({
                                       uri: a.file_path
-                                        ? `http://localhost:8000/storage/${a.file_path}`
+                                        ? getStorageUrl(a.file_path)
                                         : a.file_url,
                                       name: a.file_name
                                     }));
                                   const index = images.findIndex((img: any) =>
                                     img.uri === (attachment.file_path
-                                      ? `http://localhost:8000/storage/${attachment.file_path}`
+                                      ? getStorageUrl(attachment.file_path)
                                       : attachment.file_url)
                                   );
                                   setViewerImages(images);
@@ -1415,7 +1451,7 @@ export default function ConstructionLogsScreen() {
                                 <Image
                                   source={{
                                     uri: attachment.file_path
-                                      ? `http://localhost:8000/storage/${attachment.file_path}`
+                                      ? getStorageUrl(attachment.file_path)
                                       : attachment.file_url
                                   }}
                                   style={styles.detailImageGrid}
@@ -1655,6 +1691,42 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#3B82F6",
+  },
+  sectionHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  sectionHeaderTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  sectionHeaderBadge: {
+    backgroundColor: "#3B82F6",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 24,
+    alignItems: "center",
+  },
+  sectionHeaderCount: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   logCard: {
     backgroundColor: "#FFFFFF",
@@ -2124,7 +2196,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   sliderTrackTouchable: {
-    paddingVertical: 12,
+    paddingVertical: 20,
     marginBottom: 16,
   },
   sliderTrack: {
