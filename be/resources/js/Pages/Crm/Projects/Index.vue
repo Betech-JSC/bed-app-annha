@@ -154,7 +154,7 @@
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
         <a-col :span="24">
-          <a-form-item label="Tên dự án" :validate-status="form.errors.name ? 'error' : ''" :help="form.errors.name" required>
+          <a-form-item label="Tên dự án" required v-bind="fieldStatus('name')">
             <a-input v-model:value="form.name" placeholder="Nhập tên dự án..." size="large" />
           </a-form-item>
         </a-col>
@@ -162,7 +162,7 @@
 
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="Khách hàng" :validate-status="form.errors.customer_id ? 'error' : ''" :help="form.errors.customer_id" required>
+          <a-form-item label="Khách hàng" required v-bind="fieldStatus('customer_id')">
             <a-select
               v-model:value="form.customer_id"
               placeholder="Chọn khách hàng"
@@ -177,7 +177,7 @@
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="Quản lý dự án" :validate-status="form.errors.project_manager_id ? 'error' : ''">
+          <a-form-item label="Quản lý dự án" v-bind="fieldStatus('project_manager_id')">
             <a-select
               v-model:value="form.project_manager_id"
               placeholder="Chọn quản lý"
@@ -233,6 +233,7 @@ import StatCard from '@/Components/Crm/StatCard.vue'
 import {
   PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined,
 } from '@ant-design/icons-vue'
+import { message, notification } from 'ant-design-vue'
 import dayjs from 'dayjs'
 
 defineOptions({ layout: CrmLayout })
@@ -322,6 +323,39 @@ const form = useForm({
   status: 'planning',
 })
 
+/**
+ * Returns Ant Design form-item props for field validation display.
+ * Backend now returns Vietnamese messages, so we show them directly.
+ */
+const fieldStatus = (field) => {
+  const err = form.errors[field]
+  if (!err) return {}
+  return { validateStatus: 'error', help: Array.isArray(err) ? err[0] : err }
+}
+
+/**
+ * Shows a single consolidated error notification for validation failures.
+ */
+const showValidationErrors = (errors) => {
+  const entries = Object.entries(errors)
+  const errorList = entries.map(([, msg]) => {
+    const text = Array.isArray(msg) ? msg[0] : msg
+    return text
+  })
+
+  if (errorList.length === 1) {
+    message.warning(errorList[0], 4)
+  } else {
+    notification.warning({
+      message: `Vui lòng kiểm tra ${errorList.length} trường`,
+      description: errorList.map(e => `• ${e}`).join('\n'),
+      duration: 6,
+      placement: 'topRight',
+      style: { whiteSpace: 'pre-line' },
+    })
+  }
+}
+
 const openCreateModal = () => {
   editingProject.value = null
   form.reset()
@@ -350,14 +384,14 @@ const handleSubmit = () => {
   }
 
   if (editingProject.value) {
-    router.put(`/projects/${editingProject.value.id}`, data, {
+    form.put(`/projects/${editingProject.value.id}`, {
       onSuccess: () => { showModal.value = false; resetForm() },
-      onError: (errors) => { Object.assign(form.errors, errors) },
+      onError: (errors) => { showValidationErrors(errors) },
     })
   } else {
-    router.post('/projects', data, {
+    form.post('/projects', {
       onSuccess: () => { showModal.value = false; resetForm() },
-      onError: (errors) => { Object.assign(form.errors, errors) },
+      onError: (errors) => { showValidationErrors(errors) },
     })
   }
 }
