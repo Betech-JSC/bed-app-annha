@@ -1,7 +1,7 @@
 <template>
   <Head title="Quản lý vật tư" />
 
-  <PageHeader title="Quản lý vật tư" subtitle="Danh mục và tồn kho vật tư xây dựng">
+  <PageHeader title="Quản lý vật tư" subtitle="Danh mục vật tư xây dựng — chi phí & số lượng sử dụng">
     <template #actions>
       <a-button type="primary" size="large" @click="openCreateModal">
         <template #icon><PlusOutlined /></template>
@@ -10,9 +10,8 @@
     </template>
   </PageHeader>
 
-  <div class="crm-stats-grid">
+  <div class="crm-stats-grid" style="grid-template-columns: 1fr;">
     <StatCard label="Tổng vật tư" :value="stats.total" icon="ToolOutlined" variant="primary" />
-    <StatCard label="Dưới mức tối thiểu" :value="stats.low_stock" icon="WarningOutlined" variant="warning" />
   </div>
 
   <div class="crm-content-card">
@@ -50,8 +49,7 @@
       </a-row>
       <a-row :gutter="16">
         <a-col :span="8"><a-form-item label="Đơn vị" required><a-input v-model:value="form.unit" placeholder="thùng, kg..." size="large" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Đơn giá"><a-input-number v-model:value="form.unit_price" :min="0" class="w-full" size="large" :formatter="(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Tồn kho tối thiểu"><a-input-number v-model:value="form.min_stock" :min="0" class="w-full" size="large" /></a-form-item></a-col>
+        <a-col :span="12"><a-form-item label="Đơn giá"><a-input-number v-model:value="form.unit_price" :min="0" class="w-full" size="large" :formatter="(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
       </a-row>
       <a-form-item label="Danh mục"><a-input v-model:value="form.category" placeholder="Xi măng, sắt thép..." size="large" /></a-form-item>
       <a-form-item label="Mô tả"><a-textarea v-model:value="form.description" :rows="2" /></a-form-item>
@@ -80,7 +78,6 @@ const columns = [
   { title: 'Đơn vị', dataIndex: 'unit', width: 100 },
   { title: 'Danh mục', dataIndex: 'category', width: 140 },
   { title: 'Đơn giá', key: 'price', align: 'right', width: 150 },
-  { title: 'Tồn tối thiểu', dataIndex: 'min_stock', align: 'center', width: 120 },
   { title: '', key: 'actions', width: 100, align: 'center' },
 ]
 
@@ -89,9 +86,9 @@ const debounceSearch = () => { clearTimeout(searchTimeout); searchTimeout = setT
 const applyFilters = () => { loading.value = true; router.get('/materials', { search: filters.value.search || undefined, category: filters.value.category || undefined }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
 const handleTableChange = (p) => { loading.value = true; router.get('/materials', { page: p.current, ...filters.value }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
 
-const form = useForm({ name: '', code: '', unit: '', category: '', unit_price: null, min_stock: null, description: '' })
+const form = useForm({ name: '', code: '', unit: '', category: '', unit_price: null, description: '' })
 const openCreateModal = () => { editing.value = null; form.reset(); showModal.value = true }
-const openEditModal = (m) => { editing.value = m; Object.assign(form, { name: m.name, code: m.code || '', unit: m.unit, category: m.category || '', unit_price: m.unit_price, min_stock: m.min_stock, description: m.description || '' }); showModal.value = true }
+const openEditModal = (m) => { editing.value = m; Object.assign(form, { name: m.name, code: m.code || '', unit: m.unit, category: m.category || '', unit_price: m.unit_price, description: m.description || '' }); showModal.value = true }
 const handleSubmit = () => {
   if (editing.value) router.put(`/materials/${editing.value.id}`, form.data(), { onSuccess: () => { showModal.value = false; resetForm() } })
   else router.post('/materials', form.data(), { onSuccess: () => { showModal.value = false; resetForm() } })

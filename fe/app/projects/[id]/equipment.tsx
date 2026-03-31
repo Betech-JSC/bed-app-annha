@@ -134,15 +134,11 @@ export default function ProjectEquipmentScreen() {
     const loadAllEquipment = async () => {
         try {
             setLoadingAllEquipment(true);
-            const response = await equipmentApi.getEquipment({ active_only: true });
+            const response = await equipmentApi.getEquipment(); // No active_only: true
             if (response.success) {
                 const all = response.data.data || [];
-                // Lọc ra các equipment chưa có trong project hoặc có status available
-                const projectEquipmentIds = equipment.map(e => e.id);
-                setAllEquipment(all.filter((e: Equipment) =>
-                    !projectEquipmentIds.includes(e.id) &&
-                    (e.status === "available" || e.status === "in_use")
-                ));
+                // Show all equipment from catalog, allowing allocation regardless of project status or availability
+                setAllEquipment(all);
             }
         } catch (error: any) {
             const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải danh sách thiết bị";
@@ -202,10 +198,8 @@ export default function ProjectEquipmentScreen() {
             return;
         }
 
-        if (selectedEquipment.status !== "available" && selectedEquipment.status !== "in_use") {
-            Alert.alert("Lỗi", "Thiết bị không khả dụng");
-            return;
-        }
+        // Status check removed to follow the "no inventory" and flexible allocation rule
+        
 
         const quantity = parseInt(allocationData.quantity) || 1;
         if (quantity < 1) {
@@ -314,120 +308,57 @@ export default function ProjectEquipmentScreen() {
         return EQUIPMENT_STATUS_COLORS[status] || equipmentStatuses.find(s => s.value === status)?.color || "#6B7280";
     };
 
-    const EquipmentItem = ({ item }: { item: Equipment }) => {
-        const [expanded, setExpanded] = useState(false);
+    const renderEquipmentItem = ({ item }: { item: Equipment }) => {
         const projectAllocation = (item as any).project_allocation;
-        const allocationsCount = (item as any).project_allocations_count || 0;
         const statusColor = getStatusColor(item.status);
+        const typeLabel = getTypeLabel(item.type);
 
         return (
             <View style={styles.card}>
                 <TouchableOpacity
-                    style={styles.cardHeader}
+                    style={styles.cardMain}
                     onPress={() => router.push(`/equipment/${item.id}`)}
+                    activeOpacity={0.7}
                 >
-                    <View style={styles.cardHeaderLeft}>
-                        <Text style={styles.cardTitle}>{item.name}</Text>
-                        {item.code && (
-                            <Text style={styles.cardCode}>{item.code}</Text>
-                        )}
+                    <View style={styles.iconContainer}>
+                        <Ionicons 
+                            name={item.type === 'rented' ? "time" : "construct"} 
+                            size={24} 
+                            color={item.type === 'rented' ? "#F59E0B" : "#3B82F6"} 
+                        />
                     </View>
-                    <View
-                        style={[
-                            styles.statusBadge,
-                            { backgroundColor: statusColor + "20" },
-                        ]}
-                    >
+                    <View style={styles.cardInfo}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
+                        <View style={styles.metaRow}>
+                            <Text style={styles.cardCode}>{item.code || "No Code"}</Text>
+                            <View style={styles.bullet} />
+                            <Text style={styles.typeText}>{typeLabel}</Text>
+                        </View>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: statusColor + "15" }]}>
+                        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                         <Text style={[styles.statusText, { color: statusColor }]}>
                             {getStatusLabel(item.status)}
                         </Text>
                     </View>
                 </TouchableOpacity>
 
-                {expanded && (
-                    <View style={styles.cardBody}>
-                        <View style={styles.infoRow}>
-                            <View style={styles.infoItem}>
-                                <Ionicons name="pricetag-outline" size={16} color="#6B7280" />
-                                <Text style={styles.infoLabel}>Loại:</Text>
-                                <Text style={styles.infoValue}>{getTypeLabel(item.type)}</Text>
-                            </View>
-                            {item.category && (
-                                <View style={styles.infoItem}>
-                                    <Ionicons name="grid-outline" size={16} color="#6B7280" />
-                                    <Text style={styles.infoLabel}>Danh mục:</Text>
-                                    <Text style={styles.infoValue}>{item.category}</Text>
-                                </View>
-                            )}
+                {projectAllocation && (
+                    <View style={styles.allocationSummary}>
+                        <View style={styles.allocationDetail}>
+                            <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+                            <Text style={styles.allocationLabel}>
+                                {projectAllocation.start_date ? formatDate(projectAllocation.start_date) : "N/A"}
+                                {projectAllocation.end_date ? ` → ${formatDate(projectAllocation.end_date)}` : " (Đang sử dụng)"}
+                            </Text>
                         </View>
-
-                        {projectAllocation && (
-                            <View style={styles.allocationCard}>
-                                <View style={styles.allocationHeader}>
-                                    <Ionicons name="calendar-outline" size={16} color="#3B82F6" />
-                                    <Text style={styles.allocationTitle}>Thông tin phân bổ</Text>
-                                </View>
-                                <View style={styles.allocationInfo}>
-                                    <Text style={styles.allocationText}>
-                                        Từ: {formatDate(projectAllocation.start_date)}
-                                    </Text>
-                                    {projectAllocation.status === 'active' ? (
-                                        projectAllocation.end_date ? (
-                                            <Text style={styles.allocationText}>
-                                                Dự kiến đến: {formatDate(projectAllocation.end_date)}
-                                            </Text>
-                                        ) : (
-                                            <Text style={[styles.allocationText, styles.allocationActive]}>
-                                                Đang sử dụng
-                                            </Text>
-                                        )
-                                    ) : (
-                                        <Text style={[styles.allocationText, { color: '#6B7280' }]}>
-                                            Đã trả: {formatDate(projectAllocation.return_date || projectAllocation.end_date)}
-                                        </Text>
-                                    )}
-                                    {projectAllocation.rental_fee && (
-                                        <Text style={styles.allocationText}>
-                                            Phí thuê: {formatCurrency(projectAllocation.rental_fee)}
-                                        </Text>
-                                    )}
-                                </View>
+                        {projectAllocation.rental_fee > 0 && (
+                            <View style={styles.priceBadge}>
+                                <Text style={styles.priceText}>{formatCurrency(projectAllocation.rental_fee)}</Text>
                             </View>
                         )}
-
-                        {allocationsCount > 0 && !projectAllocation && (
-                            <View style={styles.infoRow}>
-                                <View style={styles.infoItem}>
-                                    <Ionicons name="time-outline" size={16} color="#6B7280" />
-                                    <Text style={styles.infoLabel}>Số lần phân bổ:</Text>
-                                    <Text style={styles.infoValue}>{allocationsCount}</Text>
-                                </View>
-                            </View>
-                        )}
-
-                        <TouchableOpacity
-                            style={styles.detailLink}
-                            onPress={() => router.push(`/equipment/${item.id}`)}
-                        >
-                            <Text style={styles.detailLinkText}>Xem chi tiết đầy đủ</Text>
-                            <Ionicons name="arrow-forward" size={14} color="#3B82F6" />
-                        </TouchableOpacity>
                     </View>
                 )}
-
-                <TouchableOpacity
-                    style={styles.expandButton}
-                    onPress={() => setExpanded(!expanded)}
-                >
-                    <Ionicons
-                        name={expanded ? "chevron-up" : "chevron-down"}
-                        size={20}
-                        color="#6B7280"
-                    />
-                    <Text style={styles.expandButtonText}>
-                        {expanded ? "Thu gọn" : "Xem thêm"}
-                    </Text>
-                </TouchableOpacity>
             </View>
         );
     };
@@ -461,14 +392,30 @@ export default function ProjectEquipmentScreen() {
                 rightComponent={
                     <PermissionGuard permission={Permissions.EQUIPMENT_CREATE} projectId={id}>
                         <TouchableOpacity onPress={handleOpenAddModal} style={styles.addButton}>
-                            <Ionicons name="add" size={24} color="#3B82F6" />
+                            <Ionicons name="add" size={24} color="#FFFFFF" />
                         </TouchableOpacity>
                     </PermissionGuard>
                 }
             />
 
-            <PermissionGuard permission={Permissions.EQUIPMENT_VIEW} projectId={id}>
-                <View style={styles.filterContainer}>
+            <View style={styles.topBar}>
+                <View style={styles.searchContainer}>
+                    <Ionicons name="search" size={20} color="#9CA3AF" />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Tìm theo tên hoặc mã thiết bị..."
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholderTextColor="#9CA3AF"
+                    />
+                    {searchQuery !== "" && (
+                        <TouchableOpacity onPress={() => setSearchQuery("")}>
+                            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                <View style={styles.filterSection}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
                         <TouchableOpacity
                             style={[styles.filterChip, selectedStatus === "all" && styles.filterChipActive]}
@@ -491,27 +438,27 @@ export default function ProjectEquipmentScreen() {
                         ))}
                     </ScrollView>
                 </View>
+            </View>
 
-                <FlatList
-                    data={equipment}
-                    renderItem={({ item }) => <EquipmentItem item={item} />}
-                    keyExtractor={(item) => item.id.toString()}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                    }
-                    contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
-                    ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Ionicons name="build-outline" size={64} color="#9CA3AF" />
-                            <Text style={styles.emptyText}>
-                                {searchQuery
-                                    ? "Không tìm thấy thiết bị phù hợp"
-                                    : "Chưa có thiết bị nào trong danh sách"}
-                            </Text>
-                        </View>
-                    }
-                />
-            </PermissionGuard>
+            <FlatList
+                data={equipment}
+                renderItem={({ item }) => renderEquipmentItem({ item })}
+                keyExtractor={(item) => item.id.toString()}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                }
+                contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 20 }]}
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        <Ionicons name="build-outline" size={64} color="#9CA3AF" />
+                        <Text style={styles.emptyText}>
+                            {searchQuery
+                                ? "Không tìm thấy thiết bị phù hợp"
+                                : "Chưa có thiết bị nào trong danh sách"}
+                        </Text>
+                    </View>
+                }
+            />
 
             {/* Add Equipment Modal */}
             <Modal
@@ -817,14 +764,14 @@ export default function ProjectEquipmentScreen() {
 
                             <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB' }}>
                                 <TouchableOpacity
-                                    style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+                                    style={[styles.saveBtn, submitting && styles.saveBtnDisabled]}
                                     onPress={handleCreateAllocation}
                                     disabled={submitting}
                                 >
                                     {submitting ? (
                                         <ActivityIndicator size="small" color="#FFFFFF" />
                                     ) : (
-                                        <Text style={styles.submitButtonText}>Xác nhận phân bổ</Text>
+                                        <Text style={styles.saveBtnText}>Xác nhận phân bổ</Text>
                                     )}
                                 </TouchableOpacity>
                             </View>
@@ -837,504 +784,103 @@ export default function ProjectEquipmentScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: "#F9FAFB",
-    },
-    centerContainer: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "#F9FAFB",
-    },
-    addButton: {
-        padding: 4,
-    },
-    listContent: {
-        padding: 16,
-    },
-    card: {
-        backgroundColor: "#FFFFFF",
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-    cardHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        marginBottom: 12,
-    },
-    cardHeaderLeft: {
-        flex: 1,
-    },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#1F2937",
-        marginBottom: 4,
-    },
-    cardCode: {
-        fontSize: 12,
-        color: "#6B7280",
-    },
-    statusBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    statusText: {
-        fontSize: 12,
-        fontWeight: "600",
-    },
-    cardBody: {
-        gap: 12,
-    },
-    infoRow: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        gap: 16,
-        marginBottom: 4,
-    },
-    infoItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-    },
-    infoLabel: {
-        fontSize: 14,
-        color: "#6B7280",
-        fontWeight: "500",
-    },
-    infoValue: {
-        fontSize: 14,
-        color: "#1F2937",
-        fontWeight: "600",
-    },
-    allocationCard: {
-        backgroundColor: "#EFF6FF",
-        borderRadius: 8,
-        padding: 12,
-        marginTop: 8,
-        borderLeftWidth: 3,
-        borderLeftColor: "#3B82F6",
-    },
-    allocationHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        marginBottom: 8,
-    },
-    allocationTitle: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#3B82F6",
-    },
-    allocationInfo: {
-        gap: 4,
-    },
-    allocationText: {
-        fontSize: 13,
-        color: "#4B5563",
-    },
-    allocationActive: {
-        color: "#10B981",
-        fontWeight: "600",
-    },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        paddingVertical: 60,
-    },
-    emptyText: {
-        fontSize: 16,
-        color: "#6B7280",
-        marginTop: 16,
-        textAlign: "center",
-    },
-    modalContainer: {
-        flex: 1,
-        backgroundColor: "#FFFFFF",
-    },
-    modalHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: 16,
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E5E7EB",
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1F2937",
-        flex: 1,
-        textAlign: "center",
-    },
-    modalBody: {
-        flex: 1,
-        padding: 16,
-    },
-    equipmentOption: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        backgroundColor: "#F9FAFB",
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 8,
-    },
-    equipmentOptionInfo: {
-        flex: 1,
-    },
-    equipmentOptionName: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#1F2937",
-        marginBottom: 4,
-    },
-    equipmentOptionCode: {
-        fontSize: 12,
-        color: "#6B7280",
-        marginBottom: 8,
-    },
-    equipmentOptionMeta: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-    },
-    equipmentOptionType: {
-        fontSize: 14,
-        color: "#6B7280",
-    },
-    equipmentStatusBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    equipmentStatusText: {
-        fontSize: 12,
-        fontWeight: "600",
-    },
-    selectedEquipmentCard: {
-        backgroundColor: "#EFF6FF",
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 24,
-        borderLeftWidth: 3,
-        borderLeftColor: "#3B82F6",
-    },
-    selectedEquipmentHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 8,
-    },
-    selectedEquipmentName: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#1F2937",
-    },
-    selectedEquipmentInfo: {
-        fontSize: 14,
-        color: "#6B7280",
-        marginTop: 4,
-    },
-    formSection: {
-        marginBottom: 20,
-        backgroundColor: "#FFFFFF",
-        borderRadius: 12,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: "#F3F4F6",
-    },
-    sectionHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginBottom: 16,
-        gap: 8,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: "#1F2937",
-    },
-    formGroup: {
-        marginBottom: 20,
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#1F2937",
-        marginBottom: 12,
-    },
-    input: {
-        backgroundColor: "#F9FAFB",
-        borderWidth: 1,
-        borderColor: "#E5E7EB",
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        color: "#1F2937",
-    },
-    textArea: {
-        height: 80,
-        textAlignVertical: "top",
-    },
-    dateButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        backgroundColor: "#F9FAFB",
-        borderWidth: 1,
-        borderColor: "#E5E7EB",
-        borderRadius: 8,
-        padding: 12,
-    },
-    dateButtonText: {
-        fontSize: 16,
-        color: "#1F2937",
-    },
-    clearDateButton: {
-        marginTop: 8,
-        alignSelf: "flex-start",
-    },
-    clearDateText: {
-        fontSize: 14,
-        color: "#EF4444",
-    },
-    typeContainer: {
-        flexDirection: "row",
-        gap: 12,
-        marginTop: 8,
-    },
-    typeButton: {
-        flex: 1,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        padding: 16,
-        borderRadius: 8,
-        borderWidth: 2,
-        borderColor: "#D1D5DB",
-        backgroundColor: "#FFFFFF",
-    },
-    typeButtonActive: {
-        borderColor: "#3B82F6",
-        backgroundColor: "#EFF6FF",
-    },
-    typeButtonText: {
-        fontSize: 16,
-        fontWeight: "500",
-        color: "#6B7280",
-    },
-    typeButtonTextActive: {
-        color: "#3B82F6",
-        fontWeight: "600",
-    },
-    helperText: {
-        fontSize: 13,
-        color: "#6B7280",
-        marginBottom: 8,
-        fontStyle: "italic",
-    },
-    selectButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        borderWidth: 1,
-        borderColor: "#D1D5DB",
-        borderRadius: 8,
-        padding: 12,
-        backgroundColor: "#FFFFFF",
-        minHeight: 48,
-    },
-    selectButtonText: {
-        fontSize: 16,
-        color: "#1F2937",
-        fontWeight: "500",
-    },
-    selectButtonPlaceholder: {
-        color: "#9CA3AF",
-    },
-    clearSelectionButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        marginTop: 8,
-        alignSelf: "flex-start",
-    },
-    clearSelectionText: {
-        fontSize: 14,
-        color: "#EF4444",
-        fontWeight: "500",
-    },
-    pickerModalOverlay: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1000,
-    },
-    pickerModalContainer: {
-        backgroundColor: "#FFFFFF",
-        borderRadius: 12,
-        width: "90%",
-        maxHeight: "70%",
-        padding: 20,
-    },
-    pickerModalHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 20,
-    },
-    pickerModalTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1F2937",
-    },
-    pickerLoadingContainer: {
-        padding: 40,
-        alignItems: "center",
-    },
-    pickerItem: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 8,
-        backgroundColor: "#F9FAFB",
-    },
-    pickerItemActive: {
-        backgroundColor: "#EFF6FF",
-    },
-    pickerItemText: {
-        fontSize: 16,
-        color: "#1F2937",
-    },
-    pickerItemTextActive: {
-        color: "#3B82F6",
-        fontWeight: "600",
-    },
-    pickerEmptyContainer: {
-        padding: 40,
-        alignItems: "center",
-    },
-    pickerEmptyText: {
-        fontSize: 14,
-        color: "#9CA3AF",
-        textAlign: "center",
-    },
-    submitButton: {
-        backgroundColor: "#3B82F6",
-        padding: 16,
-        borderRadius: 8,
-        alignItems: "center",
-        justifyContent: "center",
-        marginTop: 20,
-        marginBottom: 40,
-    },
-    submitButtonDisabled: {
-        backgroundColor: "#9CA3AF",
-    },
-    submitButtonText: {
-        color: "#FFFFFF",
-        fontSize: 16,
-        fontWeight: "600",
-    },
-    filterContainer: {
-        paddingVertical: 12,
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6',
-    },
-    filterContent: {
-        paddingHorizontal: 16,
-        gap: 8,
-    },
-    filterChip: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: '#F3F4F6',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        marginRight: 8,
-    },
-    filterChipActive: {
-        backgroundColor: '#EFF6FF',
-        borderColor: '#3B82F6',
-    },
-    filterChipText: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#6B7280',
-    },
-    filterChipTextActive: {
-        color: '#3B82F6',
-        fontWeight: '600',
-    },
-    permissionDeniedContainer: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 20,
-    },
-    permissionDeniedTitle: {
-        fontSize: 20,
-        fontWeight: "700",
-        color: "#EF4444",
-        marginTop: 16,
-        marginBottom: 8,
-    },
-    permissionDeniedMessage: {
-        fontSize: 16,
-        color: "#4B5563",
-        textAlign: "center",
-        marginBottom: 8,
-    },
-    expandButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#F3F4F6',
-        gap: 4,
-        marginTop: 4,
-    },
-    expandButtonText: {
-        fontSize: 13,
-        color: '#6B7280',
-        fontWeight: '500',
-    },
-    detailLink: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
-        marginTop: 12,
-        paddingVertical: 8,
-        backgroundColor: '#EFF6FF',
-        borderRadius: 8,
-    },
-    detailLinkText: {
-        fontSize: 13,
-        color: '#3B82F6',
-        fontWeight: '600',
-    },
+    container: { flex: 1, backgroundColor: "#F3F4F6" },
+    centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+    addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#3B82F6", justifyContent: "center", alignItems: "center", shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+    
+    topBar: { backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#E5E7EB", paddingVertical: 12 },
+    searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#F3F4F6", borderRadius: 12, paddingHorizontal: 12, marginHorizontal: 16, marginBottom: 12, height: 44 },
+    searchInput: { flex: 1, fontSize: 15, color: "#1F2937", marginLeft: 8 },
+    filterSection: { paddingHorizontal: 16 },
+    filterContent: { gap: 8 },
+    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: "#E5E7EB" },
+    filterChipActive: { backgroundColor: "#1F2937", borderColor: "#1F2937" },
+    filterChipText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
+    filterChipTextActive: { color: "#FFFFFF" },
+
+    listContent: { padding: 16 },
+    card: { backgroundColor: "#FFFFFF", borderRadius: 16, marginBottom: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+    cardMain: { flexDirection: "row", alignItems: "center", padding: 16 },
+    iconContainer: { width: 48, height: 48, borderRadius: 12, backgroundColor: "#F3F4F6", justifyContent: "center", alignItems: "center", marginRight: 12 },
+    cardInfo: { flex: 1 },
+    cardTitle: { fontSize: 16, fontWeight: "700", color: "#111827", marginBottom: 4 },
+    metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+    cardCode: { fontSize: 12, color: "#6B7280", fontWeight: "600" },
+    bullet: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#D1D5DB" },
+    typeText: { fontSize: 12, color: "#6B7280" },
+    statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+    statusDot: { width: 6, height: 6, borderRadius: 3 },
+    statusText: { fontSize: 12, fontWeight: "700" },
+
+    allocationSummary: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#F3F4F6", backgroundColor: "#FAFBFC", borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+    allocationDetail: { flexDirection: "row", alignItems: "center", gap: 6 },
+    allocationLabel: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
+    priceBadge: { backgroundColor: "#ECFDF5", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    priceText: { fontSize: 12, color: "#10B981", fontWeight: "700" },
+
+    emptyContainer: { alignItems: "center", justifyContent: "center", paddingVertical: 100 },
+    emptyText: { fontSize: 16, color: "#9CA3AF", marginTop: 16, textAlign: "center", paddingHorizontal: 40 },
+
+    modalFullContainer: { flex: 1, backgroundColor: "#F9FAFB" },
+    modalContainer: { flex: 1, backgroundColor: "#F9FAFB" },
+    modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, backgroundColor: "#FFF", borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
+    modalTitle: { fontSize: 18, fontWeight: "700", color: "#111827" },
+    modalBody: { flex: 1, padding: 16 },
+    sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
+    sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1F2937" },
+    
+    equipmentOption: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFF", padding: 16, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: "#E5E7EB" },
+    equipmentOptionInfo: { flex: 1 },
+    equipmentOptionName: { fontSize: 15, fontWeight: "600", color: "#111827", marginBottom: 4 },
+    equipmentOptionCode: { fontSize: 12, color: "#6B7280", marginBottom: 6 },
+    equipmentOptionMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
+    equipmentOptionType: { fontSize: 12, color: "#9CA3AF" },
+    equipmentStatusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+    equipmentStatusText: { fontSize: 11, fontWeight: "700" },
+
+    selectedEquipmentCard: { backgroundColor: "#EFF6FF", padding: 16, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: "#3B82F6" },
+    selectedEquipmentHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+    selectedEquipmentName: { fontSize: 16, fontWeight: "700", color: "#1E40AF" },
+    selectedEquipmentInfo: { fontSize: 13, color: "#3B82F6" },
+
+    formSection: { marginBottom: 24 },
+    formGroup: { marginBottom: 16 },
+    label: { fontSize: 14, fontWeight: "700", color: "#374151", marginBottom: 8 },
+    input: { backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12, padding: 12, fontSize: 15, color: "#1F2937" },
+    textArea: { height: 80, textAlignVertical: "top" },
+    
+    typeContainer: { flexDirection: "row", gap: 10 },
+    typeButton: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 10, backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: "#E5E7EB" },
+    typeButtonActive: { backgroundColor: "#3B82F6", borderColor: "#3B82F6" },
+    typeButtonText: { fontSize: 14, fontWeight: "600", color: "#6B7280" },
+    typeButtonTextActive: { color: "#FFFFFF" },
+
+    selectButton: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12, padding: 12 },
+    selectButtonText: { fontSize: 15, color: "#1F2937" },
+    selectButtonPlaceholder: { color: "#9CA3AF" },
+
+    modalFooter: { padding: 16, backgroundColor: "#FFF", borderTopWidth: 1, borderTopColor: "#E5E7EB", flexDirection: "row", gap: 12 },
+    cancelBtn: { flex: 1, height: 50, alignItems: "center", justifyContent: "center" },
+    cancelBtnText: { fontSize: 16, fontWeight: "600", color: "#6B7280" },
+    saveBtn: { flex: 1, height: 50, backgroundColor: "#3B82F6", borderRadius: 12, alignItems: "center", justifyContent: "center" },
+    saveBtnText: { fontSize: 16, fontWeight: "700", color: "#FFFFFF" },
+    saveBtnDisabled: { opacity: 0.5 },
+
+    pickerModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+    pickerModalContainer: { backgroundColor: "#FFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, height: "70%" },
+    pickerModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
+    pickerModalTitle: { fontSize: 18, fontWeight: "700", color: "#111827" },
+    pickerLoadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+    pickerItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+    pickerItemActive: { backgroundColor: "#EFF6FF" },
+    pickerItemText: { fontSize: 16, color: "#374151" },
+    pickerItemTextActive: { color: "#3B82F6", fontWeight: "700" },
+
+    permissionDeniedContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+    pickerEmptyContainer: { padding: 40, alignItems: "center" },
+    pickerEmptyText: { fontSize: 14, color: "#9CA3AF", textAlign: "center" },
+    submitButton: { backgroundColor: "#3B82F6", padding: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", marginTop: 20 },
+    submitButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
+    submitButtonDisabled: { opacity: 0.5 },
+    filterContainer: { paddingHorizontal: 16 },
 });

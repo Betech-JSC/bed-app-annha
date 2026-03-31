@@ -29,7 +29,6 @@ class CrmMaterialsController extends Controller
 
         $stats = [
             'total' => Material::count(),
-            'low_stock' => Material::whereColumn('min_stock', '>', \DB::raw('COALESCE((SELECT SUM(quantity) FROM material_transactions WHERE material_transactions.material_id = materials.id AND type = "in") - COALESCE((SELECT SUM(quantity) FROM material_transactions WHERE material_transactions.material_id = materials.id AND type = "out"), 0), 0)'))->count(),
         ];
 
         $categories = Material::select('category')->distinct()->whereNotNull('category')->pluck('category');
@@ -50,7 +49,7 @@ class CrmMaterialsController extends Controller
             'unit' => 'required|string|max:50',
             'category' => 'nullable|string|max:100',
             'unit_price' => 'nullable|numeric|min:0',
-            'min_stock' => 'nullable|integer|min:0',
+
             'description' => 'nullable|string',
         ]);
 
@@ -67,7 +66,7 @@ class CrmMaterialsController extends Controller
             'unit' => 'sometimes|string|max:50',
             'category' => 'nullable|string|max:100',
             'unit_price' => 'nullable|numeric|min:0',
-            'min_stock' => 'nullable|integer|min:0',
+
             'description' => 'nullable|string',
         ]);
 

@@ -11,6 +11,10 @@ export interface Material {
   project_id?: number;
   created_at: string;
   updated_at: string;
+  // Project-specific usage summary (only when fetched via getMaterialsByProject)
+  project_usage?: number;
+  project_total_amount?: number;
+  project_transactions_count?: number;
 }
 
 export interface MaterialTransaction {

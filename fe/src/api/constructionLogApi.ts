@@ -26,6 +26,7 @@ export interface ConstructionLog {
   task?: {
     id: number;
     name: string;
+    code?: string;
     progress_percentage: number;
   };
   creator?: { id: number; name: string };

@@ -26,129 +26,38 @@ import { useTabBarHeight } from '@/hooks/useTabBarHeight';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─────────────────────────────────────────────────
-// Simplified Group Config (role-based like CRM)
+// Consolidated Role Config (Matches CRM Tabs)
 // ─────────────────────────────────────────────────
-const GROUP_CONFIG: Record<string, {
-    label: string;
-    shortLabel: string;
-    icon: string;
-    color: string;
-    bgColor: string;
-    order: number;
-}> = {
-    management: {
-        label: 'Ban Điều Hành duyệt',
-        shortLabel: 'BĐH',
-        icon: 'ribbon-outline',
-        color: '#F97316',
-        bgColor: '#FFF7ED',
-        order: 1,
-    },
-    accountant: {
-        label: 'Kế Toán xác nhận',
-        shortLabel: 'KT',
-        icon: 'calculator-outline',
-        color: '#06B6D4',
-        bgColor: '#ECFEFF',
-        order: 2,
-    },
-    supervisor: {
-        label: 'Giám sát duyệt',
-        shortLabel: 'GS',
-        icon: 'eye-outline',
-        color: '#0D9488',
-        bgColor: '#CCFBF1',
-        order: 3,
-    },
-    project_manager: {
-        label: 'QLDA duyệt',
-        shortLabel: 'QLDA',
-        icon: 'person-outline',
-        color: '#3B82F6',
-        bgColor: '#DBEAFE',
-        order: 4,
-    },
-    customer: {
-        label: 'Khách hàng duyệt',
-        shortLabel: 'KH',
-        icon: 'people-outline',
-        color: '#10B981',
-        bgColor: '#D1FAE5',
-        order: 5,
-    },
-    change_request: {
-        label: 'Yêu cầu thay đổi',
-        shortLabel: 'CR',
-        icon: 'git-compare-outline',
-        color: '#EC4899',
-        bgColor: '#FCE7F3',
-        order: 6,
-    },
-    additional_cost: {
-        label: 'Chi phí phát sinh',
-        shortLabel: 'CPPS',
-        icon: 'trending-up-outline',
-        color: '#F97316',
-        bgColor: '#FFF7ED',
-        order: 7,
-    },
-    sub_acceptance: {
-        label: 'Nghiệm thu NTP',
-        shortLabel: 'NT NTP',
-        icon: 'checkbox-outline',
-        color: '#0D9488',
-        bgColor: '#CCFBF1',
-        order: 8,
-    },
-    supplier_acceptance: {
-        label: 'Nghiệm thu NCC',
-        shortLabel: 'NT NCC',
-        icon: 'storefront-outline',
-        color: '#84CC16',
-        bgColor: '#ECFCCB',
-        order: 9,
-    },
-    construction_log: {
-        label: 'Nhật ký công trường',
-        shortLabel: 'NK',
-        icon: 'newspaper-outline',
-        color: '#A855F7',
-        bgColor: '#F3E8FF',
-        order: 10,
-    },
-    schedule_adjustment: {
-        label: 'Điều chỉnh tiến độ',
-        shortLabel: 'TĐ',
-        icon: 'calendar-outline',
-        color: '#E11D48',
-        bgColor: '#FFE4E6',
-        order: 11,
-    },
-    contract: {
-        label: 'Hợp đồng',
-        shortLabel: 'HĐ',
-        icon: 'document-text-outline',
-        color: '#6366F1',
-        bgColor: '#E0E7FF',
-        order: 12,
-    },
-    project_payment: {
-        label: 'Thanh toán dự án',
-        shortLabel: 'TT',
-        icon: 'cash-outline',
-        color: '#D946EF',
-        bgColor: '#FAE8FF',
-        order: 13,
-    },
+const ROLE_TABS = [
+    { key: 'all', label: 'Tất cả', icon: 'apps-outline', color: '#6B7280', bgColor: '#F3F4F6' },
+    { key: 'management', label: 'BĐH', icon: 'ribbon-outline', color: '#F97316', bgColor: '#FFF7ED' },
+    { key: 'accountant', label: 'Kế Toán', icon: 'calculator-outline', color: '#06B6D4', bgColor: '#ECFEFF' },
+    { key: 'customer', label: 'Khách Hàng', icon: 'people-outline', color: '#10B981', bgColor: '#D1FAE5' },
+    { key: 'operations', label: 'Vận Hành', icon: 'construct-outline', color: '#3B82F6', bgColor: '#DBEAFE' },
+];
+
+const ROLE_MAPPING: Record<string, string> = {
+    management: 'management',
+    accountant: 'accountant',
+    customer: 'customer',
+    // Operations includes everything else technical
+    supervisor: 'operations',
+    project_manager: 'operations',
+    change_request: 'operations',
+    additional_cost: 'operations',
+    sub_acceptance: 'operations',
+    supplier_acceptance: 'operations',
+    construction_log: 'operations',
+    schedule_adjustment: 'operations',
+    defect_verify: 'operations',
+    acceptance_item: 'operations',
 };
 
-const DEFAULT_GROUP = {
-    label: 'Khác',
-    shortLabel: 'Khác',
-    icon: 'ellipsis-horizontal-outline',
-    color: '#6B7280',
-    bgColor: '#F3F4F6',
-    order: 99,
+const ROLE_CONFIG: Record<string, { label: string; icon: string; color: string; bgColor: string }> = {
+    management: { label: 'Ban Điều Hành duyệt', icon: 'ribbon-outline', color: '#F97316', bgColor: '#FFF7ED' },
+    accountant: { label: 'Kế Toán xác nhận', icon: 'calculator-outline', color: '#06B6D4', bgColor: '#ECFEFF' },
+    customer: { label: 'Khách hàng duyệt', icon: 'people-outline', color: '#10B981', bgColor: '#D1FAE5' },
+    operations: { label: 'Vận Hành (Kỹ thuật/GS)', icon: 'construct-outline', color: '#3B82F6', bgColor: '#DBEAFE' },
 };
 
 // Type icon mapping for cards
@@ -169,6 +78,8 @@ const TYPE_ICON: Record<string, { icon: string; color: string }> = {
     supplier_acceptance: { icon: 'storefront-outline', color: '#84CC16' },
     construction_log: { icon: 'newspaper-outline', color: '#A855F7' },
     schedule_adjustment: { icon: 'calendar-outline', color: '#E11D48' },
+    budget: { icon: 'pie-chart-outline', color: '#F97316' },
+    history: { icon: 'time-outline', color: '#6B7280' },
 };
 
 export default function ApprovalCenterScreen() {
@@ -182,7 +93,8 @@ export default function ApprovalCenterScreen() {
     const [rejectTarget, setRejectTarget] = useState<ApprovalItem | null>(null);
     const [rejectReason, setRejectReason] = useState('');
     const [actionLoading, setActionLoading] = useState<number | null>(null);
-    const [selectedGroup, setSelectedGroup] = useState<string>('all');
+    const [selectedRole, setSelectedRole] = useState<string>('all');
+    const [viewMode, setViewMode] = useState<'pending' | 'history'>('pending');
 
     useEffect(() => {
         loadApprovals();
@@ -204,129 +116,115 @@ export default function ApprovalCenterScreen() {
         }
     };
 
-    const onRefresh = () => {
-        setRefreshing(true);
-        loadApprovals();
-    };
-
-    // ─────────────────────────────────────────────────
-    // Group items by approval_level into sections
-    // ─────────────────────────────────────────────────
-    const sections = useMemo(() => {
-        if (!data?.items) return [];
-
-        const grouped: Record<string, ApprovalItem[]> = {};
-        for (const item of data.items) {
-            const groupKey = item.approval_level || 'other';
-            if (!grouped[groupKey]) grouped[groupKey] = [];
-            grouped[groupKey].push(item);
-        }
-
-        const result = Object.entries(grouped)
-            .map(([key, items]) => {
-                const config = GROUP_CONFIG[key] || DEFAULT_GROUP;
-                return {
-                    key,
-                    title: config.label,
-                    shortLabel: config.shortLabel,
-                    icon: config.icon,
-                    color: config.color,
-                    bgColor: config.bgColor,
-                    order: config.order,
-                    data: items,
-                };
-            })
-            .sort((a, b) => a.order - b.order);
-
-        // If a group filter is active, only show that group
-        if (selectedGroup !== 'all') {
-            return result.filter(s => s.key === selectedGroup);
-        }
-
-        return result;
-    }, [data?.items, selectedGroup]);
-
-    // Group counts for the tab strip
-    const groupCounts = useMemo(() => {
-        if (!data?.items) return {};
-        const counts: Record<string, number> = {};
-        for (const item of data.items) {
-            const key = item.approval_level || 'other';
-            counts[key] = (counts[key] || 0) + 1;
-        }
-        return counts;
-    }, [data?.items]);
-
-    const groupKeys = useMemo(() => {
-        return Object.keys(groupCounts).sort((a, b) => {
-            const orderA = GROUP_CONFIG[a]?.order ?? 99;
-            const orderB = GROUP_CONFIG[b]?.order ?? 99;
-            return orderA - orderB;
-        });
-    }, [groupCounts]);
-
-    // ─────────────────────────────────────────────────
-    // Actions
-    // ─────────────────────────────────────────────────
     const handleQuickApprove = async (item: ApprovalItem) => {
-        const groupConfig = GROUP_CONFIG[item.approval_level] || DEFAULT_GROUP;
-        Alert.alert(
-            'Xác nhận duyệt',
-            `Duyệt "${item.title}"?\n\n${item.amount > 0 ? `Số tiền: ${formatCurrency(item.amount)}` : ''}`,
-            [
-                { text: 'Hủy', style: 'cancel' },
-                {
-                    text: 'Duyệt',
-                    onPress: async () => {
-                        try {
-                            setActionLoading(item.id);
-                            const response = await approvalCenterApi.quickApprove(item.type, item.id);
-                            if (response.success) {
-                                Alert.alert('✅ Thành công', response.message);
-                                loadApprovals();
-                            }
-                        } catch (error: any) {
-                            Alert.alert('Lỗi', error.response?.data?.message || 'Không thể duyệt');
-                        } finally {
-                            setActionLoading(null);
-                        }
-                    },
-                },
-            ]
-        );
+        try {
+            setActionLoading(item.id);
+            const res = await approvalCenterApi.quickApprove(item.type, item.id);
+            if (res.success) {
+                // Remove item from UI locally for speed
+                setData(prev => prev ? ({
+                    ...prev,
+                    items: prev.items.filter(i => i.id !== item.id || i.type !== item.type)
+                }) : null);
+            } else {
+                Alert.alert('Thông báo', res.message || 'Không thể duyệt yêu cầu này');
+            }
+        } catch (error) {
+            Alert.alert('Lỗi', 'Đã xảy ra lỗi khi duyệt');
+        } finally {
+            setActionLoading(null);
+        }
     };
 
-    const handleOpenReject = (item: ApprovalItem) => {
+    const openRejectModal = (item: ApprovalItem) => {
         setRejectTarget(item);
         setRejectReason('');
         setShowRejectModal(true);
     };
 
     const handleReject = async () => {
-        if (!rejectTarget || !rejectReason.trim()) {
-            Alert.alert('Lỗi', 'Vui lòng nhập lý do từ chối');
-            return;
-        }
-
+        if (!rejectTarget || !rejectReason.trim()) return;
         try {
             setActionLoading(rejectTarget.id);
-            const response = await approvalCenterApi.quickReject(
-                rejectTarget.type,
-                rejectTarget.id,
-                rejectReason.trim()
-            );
-            if (response.success) {
-                Alert.alert('✅ Thành công', response.message);
+            const res = await approvalCenterApi.quickReject(rejectTarget.type, rejectTarget.id, rejectReason);
+            if (res.success) {
                 setShowRejectModal(false);
-                setRejectTarget(null);
-                loadApprovals();
+                setData(prev => prev ? ({
+                    ...prev,
+                    items: prev.items.filter(i => i.id !== rejectTarget.id || i.type !== rejectTarget.type)
+                }) : null);
+            } else {
+                Alert.alert('Thông báo', res.message || 'Không thể từ chối yêu cầu này');
             }
-        } catch (error: any) {
-            Alert.alert('Lỗi', error.response?.data?.message || 'Không thể từ chối');
+        } catch (error) {
+            Alert.alert('Lỗi', 'Đã xảy ra lỗi khi từ chối');
         } finally {
             setActionLoading(null);
         }
     };
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        loadApprovals();
+    };
+
+    // ─────────────────────────────────────────────────
+    // Consolidated grouping into 4 main roles + History
+    // ─────────────────────────────────────────────────
+    const sections = useMemo(() => {
+        if (!data) return [];
+
+        if (viewMode === 'history') {
+            return [{
+                key: 'history',
+                title: 'Hoạt động gần đây',
+                icon: 'time-outline',
+                color: '#6B7280',
+                bgColor: '#F3F4F6',
+                data: data.recent_items || [],
+            }];
+        }
+
+        const grouped: Record<string, ApprovalItem[]> = {};
+        for (const item of (data.items || [])) {
+            const level = item.approval_level || 'operations';
+            const roleKey = ROLE_MAPPING[level] || 'operations';
+            
+            // Filter by selected role if not 'all'
+            if (selectedRole !== 'all' && roleKey !== selectedRole) continue;
+
+            if (!grouped[roleKey]) grouped[roleKey] = [];
+            grouped[roleKey].push(item);
+        }
+
+        return Object.entries(grouped)
+            .map(([key, items]) => {
+                const config = ROLE_CONFIG[key] || ROLE_CONFIG.operations;
+                return {
+                    key,
+                    title: config.label,
+                    icon: config.icon,
+                    color: config.color,
+                    bgColor: config.bgColor,
+                    data: items,
+                };
+            })
+            .sort((a, b) => {
+                // Order: management, accountant, customer, operations
+                const order = ['management', 'accountant', 'customer', 'operations'];
+                return order.indexOf(a.key) - order.indexOf(b.key);
+            });
+    }, [data, selectedRole, viewMode]);
+
+    // Counts for role tabs (only for pending items)
+    const roleCounts = useMemo(() => {
+        const counts: Record<string, number> = { all: data?.items?.length || 0 };
+        for (const item of (data?.items || [])) {
+            const role = ROLE_MAPPING[item.approval_level] || 'operations';
+            counts[role] = (counts[role] || 0) + 1;
+        }
+        return counts;
+    }, [data?.items]);
 
     const handleNavigateToDetail = (item: ApprovalItem) => {
         if (item.type === 'company_cost') {
@@ -361,288 +259,307 @@ export default function ApprovalCenterScreen() {
         return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
     };
 
+
     // ─────────────────────────────────────────────────
-    // Group Filter Strip
+    // Stats Summary Cards (Matches CRM Dashboard)
     // ─────────────────────────────────────────────────
-    const renderGroupStrip = () => {
-        if (!data || data.grand_total === 0) return null;
+    const renderStatsCards = () => {
+        if (!data?.stats) return null;
+        const { stats } = data;
 
         return (
-            <View style={styles.stripContainer}>
-                {/* Total Badge */}
-                <TouchableOpacity
-                    style={[
-                        styles.stripItem,
-                        selectedGroup === 'all' && styles.stripItemActive,
-                    ]}
-                    onPress={() => setSelectedGroup('all')}
-                    activeOpacity={0.7}
-                >
-                    <View style={[styles.stripBadge, selectedGroup === 'all' && { backgroundColor: '#1B4F72' }]}>
-                        <Text style={[styles.stripBadgeText, selectedGroup === 'all' && { color: '#FFF' }]}>
-                            {data.grand_total}
-                        </Text>
+            <View style={styles.statsGrid}>
+                <View style={[styles.statCard, { backgroundColor: '#F0F9FF' }]}>
+                    <View style={[styles.statIcon, { backgroundColor: '#0EA5E9' }]}>
+                        <Ionicons name="documents-outline" size={18} color="#FFF" />
                     </View>
-                    <Text style={[styles.stripLabel, selectedGroup === 'all' && styles.stripLabelActive]}>
-                        Tất cả
-                    </Text>
-                </TouchableOpacity>
+                    <View>
+                        <Text style={styles.statValue}>{stats.pending_total}</Text>
+                        <Text style={styles.statLabel}>Chờ duyệt</Text>
+                    </View>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: '#F0FDF4' }]}>
+                    <View style={[styles.statIcon, { backgroundColor: '#22C55E' }]}>
+                        <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
+                    </View>
+                    <View>
+                        <Text style={styles.statValue}>{stats.approved_today}</Text>
+                        <Text style={styles.statLabel}>Duyệt hôm nay</Text>
+                    </View>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: '#FFF1F2' }]}>
+                    <View style={[styles.statIcon, { backgroundColor: '#F43F5E' }]}>
+                        <Ionicons name="close-circle-outline" size={18} color="#FFF" />
+                    </View>
+                    <View>
+                        <Text style={styles.statValue}>{stats.rejected_today}</Text>
+                        <Text style={styles.statLabel}>Từ chối</Text>
+                    </View>
+                </View>
+            </View>
+        );
+    };
 
-                {groupKeys.map((key) => {
-                    const config = GROUP_CONFIG[key] || DEFAULT_GROUP;
-                    const count = groupCounts[key] || 0;
-                    const isActive = selectedGroup === key;
+    // ─────────────────────────────────────────────────
+    // Role Tabs (Matches CRM activeRole tabs)
+    // ─────────────────────────────────────────────────
+    const renderRoleTabs = () => {
+        return (
+            <View style={styles.roleTabsContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.roleTabsScroll}>
+                    <TouchableOpacity 
+                        style={[styles.viewModeToggle, viewMode === 'pending' && styles.viewModeToggleActive]}
+                        onPress={() => setViewMode('pending')}
+                    >
+                        <Ionicons name="time-outline" size={16} color={viewMode === 'pending' ? '#3B82F6' : '#6B7280'} />
+                        <Text style={[styles.viewModeText, viewMode === 'pending' && styles.viewModeTextActive]}>Đang chờ</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.viewModeToggle, viewMode === 'history' && styles.viewModeToggleActive]}
+                        onPress={() => setViewMode('history')}
+                    >
+                        <Ionicons name="list-outline" size={16} color={viewMode === 'history' ? '#3B82F6' : '#6B7280'} />
+                        <Text style={[styles.viewModeText, viewMode === 'history' && styles.viewModeTextActive]}>Lịch sử</Text>
+                    </TouchableOpacity>
+                    
+                    <View style={styles.tabDivider} />
 
-                    return (
-                        <TouchableOpacity
-                            key={key}
-                            style={[
-                                styles.stripItem,
-                                isActive && { backgroundColor: config.color + '15', borderColor: config.color },
-                            ]}
-                            onPress={() => setSelectedGroup(isActive ? 'all' : key)}
-                            activeOpacity={0.7}
-                        >
-                            <View style={[styles.stripBadge, { backgroundColor: isActive ? config.color : config.bgColor }]}>
-                                <Text style={[styles.stripBadgeText, { color: isActive ? '#FFF' : config.color }]}>
-                                    {count}
+                    {viewMode === 'pending' && ROLE_TABS.map((tab) => {
+                        const count = roleCounts[tab.key] || 0;
+                        const isActive = selectedRole === tab.key;
+                        if (tab.key !== 'all' && count === 0) return null;
+
+                        return (
+                            <TouchableOpacity
+                                key={tab.key}
+                                style={[styles.roleTab, isActive && { borderBottomColor: tab.color }]}
+                                onPress={() => setSelectedRole(tab.key)}
+                            >
+                                <Text style={[styles.roleTabText, isActive && { color: tab.color, fontWeight: '700' }]}>
+                                    {tab.label}
                                 </Text>
-                            </View>
-                            <Text style={[styles.stripLabel, isActive && { color: config.color, fontWeight: '700' }]}>
-                                {config.shortLabel}
-                            </Text>
-                        </TouchableOpacity>
-                    );
-                })}
+                                {count > 0 && (
+                                    <View style={[styles.roleTabBadge, { backgroundColor: tab.color }]}>
+                                        <Text style={styles.roleTabBadgeText}>{count}</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
             </View>
         );
     };
 
-    // ─────────────────────────────────────────────────
-    // Section Header
-    // ─────────────────────────────────────────────────
-    const renderSectionHeader = ({ section }: { section: any }) => {
-        const config = GROUP_CONFIG[section.key] || DEFAULT_GROUP;
-        return (
-            <View style={[styles.sectionHeader, { borderLeftColor: section.color }]}>
-                <View style={[styles.sectionIcon, { backgroundColor: section.bgColor }]}>
-                    <Ionicons name={section.icon as any} size={18} color={section.color} />
-                </View>
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <View style={[styles.sectionCount, { backgroundColor: section.color }]}>
-                    <Text style={styles.sectionCountText}>{section.data.length}</Text>
-                </View>
+    const renderSectionHeader = ({ section }: { section: any }) => (
+        <View style={styles.sectionHeader}>
+            <View style={[styles.sectionIconBg, { backgroundColor: section.bgColor }]}>
+                <Ionicons name={section.icon as any} size={18} color={section.color} />
             </View>
-        );
-    };
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <View style={[styles.sectionCount, { backgroundColor: section.color }]}>
+                <Text style={styles.sectionCountText}>{section.data.length}</Text>
+            </View>
+        </View>
+    );
 
-    // ─────────────────────────────────────────────────
-    // Approval Item Card (simplified)
-    // ─────────────────────────────────────────────────
     const renderApprovalItem = ({ item }: { item: ApprovalItem }) => {
-        const typeIcon = TYPE_ICON[item.type] || { icon: 'document-outline', color: '#6B7280' };
-        const isLoading = actionLoading === item.id;
+        const typeInfo = TYPE_ICON[item.type] || TYPE_ICON.project_cost;
+        const isHistory = viewMode === 'history';
 
         return (
-            <View style={styles.card}>
-                {/* Card Content */}
-                <TouchableOpacity
-                    style={styles.cardContent}
-                    onPress={() => handleNavigateToDetail(item)}
-                    activeOpacity={0.7}
-                >
-                    <View style={[styles.cardIcon, { backgroundColor: typeIcon.color + '15' }]}>
-                        <Ionicons name={typeIcon.icon as any} size={20} color={typeIcon.color} />
+            <TouchableOpacity 
+                style={styles.card}
+                onPress={() => handleNavigateToDetail(item)}
+                activeOpacity={0.7}
+            >
+                <View style={styles.cardContent}>
+                    <View style={[styles.cardIcon, { backgroundColor: typeInfo.color + '15' }]}>
+                        <Ionicons name={typeInfo.icon as any} size={22} color={typeInfo.color} />
                     </View>
+                    
                     <View style={styles.cardInfo}>
-                        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-                        <Text style={styles.cardSubtitle} numberOfLines={1}>{item.subtitle}</Text>
-                        <View style={styles.cardMeta}>
+                        <View style={styles.cardHeader}>
+                            <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
                             {item.amount > 0 && (
                                 <Text style={styles.cardAmount}>{formatCurrency(item.amount)}</Text>
                             )}
-                            <Text style={styles.cardTime}>
-                                <Ionicons name="time-outline" size={11} color="#9CA3AF" /> {formatDate(item.created_at)}
-                            </Text>
+                        </View>
+                        <Text style={styles.cardSubtitle} numberOfLines={1}>{item.subtitle}</Text>
+                        
+                        <View style={styles.cardMeta}>
+                            <View style={styles.metaItem}>
+                                <Ionicons name="person-outline" size={12} color="#9CA3AF" />
+                                <Text style={styles.cardTime}>{item.created_by}</Text>
+                            </View>
+                            <View style={styles.metaItem}>
+                                <Ionicons name="time-outline" size={12} color="#9CA3AF" />
+                                <Text style={styles.cardTime}>{formatDate(item.created_at)}</Text>
+                            </View>
                         </View>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
-                </TouchableOpacity>
+                </View>
 
-                {/* Quick Actions */}
-                {item.can_approve && (
+                {!isHistory && item.can_approve && (
                     <View style={styles.cardActions}>
-                        <TouchableOpacity
+                        <TouchableOpacity 
                             style={styles.rejectBtn}
-                            onPress={() => handleOpenReject(item)}
-                            disabled={isLoading}
+                            onPress={() => {
+                                setRejectTarget(item);
+                                setRejectReason('');
+                                setShowRejectModal(true);
+                            }}
+                            disabled={actionLoading === item.id}
                         >
-                            <Ionicons name="close-circle-outline" size={17} color="#EF4444" />
+                            <Ionicons name="close-outline" size={18} color="#EF4444" />
                             <Text style={styles.rejectBtnText}>Từ chối</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity
+                        <TouchableOpacity 
                             style={styles.approveBtn}
                             onPress={() => handleQuickApprove(item)}
-                            disabled={isLoading}
+                            disabled={actionLoading === item.id}
                         >
-                            {isLoading ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            {actionLoading === item.id ? (
+                                <ActivityIndicator color="#FFF" size="small" />
                             ) : (
                                 <>
-                                    <Ionicons name="checkmark-circle" size={17} color="#FFFFFF" />
+                                    <Ionicons name="checkmark-outline" size={18} color="#FFFFFF" />
                                     <Text style={styles.approveBtnText}>Duyệt</Text>
                                 </>
                             )}
                         </TouchableOpacity>
                     </View>
                 )}
-            </View>
+                
+                {isHistory && (
+                    <View style={[styles.historyStatus, { backgroundColor: item.status === 'approved' ? '#DCFCE7' : '#FEE2E2' }]}>
+                         <Ionicons 
+                            name={item.status === 'approved' ? 'checkmark-circle' : 'close-circle'} 
+                            size={14} 
+                            color={item.status === 'approved' ? '#166534' : '#991B1B'} 
+                        />
+                        <Text style={[styles.historyStatusText, { color: item.status === 'approved' ? '#166534' : '#991B1B' }]}>
+                            {item.status_label}
+                        </Text>
+                    </View>
+                )}
+            </TouchableOpacity>
         );
     };
 
-    // ─────────────────────────────────────────────────
-    // Empty State
-    // ─────────────────────────────────────────────────
-    const renderEmpty = () => (
-        <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconBg}>
-                <Ionicons name="checkmark-done-circle-outline" size={64} color="#10B981" />
-            </View>
-            <Text style={styles.emptyTitle}>Tuyệt vời! 🎉</Text>
-            <Text style={styles.emptyText}>Không có yêu cầu nào chờ duyệt</Text>
-        </View>
-    );
-
     return (
         <View style={styles.container}>
-            <ScreenHeader
-                title="Trung Tâm Duyệt"
-                showBackButton
-                rightComponent={
-                    <TouchableOpacity
-                        style={styles.refreshBtn}
-                        onPress={onRefresh}
-                        disabled={loading}
-                    >
-                        <Ionicons
-                            name="refresh-outline"
-                            size={22}
-                            color={loading ? '#9CA3AF' : '#3B82F6'}
-                        />
-                    </TouchableOpacity>
+            <ScreenHeader title="Trung tâm Duyệt" showBackButton />
+            
+            <SectionList
+                sections={sections}
+                keyExtractor={(item, index) => `${item.type}-${item.id}-${index}`}
+                renderItem={renderApprovalItem}
+                renderSectionHeader={renderSectionHeader}
+                ListHeaderComponent={() => (
+                    <View style={styles.listHeader}>
+                        {renderStatsCards()}
+                        {renderRoleTabs()}
+                        {sections.length === 0 && !loading && (
+                            <View style={styles.emptyContainer}>
+                                <View style={styles.emptyIconBg}>
+                                    <Ionicons name="documents-outline" size={64} color="#CBD5E1" />
+                                </View>
+                                <Text style={styles.emptyTitle}>
+                                    {viewMode === 'pending' ? 'Hết việc rồi!' : 'Trống'}
+                                </Text>
+                                <Text style={styles.emptyText}>
+                                    {viewMode === 'pending' 
+                                        ? 'Không có yêu cầu nào đang chờ bạn duyệt.' 
+                                        : 'Chưa có hoạt động nào được ghi lại.'}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                )}
+                stickySectionHeadersEnabled={true}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />
                 }
+                contentContainerStyle={[
+                    styles.listContent,
+                    { paddingBottom: tabBarHeight + 20 }
+                ]}
+                ListFooterComponent={() => loading ? (
+                    <View style={styles.loadingFooter}>
+                        <ActivityIndicator color="#3B82F6" />
+                        <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+                    </View>
+                ) : null}
             />
 
-            {/* Group Filter Strip */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.stripScroll}
-                contentContainerStyle={styles.stripScrollContent}
-            >
-                {renderGroupStrip()}
-            </ScrollView>
-
-            {loading && !refreshing ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                    <Text style={styles.loadingText}>Đang tải...</Text>
-                </View>
-            ) : (
-                <SectionList
-                    sections={sections}
-                    keyExtractor={(item) => `${item.type}-${item.id}`}
-                    renderItem={renderApprovalItem}
-                    renderSectionHeader={renderSectionHeader}
-                    ListEmptyComponent={renderEmpty}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                    }
-                    contentContainerStyle={{
-                        paddingBottom: tabBarHeight + 24,
-                        flexGrow: sections.length === 0 ? 1 : undefined,
-                    }}
-                    stickySectionHeadersEnabled={false}
-                    showsVerticalScrollIndicator={false}
-                />
-            )}
-
-            {/* Reject Modal */}
+            {/* Reject Reason Modal */}
             <Modal
                 visible={showRejectModal}
                 transparent
                 animationType="fade"
                 onRequestClose={() => setShowRejectModal(false)}
             >
-                <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={styles.modalOverlay}
-                >
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <View style={styles.modalOverlayInner}>
-                            <View style={styles.modalContent}>
-                                <View style={styles.modalHeader}>
-                                    <View style={styles.modalIconBg}>
-                                        <Ionicons name="alert-circle" size={32} color="#EF4444" />
+                <TouchableWithoutFeedback onPress={() => setShowRejectModal(false)}>
+                    <View style={styles.modalOverlay}>
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                            style={styles.modalOverlayInner}
+                        >
+                            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                                <View style={styles.modalContent}>
+                                    <View style={styles.modalHeader}>
+                                        <View style={styles.modalIconBg}>
+                                            <Ionicons name="close-circle-outline" size={28} color="#EF4444" />
+                                        </View>
+                                        <Text style={styles.modalTitle}>Lý do từ chối</Text>
+                                        <Text style={styles.modalItemName}>{rejectTarget?.title}</Text>
                                     </View>
-                                    <Text style={styles.modalTitle}>Từ chối yêu cầu</Text>
-                                    {rejectTarget && (
-                                        <Text style={styles.modalItemName} numberOfLines={1}>
-                                            "{rejectTarget.title}"
-                                        </Text>
-                                    )}
+
+                                    <TextInput
+                                        style={styles.modalInput}
+                                        placeholder="Nhập lý do tại đây..."
+                                        placeholderTextColor="#9CA3AF"
+                                        multiline
+                                        numberOfLines={4}
+                                        value={rejectReason}
+                                        onChangeText={setRejectReason}
+                                        autoFocus
+                                    />
+
+                                    <View style={styles.modalActions}>
+                                        <TouchableOpacity
+                                            style={[styles.modalBtn, styles.modalCancelBtn]}
+                                            onPress={() => setShowRejectModal(false)}
+                                        >
+                                            <Text style={styles.modalCancelText}>Hủy</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.modalBtn,
+                                                styles.modalRejectBtn,
+                                                (!rejectReason.trim() || actionLoading === rejectTarget?.id) && styles.modalBtnDisabled
+                                            ]}
+                                            onPress={handleReject}
+                                            disabled={!rejectReason.trim() || actionLoading === rejectTarget?.id}
+                                        >
+                                            {actionLoading === rejectTarget?.id ? (
+                                                <ActivityIndicator color="#FFF" size="small" />
+                                            ) : (
+                                                <Text style={styles.modalRejectText}>Xác nhận</Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
-
-                                <TextInput
-                                    style={styles.modalInput}
-                                    placeholder="Nhập lý do từ chối..."
-                                    placeholderTextColor="#9CA3AF"
-                                    value={rejectReason}
-                                    onChangeText={setRejectReason}
-                                    multiline
-                                    numberOfLines={4}
-                                    textAlignVertical="top"
-                                    autoFocus
-                                />
-
-                                <View style={styles.modalActions}>
-                                    <TouchableOpacity
-                                        style={[styles.modalBtn, styles.modalCancelBtn]}
-                                        onPress={() => {
-                                            setShowRejectModal(false);
-                                            setRejectTarget(null);
-                                            setRejectReason('');
-                                        }}
-                                        disabled={actionLoading !== null}
-                                    >
-                                        <Text style={styles.modalCancelText}>Hủy</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.modalBtn,
-                                            styles.modalRejectBtn,
-                                            (!rejectReason.trim() || actionLoading !== null) && styles.modalBtnDisabled,
-                                        ]}
-                                        onPress={handleReject}
-                                        disabled={!rejectReason.trim() || actionLoading !== null}
-                                    >
-                                        {actionLoading !== null ? (
-                                            <ActivityIndicator color="#FFFFFF" size="small" />
-                                        ) : (
-                                            <Text style={styles.modalRejectText}>Xác nhận từ chối</Text>
-                                        )}
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        </View>
-                    </TouchableWithoutFeedback>
-                </KeyboardAvoidingView>
+                            </TouchableWithoutFeedback>
+                        </KeyboardAvoidingView>
+                    </View>
+                </TouchableWithoutFeedback>
             </Modal>
         </View>
     );
 }
+
 
 // ─────────────────────────────────────────────────
 // Styles
@@ -650,77 +567,117 @@ export default function ApprovalCenterScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F3F4F6',
+        backgroundColor: '#F8FAFC',
     },
-    refreshBtn: {
-        padding: 4,
+    listHeader: {
+        paddingTop: 16,
+    },
+    listContent: {
+        paddingTop: 0,
     },
 
-    // ─── Strip Filter ───
-    stripScroll: {
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-        maxHeight: 60,
+    // ─── Stats Grid ───
+    statsGrid: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        gap: 10,
+        marginBottom: 20,
     },
-    stripScrollContent: {
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-    },
-    stripContainer: {
+    statCard: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        padding: 12,
+        borderRadius: 14,
+        gap: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
     },
-    stripItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 20,
-        backgroundColor: '#F9FAFB',
-        borderWidth: 1.5,
-        borderColor: '#E5E7EB',
-    },
-    stripItemActive: {
-        backgroundColor: '#EFF6FF',
-        borderColor: '#1B4F72',
-    },
-    stripBadge: {
-        minWidth: 22,
-        height: 22,
-        borderRadius: 11,
+    statIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 5,
-        backgroundColor: '#F3F4F6',
     },
-    stripBadgeText: {
-        fontSize: 12,
+    statValue: {
+        fontSize: 16,
         fontWeight: '800',
-        color: '#374151',
+        color: '#0F172A',
     },
-    stripLabel: {
-        fontSize: 12,
+    statLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#64748B',
+        marginTop: -1,
+    },
+
+    // ─── Role Tabs ───
+    roleTabsContainer: {
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        paddingVertical: 4,
+    },
+    roleTabsScroll: {
+        paddingHorizontal: 16,
+        alignItems: 'center',
+        height: 48,
+    },
+    viewModeToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: '#F1F5F9',
+        marginRight: 8,
+        gap: 6,
+    },
+    viewModeToggleActive: {
+        backgroundColor: '#EFF6FF',
+    },
+    viewModeText: {
+        fontSize: 13,
         fontWeight: '600',
         color: '#6B7280',
     },
-    stripLabelActive: {
-        color: '#1B4F72',
-        fontWeight: '700',
+    viewModeTextActive: {
+        color: '#3B82F6',
     },
-
-    // ─── Loading ───
-    loadingContainer: {
-        flex: 1,
+    tabDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: '#E2E8F0',
+        marginHorizontal: 12,
+    },
+    roleTab: {
+        height: 48,
+        justifyContent: 'center',
+        marginRight: 20,
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+    },
+    roleTabText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#64748B',
+    },
+    roleTabBadge: {
+        position: 'absolute',
+        top: 6,
+        right: -12,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 12,
+        paddingHorizontal: 4,
     },
-    loadingText: {
-        fontSize: 14,
-        color: '#9CA3AF',
+    roleTabBadgeText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#FFFFFF',
     },
 
     // ─── Section Header ───
@@ -729,27 +686,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        paddingTop: 20,
+        paddingTop: 24,
+        backgroundColor: '#F8FAFC',
         gap: 10,
-        borderLeftWidth: 3,
-        borderLeftColor: '#3B82F6',
-        marginLeft: 16,
-        marginRight: 16,
-        marginTop: 8,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        borderTopLeftRadius: 0,
-        borderBottomLeftRadius: 0,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
-        elevation: 1,
     },
-    sectionIcon: {
-        width: 34,
-        height: 34,
-        borderRadius: 10,
+    sectionIconBg: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -757,18 +701,15 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 15,
         fontWeight: '700',
-        color: '#1F2937',
+        color: '#1E293B',
     },
     sectionCount: {
-        minWidth: 26,
-        height: 26,
-        borderRadius: 13,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
     },
     sectionCountText: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '800',
         color: '#FFFFFF',
     },
@@ -777,24 +718,20 @@ const styles = StyleSheet.create({
     card: {
         backgroundColor: '#FFFFFF',
         marginHorizontal: 16,
-        marginTop: 8,
-        borderRadius: 14,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 4,
-        elevation: 1,
+        marginBottom: 12,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
         overflow: 'hidden',
     },
     cardContent: {
         flexDirection: 'row',
-        alignItems: 'center',
-        padding: 14,
-        gap: 12,
+        padding: 16,
+        gap: 14,
     },
     cardIcon: {
-        width: 42,
-        height: 42,
+        width: 44,
+        height: 44,
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
@@ -802,48 +739,62 @@ const styles = StyleSheet.create({
     cardInfo: {
         flex: 1,
     },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 4,
+    },
     cardTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1F2937',
-        marginBottom: 2,
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#0F172A',
+        flex: 1,
+        marginRight: 8,
+    },
+    cardAmount: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#10B981',
     },
     cardSubtitle: {
-        fontSize: 12,
-        color: '#6B7280',
-        marginBottom: 4,
+        fontSize: 13,
+        color: '#64748B',
+        marginBottom: 8,
     },
     cardMeta: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
     },
-    cardAmount: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#10B981',
+    metaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
     },
     cardTime: {
-        fontSize: 11,
-        color: '#9CA3AF',
+        fontSize: 12,
+        color: '#94A3B8',
+        fontWeight: '500',
     },
 
-    // ─── Card Actions ───
+    // ─── Actions ───
     cardActions: {
         flexDirection: 'row',
         borderTopWidth: 1,
-        borderTopColor: '#F3F4F6',
+        borderTopColor: '#F1F5F9',
+        backgroundColor: '#F8FAFC',
     },
     rejectBtn: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 11,
-        gap: 5,
+        paddingVertical: 12,
+        gap: 6,
     },
     rejectBtnText: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '600',
         color: '#EF4444',
     },
@@ -852,55 +803,81 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 11,
-        gap: 5,
+        paddingVertical: 12,
+        gap: 6,
         backgroundColor: '#10B981',
-        borderBottomRightRadius: 14,
     },
     approveBtnText: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '700',
         color: '#FFFFFF',
     },
 
-    // ─── Empty State ───
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
+    // ─── History Status ───
+    historyStatus: {
+        flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 80,
+        justifyContent: 'center',
+        paddingVertical: 8,
+        gap: 6,
+    },
+    historyStatusText: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
+
+    // ─── Empty ───
+    emptyContainer: {
+        paddingTop: 100,
+        alignItems: 'center',
+        paddingHorizontal: 40,
     },
     emptyIconBg: {
         marginBottom: 16,
+        opacity: 0.5,
     },
     emptyTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '800',
-        color: '#1F2937',
-        marginBottom: 6,
+        color: '#475569',
+        marginBottom: 8,
     },
     emptyText: {
         fontSize: 14,
-        color: '#6B7280',
+        color: '#94A3B8',
+        textAlign: 'center',
+    },
+
+    // ─── Footer ───
+    loadingFooter: {
+        paddingVertical: 20,
+        alignItems: 'center',
+        gap: 8,
+    },
+    loadingText: {
+        fontSize: 12,
+        color: '#94A3B8',
     },
 
     // ─── Reject Modal ───
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        justifyContent: 'flex-end',
     },
     modalOverlayInner: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
+        padding: 16,
     },
     modalContent: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 20,
+        borderRadius: 24,
         padding: 24,
-        width: '100%',
-        maxWidth: 400,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 20,
     },
     modalHeader: {
         alignItems: 'center',
@@ -910,32 +887,33 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: '#FEE2E2',
+        backgroundColor: '#FFF1F2',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 12,
     },
     modalTitle: {
         fontSize: 18,
-        fontWeight: '700',
-        color: '#1F2937',
+        fontWeight: '800',
+        color: '#0F172A',
         marginBottom: 4,
     },
     modalItemName: {
         fontSize: 13,
-        color: '#3B82F6',
-        fontWeight: '600',
+        color: '#64748B',
+        textAlign: 'center',
     },
     modalInput: {
         borderWidth: 1.5,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        padding: 14,
+        borderColor: '#E2E8F0',
+        borderRadius: 16,
+        padding: 16,
         fontSize: 15,
-        height: 100,
+        height: 120,
         textAlignVertical: 'top',
-        marginBottom: 16,
-        backgroundColor: '#F9FAFB',
+        marginBottom: 20,
+        backgroundColor: '#F8FAFC',
+        color: '#0F172A',
     },
     modalActions: {
         flexDirection: 'row',
@@ -943,20 +921,20 @@ const styles = StyleSheet.create({
     },
     modalBtn: {
         flex: 1,
-        paddingVertical: 13,
-        borderRadius: 12,
+        paddingVertical: 14,
+        borderRadius: 14,
         alignItems: 'center',
     },
     modalCancelBtn: {
-        backgroundColor: '#F3F4F6',
+        backgroundColor: '#F1F5F9',
     },
     modalRejectBtn: {
         backgroundColor: '#EF4444',
     },
     modalCancelText: {
-        color: '#6B7280',
+        color: '#475569',
         fontSize: 15,
-        fontWeight: '600',
+        fontWeight: '700',
     },
     modalRejectText: {
         color: '#FFFFFF',
@@ -967,3 +945,4 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
 });
+

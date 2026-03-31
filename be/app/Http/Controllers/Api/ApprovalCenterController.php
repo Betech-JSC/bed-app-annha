@@ -822,8 +822,93 @@ class ApprovalCenterController extends Controller
             }
         }
 
+        // ================================================================
+        // 17. RECENT ACTIVITY (History)
+        // ================================================================
+        $recentActions = collect();
+        
+        // Fetch recently approved/rejected costs
+        $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
+            ->with(['creator:id,name', 'costGroup:id,name', 'project:id,name,code', 'attachments'])
+            ->where('updated_at', '>=', now()->subDays(7))
+            ->orderBy('updated_at', 'desc')
+            ->limit(10)
+            ->get();
+            
+        foreach ($recentCosts as $cost) {
+            $recentActions->push([
+                'id' => $cost->id,
+                'type' => $cost->project_id ? 'project_cost' : 'company_cost',
+                'title' => $cost->name,
+                'subtitle' => $cost->project ? ($cost->project->code . ' - ' . $cost->project->name) : ($cost->costGroup->name ?? 'Chi phí'),
+                'amount' => (float) $cost->amount,
+                'status' => $cost->status,
+                'status_label' => $this->getStatusLabel($cost->status),
+                'created_by' => $cost->creator->name ?? 'N/A',
+                'created_at' => $cost->created_at->toISOString(),
+                'updated_at' => $cost->updated_at->toISOString(),
+                'project_id' => $cost->project_id,
+                'description' => $cost->description,
+                'rejected_reason' => $cost->rejected_reason, // Assuming this field exists or from log
+                'can_approve' => false,
+                'approval_level' => 'history',
+            ]);
+        }
+
+        // Fetch recently processed acceptance stages
+        $recentAcceptances = AcceptanceStage::whereIn('status', ['customer_approved', 'rejected'])
+            ->with(['project:id,name,code', 'task:id,name', 'attachments'])
+            ->orderBy('updated_at', 'desc')
+            ->limit(10)
+            ->get();
+            
+        foreach ($recentAcceptances as $stage) {
+            $recentActions->push([
+                'id' => $stage->id,
+                'type' => 'acceptance',
+                'title' => $stage->name,
+                'subtitle' => ($stage->project->code ?? '') . ' - ' . ($stage->project->name ?? 'Dự án'),
+                'amount' => 0,
+                'status' => $stage->status,
+                'status_label' => $this->getStatusLabel($stage->status),
+                'created_by' => 'GS/QLDA',
+                'created_at' => $stage->created_at->toISOString(),
+                'updated_at' => $stage->updated_at->toISOString(),
+                'project_id' => $stage->project_id,
+                'rejected_reason' => $stage->rejected_reason,
+                'can_approve' => false,
+                'approval_level' => 'history',
+            ]);
+        }
+
+        $result['recent_items'] = $recentActions->sortByDesc('updated_at')->values()->all();
+
+        // ================================================================
+        // STATS OVERVIEW
+        // ================================================================
+        $pendingAmount = Cost::whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])->sum('amount');
+        $approvedToday = Cost::where('status', 'approved')->whereDate('updated_at', today())->count();
+        $rejectedToday = Cost::where('status', 'rejected')->whereDate('updated_at', today())->count();
+        
+        $result['stats'] = [
+            'pending_total' => array_sum(array_column($result['summary'], 'total')),
+            'pending_amount' => (float) $pendingAmount,
+            'approved_today' => (int) $approvedToday,
+            'rejected_today' => (int) $rejectedToday,
+        ];
+
+        // ──────────────────────────────────────────────
+        // Post-processing: Roles and Sorting
+        // ──────────────────────────────────────────────
+
         // Inject required_role info into each item
         foreach ($result['items'] as &$item) {
+            $roleInfo = $this->getRequiredRoleInfo($item['approval_level']);
+            $item = array_merge($item, $roleInfo);
+        }
+        unset($item);
+
+        foreach ($result['recent_items'] as &$item) {
             $roleInfo = $this->getRequiredRoleInfo($item['approval_level']);
             $item = array_merge($item, $roleInfo);
         }
@@ -835,9 +920,9 @@ class ApprovalCenterController extends Controller
         });
 
         // Calculate grand total
-        $result['grand_total'] = array_sum(array_column($result['summary'], 'total'));
+        $result['grand_total'] = $result['stats']['pending_total'];
 
-        // Include current user's roles for client-side role matching
+        // Include current user's roles
         $userRoles = [];
         if (method_exists($user, 'roles')) {
             $userRoles = $user->roles->pluck('name')->toArray();
@@ -849,6 +934,7 @@ class ApprovalCenterController extends Controller
             'data' => $result,
         ]);
     }
+
 
     /**
      * Quick approve action directly from approval center.

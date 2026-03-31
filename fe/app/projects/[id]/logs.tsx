@@ -3,6 +3,7 @@ import {
   View,
   Text,
   SectionList,
+  FlatList,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
@@ -2557,13 +2558,8 @@ const styles = StyleSheet.create({
     color: "#4B5563",
     marginBottom: 8,
   },
-  imagesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
   imageGridItem: {
-    width: "31%", // ~3 items per row with gap
+    width: "31%",
     aspectRatio: 1,
   },
   detailImageGrid: {
@@ -2582,12 +2578,6 @@ const styles = StyleSheet.create({
     padding: 4,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-  },
-  detailFileName: {
-    fontSize: 10,
-    color: "#6B7280",
-    marginTop: 4,
-    textAlign: "center",
   },
 });
 

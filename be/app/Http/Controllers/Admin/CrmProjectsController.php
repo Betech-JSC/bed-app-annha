@@ -556,10 +556,7 @@ class CrmProjectsController extends Controller
             if ($cost->subcontractor_id) {
                 $this->syncSubcontractorPaymentFromCost($cost);
             }
-            // 2. Create material transaction
-            if ($cost->material_id && class_exists(\App\Services\MaterialInventoryService::class)) {
-                app(\App\Services\MaterialInventoryService::class)->createTransactionFromCost($cost);
-            }
+            // NOTE: Material inventory transaction removed — cost tracking is done via Cost model directly
             // 3. Sync budget items
             if ($cost->project_id && class_exists(\App\Services\BudgetSyncService::class)) {
                 app(\App\Services\BudgetSyncService::class)->syncProjectBudgets($project);
@@ -3056,12 +3053,7 @@ class CrmProjectsController extends Controller
                     'approved_at' => now(),
                 ]);
 
-                // Update stock via MaterialInventory (per-project stock tracking)
-                $inventory = \App\Models\MaterialInventory::firstOrCreate(
-                    ['project_id' => $project->id, 'material_id' => $item['material_id']],
-                    ['current_stock' => 0, 'min_stock_level' => 0]
-                );
-                $inventory->removeStock(abs($item['quantity']));
+                // NOTE: Inventory stock tracking removed — materials module is cost-only
             }
         });
 

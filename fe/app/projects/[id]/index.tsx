@@ -308,13 +308,7 @@ export default function ProjectDetailScreen() {
       color: "#10B981",
       permission: Permissions.COST_VIEW,
     },
-    {
-      title: "📊 Giám Sát Kho & Định Mức",
-      icon: "archive-outline",
-      route: `/projects/${id}/inventory-monitor`,
-      color: "#8B5CF6",
-      permission: Permissions.MATERIAL_VIEW,
-    },
+    
     {
       title: "⏰ Chấm Công",
       icon: "finger-print-outline",

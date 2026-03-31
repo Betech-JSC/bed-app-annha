@@ -37,6 +37,7 @@ export default function ProjectMaterialsScreen() {
     const [searchQuery, setSearchQuery] = useState("");
     const [showAddModal, setShowAddModal] = useState(false);
     const [allMaterials, setAllMaterials] = useState<Material[]>([]);
+    const [allMaterialsSearch, setAllMaterialsSearch] = useState(""); // Add search for modal
     const [loadingAllMaterials, setLoadingAllMaterials] = useState(false);
     const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
     const [transactionData, setTransactionData] = useState({
@@ -59,6 +60,7 @@ export default function ProjectMaterialsScreen() {
     const [submitting, setSubmitting] = useState(false);
     const [permissionDenied, setPermissionDenied] = useState(false);
     const [permissionMessage, setPermissionMessage] = useState("");
+    const [showReportModal, setShowReportModal] = useState(false);
     const [summary, setSummary] = useState({
         total_material_cost: 0,
         total_materials_count: 0
@@ -103,13 +105,12 @@ export default function ProjectMaterialsScreen() {
             const response = await materialApi.getMaterials({ active_only: true });
             if (response.success) {
                 const all = response.data.data || [];
-                // Lọc ra các materials chưa có trong project
-                const projectMaterialIds = materials.map(m => m.id);
-                // Also load cost groups if not loaded
+                // Load cost groups if not loaded
                 if (costGroups.length === 0) {
                     loadCostGroups();
                 }
-                setAllMaterials(all.filter((m: Material) => !projectMaterialIds.includes(m.id)));
+                // Don't filter out materials already in the project, because we record multiple usage transactions
+                setAllMaterials(all);
             }
         } catch (error: any) {
             const errorMessage = error.userMessage || error.response?.data?.message || "Không thể tải danh sách vật liệu";
@@ -265,9 +266,9 @@ export default function ProjectMaterialsScreen() {
     };
 
     const renderItem = ({ item }: { item: Material }) => {
-        const projectUsage = (item as any).project_usage || 0;
-        const projectTotalAmount = (item as any).project_total_amount || 0;
-        const transactionsCount = (item as any).project_transactions_count || 0;
+        const projectUsage = item.project_usage || 0;
+        const projectTotalAmount = item.project_total_amount || 0;
+        const transactionsCount = item.project_transactions_count || 0;
 
         return (
             <TouchableOpacity
@@ -348,7 +349,11 @@ export default function ProjectMaterialsScreen() {
 
             <PermissionGuard permission={Permissions.MATERIAL_VIEW} projectId={id}>
                 <View style={styles.summaryDashboard}>
-                    <View style={styles.summaryCard}>
+                    <TouchableOpacity 
+                        style={styles.summaryCard}
+                        onPress={() => setShowReportModal(true)}
+                        activeOpacity={0.7}
+                    >
                         <View style={styles.summaryIconContainer}>
                             <Ionicons name="cart" size={24} color="#3B82F6" />
                         </View>
@@ -356,8 +361,12 @@ export default function ProjectMaterialsScreen() {
                             <Text style={styles.summaryLabel}>Vật liệu dùng</Text>
                             <Text style={styles.summaryValue}>{summary.total_materials_count}</Text>
                         </View>
-                    </View>
-                    <View style={[styles.summaryCard, styles.summaryCardPrimary]}>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.summaryCard, styles.summaryCardPrimary]}
+                        onPress={() => setShowReportModal(true)}
+                        activeOpacity={0.7}
+                    >
                         <View style={[styles.summaryIconContainer, styles.summaryIconContainerPrimary]}>
                             <Ionicons name="cash" size={24} color="#FFFFFF" />
                         </View>
@@ -367,7 +376,7 @@ export default function ProjectMaterialsScreen() {
                                 {new Intl.NumberFormat("vi-VN").format(summary.total_material_cost)}
                             </Text>
                         </View>
-                    </View>
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.searchSection}>
@@ -439,31 +448,60 @@ export default function ProjectMaterialsScreen() {
                     </View>
 
                     {!selectedMaterial ? (
-                        <View style={styles.modalBody}>
-                            <Text style={styles.sectionTitle}>Chọn vật liệu</Text>
+                        <View style={[styles.modalBody, { flex: 1 }]}>
+                            <View style={styles.modalSearchSection}>
+                                <TextInput
+                                    style={styles.modalSearchInput}
+                                    placeholder="Tìm vật liệu để thêm..."
+                                    value={allMaterialsSearch}
+                                    onChangeText={setAllMaterialsSearch}
+                                />
+                                {allMaterialsSearch !== "" && (
+                                    <TouchableOpacity 
+                                        onPress={() => setAllMaterialsSearch("")}
+                                        style={styles.clearSearchBtn}
+                                    >
+                                        <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                            <Text style={styles.sectionTitle}>Chọn vật liệu từ kho</Text>
                             {loadingAllMaterials ? (
-                                <ActivityIndicator size="large" color="#3B82F6" style={{ marginVertical: 20 }} />
+                                <ActivityIndicator size="large" color="#3B82F6" style={{ marginVertical: 40 }} />
                             ) : (
                                 <FlatList
-                                    data={allMaterials}
+                                    data={allMaterials.filter(m => 
+                                        m.name.toLowerCase().includes(allMaterialsSearch.toLowerCase()) || 
+                                        m.code?.toLowerCase().includes(allMaterialsSearch.toLowerCase())
+                                    )}
                                     renderItem={({ item }) => (
                                         <TouchableOpacity
                                             style={styles.materialOption}
                                             onPress={() => handleSelectMaterial(item)}
+                                            activeOpacity={0.7}
                                         >
+                                            <View style={styles.materialOptionIcon}>
+                                                <Ionicons name="cube-outline" size={20} color="#3B82F6" />
+                                            </View>
                                             <View style={styles.materialOptionInfo}>
                                                 <Text style={styles.materialOptionName}>{item.name}</Text>
                                                 {item.code && (
                                                     <Text style={styles.materialOptionCode}>{item.code}</Text>
                                                 )}
                                             </View>
-                                            <Ionicons name="chevron-forward" size={20} color="#6B7280" />
+                                            <Ionicons name="add-circle" size={24} color="#3B82F6" />
                                         </TouchableOpacity>
                                     )}
                                     keyExtractor={(item) => item.id.toString()}
                                     ListEmptyComponent={
-                                        <Text style={styles.emptyText}>Không còn vật liệu nào để thêm</Text>
+                                        <View style={styles.modalEmpty}>
+                                            <Ionicons name="search-outline" size={48} color="#D1D5DB" />
+                                            <Text style={styles.modalEmptyText}>
+                                                {allMaterialsSearch ? "Không tìm thấy vật liệu này" : "Danh sách trống"}
+                                            </Text>
+                                        </View>
                                     }
+                                    keyboardShouldPersistTaps="handled"
                                     style={{ flex: 1 }}
                                 />
                             )}
@@ -564,24 +602,33 @@ export default function ProjectMaterialsScreen() {
 
                     {/* Batch Items List */}
                     {batchItems.length > 0 && (
-                        <View style={styles.batchSection}>
+                        <View style={[styles.batchSection, { paddingBottom: insets.bottom + 16 }]}>
                             <View style={styles.batchHeader}>
-                                <Text style={styles.batchTitle}>Danh sách chờ ({batchItems.length})</Text>
+                                <View>
+                                    <Text style={styles.batchTitle}>Danh sách đang thêm</Text>
+                                    <Text style={styles.batchCountText}>{batchItems.length} hạng mục</Text>
+                                </View>
                                 <TouchableOpacity onPress={() => setBatchItems([])}>
-                                    <Text style={styles.clearBatchText}>Xóa tất cả</Text>
+                                    <Text style={styles.clearBatchText}>Xóa hết</Text>
                                 </TouchableOpacity>
                             </View>
-                            <ScrollView style={[styles.batchList, { maxHeight: 200 }]}>
+                            <ScrollView 
+                                style={[styles.batchList, { maxHeight: 180 }]}
+                                contentContainerStyle={{ paddingVertical: 8 }}
+                            >
                                 {batchItems.map((item, index) => (
                                     <View key={index} style={styles.batchItem}>
                                         <View style={styles.batchItemInfo}>
                                             <Text style={styles.batchItemName}>{item.material.name}</Text>
                                             <Text style={styles.batchItemDetail}>
-                                                Qty: {item.quantity} {item.material.unit} - {new Intl.NumberFormat('vi-VN').format(item.amount)} đ
+                                                SL: <Text style={{ color: '#1F2937', fontWeight: '700' }}>{item.quantity}</Text> {item.material.unit} — {new Intl.NumberFormat('vi-VN').format(item.amount)} đ
                                             </Text>
                                         </View>
-                                        <TouchableOpacity onPress={() => handleRemoveFromBatch(index)}>
-                                            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                                        <TouchableOpacity 
+                                            onPress={() => handleRemoveFromBatch(index)}
+                                            style={styles.removeBatchItemBtn}
+                                        >
+                                            <Ionicons name="close-circle" size={22} color="#EF4444" />
                                         </TouchableOpacity>
                                     </View>
                                 ))}
@@ -589,7 +636,7 @@ export default function ProjectMaterialsScreen() {
 
                             <View style={styles.batchFooter}>
                                 <View style={styles.formGroup}>
-                                    <Text style={styles.label}>Nhóm chi phí (cho cả đợt nhập) *</Text>
+                                    <Text style={styles.label}>Nhóm chi phí *</Text>
                                     <TouchableOpacity
                                         style={styles.selectButton}
                                         onPress={() => setShowCostGroupPicker(true)}
@@ -600,14 +647,14 @@ export default function ProjectMaterialsScreen() {
                                                 !selectedCostGroup && styles.selectButtonPlaceholder,
                                             ]}
                                         >
-                                            {selectedCostGroup ? selectedCostGroup.name : "Chọn nhóm chi phí"}
+                                            {selectedCostGroup ? selectedCostGroup.name : "Chọn mục chi phí"}
                                         </Text>
                                         <Ionicons name="chevron-down" size={20} color="#6B7280" />
                                     </TouchableOpacity>
                                 </View>
 
                                 <View style={styles.totalRow}>
-                                    <Text style={styles.totalLabel}>Tổng cộng:</Text>
+                                    <Text style={styles.totalLabel}>Tổng cộng vốn:</Text>
                                     <Text style={styles.totalValue}>{new Intl.NumberFormat('vi-VN').format(totalBatchAmount)} VNĐ</Text>
                                 </View>
 
@@ -620,8 +667,8 @@ export default function ProjectMaterialsScreen() {
                                         <ActivityIndicator color="#FFFFFF" />
                                     ) : (
                                         <>
-                                            <Ionicons name="checkmark-done" size={24} color="#FFFFFF" />
-                                            <Text style={styles.submitBatchButtonText}>Xác nhận & Đẩy qua chi phí</Text>
+                                            <Ionicons name="cloud-upload-outline" size={22} color="#FFFFFF" />
+                                            <Text style={styles.submitBatchButtonText}>Xác nhận & Lưu dự án</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
@@ -678,6 +725,83 @@ export default function ProjectMaterialsScreen() {
                     )}
                 </KeyboardAvoidingView>
             </Modal>
+
+            {/* Material Usage Report Modal */}
+            <Modal
+                visible={showReportModal}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowReportModal(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalHeader}>
+                        <TouchableOpacity onPress={() => setShowReportModal(false)} style={{ padding: 4 }}>
+                            <Ionicons name="close" size={24} color="#1F2937" />
+                        </TouchableOpacity>
+                        <Text style={styles.modalTitle}>Thống Kê Vật Tư Dự Án</Text>
+                        <View style={{ width: 32 }} />
+                    </View>
+
+                    <ScrollView style={styles.reportContent}>
+                        <View style={styles.reportSummaryCard}>
+                            <View style={styles.reportSummaryItem}>
+                                <Text style={styles.reportSummaryLabel}>Tổng số loại vật tư</Text>
+                                <Text style={styles.reportSummaryValue}>{materials.length}</Text>
+                            </View>
+                            <View style={styles.reportSummaryDivider} />
+                            <View style={styles.reportSummaryItem}>
+                                <Text style={styles.reportSummaryLabel}>Tổng chi phí</Text>
+                                <Text style={[styles.reportSummaryValue, { color: '#10B981' }]}>
+                                    {new Intl.NumberFormat("vi-VN").format(summary.total_material_cost ?? 0)}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.reportListHeader}>
+                            <Text style={[styles.reportCol, { flex: 2, textAlign: 'left' }]}>VẬT TƯ</Text>
+                            <Text style={[styles.reportCol, { flex: 1, textAlign: 'center' }]}>SL</Text>
+                            <Text style={[styles.reportCol, { flex: 1.5, textAlign: 'right' }]}>THÀNH TIỀN</Text>
+                        </View>
+
+                        {materials.map((m, idx) => (
+                            <View key={m.id} style={[styles.reportRow, idx % 2 === 1 && { backgroundColor: '#F9FAFB' }]}>
+                                <View style={{ flex: 2 }}>
+                                    <Text style={styles.reportItemName} numberOfLines={2}>{m.name}</Text>
+                                    <View style={styles.reportItemSub}>
+                                        <Text style={styles.reportItemCode}>{m.code}</Text>
+                                        <Text style={styles.reportItemUnit}> • {m.unit}</Text>
+                                    </View>
+                                </View>
+                                <View style={{ flex: 1, alignItems: 'center' }}>
+                                    <Text style={[styles.reportCol, { textAlign: 'center', fontWeight: 'bold' }]}>
+                                        {new Intl.NumberFormat("vi-VN").format(Math.abs(m.project_usage || 0))}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1.5, alignItems: 'flex-end' }}>
+                                    <Text style={[styles.reportCol, { textAlign: 'right', color: '#10B981', fontWeight: '700' }]}>
+                                        {new Intl.NumberFormat("vi-VN").format(m.project_total_amount || 0)}
+                                    </Text>
+                                </View>
+                            </View>
+                        ))}
+                        
+                        {materials.length === 0 && (
+                            <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                                <Text style={styles.noDataText}>Chưa có dữ liệu thống kê vật tư đã dùng</Text>
+                            </View>
+                        )}
+                    </ScrollView>
+                    
+                    <View style={{ padding: 16, borderTopWidth: 1, borderColor: '#F3F4F6' }}>
+                        <TouchableOpacity 
+                            style={styles.closeModalButton}
+                            onPress={() => setShowReportModal(false)}
+                        >
+                            <Text style={styles.closeModalButtonText}>Đóng</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -702,22 +826,22 @@ const styles = StyleSheet.create({
     card: {
         backgroundColor: "#FFFFFF",
         borderRadius: 12,
-        padding: 16,
         marginBottom: 12,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 2,
         elevation: 1,
+        overflow: 'hidden',
+    },
+    cardContent: {
+        padding: 16,
     },
     cardHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "flex-start",
         marginBottom: 12,
-    },
-    cardHeaderLeft: {
-        flex: 1,
     },
     cardTitle: {
         fontSize: 16,
@@ -729,38 +853,8 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: "#6B7280",
     },
-    stockBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    stockText: {
-        fontSize: 12,
-        fontWeight: "600",
-    },
     cardBody: {
         gap: 8,
-    },
-    infoRow: {
-        marginBottom: 4,
-    },
-    infoItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    infoLabel: {
-        fontSize: 14,
-        color: "#6B7280",
-        fontWeight: "500",
-    },
-    infoValue: {
-        fontSize: 14,
-        color: "#1F2937",
-        fontWeight: "600",
-    },
-    usageValue: {
-        color: "#3B82F6",
     },
     emptyContainer: {
         flex: 1,
@@ -793,67 +887,70 @@ const styles = StyleSheet.create({
         color: "#1F2937",
         flex: 1,
         textAlign: "center",
-        marginLeft: 0,
     },
     modalBody: {
         flex: 1,
         padding: 16,
     },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#1F2937",
+    modalEmpty: {
+        padding: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalEmptyText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: '#9CA3AF',
+        textAlign: 'center',
+    },
+    modalSearchSection: {
         marginBottom: 16,
-        marginTop: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3F4F6',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+    },
+    modalSearchInput: {
+        flex: 1,
+        height: 44,
+        fontSize: 15,
+        color: '#1F2937',
+    },
+    clearSearchBtn: {
+        padding: 4,
     },
     materialOption: {
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
-        backgroundColor: "#F9FAFB",
-        padding: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 12,
+        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+    },
+    materialOptionIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 8,
+        backgroundColor: '#EFF6FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
     },
     materialOptionInfo: {
         flex: 1,
     },
     materialOptionName: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: "600",
         color: "#1F2937",
-        marginBottom: 4,
+        marginBottom: 2,
     },
     materialOptionCode: {
         fontSize: 12,
-        color: "#6B7280",
-        marginBottom: 4,
-    },
-    materialOptionStock: {
-        fontSize: 14,
-        color: "#6B7280",
-    },
-    selectedMaterialCard: {
-        backgroundColor: "#EFF6FF",
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 24,
-        borderLeftWidth: 3,
-        borderLeftColor: "#3B82F6",
-    },
-    selectedMaterialHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 8,
-    },
-    selectedMaterialName: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#1F2937",
-    },
-    selectedMaterialInfo: {
-        fontSize: 14,
         color: "#6B7280",
     },
     formGroup: {
@@ -878,28 +975,16 @@ const styles = StyleSheet.create({
         height: 80,
         textAlignVertical: "top",
     },
-    addToBatchButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#EFF6FF",
-        padding: 16,
-        borderRadius: 12,
-        gap: 8,
-        borderWidth: 1,
-        borderColor: "#3B82F6",
-        marginTop: 16,
-    },
-    addToBatchButtonText: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#3B82F6",
-    },
     batchSection: {
         backgroundColor: "#FFFFFF",
         borderTopWidth: 1,
         borderTopColor: "#E5E7EB",
         padding: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 10,
     },
     batchHeader: {
         flexDirection: "row",
@@ -912,21 +997,24 @@ const styles = StyleSheet.create({
         fontWeight: "700",
         color: "#1F2937",
     },
+    batchCountText: {
+        fontSize: 12,
+        color: "#6B7280",
+    },
     clearBatchText: {
         fontSize: 14,
         color: "#EF4444",
-        fontWeight: "500",
+        fontWeight: "600",
     },
     batchList: {
-        marginBottom: 16,
+        marginBottom: 12,
     },
     batchItem: {
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
         backgroundColor: "#F9FAFB",
-        padding: 12,
-        borderRadius: 8,
+        borderRadius: 10,
+        padding: 10,
         marginBottom: 8,
     },
     batchItemInfo: {
@@ -935,15 +1023,18 @@ const styles = StyleSheet.create({
     batchItemName: {
         fontSize: 14,
         fontWeight: "600",
-        color: "#1F2937",
+        color: "#374151",
         marginBottom: 2,
     },
     batchItemDetail: {
         fontSize: 12,
         color: "#6B7280",
     },
+    removeBatchItemBtn: {
+        padding: 4,
+    },
     batchFooter: {
-        gap: 16,
+        gap: 12,
     },
     totalRow: {
         flexDirection: "row",
@@ -954,53 +1045,284 @@ const styles = StyleSheet.create({
         borderTopColor: "#F3F4F6",
     },
     totalLabel: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: "600",
-        color: "#374151",
+        color: "#4B5563",
     },
     totalValue: {
         fontSize: 18,
-        fontWeight: "700",
-        color: "#EF4444",
+        fontWeight: "800",
+        color: "#10B981",
     },
     submitBatchButton: {
+        backgroundColor: "#3B82F6",
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#3B82F6",
-        padding: 16,
+        paddingVertical: 14,
         borderRadius: 12,
         gap: 8,
     },
     submitBatchButtonText: {
-        fontSize: 16,
-        fontWeight: "600",
         color: "#FFFFFF",
+        fontSize: 16,
+        fontWeight: "700",
     },
-    typeButtons: {
-        flexDirection: "row",
+    unitText: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: 'normal'
+    },
+    costValue: {
+        color: '#10B981',
+    },
+    // Report Modal Styles
+    reportContent: {
+        flex: 1,
+        padding: 16,
+    },
+    reportSummaryCard: {
+        flexDirection: 'row',
+        backgroundColor: '#F3F4F6',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 20,
+        alignItems: 'center',
+    },
+    reportSummaryItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    reportSummaryLabel: {
+        fontSize: 12,
+        color: '#6B7280',
+        marginBottom: 4,
+    },
+    reportSummaryValue: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#1F2937',
+    },
+    reportSummaryDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: '#D1D5DB',
+        marginHorizontal: 12,
+    },
+    reportListHeader: {
+        flexDirection: 'row',
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        backgroundColor: '#F3F4F6',
+        borderRadius: 4,
+        marginBottom: 8,
+    },
+    reportCol: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#4B5563',
+    },
+    reportRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    reportItemName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1F2937',
+    },
+    reportItemSub: {
+        flexDirection: 'row',
+        marginTop: 2,
+    },
+    reportItemCode: {
+        fontSize: 11,
+        color: '#6B7280',
+    },
+    reportItemUnit: {
+        fontSize: 11,
+        color: '#6B7280',
+    },
+    noDataText: {
+        textAlign: 'center',
+        color: '#9CA3AF',
+        marginTop: 20,
+    },
+    closeModalButton: {
+        backgroundColor: '#F3F4F6',
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    closeModalButtonText: {
+        color: '#374151',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    summaryDashboard: {
+        flexDirection: 'row',
+        padding: 16,
         gap: 12,
     },
-    typeButton: {
+    summaryCard: {
         flex: 1,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
         padding: 12,
-        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    summaryCardPrimary: {
+        backgroundColor: '#3B82F6',
+    },
+    summaryIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        backgroundColor: '#EFF6FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    summaryIconContainerPrimary: {
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    summaryLabel: {
+        fontSize: 11,
+        color: '#6B7280',
+        fontWeight: '500',
+    },
+    summaryLabelPrimary: {
+        color: 'rgba(255, 255, 255, 0.8)',
+    },
+    summaryValue: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1F2937',
+    },
+    summaryValuePrimary: {
+        color: '#FFFFFF',
+    },
+    searchSection: {
+        paddingHorizontal: 16,
+        marginBottom: 8,
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        height: 44,
         borderWidth: 1,
-        borderColor: "#E5E7EB",
-        backgroundColor: "#FFFFFF",
-        alignItems: "center",
+        borderColor: '#E5E7EB',
     },
-    typeButtonActive: {
-        backgroundColor: "#3B82F6",
-        borderColor: "#3B82F6",
-    },
-    typeButtonText: {
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
         fontSize: 14,
-        fontWeight: "600",
-        color: "#6B7280",
+        color: '#1F2937',
     },
-    typeButtonTextActive: {
-        color: "#FFFFFF",
+    statsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 4,
+        backgroundColor: '#F9FAFB',
+        borderRadius: 8,
+        padding: 8,
+    },
+    statItem: {
+        flex: 1,
+    },
+    centerStat: {
+        alignItems: 'center',
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    statLabel: {
+        fontSize: 10,
+        color: '#6B7280',
+        marginBottom: 2,
+        textAlign: 'center',
+    },
+    statValue: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#1F2937',
+        textAlign: 'center',
+    },
+    materialIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: '#EFF6FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
+    },
+    headerInfo: {
+        flex: 1,
+    },
+    selectedMaterialCard: {
+        backgroundColor: '#EFF6FF',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#DBEAFE',
+    },
+    selectedMaterialHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    selectedMaterialName: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1E40AF',
+        flex: 1,
+    },
+    helperText: {
+        fontSize: 11,
+        color: '#6B7280',
+        marginTop: 4,
+        fontStyle: 'italic',
+    },
+    addToBatchButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        borderWidth: 2,
+        borderColor: '#3B82F6',
+        borderStyle: 'dashed',
+        borderRadius: 12,
+        marginTop: 12,
+        marginBottom: 30,
+        gap: 8,
+    },
+    addToBatchButtonText: {
+        color: '#3B82F6',
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    sectionTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#4B5563',
+        marginBottom: 12,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     selectButton: {
         flexDirection: "row",
@@ -1019,18 +1341,6 @@ const styles = StyleSheet.create({
     },
     selectButtonPlaceholder: {
         color: "#9CA3AF",
-    },
-    clearSelectionButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        marginTop: 8,
-        alignSelf: "flex-start",
-    },
-    clearSelectionText: {
-        fontSize: 14,
-        color: "#EF4444",
-        fontWeight: "500",
     },
     pickerOverlay: {
         position: "absolute",
@@ -1096,192 +1406,7 @@ const styles = StyleSheet.create({
         marginTop: 8,
         textAlign: "center",
     },
-    dateButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        backgroundColor: "#F9FAFB",
-        borderWidth: 1,
-        borderColor: "#E5E7EB",
-        borderRadius: 8,
-        padding: 12,
-    },
-    dateButtonText: {
-        fontSize: 16,
-        color: "#1F2937",
-    },
-    submitButton: {
-        backgroundColor: "#3B82F6",
-        padding: 16,
-        borderRadius: 8,
-        alignItems: "center",
-        marginTop: 8,
-        marginBottom: 32,
-    },
     submitButtonDisabled: {
         opacity: 0.6,
-    },
-    submitButtonText: {
-        color: "#FFFFFF",
-        fontSize: 16,
-        fontWeight: "600",
-    },
-    helperText: {
-        fontSize: 12,
-        color: "#6B7280",
-        marginTop: 4,
-    },
-    helperTextInline: {
-        fontSize: 12,
-        color: "#6B7280",
-        fontWeight: "400",
-    },
-    permissionDeniedContainer: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 32,
-    },
-    permissionDeniedTitle: {
-        fontSize: 20,
-        fontWeight: "600",
-        color: "#1F2937",
-        marginTop: 24,
-        marginBottom: 8,
-    },
-    permissionDeniedMessage: {
-        fontSize: 16,
-        color: "#6B7280",
-        textAlign: "center",
-        marginBottom: 8,
-        lineHeight: 24,
-    },
-    permissionDeniedSubtext: {
-        fontSize: 14,
-        color: "#9CA3AF",
-        textAlign: "center",
-        marginTop: 8,
-        lineHeight: 20,
-    },
-    summaryDashboard: {
-        flexDirection: "row",
-        padding: 16,
-        gap: 12,
-        backgroundColor: "#FFFFFF",
-    },
-    summaryCard: {
-        flex: 1,
-        backgroundColor: "#F3F4F6",
-        padding: 12,
-        borderRadius: 12,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-    },
-    summaryCardPrimary: {
-        backgroundColor: "#3B82F6",
-    },
-    summaryIconContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: "#E0E7FF",
-        justifyContent: "center",
-        alignItems: "center",
-    },
-    summaryIconContainerPrimary: {
-        backgroundColor: "rgba(255, 255, 255, 0.2)",
-    },
-    summaryLabel: {
-        fontSize: 12,
-        color: "#6B7280",
-        marginBottom: 2,
-    },
-    summaryLabelPrimary: {
-        color: "rgba(255, 255, 255, 0.8)",
-    },
-    summaryValue: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: "#1F2937",
-    },
-    summaryValuePrimary: {
-        color: "#FFFFFF",
-    },
-    searchSection: {
-        paddingHorizontal: 16,
-        paddingBottom: 12,
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#F3F4F6",
-    },
-    searchBar: {
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: "#F9FAFB",
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: "#E5E7EB",
-        gap: 8,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 14,
-        color: "#1F2937",
-    },
-    cardContent: {
-        padding: 16,
-    },
-    materialIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: "#EFF6FF",
-        justifyContent: "center",
-        alignItems: "center",
-        marginRight: 12,
-    },
-    headerInfo: {
-        flex: 1,
-    },
-    statsRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        marginTop: 16,
-        paddingTop: 16,
-        borderTopWidth: 1,
-        borderTopColor: "#F3F4F6",
-    },
-    statItem: {
-        flex: 1,
-    },
-    centerStat: {
-        alignItems: "center",
-        borderLeftWidth: 1,
-        borderRightWidth: 1,
-        borderColor: "#F3F4F6",
-    },
-    statLabel: {
-        fontSize: 11,
-        color: "#6B7280",
-        textTransform: "uppercase",
-        letterSpacing: 0.5,
-        marginBottom: 4,
-    },
-    statValue: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#1F2937",
-    },
-    unitText: {
-        fontSize: 12,
-        color: "#9CA3AF",
-        fontWeight: "400",
-    },
-    costValue: {
-        color: "#10B981",
-        textAlign: "right",
     },
 });

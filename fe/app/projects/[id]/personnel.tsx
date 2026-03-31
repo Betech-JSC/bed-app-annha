@@ -43,6 +43,7 @@ export default function PersonnelScreen() {
   const [personnelRoles, setPersonnelRoles] = useState<Option[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [activeRoleFilter, setActiveRoleFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
   const { hasPermission } = useProjectPermissions(id!);
@@ -98,6 +99,29 @@ export default function PersonnelScreen() {
     loadPersonnel();
   };
 
+  const getRoleText = (item: ProjectPersonnel) => {
+    if (item.personnelRole) return item.personnelRole.name;
+    if (item.role) {
+      const roleOption = personnelRoles.find(r => r.value === item.role);
+      return roleOption?.label || item.role;
+    }
+    return "N/A";
+  };
+
+  const getRoleCode = (item: ProjectPersonnel): string => {
+    if (item.personnelRole) return item.personnelRole.code;
+    return item.role || "";
+  };
+
+  const getRoleColor = (roleCode: string) => {
+    switch (roleCode) {
+      case "project_manager": return "#3B82F6";
+      case "supervisor": return "#10B981";
+      case "accountant": return "#F59E0B";
+      default: return "#6B7280";
+    }
+  };
+
   const loadEmployees = async () => {
     try {
       setLoadingEmployees(true);
@@ -137,12 +161,25 @@ export default function PersonnelScreen() {
   }, [employees, employeeSearch]);
 
   const filteredPersonnel = useMemo(() => {
-    if (!activeRoleFilter) return personnel;
-    return personnel.filter(p => {
-      const roleCode = p.personnelRole?.code || p.role;
-      return roleCode === activeRoleFilter;
-    });
-  }, [personnel, activeRoleFilter]);
+    let result = personnel;
+    
+    if (activeRoleFilter) {
+      result = result.filter(p => {
+        const roleCode = p.personnelRole?.code || p.role;
+        return roleCode === activeRoleFilter;
+      });
+    }
+
+    if (searchQuery) {
+      const searchLower = searchQuery.toLowerCase();
+      result = result.filter(p => 
+        p.user?.name?.toLowerCase().includes(searchLower) ||
+        p.user?.email?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return result;
+  }, [personnel, activeRoleFilter, searchQuery]);
 
   const handleAddPersonnel = async () => {
     if (!selectedUser || !selectedRoleId) {
@@ -197,50 +234,63 @@ export default function PersonnelScreen() {
     ]);
   };
 
-  const getRoleText = (item: ProjectPersonnel) => {
-    if (item.personnelRole) return item.personnelRole.name;
-    if (item.role) {
-      const roleOption = personnelRoles.find(r => r.value === item.role);
-      return roleOption?.label || item.role;
+  const getAvatarColor = (name: string) => {
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
-    return "N/A";
+    return colors[Math.abs(hash) % colors.length];
   };
 
-  const getRoleCode = (item: ProjectPersonnel): string => {
-    if (item.personnelRole) return item.personnelRole.code;
-    return item.role || "";
-  };
+  const renderPersonnelItem = ({ item }: { item: ProjectPersonnel }) => {
+    const roleCode = getRoleCode(item);
+    const roleColor = getRoleColor(roleCode);
+    const userName = item.user?.name || `User #${item.user_id}`;
+    const initials = userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
-  const getRoleColor = (roleCode: string) => {
-    switch (roleCode) {
-      case "project_manager": return "#3B82F6";
-      case "supervisor": return "#10B981";
-      case "accountant": return "#F59E0B";
-      default: return "#6B7280";
-    }
-  };
-
-  const renderPersonnelItem = ({ item }: { item: ProjectPersonnel }) => (
-    <View style={styles.personnelCard}>
-      <View style={styles.personnelHeader}>
-        <View style={styles.personnelInfo}>
-          <Text style={styles.personnelName}>{item.user?.name || `User #${item.user_id}`}</Text>
-          <Text style={styles.personnelEmail}>{item.user?.email || "N/A"}</Text>
+    return (
+      <View style={styles.personnelCard}>
+        <View style={styles.cardMain}>
+          <View style={[styles.avatar, { backgroundColor: getAvatarColor(userName) }]}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          <View style={styles.personnelInfo}>
+            <Text style={styles.personnelName} numberOfLines={1}>{userName}</Text>
+            <View style={styles.emailContainer}>
+              <Ionicons name="mail-outline" size={12} color="#6B7280" />
+              <Text style={styles.personnelEmail} numberOfLines={1}>{item.user?.email || "N/A"}</Text>
+            </View>
+          </View>
+          <View style={[styles.roleBadge, { backgroundColor: roleColor + "15", borderColor: roleColor + "30" }]}>
+            <Text style={[styles.roleText, { color: roleColor }]}>
+              {getRoleText(item)}
+            </Text>
+          </View>
         </View>
-        <View style={[styles.roleBadge, { backgroundColor: getRoleColor(getRoleCode(item)) + "20" }]}>
-          <Text style={[styles.roleText, { color: getRoleColor(getRoleCode(item)) }]}>
-            {getRoleText(item)}
-          </Text>
+
+        <View style={styles.cardFooter}>
+          <PermissionGuard permission={Permissions.PERSONNEL_REMOVE} projectId={id}>
+            <TouchableOpacity 
+              style={styles.removeButton} 
+              onPress={() => handleRemovePersonnel(item.id)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+              <Text style={styles.removeButtonText}>Gỡ khỏi dự án</Text>
+            </TouchableOpacity>
+          </PermissionGuard>
+          <TouchableOpacity 
+            style={styles.detailButton}
+            onPress={() => Alert.alert("Thông tin", `Xem chi tiết hồ sơ ${userName} (Tính năng đang phát triển)`)}
+          >
+            <Text style={styles.detailButtonText}>Chi tiết</Text>
+            <Ionicons name="chevron-forward" size={14} color="#3B82F6" />
+          </TouchableOpacity>
         </View>
       </View>
-      <PermissionGuard permission={Permissions.PERSONNEL_REMOVE} projectId={id}>
-        <TouchableOpacity style={styles.removeButton} onPress={() => handleRemovePersonnel(item.id)}>
-          <Ionicons name="trash-outline" size={18} color="#EF4444" />
-          <Text style={styles.removeButtonText}>Xóa</Text>
-        </TouchableOpacity>
-      </PermissionGuard>
-    </View>
-  );
+    );
+  };
 
   if (loading && !refreshing) {
     return (
@@ -287,26 +337,44 @@ export default function PersonnelScreen() {
         }
       />
 
-      <View style={styles.filterWrapper}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContainer}>
-          <TouchableOpacity
-            style={[styles.filterChip, activeRoleFilter === null && styles.filterChipActive]}
-            onPress={() => setActiveRoleFilter(null)}
-          >
-            <Text style={[styles.filterChipText, activeRoleFilter === null && styles.filterChipTextActive]}>Tất cả</Text>
-          </TouchableOpacity>
-          {personnelRoles.map((role) => (
-            <TouchableOpacity
-              key={role.value}
-              style={[styles.filterChip, activeRoleFilter === role.value && styles.filterChipActive]}
-              onPress={() => setActiveRoleFilter(role.value === activeRoleFilter ? null : role.value)}
-            >
-              <Text style={[styles.filterChipText, activeRoleFilter === role.value && styles.filterChipTextActive]}>
-                {role.label}
-              </Text>
+      <View style={styles.topBar}>
+        <View style={styles.mainSearchContainer}>
+          <Ionicons name="search" size={20} color="#9CA3AF" />
+          <TextInput
+            style={styles.mainSearchInput}
+            placeholder="Tìm theo tên hoặc email..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#9CA3AF"
+          />
+          {searchQuery !== "" && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <Ionicons name="close-circle" size={20} color="#9CA3AF" />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+          )}
+        </View>
+
+        <View style={styles.filterWrapper}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContainer}>
+            <TouchableOpacity
+              style={[styles.filterChip, activeRoleFilter === null && styles.filterChipActive]}
+              onPress={() => setActiveRoleFilter(null)}
+            >
+              <Text style={[styles.filterChipText, activeRoleFilter === null && styles.filterChipTextActive]}>Tất cả</Text>
+            </TouchableOpacity>
+            {personnelRoles.map((role) => (
+              <TouchableOpacity
+                key={role.value}
+                style={[styles.filterChip, activeRoleFilter === role.value && styles.filterChipActive]}
+                onPress={() => setActiveRoleFilter(role.value === activeRoleFilter ? null : role.value)}
+              >
+                <Text style={[styles.filterChipText, activeRoleFilter === role.value && styles.filterChipTextActive]}>
+                  {role.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       </View>
 
       <PermissionGuard permission={Permissions.PERSONNEL_VIEW} projectId={id}>
@@ -438,31 +506,47 @@ export default function PersonnelScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB" },
+  container: { flex: 1, backgroundColor: "#F3F4F6" },
   centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  addButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#3B82F6", justifyContent: "center", alignItems: "center" },
+  addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#3B82F6", justifyContent: "center", alignItems: "center", shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  
+  topBar: { backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#E5E7EB", paddingVertical: 12 },
+  mainSearchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#F3F4F6", borderRadius: 12, paddingHorizontal: 12, marginHorizontal: 16, marginBottom: 12, height: 44 },
+  mainSearchInput: { flex: 1, fontSize: 15, color: "#1F2937", marginLeft: 8 },
+  
   listContent: { padding: 16 },
-  personnelCard: { backgroundColor: "#FFFFFF", borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  personnelHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  personnelInfo: { flex: 1, marginRight: 12 },
-  personnelName: { fontSize: 16, fontWeight: "600", color: "#1F2937", marginBottom: 2 },
+  personnelCard: { backgroundColor: "#FFFFFF", borderRadius: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: "#3B82F6", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+  cardMain: { flexDirection: "row", alignItems: "center", padding: 16 },
+  avatar: { width: 48, height: 48, borderRadius: 24, justifyContent: "center", alignItems: "center", marginRight: 12 },
+  avatarText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  personnelInfo: { flex: 1 },
+  personnelName: { fontSize: 16, fontWeight: "700", color: "#1F2937", marginBottom: 4 },
+  emailContainer: { flexDirection: "row", alignItems: "center", gap: 4 },
   personnelEmail: { fontSize: 13, color: "#6B7280" },
-  roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  roleText: { fontSize: 12, fontWeight: "700" },
-  removeButton: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F3F4F6" },
-  removeButtonText: { fontSize: 14, color: "#EF4444", fontWeight: "600" },
-  filterWrapper: { backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#F3F4F6", paddingVertical: 12 },
-  filterContainer: { paddingHorizontal: 16, gap: 8 },
+  
+  roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  roleText: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  
+  cardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#F3F4F6", backgroundColor: "#FAFBFC", borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  removeButton: { flexDirection: "row", alignItems: "center", gap: 6 },
+  removeButtonText: { fontSize: 13, color: "#EF4444", fontWeight: "600" },
+  detailButton: { flexDirection: "row", alignItems: "center", gap: 4 },
+  detailButtonText: { fontSize: 13, color: "#3B82F6", fontWeight: "600" },
+
+  filterWrapper: { paddingHorizontal: 16 },
+  filterContainer: { gap: 8 },
   filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: "#E5E7EB" },
-  filterChipActive: { backgroundColor: "#3B82F6", borderColor: "#3B82F6" },
+  filterChipActive: { backgroundColor: "#1F2937", borderColor: "#1F2937" },
   filterChipText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
   filterChipTextActive: { color: "#FFFFFF" },
-  emptyContainer: { alignItems: "center", justifyContent: "center", paddingVertical: 80 },
-  emptyText: { fontSize: 16, color: "#9CA3AF", marginTop: 12 },
+  
+  emptyContainer: { alignItems: "center", justifyContent: "center", paddingVertical: 100 },
+  emptyText: { fontSize: 16, color: "#9CA3AF", marginTop: 16, fontWeight: "500" },
+  
   modalFullContainer: { flex: 1, backgroundColor: "#F9FAFB" },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, backgroundColor: "#FFF", borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
   modalTitle: { fontSize: 18, fontWeight: "700", color: "#111827" },
-  searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFF", borderRadius: 12, paddingHorizontal: 12, margin: 16, marginBottom: 8, height: 48, borderWidth: 1, borderColor: "#E5E7EB" },
+  searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#F3F4F6", borderRadius: 12, paddingHorizontal: 12, margin: 16, marginBottom: 8, height: 48 },
   searchInputField: { flex: 1, fontSize: 15, color: "#1F2937", marginLeft: 8 },
   modalBody: { flex: 1, padding: 16 },
   formSection: { marginBottom: 24 },
@@ -475,16 +559,13 @@ const styles = StyleSheet.create({
   radioButton: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: "#D1D5DB", alignItems: "center", justifyContent: "center" },
   radioButtonSelected: { borderColor: "#3B82F6" },
   radioButtonInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#3B82F6" },
-  employeeInfo: { flex: 1 },
-  employeeName: { fontSize: 15, fontWeight: "600", color: "#111827" },
   employeeSubDetails: { flexDirection: "row", alignItems: "center" },
-  employeeEmail: { fontSize: 12, color: "#6B7280" },
   employeePhone: { fontSize: 12, color: "#9CA3AF" },
   loadingInModal: { padding: 20, alignItems: "center" },
   emptyEmployees: { padding: 40, alignItems: "center" },
   emptyEmployeesText: { fontSize: 14, color: "#9CA3AF", marginTop: 12, textAlign: "center" },
   roleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  roleCard: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFF", borderRadius: 12, padding: 12, width: "48%", borderWidth: 1.5, borderColor: "#E5E7EB" },
+  roleCard: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFF", borderRadius: 12, padding: 12, width: "47%", borderWidth: 1.5, borderColor: "#E5E7EB" },
   roleCardSelected: { borderColor: "#3B82F6", backgroundColor: "#EFF6FF" },
   roleCardText: { fontSize: 14, fontWeight: "500", color: "#4B5563" },
   roleCardTextSelected: { color: "#3B82F6", fontWeight: "700" },

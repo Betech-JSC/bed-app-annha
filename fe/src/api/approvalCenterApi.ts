@@ -44,9 +44,17 @@ export interface ApprovalSummary {
 export interface ApprovalCenterData {
     summary: ApprovalSummary[];
     items: ApprovalItem[];
+    recent_items: ApprovalItem[];
+    stats: {
+        pending_total: number;
+        pending_amount: number;
+        approved_today: number;
+        rejected_today: number;
+    };
     grand_total: number;
     user_roles: string[];
 }
+
 
 export const approvalCenterApi = {
     // Get all pending approvals

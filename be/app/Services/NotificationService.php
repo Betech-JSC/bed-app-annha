@@ -121,6 +121,7 @@ class NotificationService
         bool $sendPush = true
     ): array {
         $notifications = [];
+        $userIds = array_values(array_unique(array_filter($userIds)));
 
         foreach ($userIds as $userId) {
             $notifications[] = $this->createNotification(
@@ -135,11 +136,57 @@ class NotificationService
                 $notifiableType,
                 $notifiableId,
                 null,
-                $sendPush
+                false // Không gửi push lẻ ở đây
             );
         }
 
+        // Gửi push theo lô
+        if ($sendPush && !empty($userIds)) {
+            $this->sendBatchPushNotifications($userIds, $title, $body, array_merge($data, [
+                'type' => $type,
+                'category' => $category,
+                'action_url' => $actionUrl,
+            ]));
+        }
+
         return $notifications;
+    }
+
+    /**
+     * Gửi push notification theo lô cho nhiều users
+     */
+    public function sendBatchPushNotifications(array $userIds, string $title, string $body, array $data = []): void
+    {
+        try {
+            $tokens = [];
+            $contentHash = md5($title . $body);
+            
+            foreach ($userIds as $userId) {
+                $cacheKey = "push_throttle_{$userId}_{$contentHash}";
+                
+                // Tránh gửi dồn dập cho cùng 1 user (trong vòng 5s)
+                if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+                    continue;
+                }
+                \Illuminate\Support\Facades\Cache::put($cacheKey, true, 5);
+
+                $user = User::find($userId);
+                if ($user && $user->fcm_token) {
+                    $tokens[] = $user->fcm_token;
+                }
+            }
+
+            if (empty($tokens)) {
+                return;
+            }
+
+            ExpoPushService::sendNotification(array_unique($tokens), $title, $body, $data);
+        } catch (\Exception $e) {
+            Log::error('Failed to send batch push notifications: ' . $e->getMessage(), [
+                'user_ids' => $userIds,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**
@@ -274,6 +321,13 @@ class NotificationService
     public function sendPushNotification(int $userId, string $title, string $body, array $data = []): bool
     {
         try {
+            // Anti-spam: Tránh gửi thông báo giống hệt nhau liên tục cho 1 user (trong vòng 5s)
+            $cacheKey = "push_throttle_{$userId}_" . md5($title . $body);
+            if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+                return false;
+            }
+            \Illuminate\Support\Facades\Cache::put($cacheKey, true, 5);
+
             $user = User::find($userId);
             if (!$user || !$user->fcm_token) {
                 return false;
@@ -338,7 +392,7 @@ class NotificationService
         };
 
         $this->sendToPermissionUsers(
-            Permissions::PROJECT_MANAGE,
+            \App\Constants\Permissions::PROJECT_MANAGE,
             $project->id,
             Notification::TYPE_PROJECT_PERFORMANCE,
             Notification::CATEGORY_DELAY_RISK,
@@ -365,7 +419,7 @@ class NotificationService
         $body = "Dự án '{$project->name}' đã vượt ngân sách " . number_format($overrunPercentage, 1) . "%";
 
         $this->sendToPermissionUsers(
-            Permissions::COST_APPROVE_MANAGEMENT,
+            \App\Constants\Permissions::COST_APPROVE_MANAGEMENT,
             $project->id,
             Notification::TYPE_PROJECT_PERFORMANCE,
             Notification::CATEGORY_BUDGET_OVERRUN,
@@ -394,7 +448,7 @@ class NotificationService
         $priority = $daysRemaining <= 3 ? Notification::PRIORITY_URGENT : Notification::PRIORITY_HIGH;
 
         $this->sendToPermissionUsers(
-            Permissions::PROJECT_MANAGE,
+            \App\Constants\Permissions::PROJECT_MANAGE,
             $project->id,
             Notification::TYPE_PROJECT_PERFORMANCE,
             Notification::CATEGORY_DEADLINE,

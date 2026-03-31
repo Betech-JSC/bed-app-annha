@@ -464,16 +464,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/warranty-retentions', [FinanceController::class, 'storeWarrantyRetention'])->middleware('permission:finance.manage,projectId');
         Route::post('/{projectId}/warranty-retentions/{id}/release', [FinanceController::class, 'releaseWarranty'])->middleware('permission:finance.manage,projectId');
 
-        // ============ Sprint 2 — Module 4: Material Quotas & Inventory ============
-        Route::get('/{projectId}/materials/inventory', [MaterialQuotaController::class, 'inventory'])->middleware('permission:material.view,projectId');
+        // ============ Sprint 2 — Module 4: Material Quotas (Cost tracking — no inventory) ============
         Route::get('/{projectId}/materials/quotas', [MaterialQuotaController::class, 'quotas'])->middleware('permission:material.view,projectId');
         Route::post('/{projectId}/materials/quotas', [MaterialQuotaController::class, 'storeQuota'])->middleware('permission:material.create,projectId');
         Route::put('/{projectId}/materials/quotas/{id}', [MaterialQuotaController::class, 'updateQuota'])->middleware('permission:material.update,projectId');
         Route::get('/{projectId}/materials/warnings', [MaterialQuotaController::class, 'warnings'])->middleware('permission:material.view,projectId');
-        Route::post('/{projectId}/materials/import', [MaterialQuotaController::class, 'importMaterial'])->middleware('permission:material.create,projectId');
-        Route::post('/{projectId}/materials/export', [MaterialQuotaController::class, 'exportMaterial'])->middleware('permission:material.view,projectId');
         Route::get('/{projectId}/materials/history', [MaterialQuotaController::class, 'history'])->middleware('permission:material.view,projectId');
-        Route::post('/{projectId}/materials/sync-inventory', [MaterialQuotaController::class, 'syncInventory'])->middleware('permission:material.update,projectId');
 
         // ============ Năng suất lao động (Labor Productivity) ============
         Route::get('/{projectId}/labor-productivity', [LaborProductivityController::class, 'index'])->middleware('permission:labor_productivity.view,projectId');
@@ -668,16 +664,14 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::delete('/{id}', [DepartmentController::class, 'destroy']);
     });
 
-    // Materials
+    // Materials (catalog management — no inventory/stock)
     Route::prefix('materials')->group(function () {
         Route::get('/', [MaterialController::class, 'index']);
         Route::post('/', [MaterialController::class, 'store']);
         Route::get('/{id}', [MaterialController::class, 'show']);
-        Route::get('/{id}/stock', [MaterialController::class, 'getStock']);
         Route::get('/{id}/transactions', [MaterialController::class, 'getTransactions']);
         Route::put('/{id}', [MaterialController::class, 'update']);
         Route::delete('/{id}', [MaterialController::class, 'destroy']);
-        Route::post('/{id}/adjust-stock', [MaterialController::class, 'adjustStock']);
     });
 
     // Equipment
