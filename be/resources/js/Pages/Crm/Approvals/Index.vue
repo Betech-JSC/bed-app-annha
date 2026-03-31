@@ -455,9 +455,12 @@ const props = defineProps({
   budgetItems: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
+  auth: { type: Object, required: true }, // Add auth for role-based UI
 })
 
-const activeRole = ref('management')
+const currentUserRole = computed(() => props.auth.user.role)
+
+const activeRole = ref(currentUserRole.value === 'customer' ? 'customer' : 'management')
 const activeCategory = ref('all')
 const activeStatus = ref('all')
 const rejectModalVisible = ref(false)
@@ -594,13 +597,23 @@ const totalPending = computed(() =>
   Object.values(roleItemsMap.value).reduce((sum, arr) => sum + arr.length, 0)
 )
 
-// ─── Role tabs ───
-const roleTabs = computed(() => [
-  { key: 'management', label: 'Ban Điều Hành', icon: BankOutlined, count: roleItemsMap.value.management.length },
-  { key: 'accountant', label: 'Kế Toán', icon: DollarOutlined, count: roleItemsMap.value.accountant.length },
-  { key: 'customer', label: 'Khách Hàng', icon: TeamOutlined, count: roleItemsMap.value.customer.length },
-  { key: 'operations', label: 'Vận Hành', icon: ToolOutlined, count: roleItemsMap.value.operations.length },
-])
+// ─── Role tabs (UX Optimized per user role) ───
+const roleTabs = computed(() => {
+  const allTabs = [
+    { key: 'management', label: 'Ban Điều Hành', icon: BankOutlined, count: roleItemsMap.value.management.length },
+    { key: 'accountant', label: 'Kế Toán', icon: DollarOutlined, count: roleItemsMap.value.accountant.length },
+    { key: 'customer', label: 'Khách Hàng', icon: TeamOutlined, count: roleItemsMap.value.customer.length },
+    { key: 'operations', label: 'Vận Hành', icon: ToolOutlined, count: roleItemsMap.value.operations.length },
+  ]
+  
+  // If user is a customer, only show the customer tab for focus and security
+  if (currentUserRole.value === 'customer') {
+    return allTabs.filter(tab => tab.key === 'customer')
+  }
+  
+  // For admin/staff, they can see all (existing behavior)
+  return allTabs
+})
 
 // ─── Table columns ───
 const tableColumns = [

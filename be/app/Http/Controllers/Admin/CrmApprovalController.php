@@ -228,14 +228,19 @@ class CrmApprovalController extends Controller
         $realPendingAccountant = Cost::whereIn('status', ['pending_accountant_approval'])->count();
         $realPendingAcceptance = AcceptanceStage::whereIn('status', ['pending', 'supervisor_approved', 'project_manager_approved'])->count();
         
+        // Security Check: If user is a customer, only count items they are supposed to see
+        $isCustomer = Auth::user()->role === 'customer';
+        
         $stats = [
-            'pending_management' => $realPendingManagement,
-            'pending_accountant' => $realPendingAccountant,
+            'pending_management' => $isCustomer ? 0 : $realPendingManagement,
+            'pending_accountant' => $isCustomer ? 0 : $realPendingAccountant,
             'pending_acceptance' => $realPendingAcceptance,
-            'pending_others' => $changeRequestItems->count() + $additionalCostItems->count() + $subPaymentManagement->count() + $materialBillManagementItemsFormatted->count(),
+            'pending_others' => $isCustomer ? 0 : ($changeRequestItems->count() + $additionalCostItems->count() + $subPaymentManagement->count() + $materialBillManagementItemsFormatted->count()),
             'approved_today' => Cost::where('status', 'approved')->whereDate('updated_at', today())->count(),
             'rejected_today' => Cost::where('status', 'rejected')->whereDate('updated_at', today())->count(),
-            'total_pending_amount' => Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])->sum('amount'),
+            'total_pending_amount' => $isCustomer 
+                ? ProjectPayment::where('status', 'customer_pending_approval')->sum('amount')
+                : Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])->sum('amount'),
         ];
 
         return Inertia::render('Crm/Approvals/Index', [
