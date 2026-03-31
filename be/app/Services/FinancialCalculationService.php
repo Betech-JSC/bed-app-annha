@@ -62,21 +62,20 @@ class FinancialCalculationService
             'end_date' => $endDate?->toDateString(),
         ]);
 
-        // Chi phí nhà thầu phụ - Ưu tiên từ Cost records
+        // Chi phí nhà thầu phụ (Actual Cost) - CHỈ tính từ các payment đã được duyệt
+        // Bỏ fallback quote để tránh double counting khi cộng dồn vào tổng chi phí dự án
         $subcontractorCostsQuery = $project->costs()
             ->whereNotNull('subcontractor_id')
+            ->whereNotNull('subcontractor_payment_id') // Quan trọng: Chỉ lấy chi phí thực chi (từ payment)
             ->where('status', 'approved');
+            
         if ($startDate && $endDate) {
             $subcontractorCostsQuery->whereBetween('cost_date', [$startDate, $endDate]);
         }
-        $subcontractorCostsFromCosts = $subcontractorCostsQuery->sum('amount');
+        $subcontractorCosts = (float) $subcontractorCostsQuery->sum('amount');
 
-        // Nếu chưa có Cost record, tính từ total_quote (fallback)
-        $subcontractorCostsFromQuote = $project->subcontractors()->sum('total_quote');
-        
-        $subcontractorCosts = $subcontractorCostsFromCosts > 0 
-            ? $subcontractorCostsFromCosts 
-            : $subcontractorCostsFromQuote;
+        // Chi phí cam kết (Committed Cost) - Từ tổng giá trị hợp đồng/báo giá
+        $committedSubcontractorCosts = (float) $project->subcontractors()->sum('total_quote');
 
         // Chi phí lương/payroll
         $payrollCostsQuery = $project->costs()
@@ -85,7 +84,7 @@ class FinancialCalculationService
         if ($startDate && $endDate) {
             $payrollCostsQuery->whereBetween('cost_date', [$startDate, $endDate]);
         }
-        $payrollCosts = $payrollCostsQuery->sum('amount');
+        $payrollCosts = (float) $payrollCostsQuery->sum('amount');
 
         // Chi phí khác từ Cost (Vật liệu, Thiết bị, Vận chuyển, v.v.)
         $otherCostsQuery = $project->costs()
@@ -95,17 +94,18 @@ class FinancialCalculationService
         if ($startDate && $endDate) {
             $otherCostsQuery->whereBetween('cost_date', [$startDate, $endDate]);
         }
-        $otherCosts = $otherCostsQuery->sum('amount');
+        $otherCosts = (float) $otherCostsQuery->sum('amount');
 
-        // Tổng chi phí công trình (Subcontractor + Other costs)
-        // Lưu ý: Payroll được tính riêng (là chi phí công ty)
+        // Tổng chi phí công trình thực tế (Actual Spent)
         $totalCosts = $subcontractorCosts + $otherCosts;
 
         $result = [
-            'subcontractor_costs' => (float) $subcontractorCosts,
-            'payroll_costs' => (float) $payrollCosts,
-            'other_costs' => (float) $otherCosts,
-            'total_costs' => (float) $totalCosts,
+            'subcontractor_costs' => $subcontractorCosts,
+            'committed_subcontractor_costs' => $committedSubcontractorCosts,
+            'remaining_subcontractor_costs' => max(0, $committedSubcontractorCosts - $subcontractorCosts),
+            'payroll_costs' => $payrollCosts,
+            'other_costs' => $otherCosts,
+            'total_costs' => $totalCosts,
         ];
 
         Log::info("Total costs calculated for project {$project->id}", $result);

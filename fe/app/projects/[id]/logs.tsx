@@ -15,6 +15,10 @@ import {
   Platform,
   PanResponder,
   Animated,
+  Keyboard,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  RefreshControl,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { constructionLogApi, ConstructionLog } from "@/api/constructionLogApi";
@@ -42,6 +46,16 @@ const getStorageUrl = (filePath: string): string => {
 
 const DAYS_OF_WEEK = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const WEATHER_OPTIONS = ["Nắng", "Mưa"];
+
+// Helper to format date to YYYY-MM-DD in local time
+const formatDateLocal = (date: Date): string => {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const MONTHS = [
   "Tháng 1",
   "Tháng 2",
@@ -82,8 +96,9 @@ export default function ConstructionLogsScreen() {
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   // BUSINESS RULE: Date is auto-set to current day and NOT editable
-  const today = new Date().toISOString().split("T")[0];
+  const today = useMemo(() => formatDateLocal(new Date()), []);
   const [formData, setFormData] = useState({
     log_date: today, // Always set to today
     task_id: null as number | null,
@@ -191,7 +206,8 @@ export default function ConstructionLogsScreen() {
 
     try {
       isLoadingRef.current = true;
-      setLoading(true);
+      if (!force) setLoading(true);
+      setRefreshing(true);
       lastLoadTimeRef.current = Date.now();
 
       const response = await constructionLogApi.getLogs(id!, {
@@ -199,7 +215,9 @@ export default function ConstructionLogsScreen() {
         end_date: endDate,
       });
       if (response.success) {
-        setLogs(response.data.data || []);
+        // More robust parsing: check response.data.data (paginated) or response.data (flat list)
+        const rawData = response.data?.data ?? response.data ?? [];
+        setLogs(Array.isArray(rawData) ? rawData : []);
       }
     } catch (error: any) {
       if (error.response?.status === 403) {
@@ -229,8 +247,18 @@ export default function ConstructionLogsScreen() {
     } finally {
       isLoadingRef.current = false;
       setLoading(false);
+      setRefreshing(false);
     }
   }, [id]);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    // Refresh for currently visible month
+    const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+    const lastDay = new Date(currentYear, currentMonth, 0);
+    const endDate = formatDateLocal(lastDay);
+    loadLogs(startDate, endDate, true);
+  }, [loadLogs, currentMonth, currentYear]);
 
   const loadTasks = React.useCallback(async () => {
     try {
@@ -261,7 +289,9 @@ export default function ConstructionLogsScreen() {
   useEffect(() => {
     if (id) {
       const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
-      const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+      // Use local date for last day of month
+      const lastDay = new Date(currentYear, currentMonth, 0);
+      const endDate = formatDateLocal(lastDay);
       loadLogs(startDate, endDate, true);
       loadTasks();
     }
@@ -282,7 +312,8 @@ export default function ConstructionLogsScreen() {
       const logsTimeout = setTimeout(() => {
         if (currentMonth && currentYear) {
           const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
-          const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+          const lastDay = new Date(currentYear, currentMonth, 0);
+          const endDate = formatDateLocal(lastDay);
           loadLogs(startDate, endDate, false); // Use debouncing
         } else {
           loadLogs(undefined, undefined, false); // Use debouncing
@@ -305,7 +336,8 @@ export default function ConstructionLogsScreen() {
   useEffect(() => {
     if (currentMonth && currentYear && id) {
       const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
-      const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+      const lastDay = new Date(currentYear, currentMonth, 0);
+      const endDate = formatDateLocal(lastDay);
       loadLogs(startDate, endDate, false); // Use debouncing
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -372,7 +404,8 @@ export default function ConstructionLogsScreen() {
                 Alert.alert("Thành công", "Đã xóa nhật ký");
                 if (currentMonth && currentYear) {
                   const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
-                  const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+                  const lastDay = new Date(currentYear, currentMonth, 0);
+                  const endDate = formatDateLocal(lastDay);
                   loadLogs(startDate, endDate, true);
                 } else {
                   loadLogs(undefined, undefined, true);
@@ -433,7 +466,8 @@ export default function ConstructionLogsScreen() {
         handleCloseModal();
         if (currentMonth && currentYear) {
           const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
-          const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
+          const lastDay = new Date(currentYear, currentMonth, 0);
+          const endDate = formatDateLocal(lastDay);
           loadLogs(startDate, endDate, true);
         } else {
           loadLogs(undefined, undefined, true);
@@ -530,12 +564,17 @@ export default function ConstructionLogsScreen() {
   const logsByDate = useMemo(() => {
     const map: Record<string, ConstructionLog[]> = {};
     logs.forEach(log => {
-      // Normalize log_date to YYYY-MM-DD format (remove time part if exists)
-      const normalizedDate = log.log_date.split('T')[0].split(' ')[0];
-      if (!map[normalizedDate]) {
-        map[normalizedDate] = [];
+      if (log.log_date) {
+        // Robust normalization: use string split to avoid UTC timezone shifts
+        // log_date is usually "YYYY-MM-DD" or "YYYY-MM-DD HH:mm:ss"
+        const normalizedDate = log.log_date.split('T')[0].split(' ')[0];
+        if (normalizedDate) {
+          if (!map[normalizedDate]) {
+            map[normalizedDate] = [];
+          }
+          map[normalizedDate].push(log);
+        }
       }
-      map[normalizedDate].push(log);
     });
     return map;
   }, [logs]);
@@ -545,7 +584,9 @@ export default function ConstructionLogsScreen() {
     const dateKeys = Object.keys(logsByDate).sort((a, b) => b.localeCompare(a)); // newest first
     return dateKeys.map(dateKey => {
       const dateLogs = logsByDate[dateKey];
-      const dateObj = new Date(dateKey);
+      // BUSINESS RULE: Ensure date is parsed correctly from YYYY-MM-DD
+      const [year, month, day] = dateKey.split('-').map(Number);
+      const dateObj = new Date(year, month - 1, day);
       const dayName = dateObj.toLocaleDateString("vi-VN", { weekday: "long" });
       const dateFormatted = dateObj.toLocaleDateString("vi-VN", {
         day: "2-digit",
@@ -673,7 +714,10 @@ export default function ConstructionLogsScreen() {
       </View>
 
       {viewMode === "calendar" ? (
-        <ScrollView style={styles.content}>
+        <ScrollView 
+          style={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
           {/* Calendar Header */}
           <View style={styles.calendarHeader}>
             <TouchableOpacity onPress={goToPreviousMonth} style={styles.navButton}>
@@ -759,6 +803,8 @@ export default function ConstructionLogsScreen() {
       ) : (
         <SectionList
           sections={logSections}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderLeft}>
@@ -942,7 +988,11 @@ export default function ConstructionLogsScreen() {
         presentationStyle="fullScreen"
         onRequestClose={handleCloseModal}
       >
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalKeyboardAvoiding}
+        >
+          <View style={styles.modalContainer}>
           <ScreenHeader
             title={editingLog ? "Chỉnh Sửa Nhật Ký" : "Thêm Nhật Ký"}
             showBackButton={true}
@@ -953,10 +1003,10 @@ export default function ConstructionLogsScreen() {
             <View style={styles.formGroup}>
               <DatePickerInput
                 label="Ngày"
-                value={new Date(formData.log_date)}
+                value={new Date(formData.log_date + 'T00:00:00')}
                 onChange={(date) => {
                   if (date) {
-                    const dateString = date.toISOString().split('T')[0];
+                    const dateString = formatDateLocal(date);
                     setFormData(prev => ({ ...prev, log_date: dateString }));
                   }
                 }}
@@ -1063,6 +1113,8 @@ export default function ConstructionLogsScreen() {
                       }}
                       keyboardType="numeric"
                       editable={true}
+                      returnKeyType="done"
+                      onSubmitEditing={Keyboard.dismiss}
                     />
                     <Text style={styles.sliderPercent}>%</Text>
                     <TouchableOpacity
@@ -1129,6 +1181,8 @@ export default function ConstructionLogsScreen() {
                 }
                 placeholder="0"
                 keyboardType="numeric"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
               />
             </View>
 
@@ -1143,6 +1197,9 @@ export default function ConstructionLogsScreen() {
                 placeholder="Nhập ghi chú..."
                 multiline
                 numberOfLines={4}
+                returnKeyType="done"
+                blurOnSubmit={true}
+                onSubmitEditing={Keyboard.dismiss}
               />
             </View>
 
@@ -1295,6 +1352,7 @@ export default function ConstructionLogsScreen() {
             </View>
           )}
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Detail Modal */}
@@ -2578,6 +2636,9 @@ const styles = StyleSheet.create({
     padding: 4,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+  },
+  modalKeyboardAvoiding: {
+    flex: 1,
   },
 });
 

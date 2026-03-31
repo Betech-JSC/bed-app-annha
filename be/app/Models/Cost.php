@@ -28,6 +28,7 @@ class Cost extends Model
         'input_invoice_id',
         'receipt_id',
         'material_id',
+        'material_bill_id',
         'equipment_allocation_id',
         'quantity',
         'unit',
@@ -148,6 +149,11 @@ class Cost extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class, 'supplier_id');
+    }
+
+    public function materialBill(): BelongsTo
+    {
+        return $this->belongsTo(MaterialBill::class, 'material_bill_id');
     }
 
     public function inputInvoice(): BelongsTo
@@ -425,9 +431,56 @@ class Cost extends Model
 
         static::creating(function ($cost) {
             if (empty($cost->uuid)) {
-                $cost->uuid = Str::uuid();
+                $cost->uuid = (string) Str::uuid();
             }
         });
+
+        static::saved(function ($cost) {
+            // Đồng bộ trạng thái về Phiếu vật tư nếu có liên kết
+            if ($cost->material_bill_id) {
+                $cost->syncToMaterialBill();
+            }
+        });
+    }
+
+    /**
+     * Đồng bộ trạng thái và các tác vụ liên quan khi Cost thay đổi trạng thái
+     */
+    public function syncToMaterialBill(): void
+    {
+        $bill = $this->materialBill;
+        if (!$bill) return;
+
+        $newBillStatus = match ($this->status) {
+            'approved' => 'approved',
+            'pending_management_approval' => 'pending_management',
+            'pending_accountant_approval' => 'pending_accountant',
+            'rejected' => 'rejected',
+            default => 'draft',
+        };
+
+        if ($bill->status !== $newBillStatus) {
+            // Cập nhật trạng thái
+            $bill->status = $newBillStatus;
+            
+            // Nếu cost được duyệt, cập nhật thông tin người duyệt cho Bill
+            if ($this->status === 'approved') {
+                $bill->management_approved_by = $bill->management_approved_by ?: $this->management_approved_by;
+                $bill->management_approved_at = $bill->management_approved_at ?: $this->management_approved_at;
+                $bill->accountant_approved_by = $this->accountant_approved_by;
+                $bill->accountant_approved_at = $this->accountant_approved_at;
+            } elseif ($this->status === 'rejected') {
+                $bill->rejected_reason = $this->rejected_reason;
+            }
+            
+            $bill->save();
+
+            // QUAN TRỌNG: Nếu hóa đơn được duyệt từ màn hình Chi phí, 
+            // cần kích hoạt tạo MaterialTransaction (nhập kho) và công nợ NCC
+            if ($newBillStatus === 'approved') {
+                $bill->triggerApprovalSideEffects();
+            }
+        }
     }
 
     // ==================================================================

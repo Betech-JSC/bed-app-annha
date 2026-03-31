@@ -36,18 +36,18 @@ class FinanceService
         $cursor = $from->copy()->startOfMonth();
         while ($cursor->lte($to)) {
             $monthKey = $cursor->format('Y-m');
-            $monthFlows = $flows->filter(function ($f) use ($cursor) {
+            $monthFlows = $flows->filter(function ($f) use ($monthKey) {
                 $date = $f->actual_date ?: $f->planned_date;
-                return $date && $date->format('Y-m') === $cursor->format('Y-m');
+                return $date instanceof \DateTimeInterface && $date->format('Y-m') === $monthKey;
             });
 
             $months[] = [
                 'month'           => $monthKey,
                 'label'           => $cursor->format('m/Y'),
-                'planned_inflow'  => $flows->where('type', 'inflow')->filter(fn($f) => $f->planned_date && $f->planned_date->format('Y-m') === $monthKey)->sum('amount'),
-                'planned_outflow' => $flows->where('type', 'outflow')->filter(fn($f) => $f->planned_date && $f->planned_date->format('Y-m') === $monthKey)->sum('amount'),
-                'actual_inflow'   => $flows->where('type', 'inflow')->filter(fn($f) => $f->actual_date && $f->actual_date->format('Y-m') === $monthKey)->sum('amount'),
-                'actual_outflow'  => $flows->where('type', 'outflow')->filter(fn($f) => $f->actual_date && $f->actual_date->format('Y-m') === $monthKey)->sum('amount'),
+                'planned_inflow'  => $flows->where('type', 'inflow')->filter(fn($f) => $f->planned_date instanceof \DateTimeInterface && $f->planned_date->format('Y-m') === $monthKey)->sum('amount'),
+                'planned_outflow' => $flows->where('type', 'outflow')->filter(fn($f) => $f->planned_date instanceof \DateTimeInterface && $f->planned_date->format('Y-m') === $monthKey)->sum('amount'),
+                'actual_inflow'   => $flows->where('type', 'inflow')->filter(fn($f) => $f->actual_date instanceof \DateTimeInterface && $f->actual_date->format('Y-m') === $monthKey)->sum('amount'),
+                'actual_outflow'  => $flows->where('type', 'outflow')->filter(fn($f) => $f->actual_date instanceof \DateTimeInterface && $f->actual_date->format('Y-m') === $monthKey)->sum('amount'),
             ];
             $cursor->addMonth();
         }
@@ -106,9 +106,9 @@ class FinanceService
                 + $approvedCosts->where('category', 'concrete')->sum('amount'),
             'labor'         => $approvedCosts->where('category', 'labor')->sum('amount'),
             'equipment'     => $approvedCosts->where('category', 'equipment')->sum('amount'),
-            'subcontractor' => $approvedCosts->whereNotNull('subcontractor_id')->sum('amount'),
+            'subcontractor' => $approvedCosts->whereNotNull('subcontractor_payment_id')->sum('amount'),
             'transportation' => $approvedCosts->where('category', 'transportation')->sum('amount'),
-            'other'         => $approvedCosts->where('category', 'other')->sum('amount'),
+            'other'         => $approvedCosts->where('category', 'other')->whereNull('subcontractor_id')->sum('amount'),
         ];
 
         $totalCosts = array_sum($costByCategory);

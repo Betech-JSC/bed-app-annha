@@ -96,12 +96,14 @@ class ProjectSummaryReportService
                 $materialCosts += (float) $cost->amount;
             } elseif ($cost->equipment_allocation_id) {
                 $equipmentRentalCosts += (float) $cost->amount;
-            } elseif ($cost->subcontractor_id) {
+            } elseif ($cost->subcontractor_payment_id) {
+                // CHỈ tính các khoản thực chi cho thầu phụ (có liên kết payment)
                 $subcontractorCosts += (float) $cost->amount;
             } elseif ($cost->payroll_id) {
                 $salaryCosts += (float) $cost->amount;
             } else {
                 // Các chi phí khác (vận chuyển, tiếp khách, v.v. gắn với dự án)
+                // Lưu ý: Nếu có subcontractor_id nhưng không có payment_id (do tính từ quote), nó sẽ vào đây
                 $otherCosts += (float) $cost->amount;
             }
         }
@@ -149,7 +151,7 @@ class ProjectSummaryReportService
                     }]);
                 break;
             case 'subcontractor':
-                $query->whereNotNull('subcontractor_id')
+                $query->whereNotNull('subcontractor_payment_id')
                     ->with('subcontractor');
                 break;
 

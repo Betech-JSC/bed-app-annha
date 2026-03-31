@@ -11,6 +11,7 @@ export interface Equipment {
   brand?: string;
   model?: string;
   serial_number?: string;
+  unit?: string;
   status: "available" | "in_use" | "maintenance" | "retired" | "returned";
   purchase_price?: number;
   rental_rate_per_day?: number;

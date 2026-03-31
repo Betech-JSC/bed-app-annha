@@ -152,32 +152,9 @@ class SubcontractorController extends Controller
                     ]);
             }
 
-            // Tạo Cost record nếu được yêu cầu
-            if (!empty($validated['create_cost']) && $validated['create_cost']) {
-                $costGroupId = $validated['cost_group_id'] ?? null;
-                $costDate = $validated['cost_date'] ?? now()->toDateString();
-
-                // Tìm CostGroup mặc định nếu không có
-                if (!$costGroupId) {
-                    $defaultCostGroup = \App\Models\CostGroup::where('code', 'subcontractor')
-                        ->orWhere('name', 'LIKE', '%Nhà thầu phụ%')
-                        ->orWhere('name', 'LIKE', '%Thầu phụ%')
-                        ->first();
-                    $costGroupId = $defaultCostGroup?->id;
-                }
-
-                Cost::create([
-                    'project_id' => $project->id,
-                    'subcontractor_id' => $subcontractor->id,
-                    'cost_group_id' => $costGroupId,
-                    'name' => "Chi phí nhà thầu phụ: {$subcontractor->name}",
-                    'amount' => $subcontractor->total_quote,
-                    'description' => "Chi phí từ nhà thầu phụ. Hạng mục: " . ($subcontractor->category ?? 'N/A'),
-                    'cost_date' => $costDate,
-                    'status' => 'draft',
-                    'created_by' => $request->user()->id,
-                ]);
-            }
+            // Tự động tạo Cost record đã bị gỡ bỏ để tránh tính trùng chi phí (Double Counting)
+            // Hợp đồng thầu phụ dự kiến chỉ được theo dõi qua bảng subcontractors
+            // Chi phí thực tế chỉ phát sinh khi có phiếu thanh toán (SubcontractorPayment)
 
             DB::commit();
 

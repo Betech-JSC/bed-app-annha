@@ -115,7 +115,8 @@ class MaterialController extends Controller
 
 
     /**
-     * Lấy danh sách materials đã sử dụng trong project (thông qua transactions)
+     * Lấy danh sách materials đã sử dụng trong project (thông qua MaterialBills)
+     * Tính toán thống kê từ MaterialBillItem — nguồn dữ liệu chính xác
      */
     public function getByProject(string $projectId, Request $request)
     {
@@ -128,13 +129,11 @@ class MaterialController extends Controller
             ], 403);
         }
 
-        // Lấy các materials đã có transaction trong project này
-        $query = Material::whereHas('transactions', function ($q) use ($projectId) {
-            $q->where('project_id', $projectId);
-        })->with(['transactions' => function ($q) use ($projectId) {
+        // Lấy các materials đã xuất hiện trong MaterialBillItem của project này
+        $query = Material::whereHas('billItems.materialBill', function ($q) use ($projectId) {
             $q->where('project_id', $projectId)
-                ->orderBy('transaction_date', 'desc');
-        }]);
+              ->whereNotIn('status', ['rejected']); // Bỏ qua phiếu bị từ chối
+        });
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -151,32 +150,66 @@ class MaterialController extends Controller
         $materials = $query->paginate(50);
 
         $projectTotalCost = 0;
+        $projectApprovedCost = 0;
+        $projectPendingCost = 0;
+        $totalBillsCount = 0;
 
-        // Tính toán số lượng đã sử dụng trong project cho mỗi material
-        $materials->getCollection()->transform(function ($material) use ($projectId, &$projectTotalCost) {
-            // Tính tổng số lượng đã sử dụng trong project
-            $projectTransactions = $material->transactions->where('project_id', $projectId);
-            $totalIn = $projectTransactions->where('type', 'in')->sum('quantity');
-            $totalOut = $projectTransactions->where('type', 'out')->sum('quantity');
+        // Tính toán số lượng & chi phí từ MaterialBillItem
+        $materials->getCollection()->transform(function ($material) use ($projectId, &$projectTotalCost, &$projectApprovedCost, &$projectPendingCost, &$totalBillsCount) {
+            // Lấy tất cả bill items của material này trong project (trừ rejected)
+            $billItems = \App\Models\MaterialBillItem::where('material_id', $material->id)
+                ->whereHas('materialBill', function ($q) use ($projectId) {
+                    $q->where('project_id', $projectId)
+                      ->whereNotIn('status', ['rejected']);
+                })
+                ->with('materialBill:id,status')
+                ->get();
+
+            $totalQuantity = $billItems->sum('quantity');
+            $totalAmount = $billItems->sum('total_price');
             
-            $amountIn = $projectTransactions->where('type', 'in')->sum('total_amount');
-            $amountOut = $projectTransactions->where('type', 'out')->sum('total_amount');
+            // Phân loại theo trạng thái
+            $approvedAmount = $billItems->filter(fn($item) => $item->materialBill->status === 'approved')->sum('total_price');
+            $pendingAmount = $totalAmount - $approvedAmount;
+            $billsCount = $billItems->pluck('material_bill_id')->unique()->count();
 
-            $material->project_usage = $totalOut - $totalIn; // Số lượng đã sử dụng
-            $material->project_total_amount = $amountOut - $amountIn; // Tổng chi phí
-            $material->project_transactions_count = $projectTransactions->count();
+            $material->project_usage = $totalQuantity;
+            $material->project_total_amount = $totalAmount;
+            $material->project_approved_amount = $approvedAmount;
+            $material->project_pending_amount = $pendingAmount;
+            $material->project_transactions_count = $billsCount;
 
-            $projectTotalCost += $material->project_total_amount;
+            $projectTotalCost += $totalAmount;
+            $projectApprovedCost += $approvedAmount;
+            $projectPendingCost += $pendingAmount;
+            $totalBillsCount += $billsCount;
 
             return $material;
         });
+
+        // Đếm tổng số phiếu vật tư trong dự án
+        $billStats = \App\Models\MaterialBill::where('project_id', $projectId)
+            ->whereNotIn('status', ['rejected'])
+            ->selectRaw("
+                COUNT(*) as total_bills,
+                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_bills,
+                SUM(CASE WHEN status IN ('pending_management', 'pending_accountant') THEN 1 ELSE 0 END) as pending_bills,
+                SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draft_bills
+            ")
+            ->first();
 
         return response()->json([
             'success' => true,
             'data' => $materials,
             'summary' => [
                 'total_material_cost' => (float)$projectTotalCost,
+                'approved_material_cost' => (float)$projectApprovedCost,
+                'pending_material_cost' => (float)$projectPendingCost,
                 'total_materials_count' => $materials->total(),
+                'total_bills' => (int)($billStats->total_bills ?? 0),
+                'approved_bills' => (int)($billStats->approved_bills ?? 0),
+                'pending_bills' => (int)($billStats->pending_bills ?? 0),
+                'draft_bills' => (int)($billStats->draft_bills ?? 0),
             ]
         ]);
     }

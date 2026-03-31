@@ -36,6 +36,11 @@ class Material extends Model
         return $this->hasMany(MaterialTransaction::class);
     }
 
+    public function billItems(): HasMany
+    {
+        return $this->hasMany(MaterialBillItem::class);
+    }
+
     // ==================================================================
     // BOOT
     // ==================================================================

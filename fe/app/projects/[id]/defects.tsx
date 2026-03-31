@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Keyboard,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { defectApi, Defect } from "@/api/defectApi";
@@ -817,6 +818,9 @@ export default function DefectsScreen() {
                     placeholderTextColor="#9CA3AF"
                     multiline
                     numberOfLines={4}
+                    returnKeyType="done"
+                    blurOnSubmit={true}
+                    onSubmitEditing={Keyboard.dismiss}
                   />
                 </View>
 

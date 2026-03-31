@@ -176,24 +176,6 @@ export default function EditBudgetItemScreen() {
                     />
 
                     <View style={styles.formGroup}>
-                        <Text style={styles.label}>Số lượng</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="1"
-                            value={itemData.quantity > 0 ? itemData.quantity.toString() : ""}
-                            onChangeText={(text) => setItemData({ ...itemData, quantity: parseFloat(text) || 0 })}
-                            keyboardType="numeric"
-                        />
-                    </View>
-
-                    <CurrencyInput
-                        label="Đơn giá (VNĐ)"
-                        value={itemData.unit_price}
-                        onChangeText={(price) => setItemData({ ...itemData, unit_price: price })}
-                        placeholder="0"
-                    />
-
-                    <View style={styles.formGroup}>
                         <Text style={styles.label}>Mô tả</Text>
                         <TextInput
                             style={[styles.input, styles.textArea]}

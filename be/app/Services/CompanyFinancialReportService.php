@@ -141,7 +141,7 @@ class CompanyFinancialReportService
             ->sum('amount');
 
         $subcontractorCosts = Cost::whereNotNull('project_id')
-            ->whereNotNull('subcontractor_id')
+            ->whereNotNull('subcontractor_payment_id') // CHỈ tính các khoản thực chi
             ->where('status', 'approved')
             ->whereBetween('cost_date', [$startDate, $endDate])
             ->sum('amount');
@@ -149,7 +149,7 @@ class CompanyFinancialReportService
         $otherCosts = Cost::whereNotNull('project_id')
             ->whereNull('material_id')
             ->whereNull('equipment_allocation_id')
-            ->whereNull('subcontractor_id')
+            ->whereNull('subcontractor_payment_id') // Loại trừ payment thầu phụ (đã tính ở trên)
             ->where('status', 'approved')
             ->whereBetween('cost_date', [$startDate, $endDate])
             ->sum('amount');

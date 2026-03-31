@@ -2193,29 +2193,9 @@ class CrmProjectsController extends Controller
                 'progress_end_date' => $validated['progress_end_date'] ?? null,
             ]);
 
-            // Auto-create Cost record (matching APP logic)
-            if (!empty($validated['create_cost'])) {
-                $costGroupId = $validated['cost_group_id'] ?? null;
-                if (!$costGroupId) {
-                    $defaultCostGroup = \App\Models\CostGroup::where('code', 'subcontractor')
-                        ->orWhere('name', 'LIKE', '%Nhà thầu phụ%')
-                        ->orWhere('name', 'LIKE', '%Thầu phụ%')
-                        ->first();
-                    $costGroupId = $defaultCostGroup?->id;
-                }
-
-                Cost::create([
-                    'project_id' => $project->id,
-                    'subcontractor_id' => $subcontractor->id,
-                    'cost_group_id' => $costGroupId,
-                    'name' => "Chi phí nhà thầu phụ: {$subcontractor->name}",
-                    'amount' => $subcontractor->total_quote,
-                    'description' => "Chi phí từ nhà thầu phụ. Hạng mục: " . ($subcontractor->category ?? 'N/A'),
-                    'cost_date' => $validated['progress_start_date'] ?? now()->toDateString(),
-                    'status' => 'draft',
-                    'created_by' => $user->id,
-                ]);
-            }
+            // Tự động tạo Cost record đã bị gỡ bỏ để tránh tính trùng chi phí (Double Counting)
+            // Hợp đồng thầu phụ chỉ được theo dõi qua bảng subcontractors
+            // Chi phí thực tế chỉ tính từ các đợt thanh toán (SubcontractorPayment)
 
             // Handle file uploads
             $this->attachFilesToEntity($request, $subcontractor, "subcontractors/{$project->id}/{$subcontractor->id}", false);
@@ -2420,23 +2400,9 @@ class CrmProjectsController extends Controller
             // Recalculate subcontractor financials from payments table (single source of truth)
             $payment->subcontractor->recalculateFinancials();
 
-            // Auto-create Cost record for cash flow sync
-            Cost::create([
-                'project_id' => $payment->project_id,
-                'subcontractor_id' => $payment->subcontractor_id,
-                'subcontractor_payment_id' => $payment->id,
-                'name' => "Thanh toán thầu phụ: " . ($payment->subcontractor->name ?? 'N/A') . " - Đợt: " . ($payment->payment_stage ?? 'N/A'),
-                'amount' => $payment->amount,
-                'cost_date' => $payment->payment_date ?: now(),
-                'category' => 'other',
-                'cost_group_id' => 5,
-                'description' => $payment->description ?: "Tự động tạo từ phiếu chi thầu phụ " . $payment->payment_number,
-                'status' => 'approved',
-                'created_by' => $admin->id,
-                'accountant_approved_by' => $admin->id,
-                'accountant_approved_at' => now(),
-            ]);
-
+            // Ghi chú: Việc đồng bộ sang bảng Cost hiện đã được xử lý tự động qua model hook 'saved'
+            // Điều này đảm bảo dữ liệu luôn nhất quán giữa trạng thái Thanh toán và Chi phí dự án
+            
             DB::commit();
             return back()->with('success', 'Đã xác nhận thanh toán.');
         } catch (\Exception $e) {
@@ -3610,6 +3576,7 @@ class CrmProjectsController extends Controller
                 'cost_group_id' => $validated['cost_group_id'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
                 'category' => 'construction_materials',
+                'material_bill_id' => $bill->id,
                 'name' => "Phiếu vật liệu #{$billNumber}" . ($supplierName ? " - {$supplierName}" : ''),
                 'amount' => $totalAmount,
                 'description' => $validated['notes'] ?? "Từ phiếu vật tư {$billNumber}",
@@ -3718,9 +3685,6 @@ class CrmProjectsController extends Controller
 
         $bill->submitForManagementApproval();
 
-        // Update linked Cost status
-        $this->updateLinkedMaterialCost($project->id, $bill->bill_number, 'pending_management_approval');
-
         $bill->notifyEvent('submitted', auth('admin')->user());
 
         return back()->with('success', 'Đã gửi phiếu vật tư để duyệt.');
@@ -3741,12 +3705,6 @@ class CrmProjectsController extends Controller
         // Use model method
         $bill->approveByManagement((object) ['id' => $user->id ?? null]);
         $bill->update(['management_approved_at' => now()]);
-
-        // Update linked Cost status
-        $linkedCost = $this->updateLinkedMaterialCost($project->id, $bill->bill_number, 'pending_accountant_approval', [
-            'management_approved_by' => $user->id ?? null,
-            'management_approved_at' => now(),
-        ]);
 
         $bill->notifyEvent('approved_management', $user);
 
@@ -3772,57 +3730,9 @@ class CrmProjectsController extends Controller
             // 1. Update bill status
             $bill->approveByAccountant((object) ['id' => $user->id ?? null]);
 
-            // 2. Update linked Cost record to approved (or create if missing)
-            $cost = $this->updateLinkedMaterialCost($project->id, $bill->bill_number, 'approved', [
-                'accountant_approved_by' => $user->id ?? null,
-                'accountant_approved_at' => now(),
-            ]);
-
-            // If no linked cost found, create one
-            if (!$cost) {
-                $cost = \App\Models\Cost::create([
-                    'project_id' => $project->id,
-                    'cost_group_id' => $bill->cost_group_id,
-                    'supplier_id' => $bill->supplier_id,
-                    'category' => 'construction_materials',
-                    'name' => "Phiếu vật liệu #" . ($bill->bill_number ?? $bill->id) . " - " . ($bill->supplier->name ?? ""),
-                    'amount' => $bill->total_amount,
-                    'description' => $bill->notes ?? "Tự động tạo từ phiếu vật tư",
-                    'cost_date' => $bill->bill_date,
-                    'status' => 'approved',
-                    'created_by' => $bill->created_by,
-                    'management_approved_by' => $bill->management_approved_by,
-                    'management_approved_at' => $bill->management_approved_at,
-                    'accountant_approved_by' => $user->id ?? null,
-                    'accountant_approved_at' => now(),
-                ]);
-            }
-
-            // 3. Update supplier debt
-            if ($bill->supplier) {
-                $bill->supplier->recordDebt($bill->total_amount);
-            }
-
-            // 4. Create MaterialTransactions per item (for reporting)
-            foreach ($bill->items as $item) {
-                \App\Models\MaterialTransaction::create([
-                    'material_id' => $item->material_id,
-                    'project_id' => $project->id,
-                    'cost_id' => $cost->id,
-                    'type' => 'in',
-                    'quantity' => $item->quantity,
-                    'unit_price' => $item->unit_price,
-                    'total_amount' => $item->total_price,
-                    'supplier_id' => $bill->supplier_id,
-                    'reference_number' => $bill->bill_number,
-                    'transaction_date' => $bill->bill_date,
-                    'notes' => "Nhập từ phiếu vật tư #" . ($bill->bill_number ?? $bill->id),
-                    'status' => 'approved',
-                    'created_by' => $bill->created_by,
-                    'approved_by' => $user->id ?? null,
-                    'approved_at' => now(),
-                ]);
-            }
+            // 2. Tự động đồng bộ sang Cost và kích hoạt side effects (Kho, Công nợ) 
+            // đã được xử lý thông qua Model hook saved trong Cost và sync logic
+            $bill->triggerApprovalSideEffects();
 
             DB::commit();
 

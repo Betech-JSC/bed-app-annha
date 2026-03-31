@@ -159,23 +159,8 @@ class SubcontractorPayment extends Model
         // Cập nhật tổng thanh toán cho subcontractor
         $this->subcontractor->recordPayment($this->amount);
         
-        // TỰ ĐỘNG TẠO BẢN GHI CHI PHÍ (COST) ĐỂ ĐỒNG BỘ DÒNG TIỀN
-        // Điều này giúp báo cáo thu chi/dòng tiền lấy được dữ liệu thanh toán thầu phụ
-        Cost::create([
-            'project_id' => $this->project_id,
-            'subcontractor_id' => $this->subcontractor_id,
-            'subcontractor_payment_id' => $this->id,
-            'name' => "Thanh toán thầu phụ: " . ($this->subcontractor->name ?? 'N/A') . " - Đợt: " . ($this->payment_stage ?? 'N/A'),
-            'amount' => $this->amount,
-            'cost_date' => $this->payment_date ?: now(),
-            'category' => 'other', // Fallback
-            'cost_group_id' => 5, // ID 5 là "Nhà thầu phụ" theo database hiện tại
-            'description' => $this->description ?: "Tự động tạo từ phiếu chi thầu phụ " . $this->payment_number,
-            'status' => 'approved', // Đã thanh toán nên mặc định là approved
-            'created_by' => $this->paid_by ?: $this->created_by,
-            'accountant_approved_by' => $this->paid_by,
-            'accountant_approved_at' => now(),
-        ]);
+        // Ghi chú: Việc đồng bộ sang bảng Cost hiện đã được xử lý tự động qua model hook 'saved'
+        // Điều này đảm bảo dữ liệu luôn nhất quán ở mọi giai đoạn (draft -> paid)
         
         return $this->save();
     }
@@ -225,6 +210,54 @@ class SubcontractorPayment extends Model
         return $query->where('status', 'paid');
     }
 
+    /**
+     * Đồng bộ thông tin thanh toán sang bảng Chi phí dự án (Cost)
+     * Để người dùng thấy được các khoản chi thầu phụ ở màn hình Chi phí tổng thể
+     */
+    public function syncToCostTable(): void
+    {
+        // Trạng thái bị hủy thì xóa bản ghi chi phí tương ứng
+        if ($this->status === 'cancelled') {
+            Cost::where('subcontractor_payment_id', $this->id)->delete();
+            return;
+        }
+
+        $costGroupId = \App\Models\CostGroup::where('code', 'subcontractor')
+            ->orWhere('name', 'LIKE', '%Nhà thầu phụ%')
+            ->value('id') ?: 5;
+        
+        // Ánh xạ trạng thái từ Payment sang Cost
+        $costStatus = match($this->status) {
+            'draft'                           => 'draft',
+            'pending_management_approval'     => 'pending_management_approval',
+            'pending_accountant_confirmation' => 'pending_accountant_approval',
+            'paid'                            => 'approved',
+            'rejected'                        => 'rejected',
+            default                           => 'draft'
+        };
+
+        Cost::updateOrCreate(
+            ['subcontractor_payment_id' => $this->id],
+            [
+                'project_id'               => $this->project_id,
+                'subcontractor_id'         => $this->subcontractor_id,
+                'name'                     => "Thanh toán thầu phụ: " . ($this->subcontractor->name ?? 'N/A') . " - Đợt: " . ($this->payment_stage ?? 'N/A'),
+                'amount'                   => $this->amount,
+                'cost_date'                => $this->payment_date ?: now(),
+                'category'                 => 'other',
+                'cost_group_id'            => $costGroupId,
+                'description'              => $this->description ?: "Đồng bộ từ phiếu chi thầu phụ " . $this->payment_number,
+                'status'                   => $costStatus,
+                'created_by'               => $this->created_by,
+                'management_approved_by'   => $this->approved_by,
+                'management_approved_at'   => $this->approved_at,
+                'accountant_approved_by'   => $this->paid_by,
+                'accountant_approved_at'   => $this->paid_at,
+                'rejected_reason'          => $this->rejection_reason,
+            ]
+        );
+    }
+
     // ==================================================================
     // BOOT
     // ==================================================================
@@ -240,6 +273,16 @@ class SubcontractorPayment extends Model
             if (empty($payment->payment_number)) {
                 $payment->payment_number = 'PT-' . date('Ymd') . '-' . strtoupper(Str::random(6));
             }
+        });
+
+        // Tự động đồng bộ sang bảng Cost sau khi lưu
+        static::saved(function ($payment) {
+            $payment->syncToCostTable();
+        });
+
+        // Xóa bản ghi chi phí khi phiếu payment bị xóa
+        static::deleted(function ($payment) {
+            Cost::where('subcontractor_payment_id', $payment->id)->delete();
         });
     }
 }

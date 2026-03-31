@@ -11,9 +11,11 @@ import {
   TextInput,
   ScrollView,
   Alert,
-  SafeAreaView,
-  StatusBar,
+  Keyboard,
+  TouchableWithoutFeedback,
   KeyboardAvoidingView,
+  RefreshControl,
+  SafeAreaView,
   Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -42,6 +44,7 @@ export default function DocumentsScreen() {
   const [initialImageIndex, setInitialImageIndex] = useState(0);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadDocuments();
@@ -63,8 +66,14 @@ export default function DocumentsScreen() {
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    loadDocuments();
+  }, [id]);
 
   const handleUploadComplete = async (files: any[]) => {
     if (files.length === 0) return;
@@ -163,16 +172,12 @@ export default function DocumentsScreen() {
         <Text style={styles.documentName} numberOfLines={1}>
           {item.original_name}
         </Text>
-        {item.description ? (
+        {item.description && (
           <Text style={styles.documentDescription} numberOfLines={1}>
             {item.description}
           </Text>
-        ) : (
-          <Text style={styles.documentSize}>{formatFileSize(item.file_size)}</Text>
         )}
-        {item.description && (
-          <Text style={styles.documentSize}>{formatFileSize(item.file_size)}</Text>
-        )}
+        <Text style={styles.documentSize}>{formatFileSize(item.file_size)}</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
     </TouchableOpacity>
@@ -217,7 +222,10 @@ export default function DocumentsScreen() {
         data={documents}
         renderItem={renderDocumentItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight }]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 20 }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="folder-outline" size={64} color="#D1D5DB" />
@@ -231,70 +239,90 @@ export default function DocumentsScreen() {
         visible={showUploadModal}
         transparent
         animationType="slide"
-        presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowUploadModal(false);
           setUploadedFiles([]);
           setFileDescriptions({});
         }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Mô tả tài liệu</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowUploadModal(false);
-                  setUploadedFiles([]);
-                  setFileDescriptions({});
-                }}
-              >
-                <Ionicons name="close" size={24} color="#1F2937" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalBody}>
-              {uploadedFiles.map((file, index) => (
-                <View key={index} style={styles.fileInputGroup}>
-                  <Text style={styles.fileName} numberOfLines={1}>
-                    {file.original_name || file.name || `File ${index + 1}`}
-                  </Text>
-                  <TextInput
-                    style={styles.descriptionInput}
-                    placeholder="Nhập mô tả (ví dụ: bản vẽ thiết kế, hợp đồng scan, bản vẽ chỉnh sửa...)"
-                    placeholderTextColor="#9CA3AF"
-                    value={fileDescriptions[file.attachment_id || file.id] || ""}
-                    onChangeText={(text) => {
-                      setFileDescriptions({
-                        ...fileDescriptions,
-                        [file.attachment_id || file.id]: text,
-                      });
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={Keyboard.dismiss}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalKeyboardAvoiding}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Mô tả tài liệu</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowUploadModal(false);
+                      setUploadedFiles([]);
+                      setFileDescriptions({});
                     }}
-                    multiline
-                    numberOfLines={3}
-                  />
+                  >
+                    <Ionicons name="close" size={24} color="#1F2937" />
+                  </TouchableOpacity>
                 </View>
-              ))}
-            </ScrollView>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowUploadModal(false);
-                  setUploadedFiles([]);
-                  setFileDescriptions({});
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleConfirmUpload}
-              >
-                <Text style={styles.saveButtonText}>Xác nhận</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+                <ScrollView 
+                  style={styles.modalBody}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <TouchableWithoutFeedback>
+                    <View>
+                      {uploadedFiles.map((file, index) => (
+                        <View key={index} style={styles.fileInputGroup}>
+                          <Text style={styles.fileName} numberOfLines={1}>
+                            {file.original_name || file.name || `File ${index + 1}`}
+                          </Text>
+                          <TextInput
+                            style={styles.descriptionInput}
+                            placeholder="Nhập mô tả (ví dụ: bản vẽ thiết kế, hợp đồng scan...)"
+                            placeholderTextColor="#9CA3AF"
+                            value={fileDescriptions[file.attachment_id || file.id] || ""}
+                            onChangeText={(text) => {
+                              setFileDescriptions({
+                                ...fileDescriptions,
+                                [file.attachment_id || file.id]: text,
+                              });
+                            }}
+                            multiline
+                            numberOfLines={3}
+                            returnKeyType="done"
+                            blurOnSubmit={true}
+                            onSubmitEditing={Keyboard.dismiss}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  </TouchableWithoutFeedback>
+                </ScrollView>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => {
+                      setShowUploadModal(false);
+                      setUploadedFiles([]);
+                      setFileDescriptions({});
+                    }}
+                  >
+                    <Text style={styles.cancelButtonText}>Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.saveButton]}
+                    onPress={handleConfirmUpload}
+                  >
+                    <Text style={styles.saveButtonText}>Xác nhận</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
 
       {/* Document Detail Modal */}
@@ -566,6 +594,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalKeyboardAvoiding: {
+    width: "100%",
   },
   modalContent: {
     backgroundColor: "#FFFFFF",

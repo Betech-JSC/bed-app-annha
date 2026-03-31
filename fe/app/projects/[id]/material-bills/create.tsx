@@ -10,6 +10,8 @@ import {
     TextInput,
     Modal,
     FlatList,
+    Platform,
+    KeyboardAvoidingView,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { materialBillApi } from "@/api/materialBillApi";
@@ -31,6 +33,13 @@ export default function CreateMaterialBillScreen() {
     const [billDate, setBillDate] = useState(new Date());
     const [notes, setNotes] = useState("");
     const [items, setItems] = useState<any[]>([]);
+
+    // Adder State (For inline adding)
+    const [currentItem, setCurrentItem] = useState({
+        material: null as Material | null,
+        quantity: 1,
+        unit_price: 0,
+    });
 
     // Selector States
     const [showSupplierModal, setShowSupplierModal] = useState(false);
@@ -98,7 +107,27 @@ export default function CreateMaterialBillScreen() {
         loadMaterials();
     }, []);
 
-    const handleAddItem = (material: Material) => {
+    const handleSelectMaterial = (material: Material) => {
+        setCurrentItem({
+            ...currentItem,
+            material: material,
+            unit_price: material.unit_price || 0,
+        });
+        setShowMaterialModal(false);
+    };
+
+    const handleAddItem = () => {
+        const { material, quantity, unit_price } = currentItem;
+        if (!material) {
+            Alert.alert("Lỗi", "Vui lòng chọn vật liệu.");
+            return;
+        }
+
+        if (quantity <= 0) {
+            Alert.alert("Lỗi", "Số lượng phải lớn hơn 0.");
+            return;
+        }
+
         // Kiểm tra xem vật liệu đã có trong list chưa
         if (items.some(item => item.material_id === material.id)) {
             Alert.alert("Thông báo", "Vật liệu này đã có trong danh sách hóa đơn.");
@@ -108,15 +137,23 @@ export default function CreateMaterialBillScreen() {
         setItems([...items, {
             material_id: material.id,
             material: material,
-            quantity: 1,
-            unit_price: material.unit_price || 0,
+            quantity: quantity,
+            unit_price: unit_price,
+            total_price: quantity * unit_price
         }]);
-        setShowMaterialModal(false);
+
+        // Reset adder
+        setCurrentItem({
+            material: null,
+            quantity: 1,
+            unit_price: 0,
+        });
     };
 
     const handleUpdateItem = (index: number, field: string, value: any) => {
         const newItems = [...items];
         newItems[index][field] = value;
+        newItems[index].total_price = newItems[index].quantity * newItems[index].unit_price;
         setItems(newItems);
     };
 
@@ -168,151 +205,218 @@ export default function CreateMaterialBillScreen() {
 
     return (
         <View style={styles.container}>
-            <ScreenHeader title="Tạo Hóa Đơn Vật Liệu" showBackButton />
+            <ScreenHeader 
+                title="Tạo Phiếu Nhập Vật Liệu" 
+                showBackButton 
+                rightComponent={
+                    <TouchableOpacity
+                        onPress={handleSubmit}
+                        style={[styles.headerSubmitBtn, (loading || items.length === 0) && { opacity: 0.5 }]}
+                        disabled={loading || items.length === 0}
+                    >
+                        {loading ? <ActivityIndicator size="small" color="#3B82F6" /> : <Text style={styles.headerSubmitText}>Tạo</Text>}
+                    </TouchableOpacity>
+                }
+            />
 
-            <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Thông tin chung</Text>
-
-                    <View style={styles.formGroup}>
-                        <Text style={styles.label}>Nhà cung cấp *</Text>
-                        <TouchableOpacity
-                            style={styles.pickerButton}
-                            onPress={() => setShowSupplierModal(true)}
-                        >
-                            <Text style={[styles.pickerButtonText, !supplier && styles.placeholder]}>
-                                {supplier ? supplier.name : "Chọn nhà cung cấp"}
-                            </Text>
-                            <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.formGroup}>
-                        <Text style={styles.label}>Nhóm chi phí *</Text>
-                        <TouchableOpacity
-                            style={styles.pickerButton}
-                            onPress={() => setShowCostGroupModal(true)}
-                        >
-                            <Text style={[styles.pickerButtonText, !costGroup && styles.placeholder]}>
-                                {costGroup ? costGroup.name : "Chọn nhóm chi phí"}
-                            </Text>
-                            <Ionicons name="chevron-down" size={20} color="#6B7280" />
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.row}>
-                        <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                            <Text style={styles.label}>Số hóa đơn</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={billNumber}
-                                onChangeText={setBillNumber}
-                                placeholder="Nhập số bill"
-                            />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <DatePickerInput
-                                label="Ngày hóa đơn *"
-                                value={billDate}
-                                onChange={(date) => date && setBillDate(date)}
-                            />
-                        </View>
-                    </View>
-                </View>
-
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Danh sách vật liệu</Text>
-                        <TouchableOpacity
-                            style={styles.addMaterialBtn}
-                            onPress={() => setShowMaterialModal(true)}
-                        >
-                            <Ionicons name="add-circle" size={20} color="#3B82F6" />
-                            <Text style={styles.addMaterialText}>Thêm vật liệu</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {items.length === 0 ? (
-                        <View style={styles.emptyItems}>
-                            <Text style={styles.emptyItemsText}>Chưa có vật liệu nào được thêm</Text>
-                        </View>
-                    ) : (
-                        items.map((item, index) => (
-                            <View key={index} style={styles.itemCard}>
-                                <View style={styles.itemHeader}>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.itemName}>{item.material.name}</Text>
-                                        <Text style={styles.itemCode}>{item.material.code} - {item.material.unit}</Text>
-                                    </View>
-                                    <TouchableOpacity onPress={() => handleRemoveItem(index)}>
-                                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                                    </TouchableOpacity>
-                                </View>
-
-                                <View style={styles.row}>
-                                    <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                                        <Text style={styles.label}>Số lượng</Text>
-                                        <TextInput
-                                            style={styles.input}
-                                            value={item.quantity.toString()}
-                                            onChangeText={(text) => handleUpdateItem(index, 'quantity', parseFloat(text) || 0)}
-                                            keyboardType="decimal-pad"
-                                        />
-                                    </View>
-                                    <View style={{ flex: 2 }}>
-                                        <CurrencyInput
-                                            label="Đơn giá"
-                                            value={item.unit_price}
-                                            onChangeText={(amount) => handleUpdateItem(index, 'unit_price', amount)}
-                                        />
-                                    </View>
-                                </View>
-                                <View style={styles.itemSubtotal}>
-                                    <Text style={styles.subtotalLabel}>Thành tiền:</Text>
-                                    <Text style={styles.subtotalValue}>{formatCurrency(item.quantity * item.unit_price)}</Text>
-                                </View>
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+            >
+                <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+                    <View style={[styles.section, { borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }]}>
+                        <View style={styles.row}>
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                                <DatePickerInput
+                                    label="Ngày nhập *"
+                                    value={billDate}
+                                    onChange={(date) => date && setBillDate(date)}
+                                />
                             </View>
-                        ))
-                    )}
-                </View>
+                            <View style={[styles.formGroup, { flex: 1 }]}>
+                                <Text style={styles.label}>Nhà cung cấp</Text>
+                                <TouchableOpacity
+                                    style={styles.pickerButton}
+                                    onPress={() => setShowSupplierModal(true)}
+                                >
+                                    <Text style={[styles.pickerButtonText, !supplier && styles.placeholder]} numberOfLines={1}>
+                                        {supplier ? supplier.name : "Chọn nhà cung cấp"}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
 
-                <View style={styles.section}>
-                    <View style={styles.formGroup}>
-                        <Text style={styles.label}>Ghi chú</Text>
-                        <TextInput
-                            style={[styles.input, styles.textArea]}
-                            value={notes}
-                            onChangeText={setNotes}
-                            placeholder="Nhập ghi chú cho hóa đơn..."
-                            multiline
-                            numberOfLines={3}
-                        />
+                        <View style={styles.row}>
+                            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+                                <Text style={styles.label}>Nhóm chi phí</Text>
+                                <TouchableOpacity
+                                    style={styles.pickerButton}
+                                    onPress={() => setShowCostGroupModal(true)}
+                                >
+                                    <Text style={[styles.pickerButtonText, !costGroup && styles.placeholder]} numberOfLines={1}>
+                                        {costGroup ? costGroup.name : "Chọn nhóm chi phí"}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+                            <View style={[styles.formGroup, { flex: 1 }]}>
+                                <Text style={styles.label}>Ghi chú</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={notes}
+                                    onChangeText={setNotes}
+                                    placeholder="Ghi chú (tùy chọn)"
+                                />
+                            </View>
+                        </View>
                     </View>
-                </View>
 
-                <View style={styles.footer}>
-                    <View style={styles.totalRow}>
+                    {/* ADDER SECTION - PREMIUM LOOK MATCHING CRM */}
+                    <View style={styles.adderSection}>
+                        <Text style={styles.adderTitle}>THÊM VẬT LIỆU VÀO PHIẾU</Text>
+                        
+                        <View style={styles.adderContent}>
+                            <View style={styles.formGroup}>
+                                <Text style={styles.label}>Vật liệu :</Text>
+                                <TouchableOpacity
+                                    style={styles.pickerButton}
+                                    onPress={() => setShowMaterialModal(true)}
+                                >
+                                    <Text style={[styles.pickerButtonText, !currentItem.material && styles.placeholder]} numberOfLines={1}>
+                                        {currentItem.material ? currentItem.material.name : "Chọn vật liệu..."}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.adderInputsRow}>
+                                <View style={[styles.formGroup, { flex: 1.5, marginRight: 8 }]}>
+                                    <Text style={styles.label}>Số lượng :</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={currentItem.quantity.toString()}
+                                        onChangeText={(text) => setCurrentItem({...currentItem, quantity: parseFloat(text) || 0})}
+                                        keyboardType="decimal-pad"
+                                    />
+                                </View>
+                                <View style={[styles.formGroup, { flex: 2, marginRight: 8 }]}>
+                                    <Text style={styles.label}>Đơn giá :</Text>
+                                    <CurrencyInput
+                                        value={currentItem.unit_price}
+                                        onChangeText={(amount) => setCurrentItem({...currentItem, unit_price: amount})}
+                                        style={{ height: 40 }}
+                                    />
+                                </View>
+                                <View style={[styles.formGroup, { flex: 2, justifyContent: 'flex-end', paddingBottom: 10 }]}>
+                                    <Text style={styles.label}>Thành tiền :</Text>
+                                    <Text style={styles.adderSubtotal} numberOfLines={1}>
+                                        {formatCurrency(currentItem.quantity * currentItem.unit_price)}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity 
+                                    style={styles.plusButton}
+                                    onPress={handleAddItem}
+                                >
+                                    <Ionicons name="add" size={24} color="#3B82F6" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* ITEMS LIST */}
+                    <View style={styles.listSection}>
+                        {items.length === 0 ? (
+                            <View style={styles.emptyItems}>
+                                <Ionicons name="cube-outline" size={48} color="#D1D5DB" />
+                                <Text style={styles.emptyItemsText}>Chưa có vật liệu</Text>
+                                <Text style={styles.emptyItemsSubtext}>Chọn vật liệu ở trên và nhấn nút +</Text>
+                            </View>
+                        ) : (
+                            items.map((item, index) => (
+                                <View key={index} style={styles.itemCard}>
+                                    <View style={styles.itemHeader}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.itemName}>{item.material.name}</Text>
+                                            <Text style={styles.itemCode}>{item.material.code} • {item.material.unit}</Text>
+                                        </View>
+                                        <TouchableOpacity 
+                                            onPress={() => handleRemoveItem(index)}
+                                            style={styles.removeBtn}
+                                        >
+                                            <Ionicons name="close-circle" size={22} color="#EF4444" />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <View style={styles.itemInputs}>
+                                        <View style={styles.itemInputGroup}>
+                                            <Text style={styles.miniLabel}>SL</Text>
+                                            <TextInput
+                                                style={styles.miniInput}
+                                                value={item.quantity.toString()}
+                                                onChangeText={(text) => handleUpdateItem(index, 'quantity', parseFloat(text) || 0)}
+                                                keyboardType="decimal-pad"
+                                            />
+                                        </View>
+                                        <View style={[styles.itemInputGroup, { flex: 2 }]}>
+                                            <Text style={styles.miniLabel}>Đơn giá</Text>
+                                            <CurrencyInput
+                                                value={item.unit_price}
+                                                onChangeText={(amount) => handleUpdateItem(index, 'unit_price', amount)}
+                                                style={styles.miniInput}
+                                            />
+                                        </View>
+                                        <View style={[styles.itemInputGroup, { flex: 1.5, alignItems: 'flex-end' }]}>
+                                            <Text style={styles.miniLabel}>Thành tiền</Text>
+                                            <Text style={styles.itemTotalAmount}>{formatCurrency(item.quantity * item.unit_price)}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            ))
+                        )}
+                    </View>
+
+                    {/* ATTACHMENT SECTION */}
+                    <View style={styles.attachmentSection}>
+                        <Text style={styles.label}>
+                            <Ionicons name="document-text-outline" size={14} /> CHỨNG TỪ ĐÍNH KÈM (ẢNH CHỤP PHIẾU/HÓA ĐƠN)
+                        </Text>
+                        <TouchableOpacity style={styles.uploadBox}>
+                            <View style={styles.uploadBtn}>
+                                <Text style={styles.uploadBtnText}>Choose Files</Text>
+                            </View>
+                            <Text style={styles.uploadInfo}>No file chosen</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.uploadNote}>Không bắt buộc đính kèm file</Text>
+                    </View>
+
+                    <View style={styles.footerSpace} />
+                </ScrollView>
+
+                <View style={styles.bottomBar}>
+                    <View style={styles.totalContainer}>
                         <Text style={styles.totalLabel}>TỔNG CỘNG:</Text>
-                        <Text style={styles.totalValueText}>{formatCurrency(calculateTotal())}</Text>
+                        <Text style={styles.totalValue}>{formatCurrency(calculateTotal())}</Text>
                     </View>
                     <TouchableOpacity
-                        style={[styles.submitBtn, loading && styles.disabledBtn]}
+                        style={[styles.submitBtn, (loading || items.length === 0) && styles.disabledBtn]}
                         onPress={handleSubmit}
-                        disabled={loading}
+                        disabled={loading || items.length === 0}
                     >
-                        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitBtnText}>Lưu hóa đơn</Text>}
+                        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitBtnText}>TẠO PHIẾU NHẬP</Text>}
                     </TouchableOpacity>
                 </View>
-            </ScrollView>
+            </KeyboardAvoidingView>
 
             {/* Selector Modals */}
-            <Modal visible={showSupplierModal} animationType="slide" transparent={true}>
+            <Modal visible={showSupplierModal} animationType="fade" transparent={true}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Chọn nhà cung cấp</Text>
                             <TouchableOpacity onPress={() => setShowSupplierModal(false)}>
-                                <Ionicons name="close" size={24} color="#000" />
+                                <Ionicons name="close" size={24} color="#374151" />
                             </TouchableOpacity>
                         </View>
                         <FlatList
@@ -326,8 +430,8 @@ export default function CreateMaterialBillScreen() {
                                         setShowSupplierModal(false);
                                     }}
                                 >
-                                    <Text style={styles.pickerItemText}>{item.name}</Text>
-                                    {supplier?.id === item.id && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                                    <Text style={[styles.pickerItemText, supplier?.id === item.id && { color: '#3B82F6', fontWeight: '700' }]}>{item.name}</Text>
+                                    {supplier?.id === item.id && <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />}
                                 </TouchableOpacity>
                             )}
                         />
@@ -335,13 +439,13 @@ export default function CreateMaterialBillScreen() {
                 </View>
             </Modal>
 
-            <Modal visible={showCostGroupModal} animationType="slide" transparent={true}>
+            <Modal visible={showCostGroupModal} animationType="fade" transparent={true}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Chọn nhóm chi phí</Text>
                             <TouchableOpacity onPress={() => setShowCostGroupModal(false)}>
-                                <Ionicons name="close" size={24} color="#000" />
+                                <Ionicons name="close" size={24} color="#374151" />
                             </TouchableOpacity>
                         </View>
                         <FlatList
@@ -355,8 +459,8 @@ export default function CreateMaterialBillScreen() {
                                         setShowCostGroupModal(false);
                                     }}
                                 >
-                                    <Text style={styles.pickerItemText}>{item.name}</Text>
-                                    {costGroup?.id === item.id && <Ionicons name="checkmark" size={20} color="#3B82F6" />}
+                                    <Text style={[styles.pickerItemText, costGroup?.id === item.id && { color: '#3B82F6', fontWeight: '700' }]}>{item.name}</Text>
+                                    {costGroup?.id === item.id && <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />}
                                 </TouchableOpacity>
                             )}
                         />
@@ -364,20 +468,20 @@ export default function CreateMaterialBillScreen() {
                 </View>
             </Modal>
 
-            <Modal visible={showMaterialModal} animationType="slide" transparent={true}>
+            <Modal visible={showMaterialModal} animationType="fade" transparent={true}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Thêm vật liệu</Text>
+                            <Text style={styles.modalTitle}>Tìm vật liệu</Text>
                             <TouchableOpacity onPress={() => setShowMaterialModal(false)}>
-                                <Ionicons name="close" size={24} color="#000" />
+                                <Ionicons name="close" size={24} color="#374151" />
                             </TouchableOpacity>
                         </View>
                         <View style={styles.searchContainer}>
                             <Ionicons name="search" size={18} color="#9CA3AF" />
                             <TextInput
                                 style={styles.searchInput}
-                                placeholder="Tìm kiếm vật liệu..."
+                                placeholder="Gõ tên hoặc mã vật liệu..."
                                 value={searchQuery}
                                 onChangeText={(text) => {
                                     setSearchQuery(text);
@@ -394,15 +498,20 @@ export default function CreateMaterialBillScreen() {
                                 renderItem={({ item }) => (
                                     <TouchableOpacity
                                         style={styles.pickerItem}
-                                        onPress={() => handleAddItem(item)}
+                                        onPress={() => handleSelectMaterial(item)}
                                     >
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.pickerItemText}>{item.name}</Text>
-                                            <Text style={styles.itemCode}>{item.code || "N/A"}</Text>
+                                            <Text style={styles.itemCode}>{item.code || "---"} • {item.unit}</Text>
                                         </View>
-                                        <Ionicons name="add-circle-outline" size={24} color="#3B82F6" />
+                                        <Ionicons name="add-circle" size={22} color="#3B82F6" />
                                     </TouchableOpacity>
                                 )}
+                                ListEmptyComponent={
+                                    <View style={{ padding: 20, alignItems: 'center' }}>
+                                        <Text style={{ color: '#9CA3AF' }}>Không tìm thấy vật liệu phù hợp</Text>
+                                    </View>
+                                }
                             />
                         )}
                     </View>
@@ -415,7 +524,7 @@ export default function CreateMaterialBillScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#F9FAFB",
+        backgroundColor: "#F3F4F6",
     },
     content: {
         flex: 1,
@@ -423,89 +532,110 @@ const styles = StyleSheet.create({
     section: {
         padding: 16,
         backgroundColor: "#FFFFFF",
-        marginBottom: 8,
-    },
-    sectionHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 16,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: "#1F2937",
         marginBottom: 12,
     },
+    row: {
+        flexDirection: "row",
+        alignItems: "flex-end",
+    },
     formGroup: {
-        marginBottom: 16,
+        marginBottom: 12,
     },
     label: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: "600",
-        color: "#4B5563",
+        color: "#6B7280",
         marginBottom: 6,
     },
     input: {
+        height: 40,
         borderWidth: 1,
         borderColor: "#E5E7EB",
         borderRadius: 8,
-        padding: 10,
-        fontSize: 15,
-        backgroundColor: "#F9FAFB",
-    },
-    textArea: {
-        height: 80,
-        textAlignVertical: "top",
+        paddingHorizontal: 12,
+        fontSize: 14,
+        backgroundColor: "#FFFFFF",
     },
     pickerButton: {
+        height: 40,
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
         borderWidth: 1,
         borderColor: "#E5E7EB",
         borderRadius: 8,
-        padding: 12,
-        backgroundColor: "#F9FAFB",
+        paddingHorizontal: 12,
+        backgroundColor: "#FFFFFF",
     },
     pickerButtonText: {
-        fontSize: 15,
+        fontSize: 14,
         color: "#1F2937",
+        flex: 1,
     },
     placeholder: {
         color: "#9CA3AF",
     },
-    row: {
+    
+    // ADDER STYLES
+    adderSection: {
+        marginHorizontal: 12,
+        backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    adderTitle: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#4B5563",
+        marginBottom: 12,
+        letterSpacing: 0.5,
+    },
+    adderContent: {
+        // padding: 4
+    },
+    adderInputsRow: {
         flexDirection: "row",
+        alignItems: "center",
+    },
+    adderSubtotal: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#10B981",
+        height: 40,
+        lineHeight: 40,
+    },
+    plusButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        backgroundColor: "#EFF6FF",
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#DBEAFE",
+        marginLeft: 8,
         marginBottom: 8,
     },
-    emptyItems: {
-        padding: 20,
-        alignItems: "center",
-        borderStyle: "dashed",
-        borderWidth: 1,
-        borderColor: "#D1D5DB",
-        borderRadius: 8,
-    },
-    emptyItemsText: {
-        color: "#9CA3AF",
-    },
-    addMaterialBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-    },
-    addMaterialText: {
-        color: "#3B82F6",
-        fontWeight: "600",
+
+    // LIST STYLES
+    listSection: {
+        marginTop: 12,
+        paddingHorizontal: 16,
     },
     itemCard: {
-        borderWidth: 1,
-        borderColor: "#F3F4F6",
+        backgroundColor: "#FFFFFF",
         borderRadius: 12,
         padding: 12,
         marginBottom: 12,
-        backgroundColor: "#FAFAFA",
+        borderWidth: 1,
+        borderColor: "#F3F4F6",
     },
     itemHeader: {
         flexDirection: "row",
@@ -515,90 +645,186 @@ const styles = StyleSheet.create({
     itemName: {
         fontSize: 15,
         fontWeight: "600",
-        color: "#1F2937",
+        color: "#374151",
     },
     itemCode: {
         fontSize: 12,
-        color: "#6B7280",
+        color: "#9CA3AF",
     },
-    itemSubtotal: {
+    removeBtn: {
+        padding: 4,
+    },
+    itemInputs: {
         flexDirection: "row",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        marginTop: 8,
-        paddingTop: 8,
-        borderTopWidth: 1,
-        borderTopColor: "#EEE",
+        gap: 12,
+        alignItems: "flex-end",
     },
-    subtotalLabel: {
+    itemInputGroup: {
+        flex: 1,
+    },
+    miniLabel: {
+        fontSize: 11,
+        color: "#9CA3AF",
+        marginBottom: 4,
+    },
+    miniInput: {
+        height: 34,
+        borderWidth: 1,
+        borderColor: "#F3F4F6",
+        borderRadius: 6,
+        paddingHorizontal: 8,
+        fontSize: 13,
+        backgroundColor: "#F9FAFB",
+    },
+    itemTotalAmount: {
+        height: 34,
+        lineHeight: 34,
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#3B82F6",
+    },
+
+    emptyItems: {
+        padding: 40,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    emptyItemsText: {
+        color: "#9CA3AF",
+        fontSize: 16,
+        fontWeight: "600",
+        marginTop: 12,
+    },
+    emptyItemsSubtext: {
+        color: "#D1D5DB",
+        fontSize: 13,
+        marginTop: 4,
+    },
+
+    attachmentSection: {
+        padding: 16,
+        backgroundColor: "#FFFFFF",
+        marginTop: 12,
+    },
+    uploadBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#D1D5DB",
+        borderStyle: "dashed",
+        borderRadius: 8,
+        padding: 8,
+        marginTop: 8,
+        backgroundColor: "#F9FAFB",
+    },
+    uploadBtn: {
+        backgroundColor: "#E5E7EB",
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 4,
+        marginRight: 10,
+    },
+    uploadBtnText: {
+        fontSize: 12,
+        color: "#374151",
+    },
+    uploadInfo: {
         fontSize: 13,
         color: "#6B7280",
-        marginRight: 8,
     },
-    subtotalValue: {
-        fontSize: 15,
-        fontWeight: "700",
-        color: "#10B981",
+    uploadNote: {
+        fontSize: 11,
+        fontStyle: "italic",
+        color: "#9CA3AF",
+        marginTop: 6,
     },
-    footer: {
-        padding: 16,
-        paddingBottom: 40,
+
+    footerSpace: {
+        height: 120,
+    },
+    bottomBar: {
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
         backgroundColor: "#FFFFFF",
-    },
-    totalRow: {
+        padding: 16,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+        borderTopWidth: 1,
+        borderTopColor: "#E5E7EB",
         flexDirection: "row",
-        justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 20,
-        paddingTop: 16,
-        borderTopWidth: 2,
-        borderTopColor: "#F3F4F6",
+        justifyContent: "space-between",
+    },
+    totalContainer: {
+        flex: 1,
     },
     totalLabel: {
-        fontSize: 16,
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#4B5563",
+    },
+    totalValue: {
+        fontSize: 18,
         fontWeight: "800",
         color: "#1F2937",
     },
-    totalValueText: {
-        fontSize: 20,
-        fontWeight: "800",
-        color: "#3B82F6",
-    },
     submitBtn: {
         backgroundColor: "#3B82F6",
-        padding: 16,
-        borderRadius: 12,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 10,
+        minWidth: 140,
         alignItems: "center",
     },
     submitBtnText: {
         color: "#FFFFFF",
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: "700",
     },
     disabledBtn: {
-        backgroundColor: "#93C5FD",
+        backgroundColor: "#D1D5DB",
     },
+
+    // CUSTOM MODAL STYLES
     modalOverlay: {
         flex: 1,
-        backgroundColor: "rgba(0,0,0,0.5)",
+        backgroundColor: "rgba(0,0,0,0.4)",
         justifyContent: "flex-end",
     },
     modalContent: {
         backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: "80%",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        minHeight: "50%",
+        maxHeight: "85%",
         padding: 20,
     },
     modalHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 20,
+        marginBottom: 16,
     },
     modalTitle: {
         fontSize: 18,
-        fontWeight: "700",
+        fontWeight: "800",
+        color: "#1F2937",
+    },
+    searchContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#F3F4F6",
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        marginBottom: 16,
+    },
+    searchInput: {
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        fontSize: 15,
+        color: "#111827",
     },
     pickerItem: {
         flexDirection: "row",
@@ -610,20 +836,17 @@ const styles = StyleSheet.create({
     },
     pickerItemText: {
         fontSize: 16,
-        color: "#1F2937",
+        color: "#374151",
     },
-    searchContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: "#F3F4F6",
-        borderRadius: 10,
-        paddingHorizontal: 10,
-        marginBottom: 10,
+    headerSubmitBtn: {
+        backgroundColor: "#EFF6FF",
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
     },
-    searchInput: {
-        flex: 1,
-        paddingVertical: 10,
-        paddingHorizontal: 8,
-        fontSize: 15,
+    headerSubmitText: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#3B82F6",
     },
 });
