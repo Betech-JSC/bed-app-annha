@@ -1614,7 +1614,7 @@ class CrmProjectsController extends Controller
             'old_status' => $oldStatus,
             'new_status' => 'in_progress',
             'user_id' => $user->id,
-            'notes' => 'Từ chối: ' . $validated['rejection_reason'],
+            'comment' => 'Từ chối: ' . $validated['rejection_reason'],
         ]);
 
         $this->notifyFromCrm($project, 'defect_rejected', "Lỗi \"{$defect->description}\" bị từ chối sửa: {$validated['rejection_reason']}");
@@ -3605,8 +3605,8 @@ class CrmProjectsController extends Controller
                 ]);
             }
 
-            // Handle file uploads - MANDATORY for material bills
-            $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", true);
+            // Handle file uploads - OPTIONAL for material bills
+            $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", false);
 
             // Create linked Cost record immediately (draft) so it shows in Chi phí tab
             $supplierName = '';

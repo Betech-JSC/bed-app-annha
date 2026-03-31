@@ -629,6 +629,76 @@ class CrmApprovalController extends Controller
     }
 
     // =========================================================================
+    // MATERIAL BILL APPROVAL
+    // =========================================================================
+
+    public function approveMaterialBill(Request $request, $id)
+    {
+        $materialBillClass = 'App\\Models\\MaterialBill';
+        if (!class_exists($materialBillClass)) {
+            return back()->with('error', 'Module Phiếu vật tư chưa được cài đặt');
+        }
+
+        $bill = $materialBillClass::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        try {
+            DB::beginTransaction();
+
+            if ($bill->status === 'pending_management') {
+                $result = $bill->approveByManagement($user);
+            } elseif ($bill->status === 'pending_accountant') {
+                $result = $bill->approveByAccountant($user);
+            } else {
+                DB::rollBack();
+                return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ duyệt');
+            }
+
+            if (!$result) {
+                DB::rollBack();
+                return back()->with('error', 'Không thể duyệt phiếu vật tư');
+            }
+
+            DB::commit();
+            Log::info('CRM: Đã duyệt phiếu vật tư', ['bill_id' => $id, 'user_id' => $user->id]);
+            return back()->with('success', "Đã duyệt phiếu vật tư \"{$bill->bill_number}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Error approving material bill', ['bill_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi duyệt phiếu vật tư');
+        }
+    }
+
+    public function rejectMaterialBill(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $materialBillClass = 'App\\Models\\MaterialBill';
+        if (!class_exists($materialBillClass)) {
+            return back()->with('error', 'Module Phiếu vật tư chưa được cài đặt');
+        }
+
+        $bill = $materialBillClass::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        if (!in_array($bill->status, ['pending_management', 'pending_accountant'])) {
+            return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ duyệt');
+        }
+
+        try {
+            DB::beginTransaction();
+            $bill->reject($request->reason, $user);
+            DB::commit();
+            
+            Log::info('CRM: Đã từ chối phiếu vật tư', ['bill_id' => $id, 'user_id' => $user->id]);
+            return back()->with('success', "Đã từ chối phiếu vật tư \"{$bill->bill_number}\"");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CRM: Error rejecting material bill', ['bill_id' => $id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Lỗi hệ thống khi từ chối phiếu vật tư');
+        }
+    }
+
+    // =========================================================================
     // OTHER APPROVALS
     // =========================================================================
 

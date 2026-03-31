@@ -4199,7 +4199,7 @@
         </div>
         <input type="file" multiple @change="e => billFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
         <div v-if="billFiles.length" class="text-[10px] text-green-600 mt-1">{{ billFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
-        <div v-else class="text-[10px] text-amber-500 mt-1 italic">Bắt buộc đính kèm ít nhất một ảnh/file</div>
+        <div v-else class="text-[10px] text-gray-400 mt-1 italic">Không bắt buộc đính kèm file</div>
       </div>
 
       <!-- Submit -->
@@ -6608,9 +6608,6 @@ const addBillItem = () => {
 
 const submitCreateBill = () => {
   if (!billForm.value.items.length || !billForm.value.bill_date) return
-  if (!billFiles.value.length) {
-    return Modal.warning({ title: 'Yêu cầu chứng từ', content: 'Vui lòng đính kèm ảnh chụp phiếu nhập hoặc hóa đơn từ nhà cung cấp.' })
-  }
   submittingBill.value = true
   router.post(`/projects/${props.project.id}/material-bills`, {
     bill_date: billForm.value.bill_date,
