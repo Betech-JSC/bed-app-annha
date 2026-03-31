@@ -266,15 +266,14 @@ const menuItems = computed(() => {
     {
       key: 'approvals',
       icon: () => h(AuditOutlined),
-      label: () => {
-        const count = page.props.pending_approvals_count || 0;
-        return count > 0 
-          ? h('div', { class: 'flex items-center justify-between w-full' }, [
-              h('span', 'Trung tâm duyệt'),
-              h('span', { class: 'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-bold text-white bg-red-500 rounded-[10px] shadow-[0_0_8px_rgba(239,68,68,0.4)] ml-2 transition-transform hover:scale-110' }, count > 99 ? '99+' : count)
-            ]) 
-          : 'Trung tâm duyệt';
-      },
+      label: (page.props.pending_approvals_count || 0) > 0
+        ? h('span', { class: 'flex items-center justify-between w-full' }, [
+            h('span', 'Trung tâm duyệt'),
+            h('span', {
+              class: 'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-bold text-white bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.4)] ml-2',
+            }, (page.props.pending_approvals_count > 99 ? '99+' : String(page.props.pending_approvals_count)))
+          ])
+        : 'Trung tâm duyệt',
       show: canAny('cost.approve.management', 'cost.approve.accountant', 'acceptance.approve.level_1', 'acceptance.approve.level_2', 'acceptance.approve.level_3', 'log.approve', 'material.approve', 'equipment.approve'),
     },
     {
