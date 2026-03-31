@@ -4435,7 +4435,7 @@
 import { ref, computed, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
-import { message, Modal } from 'ant-design-vue'
+import { message, Modal, notification } from 'ant-design-vue'
 import axios from 'axios'
 axios.defaults.withCredentials = true
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
@@ -4628,6 +4628,7 @@ const formErrors = reactive({})
 
 /**
  * Returns Ant Design form-item props for field validation display.
+ * Backend now returns Vietnamese messages, so we show them directly.
  * Usage: <a-form-item v-bind="fieldStatus('name')">
  */
 const fieldStatus = (field) => {
@@ -4641,21 +4642,31 @@ const clearFormErrors = () => {
   Object.keys(formErrors).forEach(k => delete formErrors[k])
 }
 
-/** Vietnamese error labels for common backend field names. */
-const fieldLabels = {
-  name: 'Tên', amount: 'Số tiền', cost_date: 'Ngày', description: 'Mô tả',
-  contract_value: 'Giá trị HĐ', signed_date: 'Ngày ký', content: 'Nội dung',
-  payment_number: 'Số phiếu', payment_date: 'Ngày TT', title: 'Tiêu đề',
-  user_id: 'Nhân viên', personnel_role_id: 'Vai trò', customer_id: 'Khách hàng',
-  log_date: 'Ngày', weather: 'Thời tiết', work_done: 'Nội dung công việc',
-  severity: 'Mức độ', priority: 'Ưu tiên', impact: 'Ảnh hưởng',
-  start_date: 'Ngày BĐ', end_date: 'Ngày KT', status: 'Trạng thái',
-  category: 'Loại', reason: 'Lý do', budget_date: 'Ngày NS',
-  invoice_date: 'Ngày HĐ', rejected_reason: 'Lý do từ chối',
-  
-  phone: 'SĐT', email: 'Email', company_name: 'Tên công ty',
-  contact_person: 'Người liên hệ', contract_amount: 'Giá trị HĐ NTP',
-  subtotal: 'Tổng phụ', tax_amount: 'Thuế', cost_group_id: 'Nhóm chi phí',
+/**
+ * Shows a single consolidated error notification for validation failures.
+ * Groups all field errors into one organized notification instead of
+ * spamming multiple toast messages.
+ */
+const showValidationErrors = (errors) => {
+  const entries = Object.entries(errors)
+  const errorList = entries.map(([, msg]) => {
+    const text = Array.isArray(msg) ? msg[0] : msg
+    return text
+  })
+
+  if (errorList.length === 1) {
+    // Single error → show as clean message
+    message.warning(errorList[0], 4)
+  } else {
+    // Multiple errors → show consolidated notification
+    notification.warning({
+      message: `Vui lòng kiểm tra ${errorList.length} trường`,
+      description: errorList.map(e => `• ${e}`).join('\n'),
+      duration: 6,
+      placement: 'topRight',
+      style: { whiteSpace: 'pre-line' },
+    })
+  }
 }
 
 /**
@@ -4670,15 +4681,14 @@ const loadingOptions = (key, extraOptions = {}) => ({
   onError: (errors) => {
     actionLoading[key] = false
     Object.assign(formErrors, errors)
-    const firstErr = Object.values(errors)[0]
-    message.error(Array.isArray(firstErr) ? firstErr[0] : (firstErr || 'Thao tác thất bại'))
+    showValidationErrors(errors)
     extraOptions.onError?.(errors)
   },
 })
 
 /**
  * Helper for modal form saves with loading state.
- * Shows validation errors on form fields + toast message.
+ * Shows validation errors inline on form fields + one consolidated notification.
  */
 const savingOptions = (extraOptions = {}) => ({
   ...extraOptions,
@@ -4688,16 +4698,7 @@ const savingOptions = (extraOptions = {}) => ({
   onError: (errors) => {
     savingForm.value = false
     Object.assign(formErrors, errors)
-    const errorMessages = Object.entries(errors).map(([field, msg]) => {
-      const label = fieldLabels[field] || field
-      const text = Array.isArray(msg) ? msg[0] : msg
-      return `${label}: ${text}`
-    })
-    if (errorMessages.length <= 3) {
-      errorMessages.forEach(e => message.error(e, 4))
-    } else {
-      message.error(`Có ${errorMessages.length} lỗi cần sửa. Vui lòng kiểm tra các trường bắt buộc.`, 5)
-    }
+    showValidationErrors(errors)
     extraOptions.onError?.(errors)
   },
 })
