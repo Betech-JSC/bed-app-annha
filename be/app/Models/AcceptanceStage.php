@@ -9,8 +9,11 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 use App\Models\AcceptanceTemplate;
 
+use App\Traits\NotifiesUsers;
+
 class AcceptanceStage extends Model
 {
+    use NotifiesUsers;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -455,7 +458,7 @@ class AcceptanceStage extends Model
                 'action' => 'created',
                 'new_status' => 'open',
                 'user_id' => $defect->reported_by,
-                'notes' => 'Tự động tạo khi nghiệm thu không đạt',
+                'comment' => 'Tự động tạo khi nghiệm thu không đạt',
             ]);
 
             \Illuminate\Support\Facades\Log::info('Auto-created defect for not acceptable stage', [
@@ -523,5 +526,65 @@ class AcceptanceStage extends Model
                 }
             }
         });
+    }
+
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return $this->name ?? "Nghiệm thu #{$this->id}";
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Hạng mục cần giám sát duyệt',
+                'body'     => 'Hạng mục "{name}" cần giám sát duyệt.',
+                'target'   => ['supervisor', 'pm'],
+                'tab'      => 'acceptance',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'supervisor_approved' => [
+                'title'    => 'Giám sát đã duyệt nghiệm thu',
+                'body'     => 'Hạng mục "{name}" đã được giám sát duyệt, chờ PM duyệt.',
+                'target'   => ['pm'],
+                'tab'      => 'acceptance',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'pm_approved' => [
+                'title'    => 'PM đã duyệt nghiệm thu',
+                'body'     => 'Hạng mục "{name}" đã được PM duyệt, chờ KH duyệt.',
+                'target'   => ['customer', 'pm'],
+                'tab'      => 'acceptance',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'customer_approved' => [
+                'title'    => 'KH đã nghiệm thu',
+                'body'     => 'Hạng mục "{name}" đã được KH nghiệm thu đạt.',
+                'target'   => ['pm', 'supervisor', 'team'],
+                'tab'      => 'acceptance',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Nghiệm thu bị từ chối',
+                'body'     => 'Hạng mục "{name}" bị từ chối: {reason}',
+                'target'   => ['pm', 'supervisor', 'team'],
+                'tab'      => 'acceptance',
+                'priority' => 'urgent',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }

@@ -519,7 +519,7 @@ class CrmProjectsController extends Controller
             'management_approved_at' => now(),
         ])->save();
 
-        $this->notifyFromCrm($project, 'cost_management_approved', "Phiếu chi \"{$cost->name}\" đã được BĐH duyệt, chờ KT xác nhận.");
+        $cost->notifyEvent('approved_management', $admin);
 
         return back()->with('success', 'Đã duyệt phiếu chi (Ban điều hành).');
     }
@@ -571,7 +571,7 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Lỗi xác nhận: ' . $e->getMessage());
         }
 
-        $this->notifyFromCrm($project, 'cost_accountant_approved', "Phiếu chi \"{$cost->name}\" đã được KT xác nhận.");
+        $cost->notifyEvent('approved_accountant', $admin);
 
         return back()->with('success', 'Đã xác nhận phiếu chi (Kế toán).');
     }
@@ -592,7 +592,7 @@ class CrmProjectsController extends Controller
         // Pass null for user (Admin FK constraint) — model handles gracefully
         $cost->reject($validated['rejected_reason'], null);
 
-        $this->notifyFromCrm($project, 'cost_rejected', "Phiếu chi \"{$cost->name}\" bị từ chối: {$validated['rejected_reason']}");
+        $cost->notifyEvent('rejected', $admin, ['reason' => $validated['rejected_reason']]);
 
         return back()->with('success', 'Đã từ chối phiếu chi.');
     }
@@ -866,7 +866,7 @@ class CrmProjectsController extends Controller
 
             DB::commit();
 
-            $this->notifyFromCrm($project, 'payment_proof_uploaded', "Hình xác nhận thanh toán đợt #{$payment->payment_number} đã được upload, chờ KH duyệt.");
+            $payment->notifyEvent('proof_uploaded', $user);
 
             return back()->with('success', "Đã upload {$count} hình xác nhận. Đang chờ khách hàng duyệt.");
         } catch (\Exception $e) {
@@ -892,7 +892,7 @@ class CrmProjectsController extends Controller
         // Use model method (null for Admin FK constraint)
         $payment->approveByCustomer(null);
 
-        $this->notifyFromCrm($project, 'payment_customer_approved', "Thanh toán đợt #{$payment->payment_number} đã được KH duyệt.");
+        $payment->notifyEvent('customer_approved', $user);
 
         return back()->with('success', 'Đã duyệt thanh toán (Khách hàng).');
     }
@@ -920,7 +920,7 @@ class CrmProjectsController extends Controller
             'notes' => ($payment->notes ? $payment->notes . "\n\n" : '') . "KH từ chối — " . $validated['rejection_reason'],
         ]);
 
-        $this->notifyFromCrm($project, 'payment_customer_rejected', "Thanh toán đợt #{$payment->payment_number} bị KH từ chối: {$validated['rejection_reason']}");
+        $payment->notifyEvent('customer_rejected', $user, ['reason' => $validated['rejection_reason']]);
 
         return back()->with('success', 'Đã từ chối thanh toán (Khách hàng).');
     }
@@ -1513,7 +1513,7 @@ class CrmProjectsController extends Controller
             'user_id' => $user->id,
         ]);
 
-        $this->notifyFromCrm($project, 'defect_in_progress', "Lỗi \"{$defect->description}\" đã được nhận xử lý.");
+        $defect->notifyEvent('in_progress', $user);
 
         return back()->with('success', 'Đã nhận xử lý lỗi.');
     }
@@ -1544,7 +1544,7 @@ class CrmProjectsController extends Controller
             'user_id' => $user->id,
         ]);
 
-        $this->notifyFromCrm($project, 'defect_fixed', "Lỗi \"{$defect->description}\" đã được sửa, chờ xác nhận.");
+        $defect->notifyEvent('fixed', $user);
 
         return back()->with('success', 'Đã đánh dấu lỗi đã sửa — chờ xác nhận.');
     }
@@ -1582,7 +1582,7 @@ class CrmProjectsController extends Controller
             'user_id' => $user->id,
         ]);
 
-        $this->notifyFromCrm($project, 'defect_verified', "Lỗi \"{$defect->description}\" đã được xác nhận sửa xong.");
+        $defect->notifyEvent('verified', $user);
 
         return back()->with('success', 'Đã xác nhận lỗi đã sửa xong.');
     }
@@ -1617,7 +1617,7 @@ class CrmProjectsController extends Controller
             'comment' => 'Từ chối: ' . $validated['rejection_reason'],
         ]);
 
-        $this->notifyFromCrm($project, 'defect_rejected', "Lỗi \"{$defect->description}\" bị từ chối sửa: {$validated['rejection_reason']}");
+        $defect->notifyEvent('rejected', $user, ['reason' => $validated['rejection_reason']]);
 
         return back()->with('success', 'Đã từ chối sửa lỗi — yêu cầu sửa lại.');
     }
@@ -3267,7 +3267,7 @@ class CrmProjectsController extends Controller
         $item->update($updateData);
 
         // Send notification to supervisor
-        $this->notifyFromCrm($project, 'acceptance_submit', "Hạng mục \"{$item->name}\" cần giám sát duyệt.");
+        $stage->notifyEvent('submitted', auth('admin')->user());
 
         return back()->with('success', 'Đã gửi hạng mục để duyệt.');
     }
@@ -3309,7 +3309,7 @@ class CrmProjectsController extends Controller
             'supervisor_approved_at' => now(),
         ]);
 
-        $this->notifyFromCrm($project, 'acceptance_supervisor_approved', "Hạng mục \"{$item->name}\" đã được giám sát duyệt, chờ PM duyệt.");
+        $stage->notifyEvent('supervisor_approved', $user);
 
         return back()->with('success', 'Đã duyệt (Giám sát).');
     }
@@ -3364,7 +3364,7 @@ class CrmProjectsController extends Controller
             'project_manager_approved_at' => now(),
         ]);
 
-        $this->notifyFromCrm($project, 'acceptance_pm_approved', "Hạng mục \"{$item->name}\" đã được PM duyệt, chờ KH duyệt.");
+        $stage->notifyEvent('pm_approved', $user);
 
         return back()->with('success', 'Đã duyệt (PM).');
     }
@@ -3428,7 +3428,7 @@ class CrmProjectsController extends Controller
         // BUSINESS RULE: Check stage completion (matching APP)
         $stage->checkCompletion();
 
-        $this->notifyFromCrm($project, 'acceptance_customer_approved', "Hạng mục \"{$item->name}\" đã được KH nghiệm thu.");
+        $stage->notifyEvent('customer_approved', $user);
 
         return back()->with('success', 'Đã nghiệm thu (Khách hàng).');
     }
@@ -3462,7 +3462,7 @@ class CrmProjectsController extends Controller
         // BUSINESS RULE: Auto-create defect on reject (matching APP)
         $item->autoCreateDefectOnReject(null, $validated['rejection_reason']);
 
-        $this->notifyFromCrm($project, 'acceptance_rejected', "Hạng mục \"{$item->name}\" bị từ chối: {$validated['rejection_reason']}");
+        $stage->notifyEvent('rejected', $user, ['reason' => $validated['rejection_reason']]);
 
         return back()->with('success', 'Đã từ chối hạng mục nghiệm thu. Lỗi ghi nhận đã được tự động tạo.');
     }
@@ -3729,7 +3729,7 @@ class CrmProjectsController extends Controller
         // Update linked Cost status
         $this->updateLinkedMaterialCost($project->id, $bill->bill_number, 'pending_management_approval');
 
-        $this->notifyFromCrm($project, 'material_bill_submit', "Phiếu vật tư {$bill->bill_number} cần BĐH duyệt.");
+        $bill->notifyEvent('submitted', auth('admin')->user());
 
         return back()->with('success', 'Đã gửi phiếu vật tư để duyệt.');
     }
@@ -3756,7 +3756,7 @@ class CrmProjectsController extends Controller
             'management_approved_at' => now(),
         ]);
 
-        $this->notifyFromCrm($project, 'material_bill_management_approved', "Phiếu vật tư {$bill->bill_number} đã được BĐH duyệt, chờ KT xác nhận.");
+        $bill->notifyEvent('approved_management', $user);
 
         return back()->with('success', 'Đã duyệt phiếu vật tư (BĐH).');
     }
@@ -3834,7 +3834,7 @@ class CrmProjectsController extends Controller
 
             DB::commit();
 
-            $this->notifyFromCrm($project, 'material_bill_approved', "Phiếu vật tư {$bill->bill_number} đã được xác nhận. Chi phí đã được ghi nhận.");
+            $bill->notifyEvent('approved_accountant', $user);
 
             return back()->with('success', 'Đã xác nhận phiếu vật tư. Dữ liệu đã đẩy qua Chi phí dự án.');
         } catch (\Exception $e) {
@@ -3974,7 +3974,7 @@ class CrmProjectsController extends Controller
         $validated = $request->validate(['rejected_reason' => 'required|string|max:500']);
         $bill->reject($validated['rejected_reason'], null);
 
-        $this->notifyFromCrm($project, 'material_bill_rejected', "Phiếu vật tư {$bill->bill_number} bị từ chối: {$validated['rejected_reason']}");
+        $bill->notifyEvent('rejected', $user, ['reason' => $validated['rejected_reason']]);
 
         return back()->with('success', 'Đã từ chối phiếu vật tư.');
     }

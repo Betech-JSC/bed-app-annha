@@ -7,8 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
+use App\Traits\NotifiesUsers;
+
 class ProjectPayment extends Model
 {
+    use NotifiesUsers;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -224,5 +227,65 @@ class ProjectPayment extends Model
                 $payment->uuid = Str::uuid();
             }
         });
+    }
+
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return "Đợt #{$this->payment_number}";
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'proof_uploaded' => [
+                'title'    => 'Hình xác nhận thanh toán',
+                'body'     => 'Hình xác nhận thanh toán {name} đã được upload, chờ KH duyệt.',
+                'target'   => ['customer', 'pm'],
+                'tab'      => 'payments',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'customer_approved' => [
+                'title'    => 'KH đã duyệt thanh toán',
+                'body'     => 'Thanh toán {name} đã được KH duyệt.',
+                'target'   => ['pm', 'accountant'],
+                'tab'      => 'payments',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'customer_rejected' => [
+                'title'    => 'KH từ chối thanh toán',
+                'body'     => 'Thanh toán {name} bị KH từ chối: {reason}',
+                'target'   => ['pm', 'accountant'],
+                'tab'      => 'payments',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'confirmed' => [
+                'title'    => 'Kế toán xác nhận thanh toán',
+                'body'     => 'Thanh toán {name} đã được kế toán xác nhận.',
+                'target'   => ['pm', 'customer'],
+                'tab'      => 'payments',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'customer_paid' => [
+                'title'    => 'KH đã thanh toán',
+                'body'     => 'KH đã thanh toán {name}, chờ KT xác nhận.',
+                'target'   => ['pm', 'accountant'],
+                'tab'      => 'payments',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }

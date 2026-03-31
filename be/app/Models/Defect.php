@@ -8,8 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
+use App\Traits\NotifiesUsers;
+
 class Defect extends Model
 {
+    use NotifiesUsers;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -313,5 +316,57 @@ class Defect extends Model
                 $defect->uuid = Str::uuid();
             }
         });
+    }
+
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return Str::limit($this->description, 50) ?? "Lỗi #{$this->id}";
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'in_progress' => [
+                'title'    => 'Lỗi đã được nhận xử lý',
+                'body'     => 'Lỗi "{name}" đã được nhận xử lý.',
+                'target'   => ['reporter', 'pm', 'supervisor'],
+                'tab'      => 'monitoring',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'fixed' => [
+                'title'    => 'Lỗi đã được sửa',
+                'body'     => 'Lỗi "{name}" đã được sửa, chờ xác nhận.',
+                'target'   => ['reporter', 'pm', 'supervisor'],
+                'tab'      => 'monitoring',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'verified' => [
+                'title'    => 'Lỗi đã xác nhận sửa xong',
+                'body'     => 'Lỗi "{name}" đã được xác nhận sửa xong.',
+                'target'   => ['fixer', 'pm'],
+                'tab'      => 'monitoring',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Lỗi bị từ chối sửa',
+                'body'     => 'Lỗi "{name}" bị từ chối: {reason}',
+                'target'   => ['fixer', 'pm'],
+                'tab'      => 'monitoring',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }

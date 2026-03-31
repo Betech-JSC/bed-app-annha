@@ -8,8 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
+use App\Traits\NotifiesUsers;
+
 class Cost extends Model
 {
+    use NotifiesUsers;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -425,5 +428,57 @@ class Cost extends Model
                 $cost->uuid = Str::uuid();
             }
         });
+    }
+
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return $this->name ?? "Chi phí #{$this->id}";
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Phiếu chi cần duyệt',
+                'body'     => 'Phiếu chi "{name}" cần BĐH duyệt.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'costs',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved_management' => [
+                'title'    => 'BĐH đã duyệt phiếu chi',
+                'body'     => 'Phiếu chi "{name}" đã được BĐH duyệt, chờ KT xác nhận.',
+                'target'   => ['creator', 'accountant', 'pm'],
+                'tab'      => 'costs',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved_accountant' => [
+                'title'    => 'KT đã xác nhận phiếu chi',
+                'body'     => 'Phiếu chi "{name}" đã được KT xác nhận thanh toán.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'costs',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Phiếu chi bị từ chối',
+                'body'     => 'Phiếu chi "{name}" bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'costs',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }

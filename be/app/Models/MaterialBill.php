@@ -8,9 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
+use App\Traits\NotifiesUsers;
+
 class MaterialBill extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, NotifiesUsers;
 
     protected $fillable = [
         'uuid',
@@ -119,5 +121,57 @@ class MaterialBill extends Model
                 $model->uuid = (string) Str::uuid();
             }
         });
+    }
+
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return $this->bill_number ?? "Phiếu vật tư #{$this->id}";
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Phiếu vật tư cần duyệt',
+                'body'     => 'Phiếu vật tư {name} cần BĐH duyệt.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'materials',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved_management' => [
+                'title'    => 'BĐH đã duyệt phiếu vật tư',
+                'body'     => 'Phiếu vật tư {name} đã được BĐH duyệt, chờ KT xác nhận.',
+                'target'   => ['creator', 'accountant', 'pm'],
+                'tab'      => 'materials',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved_accountant' => [
+                'title'    => 'KT đã xác nhận phiếu vật tư',
+                'body'     => 'Phiếu vật tư {name} đã được xác nhận. Chi phí đã được ghi nhận.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'materials',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Phiếu vật tư bị từ chối',
+                'body'     => 'Phiếu vật tư {name} bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'materials',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }
