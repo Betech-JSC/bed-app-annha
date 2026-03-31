@@ -37,15 +37,12 @@ class CrmDashboardController extends Controller
             $q->where('created_at', '>=', $startOfMonth);
         })->sum('contract_value') ?: 0;
 
-        // Costs
-        $totalCosts = Cost::where('status', '!=', 'rejected')->sum('amount') ?: 0;
-        $monthCosts = Cost::where('status', '!=', 'rejected')
+        // Costs (Only 'approved' counts as actual expenditure)
+        $totalCosts = Cost::where('status', 'approved')->sum('amount') ?: 0;
+        $monthCosts = Cost::where('status', 'approved')
             ->where('created_at', '>=', $startOfMonth)
             ->sum('amount') ?: 0;
-        $pendingCosts = Cost::whereIn('status', ['pending_management', 'pending_accountant', 'pending'])
-            ->sum('amount') ?: 0;
-        $pendingCostsCount = Cost::whereIn('status', ['pending_management', 'pending_accountant', 'pending'])
-            ->count();
+
 
         // Profit
         $profit = $totalRevenue - $totalCosts;
@@ -77,7 +74,7 @@ class CrmDashboardController extends Controller
             })->sum('contract_value') ?: 0;
 
             $cost = Cost::whereBetween('created_at', [$monthStart, $monthEnd])
-                ->where('status', '!=', 'rejected')
+                ->where('status', 'approved')
                 ->sum('amount') ?: 0;
 
             $revenueByMonth[] = $rev;
@@ -113,7 +110,7 @@ class CrmDashboardController extends Controller
         $costByGroup = [];
         if (class_exists(\App\Models\CostGroup::class)) {
             $costByGroup = Cost::select('cost_group_id', DB::raw('SUM(amount) as total'))
-                ->where('status', '!=', 'rejected')
+                ->where('status', 'approved')
                 ->whereNotNull('cost_group_id')
                 ->groupBy('cost_group_id')
                 ->orderByDesc('total')
@@ -129,7 +126,7 @@ class CrmDashboardController extends Controller
         if (empty($costByGroup) || (is_object($costByGroup) && $costByGroup->isEmpty())) {
             // Fallback to category field
             $costByGroup = Cost::selectRaw("COALESCE(category, 'Khác') as label, SUM(amount) as value")
-                ->where('status', '!=', 'rejected')
+                ->where('status', 'approved')
                 ->groupBy('category')
                 ->orderByDesc('value')
                 ->limit(8)
@@ -193,7 +190,7 @@ class CrmDashboardController extends Controller
         // CHART 6: Top 5 Projects by Cost (Bar)
         // ============================================================
         $topProjectsByCost = Project::select('projects.id', 'projects.name', 'projects.code')
-            ->withSum(['costs' => fn($q) => $q->where('status', '!=', 'rejected')], 'amount')
+            ->withSum(['costs' => fn($q) => $q->where('status', 'approved')], 'amount')
             ->having('costs_sum_amount', '>', 0)
             ->orderByDesc('costs_sum_amount')
             ->limit(5)
@@ -215,7 +212,7 @@ class CrmDashboardController extends Controller
         $budgetUtilization = Project::select('projects.id', 'projects.name')
             ->whereHas('contract')
             ->with('contract:id,project_id,contract_value')
-            ->withSum(['costs' => fn($q) => $q->where('status', '!=', 'rejected')], 'amount')
+            ->withSum(['costs' => fn($q) => $q->where('status', 'approved')], 'amount')
             ->limit(6)
             ->get()
             ->filter(fn($p) => $p->contract && $p->contract->contract_value > 0)
@@ -265,8 +262,7 @@ class CrmDashboardController extends Controller
                 'monthRevenue' => $monthRevenue,
                 'totalCosts' => $totalCosts,
                 'monthCosts' => $monthCosts,
-                'pendingCosts' => $pendingCosts,
-                'pendingCostsCount' => $pendingCostsCount,
+
                 'profit' => $profit,
                 'profitMargin' => $profitMargin,
                 'unreadNotifications' => $unreadNotifications,

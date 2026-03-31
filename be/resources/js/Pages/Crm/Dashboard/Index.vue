@@ -42,12 +42,7 @@
           Biên LN: {{ stats.profitMargin }}%
         </div>
       </div>
-      <div class="kpi-sep"></div>
-      <div class="kpi-item">
-        <div class="kpi-label">Chờ duyệt</div>
-        <div class="kpi-value kpi-value--red">{{ stats.pendingCostsCount }}</div>
-        <div class="kpi-sub kpi-sub--red">{{ fmtCurrency(stats.pendingCosts) }}</div>
-      </div>
+
     </div>
   </div>
 
@@ -163,15 +158,7 @@
           </div>
         </div>
 
-        <!-- Pending costs alert -->
-        <div v-if="stats.pendingCosts > 0" class="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200">
-          <div class="flex items-center gap-2">
-            <ExclamationCircleOutlined class="text-amber-500" />
-            <span class="text-sm text-amber-700 font-medium">
-              {{ stats.pendingCostsCount }} chi phí ({{ fmtCurrency(stats.pendingCosts) }}) chờ duyệt
-            </span>
-          </div>
-        </div>
+
 
         <!-- Notifications alert -->
         <div v-if="stats.unreadNotifications > 0" class="mt-2 p-3 rounded-xl bg-blue-50 border border-blue-200 cursor-pointer" @click="router.visit('/notifications')">

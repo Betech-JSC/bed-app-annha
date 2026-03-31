@@ -17,8 +17,8 @@ class SetLocale
      */
     public function handle(Request $request, Closure $next)
     {
-        // Ưu tiên lấy từ APP_LOCALE trong env, mặc định là 'vi'
-        $locale = config('app.locale', 'vi');
+        // Ưu tiên lấy từ env, nếu không thì mặc định là 'vi'
+        $locale = env('APP_LOCALE', 'vi');
         
         App::setLocale($locale);
 
