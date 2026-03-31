@@ -53,42 +53,93 @@
     </div>
   </div>
 
-  <!-- ─── Role Tabs ─── -->
-  <div class="ac-role-tabs">
-    <button
-      v-for="tab in roleTabs"
-      :key="tab.key"
-      class="ac-role-tab"
-      :class="{ 'ac-role-tab--active': activeRole === tab.key }"
-      @click="activeRole = tab.key"
-    >
-      <component :is="tab.icon" class="ac-role-tab__icon" />
-      <span>{{ tab.label }}</span>
-      <a-badge
-        v-if="tab.count > 0"
-        :count="tab.count"
-        :number-style="{ background: activeRole === tab.key ? 'white' : '#F59E0B', color: activeRole === tab.key ? '#1F2937' : 'white', fontSize: '10px', boxShadow: 'none', minWidth: '20px', height: '20px', lineHeight: '20px' }"
-      />
-    </button>
+  <!-- ─── Unified Control Bar (UX Optimized) ─── -->
+  <div class="ac-controls shadow-sm">
+    <div class="ac-controls__main">
+      <!-- Role Selector -->
+      <a-radio-group v-model:value="activeRole" button-style="solid" size="large" class="role-selector">
+        <a-radio-button v-for="tab in roleTabs" :key="tab.key" :value="tab.key">
+          <div class="flex items-center gap-2">
+            <component :is="tab.icon" />
+            <span>{{ tab.label }}</span>
+            <span v-if="tab.count > 0" class="tab-badge">{{ tab.count }}</span>
+          </div>
+        </a-radio-button>
+      </a-radio-group>
+      
+      <div class="flex-grow"></div>
+
+      <!-- Sync Button -->
+      <a-button shape="circle" @click="refreshPage" class="flex items-center justify-center">
+        <template #icon><ReloadOutlined /></template>
+      </a-button>
+    </div>
+
+    <div class="ac-controls__filters">
+      <!-- Category Filter -->
+      <div class="filter-group">
+        <span class="filter-label"><AppstoreOutlined /> Nhóm phiếu:</span>
+        <a-segmented 
+          v-model:value="activeCategory" 
+          :options="[
+            { label: 'Tất cả', value: 'all' },
+            { label: 'Tài chính', value: 'finance' },
+            { label: 'Nghiệm thu', value: 'acceptance' },
+            { label: 'Vận hành', value: 'technical' }
+          ]"
+        />
+      </div>
+
+      <!-- Status Filter -->
+      <div class="filter-group">
+        <span class="filter-label"><FilterOutlined /> Trạng thái:</span>
+        <a-segmented 
+          v-model:value="activeStatus" 
+          :options="[
+            { label: 'Đang chờ', value: 'pending' },
+            { label: 'Nháp', value: 'draft' },
+            { label: 'Từ chối', value: 'rejected' },
+            { label: 'Đã duyệt', value: 'approved' },
+            { label: 'Tất cả', value: 'all' }
+          ]"
+        />
+      </div>
+    </div>
   </div>
 
-  <!-- ─── Items Table ─── -->
-  <div class="ac-table-card">
+  <!-- ─── Items Table (Enhanced) ─── -->
+  <div class="ac-table-card mt-6">
+    <div class="p-4 border-b flex justify-between items-center bg-gray-50/50">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest">
+        DANH SÁCH YÊU CẦU ({{ activeItems.length }})
+      </div>
+      <div class="flex gap-2">
+        <a-tag v-if="activeStatus === 'pending'" color="orange" class="rounded-lg">Đang chờ xử lý</a-tag>
+        <a-tag v-else-if="activeStatus === 'rejected'" color="error" class="rounded-lg">Đã từ chối</a-tag>
+      </div>
+    </div>
     <a-table
       :columns="tableColumns"
       :data-source="activeItems"
-      :pagination="{ pageSize: 15, showTotal: (t) => `${t} yêu cầu`, showSizeChanger: true, pageSizeOptions: ['10', '15', '30', '50'] }"
+      :pagination="{ pageSize: 15, showTotal: (t) => `${t} yêu cầu`, showSizeChanger: true }"
       row-key="id"
       size="middle"
       class="ac-table"
-      :locale="{ emptyText: 'Không có yêu cầu nào cần duyệt 🎉' }"
+      :scroll="{ x: 1000 }"
     >
       <template #bodyCell="{ column, record }">
+        <!-- Status Tag (New in Table) -->
+        <template v-if="column.key === 'status'">
+          <a-tag :color="historyStatusColor(record.status)" class="rounded-md text-[10px] uppercase font-bold">
+            {{ statusViMap[record.status] || record.status }}
+          </a-tag>
+        </template>
         <!-- Loại -->
         <template v-if="column.key === 'type'">
-          <a-tag :color="typeColors[record.type] || 'default'" class="rounded-lg" style="font-size: 11px;">
-            {{ record.type_label }}
-          </a-tag>
+          <div class="flex items-center gap-2">
+            <div class="w-1.5 h-6 rounded-full" :style="{ backgroundColor: typeColors[record.type] || '#ccc' }"></div>
+            <span class="text-xs font-medium text-gray-600">{{ record.type_label }}</span>
+          </div>
         </template>
         <!-- Nội dung -->
         <template v-if="column.key === 'title'">
@@ -139,52 +190,75 @@
     </a-table>
   </div>
 
-  <!-- ─── Lịch sử xử lý ─── -->
-  <div class="ac-table-card" style="margin-top: 20px;">
-    <div class="ac-table-card__header" @click="showHistory = !showHistory" style="cursor: pointer;">
-      <div class="flex items-center gap-2">
-        <HistoryOutlined />
-        <span class="font-semibold text-gray-700 text-sm">Lịch sử xử lý gần đây</span>
-        <a-tag color="default" class="rounded-lg">{{ recentItems.length }}</a-tag>
+  <!-- ─── Recent Activity Feed (UX Uplifted) ─── -->
+  <div class="ac-history-card mt-6">
+    <div class="ac-history-card__header" @click="showHistory = !showHistory">
+      <div class="flex items-center gap-3">
+        <div class="history-pulse" v-if="recentItems.length > 0"></div>
+        <HistoryOutlined class="text-blue-500" />
+        <span class="font-bold text-gray-800 text-sm uppercase tracking-wide">Hoạt động xử lý gần đây</span>
+        <span class="history-count">{{ recentItems.length }}</span>
       </div>
-      <UpOutlined v-if="showHistory" class="text-gray-400" style="font-size: 12px;" />
-      <DownOutlined v-else class="text-gray-400" style="font-size: 12px;" />
+      <div class="flex items-center gap-2 text-xs text-gray-400 font-medium">
+        {{ showHistory ? 'Thu gọn' : 'Xem chi tiết' }}
+        <UpOutlined v-if="showHistory" style="font-size: 10px;" />
+        <DownOutlined v-else style="font-size: 10px;" />
+      </div>
     </div>
-    <div v-if="showHistory">
-      <a-table
-        :columns="historyColumns"
-        :data-source="recentItems"
-        :pagination="{ pageSize: 10, showTotal: (total) => `${total} mục` }"
-        row-key="id"
-        size="small"
-        class="ac-table"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'title'">
-            <div>
-              <div class="font-semibold text-gray-800 text-sm">{{ record.title }}</div>
-              <div class="text-xs text-gray-400">{{ record.subtitle }}</div>
+
+    <transition name="slide-fade">
+      <div v-if="showHistory" class="ac-history-body">
+        <div v-if="recentItems.length === 0" class="p-12 text-center text-gray-400">
+          <HistoryOutlined style="font-size: 32px; opacity: 0.2; margin-bottom: 12px;" />
+          <p>Chưa có hoạt động xử lý nào gần đây</p>
+        </div>
+        
+        <div v-else class="ac-timeline">
+          <div v-for="item in recentItems" :key="item.id" class="ac-timeline-item">
+            <!-- Timeline Line/Dot -->
+            <div class="ac-timeline-left">
+              <div class="ac-timeline-dot" :class="item.status">
+                <CheckOutlined v-if="['approved', 'confirmed', 'paid', 'verified'].includes(item.status)" />
+                <CloseOutlined v-else-if="['rejected', 'cancelled'].includes(item.status)" />
+                <InfoCircleOutlined v-else />
+              </div>
+              <div class="ac-timeline-line"></div>
             </div>
-          </template>
-          <template v-if="column.key === 'type'">
-            <a-tag :color="typeColors[record.type] || 'default'" class="rounded-lg text-xs">
-              {{ record.type_label }}
-            </a-tag>
-          </template>
-          <template v-if="column.key === 'amount'">
-            <span class="font-semibold text-gray-700 text-sm">{{ formatCurrency(record.amount) }}</span>
-          </template>
-          <template v-if="column.key === 'status'">
-            <a-tag :color="historyStatusColor(record.status)" class="rounded-lg">
-              {{ record.status_label || statusViMap[record.status] || record.status }}
-            </a-tag>
-          </template>
-          <template v-if="column.key === 'created_at'">
-            <span class="text-xs text-gray-500">{{ record.created_at }}</span>
-          </template>
-        </template>
-      </a-table>
-    </div>
+
+            <!-- Timeline Content -->
+            <div class="ac-timeline-content group" @click="openDetailDrawer(item)">
+              <div class="flex justify-between items-start mb-1">
+                <div class="flex flex-col">
+                  <div class="flex items-center gap-2">
+                    <span class="action-badge" :class="item.status">
+                      {{ statusViMap[item.status] || item.status }}
+                    </span>
+                    <span class="item-title-link">{{ item.title }}</span>
+                  </div>
+                  <span class="item-subtitle">{{ item.subtitle }} • {{ item.type_label }}</span>
+                </div>
+                <div class="text-right">
+                  <div v-if="item.amount" class="text-sm font-bold text-gray-700">{{ formatCurrency(item.amount) }}</div>
+                  <div class="text-[10px] text-gray-400">{{ item.created_at }}</div>
+                </div>
+              </div>
+
+              <!-- Rejection Reason Highlight (Direct Visibility) -->
+              <div v-if="item.rejected_reason" class="item-reason-alert">
+                <div class="reason-indicator"></div>
+                <span class="font-bold mr-1">Lý do:</span> {{ item.rejected_reason }}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="p-4 bg-gray-50/50 border-t text-center">
+          <a-button type="link" size="small" class="text-gray-400 font-medium hover:text-blue-500">
+            Xem toàn bộ nhật ký hệ thống <ArrowRightOutlined />
+          </a-button>
+        </div>
+      </div>
+    </transition>
   </div>
 
   <!-- ─── Detail Drawer ─── -->
@@ -351,6 +425,8 @@ import {
   FileImageOutlined,
   PaperClipOutlined,
   DownloadOutlined,
+  InfoCircleOutlined,
+  ArrowRightOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -382,6 +458,8 @@ const props = defineProps({
 })
 
 const activeRole = ref('management')
+const activeCategory = ref('all')
+const activeStatus = ref('all')
 const rejectModalVisible = ref(false)
 const rejectTarget = ref(null)
 const rejectReason = ref('')
@@ -408,26 +486,40 @@ const typeColors = {
 }
 
 const statusViMap = {
-  draft: 'Nháp', pending: 'Chờ duyệt', pending_approval: 'Chờ duyệt',
-  submitted: 'Đã gửi', under_review: 'Đang xem xét',
-  pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận',
-  pending_accountant_confirmation: 'Chờ KT xác nhận', pending_customer_approval: 'Chờ KH duyệt',
-  customer_pending_approval: 'Chờ KH duyệt', pending_management: 'Chờ BĐH duyệt',
-  pending_accountant: 'Chờ KT xác nhận', approved_management: 'BĐH đã duyệt',
-  approved_accountant: 'KT đã duyệt', approved: 'Đã duyệt',
-  customer_approved: 'KH đã duyệt', rejected: 'Từ chối',
-  paid: 'Đã thanh toán', customer_paid: 'KH đã thanh toán',
-  confirmed: 'Đã xác nhận', implemented: 'Đã triển khai', cancelled: 'Đã hủy',
-  active: 'Đang hiệu lực', expired: 'Hết hạn', terminated: 'Đã thanh lý',
-  project_manager_approved: 'QLDA đã duyệt', supervisor_approved: 'GS đã duyệt', owner_approved: 'CĐT đã duyệt',
-  fixed: 'Đã sửa — Chờ xác nhận', verified: 'Đã xác nhận',
+  draft: 'Nháp', 
+  pending: 'Chờ duyệt', 
+  pending_approval: 'Chờ duyệt',
+  submitted: 'Đã gửi', 
+  under_review: 'Đang xem xét',
+  pending_management_approval: 'Chờ BĐH duyệt', 
+  pending_accountant_approval: 'Chờ KT xác nhận',
+  pending_accountant_confirmation: 'Chờ KT xác nhận', 
+  pending_customer_approval: 'Chờ KH duyệt',
+  customer_pending_approval: 'Chờ KH duyệt', 
+  pending_management: 'Chờ BĐH duyệt',
+  pending_accountant: 'Chờ KT xác nhận', 
+  approved_management: 'BĐH đã duyệt',
+  approved_accountant: 'KT đã duyệt', 
+  approved: 'Đã duyệt',
+  customer_approved: 'KH đã duyệt', 
+  rejected: 'Từ chối',
+  paid: 'Đã thanh toán', 
+  customer_paid: 'KH đã thanh toán',
+  confirmed: 'Đã xác nhận', 
+  implemented: 'Đã triển khai', 
+  cancelled: 'Đã hủy',
+  project_manager_approved: 'QLDA đã duyệt', 
+  supervisor_approved: 'GS đã duyệt', 
+  owner_approved: 'CĐT đã duyệt',
+  fixed: 'Đã sửa — Chờ xác nhận', 
+  verified: 'Đã xác nhận',
 }
 
 const historyStatusColor = (status) => {
-  if (['approved', 'customer_approved', 'approved_management', 'approved_accountant', 'paid', 'customer_paid', 'confirmed', 'implemented'].includes(status)) return 'green'
+  if (['approved', 'customer_approved', 'approved_management', 'approved_accountant', 'paid', 'customer_paid', 'confirmed', 'implemented', 'verified'].includes(status)) return 'green'
   if (['rejected', 'cancelled'].includes(status)) return 'red'
   if (['draft'].includes(status)) return 'default'
-  if (['submitted', 'under_review'].includes(status)) return 'processing'
+  if (['submitted', 'under_review', 'fixed'].includes(status)) return 'processing'
   return 'orange'
 }
 
@@ -464,12 +556,34 @@ const roleItemsMap = computed(() => ({
 }))
 
 // Sort by date descending so newest items always appear first
+// Sort and Filter active items
 const activeItems = computed(() => {
-  const items = roleItemsMap.value[activeRole.value] || []
+  let items = roleItemsMap.value[activeRole.value] || []
+  
+  // Filter by category
+  if (activeCategory.value !== 'all') {
+    items = items.filter(i => {
+      if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget'].includes(i.type)
+      if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance'].includes(i.type)
+      if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'construction_log', 'schedule_adjustment', 'defect'].includes(i.type)
+      return true
+    })
+  }
+
+  // Filter by status (Only apply if not 'all')
+  if (activeStatus.value !== 'all') {
+    items = items.filter(i => {
+      if (activeStatus.value === 'pending') return ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed'].includes(i.status)
+      if (activeStatus.value === 'draft') return i.status === 'draft'
+      if (activeStatus.value === 'rejected') return i.status === 'rejected'
+      if (activeStatus.value === 'approved') return ['approved', 'confirmed', 'paid', 'customer_approved'].includes(i.status)
+      return true
+    })
+  }
+
   return [...items].sort((a, b) => {
     const dateA = a.created_at || ''
     const dateB = b.created_at || ''
-    // Format is dd/mm/yyyy HH:mm — reverse compare to sort newest first
     const pa = dateA.split(/[\/ :]/).reverse().join('')
     const pb = dateB.split(/[\/ :]/).reverse().join('')
     return pb.localeCompare(pa)
@@ -490,7 +604,8 @@ const roleTabs = computed(() => [
 
 // ─── Table columns ───
 const tableColumns = [
-  { title: 'Loại', key: 'type', width: 130 },
+  { title: 'Trạng thái', key: 'status', width: 110 },
+  { title: 'Loại', key: 'type', width: 140 },
   { title: 'Nội dung', key: 'title', ellipsis: true },
   { title: 'Số tiền', key: 'amount', width: 120, align: 'right' },
   { title: 'Người tạo', key: 'created_by', width: 160 },
@@ -654,6 +769,124 @@ const handleReject = () => {
 </script>
 
 <style scoped>
+/* ─── Unified Control Bar ─── */
+.ac-controls {
+  background: white;
+  border-radius: 20px;
+  border: 1px solid #E8ECF1;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ac-controls__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ac-controls__filters {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 10px;
+  background: #F8FAFC;
+  border-radius: 14px;
+  border: 1px solid #F1F5F9;
+}
+.role-selector :deep(.ant-radio-button-wrapper) {
+  border-radius: 14px !important;
+  border: 1px solid #E2E8F0 !important;
+  margin-right: 12px;
+  height: 52px;
+  line-height: 50px;
+  font-weight: 700;
+  color: #64748B;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
+  position: relative;
+  overflow: visible;
+}
+.role-selector :deep(.ant-radio-button-wrapper-checked) {
+  background: #EFF6FF !important; /* Soft blue background */
+  border-color: #2563EB !important; /* Strong blue border */
+  color: #1D4ED8 !important; /* Blue text */
+  box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.2);
+  transform: translateY(-2px);
+}
+/* Indicator Dot for Active Role */
+.role-selector :deep(.ant-radio-button-wrapper-checked)::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  background: #3B82F6;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #3B82F6;
+}
+
+.role-selector :deep(.ant-radio-button-wrapper::before) {
+  display: none !important;
+}
+
+.tab-badge {
+  background: #F59E0B;
+  color: white;
+  font-size: 10px;
+  padding: 0 7px;
+  height: 20px;
+  line-height: 20px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+  margin-left: 6px;
+  font-weight: 800;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+}
+.role-selector :deep(.ant-radio-button-wrapper-checked) .tab-badge {
+  background: #2563EB;
+  color: white;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+/* Highlight active Segmented items */
+.filter-group :deep(.ant-segmented) {
+  background: #F1F5F9;
+  padding: 3px;
+  border-radius: 10px;
+}
+.filter-group :deep(.ant-segmented-item-selected) {
+  background: #1E293B !important; /* Dark slate for premium feel */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border-radius: 8px !important;
+}
+.filter-group :deep(.ant-segmented-item-selected .ant-segmented-item-label) {
+  color: white !important;
+  font-weight: 800;
+}
+.filter-group :deep(.ant-segmented-item-label) {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+}
+.filter-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ─── Stats Grid ─── */
 .ac-stats-grid {
   display: grid;
@@ -663,22 +896,25 @@ const handleReject = () => {
 }
 .ac-stat-card {
   background: white;
-  border-radius: 16px;
+  border-radius: 18px;
   border: 1px solid #E8ECF1;
-  padding: 18px 20px;
+  padding: 20px;
   display: flex;
   align-items: center;
-  gap: 14px;
-  transition: all 0.2s ease;
+  gap: 16px;
+  transition: all 0.3s ease;
+  overflow: hidden;
+  position: relative;
 }
 .ac-stat-card:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-  transform: translateY(-1px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+  transform: translateY(-2px);
+  border-color: #CBD5E1;
 }
 .ac-stat-card__icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -687,96 +923,40 @@ const handleReject = () => {
   color: white;
 }
 .ac-stat-card__value {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
-  color: #1F2937;
-  line-height: 1.2;
+  color: #0F172A;
+  line-height: 1.1;
 }
 .ac-stat-card__value--amount {
   color: #6366F1;
-  font-size: 18px;
+  font-size: 20px;
 }
 .ac-stat-card__label {
   font-size: 12px;
-  color: #9CA3AF;
-  white-space: nowrap;
-}
-
-/* ─── Role Tabs ─── */
-.ac-role-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 20px;
-  padding: 5px;
-  background: white;
-  border-radius: 14px;
-  border: 1px solid #E8ECF1;
-}
-.ac-role-tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-radius: 10px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  color: #6B7280;
-  transition: all 0.2s ease;
-  flex: 1;
-  justify-content: center;
-}
-.ac-role-tab:hover {
-  background: #F3F4F6;
-  color: #374151;
-}
-.ac-role-tab--active {
-  background: #1F2937;
-  color: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-}
-.ac-role-tab--active:hover {
-  background: #111827;
-  color: white;
-}
-.ac-role-tab__icon {
-  font-size: 16px;
+  font-weight: 500;
+  color: #64748B;
+  margin-top: 2px;
 }
 
 /* ─── Table Card ─── */
 .ac-table-card {
   background: white;
-  border-radius: 16px;
-  border: 1px solid #E8ECF1;
+  border-radius: 20px;
+  border: 1px solid #E2E8F0;
   overflow: hidden;
-}
-.ac-table-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid #F3F4F6;
-}
-.ac-table :deep(.ant-table) {
-  border-radius: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 .ac-table :deep(.ant-table-thead > tr > th) {
   background: #F8FAFC;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  color: #6B7280;
+  color: #475569;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  border-bottom: 1px solid #E8ECF1;
-  padding: 12px 16px;
+  letter-spacing: 0.05em;
+  padding: 14px 16px;
 }
 .ac-table :deep(.ant-table-tbody > tr > td) {
-  padding: 12px 16px;
-  border-bottom: 1px solid #F3F4F6;
-}
-.ac-table :deep(.ant-table-tbody > tr:hover > td) {
   background: #FAFBFC;
 }
 .ac-table :deep(.ant-table-pagination) {
@@ -818,8 +998,158 @@ const handleReject = () => {
   border-color: #059669 !important;
 }
 .ac-btn-reject {
-  border-radius: 8px !important;
-  font-size: 12px !important;
+  border-radius: 8px;
+}
+
+/* ─── History Activity Feed ─── */
+.ac-history-card {
+  background: white;
+  border-radius: 20px;
+  border: 1px solid #E2E8F0;
+  overflow: hidden;
+}
+.ac-history-card__header {
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  background: #F8FAFC;
+  transition: all 0.2s ease;
+}
+.ac-history-card__header:hover {
+  background: #F1F5F9;
+}
+.history-pulse {
+  width: 8px;
+  height: 8px;
+  background: #3B82F6;
+  border-radius: 50%;
+  box-shadow: 0 0 0 rgba(59, 130, 246, 0.4);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+.history-count {
+  background: #CBD5E1;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.ac-history-body {
+  border-top: 1px solid #F1F5F9;
+}
+
+/* Timeline Layout */
+.ac-timeline {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+.ac-timeline-item {
+  display: flex;
+  gap: 20px;
+  position: relative;
+}
+.ac-timeline-item:last-child .ac-timeline-line {
+  display: none;
+}
+
+.ac-timeline-left {
+  width: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ac-timeline-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #F1F5F9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #94A3B8;
+  z-index: 1;
+}
+.ac-timeline-dot.approved, .ac-timeline-dot.confirmed, .ac-timeline-dot.paid, .ac-timeline-dot.verified {
+  background: #DCFCE7;
+  color: #16A34A;
+}
+.ac-timeline-dot.rejected, .ac-timeline-dot.cancelled {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.ac-timeline-line {
+  flex-grow: 1;
+  width: 2px;
+  background: #F1F5F9;
+  margin: 4px 0;
+}
+
+.ac-timeline-content {
+  flex-grow: 1;
+  padding-bottom: 24px;
+  cursor: pointer;
+}
+.item-title-link {
+  font-weight: 600;
+  color: #1E293B;
+  font-size: 13.5px;
+  transition: color 0.15s ease;
+}
+.ac-timeline-content:hover .item-title-link {
+  color: #2563EB;
+}
+.item-subtitle {
+  font-size: 11px;
+  color: #64748B;
+}
+
+.action-badge {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #F1F5F9;
+  color: #64748B;
+}
+.action-badge.approved, .action-badge.confirmed, .action-badge.paid, .action-badge.verified {
+  background: #BBF7D0;
+  color: #15803D;
+}
+.action-badge.rejected, .action-badge.cancelled {
+  background: #FECACA;
+  color: #B91C1C;
+}
+
+.item-reason-alert {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #FFF1F2;
+  border-left: 3px solid #F43F5E;
+  border-radius: 0 8px 8px 0;
+  font-size: 12px;
+  color: #9F1239;
+  display: flex;
+  align-items: center;
+}
+
+/* Animations */
+.slide-fade-enter-active { transition: all 0.3s ease-out; }
+.slide-fade-leave-active { transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1); }
+.slide-fade-enter-from, .slide-fade-leave-to {
+  transform: translateY(-10px);
+  opacity: 0;
 }
 
 /* ─── Detail Drawer ─── */

@@ -32,15 +32,15 @@ class CrmApprovalController extends Controller
      */
     public function index(Request $request)
     {
-        // ─── Management Level (BĐH) ───
-        $managementItems = Cost::whereIn('status', ['pending_management_approval'])
+        // ─── Management Level (BĐH) — Show All (Draft, Pending, Management, Rejected) ───
+        $managementItems = Cost::whereIn('status', ['draft', 'pending', 'pending_management_approval', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
         $managementItemsFormatted = $managementItems->map(fn(Cost $cost) => $this->formatItem($cost));
 
-        // ─── Accountant Level (KT) ───
-        $accountantItems = Cost::whereIn('status', ['pending_accountant_approval'])
+        // ─── Accountant Level (KT) — Show All (Accountant, Approved, Rejected) ───
+        $accountantItems = Cost::whereIn('status', ['pending_accountant_approval', 'approved', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -67,22 +67,22 @@ class CrmApprovalController extends Controller
             ->get();
         $customerAcceptanceItemsFormatted = $customerAcceptanceItems->map(fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ KH duyệt', 'customer'));
 
-        // ─── Change Requests chờ duyệt ───
-        $changeRequestItems = ChangeRequest::whereIn('status', ['submitted', 'under_review'])
+        // ─── Change Requests — Show All ───
+        $changeRequestItems = ChangeRequest::whereIn('status', ['submitted', 'under_review', 'rejected'])
             ->with(['project:id,name,code', 'requester:id,name,email', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
         $changeRequestItemsFormatted = $changeRequestItems->map(fn(ChangeRequest $cr) => $this->formatChangeRequestItem($cr));
 
-        // ─── Additional Costs chờ duyệt ───
-        $additionalCostItems = AdditionalCost::whereIn('status', ['pending', 'pending_approval'])
+        // ─── Additional Costs — Show All ───
+        $additionalCostItems = AdditionalCost::whereIn('status', ['pending', 'pending_approval', 'rejected'])
             ->with(['project:id,name,code', 'proposer:id,name,email', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
         $additionalCostItemsFormatted = $additionalCostItems->map(fn(AdditionalCost $ac) => $this->formatAdditionalCostItem($ac));
 
         // ─── Subcontractor Payments chờ duyệt ───
-        $subPaymentManagement = SubcontractorPayment::where('status', 'pending_management_approval')
+        $subPaymentManagement = SubcontractorPayment::whereIn('status', ['pending_management_approval', 'rejected'])
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -120,7 +120,7 @@ class CrmApprovalController extends Controller
         $materialBillAccountantItemsFormatted = collect();
         $materialBillClass = 'App\\Models\\MaterialBill';
         if (class_exists($materialBillClass)) {
-            $materialBillManagementItemsFormatted = $materialBillClass::where('status', 'pending_management')
+            $materialBillManagementItemsFormatted = $materialBillClass::whereIn('status', ['draft', 'pending', 'pending_management', 'rejected'])
                 ->with(['creator:id,name,email', 'project:id,name,code', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get()
@@ -147,8 +147,8 @@ class CrmApprovalController extends Controller
             ->get();
         $supplierAcceptanceItemsFormatted = $supplierAcceptanceItems->map(fn(SupplierAcceptance $sa) => $this->formatSupplierAcceptanceItem($sa));
 
-        // ─── Nhật ký công trường chờ duyệt ───
-        $constructionLogItems = ConstructionLog::where('approval_status', 'pending')
+        // ─── Nhật ký công trường — Show All ───
+        $constructionLogItems = ConstructionLog::whereIn('approval_status', ['pending', 'rejected'])
             ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
             ->orderBy('log_date', 'desc')
             ->get();
@@ -223,29 +223,19 @@ class CrmApprovalController extends Controller
             ->take(30)
             ->values();
 
-        // ─── Stats ───
+        // ─── Actually Pending Stats (Exclude Draft/Rejected for KPIs) ───
+        $realPendingManagement = Cost::whereIn('status', ['pending', 'pending_management_approval'])->count();
+        $realPendingAccountant = Cost::whereIn('status', ['pending_accountant_approval'])->count();
+        $realPendingAcceptance = AcceptanceStage::whereIn('status', ['pending', 'supervisor_approved', 'project_manager_approved'])->count();
+        
         $stats = [
-            'pending_management' => $managementItems->count(),
-            'pending_accountant' => $accountantItems->count(),
-            'pending_acceptance_supervisor' => $acceptanceSupervisorItems->count(),
-            'pending_acceptance_pm' => $acceptancePMItems->count(),
-            'pending_customer' => $customerAcceptanceItems->count(),
-            'pending_change_request' => $changeRequestItems->count(),
-            'pending_additional_cost' => $additionalCostItems->count(),
-            'pending_sub_payment' => $subPaymentManagement->count() + $subPaymentAccountant->count(),
-            'pending_contract' => $contractItems->count(),
-            'pending_payment_customer' => $pendingPaymentItems->count(),
-            'pending_payment_accountant' => $paidPaymentItems->count(),
-            'pending_material_bill' => $materialBillManagementItemsFormatted->count() + $materialBillAccountantItemsFormatted->count(),
-            'pending_sub_acceptance' => $subAcceptanceItems->count(),
-            'pending_supplier_acceptance' => $supplierAcceptanceItems->count(),
-            'pending_construction_log' => $constructionLogItems->count(),
-            'pending_schedule_adjustment' => $scheduleAdjustmentItems->count(),
-            'pending_defect' => $defectItems->count(),
-            'pending_budget' => $budgetItems->count(),
+            'pending_management' => $realPendingManagement,
+            'pending_accountant' => $realPendingAccountant,
+            'pending_acceptance' => $realPendingAcceptance,
+            'pending_others' => $changeRequestItems->count() + $additionalCostItems->count() + $subPaymentManagement->count() + $materialBillManagementItemsFormatted->count(),
             'approved_today' => Cost::where('status', 'approved')->whereDate('updated_at', today())->count(),
             'rejected_today' => Cost::where('status', 'rejected')->whereDate('updated_at', today())->count(),
-            'total_pending_amount' => $managementItems->sum('amount') + $accountantItems->sum('amount'),
+            'total_pending_amount' => Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])->sum('amount'),
         ];
 
         return Inertia::render('Crm/Approvals/Index', [
@@ -283,8 +273,8 @@ class CrmApprovalController extends Controller
         $cost = Cost::findOrFail($id);
         $user = Auth::guard('admin')->user();
 
-        if ($cost->status !== 'pending_management_approval') {
-            return back()->with('error', 'Chi phí không ở trạng thái chờ BĐH duyệt');
+        if (!in_array($cost->status, ['draft', 'pending', 'pending_management_approval', 'rejected'])) {
+            return back()->with('error', 'Chi phí không ở trạng thái có thể duyệt');
         }
 
         try {
@@ -645,7 +635,7 @@ class CrmApprovalController extends Controller
         try {
             DB::beginTransaction();
 
-            if ($bill->status === 'pending_management') {
+            if (in_array($bill->status, ['draft', 'pending', 'pending_management', 'rejected'])) {
                 $result = $bill->approveByManagement($user);
             } elseif ($bill->status === 'pending_accountant') {
                 $result = $bill->approveByAccountant($user);
