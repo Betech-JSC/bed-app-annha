@@ -208,6 +208,9 @@ class SubcontractorPaymentController extends Controller
 
         $payment->submitForApproval();
 
+        // Notify management and PM
+        $payment->notifyEvent('submitted', $user);
+
         return response()->json([
             'success' => true,
             'message' => 'Phiếu chi đã được gửi để duyệt.',
@@ -234,6 +237,10 @@ class SubcontractorPaymentController extends Controller
         try {
             DB::beginTransaction();
             $payment->approve($user);
+
+            // Notify creator, PM and accountants
+            $payment->notifyEvent('approved_management', $user);
+
             DB::commit();
 
             return response()->json([
@@ -274,6 +281,10 @@ class SubcontractorPaymentController extends Controller
                 DB::rollBack();
                 return response()->json(['success' => false, 'message' => 'Không thể từ chối phiếu chi.'], 400);
             }
+
+            // Notify creator and PM
+            $payment->notifyEvent('rejected', $user, ['reason' => $validated['rejection_reason'] ?? '']);
+
             DB::commit();
 
             return response()->json([
@@ -306,6 +317,10 @@ class SubcontractorPaymentController extends Controller
         try {
             DB::beginTransaction();
             $payment->markAsPaid($user);
+
+            // Notify creator and PM
+            $payment->notifyEvent('paid', $user);
+
             DB::commit();
 
             return response()->json([

@@ -59,8 +59,7 @@ export default function CreateBudgetScreen() {
                 const item = JSON.parse(itemData);
                 const items = formData.items || [];
                 items.push(item);
-                const total = items.reduce((sum, i) => sum + (i.estimated_amount || 0), 0);
-                setFormData({ ...formData, items, total });
+                setFormData({ ...formData, items });
                 await AsyncStorage.removeItem(storageKey);
             }
 
@@ -72,8 +71,7 @@ export default function CreateBudgetScreen() {
                 if (editData) {
                     const updatedItem = JSON.parse(editData);
                     items[updatedItem.index] = updatedItem;
-                    const total = items.reduce((sum, i) => sum + (i.estimated_amount || 0), 0);
-                    setFormData({ ...formData, items, total });
+                    setFormData({ ...formData, items });
                     await AsyncStorage.removeItem(editKey);
                 }
             }
@@ -119,8 +117,7 @@ export default function CreateBudgetScreen() {
     const handleRemoveItem = (index: number) => {
         const items = formData.items || [];
         items.splice(index, 1);
-        const total = items.reduce((sum, i) => sum + (i.estimated_amount || 0), 0);
-        setFormData({ ...formData, items, total });
+        setFormData({ ...formData, items });
     };
 
     const handleCreate = async () => {
@@ -165,8 +162,6 @@ export default function CreateBudgetScreen() {
                 cost_group_id: item.cost_group_id,
                 description: item.description,
                 estimated_amount: item.estimated_amount,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
             })) || [],
         });
         setShowTemplatePicker(false);

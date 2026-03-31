@@ -31,8 +31,6 @@ export default function CreateBudgetItemScreen() {
         cost_group_id: null as number | null,
         description: "",
         estimated_amount: 0,
-        quantity: 1,
-        unit_price: 0,
     });
     const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
     const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
@@ -67,8 +65,6 @@ export default function CreateBudgetItemScreen() {
                 cost_group_id: itemData.cost_group_id,
                 description: itemData.description || undefined,
                 estimated_amount: itemData.estimated_amount,
-                quantity: itemData.quantity || undefined,
-                unit_price: itemData.unit_price || undefined,
             };
 
             // Store item data in AsyncStorage temporarily

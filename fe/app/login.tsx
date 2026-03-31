@@ -18,6 +18,7 @@ import api from "@/api/api";
 import { permissionApi } from "@/api/permissionApi";
 import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { setUser } from "@/reducers/userSlice";
 import { setPermissions } from "@/reducers/permissionsSlice";
 
@@ -49,13 +50,16 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // Get FCM token if available
+      // Get push token if available
       let fcmToken = null;
       try {
-        const tokenData = await Notifications.getExpoPushTokenAsync();
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+        const tokenData = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined
+        );
         fcmToken = tokenData.data;
       } catch (error) {
-        console.log("Could not get FCM token:", error);
+        console.log("Could not get push token:", error);
       }
 
       const response = await api.post("/login", {

@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class SubcontractorPayment extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, \App\Traits\NotifiesUsers;
 
     protected $fillable = [
         'uuid',
@@ -157,10 +157,9 @@ class SubcontractorPayment extends Model
         $this->status = 'paid';
         
         // Cập nhật tổng thanh toán cho subcontractor
-        $this->subcontractor->recordPayment($this->amount);
-        
-        // Ghi chú: Việc đồng bộ sang bảng Cost hiện đã được xử lý tự động qua model hook 'saved'
-        // Điều này đảm bảo dữ liệu luôn nhất quán ở mọi giai đoạn (draft -> paid)
+        if ($this->subcontractor) {
+            $this->subcontractor->recordPayment($this->amount);
+        }
         
         return $this->save();
     }
@@ -212,11 +211,9 @@ class SubcontractorPayment extends Model
 
     /**
      * Đồng bộ thông tin thanh toán sang bảng Chi phí dự án (Cost)
-     * Để người dùng thấy được các khoản chi thầu phụ ở màn hình Chi phí tổng thể
      */
     public function syncToCostTable(): void
     {
-        // Trạng thái bị hủy thì xóa bản ghi chi phí tương ứng
         if ($this->status === 'cancelled') {
             Cost::where('subcontractor_payment_id', $this->id)->delete();
             return;
@@ -226,7 +223,6 @@ class SubcontractorPayment extends Model
             ->orWhere('name', 'LIKE', '%Nhà thầu phụ%')
             ->value('id') ?: 5;
         
-        // Ánh xạ trạng thái từ Payment sang Cost
         $costStatus = match($this->status) {
             'draft'                           => 'draft',
             'pending_management_approval'     => 'pending_management_approval',
@@ -259,6 +255,58 @@ class SubcontractorPayment extends Model
     }
 
     // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return "Phiếu chi Thầu phụ: " . ($this->subcontractor->name ?? 'N/A') . " - Đợt: " . ($this->payment_stage ?? 'N/A');
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Phiếu chi thầu phụ cần duyệt',
+                'body'     => 'Phiếu chi thầu phụ {name} cho dự án {project} cần BĐH duyệt.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'subcontractors',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved_management' => [
+                'title'    => 'BĐH đã duyệt phiếu chi thầu phụ',
+                'body'     => 'Phiếu chi thầu phụ {name} đã được BĐH duyệt, chờ KT xác nhận.',
+                'target'   => ['creator', 'accountant', 'pm'],
+                'tab'      => 'subcontractors',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'paid' => [
+                'title'    => 'KT đã xác nhận thanh toán thầu phụ',
+                'body'     => 'Phiếu chi thầu phụ {name} đã được thanh toán.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'subcontractors',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Phiếu chi thầu phụ bị từ chối',
+                'body'     => 'Phiếu chi thầu phụ {name} bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'subcontractors',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
+    }
+
+    // ==================================================================
     // BOOT
     // ==================================================================
 
@@ -275,12 +323,10 @@ class SubcontractorPayment extends Model
             }
         });
 
-        // Tự động đồng bộ sang bảng Cost sau khi lưu
         static::saved(function ($payment) {
             $payment->syncToCostTable();
         });
 
-        // Xóa bản ghi chi phí khi phiếu payment bị xóa
         static::deleted(function ($payment) {
             Cost::where('subcontractor_payment_id', $payment->id)->delete();
         });

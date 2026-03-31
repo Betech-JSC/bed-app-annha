@@ -1,5 +1,6 @@
 // src/notifications/registerPushToken.ts
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import api from "@/api/api";
 
 /**
@@ -8,10 +9,13 @@ import api from "@/api/api";
  */
 export async function registerPushToken(userId: string) {
     try {
+        // Lấy projectId từ app config (cần thiết cho Expo SDK 54+)
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+
         // Lấy token từ Expo
-        const { data: expoPushToken } = await Notifications.getExpoPushTokenAsync({
-            projectId: '363ab25f-f7bc-4a57-869d-c054d3e254f7',
-        });
+        const { data: expoPushToken } = await Notifications.getExpoPushTokenAsync(
+            projectId ? { projectId } : undefined
+        );
 
 
         if (!expoPushToken) return null;

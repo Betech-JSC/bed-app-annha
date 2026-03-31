@@ -35,8 +35,6 @@ export default function EditBudgetItemScreen() {
         cost_group_id: null as number | null,
         description: "",
         estimated_amount: 0,
-        quantity: 1,
-        unit_price: 0,
     });
     const [showCostGroupPicker, setShowCostGroupPicker] = useState(false);
     const [selectedCostGroup, setSelectedCostGroup] = useState<CostGroup | null>(null);
@@ -52,8 +50,6 @@ export default function EditBudgetItemScreen() {
                     cost_group_id: parsed.cost_group_id || null,
                     description: parsed.description || "",
                     estimated_amount: parsed.estimated_amount || 0,
-                    quantity: parsed.quantity || 1,
-                    unit_price: parsed.unit_price || 0,
                 });
                 if (parsed.cost_group_id) {
                     // Will be set after costGroups load
@@ -96,8 +92,6 @@ export default function EditBudgetItemScreen() {
                 cost_group_id: itemData.cost_group_id,
                 description: itemData.description || undefined,
                 estimated_amount: itemData.estimated_amount,
-                quantity: itemData.quantity || undefined,
-                unit_price: itemData.unit_price || undefined,
             };
 
             // Store item data in AsyncStorage temporarily with index

@@ -329,6 +329,9 @@ class CostController extends Controller
 
         $cost->submitForManagementApproval();
 
+        // Notify management and PM
+        $cost->notifyEvent('submitted', $user);
+
         return response()->json([
             'success' => true,
             'message' => 'Chi phí đã được gửi để Ban điều hành duyệt.',
@@ -361,6 +364,9 @@ class CostController extends Controller
         }
 
         $cost->approveByManagement($user);
+
+        // Notify creator, PM and accountant
+        $cost->notifyEvent('approved_management', $user);
 
         return response()->json([
             'success' => true,
@@ -417,6 +423,9 @@ class CostController extends Controller
 
             $cost->approveByAccountant($user);
 
+            // Notify creator and PM
+            $cost->notifyEvent('approved_accountant', $user);
+
             DB::commit();
 
             return response()->json([
@@ -463,6 +472,9 @@ class CostController extends Controller
         }
 
         $cost->reject($validated['rejected_reason'], $user);
+
+        // Notify creator and PM
+        $cost->notifyEvent('rejected', $user, ['reason' => $validated['rejected_reason']]);
 
         return response()->json([
             'success' => true,

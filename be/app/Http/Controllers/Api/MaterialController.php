@@ -149,13 +149,8 @@ class MaterialController extends Controller
 
         $materials = $query->paginate(50);
 
-        $projectTotalCost = 0;
-        $projectApprovedCost = 0;
-        $projectPendingCost = 0;
-        $totalBillsCount = 0;
-
-        // Tính toán số lượng & chi phí từ MaterialBillItem
-        $materials->getCollection()->transform(function ($material) use ($projectId, &$projectTotalCost, &$projectApprovedCost, &$projectPendingCost, &$totalBillsCount) {
+        // Tính toán số lượng & chi phí từ MaterialBillItem CHO TỪNG LOẠI VẬT TƯ TRÊN TRANG NÀY
+        $materials->getCollection()->transform(function ($material) use ($projectId) {
             // Lấy tất cả bill items của material này trong project (trừ rejected)
             $billItems = \App\Models\MaterialBillItem::where('material_id', $material->id)
                 ->whereHas('materialBill', function ($q) use ($projectId) {
@@ -179,22 +174,20 @@ class MaterialController extends Controller
             $material->project_pending_amount = $pendingAmount;
             $material->project_transactions_count = $billsCount;
 
-            $projectTotalCost += $totalAmount;
-            $projectApprovedCost += $approvedAmount;
-            $projectPendingCost += $pendingAmount;
-            $totalBillsCount += $billsCount;
-
             return $material;
         });
 
-        // Đếm tổng số phiếu vật tư trong dự án
-        $billStats = \App\Models\MaterialBill::where('project_id', $projectId)
+        // TÍNH TOÁN THỐNG KÊ TỔNG THỂ DỰ ÁN (GLOBAL)
+        $globalStats = \App\Models\MaterialBill::where('project_id', $projectId)
             ->whereNotIn('status', ['rejected'])
             ->selectRaw("
                 COUNT(*) as total_bills,
                 SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_bills,
-                SUM(CASE WHEN status IN ('pending_management', 'pending_accountant') THEN 1 ELSE 0 END) as pending_bills,
-                SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draft_bills
+                SUM(CASE WHEN status IN ('pending_management', 'pending_accountant', 'pending') THEN 1 ELSE 0 END) as pending_bills,
+                SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draft_bills,
+                SUM(total_amount) as total_material_cost,
+                SUM(CASE WHEN status = 'approved' THEN total_amount ELSE 0 END) as approved_material_cost,
+                SUM(CASE WHEN status IN ('pending_management', 'pending_accountant', 'pending', 'draft') THEN total_amount ELSE 0 END) as pending_material_cost
             ")
             ->first();
 
@@ -202,14 +195,14 @@ class MaterialController extends Controller
             'success' => true,
             'data' => $materials,
             'summary' => [
-                'total_material_cost' => (float)$projectTotalCost,
-                'approved_material_cost' => (float)$projectApprovedCost,
-                'pending_material_cost' => (float)$projectPendingCost,
+                'total_material_cost' => (float)($globalStats->total_material_cost ?? 0),
+                'approved_material_cost' => (float)($globalStats->approved_material_cost ?? 0),
+                'pending_material_cost' => (float)($globalStats->pending_material_cost ?? 0),
                 'total_materials_count' => $materials->total(),
-                'total_bills' => (int)($billStats->total_bills ?? 0),
-                'approved_bills' => (int)($billStats->approved_bills ?? 0),
-                'pending_bills' => (int)($billStats->pending_bills ?? 0),
-                'draft_bills' => (int)($billStats->draft_bills ?? 0),
+                'total_bills' => (int)($globalStats->total_bills ?? 0),
+                'approved_bills' => (int)($globalStats->approved_bills ?? 0),
+                'pending_bills' => (int)($globalStats->pending_bills ?? 0),
+                'draft_bills' => (int)($globalStats->draft_bills ?? 0),
             ]
         ]);
     }

@@ -287,6 +287,9 @@ class MaterialBillController extends Controller
 
         $bill->submitForManagementApproval();
 
+        // Gửi thông báo cho BĐH và PM
+        $bill->notifyEvent('submitted', $user);
+
         return response()->json([
             'success' => true,
             'message' => 'Đã gửi hóa đơn cho Ban điều hành duyệt.'
@@ -314,6 +317,9 @@ class MaterialBillController extends Controller
         }
 
         $bill->approveByManagement($user);
+
+        // Gửi thông báo cho Kế toán, PM và Người tạo
+        $bill->notifyEvent('approved_management', $user);
 
         return response()->json([
             'success' => true,
@@ -351,6 +357,9 @@ class MaterialBillController extends Controller
             $bill->triggerApprovalSideEffects();
 
             DB::commit();
+
+            // Gửi thông báo cho PM và Người tạo
+            $bill->notifyEvent('approved_accountant', $user);
 
             return response()->json([
                 'success' => true,
@@ -394,6 +403,9 @@ class MaterialBillController extends Controller
         }
 
         $bill->reject($request->reason, $user);
+
+        // Gửi thông báo cho Người tạo và PM
+        $bill->notifyEvent('rejected', $user, ['reason' => $request->reason]);
 
         return response()->json([
             'success' => true,
