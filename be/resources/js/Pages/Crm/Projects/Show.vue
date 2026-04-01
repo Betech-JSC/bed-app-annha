@@ -790,7 +790,7 @@
               <template v-else-if="column.key === 'creator'">
                 <div class="text-[11px]">
                   <div class="font-medium text-gray-700">{{ record.creator?.name || '—' }}</div>
-                  <div class="text-gray-400 text-[10px]">{{ fmtDate(record.created_at) }}</div>
+                  <div class="text-gray-400 text-[10px]">{{ fmtDateTime(record.created_at) }}</div>
                 </div>
               </template>
               <template v-else-if="column.key === 'approver'">
@@ -2019,7 +2019,7 @@
                 </div>
               </template>
               <template v-else-if="column.key === 'size'">{{ formatFileSize(record.file_size) }}</template>
-              <template v-else-if="column.key === 'date'">{{ fmtDate(record.created_at) }}</template>
+              <template v-else-if="column.key === 'date'">{{ fmtDateTime(record.created_at) }}</template>
               <template v-else-if="column.key === 'actions'">
                 <div class="flex gap-1">
                   <a :href="record.file_url" target="_blank"><a-button type="text" size="small"><DownloadOutlined /></a-button></a>
@@ -2810,21 +2810,21 @@
             <a-avatar size="small" class="bg-gray-400">{{ costDetailRecord.creator?.name?.charAt(0) }}</a-avatar>
             <div class="flex-1">
               <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Người tạo phiếu</div>
-              <div class="text-sm font-medium text-gray-700">{{ costDetailRecord.creator?.name || '—' }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDate(costDetailRecord.created_at) }}</span></div>
+              <div class="text-sm font-medium text-gray-700">{{ costDetailRecord.creator?.name || '—' }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDateTime(costDetailRecord.created_at) }}</span></div>
             </div>
           </div>
           <div v-if="costDetailRecord.management_approver" class="flex items-center gap-3 pt-3 border-t border-gray-50">
             <a-avatar size="small" class="bg-green-500">{{ costDetailRecord.management_approver.name.charAt(0) }}</a-avatar>
             <div class="flex-1">
               <div class="text-[10px] text-green-500 uppercase font-bold tracking-wider">Ban điều hành duyệt</div>
-              <div class="text-sm font-medium text-gray-700">{{ costDetailRecord.management_approver.name }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDate(costDetailRecord.management_approved_at) }}</span></div>
+              <div class="text-sm font-medium text-gray-700">{{ costDetailRecord.management_approver.name }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDateTime(costDetailRecord.management_approved_at) }}</span></div>
             </div>
           </div>
           <div v-if="costDetailRecord.accountant_approver" class="flex items-center gap-3 pt-3 border-t border-gray-50">
             <a-avatar size="small" class="bg-blue-500">{{ costDetailRecord.accountant_approver.name.charAt(0) }}</a-avatar>
             <div class="flex-1">
               <div class="text-[10px] text-blue-500 uppercase font-bold tracking-wider">Kế toán xác nhận</div>
-              <div class="text-sm font-medium text-gray-700">{{ costDetailRecord.accountant_approver.name }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDate(costDetailRecord.accountant_approved_at) }}</span></div>
+              <div class="text-sm font-medium text-gray-700">{{ costDetailRecord.accountant_approver.name }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDateTime(costDetailRecord.accountant_approved_at) }}</span></div>
             </div>
           </div>
         </div>
@@ -3418,7 +3418,7 @@
             <div class="font-bold text-gray-800">{{ logDetailRecord.creator?.name || 'Vô danh' }}</div>
             <div class="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
               <span class="flex items-center gap-1"><CalendarOutlined /> {{ fmtDate(logDetailRecord.log_date) }}</span>
-              <span class="flex items-center gap-1"><ClockCircleOutlined /> {{ logDetailRecord.created_at ? dayjs(logDetailRecord.created_at).format('HH:mm') : '—' }}</span>
+              <span class="flex items-center gap-1"><ClockCircleOutlined /> {{ logDetailRecord.created_at ? dayjs.utc(logDetailRecord.created_at).local().format('HH:mm') : '—' }}</span>
             </div>
           </div>
         </div>
@@ -3567,7 +3567,7 @@
              <a-avatar size="small" class="bg-blue-500">{{ paymentDetailRecord.confirmer.name.charAt(0) }}</a-avatar>
              <div>
                 <div class="text-[10px] text-blue-500 uppercase font-bold tracking-wider">Kế toán đối soát</div>
-                <div class="text-sm font-medium text-gray-700">{{ paymentDetailRecord.confirmer.name }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDate(paymentDetailRecord.confirmed_at) }}</span></div>
+                <div class="text-sm font-medium text-gray-700">{{ paymentDetailRecord.confirmer.name }} <span class="text-gray-400 text-xs font-normal">• {{ fmtDateTime(paymentDetailRecord.confirmed_at) }}</span></div>
              </div>
           </div>
         </div>
@@ -4004,7 +4004,7 @@
         </div>
         <div class="text-xs text-gray-500 space-y-1">
           <div v-if="acceptDetailStage.task">📐 Hạng mục: <span class="font-semibold">{{ acceptDetailStage.task.name }}</span></div>
-          <div v-if="acceptDetailStage.created_at">📅 Ngày tạo: {{ dayjs(acceptDetailStage.created_at).format('DD/MM/YYYY HH:mm') }}</div>
+          <div v-if="acceptDetailStage.created_at">📅 Ngày tạo: {{ fmtDateTime(acceptDetailStage.created_at) }}</div>
           <div><a-tag :color="acceptStatusColors[acceptDetailStage.status] || 'default'" class="rounded-full text-xs">{{ acceptStatusLabels[acceptDetailStage.status] || acceptDetailStage.status }}</a-tag></div>
         </div>
       </div>
@@ -4527,6 +4527,8 @@ import axios from 'axios'
 axios.defaults.withCredentials = true
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+dayjs.extend(utc)
 import {
   ArrowLeftOutlined, EditOutlined, PlusOutlined, DeleteOutlined,
   SendOutlined, CheckCircleOutlined, CloseCircleOutlined,
@@ -4570,7 +4572,8 @@ const can = (perm) => {
 
 // ============ HELPERS ============
 const fmt = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v) : '0 ₫'
-const fmtDate = (d) => d ? dayjs(d).format('DD/MM/YYYY') : '—'
+const fmtDate = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY') : '—'
+const fmtDateTime = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY HH:mm') : '—'
 const totalCosts = computed(() => (props.project.costs || []).reduce((s, c) => s + Number(c.amount || 0), 0))
 
 // ============ OVERVIEW COMPUTED ============
