@@ -6143,9 +6143,17 @@ const getAcceptIconClass = (status) => {
   return 'bg-orange-100 text-orange-600'
 }
 const getAcceptability = (stage) => {
-  if (stage.acceptability_status) return stage.acceptability_status
+  // 1. All approval levels must be passed (final status = owner_approved)
+  const isFullyApproved = stage.status === 'owner_approved'
+  
+  // 2. No open or in-progress defects
   const hasOpenDefects = (stage.defects || []).some(d => d.status === 'open' || d.status === 'in_progress')
-  return hasOpenDefects ? 'not_acceptable' : 'acceptable'
+  
+  // 3. All checklist items must be customer_approved (if items exist)
+  const items = stage.items || []
+  const allItemsApproved = items.length === 0 || items.every(i => i.workflow_status === 'customer_approved')
+  
+  return (isFullyApproved && !hasOpenDefects && allItemsApproved) ? 'acceptable' : 'not_acceptable'
 }
 const getAcceptCompletion = (stage) => {
   const items = stage.items || []
