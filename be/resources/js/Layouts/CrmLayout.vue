@@ -178,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, computed, h } from 'vue'
+import { ref, computed, h, watch } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import {
   MenuFoldOutlined,
@@ -221,6 +221,20 @@ const props = defineProps({
 
 const collapsed = ref(false)
 const page = usePage()
+
+// Auto-dismiss flash messages after 2 seconds
+watch(() => page.props.flash, (flash) => {
+  if (flash?.success) {
+    setTimeout(() => {
+      page.props.flash.success = null
+    }, 2000)
+  }
+  if (flash?.error) {
+    setTimeout(() => {
+      page.props.flash.error = null
+    }, 2000)
+  }
+}, { deep: true, immediate: true })
 
 const selectedKeys = computed(() => {
   const url = page.url
