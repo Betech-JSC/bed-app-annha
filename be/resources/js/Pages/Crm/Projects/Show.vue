@@ -633,6 +633,9 @@
                     <td class="text-center py-2 px-3 text-xs">{{ task.assigned_user?.name || '—' }}</td>
                     <td class="text-center py-2 px-3" @click.stop>
                       <div class="flex gap-1 justify-center">
+                        <a-tooltip v-if="!task.children?.length && can('log.create')" title="Ghi nhật ký">
+                          <a-button type="text" size="small" @click.stop="openLogModal(null, task.id)" class="text-blue-500 hover:bg-blue-50"><FileAddOutlined /></a-button>
+                        </a-tooltip>
                         <a-tooltip title="Sửa"><a-button type="text" size="small" @click.stop="openTaskModal(task)"><EditOutlined /></a-button></a-tooltip>
                         <a-popconfirm title="Xóa công việc?" @confirm="deleteTask(task)"><a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button></a-popconfirm>
                       </div>
@@ -659,6 +662,9 @@
                       <td class="text-center py-2 px-3 text-xs">{{ child.assigned_user?.name || '—' }}</td>
                       <td class="text-center py-2 px-3" @click.stop>
                         <div class="flex gap-1 justify-center">
+                          <a-tooltip v-if="can('log.create')" title="Ghi nhật ký">
+                            <a-button type="text" size="small" @click.stop="openLogModal(null, child.id)" class="text-blue-500 hover:bg-blue-50"><FileAddOutlined /></a-button>
+                          </a-tooltip>
                           <a-tooltip title="Sửa"><a-button type="text" size="small" @click="openTaskModal(child)"><EditOutlined /></a-button></a-tooltip>
                           <a-popconfirm title="Xóa?" @confirm="deleteTask(child)"><a-button type="text" size="small" danger><DeleteOutlined /></a-button></a-popconfirm>
                         </div>
@@ -930,123 +936,89 @@
             </a-button>
           </div>
 
-          <!-- Date-grouped logs -->
+          <!-- Compact Log Table -->
           <div v-if="groupedLogs.length === 0" class="text-center text-gray-400 py-8">Chưa có nhật ký thi công</div>
-          <div v-for="group in groupedLogs" :key="group.date" class="mb-6 relative">
-            <div class="sticky top-0 z-10 flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-md border border-gray-100 rounded-xl mb-3 shadow-sm">
-              <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 shadow-sm">
-                <CalendarOutlined class="text-blue-600 text-sm" />
-              </div>
-              <span class="font-extrabold text-gray-800">{{ fmtDate(group.date) }}</span>
-              <a-tag color="blue" class="rounded-full ml-1 border-0 bg-blue-50 text-blue-600 font-bold">{{ group.logs.length }} mục</a-tag>
-              <div class="ml-auto flex items-center gap-2 text-xs font-semibold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100" v-if="group.weatherSummary">
-                <CloudOutlined class="text-amber-500" /> {{ group.weatherSummary }}
-              </div>
-            </div>
-
-            <!-- Log Cards Timeline -->
-            <div class="px-2 md:px-4 space-y-4">
-              <div v-for="log in group.logs" :key="log.id" class="relative pl-6 before:absolute before:left-2 before:top-2 before:bottom-[-2rem] before:w-[2px] before:bg-gray-100 last:before:hidden">
-                <div class="absolute left-[3px] top-1.5 w-[10px] h-[10px] rounded-full bg-blue-400 border-[2px] border-white ring-2 ring-blue-50"></div>
-                
-                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group/log">
-                  <!-- Header -->
-                  <div class="flex items-start justify-between p-4 pb-3 border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-white">
-                    <div class="flex items-center gap-3">
-                      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-inner text-white font-bold text-sm ring-2 ring-white">
-                        <UserOutlined v-if="!log.creator?.name" />
-                        <span v-else>{{ log.creator.name[0] }}</span>
+          <div v-else class="border rounded-xl overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-gradient-to-r from-blue-50 to-indigo-50 text-gray-600 text-xs border-b">
+                  <th class="text-left py-2.5 px-3 font-semibold">Ngày</th>
+                  <th class="text-left py-2.5 px-3 font-semibold">Công việc</th>
+                  <th class="text-left py-2.5 px-3 font-semibold">Người ghi</th>
+                  <th class="text-center py-2.5 px-2 font-semibold">Thời tiết</th>
+                  <th class="text-center py-2.5 px-2 font-semibold">Nhân lực</th>
+                  <th class="py-2.5 px-3 font-semibold" style="min-width:120px">Tiến độ</th>
+                  <th class="text-center py-2.5 px-2 font-semibold">Ảnh</th>
+                  <th class="text-center py-2.5 px-2 font-semibold" style="width:90px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-for="group in groupedLogs" :key="group.date">
+                  <tr v-for="(log, idx) in group.logs" :key="log.id"
+                      class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors cursor-pointer group/row"
+                      @click="openLogDetailDrawer(log)">
+                    <!-- Date (only first row per group) -->
+                    <td class="py-2.5 px-3 align-top">
+                      <div v-if="idx === 0" class="flex items-center gap-1.5">
+                        <CalendarOutlined class="text-blue-500 text-xs" />
+                        <span class="font-semibold text-gray-800 text-xs whitespace-nowrap">{{ fmtDate(group.date) }}</span>
                       </div>
-                      <div>
-                        <div class="font-bold text-gray-800 text-sm">{{ log.creator?.name || 'Vô danh' }} <span class="text-gray-400 font-normal text-xs ml-1">ghi nhận nhật ký</span></div>
-                        <div class="text-[11px] text-gray-500 font-medium flex items-center gap-2 mt-0.5">
-                          <span class="flex items-center"><ClockCircleOutlined class="mr-1" />{{ log.created_at ? dayjs(log.created_at).format('HH:mm') : '—' }}</span>
-                          <span v-if="log.task" class="px-2 py-0.5 rounded border border-gray-200 bg-white text-gray-600 flex items-center truncate max-w-[250px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]"><ProjectOutlined class="mr-1 text-blue-500"/> {{ log.task.name }}</span>
+                    </td>
+                    <!-- Task -->
+                    <td class="py-2.5 px-3">
+                      <span v-if="log.task" class="text-xs text-gray-700 truncate block max-w-[200px]" :title="log.task.name">{{ log.task.name }}</span>
+                      <span v-else class="text-xs text-gray-300">—</span>
+                    </td>
+                    <!-- Creator -->
+                    <td class="py-2.5 px-3">
+                      <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                          {{ (log.creator?.name || '?')[0] }}
                         </div>
+                        <span class="text-xs text-gray-600 truncate max-w-[100px]">{{ log.creator?.name || '—' }}</span>
                       </div>
-                    </div>
-                    
-                    <!-- Actions Menu Context -->
-                    <div class="opacity-0 group-hover/log:opacity-100 transition-opacity flex items-center gap-1">
-                      <a-tooltip title="Sửa">
-                        <a-button v-if="can('log.update')" type="text" size="small" @click="openLogModal(log)" class="text-gray-400 hover:text-blue-600 hover:bg-blue-50"><EditOutlined /></a-button>
-                      </a-tooltip>
-                      <a-tooltip title="Upload chứng từ hình ảnh">
-                        <a-button type="text" size="small" @click="openAttachModal('logs', log)" class="text-gray-400 hover:text-blue-600 hover:bg-blue-50"><UploadOutlined /></a-button>
-                      </a-tooltip>
-                      <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký này?" @confirm="deleteLog(log)">
-                        <a-button type="text" size="small" danger class="text-gray-400 hover:text-red-500 hover:bg-red-50"><DeleteOutlined /></a-button>
-                      </a-popconfirm>
-                    </div>
-                  </div>
-
-                  <!-- Content body -->
-                  <div class="p-4">
-                    <p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed" :class="log.notes ? '' : 'italic text-gray-400'">{{ log.notes || 'Không có ghi chú mô tả...' }}</p>
-                    
-                    <!-- Stats Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
-                      <!-- Weather -->
-                      <div class="bg-gray-50 rounded-xl p-3 flex items-center gap-3 border border-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-sm transition">
-                        <div class="w-10 h-10 rounded-lg bg-orange-100/50 flex items-center justify-center text-orange-500"><CloudOutlined class="text-lg" /></div>
-                        <div>
-                          <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Thời tiết</p>
-                          <p class="text-xs font-bold text-gray-800 mb-0">{{ log.weather || '—' }}</p>
+                    </td>
+                    <!-- Weather -->
+                    <td class="text-center py-2.5 px-2">
+                      <span v-if="log.weather" class="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 whitespace-nowrap">{{ log.weather }}</span>
+                      <span v-else class="text-gray-300 text-xs">—</span>
+                    </td>
+                    <!-- Personnel -->
+                    <td class="text-center py-2.5 px-2">
+                      <span v-if="log.personnel_count" class="text-xs font-semibold text-gray-700">{{ log.personnel_count }}</span>
+                      <span v-else class="text-gray-300 text-xs">—</span>
+                    </td>
+                    <!-- Progress -->
+                    <td class="py-2.5 px-3">
+                      <div class="flex items-center gap-2">
+                        <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div class="h-full rounded-full transition-all duration-500" :class="(log.completion_percentage || 0) >= 100 ? 'bg-emerald-500' : 'bg-blue-500'" :style="{ width: `${log.completion_percentage || 0}%` }"></div>
                         </div>
+                        <span class="text-xs font-bold min-w-[32px] text-right" :class="(log.completion_percentage || 0) >= 100 ? 'text-emerald-600' : 'text-gray-700'">{{ log.completion_percentage || 0 }}%</span>
                       </div>
-                      <!-- Personnel -->
-                      <div class="bg-gray-50 rounded-xl p-3 flex items-center gap-3 border border-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-sm transition">
-                        <div class="w-10 h-10 rounded-lg bg-blue-100/50 flex items-center justify-center text-blue-500"><TeamOutlined class="text-lg" /></div>
-                        <div>
-                          <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Nhân lực</p>
-                          <p class="text-xs font-bold text-gray-800 mb-0">{{ log.personnel_count ?? '—' }} <span class="text-[10px] font-medium text-gray-500">người</span></p>
-                        </div>
+                    </td>
+                    <!-- Attachments count -->
+                    <td class="text-center py-2.5 px-2">
+                      <span v-if="log.attachments?.length" class="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                        <PictureOutlined class="text-[10px]" /> {{ log.attachments.length }}
+                      </span>
+                      <span v-else class="text-gray-300 text-xs">—</span>
+                    </td>
+                    <!-- Actions -->
+                    <td class="text-center py-2.5 px-2" @click.stop>
+                      <div class="opacity-0 group-hover/row:opacity-100 transition-opacity flex items-center gap-0.5 justify-center">
+                        <a-tooltip title="Sửa">
+                          <a-button v-if="can('log.update')" type="text" size="small" @click="openLogModal(log)" class="text-gray-400 hover:text-blue-600"><EditOutlined /></a-button>
+                        </a-tooltip>
+                        <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký này?" @confirm="deleteLog(log)">
+                          <a-button type="text" size="small" danger class="text-gray-400 hover:text-red-500"><DeleteOutlined /></a-button>
+                        </a-popconfirm>
                       </div>
-                      <!-- Progress -->
-                      <div class="bg-gray-50 rounded-xl p-3 flex flex-col justify-center border border-gray-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-sm transition">
-                        <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex justify-between items-center">
-                          <span class="flex items-center gap-1"><CheckCircleOutlined class="text-emerald-500" /> Tiến độ</span>
-                          <span class="text-emerald-600 text-[11px] font-bold">{{ log.completion_percentage || 0 }}%</span>
-                        </p>
-                        <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-0.5 shadow-inner">
-                          <div class="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full" :style="{ width: `${log.completion_percentage || 0}%` }"></div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Images Gallery -->
-                    <div v-if="log.attachments?.length" class="mt-5 border-t border-gray-100 pt-4">
-                      <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1">
-                        <PictureOutlined class="text-blue-500" /> Hình ảnh / Tài liệu thực tế ({{ log.attachments.length }})
-                      </div>
-                      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                        <a-image-preview-group>
-                          <template v-for="att in log.attachments" :key="att.id">
-                           <div class="aspect-square rounded-xl overflow-hidden border border-gray-200 group/img relative shadow-sm hover:shadow-md transition-all cursor-pointer bg-gray-50">
-                             <!-- Fixed image fill mapping for a-image -->
-                             <a-image 
-                               v-if="att.mime_type?.startsWith('image/')" 
-                               :src="att.file_url" 
-                               :fallback="'/images/fallback-image.png'" 
-                               class="!w-full !h-full object-cover [&>.ant-image-img]:!w-full [&>.ant-image-img]:!h-full [&>.ant-image-img]:object-cover group-hover/img:scale-110 transition duration-500" 
-                             />
-                             <!-- Non-image attachments -->
-                             <a v-else :href="att.file_url" target="_blank" class="absolute inset-0 flex flex-col items-center justify-center hover:bg-blue-50 transition text-gray-400 hover:text-blue-500 z-10 p-2">
-                               <FilePdfOutlined v-if="att.mime_type?.includes('pdf')" class="text-3xl mb-2 text-red-400" />
-                               <FileWordOutlined v-else-if="att.mime_type?.includes('word')" class="text-3xl mb-2 text-blue-500" />
-                               <FileExcelOutlined v-else-if="att.mime_type?.includes('spreadsheet')" class="text-3xl mb-2 text-green-500" />
-                               <FileOutlined v-else class="text-3xl mb-2" />
-                               <span class="text-[10px] text-center px-1 font-medium truncate w-full" :title="att.original_name">{{ att.original_name }}</span>
-                             </a>
-                           </div>
-                          </template>
-                        </a-image-preview-group>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
           </div>
         </div>
       </a-tab-pane>
@@ -2456,7 +2428,13 @@
         </a-col>
         <a-col :span="12">
           <a-form-item label="Phần trăm hoàn thành">
-            <a-slider v-model:value="logForm.completion_percentage" :min="logTaskMinProgress" :max="100" :step="5" :marks="{ [logTaskMinProgress]: `${logTaskMinProgress}%`, 50: '50%', 75: '75%', 100: '100%' }" />
+            <template v-if="logTaskMinProgress >= 100">
+              <div class="flex items-center gap-2 py-2">
+                <a-progress :percent="100" size="small" status="success" style="flex:1" />
+                <span class="text-xs text-emerald-600 font-bold">Đã hoàn thành 100%</span>
+              </div>
+            </template>
+            <a-slider v-else v-model:value="logForm.completion_percentage" :min="logTaskMinProgress" :max="100" :step="5" :marks="logSliderMarks" />
           </a-form-item>
         </a-col>
       </a-row>
@@ -3421,6 +3399,115 @@
            <a-popconfirm v-if="riskDetail.status !== 'closed'" title="Đánh dấu rủi ro đã xử lý?" @confirm="resolveRisk(riskDetail)">
              <a-button class="text-green-600 border-green-600 hover:bg-green-50">✅ Đã xử lý xong</a-button>
            </a-popconfirm>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- LOG DETAIL DRAWER -->
+  <a-drawer v-model:open="showLogDetailDrawer" title="Chi tiết Nhật ký thi công" :width="560" @close="logDetailRecord = null" destroy-on-close class="crm-drawer">
+    <div v-if="logDetailRecord" class="space-y-5 pb-24">
+      <!-- Header Card -->
+      <div class="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-2xl border border-blue-100/60">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-200/50">
+            <UserOutlined v-if="!logDetailRecord.creator?.name" />
+            <span v-else>{{ logDetailRecord.creator.name[0] }}</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold text-gray-800">{{ logDetailRecord.creator?.name || 'Vô danh' }}</div>
+            <div class="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+              <span class="flex items-center gap-1"><CalendarOutlined /> {{ fmtDate(logDetailRecord.log_date) }}</span>
+              <span class="flex items-center gap-1"><ClockCircleOutlined /> {{ logDetailRecord.created_at ? dayjs(logDetailRecord.created_at).format('HH:mm') : '—' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Task Badge -->
+      <div v-if="logDetailRecord.task" class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-2 flex items-center gap-1.5"><ProjectOutlined class="text-blue-500" /> Công việc liên quan</div>
+        <div class="flex items-center gap-3">
+          <div class="flex-1 text-sm font-semibold text-gray-800">{{ logDetailRecord.task.name }}</div>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm text-center">
+          <div class="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center text-amber-500 mx-auto mb-2"><CloudOutlined class="text-base" /></div>
+          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Thời tiết</div>
+          <div class="text-xs font-bold text-gray-800">{{ logDetailRecord.weather || '—' }}</div>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm text-center">
+          <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500 mx-auto mb-2"><TeamOutlined class="text-base" /></div>
+          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Nhân lực</div>
+          <div class="text-xs font-bold text-gray-800">{{ logDetailRecord.personnel_count ?? '—' }} <span class="text-gray-400 font-normal">người</span></div>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm text-center">
+          <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-500 mx-auto mb-2"><CheckCircleOutlined class="text-base" /></div>
+          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Tiến độ</div>
+          <div class="text-sm font-bold" :class="(logDetailRecord.completion_percentage || 0) >= 100 ? 'text-emerald-600' : 'text-gray-800'">{{ logDetailRecord.completion_percentage || 0 }}%</div>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Phần trăm hoàn thành</span>
+          <span class="text-sm font-bold" :class="(logDetailRecord.completion_percentage || 0) >= 100 ? 'text-emerald-600' : 'text-blue-600'">{{ logDetailRecord.completion_percentage || 0 }}%</span>
+        </div>
+        <div class="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-full rounded-full transition-all duration-700" :class="(logDetailRecord.completion_percentage || 0) >= 100 ? 'bg-gradient-to-r from-emerald-400 to-emerald-500' : 'bg-gradient-to-r from-blue-400 to-blue-600'" :style="{ width: `${logDetailRecord.completion_percentage || 0}%` }"></div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-3 flex items-center gap-1.5"><FileOutlined class="text-blue-500" /> Ghi chú / Mô tả công việc</div>
+        <p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed" :class="logDetailRecord.notes ? '' : 'italic text-gray-400'">{{ logDetailRecord.notes || 'Không có ghi chú mô tả.' }}</p>
+      </div>
+
+      <!-- Attachments -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider flex items-center gap-1.5"><PictureOutlined class="text-blue-500" /> Hình ảnh / Tài liệu ({{ logDetailRecord.attachments?.length || 0 }})</div>
+          <a-button type="link" size="small" @click="openAttachModal('logs', logDetailRecord)" class="p-0 text-xs"><UploadOutlined /> Thêm</a-button>
+        </div>
+        <div v-if="logDetailRecord.attachments?.length" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+          <a-image-preview-group>
+            <template v-for="att in logDetailRecord.attachments" :key="att.id">
+              <div class="aspect-square rounded-xl overflow-hidden border border-gray-200 group/img relative shadow-sm hover:shadow-md transition-all cursor-pointer bg-gray-50">
+                <a-image
+                  v-if="att.mime_type?.startsWith('image/')"
+                  :src="att.file_url"
+                  :fallback="'/images/fallback-image.png'"
+                  class="!w-full !h-full object-cover [&>.ant-image-img]:!w-full [&>.ant-image-img]:!h-full [&>.ant-image-img]:object-cover group-hover/img:scale-110 transition duration-500"
+                />
+                <a v-else :href="att.file_url" target="_blank" class="absolute inset-0 flex flex-col items-center justify-center hover:bg-blue-50 transition text-gray-400 hover:text-blue-500 z-10 p-2">
+                  <FilePdfOutlined v-if="att.mime_type?.includes('pdf')" class="text-3xl mb-2 text-red-400" />
+                  <FileWordOutlined v-else-if="att.mime_type?.includes('word')" class="text-3xl mb-2 text-blue-500" />
+                  <FileExcelOutlined v-else-if="att.mime_type?.includes('spreadsheet')" class="text-3xl mb-2 text-green-500" />
+                  <FileOutlined v-else class="text-3xl mb-2" />
+                  <span class="text-[10px] text-center px-1 font-medium truncate w-full" :title="att.original_name">{{ att.original_name }}</span>
+                </a>
+              </div>
+            </template>
+          </a-image-preview-group>
+        </div>
+        <a-empty v-else :image="null" description="Chưa có hình ảnh" class="text-gray-300 my-0 py-2" />
+      </div>
+
+      <!-- Action Footer -->
+      <div class="pt-4 mt-4 border-t border-gray-100 flex justify-between items-center bg-white sticky bottom-0 z-10 py-4">
+        <div class="flex gap-2">
+          <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký này?" @confirm="deleteLog(logDetailRecord); showLogDetailDrawer = false">
+            <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
+          </a-popconfirm>
+        </div>
+        <div class="flex gap-2">
+          <a-button v-if="can('log.update')" @click="openLogModal(logDetailRecord); showLogDetailDrawer = false"><EditOutlined /> Sửa nhật ký</a-button>
+          <a-button type="primary" @click="openAttachModal('logs', logDetailRecord)"><UploadOutlined /> Upload ảnh</a-button>
         </div>
       </div>
     </div>
@@ -4450,7 +4537,8 @@ import {
   SyncOutlined, DownOutlined, ExclamationCircleOutlined, WarningOutlined,
   ProjectOutlined, CloudOutlined, TeamOutlined, PictureOutlined,
   FilePdfOutlined, FileWordOutlined, FileExcelOutlined, ClockCircleOutlined,
-  LineChartOutlined, FileProtectOutlined, BankOutlined, HistoryOutlined
+  LineChartOutlined, FileProtectOutlined, BankOutlined, HistoryOutlined,
+  FileAddOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -4586,6 +4674,11 @@ watch(() => props, (newProps) => {
   if (showRiskDetailDrawer.value && riskDetail.value) {
     const updated = newProps.project?.risks?.find(x => x.id === riskDetail.value.id)
     if (updated) riskDetail.value = updated; else showRiskDetailDrawer.value = false;
+  }
+  if (showLogDetailDrawer.value && logDetailRecord.value) {
+    const logs = newProps.project?.construction_logs || newProps.project?.constructionLogs || []
+    const updated = logs.find(x => x.id === logDetailRecord.value.id)
+    if (updated) logDetailRecord.value = updated; else showLogDetailDrawer.value = false;
   }
 }, { deep: true })
 
@@ -5396,11 +5489,11 @@ const rejectPaymentAction = () => {
 
 // ============ SHARED FILE UPLOAD ============
 const showAttachModal = ref(false)
-const attachType = ref('') // 'cost' | 'payment' | 'additional-cost'
+const attachType = ref('') // 'cost' | 'payment' | 'additional-cost' | 'logs'
 const attachTarget = ref(null)
 const attachFiles = ref([])
 const attachFileInput = ref(null)
-const attachModalTitles = { cost: 'Đính kèm file — Phiếu chi', payment: 'Đính kèm chứng từ — Thanh toán', 'additional-cost': 'Đính kèm file — CP Phát sinh' }
+const attachModalTitles = { cost: 'Đính kèm file — Phiếu chi', payment: 'Đính kèm chứng từ — Thanh toán', 'additional-cost': 'Đính kèm file — CP Phát sinh', logs: 'Đính kèm hình ảnh — Nhật ký thi công' }
 const attachModalTitle = computed(() => attachModalTitles[attachType.value] || 'Đính kèm file')
 const openAttachModal = (type, record) => { attachType.value = type; attachTarget.value = record; attachFiles.value = []; showAttachModal.value = true }
 const onAttachFileChange = (e) => { attachFiles.value = Array.from(e.target.files || []) }
@@ -5412,6 +5505,7 @@ const submitAttachFiles = () => {
     cost: `/projects/${props.project.id}/costs/${attachTarget.value.id}/attach-files`,
     payment: `/projects/${props.project.id}/payments/${attachTarget.value.id}/attach-files`,
     'additional-cost': `/projects/${props.project.id}/additional-costs/${attachTarget.value.id}/attach-files`,
+    logs: `/projects/${props.project.id}/logs/${attachTarget.value.id}/attach-files`,
   }
   router.post(urlMap[attachType.value], formData, savingOptions({
     forceFormData: true,
@@ -5431,12 +5525,21 @@ const showLogModal = ref(false)
 const editingLog = ref(null)
 const logForm = ref({ log_date: null, task_id: null, weather: null, personnel_count: null, completion_percentage: 0, notes: '' })
 
-const openLogModal = (record = null) => {
+// Log Detail Drawer
+const showLogDetailDrawer = ref(false)
+const logDetailRecord = ref(null)
+const openLogDetailDrawer = (log) => {
+  logDetailRecord.value = log
+  showLogDetailDrawer.value = true
+}
+
+const openLogModal = (record = null, preSelectedTaskId = null) => {
   modalFiles.value = []
   logTaskCurrentProgress.value = null
   if (record) {
     editingLog.value = record
     logForm.value = {
+      log_date: record.log_date || null,
       task_id: record.task_id || null,
       weather: record.weather || null,
       personnel_count: record.personnel_count ?? null,
@@ -5445,15 +5548,14 @@ const openLogModal = (record = null) => {
     }
     // Prefill current progress from task's logs
     if (record.task_id) {
-      const taskLogs = (props.project.construction_logs || props.project.constructionLogs || []).filter(l => l.task_id === record.task_id && l.completion_percentage != null)
-      if (taskLogs.length) {
-        const maxPct = Math.max(...taskLogs.map(l => Number(l.completion_percentage)))
-        logTaskCurrentProgress.value = maxPct
-      }
+      onLogTaskChange(record.task_id, true)
     }
   } else {
     editingLog.value = null
-    logForm.value = { log_date: dayjs().format('YYYY-MM-DD'), task_id: null, weather: null, personnel_count: null, completion_percentage: 0, notes: '' }
+    logForm.value = { log_date: dayjs().format('YYYY-MM-DD'), task_id: preSelectedTaskId || null, weather: null, personnel_count: null, completion_percentage: 0, notes: '' }
+    if (preSelectedTaskId) {
+      onLogTaskChange(preSelectedTaskId)
+    }
   }
   showLogModal.value = true
 }
@@ -5461,23 +5563,44 @@ const openLogModal = (record = null) => {
 // When user selects/changes a task, auto-fill completion_percentage with latest progress
 const logTaskCurrentProgress = ref(null)
 const logTaskMinProgress = computed(() => logTaskCurrentProgress.value ?? 0)
-const onLogTaskChange = (taskId) => {
+const logSliderMarks = computed(() => {
+  const min = logTaskMinProgress.value
+  const marks = {}
+  marks[min] = `${min}%`
+  if (min < 50) marks[50] = '50%'
+  if (min < 75) marks[75] = '75%'
+  if (min < 100) marks[100] = '100%'
+  return marks
+})
+const onLogTaskChange = (taskId, isEditing = false) => {
   if (!taskId) {
     logTaskCurrentProgress.value = null
     logForm.value.completion_percentage = 0
     return
   }
-  const logs = (props.project.construction_logs || props.project.constructionLogs || []).filter(
-    l => l.task_id === taskId && l.completion_percentage != null
-  )
-  if (logs.length) {
-    const maxPct = Math.max(...logs.map(l => Number(l.completion_percentage)))
-    logTaskCurrentProgress.value = maxPct
+  
+  // Find task in allTasks to get current progress percentage (backend calculated)
+  const task = (props.allTasks || []).find(t => t.id === taskId)
+  if (task) {
+    const currentPct = Number(task.progress_percentage || 0)
+    logTaskCurrentProgress.value = currentPct
     // Auto-fill: set slider to current progress (user can increase from here)
-    logForm.value.completion_percentage = maxPct
+    if (!isEditing) {
+      logForm.value.completion_percentage = currentPct
+    }
   } else {
-    logTaskCurrentProgress.value = null
-    logForm.value.completion_percentage = 0
+    // Fallback: search logs directly
+    const logs = (props.project.construction_logs || props.project.constructionLogs || []).filter(
+      l => l.task_id === taskId && l.completion_percentage != null
+    )
+    if (logs.length) {
+      const maxPct = Math.max(...logs.map(l => Number(l.completion_percentage)))
+      logTaskCurrentProgress.value = maxPct
+      if (!isEditing) logForm.value.completion_percentage = maxPct
+    } else {
+      logTaskCurrentProgress.value = null
+      if (!isEditing) logForm.value.completion_percentage = 0
+    }
   }
 }
 

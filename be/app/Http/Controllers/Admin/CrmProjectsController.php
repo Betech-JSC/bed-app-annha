@@ -1198,6 +1198,15 @@ class CrmProjectsController extends Controller
             $this->attachFilesToEntity($request, $log, "logs/{$project->id}", false);
 
             DB::commit();
+
+            // Recalculate progress logic
+            if (class_exists(\App\Services\TaskProgressService::class) && $log->task_id) {
+                $task = \App\Models\ProjectTask::find($log->task_id);
+                if ($task) {
+                    app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task, true);
+                }
+            }
+
             return back()->with('success', 'Đã thêm nhật ký thi công.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1270,8 +1279,14 @@ class CrmProjectsController extends Controller
             // Recalculate progress logic (manually triggered if needed, though model usually handles)
             if (class_exists(\App\Services\TaskProgressService::class)) {
                 $service = app(\App\Services\TaskProgressService::class);
-                if ($log->task_id) $service->updateTaskFromLogs($log->task_id);
-                if ($oldTaskId && $oldTaskId != $log->task_id) $service->updateTaskFromLogs($oldTaskId);
+                if ($log->task_id) {
+                    $logTask = \App\Models\ProjectTask::find($log->task_id);
+                    if ($logTask) $service->updateTaskFromLogs($logTask);
+                }
+                if ($oldTaskId && $oldTaskId != $log->task_id) {
+                    $oldTask = \App\Models\ProjectTask::find($oldTaskId);
+                    if ($oldTask) $service->updateTaskFromLogs($oldTask);
+                }
             }
 
             return back()->with('success', 'Đã cập nhật nhật ký thi công.');
