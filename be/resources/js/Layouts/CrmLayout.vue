@@ -264,7 +264,7 @@ const selectedKeys = computed(() => {
   return []
 })
 
-const openKeys = ref(['projects-group', 'hr-group', 'finance-group', 'resource-group', 'operations-group', 'system-group'])
+const openKeys = ref(['projects-group', 'hr-group', 'resource-group', 'operations-group', 'system-group'])
 
 // Permission helper
 const userPerms = computed(() => props.auth?.user?.permissions || [])
@@ -302,17 +302,8 @@ const menuItems = computed(() => {
       label: 'Dự án & Thi công',
       children: [
         { key: 'projects', label: 'Danh sách dự án', perm: 'project.view' },
-        { key: 'reports', label: 'Báo cáo dự án', perm: 'report.view' },
         { key: 'subcontractors', label: 'Nhà thầu phụ', icon: () => h(UsergroupAddOutlined), perm: 'subcontractor.view' },
         { key: 'acceptance-templates', label: 'Bộ TL Nghiệm thu', icon: () => h(FileProtectOutlined), perm: 'acceptance.template.view' },
-      ],
-    },
-    {
-      key: 'finance-group',
-      icon: () => h(DollarOutlined),
-      label: 'Tài chính & Thu chi',
-      children: [
-        { key: 'finance', label: 'Phân tích tài chính', perm: 'finance.view' },
       ],
     },
     {
@@ -331,6 +322,7 @@ const menuItems = computed(() => {
       label: 'Vận hành',
       children: [
         { key: 'operations-dashboard', label: 'Tổng quan dòng tiền' },
+        { key: 'reports', label: 'Báo cáo dự án', perm: 'report.view' },
         { key: 'shareholders', label: 'Nguồn vốn / Cổ đông' },
         { key: 'company-assets', label: 'Quản lý tài sản' },
         { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_financial.view' },

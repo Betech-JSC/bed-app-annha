@@ -15,12 +15,12 @@
   </PageHeader>
 
   <!-- ═══ Stats Row ═══ -->
-  <div class="crm-stats-grid" style="grid-template-columns: repeat(5, 1fr);">
-    <StatCard :value="fmtCurrency(stats.totalCapital)" label="Tổng vốn góp" :icon="BankOutlined" variant="primary" format="text" />
-    <StatCard :value="fmtCurrency(stats.completedProjectsValue)" label="Doanh thu DA hoàn thành" :icon="CheckCircleOutlined" variant="success" format="text" />
-    <StatCard :value="fmtCurrency(stats.totalProjectCosts)" label="Chi phí dự án" :icon="ProjectOutlined" variant="warning" format="text" />
-    <StatCard :value="fmtCurrency(stats.totalOperatingCosts)" label="Chi phí vận hành" :icon="ShopOutlined" variant="danger" format="text" />
-    <StatCard :value="fmtCurrency(stats.totalAssetValue)" label="Tài sản hiện có" :icon="ToolOutlined" variant="accent" format="text" />
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8 text-xs font-medium">
+    <StatCard :value="fmtCurrencyShort(stats.totalCapital)" label="Tổng vốn góp" :icon="BankOutlined" variant="primary" format="text" />
+    <StatCard :value="fmtCurrencyShort(stats.completedProjectsValue)" label="Doanh thu DA hoàn thành" :icon="CheckCircleOutlined" variant="success" format="text" />
+    <StatCard :value="fmtCurrencyShort(stats.totalProjectCosts)" label="Chi phí dự án" :icon="ProjectOutlined" variant="warning" format="text" />
+    <StatCard :value="fmtCurrencyShort(stats.totalOperatingCosts)" label="Chi phí vận hành" :icon="ShopOutlined" variant="danger" format="text" />
+    <StatCard :value="fmtCurrencyShort(stats.totalAssetValue)" label="Tài sản hiện có" :icon="ToolOutlined" variant="accent" format="text" />
   </div>
 
   <!-- ═══ Charts Row ═══ -->
@@ -39,14 +39,16 @@
   </div>
 
   <!-- ═══ Operating Cost Breakdown ═══ -->
-  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8 items-stretch">
     <!-- By expense category -->
-    <ChartCard title="Chi phí vận hành theo loại" subtitle="CAPEX / OPEX / Lương" :height="220">
-      <Doughnut :data="expenseCategoryData" :options="donutOpts" />
+    <ChartCard title="Chi phí vận hành theo loại" subtitle="CAPEX / OPEX / Lương" classes="h-full">
+      <div class="flex items-center justify-center p-4" style="height: 300px;">
+        <Doughnut :data="expenseCategoryData" :options="donutOpts" />
+      </div>
     </ChartCard>
 
     <!-- Asset summary -->
-    <div class="crm-content-card">
+    <div class="crm-content-card h-full flex flex-col">
       <div class="crm-content-card__header">
         <div>
           <h3 class="crm-content-card__title">Tài sản công ty</h3>
@@ -56,17 +58,17 @@
       </div>
       <div class="p-6 space-y-4">
         <div class="grid grid-cols-3 gap-4 text-center">
-          <div class="p-4 rounded-xl bg-blue-50">
-            <div class="text-2xl font-bold text-blue-700">{{ fmtCurrencyShort(stats.totalAssetValue) }}</div>
-            <div class="text-xs text-blue-500 mt-1">Giá trị hiện tại</div>
+          <div class="p-3 rounded-xl bg-blue-50 border border-blue-100/50">
+            <div class="text-xl font-bold text-blue-700 tracking-tight">{{ fmtCurrencyShort(stats.totalAssetValue) }}</div>
+            <div class="text-[10px] uppercase font-bold text-blue-400 mt-1">Giá trị hiện tại</div>
           </div>
-          <div class="p-4 rounded-xl bg-orange-50">
-            <div class="text-2xl font-bold text-orange-600">{{ fmtCurrencyShort(stats.totalDepreciation) }}</div>
-            <div class="text-xs text-orange-500 mt-1">Khấu hao lũy kế</div>
+          <div class="p-3 rounded-xl bg-orange-50 border border-orange-100/50">
+            <div class="text-xl font-bold text-orange-600 tracking-tight">{{ fmtCurrencyShort(stats.totalDepreciation) }}</div>
+            <div class="text-[10px] uppercase font-bold text-orange-400 mt-1">Khấu hao lũy kế</div>
           </div>
-          <div class="p-4 rounded-xl bg-green-50">
-            <div class="text-2xl font-bold text-green-700">{{ stats.assetCount }}</div>
-            <div class="text-xs text-green-500 mt-1">Tổng tài sản</div>
+          <div class="p-3 rounded-xl bg-green-50 border border-green-100/50">
+            <div class="text-xl font-bold text-green-700 tracking-tight">{{ stats.assetCount }}</div>
+            <div class="text-[10px] uppercase font-bold text-green-400 mt-1">Tổng tài sản</div>
           </div>
         </div>
         <!-- Asset by status -->
