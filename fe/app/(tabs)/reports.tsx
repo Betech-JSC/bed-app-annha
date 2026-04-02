@@ -21,6 +21,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { supplierApi } from "@/api/supplierApi";
+import { companyFinancialReportApi } from "@/api/companyFinancialReportApi";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -43,51 +44,22 @@ export default function ReportsScreen() {
     const [totalCosts, setTotalCosts] = useState(0);
     const [totalProfit, setTotalProfit] = useState(0);
     const [companyCapital, setCompanyCapital] = useState<number>(0);
-    const [showCapitalModal, setShowCapitalModal] = useState(false);
-    const [capitalInput, setCapitalInput] = useState("");
     const [totalSupplierDebt, setTotalSupplierDebt] = useState(0);
 
     useEffect(() => {
         loadData();
-        loadCompanyCapital();
     }, []);
-
-    const loadCompanyCapital = async () => {
-        try {
-            const saved = await AsyncStorage.getItem("company_capital");
-            if (saved) {
-                setCompanyCapital(parseFloat(saved) || 0);
-            }
-        } catch (error) {
-            console.error("Error loading company capital:", error);
-        }
-    };
-
-    const saveCompanyCapital = async (value: number) => {
-        try {
-            await AsyncStorage.setItem("company_capital", value.toString());
-            setCompanyCapital(value);
-            setShowCapitalModal(false);
-            setCapitalInput("");
-            Alert.alert("Thành công", "Đã cập nhật vốn công ty");
-        } catch (error) {
-            console.error("Error saving company capital:", error);
-            Alert.alert("Lỗi", "Không thể lưu vốn công ty");
-        }
-    };
-
-    const handleUpdateCapital = () => {
-        const value = parseFloat(capitalInput.replace(/[^0-9.]/g, ""));
-        if (isNaN(value) || value < 0) {
-            Alert.alert("Lỗi", "Vui lòng nhập số tiền hợp lệ");
-            return;
-        }
-        saveCompanyCapital(value);
-    };
 
     const loadData = async () => {
         try {
             setLoading(true);
+            
+            // Lấy vốn công ty từ API báo cáo tổng hợp
+            const financialSummary = await companyFinancialReportApi.getSummary();
+            if (financialSummary.success) {
+                setCompanyCapital((financialSummary.data.summary as any).total_capital || 0);
+            }
+
             const loadedProjects = await loadProjects();
             if (loadedProjects && loadedProjects.length > 0) {
                 await loadSummaries(loadedProjects);
@@ -269,24 +241,17 @@ export default function ReportsScreen() {
             >
                 {/* Summary Cards */}
                 <View style={styles.summarySection}>
-                    {/* Vốn Công Ty */}
-                    <TouchableOpacity
-                        style={styles.summaryCard}
-                        onPress={() => {
-                            setCapitalInput(companyCapital.toString());
-                            setShowCapitalModal(true);
-                        }}
-                    >
-                        <View style={styles.summaryIconContainer}>
-                            <Ionicons name="wallet" size={24} color="#8B5CF6" />
+                    {/* Vốn Công Ty (Đã tự động hóa) */}
+                    <View style={styles.summaryCard}>
+                        <View style={[styles.summaryIconContainer, { backgroundColor: '#F3E8FF' }]}>
+                            <Ionicons name="business" size={24} color="#8B5CF6" />
                         </View>
                         <View style={styles.summaryCardHeader}>
-                            <Text style={styles.summaryLabel}>Vốn Công Ty</Text>
-                            <Ionicons name="create-outline" size={16} color="#6B7280" />
+                            <Text style={styles.summaryLabel}>Tổng Vốn Công Ty</Text>
                         </View>
                         <Text style={styles.summaryValue}>{formatCurrency(companyCapital)}</Text>
-                        <Text style={styles.summaryHint}>Nhấn để cập nhật</Text>
-                    </TouchableOpacity>
+                        <Text style={styles.summarySubtext}>Tổng vốn từ cổ đông</Text>
+                    </View>
 
                     {/* Tổng Lợi Nhuận */}
                     <View style={styles.summaryCard}>
@@ -525,59 +490,6 @@ export default function ReportsScreen() {
                 </View>
             </ScrollView>
 
-            {/* Company Capital Modal */}
-            <Modal
-                visible={showCapitalModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowCapitalModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Cập Nhật Vốn Công Ty</Text>
-                            <TouchableOpacity onPress={() => setShowCapitalModal(false)}>
-                                <Ionicons name="close" size={24} color="#1F2937" />
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.modalBody}>
-                            <Text style={styles.modalLabel}>Vốn công ty (VNĐ)</Text>
-                            <TextInput
-                                style={styles.modalInput}
-                                placeholder="Nhập số tiền vốn công ty"
-                                value={capitalInput}
-                                onChangeText={(text) => {
-                                    // Chỉ cho phép số và dấu chấm
-                                    const cleaned = text.replace(/[^0-9.]/g, "");
-                                    setCapitalInput(cleaned);
-                                }}
-                                keyboardType="numeric"
-                                autoFocus={true}
-                            />
-                            <Text style={styles.modalHint}>
-                                Vốn ban đầu của doanh nghiệp để so sánh với dòng tiền & lợi nhuận
-                            </Text>
-                        </View>
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
-                                onPress={() => {
-                                    setShowCapitalModal(false);
-                                    setCapitalInput("");
-                                }}
-                            >
-                                <Text style={styles.cancelButtonText}>Hủy</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.saveButton]}
-                                onPress={handleUpdateCapital}
-                            >
-                                <Text style={styles.saveButtonText}>Lưu</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 }

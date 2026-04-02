@@ -127,6 +127,20 @@ export default function FinancialDetailsScreen() {
                     </View>
                 </View>
 
+                {/* Equity Breakdown */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>PHÂN TÍCH VỐN CHỦ SỞ HỮU</Text>
+                    <View style={[styles.detailRow, styles.totalRow]}>
+                        <Text style={styles.totalLabel}>Tổng vốn công ty</Text>
+                        <Text style={[styles.totalValue, { color: '#8B5CF6' }]}>
+                            {formatCurrency((summary.summary as any).total_capital || 0)}
+                        </Text>
+                    </View>
+                    <Text style={[styles.label, { marginTop: 8, fontStyle: 'italic', fontSize: 12 }]}>
+                        * Tổng cộng từ tất cả cổ đông đã góp vốn.
+                    </Text>
+                </View>
+
                 {/* Company Costs Breakdown */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>CHI PHÍ VẬN HÀNH CÔNG TY</Text>

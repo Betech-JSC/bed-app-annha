@@ -82,25 +82,18 @@ export default function SettingsScreen() {
 
   const menuItems = [
     {
+      title: "Vận Hành",
+      icon: "business-outline",
+      route: "/operations",
+      permission: Permissions.OPERATIONS_DASHBOARD_VIEW,
+      description: "Quản lý cổ đông, nguồn vốn và tài sản công ty",
+    },
+    {
       title: "Nhóm Chi Phí Dự Án",
       icon: "folder-outline",
       route: "/settings/cost-groups",
       permission: Permissions.SETTINGS_MANAGE,
       description: "Quản lý các nhóm chi phí áp dụng cho toàn bộ dự án",
-    },
-    {
-      title: "Chi Phí Công Ty",
-      icon: "wallet-outline",
-      route: "/company-costs",
-      permission: Permissions.SETTINGS_MANAGE,
-      description: "Quản lý chi phí hoạt động chung của công ty (không gắn với dự án cụ thể)",
-    },
-    {
-      title: "Báo Cáo Tài Chính Công Ty",
-      icon: "analytics-outline",
-      route: "/company-financial",
-      permission: Permissions.SETTINGS_MANAGE,
-      description: "Xem báo cáo tài chính tổng hợp, P&L, xu hướng và so sánh hiệu suất",
     },
     {
       title: "Nhà Cung Cấp (NCC)",

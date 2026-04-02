@@ -43,6 +43,7 @@ export interface CompanyFinancialSummary {
         total_project_costs: number;
         total_company_costs: number;
         total_all_costs: number;
+        total_capital: number;
         gross_profit: number;
         gross_margin: number;
         net_profit: number;

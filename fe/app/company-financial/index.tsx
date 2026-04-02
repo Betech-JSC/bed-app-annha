@@ -140,7 +140,21 @@ export default function CompanyFinancialDashboardScreen() {
                 contentContainerStyle={{ paddingBottom: tabBarHeight + 16 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
-                {/* Summary Cards */}
+                {/* NEW: Company Capital Card - Prioritized Top */}
+                <View style={styles.summaryGrid}>
+                    <View style={[styles.summaryCard, { borderLeftColor: '#8B5CF6', borderLeftWidth: 4, flex: 1 }]}>
+                        <Ionicons name="business-outline" size={24} color="#8B5CF6" />
+                        <Text style={styles.summaryLabel}>Tổng Vốn Công Ty</Text>
+                        <Text style={styles.summaryValue}>
+                            {formatCompact((summary.summary as any).total_capital || 0)}
+                        </Text>
+                        <Text style={styles.summarySubtext}>
+                            {formatCurrency((summary.summary as any).total_capital || 0)}
+                        </Text>
+                    </View>
+                </View>
+
+                {/* Other Summary Cards */}
                 <View style={styles.summaryGrid}>
                     <View style={[styles.summaryCard, styles.revenueCard]}>
                         <Ionicons name="trending-up" size={24} color="#10B981" />

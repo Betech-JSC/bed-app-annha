@@ -356,6 +356,21 @@ export const Permissions = {
     // ===================================================================
     GANTT_VIEW: 'gantt.view',
     GANTT_UPDATE: 'gantt.update',
+
+    // ===================================================================
+    // OPERATIONS MODULE (Shareholders, Company Assets)
+    // ===================================================================
+    OPERATIONS_DASHBOARD_VIEW: 'operations.dashboard.view',
+    SHAREHOLDER_VIEW: 'shareholder.view',
+    SHAREHOLDER_CREATE: 'shareholder.create',
+    SHAREHOLDER_UPDATE: 'shareholder.update',
+    SHAREHOLDER_DELETE: 'shareholder.delete',
+    COMPANY_ASSET_VIEW: 'company_asset.view',
+    COMPANY_ASSET_CREATE: 'company_asset.create',
+    COMPANY_ASSET_UPDATE: 'company_asset.update',
+    COMPANY_ASSET_DELETE: 'company_asset.delete',
+    COMPANY_ASSET_ASSIGN: 'company_asset.assign',
+    COMPANY_ASSET_DEPRECIATE: 'company_asset.depreciate',
 } as const;
 
 // Type for permission values

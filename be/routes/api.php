@@ -62,6 +62,7 @@ use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\MaterialQuotaController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\LaborProductivityController;
+use App\Http\Controllers\Api\OperationsController;
 
 Route::post('login', [AuthController::class, 'login']);
 Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
@@ -97,6 +98,28 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Options for dropdowns (project statuses, equipment statuses, roles, etc.)
     Route::get('options', [OptionsController::class, 'index']);
+
+    // ===================================================================
+    // OPERATIONS MODULE (Shareholders, Assets, Dashboard)
+    // ===================================================================
+    Route::prefix('operations')->group(function () {
+        Route::get('/dashboard', [OperationsController::class, 'dashboard']);
+
+        // Shareholders
+        Route::get('/shareholders', [OperationsController::class, 'shareholders']);
+        Route::post('/shareholders', [OperationsController::class, 'storeShareholder']);
+        Route::put('/shareholders/{id}', [OperationsController::class, 'updateShareholder']);
+        Route::delete('/shareholders/{id}', [OperationsController::class, 'destroyShareholder']);
+
+        // Company Assets
+        Route::get('/assets', [OperationsController::class, 'assets']);
+        Route::post('/assets', [OperationsController::class, 'storeAsset']);
+        Route::get('/assets/{id}', [OperationsController::class, 'showAsset']);
+        Route::put('/assets/{id}', [OperationsController::class, 'updateAsset']);
+        Route::delete('/assets/{id}', [OperationsController::class, 'destroyAsset']);
+        Route::post('/assets/{id}/assign', [OperationsController::class, 'assignAsset']);
+        Route::post('/assets/run-depreciation', [OperationsController::class, 'runDepreciation']);
+    });
 
     // ===================================================================
     // APPROVAL CENTER (Trung tâm duyệt yêu cầu)

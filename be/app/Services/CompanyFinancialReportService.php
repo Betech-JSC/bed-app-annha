@@ -36,7 +36,9 @@ class CompanyFinancialReportService
         // 3. CHI PHÍ CÔNG TY
         $companyCostsData = $this->calculateCompanyCosts($startDate, $endDate);
 
-        // 4. TÍNH TOÁN LỢI NHUẬN
+        $totalCapital = \App\Models\Shareholder::sum('contributed_amount');
+
+        // 5. TÍNH TOÁN LỢI NHUẬN
         $grossProfit = $revenueData['total_revenue'] - $projectCostsData['total'];
         $netProfit = $grossProfit - $companyCostsData['total'];
 
@@ -56,11 +58,15 @@ class CompanyFinancialReportService
             'revenue' => $revenueData,
             'project_costs' => $projectCostsData,
             'company_costs' => $companyCostsData,
+            'equity' => [
+                'total_capital' => (float) $totalCapital,
+            ],
             'summary' => [
                 'total_revenue' => $revenueData['total_revenue'],
                 'total_project_costs' => $projectCostsData['total'],
                 'total_company_costs' => $companyCostsData['total'],
                 'total_all_costs' => $projectCostsData['total'] + $companyCostsData['total'],
+                'total_capital' => (float) $totalCapital,
                 'gross_profit' => $grossProfit,
                 'gross_margin' => round($grossMargin, 2),
                 'net_profit' => $netProfit,

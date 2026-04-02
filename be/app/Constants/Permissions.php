@@ -354,6 +354,23 @@ class Permissions
     public const COMPANY_FINANCIAL_VIEW = 'company_financial.view';
 
     // ===================================================================
+    // OPERATIONS MODULE (Shareholders, Company Assets)
+    // ===================================================================
+    public const SHAREHOLDER_VIEW = 'shareholder.view';
+    public const SHAREHOLDER_CREATE = 'shareholder.create';
+    public const SHAREHOLDER_UPDATE = 'shareholder.update';
+    public const SHAREHOLDER_DELETE = 'shareholder.delete';
+
+    public const COMPANY_ASSET_VIEW = 'company_asset.view';
+    public const COMPANY_ASSET_CREATE = 'company_asset.create';
+    public const COMPANY_ASSET_UPDATE = 'company_asset.update';
+    public const COMPANY_ASSET_DELETE = 'company_asset.delete';
+    public const COMPANY_ASSET_ASSIGN = 'company_asset.assign';
+    public const COMPANY_ASSET_DEPRECIATE = 'company_asset.depreciate';
+
+    public const OPERATIONS_DASHBOARD_VIEW = 'operations.dashboard.view';
+
+    // ===================================================================
     // PROJECT MONITORING MODULE
     // ===================================================================
     public const PROJECT_MONITORING_VIEW = 'project.monitoring.view';
@@ -634,6 +651,19 @@ class Permissions
             // Company Financial
             self::COMPANY_FINANCIAL_VIEW,
 
+            // Operations
+            self::SHAREHOLDER_VIEW,
+            self::SHAREHOLDER_CREATE,
+            self::SHAREHOLDER_UPDATE,
+            self::SHAREHOLDER_DELETE,
+            self::COMPANY_ASSET_VIEW,
+            self::COMPANY_ASSET_CREATE,
+            self::COMPANY_ASSET_UPDATE,
+            self::COMPANY_ASSET_DELETE,
+            self::COMPANY_ASSET_ASSIGN,
+            self::COMPANY_ASSET_DEPRECIATE,
+            self::OPERATIONS_DASHBOARD_VIEW,
+
             // Project Monitoring
             self::PROJECT_MONITORING_VIEW,
 
@@ -882,6 +912,19 @@ class Permissions
             ],
             'company_financial' => [
                 self::COMPANY_FINANCIAL_VIEW,
+            ],
+            'operations' => [
+                self::OPERATIONS_DASHBOARD_VIEW,
+                self::SHAREHOLDER_VIEW,
+                self::SHAREHOLDER_CREATE,
+                self::SHAREHOLDER_UPDATE,
+                self::SHAREHOLDER_DELETE,
+                self::COMPANY_ASSET_VIEW,
+                self::COMPANY_ASSET_CREATE,
+                self::COMPANY_ASSET_UPDATE,
+                self::COMPANY_ASSET_DELETE,
+                self::COMPANY_ASSET_ASSIGN,
+                self::COMPANY_ASSET_DEPRECIATE,
             ],
             'project_monitoring' => [
                 self::PROJECT_MONITORING_VIEW,
