@@ -210,7 +210,8 @@ import {
   FileProtectOutlined,
   CheckCircleFilled,
   CloseCircleFilled,
-  CloseOutlined
+  CloseOutlined,
+  BankOutlined
 } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -248,7 +249,9 @@ const selectedKeys = computed(() => {
   if (url.startsWith('/hr/org-chart')) return ['org-chart']
   if (url.startsWith('/hr/departments')) return ['departments']
   if (url.startsWith('/hr')) return ['employees']
-  if (url.startsWith('/finance')) return ['commerce']
+  if (url.startsWith('/finance/company-costs')) return ['company-costs']
+  if (url.startsWith('/finance')) return ['finance']
+  if (url.startsWith('/operations')) return ['operations-dashboard']
   if (url.startsWith('/cost-groups')) return ['cost-groups']
   if (url.startsWith('/materials')) return ['materials']
   if (url.startsWith('/equipment')) return ['equipment']
@@ -261,7 +264,7 @@ const selectedKeys = computed(() => {
   return []
 })
 
-const openKeys = ref(['projects-group', 'hr-group', 'finance-group', 'resource-group', 'system-group'])
+const openKeys = ref(['projects-group', 'hr-group', 'finance-group', 'resource-group', 'operations-group', 'system-group'])
 
 // Permission helper
 const userPerms = computed(() => props.auth?.user?.permissions || [])
@@ -310,8 +313,6 @@ const menuItems = computed(() => {
       label: 'Tài chính & Thu chi',
       children: [
         { key: 'finance', label: 'Phân tích tài chính', perm: 'finance.view' },
-        { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_financial.view' },
-        { key: 'cost-groups', label: 'Nhóm chi phí', perm: 'cost.view' },
       ],
     },
     {
@@ -322,6 +323,18 @@ const menuItems = computed(() => {
         { key: 'materials', label: 'Vật tư xây dựng', perm: 'material.view' },
         { key: 'equipment', label: 'Máy móc & Thiết bị', perm: 'equipment.view' },
         { key: 'suppliers', label: 'Nhà cung cấp', icon: () => h(ShopOutlined), perm: 'material.view' },
+      ],
+    },
+    {
+      key: 'operations-group',
+      icon: () => h(BankOutlined),
+      label: 'Vận hành',
+      children: [
+        { key: 'operations-dashboard', label: 'Tổng quan dòng tiền' },
+        { key: 'shareholders', label: 'Nguồn vốn / Cổ đông' },
+        { key: 'company-assets', label: 'Quản lý tài sản' },
+        { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_financial.view' },
+        { key: 'cost-groups', label: 'Nhóm chi phí', perm: 'cost.view' },
       ],
     },
     {
@@ -393,6 +406,9 @@ const handleMenuClick = ({ key }) => {
     subcontractors: '/subcontractors',
     suppliers: '/suppliers',
     'acceptance-templates': '/acceptance-templates',
+    'operations-dashboard': '/operations',
+    shareholders: '/operations/shareholders',
+    'company-assets': '/operations/assets',
     notifications: '/notifications',
     settings: '/settings',
     roles: '/roles',

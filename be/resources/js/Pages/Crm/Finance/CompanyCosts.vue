@@ -163,9 +163,19 @@
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Loại chi phí</label>
+          <a-select v-model:value="form.expense_category" style="width: 100%;" size="large" placeholder="Phân loại" allow-clear>
+            <a-select-option value="capex">CAPEX — Mua sắm tài sản</a-select-option>
+            <a-select-option value="opex">OPEX — Vận hành (điện, nước, mặt bằng)</a-select-option>
+            <a-select-option value="payroll">Lương, thưởng, bảo hiểm</a-select-option>
+          </a-select>
+        </div>
+        <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Ngày chi phí <span class="text-red-500">*</span></label>
           <a-date-picker v-model:value="formDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
         </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Nhà cung cấp</label>
           <a-select v-model:value="form.supplier_id" style="width: 100%;" size="large" placeholder="Chọn NCC" allow-clear show-search :filter-option="filterOption">
@@ -340,6 +350,7 @@ const form = useForm({
   quantity: null,
   unit: '',
   supplier_id: null,
+  expense_category: null,
 })
 
 const showCreateModal = () => {
@@ -358,6 +369,7 @@ const showEditModal = (record) => {
   form.quantity = record.quantity ? parseFloat(record.quantity) : null
   form.unit = record.unit || ''
   form.supplier_id = record.supplier_id
+  form.expense_category = record.expense_category || null
   formDate.value = record.cost_date ? dayjs(record.cost_date) : null
   modalVisible.value = true
 }

@@ -195,6 +195,7 @@ class CrmFinanceController extends Controller
             'quantity' => 'nullable|numeric|min:0',
             'unit' => 'nullable|string|max:50',
             'supplier_id' => 'nullable|exists:suppliers,id',
+            'expense_category' => 'nullable|in:capex,opex,payroll',
         ]);
 
         $cost = Cost::create([
@@ -207,6 +208,7 @@ class CrmFinanceController extends Controller
             'quantity' => $validated['quantity'] ?? null,
             'unit' => $validated['unit'] ?? null,
             'supplier_id' => $validated['supplier_id'] ?? null,
+            'expense_category' => $validated['expense_category'] ?? null,
             'status' => 'draft',
             // Note: created_by FK constrains to users table — admin IDs don't exist there
         ]);
@@ -234,6 +236,7 @@ class CrmFinanceController extends Controller
             'quantity' => 'nullable|numeric|min:0',
             'unit' => 'nullable|string|max:50',
             'supplier_id' => 'nullable|exists:suppliers,id',
+            'expense_category' => 'nullable|in:capex,opex,payroll',
         ]);
 
         $cost->update($validated);

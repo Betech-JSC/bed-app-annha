@@ -96,6 +96,7 @@ use App\Http\Controllers\Admin\CrmProjectsController;
 use App\Http\Controllers\Admin\CrmHrController;
 use App\Http\Controllers\Admin\CrmFinanceController;
 use App\Http\Controllers\Admin\CrmMaterialsController;
+use App\Http\Controllers\Admin\CrmOperationsController;
 use App\Http\Controllers\Admin\CrmCostGroupsController;
 use App\Http\Controllers\Admin\CrmEquipmentController;
 use App\Http\Controllers\Admin\CrmSettingsController;
@@ -517,6 +518,25 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/logo', [CrmSettingsController::class, 'uploadLogo'])->name('logo');
         Route::put('/smtp', [CrmSettingsController::class, 'updateSmtp'])->name('smtp');
         Route::post('/smtp/test', [CrmSettingsController::class, 'testSmtp'])->name('smtp.test');
+    });
+
+    // Operations (Vận hành — Dòng tiền, Nguồn vốn, Tài sản)
+    Route::prefix('operations')->name('operations.')->group(function () {
+        Route::get('/', [CrmOperationsController::class, 'index'])->name('index');
+
+        // Shareholders
+        Route::get('/shareholders', [CrmOperationsController::class, 'shareholders'])->name('shareholders');
+        Route::post('/shareholders', [CrmOperationsController::class, 'storeShareholder'])->name('shareholders.store');
+        Route::put('/shareholders/{id}', [CrmOperationsController::class, 'updateShareholder'])->name('shareholders.update');
+        Route::delete('/shareholders/{id}', [CrmOperationsController::class, 'destroyShareholder'])->name('shareholders.destroy');
+
+        // Assets
+        Route::get('/assets', [CrmOperationsController::class, 'assets'])->name('assets');
+        Route::post('/assets', [CrmOperationsController::class, 'storeAsset'])->name('assets.store');
+        Route::put('/assets/{id}', [CrmOperationsController::class, 'updateAsset'])->name('assets.update');
+        Route::delete('/assets/{id}', [CrmOperationsController::class, 'destroyAsset'])->name('assets.destroy');
+        Route::post('/assets/{id}/assign', [CrmOperationsController::class, 'assignAsset'])->name('assets.assign');
+        Route::post('/assets/run-depreciation', [CrmOperationsController::class, 'runDepreciation'])->name('assets.depreciation');
     });
 });
 

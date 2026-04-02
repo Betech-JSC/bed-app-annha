@@ -21,6 +21,7 @@ class Cost extends Model
         'acceptance_stage_id',
         'category',
         'cost_group_id',
+        'expense_category',
         'budget_item_id',
         'payroll_id',
         'subcontractor_id',
