@@ -408,11 +408,10 @@ class OperationsController extends Controller
             ->where('current_value', '>', 0)
             ->get();
 
-        $count = 0;
-        foreach ($assets as $asset) {
+        $assets->each(function (CompanyAsset $asset) {
             $asset->runMonthlyDepreciation();
-            $count++;
-        }
+        });
+        $count = $assets->count();
 
         return response()->json([
             'success' => true,
