@@ -311,6 +311,96 @@ export default function CostDetailScreen() {
           </View>
         </View>
 
+        {/* Linked Material Bill - "Ấn vào để xem chi tiết phiếu" */}
+        {cost.material_bill && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Phiếu Vật Liệu Liên Quan</Text>
+            <TouchableOpacity
+              style={styles.linkedBillCard}
+              activeOpacity={0.7}
+              onPress={() => {
+                router.push(`/projects/${id}/material-bills/${cost.material_bill!.id}`);
+              }}
+            >
+              <View style={styles.linkedBillHeader}>
+                <View style={styles.linkedBillIconContainer}>
+                  <Ionicons name="receipt-outline" size={22} color="#3B82F6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.linkedBillNumber}>
+                    {cost.material_bill.bill_number || `Bill #${cost.material_bill.id}`}
+                  </Text>
+                  <Text style={styles.linkedBillDate}>
+                    {cost.material_bill.supplier?.name || ''} • {new Date(cost.material_bill.bill_date).toLocaleDateString("vi-VN")}
+                  </Text>
+                </View>
+                <Text style={styles.linkedBillAmount}>
+                  {formatCurrency(cost.material_bill.total_amount)}
+                </Text>
+              </View>
+
+              {/* Bill Items Preview */}
+              {cost.material_bill.items && cost.material_bill.items.length > 0 && (
+                <View style={styles.linkedBillItems}>
+                  {cost.material_bill.items.slice(0, 3).map((item, idx) => (
+                    <View key={idx} style={styles.linkedBillItemRow}>
+                      <Text style={styles.linkedBillItemName} numberOfLines={1}>
+                        {item.material?.name || `Vật liệu #${idx + 1}`}
+                      </Text>
+                      <Text style={styles.linkedBillItemQty}>
+                        {item.quantity} {item.material?.unit || ''} × {new Intl.NumberFormat("vi-VN").format(item.unit_price)}đ
+                      </Text>
+                    </View>
+                  ))}
+                  {cost.material_bill.items.length > 3 && (
+                    <Text style={styles.linkedBillMoreItems}>
+                      +{cost.material_bill.items.length - 3} vật liệu khác
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              <View style={styles.linkedBillFooter}>
+                <Ionicons name="open-outline" size={16} color="#3B82F6" />
+                <Text style={styles.linkedBillViewText}>Ấn vào để xem chi tiết phiếu</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Linked Material Info (without bill) */}
+        {cost.material && !cost.material_bill && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Thông Tin Vật Liệu</Text>
+            <View style={styles.card}>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Tên vật liệu</Text>
+                <Text style={styles.infoValue}>{cost.material.name}</Text>
+              </View>
+              {cost.material.code && (
+                <>
+                  <View style={styles.divider} />
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Mã vật liệu</Text>
+                    <Text style={styles.infoValue}>{cost.material.code}</Text>
+                  </View>
+                </>
+              )}
+              {cost.quantity && (
+                <>
+                  <View style={styles.divider} />
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Số lượng</Text>
+                    <Text style={styles.infoValue}>
+                      {cost.quantity} {cost.unit || cost.material.unit || ''}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Attachments */}
         {cost.attachments && cost.attachments.length > 0 && (
           <View style={styles.section}>
@@ -855,6 +945,85 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  linkedBillCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    overflow: "hidden",
+  },
+  linkedBillHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    gap: 12,
+  },
+  linkedBillIconContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  linkedBillNumber: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  linkedBillDate: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  linkedBillAmount: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#EF4444",
+  },
+  linkedBillItems: {
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  linkedBillItemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  linkedBillItemName: {
+    fontSize: 13,
+    color: "#374151",
+    flex: 1,
+    marginRight: 8,
+  },
+  linkedBillItemQty: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  linkedBillMoreItems: {
+    fontSize: 12,
+    color: "#3B82F6",
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  linkedBillFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: 12,
+    backgroundColor: "#EFF6FF",
+    borderTopWidth: 1,
+    borderTopColor: "#DBEAFE",
+  },
+  linkedBillViewText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#3B82F6",
   },
 });
 

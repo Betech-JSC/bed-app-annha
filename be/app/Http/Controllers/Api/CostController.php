@@ -37,7 +37,7 @@ class CostController extends Controller
         }
 
         $query = Cost::where('project_id', $project->id)
-            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialTransactions']);
+            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialTransactions', 'materialBill.items.material', 'materialBill.supplier']);
 
         // Filter theo category hoặc cost_group_id
         if ($category = $request->query('category')) {
@@ -214,7 +214,7 @@ class CostController extends Controller
         }
 
         $cost = Cost::where('project_id', $project->id)
-            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialTransactions'])
+            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialTransactions', 'materialBill.items.material', 'materialBill.supplier'])
             ->findOrFail($id);
 
         return response()->json([

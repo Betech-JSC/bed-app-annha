@@ -85,6 +85,17 @@ export interface Cost {
     current_stock: number;
   };
   material_transaction?: any;
+  material_bill_id?: number;
+  material_bill?: {
+    id: number;
+    uuid: string;
+    bill_number: string;
+    bill_date: string;
+    total_amount: number;
+    status: string;
+    supplier?: { name: string };
+    items?: Array<{ material?: { name: string; unit: string }; quantity: number; unit_price: number; total_price: number }>;
+  };
   attachments?: Array<{
     id: number;
     attachment_id: number;

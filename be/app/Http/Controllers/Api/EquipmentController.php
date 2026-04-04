@@ -339,7 +339,7 @@ class EquipmentController extends Controller
             'allocated_to' => 'nullable|exists:users,id',
             'notes' => 'nullable|string',
             // Cho MUA (buy):
-            'manager_id' => 'nullable|exists:users,id|required_if:allocation_type,buy',
+            'manager_id' => 'nullable|exists:users,id',
             'handover_date' => 'nullable|date',
             'return_date' => 'nullable|date|after_or_equal:handover_date',
             // Cho THUÊ (rent):

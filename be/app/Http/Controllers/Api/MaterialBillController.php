@@ -84,6 +84,8 @@ class MaterialBillController extends Controller
             'items.*.material_id' => 'required|exists:materials,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
             'items.*.unit_price' => 'required|numeric|min:0',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
 
         if ($validator->fails()) {
@@ -145,6 +147,19 @@ class MaterialBillController extends Controller
                 'status' => 'draft',
                 'created_by' => $user->id,
             ]);
+
+            // Link attachments to the bill if provided
+            if ($request->has('attachment_ids') && is_array($request->attachment_ids)) {
+                foreach ($request->attachment_ids as $attachmentId) {
+                    $attachment = \App\Models\Attachment::find($attachmentId);
+                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
+                        $attachment->update([
+                            'attachable_type' => MaterialBill::class,
+                            'attachable_id' => $bill->id,
+                        ]);
+                    }
+                }
+            }
 
             DB::commit();
 

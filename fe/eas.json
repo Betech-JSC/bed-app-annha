@@ -17,9 +17,23 @@
         "API_URL": "https://annha.betech-digital.com/api",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
+    },
+    "production-store2": {
+      "autoIncrement": true,
+      "env": {
+        "API_URL": "https://annha.betech-digital.com/api",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "APP_BUNDLE_ID": "com.annha.app",
+        "APP_PACKAGE": "com.annha.app"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "production-store2": {
+      "ios": {
+        "ascAppId": "6761600746"
+      }
+    }
   }
 }

@@ -20,6 +20,7 @@ import { supplierApi, Supplier } from "@/api/supplierApi";
 import { costGroupApi, CostGroup } from "@/api/costGroupApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
+import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 
 export default function CreateMaterialBillScreen() {
     const router = useRouter();
@@ -33,6 +34,7 @@ export default function CreateMaterialBillScreen() {
     const [billDate, setBillDate] = useState(new Date());
     const [notes, setNotes] = useState("");
     const [items, setItems] = useState<any[]>([]);
+    const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
     // Adder State (For inline adding)
     const [currentItem, setCurrentItem] = useState({
@@ -77,7 +79,17 @@ export default function CreateMaterialBillScreen() {
             const response = await costGroupApi.getCostGroups({ active_only: true });
             if (response.success) {
                 const data = response.data?.data ?? response.data ?? [];
-                setCostGroups(Array.isArray(data) ? data : []);
+                const groupList = Array.isArray(data) ? data : [];
+                setCostGroups(groupList);
+                // Auto-default to "Vật liệu" cost group
+                if (!costGroup && groupList.length > 0) {
+                    const materialGroup = groupList.find(
+                        (g: CostGroup) => g.name.toLowerCase().includes('vật liệu') || g.code?.toLowerCase() === 'material'
+                    );
+                    if (materialGroup) {
+                        setCostGroup(materialGroup);
+                    }
+                }
             }
         } catch (error) {
             console.error("Error loading cost groups:", error);
@@ -177,6 +189,10 @@ export default function CreateMaterialBillScreen() {
 
         try {
             setLoading(true);
+            const attachmentIds = uploadedFiles
+                .filter(f => f.attachment_id || f.id)
+                .map(f => f.attachment_id || f.id!);
+
             const payload = {
                 supplier_id: supplier.id,
                 bill_number: billNumber,
@@ -187,7 +203,8 @@ export default function CreateMaterialBillScreen() {
                     material_id: item.material_id,
                     quantity: item.quantity,
                     unit_price: item.unit_price,
-                }))
+                })),
+                attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
             };
 
             const response = await materialBillApi.createBill(id!, payload);
@@ -380,15 +397,17 @@ export default function CreateMaterialBillScreen() {
                     {/* ATTACHMENT SECTION */}
                     <View style={styles.attachmentSection}>
                         <Text style={styles.label}>
-                            <Ionicons name="document-text-outline" size={14} /> CHỨNG TỪ ĐÍNH KÈM (ẢNH CHỤP PHIẾU/HÓA ĐƠN)
+                            CHỨNG TỪ ĐÍNH KÈM (ẢNH CHỤP PHIẾU/HÓA ĐƠN)
                         </Text>
-                        <TouchableOpacity style={styles.uploadBox}>
-                            <View style={styles.uploadBtn}>
-                                <Text style={styles.uploadBtnText}>Choose Files</Text>
-                            </View>
-                            <Text style={styles.uploadInfo}>No file chosen</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.uploadNote}>Không bắt buộc đính kèm file</Text>
+                        <UniversalFileUploader
+                            onUploadComplete={(files) => setUploadedFiles(files)}
+                            multiple={true}
+                            accept="all"
+                            maxFiles={10}
+                            initialFiles={uploadedFiles}
+                            label="Chọn file (hóa đơn, báo giá, chứng từ...)"
+                        />
+                        <Text style={styles.uploadNote}>Không bắt buộc đính kèm file - Hỗ trợ ảnh, PDF, tài liệu</Text>
                     </View>
 
                     <View style={styles.footerSpace} />

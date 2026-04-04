@@ -403,6 +403,17 @@ export default function CostsScreen() {
         <Text style={styles.costDescription}>{item.description}</Text>
       )}
 
+      {/* Linked Bill Indicator */}
+      {item.material_bill && (
+        <View style={styles.linkedBillIndicator}>
+          <Ionicons name="receipt-outline" size={14} color="#3B82F6" />
+          <Text style={styles.linkedBillIndicatorText}>
+            Phiếu VL: {item.material_bill.bill_number || `#${item.material_bill.id}`}
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color="#93C5FD" />
+        </View>
+      )}
+
       {/* Actions based on status */}
       {item.status === "draft" && (
         <PermissionGuard permission={Permissions.COST_SUBMIT} projectId={id}>
@@ -1890,5 +1901,20 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  linkedBillIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  linkedBillIndicatorText: {
+    fontSize: 13,
+    color: "#3B82F6",
+    fontWeight: "500",
+    flex: 1,
   },
 });

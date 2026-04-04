@@ -257,6 +257,36 @@ export default function MaterialBillDetailScreen() {
                     </View>
                 )}
 
+                {/* Payment Button for approved bills */}
+                {bill.status === 'approved' && (
+                    <View style={styles.section}>
+                        <TouchableOpacity
+                            style={styles.paymentButton}
+                            onPress={() => {
+                                router.push({
+                                    pathname: `/projects/${id}/costs`,
+                                    params: { 
+                                        defaultCostGroup: 'material',
+                                        fromBill: billId,
+                                        billAmount: bill.total_amount?.toString(),
+                                    }
+                                });
+                            }}
+                        >
+                            <View style={styles.paymentButtonInner}>
+                                <View style={styles.paymentIconContainer}>
+                                    <Ionicons name="wallet-outline" size={24} color="#FFFFFF" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.paymentButtonTitle}>Thanh toán</Text>
+                                    <Text style={styles.paymentButtonSub}>Chuyển qua tab chi phí để tạo phiếu thanh toán</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color="#6B7280" />
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 <View style={{ height: 100 }} />
             </ScrollView>
 
@@ -592,5 +622,42 @@ const styles = StyleSheet.create({
     confirmText: {
         color: "#FFFFFF",
         fontWeight: "700",
+    },
+    paymentButton: {
+        borderRadius: 16,
+        overflow: 'hidden',
+    },
+    paymentButtonInner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#F0FDF4',
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+        borderRadius: 16,
+        gap: 14,
+    },
+    paymentIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: '#10B981',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#10B981',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 4,
+    },
+    paymentButtonTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#065F46',
+    },
+    paymentButtonSub: {
+        fontSize: 12,
+        color: '#6B7280',
+        marginTop: 2,
     },
 });

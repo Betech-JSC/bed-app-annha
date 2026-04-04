@@ -63,7 +63,7 @@ export default function CreateEquipmentAllocationScreen() {
     const loadEquipments = async (query = "") => {
         try {
             setLoadingEquipments(true);
-            const response = await equipmentApi.getEquipment({ search: query, active_only: true });
+            const response = await equipmentApi.getEquipment({ search: query });
             if (response.success) {
                 const data = response.data?.data ?? response.data ?? [];
                 setEquipments(Array.isArray(data) ? data : []);
@@ -355,6 +355,17 @@ export default function CreateEquipmentAllocationScreen() {
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.pickerItemText}>{item.name}</Text>
                                             <Text style={styles.itemCodeText}>{item.code || "---"} • {item.category || "General"}</Text>
+                                        </View>
+                                        <View style={{ 
+                                            backgroundColor: item.status === 'available' ? '#D1FAE5' : item.status === 'in_use' ? '#DBEAFE' : '#FEF3C7',
+                                            paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginRight: 8 
+                                        }}>
+                                            <Text style={{ 
+                                                fontSize: 10, fontWeight: '600',
+                                                color: item.status === 'available' ? '#059669' : item.status === 'in_use' ? '#2563EB' : '#D97706'
+                                            }}>
+                                                {item.status === 'available' ? 'Sẵn sàng' : item.status === 'in_use' ? 'Đang dùng' : item.status === 'maintenance' ? 'Bảo trì' : item.status}
+                                            </Text>
                                         </View>
                                         <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
                                     </TouchableOpacity>
