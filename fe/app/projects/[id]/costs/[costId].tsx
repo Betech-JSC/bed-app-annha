@@ -21,6 +21,7 @@ import { costApi, Cost } from "@/api/revenueApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader, PermissionDenied, PermissionGuard } from "@/components";
 import { Permissions } from "@/constants/Permissions";
+import { useProjectPermissions } from "@/hooks/usePermissions";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import ImageViewer from "@/components/ImageViewer";
 
@@ -28,6 +29,7 @@ export default function CostDetailScreen() {
   const router = useRouter();
   const { id, costId } = useLocalSearchParams<{ id: string; costId: string }>();
   const tabBarHeight = useTabBarHeight();
+  const { hasPermission } = useProjectPermissions(id);
   const [cost, setCost] = useState<Cost | null>(null);
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -239,11 +241,11 @@ export default function CostDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: tabBarHeight }]}>
       <ScreenHeader title="Chi Tiết Chi Phí" showBackButton />
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight }]}
+        contentContainerStyle={[styles.content, { paddingBottom: 100 }]}
       >
         {/* Status Badge */}
         <View style={styles.statusSection}>
@@ -465,7 +467,7 @@ export default function CostDetailScreen() {
         )}
 
         {/* Approval Info */}
-        {(cost.status === "approved" || cost.status === "rejected") && (
+        {(cost.status === "draft" || cost.status === "approved" || cost.status === "rejected" || cost.status === "pending_management_approval" || cost.status === "pending_accountant_approval") && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Thông Tin Duyệt</Text>
             <View style={styles.card}>
@@ -523,6 +525,63 @@ export default function CostDetailScreen() {
                   </View>
                 </>
               )}
+
+              {/* Inline Action Buttons for easier access */}
+              {(cost.status === "draft" || cost.status === "pending_management_approval" || cost.status === "pending_accountant_approval") && (
+                <View style={styles.inlineActions}>
+                  {cost.status === "draft" && (
+                    <PermissionGuard permission={Permissions.COST_SUBMIT} projectId={id} style={{ flex: 1 }}>
+                      <TouchableOpacity
+                        style={[styles.inlineActionButton, styles.inlineSubmitButton]}
+                        onPress={handleSubmit}
+                        disabled={actionLoading}
+                      >
+                        <Ionicons name="send-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.inlineActionText}>Duyệt</Text>
+                      </TouchableOpacity>
+                    </PermissionGuard>
+                  )}
+
+                  {cost.status === "pending_management_approval" && (
+                    <PermissionGuard permission={Permissions.COST_APPROVE_MANAGEMENT} projectId={id} style={{ flex: 1 }}>
+                      <TouchableOpacity
+                        style={[styles.inlineActionButton, styles.inlineApproveButton]}
+                        onPress={handleApproveByManagement}
+                        disabled={actionLoading}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.inlineActionText}>Duyệt</Text>
+                      </TouchableOpacity>
+                    </PermissionGuard>
+                  )}
+
+                  {cost.status === "pending_accountant_approval" && (
+                    <PermissionGuard permission={Permissions.COST_APPROVE_ACCOUNTANT} projectId={id} style={{ flex: 1 }}>
+                      <TouchableOpacity
+                        style={[styles.inlineActionButton, styles.inlineApproveButton]}
+                        onPress={handleApproveByAccountant}
+                        disabled={actionLoading}
+                      >
+                        <Ionicons name="checkmark-done-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.inlineActionText}>Duyệt</Text>
+                      </TouchableOpacity>
+                    </PermissionGuard>
+                  )}
+
+                  {(cost.status === "pending_management_approval" || cost.status === "pending_accountant_approval") && (
+                    <PermissionGuard permission={Permissions.COST_REJECT} projectId={id} style={{ flex: 0.8 }}>
+                      <TouchableOpacity
+                        style={[styles.inlineActionButton, styles.inlineRejectButton]}
+                        onPress={() => setShowRejectModal(true)}
+                        disabled={actionLoading}
+                      >
+                        <Ionicons name="close-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.inlineActionText}>Hủy Duyệt</Text>
+                      </TouchableOpacity>
+                    </PermissionGuard>
+                  )}
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -548,71 +607,129 @@ export default function CostDetailScreen() {
             </View>
           </View>
         )}
+
+        {/* Material Bill Images - show images from linked material bill */}
+        {cost.material_bill && cost.material_bill.attachments && cost.material_bill.attachments.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Hình Ảnh Phiếu Vật Liệu</Text>
+            <View style={styles.card}>
+              <View style={styles.billImagesGrid}>
+                {cost.material_bill.attachments.map((att: any, idx: number) => {
+                  const isImage = att.type === "image" ||
+                    (att.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(att.file_url));
+                  return isImage ? (
+                    <TouchableOpacity
+                      key={att.id || idx}
+                      onPress={() => {
+                        const images = cost.material_bill!.attachments!.filter((a: any) =>
+                          a.type === "image" || (a.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(a.file_url))
+                        );
+                        const imgIdx = images.findIndex((a: any) => a.id === att.id);
+                        setInitialImageIndex(imgIdx >= 0 ? imgIdx : 0);
+                        setImageViewerVisible(true);
+                      }}
+                    >
+                      <Image
+                        source={{ uri: att.file_url }}
+                        style={styles.billImageThumbnail}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                  ) : null;
+                })}
+              </View>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
-      {/* Action Buttons */}
-      <View style={styles.actionBar}>
-        {cost.status === "draft" && (
-          <PermissionGuard permission={Permissions.COST_SUBMIT}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.submitButton]}
-              onPress={handleSubmit}
-              disabled={actionLoading}
-            >
-              <Text style={styles.actionButtonText}>Gửi Duyệt</Text>
-            </TouchableOpacity>
-          </PermissionGuard>
-        )}
+      {/* Action Buttons - Always visible for actionable statuses */}
+      {(cost.status === "draft" || cost.status === "pending_management_approval" || cost.status === "pending_accountant_approval") && (
+        <View style={styles.actionBar}>
+          {cost.status === "draft" && (
+            <PermissionGuard permission={Permissions.COST_SUBMIT} projectId={id} style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.submitButton]}
+                onPress={handleSubmit}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="send-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.actionButtonText}>Duyệt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </PermissionGuard>
+          )}
 
-        {cost.status === "pending_management_approval" && (
-          <PermissionGuard permission={Permissions.COST_APPROVE_MANAGEMENT}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.approveButton]}
-              onPress={handleApproveByManagement}
-              disabled={actionLoading}
-            >
-              <Text style={styles.actionButtonText}>Duyệt (BĐH)</Text>
-            </TouchableOpacity>
-          </PermissionGuard>
-        )}
+          {cost.status === "pending_management_approval" && (
+            <PermissionGuard permission={Permissions.COST_APPROVE_MANAGEMENT} projectId={id} style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.approveButton]}
+                onPress={handleApproveByManagement}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.actionButtonText}>Duyệt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </PermissionGuard>
+          )}
 
-        {cost.status === "pending_accountant_approval" && (
-          <PermissionGuard permission={Permissions.COST_APPROVE_ACCOUNTANT}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.approveButton]}
-              onPress={handleApproveByAccountant}
-              disabled={actionLoading}
-            >
-              <Text style={styles.actionButtonText}>Xác Nhận (KT)</Text>
-            </TouchableOpacity>
-          </PermissionGuard>
-        )}
+          {cost.status === "pending_accountant_approval" && (
+            <PermissionGuard permission={Permissions.COST_APPROVE_ACCOUNTANT} projectId={id} style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.approveButton]}
+                onPress={handleApproveByAccountant}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-done-circle-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.actionButtonText}>Duyệt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </PermissionGuard>
+          )}
 
-        {(cost.status === "pending_management_approval" ||
-          cost.status === "pending_accountant_approval") && (
-            <PermissionGuard permission={Permissions.COST_REJECT}>
+          {(cost.status === "pending_management_approval" || cost.status === "pending_accountant_approval") && (
+            <PermissionGuard permission={Permissions.COST_REJECT} projectId={id} style={{ flex: 0.5 }}>
               <TouchableOpacity
                 style={[styles.actionButton, styles.rejectButton]}
                 onPress={() => setShowRejectModal(true)}
                 disabled={actionLoading}
               >
-                <Text style={styles.actionButtonText}>Từ Chối</Text>
+                <Ionicons name="close-circle-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.actionButtonText}>Hủy Duyệt</Text>
               </TouchableOpacity>
             </PermissionGuard>
           )}
 
-        {cost.status === "draft" && (
-          <PermissionGuard permission={Permissions.COST_DELETE}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.deleteButton]}
-              onPress={handleDelete}
-              disabled={actionLoading}
-            >
-              <Text style={styles.actionButtonText}>Xóa</Text>
-            </TouchableOpacity>
-          </PermissionGuard>
-        )}
-      </View>
+          {cost.status === "draft" && (
+            <PermissionGuard permission={Permissions.COST_DELETE} projectId={id} style={{ flex: 0.5 }}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.deleteButton]}
+                onPress={handleDelete}
+                disabled={actionLoading}
+              >
+                <Ionicons name="trash-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.actionButtonText}>Xóa</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
+          )}
+        </View>
+      )}
 
       {/* Updated Reject Modal with Enhanced UX */}
       <Modal
@@ -632,15 +749,15 @@ export default function CostDetailScreen() {
                   <View style={styles.modalIconContainer}>
                     <Ionicons name="alert-circle" size={32} color="#EF4444" />
                   </View>
-                  <Text style={styles.modalTitle}>Từ chối chi phí</Text>
+                  <Text style={styles.modalTitle}>Hủy duyệt chi phí</Text>
                   <Text style={styles.modalSubtitle}>
-                    Vui lòng nhập lý do từ chối để người tạo có thể chỉnh sửa lại.
+                    Vui lòng nhập lý do hủy duyệt để người tạo có thể chỉnh sửa lại.
                   </Text>
                 </View>
 
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="Nhập lý do từ chối (bắt buộc)..."
+                  placeholder="Nhập lý do hủy duyệt (bắt buộc)..."
                   placeholderTextColor="#9CA3AF"
                   value={rejectReason}
                   onChangeText={setRejectReason}
@@ -676,7 +793,7 @@ export default function CostDetailScreen() {
                       <ActivityIndicator color="#FFFFFF" size="small" />
                     ) : (
                       <Text style={styles.modalConfirmText}>
-                        Xác nhận từ chối
+                        Xác nhận hủy duyệt
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -691,13 +808,22 @@ export default function CostDetailScreen() {
         <ImageViewer
           visible={imageViewerVisible}
           images={
-            cost.attachments?.filter((att) =>
-              att.type === "image" ||
-              (att.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(att.file_url))
-            ).map((att) => ({
-              uri: att.file_url,
-              name: att.original_name,
-            })) || []
+            [
+              ...(cost.attachments?.filter((att) =>
+                att.type === "image" ||
+                (att.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(att.file_url))
+              ).map((att) => ({
+                uri: att.file_url,
+                name: att.original_name,
+              })) || []),
+              ...(cost.material_bill?.attachments?.filter((att: any) =>
+                att.type === "image" ||
+                (att.file_url && /\.(jpg|jpeg|png|gif|webp)$/i.test(att.file_url))
+              ).map((att: any) => ({
+                uri: att.file_url,
+                name: att.original_name,
+              })) || []),
+            ]
           }
           initialIndex={initialImageIndex}
           onClose={() => setImageViewerVisible(false)}
@@ -834,12 +960,23 @@ const styles = StyleSheet.create({
     borderTopColor: "#E5E7EB",
     flexDirection: "row",
     gap: 12,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
   },
   actionButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
   },
   submitButton: {
     backgroundColor: "#3B82F6",
@@ -1024,6 +1161,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#3B82F6",
+  },
+  billImagesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  billImageThumbnail: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+  },
+  // Inline Actions
+  inlineActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    paddingTop: 16,
+  },
+  inlineActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  inlineSubmitButton: {
+    backgroundColor: "#3B82F6",
+  },
+  inlineApproveButton: {
+    backgroundColor: "#10B981",
+  },
+  inlineRejectButton: {
+    backgroundColor: "#EF4444",
+  },
+  inlineActionText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 

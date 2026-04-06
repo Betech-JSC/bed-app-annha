@@ -233,8 +233,13 @@ export default function CostsScreen() {
 
     try {
       const attachmentIds = confirmUploadedFiles
-        .filter(f => f.attachment_id || f.id)
-        .map(f => f.attachment_id || f.id!);
+        .map(f => f.attachment_id || f.id)
+        .filter((id): id is number => id !== undefined && id !== null && id > 0);
+
+      if (attachmentIds.length === 0) {
+        Alert.alert("Lỗi", "File chưa upload xong, vui lòng chờ hoàn tất upload");
+        return;
+      }
 
       const response = await costApi.approveByAccountant(id!, selectedCostForConfirm.id, {
         attachment_ids: attachmentIds
@@ -249,7 +254,8 @@ export default function CostsScreen() {
         loadSummary();
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể xác nhận");
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || "Không thể xác nhận. Vui lòng thử lại.";
+      Alert.alert("Lỗi", errorMsg);
     }
   };
 

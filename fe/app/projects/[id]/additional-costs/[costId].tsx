@@ -269,13 +269,13 @@ export default function AdditionalCostDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: tabBarHeight }]}>
       <ScreenHeader title="Chi Tiết Chi Phí Phát Sinh" showBackButton />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: tabBarHeight },
+          { paddingBottom: 100 },
         ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -336,18 +336,49 @@ export default function AdditionalCostDetailScreen() {
         )}
 
         {/* Thông tin người duyệt */}
-        {cost.approver && (
+        {(cost.approver || cost.status === "pending_approval" || cost.status === "pending") && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-              <Text style={styles.cardTitle}>Người Duyệt</Text>
+              <Text style={styles.cardTitle}>Duyệt Chi Phí</Text>
             </View>
-            <Text style={styles.infoValue}>{cost.approver.name}</Text>
-            <Text style={styles.infoSubtext}>{cost.approver.email}</Text>
-            {cost.approved_at && (
-              <Text style={styles.infoSubtext}>
-                Ngày duyệt: {new Date(cost.approved_at).toLocaleDateString("vi-VN")}
-              </Text>
+            {cost.approver && (
+              <>
+                <Text style={styles.infoValue}>{cost.approver.name}</Text>
+                <Text style={styles.infoSubtext}>{cost.approver.email}</Text>
+                {cost.approved_at && (
+                  <Text style={styles.infoSubtext}>
+                    Ngày duyệt: {new Date(cost.approved_at).toLocaleDateString("vi-VN")}
+                  </Text>
+                )}
+              </>
+            )}
+
+            {/* Inline Action Buttons for easier access */}
+            {(cost.status === "pending_approval" || cost.status === "pending") && (
+              <View style={styles.inlineActions}>
+                <PermissionGuard permission={Permissions.ADDITIONAL_COST_APPROVE} projectId={id} style={{ flex: 1 }}>
+                  <TouchableOpacity
+                    style={[styles.inlineActionButton, styles.inlineApproveButton]}
+                    onPress={handleApprove}
+                    disabled={!!processingAction}
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.inlineActionText}>Duyệt</Text>
+                  </TouchableOpacity>
+                </PermissionGuard>
+
+                <PermissionGuard permission={Permissions.ADDITIONAL_COST_REJECT} projectId={id} style={{ flex: 0.8 }}>
+                  <TouchableOpacity
+                    style={[styles.inlineActionButton, styles.inlineRejectButton]}
+                    onPress={handleReject}
+                    disabled={!!processingAction}
+                  >
+                    <Ionicons name="close-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.inlineActionText}>Hủy Duyệt</Text>
+                  </TouchableOpacity>
+                </PermissionGuard>
+              </View>
             )}
           </View>
         )}
@@ -402,8 +433,41 @@ export default function AdditionalCostDetailScreen() {
           </View>
         )}
 
-        {/* Note: Action buttons (Approve, Confirm, Mark Paid) have been removed from the detail view as per request. Use the list view for these actions. */}
+        {/* Note: Action buttons restored for approval workflow */}
       </ScrollView>
+
+      {/* Action Buttons Bar */}
+      {cost && (cost.status === "pending_approval" || cost.status === "pending") && (
+        <View style={styles.actionBar}>
+          <PermissionGuard permission={Permissions.ADDITIONAL_COST_APPROVE} projectId={id} style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveBtn]}
+              onPress={handleApprove}
+              disabled={!!processingAction}
+            >
+              {processingAction === 'approve' ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.actionBtnText}>Duyệt</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </PermissionGuard>
+
+          <PermissionGuard permission={Permissions.ADDITIONAL_COST_REJECT} projectId={id} style={{ flex: 0.5 }}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.rejectBtn]}
+              onPress={handleReject}
+              disabled={!!processingAction}
+            >
+              <Ionicons name="close-circle-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.actionBtnText}>Hủy Duyệt</Text>
+            </TouchableOpacity>
+          </PermissionGuard>
+        </View>
+      )}
 
       {/* Image Preview Modal */}
       {/* Image Viewer */}
@@ -543,15 +607,6 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 8,
   },
-  actionButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: 16,
-    borderRadius: 8,
-  },
   markPaidButton: {
     backgroundColor: "#3B82F6",
   },
@@ -589,6 +644,67 @@ const styles = StyleSheet.create({
   imagePreview: {
     width: "100%",
     height: "100%",
+  },
+  // Inline Actions
+  inlineActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    paddingTop: 16,
+  },
+  inlineActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  inlineApproveButton: {
+    backgroundColor: "#10B981",
+  },
+  inlineRejectButton: {
+    backgroundColor: "#EF4444",
+  },
+  inlineActionText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  actionBar: {
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  approveBtn: {
+    backgroundColor: "#10B981",
+  },
+  rejectBtn: {
+    backgroundColor: "#EF4444",
+  },
+  actionBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "600",
   },
 });
 

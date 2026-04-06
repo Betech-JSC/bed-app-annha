@@ -95,6 +95,12 @@ export interface Cost {
     status: string;
     supplier?: { name: string };
     items?: Array<{ material?: { name: string; unit: string }; quantity: number; unit_price: number; total_price: number }>;
+    attachments?: Array<{
+      id: number;
+      file_url: string;
+      original_name: string;
+      type: string;
+    }>;
   };
   attachments?: Array<{
     id: number;

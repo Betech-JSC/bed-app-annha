@@ -137,6 +137,32 @@ export default function CreateAdditionalCostScreen() {
             />
           </View>
         </ScrollView>
+
+        {/* Bottom Action Bar */}
+        <View style={styles.bottomActionBar}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => router.back()}
+            disabled={submitting}
+          >
+            <Ionicons name="close-outline" size={18} color="#4B5563" style={{ marginRight: 4 }} />
+            <Text style={styles.cancelButtonText}>Hủy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.submitBottomButton, submitting && { opacity: 0.7 }]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="send-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.submitBottomButtonText}>Gửi Duyệt</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -189,5 +215,42 @@ const styles = StyleSheet.create({
     color: "#3B82F6",
     fontSize: 16,
     fontWeight: "600",
+  },
+  bottomActionBar: {
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+  },
+  cancelButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
+  submitBottomButton: {
+    flex: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: "#3B82F6",
+  },
+  submitBottomButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });

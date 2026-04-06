@@ -328,7 +328,16 @@ export default function PaymentsScreen() {
   const handleConfirmPayment = (payment: ProjectPayment) => {
     setSelectedPayment(payment);
     setConfirmPaidDate(new Date().toISOString().split("T")[0]);
-    setShowConfirmModal(true);
+    // Close detail modal first to prevent stacking issues
+    if (showDetailModal) {
+      setShowDetailModal(false);
+      setDetailPayment(null);
+      setTimeout(() => {
+        setShowConfirmModal(true);
+      }, 350);
+    } else {
+      setShowConfirmModal(true);
+    }
   };
 
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -336,7 +345,16 @@ export default function PaymentsScreen() {
   const handleRejectPayment = (payment: ProjectPayment) => {
     setSelectedPayment(payment);
     setRejectionReason("");
-    setShowRejectModal(true);
+    // Close detail modal first to prevent stacking issues
+    if (showDetailModal) {
+      setShowDetailModal(false);
+      setDetailPayment(null);
+      setTimeout(() => {
+        setShowRejectModal(true);
+      }, 350);
+    } else {
+      setShowRejectModal(true);
+    }
   };
 
   const submitRejectPayment = async () => {
