@@ -94,12 +94,12 @@ export const equipmentApi = {
     status?: string;
     page?: number;
   }) => {
-    const response = await api.get("/admin/equipment", { params });
+    const response = await api.get("/settings/equipment", { params });
     return response.data;
   },
 
   getEquipmentItem: async (id: number) => {
-    const response = await api.get(`/admin/equipment/${id}`);
+    const response = await api.get(`/settings/equipment/${id}`);
     return response.data;
   },
 

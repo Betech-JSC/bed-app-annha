@@ -63,6 +63,10 @@ use App\Http\Controllers\Api\MaterialQuotaController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\LaborProductivityController;
 use App\Http\Controllers\Api\OperationsController;
+use App\Http\Controllers\Api\EquipmentRentalController;
+use App\Http\Controllers\Api\EquipmentPurchaseController;
+use App\Http\Controllers\Api\AssetUsageController;
+use App\Http\Controllers\Api\EquipmentCategoryController;
 
 Route::post('login', [AuthController::class, 'login']);
 Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
@@ -338,9 +342,49 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/reject', [\App\Http\Controllers\Api\MaterialBillController::class, 'reject']);
         });
 
-        // Equipment
+        // Equipment (legacy)
         Route::get('/{projectId}/equipment', [EquipmentController::class, 'getByProject']);
         Route::post('/{projectId}/equipment/allocations', [EquipmentController::class, 'createAllocation']);
+
+        // ─── Equipment Module V2: Thuê thiết bị ───
+        Route::prefix('{projectId}/equipment-rentals')->group(function () {
+            Route::get('/', [EquipmentRentalController::class, 'index']);
+            Route::post('/', [EquipmentRentalController::class, 'store']);
+            Route::get('/{id}', [EquipmentRentalController::class, 'show']);
+            Route::put('/{id}', [EquipmentRentalController::class, 'update']);
+            Route::delete('/{id}', [EquipmentRentalController::class, 'destroy']);
+            // Workflow
+            Route::post('/{id}/submit', [EquipmentRentalController::class, 'submit']);
+            Route::post('/{id}/approve-management', [EquipmentRentalController::class, 'approveManagement']);
+            Route::post('/{id}/reject-management', [EquipmentRentalController::class, 'rejectManagement']);
+            Route::post('/{id}/confirm-accountant', [EquipmentRentalController::class, 'confirmAccountant']);
+        });
+
+        // ─── Equipment Module V2: Mua thiết bị ───
+        Route::prefix('{projectId}/equipment-purchases')->group(function () {
+            Route::get('/', [EquipmentPurchaseController::class, 'index']);
+            Route::post('/', [EquipmentPurchaseController::class, 'store']);
+            Route::get('/{id}', [EquipmentPurchaseController::class, 'show']);
+            Route::put('/{id}', [EquipmentPurchaseController::class, 'update']);
+            Route::delete('/{id}', [EquipmentPurchaseController::class, 'destroy']);
+            // Workflow
+            Route::post('/{id}/submit', [EquipmentPurchaseController::class, 'submit']);
+            Route::post('/{id}/approve-management', [EquipmentPurchaseController::class, 'approveManagement']);
+            Route::post('/{id}/reject-management', [EquipmentPurchaseController::class, 'rejectManagement']);
+            Route::post('/{id}/confirm-accountant', [EquipmentPurchaseController::class, 'confirmAccountant']);
+        });
+
+        // ─── Equipment Module V2: Sử dụng tài sản ───
+        Route::prefix('{projectId}/asset-usages')->group(function () {
+            Route::get('/', [AssetUsageController::class, 'index']);
+            Route::post('/', [AssetUsageController::class, 'store']);
+            Route::get('/{id}', [AssetUsageController::class, 'show']);
+            Route::delete('/{id}', [AssetUsageController::class, 'destroy']);
+            // 2-way confirmation
+            Route::post('/{id}/confirm-receive', [AssetUsageController::class, 'confirmReceive']);
+            Route::post('/{id}/request-return', [AssetUsageController::class, 'requestReturn']);
+            Route::post('/{id}/confirm-return', [AssetUsageController::class, 'confirmReturn']);
+        });
 
         // Invoices (Output - gửi cho khách hàng)
         Route::get('/{projectId}/invoices/summary-by-cost-group', [InvoiceController::class, 'summaryByCostGroup'])->name('invoices.summaryByCostGroup');
@@ -550,6 +594,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(['auth:sanctum'])->prefix('settings')->group(function () {
         Route::get('/cost-groups', [CostGroupController::class, 'index']);
         Route::get('/cost-groups/{id}', [CostGroupController::class, 'show']);
+
+        // Equipment list for project modules
+        Route::get('/equipment', [EquipmentController::class, 'index']);
+        Route::get('/equipment/{id}', [EquipmentController::class, 'show']);
     });
 
     // Cost Groups - Manage endpoints (require settings.manage permission)
@@ -570,6 +618,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/cost-groups', [CostGroupController::class, 'store']);
         Route::put('/cost-groups/{id}', [CostGroupController::class, 'update']);
         Route::delete('/cost-groups/{id}', [CostGroupController::class, 'destroy']);
+
+
 
         // Global Subcontractors (Nhà thầu phụ hệ thống)
         Route::get('/subcontractors', [GlobalSubcontractorController::class, 'index']);
@@ -702,7 +752,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::delete('/{id}', [MaterialController::class, 'destroy']);
     });
 
-    // Equipment
+    // Equipment (legacy)
     Route::prefix('equipment')->group(function () {
         Route::get('/', [EquipmentController::class, 'index']);
         Route::post('/', [EquipmentController::class, 'store']);
@@ -712,6 +762,11 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::put('/{id}', [EquipmentController::class, 'update']);
         Route::delete('/{id}', [EquipmentController::class, 'destroy']);
     });
+
+    // Moved Settings: Danh mục thiết bị to settings group above
+
+    // Thiết bị kho công ty còn tồn (cho dropdown Module Sử dụng tài sản)
+    Route::get('/available-assets', [AssetUsageController::class, 'availableAssets']);
 
 
     // Receipts

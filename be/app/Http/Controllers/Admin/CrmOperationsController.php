@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\CompanyAsset;
+use App\Models\Equipment;
 use App\Models\AssetAssignment;
 use App\Models\Contract;
 use App\Models\Cost;
@@ -45,9 +45,9 @@ class CrmOperationsController extends Controller
             ->toArray();
 
         // Tài sản
-        $totalAssetValue = CompanyAsset::active()->sum('current_value');
-        $assetCount = CompanyAsset::active()->count();
-        $totalDepreciation = CompanyAsset::sum('accumulated_depreciation');
+        $totalAssetValue = Equipment::active()->sum('current_value');
+        $assetCount = Equipment::active()->count();
+        $totalDepreciation = Equipment::sum('accumulated_depreciation');
 
         // Monthly trend (6 months)
         $monthlyTrend = [];
@@ -77,12 +77,12 @@ class CrmOperationsController extends Controller
             ->get();
 
         // Tài sản summary
-        $assetsByCategory = CompanyAsset::active()
+        $assetsByCategory = Equipment::active()
             ->selectRaw('category, COUNT(*) as cnt, SUM(current_value) as total_value')
             ->groupBy('category')
             ->get();
 
-        $assetsByStatus = CompanyAsset::selectRaw('status, COUNT(*) as cnt')
+        $assetsByStatus = Equipment::selectRaw('status, COUNT(*) as cnt')
             ->groupBy('status')
             ->pluck('cnt', 'status')
             ->toArray();
@@ -172,7 +172,7 @@ class CrmOperationsController extends Controller
     // ================================================================
     public function assets(Request $request)
     {
-        $query = CompanyAsset::with(['assignedUser:id,name', 'project:id,name', 'creator:id,name'])
+        $query = Equipment::with(['assignedTo:id,name', 'project:id,name', 'creator:id,name'])
             ->orderByDesc('created_at');
 
         if ($cat = $request->get('category')) {
@@ -184,7 +184,7 @@ class CrmOperationsController extends Controller
         if ($search = $request->get('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('asset_code', 'like', "%{$search}%")
+                  ->orWhere('code', 'like', "%{$search}%")
                   ->orWhere('serial_number', 'like', "%{$search}%");
             });
         }
@@ -192,10 +192,10 @@ class CrmOperationsController extends Controller
         $assets = $query->paginate(20)->withQueryString();
 
         // Stats
-        $totalValue = CompanyAsset::active()->sum('current_value');
-        $totalPurchase = CompanyAsset::active()->sum('purchase_price');
-        $totalDepreciation = CompanyAsset::sum('accumulated_depreciation');
-        $counts = CompanyAsset::selectRaw('status, COUNT(*) as cnt')
+        $totalValue = Equipment::active()->sum('current_value');
+        $totalPurchase = Equipment::active()->sum('purchase_price');
+        $totalDepreciation = Equipment::sum('accumulated_depreciation');
+        $counts = Equipment::selectRaw('status, COUNT(*) as cnt')
             ->groupBy('status')
             ->pluck('cnt', 'status')
             ->toArray();
@@ -241,15 +241,16 @@ class CrmOperationsController extends Controller
         $validated['current_value'] = $validated['purchase_price'];
         $validated['depreciation_method'] = $validated['depreciation_method'] ?? 'straight_line';
         $validated['residual_value'] = $validated['residual_value'] ?? 0;
+        $validated['type'] = 'owned';
 
-        CompanyAsset::create($validated);
+        Equipment::create($validated);
 
         return redirect()->back()->with('success', 'Đã thêm tài sản thành công.');
     }
 
     public function updateAsset(Request $request, $id)
     {
-        $asset = CompanyAsset::findOrFail($id);
+        $asset = Equipment::findOrFail($id);
 
         $validated = $request->validate([
             'name'                => 'required|string|max:255',
@@ -271,13 +272,13 @@ class CrmOperationsController extends Controller
 
     public function destroyAsset($id)
     {
-        CompanyAsset::findOrFail($id)->delete();
+        Equipment::findOrFail($id)->delete();
         return redirect()->back()->with('success', 'Đã xóa tài sản.');
     }
 
     public function assignAsset(Request $request, $id)
     {
-        $asset = CompanyAsset::findOrFail($id);
+        $asset = Equipment::findOrFail($id);
 
         $validated = $request->validate([
             'action'     => 'required|in:assign,return,transfer,repair,dispose',
@@ -293,10 +294,10 @@ class CrmOperationsController extends Controller
         // Update asset status & assignment
         $statusMap = [
             'assign'   => 'in_use',
-            'return'   => 'in_stock',
+            'return'   => 'available',
             'transfer' => 'in_use',
-            'repair'   => 'under_repair',
-            'dispose'  => 'disposed',
+            'repair'   => 'maintenance',
+            'dispose'  => 'retired',
         ];
 
         $updateData = ['status' => $statusMap[$validated['action']]];
@@ -318,7 +319,7 @@ class CrmOperationsController extends Controller
 
     public function runDepreciation()
     {
-        $assets = CompanyAsset::active()
+        $assets = Equipment::active()
             ->where('current_value', '>', DB::raw('residual_value'))
             ->get();
 

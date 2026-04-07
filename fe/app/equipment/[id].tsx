@@ -270,7 +270,7 @@ export default function EquipmentDetailScreen() {
     if (loading) {
         return (
             <View style={styles.container}>
-                <ScreenHeader title="Chi Tiết Thiết Bị" showBackButton />
+                <ScreenHeader title="Hồ Sơ Tài Sản" showBackButton />
                 <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color="#3B82F6" />
                 </View>
@@ -281,9 +281,9 @@ export default function EquipmentDetailScreen() {
     if (!equipment) {
         return (
             <View style={styles.container}>
-                <ScreenHeader title="Chi Tiết Thiết Bị" showBackButton />
+                <ScreenHeader title="Hồ Sơ Tài Sản" showBackButton />
                 <View style={styles.centerContainer}>
-                    <Text style={styles.errorText}>Không tìm thấy thiết bị</Text>
+                    <Text style={styles.errorText}>Không tìm thấy tài sản</Text>
                 </View>
             </View>
         );
@@ -292,7 +292,7 @@ export default function EquipmentDetailScreen() {
     return (
         <View style={styles.container}>
             <ScreenHeader
-                title="Chi Tiết Thiết Bị"
+                title="Hồ Sơ Tài Sản"
                 showBackButton
                 rightComponent={
                     <View style={styles.headerActions}>

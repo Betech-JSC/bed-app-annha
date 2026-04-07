@@ -127,7 +127,14 @@ class MaterialBillController extends Controller
                 ]);
             }
 
-            // Create linked Cost record immediately (draft) so it shows in Chi phí tab
+            // Determine title prefix and category based on cost group
+            $costGroup = \App\Models\CostGroup::where('id', $request->cost_group_id)->first();
+            $groupName = $costGroup ? $costGroup->name : 'Vật tư';
+            
+            $isEquipment = (stripos($groupName, 'thiết bị') !== false || stripos($groupName, 'máy móc') !== false || stripos($groupName, 'equipment') !== false);
+            $prefix = $isEquipment ? 'Phiếu thiết bị' : 'Phiếu vật tư';
+            $category = $isEquipment ? 'equipment' : 'construction_materials';
+
             $supplierName = '';
             if ($request->supplier_id) {
                 $supplier = \App\Models\Supplier::find($request->supplier_id);
@@ -138,11 +145,11 @@ class MaterialBillController extends Controller
                 'project_id' => $projectId,
                 'cost_group_id' => $request->cost_group_id,
                 'supplier_id' => $request->supplier_id,
-                'category' => 'construction_materials',
+                'category' => $category,
                 'material_bill_id' => $bill->id,
-                'name' => "Phiếu vật liệu #" . ($bill->bill_number ?? $bill->id) . ($supplierName ? " - {$supplierName}" : ''),
+                'name' => "{$prefix} #" . ($bill->bill_number ?? $bill->id) . ($supplierName ? " - {$supplierName}" : ''),
                 'amount' => $totalAmount,
-                'description' => $request->notes ?? "Từ phiếu vật tư " . ($bill->bill_number ?? $bill->id),
+                'description' => $request->notes ?? "Từ phiếu phát sinh " . ($bill->bill_number ?? $bill->id),
                 'cost_date' => $request->bill_date,
                 'status' => 'draft',
                 'created_by' => $user->id,

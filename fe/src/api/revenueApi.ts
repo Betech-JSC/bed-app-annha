@@ -66,11 +66,20 @@ export interface Cost {
   management_approver?: any;
   accountant_approver?: any;
   category_label?: string; // Deprecated - dùng cost_group.name thay thế
+  category: string; // actual category code (material, equipment, labor, subcontractor, other)
   cost_group: {
     id: number;
     name: string;
     code: string;
     description?: string;
+  };
+  equipment_allocation?: {
+    id: number;
+    equipment?: {
+      id: number;
+      name: string;
+      code: string;
+    };
   };
   subcontractor?: {
     id: number;

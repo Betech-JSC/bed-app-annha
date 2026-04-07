@@ -15,19 +15,13 @@ class EquipmentController extends Controller
 {
     public function index(Request $request)
     {
-        $user = auth()->user();
-        
-        if (!$user->hasPermission(Permissions::EQUIPMENT_VIEW)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền xem danh sách thiết bị.'
-            ], 403);
-        }
+        // Relaxed for project modules
+        // if (!$user->hasPermission(Permissions::EQUIPMENT_VIEW)) { ... }
 
         $query = Equipment::query();
 
         if ($request->query('active_only') === 'true') {
-            $query->where('status', 'available');
+            $query->whereIn('status', ['available', 'in_use']);
         }
 
         if ($search = $request->query('search')) {

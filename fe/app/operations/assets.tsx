@@ -31,12 +31,12 @@ export default function AssetsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
-    asset_code: '',
+    code: '',
     category: 'other',
     purchase_price: '',
     purchase_date: new Date().toISOString().split('T')[0],
     useful_life_months: '36',
-    status: 'in_stock',
+    status: 'available',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -62,12 +62,12 @@ export default function AssetsScreen() {
     setEditingId(null);
     setForm({
       name: '',
-      asset_code: '',
+      code: '',
       category: 'other',
       purchase_price: '',
       purchase_date: new Date().toISOString().split('T')[0],
       useful_life_months: '36',
-      status: 'in_stock',
+      status: 'available',
     });
     setModalVisible(true);
   };
@@ -76,11 +76,11 @@ export default function AssetsScreen() {
     setEditingId(item.id);
     setForm({
       name: item.name,
-      asset_code: item.asset_code,
+      code: item.code,
       category: item.category,
-      purchase_price: item.purchase_price.toString(),
-      purchase_date: item.purchase_date,
-      useful_life_months: item.useful_life_months.toString(),
+      purchase_price: (item.purchase_price ?? 0).toString(),
+      purchase_date: item.purchase_date || new Date().toISOString().split('T')[0],
+      useful_life_months: (item.useful_life_months ?? 36).toString(),
       status: item.status,
     });
     setModalVisible(true);
@@ -135,9 +135,9 @@ export default function AssetsScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'in_use': return '#10B981';
-      case 'in_stock': return '#3B82F6';
-      case 'under_repair': return '#F59E0B';
-      case 'disposed': return '#EF4444';
+      case 'available': return '#3B82F6';
+      case 'maintenance': return '#F59E0B';
+      case 'retired': return '#EF4444';
       default: return '#6B7280';
     }
   };
@@ -152,7 +152,7 @@ export default function AssetsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Quản Lý Tài Sản" showBackButton onBack={() => router.back()} />
+      <ScreenHeader title="Quản Lý Tài Sản" showBackButton />
       
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#9CA3AF" />
@@ -175,7 +175,7 @@ export default function AssetsScreen() {
               <TouchableOpacity style={styles.cardMain} onPress={() => handleOpenEdit(item)}>
                 <View style={styles.cardHeader}>
                   <View>
-                    <Text style={styles.assetCode}>{item.asset_code}</Text>
+                    <Text style={styles.assetCode}>{item.code}</Text>
                     <Text style={styles.name}>{item.name}</Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
@@ -188,12 +188,8 @@ export default function AssetsScreen() {
                     <Text style={styles.label}>Giá hiện tại:</Text>
                     <Text style={styles.value}>{formatVND(item.current_value)}</Text>
                   </View>
-                  {item.assigned_user && (
-                      <View style={styles.row}>
-                          <Text style={styles.label}>Đang giữ:</Text>
-                          <Text style={styles.value}>{item.assigned_user.name}</Text>
-                      </View>
-                  )}
+                    <Text style={styles.label}>Đang giữ:</Text>
+                    <Text style={styles.value}>{item.assigned_to_user?.name || item.assigned_user?.name}</Text>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>

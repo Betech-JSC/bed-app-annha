@@ -272,7 +272,7 @@ export default function EquipmentScreen() {
         <View style={styles.container}>
             {/* ... ScreenHeader ... */}
             <ScreenHeader
-                title="Quản Lý Thiết Bị"
+                title="Kho Tài Sản Thiết Bị"
                 showBackButton
                 rightComponent={
                     <PermissionGuard permission={Permissions.EQUIPMENT_CREATE}>

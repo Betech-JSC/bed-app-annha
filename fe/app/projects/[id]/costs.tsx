@@ -377,7 +377,11 @@ export default function CostsScreen() {
     >
       <View style={styles.costHeader}>
         <View style={styles.costHeaderLeft}>
-          <Text style={styles.costName}>{item.name}</Text>
+          <Text style={styles.costName}>
+            {item.category === 'equipment' && item.name.includes('Phiếu vật liệu') 
+              ? item.name.replace('Phiếu vật liệu', 'Phiếu thiết bị') 
+              : item.name}
+          </Text>
           <Text style={styles.costCategory}>
             {getCategoryLabel(item)}
           </Text>
@@ -417,6 +421,16 @@ export default function CostsScreen() {
             Phiếu VL: {item.material_bill.bill_number || `#${item.material_bill.id}`}
           </Text>
           <Ionicons name="chevron-forward" size={14} color="#93C5FD" />
+        </View>
+      )}
+
+      {/* Linked Equipment Source */}
+      {item.equipment_allocation && (
+        <View style={styles.linkedBillIndicator}>
+          <Ionicons name="construct-outline" size={14} color="#10B981" />
+          <Text style={styles.linkedBillIndicatorText}>
+            Thiết bị: {item.equipment_allocation.equipment?.name || "N/A"}
+          </Text>
         </View>
       )}
 

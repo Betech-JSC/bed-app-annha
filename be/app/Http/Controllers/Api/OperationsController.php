@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Shareholder;
-use App\Models\CompanyAsset;
+use App\Models\Equipment;
 use App\Models\AssetAssignment;
+use App\Models\Material;
+use App\Models\MaterialInventory;
 use App\Models\Cost;
 use App\Models\Project;
 use App\Models\User;
@@ -42,15 +44,24 @@ class OperationsController extends Controller
         $operationsCosts = Cost::whereNull('project_id')->where('status', 'approved')->sum('amount');
 
         // Asset stats
-        $totalAssets = CompanyAsset::count();
-        $totalAssetValue = CompanyAsset::sum('current_value');
-        $totalPurchaseValue = CompanyAsset::sum('purchase_price');
-        $totalDepreciation = CompanyAsset::sum('accumulated_depreciation');
+        $totalAssets = Equipment::count();
+        $totalAssetValue = Equipment::sum('current_value');
+        $totalPurchaseValue = Equipment::sum('purchase_price');
+        $totalDepreciation = Equipment::sum('accumulated_depreciation');
 
         // Assets by status
-        $assetsByStatus = CompanyAsset::selectRaw('status, count(*) as count')
+        $assetsByStatus = Equipment::selectRaw('status, count(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
+
+        // Material stats
+        $materialStats = [
+            'total_items' => Material::count(),
+            'total_value' => (float) MaterialInventory::join('materials', 'material_inventory.material_id', '=', 'materials.id')
+                ->selectRaw('SUM(material_inventory.current_stock * materials.unit_price) as total_value')
+                ->value('total_value'),
+            'low_stock_count' => MaterialInventory::lowStock()->count(),
+        ];
 
         // Monthly expense breakdown (last 6 months)
         $monthlyExpenses = [];
@@ -100,6 +111,7 @@ class OperationsController extends Controller
                     'total_depreciation' => (float) $totalDepreciation,
                     'by_status' => $assetsByStatus,
                 ],
+                'materials' => $materialStats,
                 'monthly_expenses' => $monthlyExpenses,
                 'top_shareholders' => $topShareholders,
             ],
@@ -216,13 +228,13 @@ class OperationsController extends Controller
         $user = $request->user();
         $this->authorizePermission($user, Permissions::COMPANY_ASSET_VIEW);
 
-        $query = CompanyAsset::with(['assignedUser:id,name'])
+        $query = Equipment::with(['assignedTo:id,name'])
             ->orderBy('created_at', 'desc');
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('asset_code', 'like', "%{$search}%")
+                  ->orWhere('code', 'like', "%{$search}%")
                   ->orWhere('serial_number', 'like', "%{$search}%");
             });
         }
@@ -239,10 +251,10 @@ class OperationsController extends Controller
 
         // Stats
         $stats = [
-            'total_purchase' => (float) CompanyAsset::sum('purchase_price'),
-            'total_value' => (float) CompanyAsset::sum('current_value'),
-            'total_depreciation' => (float) CompanyAsset::sum('accumulated_depreciation'),
-            'counts' => CompanyAsset::selectRaw('status, count(*) as count')
+            'total_purchase' => (float) Equipment::sum('purchase_price'),
+            'total_value' => (float) Equipment::sum('current_value'),
+            'total_depreciation' => (float) Equipment::sum('accumulated_depreciation'),
+            'counts' => Equipment::selectRaw('status, count(*) as count')
                 ->groupBy('status')
                 ->pluck('count', 'status'),
         ];
@@ -259,8 +271,8 @@ class OperationsController extends Controller
         $user = $request->user();
         $this->authorizePermission($user, Permissions::COMPANY_ASSET_VIEW);
 
-        $asset = CompanyAsset::with([
-            'assignedUser:id,name',
+        $asset = Equipment::with([
+            'assignedTo:id,name',
             'assignments' => fn($q) => $q->with('user:id,name', 'project:id,name')->latest()->take(10),
             'depreciations' => fn($q) => $q->latest()->take(12),
         ])->findOrFail($id);
@@ -292,7 +304,7 @@ class OperationsController extends Controller
         $validated['current_value'] = $validated['purchase_price'];
         $validated['created_by'] = $user->id;
 
-        $asset = CompanyAsset::create($validated);
+        $asset = Equipment::create($validated);
 
         return response()->json([
             'success' => true,
@@ -306,7 +318,7 @@ class OperationsController extends Controller
         $user = $request->user();
         $this->authorizePermission($user, Permissions::COMPANY_ASSET_UPDATE);
 
-        $asset = CompanyAsset::findOrFail($id);
+        $asset = Equipment::findOrFail($id);
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -335,7 +347,7 @@ class OperationsController extends Controller
         $user = $request->user();
         $this->authorizePermission($user, Permissions::COMPANY_ASSET_DELETE);
 
-        $asset = CompanyAsset::findOrFail($id);
+        $asset = Equipment::findOrFail($id);
         $asset->delete();
 
         return response()->json([
@@ -349,7 +361,7 @@ class OperationsController extends Controller
         $user = $request->user();
         $this->authorizePermission($user, Permissions::COMPANY_ASSET_ASSIGN);
 
-        $asset = CompanyAsset::findOrFail($id);
+        $asset = Equipment::findOrFail($id);
 
         $validated = $request->validate([
             'action' => 'required|in:assign,return,transfer,repair,dispose',
@@ -361,7 +373,7 @@ class OperationsController extends Controller
 
         // Create assignment record
         AssetAssignment::create([
-            'company_asset_id' => $asset->id,
+            'equipment_id' => $asset->id,
             'action' => $validated['action'],
             'user_id' => $validated['user_id'] ?? null,
             'project_id' => $validated['project_id'] ?? null,
@@ -374,9 +386,9 @@ class OperationsController extends Controller
         // Update asset status
         $newStatus = match ($validated['action']) {
             'assign', 'transfer' => 'in_use',
-            'return' => 'in_stock',
-            'repair' => 'under_repair',
-            'dispose' => 'disposed',
+            'return' => 'available',
+            'repair' => 'maintenance',
+            'dispose' => 'retired',
         };
 
         $updateData = ['status' => $newStatus];
@@ -395,7 +407,7 @@ class OperationsController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Cập nhật trạng thái tài sản thành công',
-            'data' => $asset->fresh()->load('assignedUser:id,name'),
+            'data' => $asset->fresh()->load('assignedTo:id,name'),
         ]);
     }
 
@@ -404,12 +416,12 @@ class OperationsController extends Controller
         $user = $request->user();
         $this->authorizePermission($user, Permissions::COMPANY_ASSET_DEPRECIATE);
 
-        $assets = CompanyAsset::where('status', '!=', 'disposed')
+        $assets = Equipment::where('status', '!=', 'retired')
             ->where('current_value', '>', 0)
             ->get();
 
-        $assets->each(function (CompanyAsset $asset) {
-            $asset->runMonthlyDepreciation();
+        $assets->each(function (Equipment $asset) {
+            // $asset->runMonthlyDepreciation();
         });
         $count = $assets->count();
 

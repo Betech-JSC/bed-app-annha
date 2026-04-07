@@ -74,7 +74,6 @@ export default function OperationsDashboardScreen() {
       <ScreenHeader 
         title="Dashboard Vận Hành" 
         showBackButton 
-        onBack={() => router.back()}
       />
       
       <ScrollView
@@ -135,6 +134,39 @@ export default function OperationsDashboardScreen() {
               </View>
             </View>
           </TouchableOpacity>
+          
+          {/* Quản lý Vật liệu */}
+          <Text style={styles.sectionTitle}>Quản Lý Kho Vật Liệu</Text>
+          <TouchableOpacity 
+            style={[styles.assetPreviewCard, { borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}
+            onPress={() => router.push('/materials')}
+          >
+            <View style={styles.assetHeader}>
+              <View style={styles.assetInfo}>
+                <Text style={styles.assetMainValue}>{data?.materials?.total_items || 0}</Text>
+                <Text style={styles.assetMainLabel}>Mặt hàng</Text>
+              </View>
+              {data?.materials?.low_stock_count ? (
+                  <View style={styles.lowStockBadge}>
+                    <Text style={styles.lowStockText}>{data.materials.low_stock_count} Sắp hết</Text>
+                  </View>
+              ) : null}
+              <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
+            </View>
+            
+            <View style={styles.assetDetails}>
+              <View style={styles.assetDetailItem}>
+                <Text style={styles.assetDetailLabel}>Giá trị tồn kho</Text>
+                <Text style={styles.assetDetailValue}>{formatVND(data?.materials?.total_value || 0)}</Text>
+              </View>
+              <View style={styles.assetDetailItem}>
+                <Text style={styles.assetDetailLabel}>Tình trạng</Text>
+                <Text style={[styles.assetDetailValue, { color: (data?.materials?.low_stock_count ?? 0) > 0 ? '#EF4444' : '#10B981' }]}>
+                  {(data?.materials?.low_stock_count ?? 0) > 0 ? 'Cảnh báo tồn' : 'Ổn định'}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
 
           {/* Menu chức năng nhanh */}
           <Text style={styles.sectionTitle}>Chức Năng</Text>
@@ -147,6 +179,16 @@ export default function OperationsDashboardScreen() {
                 <Ionicons name="people-outline" size={24} color="#8B5CF6" />
               </View>
               <Text style={styles.menuText}>Cổ Đông</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => router.push('/materials')}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: '#3B82F620' }]}>
+                <Ionicons name="cube-outline" size={24} color="#3B82F6" />
+              </View>
+              <Text style={styles.menuText}>Vật Liệu</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -299,6 +341,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#111827',
+  },
+  lowStockBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  lowStockText: {
+    color: '#EF4444',
+    fontSize: 10,
+    fontWeight: '700',
   },
   menuGrid: {
     flexDirection: 'row',

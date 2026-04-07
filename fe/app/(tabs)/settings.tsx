@@ -95,6 +95,7 @@ export default function SettingsScreen() {
       permission: Permissions.SETTINGS_MANAGE,
       description: "Quản lý các nhóm chi phí áp dụng cho toàn bộ dự án",
     },
+
     {
       title: "Nhà Cung Cấp (NCC)",
       icon: "storefront-outline",
@@ -117,11 +118,11 @@ export default function SettingsScreen() {
       description: "Quản lý danh mục vật liệu dùng trong dự án",
     },
     {
-      title: "Danh Mục Thiết Bị",
-      icon: "construct-outline",
+      title: "Kho Tài Sản Thiết Bị",
+      icon: "car-outline",
       route: "/equipment",
       permission: Permissions.EQUIPMENT_VIEW,
-      description: "Quản lý danh mục thiết bị và bảo trì",
+      description: "Quản lý tài sản, trang thiết bị vật lý công ty đang sở hữu",
     },
     {
       title: "Bộ Tài Liệu Nghiệm Thu",

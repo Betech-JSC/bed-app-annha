@@ -20,7 +20,7 @@ export interface Shareholder {
 
 export interface CompanyAsset {
     id: string;
-    asset_code: string;
+    code: string;
     name: string;
     category: 'computer' | 'machinery' | 'vehicle' | 'furniture' | 'other';
     purchase_price: number;
@@ -33,8 +33,9 @@ export interface CompanyAsset {
     brand?: string;
     location?: string;
     description?: string;
-    status: 'in_stock' | 'in_use' | 'under_repair' | 'disposed';
+    status: 'available' | 'in_use' | 'maintenance' | 'retired';
     assigned_to?: number;
+    assigned_to_user?: { id: number; name: string };
     assigned_user?: { id: number; name: string };
     created_at: string;
 }
@@ -50,6 +51,11 @@ export interface OperationsDashboard {
         total_purchase: number;
         total_depreciation: number;
         by_status: Record<string, number>;
+    };
+    materials: {
+        total_items: number;
+        total_value: number;
+        low_stock_count: number;
     };
     monthly_expenses: Array<{
         month: string;
