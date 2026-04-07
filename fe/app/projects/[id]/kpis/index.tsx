@@ -190,7 +190,7 @@ export default function KpiListScreen() {
                     <View style={styles.progressHeader}>
                         <Text style={styles.progressLabel}>Tiến độ</Text>
                         <Text style={styles.progressValue}>
-                            {item.current_value} / {item.target_value} {item.unit}
+                            {Math.round(item.current_value)} / {Math.round(item.target_value)} {item.unit}
                         </Text>
                     </View>
                     <View style={styles.progressBarBg}>

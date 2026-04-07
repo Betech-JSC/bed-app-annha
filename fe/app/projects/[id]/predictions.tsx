@@ -206,7 +206,7 @@ export default function PredictionsScreen() {
               >
                 {analysis.completion_prediction.delay_days > 0 ? "+" : ""}
                 {typeof analysis.completion_prediction.delay_days === 'number'
-                  ? analysis.completion_prediction.delay_days.toFixed(2)
+                  ? Math.round(analysis.completion_prediction.delay_days)
                   : analysis.completion_prediction.delay_days} ngày
               </Text>
             </View>
@@ -261,7 +261,7 @@ export default function PredictionsScreen() {
                   ]}
                 >
                   {formatCurrency(analysis.cost_prediction.overrun_amount)} (
-                  {analysis.cost_prediction.overrun_percentage.toFixed(2)}%)
+                  {Math.round(analysis.cost_prediction.overrun_percentage)}%)
                 </Text>
               ) : (
                 <Text style={[styles.predictionValue, { color: "#6B7280", fontSize: 14 }]}>
@@ -310,7 +310,7 @@ export default function PredictionsScreen() {
             </View>
             <Text style={styles.riskDetailText}>
               Chậm tiến độ: {typeof analysis.delay_risk.delay_days === 'number'
-                ? analysis.delay_risk.delay_days.toFixed(2)
+                ? Math.round(analysis.delay_risk.delay_days)
                 : analysis.delay_risk.delay_days} ngày
             </Text>
             <Text style={styles.riskDetailText}>
@@ -363,7 +363,7 @@ export default function PredictionsScreen() {
             </View>
             {analysis.cost_risk.overrun_percentage != null ? (
               <Text style={styles.riskDetailText}>
-                Vượt ngân sách: {analysis.cost_risk.overrun_percentage.toFixed(2)}%
+                Vượt ngân sách: {Math.round(analysis.cost_risk.overrun_percentage)}%
               </Text>
             ) : (
               <Text style={styles.riskDetailText}>

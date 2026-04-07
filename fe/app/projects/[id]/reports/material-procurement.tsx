@@ -129,7 +129,7 @@ export default function MaterialProcurementReportScreen() {
               <Ionicons name="cube" size={24} color="#10B981" />
               <Text style={styles.summaryLabel}>Tổng số lượng</Text>
               <Text style={styles.summaryValue}>
-                {report.summary.total_quantity.toFixed(2)}
+                {Math.round(report.summary.total_quantity)}
               </Text>
             </View>
             <View style={styles.summaryItem}>
@@ -158,7 +158,7 @@ export default function MaterialProcurementReportScreen() {
                 <View style={styles.statRow}>
                   <Text style={styles.statLabel}>Số lượng:</Text>
                   <Text style={styles.statValue}>
-                    {(stat.total_quantity || 0).toFixed(2)} {stat.material?.unit || ""}
+                    {Math.round(stat.total_quantity || 0)} {stat.material?.unit || ""}
                   </Text>
                 </View>
                 <View style={styles.statRow}>
@@ -211,7 +211,7 @@ export default function MaterialProcurementReportScreen() {
                     {stat.transaction_count || 0} giao dịch
                   </Text>
                   <Text style={styles.dailyStatText}>
-                    {(stat.total_quantity || 0).toFixed(2)} đơn vị
+                    {Math.round(stat.total_quantity || 0)} đơn vị
                   </Text>
                   <Text style={[styles.dailyStatText, styles.amountValue]}>
                     {formatCurrency(stat.total_amount || 0)}

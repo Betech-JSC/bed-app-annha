@@ -315,7 +315,7 @@ export default function ScheduleAnalysisScreen() {
                   </View>
                   <View style={styles.warningProgressRow}>
                     <Text style={styles.warningProgressLabel}>
-                      KH: {w.expected_progress.toFixed(1)}% — TT: {w.actual_progress.toFixed(1)}%
+                      KH: {Math.round(w.expected_progress)}% — TT: {Math.round(w.actual_progress)}%
                     </Text>
                   </View>
                   <View style={styles.progressBarBg}>
@@ -367,16 +367,16 @@ export default function ScheduleAnalysisScreen() {
                     <View style={styles.compProgressRow}>
                       <View style={styles.compCol}>
                         <Text style={styles.compLabel}>Kế hoạch</Text>
-                        <Text style={styles.compValue}>{item.planned_progress.toFixed(1)}%</Text>
+                        <Text style={styles.compValue}>{Math.round(item.planned_progress)}%</Text>
                       </View>
                       <View style={styles.compCol}>
                         <Text style={styles.compLabel}>Thực tế</Text>
-                        <Text style={[styles.compValue, { fontWeight: "700" }]}>{item.actual_progress.toFixed(1)}%</Text>
+                        <Text style={[styles.compValue, { fontWeight: "700" }]}>{Math.round(item.actual_progress)}%</Text>
                       </View>
                       <View style={styles.compCol}>
                         <Text style={styles.compLabel}>Chênh lệch</Text>
                         <Text style={[styles.compValue, { color: isOnTrack ? "#16A34A" : "#DC2626", fontWeight: "700" }]}>
-                          {diff >= 0 ? "+" : ""}{diff.toFixed(1)}%
+                          {diff >= 0 ? "+" : ""}{Math.round(diff)}%
                         </Text>
                       </View>
                     </View>

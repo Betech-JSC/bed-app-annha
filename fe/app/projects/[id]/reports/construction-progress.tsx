@@ -116,7 +116,7 @@ export default function ConstructionProgressReportScreen() {
               />
             </View>
             <Text style={styles.progressText}>
-              {report.overall_progress.toFixed(2)}%
+              {Math.round(report.overall_progress)}%
             </Text>
           </View>
         </View>
@@ -132,7 +132,7 @@ export default function ConstructionProgressReportScreen() {
                   <View style={styles.weekStatItem}>
                     <Text style={styles.weekStatLabel}>Tiến độ TB</Text>
                     <Text style={styles.weekStatValue}>
-                      {(week.average_progress || 0).toFixed(2)}%
+                      {Math.round(week.average_progress || 0)}%
                     </Text>
                   </View>
                   <View style={styles.weekStatItem}>
@@ -163,13 +163,13 @@ export default function ConstructionProgressReportScreen() {
                 <View style={styles.progressRow}>
                   <Text style={styles.progressLabel}>Kế hoạch:</Text>
                   <Text style={styles.progressValue}>
-                    {(progress.planned_progress || 0).toFixed(2)}%
+                    {Math.round(progress.planned_progress || 0)}%
                   </Text>
                 </View>
                 <View style={styles.progressRow}>
                   <Text style={styles.progressLabel}>Thực tế:</Text>
                   <Text style={styles.progressValue}>
-                    {(progress.actual_progress || 0).toFixed(2)}%
+                    {Math.round(progress.actual_progress || 0)}%
                   </Text>
                 </View>
                 <View

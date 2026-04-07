@@ -103,6 +103,11 @@ export default function ProjectDetailScreen() {
     router.push(`/projects/${id}/edit`);
   };
 
+  const roundNumbersInString = (str: string) => {
+    if (!str) return str;
+    return str.replace(/\d+\.\d+/g, (match) => Math.round(parseFloat(match)).toString());
+  };
+
   const handleDelete = () => {
     if (!project) return;
     Alert.alert(
@@ -530,7 +535,7 @@ export default function ProjectDetailScreen() {
               }}
             >
               <View style={styles.alertContent}>
-                <Text style={styles.alertMessage}>{alert.message}</Text>
+                <Text style={styles.alertMessage}>{roundNumbersInString(alert.message)}</Text>
                 <Text style={styles.alertType}>{alert.type}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />

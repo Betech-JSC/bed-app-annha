@@ -129,7 +129,7 @@ export default function MaterialUsageReportScreen() {
               <Ionicons name="cube" size={24} color="#EF4444" />
               <Text style={styles.summaryLabel}>Tổng số lượng</Text>
               <Text style={styles.summaryValue}>
-                {report.summary.total_quantity.toFixed(2)}
+                {Math.round(report.summary.total_quantity)}
               </Text>
             </View>
             <View style={styles.summaryItem}>
@@ -158,7 +158,7 @@ export default function MaterialUsageReportScreen() {
                 <View style={styles.statRow}>
                   <Text style={styles.statLabel}>Số lượng đã sử dụng:</Text>
                   <Text style={[styles.statValue, styles.usageValue]}>
-                    {(stat.total_quantity || 0).toFixed(2)} {stat.material?.unit || ""}
+                    {Math.round(stat.total_quantity || 0)} {stat.material?.unit || ""}
                   </Text>
                 </View>
                 <View style={styles.statRow}>
@@ -185,14 +185,14 @@ export default function MaterialUsageReportScreen() {
                     <Ionicons name="arrow-down-circle" size={20} color="#10B981" />
                     <Text style={styles.comparisonLabel}>Nhập</Text>
                     <Text style={[styles.comparisonValue, styles.inValue]}>
-                      {(item.in_quantity || 0).toFixed(2)}
+                      {Math.round(item.in_quantity || 0)}
                     </Text>
                   </View>
                   <View style={styles.comparisonItem}>
                     <Ionicons name="arrow-up-circle" size={20} color="#EF4444" />
                     <Text style={styles.comparisonLabel}>Xuất</Text>
                     <Text style={[styles.comparisonValue, styles.outValue]}>
-                      {(item.out_quantity || 0).toFixed(2)}
+                      {Math.round(item.out_quantity || 0)}
                     </Text>
                   </View>
                   <View style={styles.comparisonItem}>
@@ -204,7 +204,7 @@ export default function MaterialUsageReportScreen() {
                         (item.remaining || 0) >= 0 ? styles.remainingValue : styles.negativeValue,
                       ]}
                     >
-                      {(item.remaining || 0).toFixed(2)}
+                      {Math.round(item.remaining || 0)}
                     </Text>
                   </View>
                 </View>

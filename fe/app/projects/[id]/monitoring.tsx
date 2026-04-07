@@ -89,6 +89,11 @@ export default function ProjectMonitoringScreen() {
     }
   };
 
+  const roundNumbersInString = (str: string) => {
+    if (!str) return str;
+    return str.replace(/\d+\.\d+/g, (match) => Math.round(parseFloat(match)).toString());
+  };
+
   const handleAlertPress = (alert: any) => {
     switch (alert.type) {
       case "risk":
@@ -215,7 +220,7 @@ export default function ProjectMonitoringScreen() {
                     />
                   </View>
                   <View style={styles.alertContent}>
-                    <Text style={styles.alertMessage}>{alert.message}</Text>
+                    <Text style={styles.alertMessage}>{roundNumbersInString(alert.message)}</Text>
                     <View style={styles.alertMeta}>
                       <View
                         style={[

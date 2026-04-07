@@ -188,9 +188,9 @@ export default function KpiDetailScreen() {
                         </View>
                         <View style={styles.progressStats}>
                             <Text style={styles.progressText}>
-                                <Text style={styles.progressHighlight}>{kpi.current_value}</Text> / {kpi.target_value} {kpi.unit}
+                                <Text style={styles.progressHighlight}>{Math.round(kpi.current_value)}</Text> / {Math.round(kpi.target_value)} {kpi.unit}
                             </Text>
-                            <Text style={styles.progressPercent}>{progressPercent.toFixed(1)}%</Text>
+                            <Text style={styles.progressPercent}>{Math.round(progressPercent)}%</Text>
                         </View>
                     </View>
 

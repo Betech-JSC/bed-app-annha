@@ -98,6 +98,11 @@ export default function ProjectEvmScreen() {
     return `${value.toFixed(2)}%`;
   };
 
+  const roundNumbersInString = (str: string) => {
+    if (!str) return str;
+    return str.replace(/\d+\.\d+/g, (match) => Math.round(parseFloat(match)).toString());
+  };
+
   if (loading && !analysis) {
     return (
       <View style={styles.container}>
@@ -179,7 +184,7 @@ export default function ProjectEvmScreen() {
               {metric.cost_performance_index != null && typeof metric.cost_performance_index === 'number' ? (
                 <>
                   <Text style={[styles.metricValue, { color: metric.cost_performance_index >= 1 ? "#10B981" : "#EF4444" }]}>
-                    {metric.cost_performance_index.toFixed(3)}
+                    {metric.cost_performance_index.toFixed(2)}
                   </Text>
                   <Text style={styles.metricDescription}>
                     {metric.cost_performance_index >= 1
@@ -208,7 +213,7 @@ export default function ProjectEvmScreen() {
               {metric.schedule_performance_index != null && typeof metric.schedule_performance_index === 'number' ? (
                 <>
                   <Text style={[styles.metricValue, { color: metric.schedule_performance_index >= 1 ? "#10B981" : "#EF4444" }]}>
-                    {metric.schedule_performance_index.toFixed(3)}
+                    {metric.schedule_performance_index.toFixed(2)}
                   </Text>
                   <Text style={styles.metricDescription}>
                     {metric.schedule_performance_index >= 1
@@ -306,7 +311,7 @@ export default function ProjectEvmScreen() {
           <View style={styles.progressCard}>
             <Text style={styles.progressValue}>
               {metric.progress_percentage != null && typeof metric.progress_percentage === 'number'
-                ? `${metric.progress_percentage.toFixed(2)}%`
+                ? `${Math.round(metric.progress_percentage)}%`
                 : "0%"}
             </Text>
             <View style={styles.progressBar}>
@@ -336,7 +341,7 @@ export default function ProjectEvmScreen() {
             {analysis.warnings.map((warning, index) => (
               <View key={index} style={styles.warningCard}>
                 <Ionicons name="warning-outline" size={20} color="#F59E0B" />
-                <Text style={styles.warningText}>{warning}</Text>
+                <Text style={styles.warningText}>{roundNumbersInString(warning)}</Text>
               </View>
             ))}
           </View>
@@ -348,7 +353,7 @@ export default function ProjectEvmScreen() {
             {analysis.recommendations.map((rec, index) => (
               <View key={index} style={styles.recommendationCard}>
                 <Ionicons name="checkmark-circle-outline" size={20} color="#10B981" />
-                <Text style={styles.recommendationText}>{rec}</Text>
+                <Text style={styles.recommendationText}>{roundNumbersInString(rec)}</Text>
               </View>
             ))}
           </View>

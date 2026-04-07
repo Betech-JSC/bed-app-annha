@@ -194,7 +194,7 @@ export default function LaborProductivityScreen() {
                 <Text style={s.summaryLabel}>Bản ghi</Text>
               </View>
               <View style={[s.summaryCard, { backgroundColor: "#DCFCE7", borderColor: "#BBF7D0" }]}>
-                <Text style={[s.summaryNumber, { color: "#16A34A" }]}>{dashboard.summary.avg_efficiency}%</Text>
+                <Text style={[s.summaryNumber, { color: "#16A34A" }]}>{Math.round(dashboard.summary.avg_efficiency)}%</Text>
                 <Text style={s.summaryLabel}>TB Hiệu suất</Text>
               </View>
               <View style={[s.summaryCard, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
@@ -240,7 +240,7 @@ export default function LaborProductivityScreen() {
                       <Text style={s.rankMeta}>{u.records_count} lượt | {u.total_actual.toLocaleString()} đơn vị</Text>
                     </View>
                     <View style={[s.effBadge, { backgroundColor: getEffColor(u.avg_efficiency) + "20" }]}>
-                      <Text style={[s.effText, { color: getEffColor(u.avg_efficiency) }]}>{u.avg_efficiency}%</Text>
+                      <Text style={[s.effText, { color: getEffColor(u.avg_efficiency) }]}>{Math.round(u.avg_efficiency)}%</Text>
                     </View>
                   </View>
                 ))}
@@ -262,7 +262,7 @@ export default function LaborProductivityScreen() {
                       <Text style={s.itemMeta}>TT: {item.total_actual.toLocaleString()}</Text>
                       <View style={[s.effBadge, { backgroundColor: getEffColor(item.avg_efficiency) + "20" }]}>
                         <Text style={[s.effText, { color: getEffColor(item.avg_efficiency) }]}>
-                          {item.avg_efficiency}% {getEffLabel(item.avg_efficiency)}
+                          {Math.round(item.avg_efficiency)}% {getEffLabel(item.avg_efficiency)}
                         </Text>
                       </View>
                     </View>
@@ -294,7 +294,7 @@ export default function LaborProductivityScreen() {
                     </View>
                     <View style={[s.effBadge, { backgroundColor: getEffColor(rec.efficiency_percent) + "20" }]}>
                       <Text style={[s.effText, { color: getEffColor(rec.efficiency_percent) }]}>
-                        {rec.efficiency_percent}%
+                        {Math.round(rec.efficiency_percent)}%
                       </Text>
                     </View>
                   </View>
@@ -317,7 +317,7 @@ export default function LaborProductivityScreen() {
                     </View>
                   </View>
                   <View style={s.recordActions}>
-                    <Text style={s.prodRate}>NS: {rec.productivity_rate} {rec.unit}/người·giờ</Text>
+                    <Text style={s.prodRate}>NS: {Math.round(rec.productivity_rate)} {rec.unit}/người·giờ</Text>
                     <TouchableOpacity onPress={() => handleDelete(rec.id)}>
                       <Ionicons name="trash-outline" size={18} color="#DC2626" />
                     </TouchableOpacity>
