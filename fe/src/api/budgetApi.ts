@@ -26,7 +26,7 @@ export interface ProjectBudget {
   remaining_budget: number;
   budget_date: string;
   notes?: string;
-  status: "draft" | "approved" | "active" | "archived";
+  status: "draft" | "pending_approval" | "approved" | "active" | "archived";
   created_by: number;
   approved_by?: number;
   approved_at?: string;
@@ -43,6 +43,7 @@ export interface CreateBudgetData {
   version?: string;
   budget_date: string;
   notes?: string;
+  status?: "draft" | "pending_approval" | "approved" | "active" | "archived";
   items: Array<{
     name: string;
     cost_group_id?: number;
@@ -83,6 +84,33 @@ export const budgetApi = {
 
   deleteBudget: async (projectId: number, id: number) => {
     const response = await api.delete(`/projects/${projectId}/budgets/${id}`);
+    return response.data;
+  },
+
+  // ====== Workflow Actions ======
+
+  submitForApproval: async (projectId: number, id: number) => {
+    const response = await api.post(`/projects/${projectId}/budgets/${id}/submit`);
+    return response.data;
+  },
+
+  approve: async (projectId: number, id: number) => {
+    const response = await api.post(`/projects/${projectId}/budgets/${id}/approve`);
+    return response.data;
+  },
+
+  reject: async (projectId: number, id: number, reason?: string) => {
+    const response = await api.post(`/projects/${projectId}/budgets/${id}/reject`, { reason });
+    return response.data;
+  },
+
+  activate: async (projectId: number, id: number) => {
+    const response = await api.post(`/projects/${projectId}/budgets/${id}/activate`);
+    return response.data;
+  },
+
+  archive: async (projectId: number, id: number) => {
+    const response = await api.post(`/projects/${projectId}/budgets/${id}/archive`);
     return response.data;
   },
 };

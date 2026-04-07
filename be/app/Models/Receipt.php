@@ -43,7 +43,7 @@ class Receipt extends Model
 
     public function supplier(): BelongsTo
     {
-        return $this->belongsTo(MaterialSupplier::class, 'supplier_id');
+        return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
     public function cost(): BelongsTo

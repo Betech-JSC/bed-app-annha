@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
     Alert,
     Dimensions,
+    Image,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { equipmentApi, Equipment, EquipmentAllocation } from "@/api/equipmentApi";
@@ -146,6 +147,16 @@ export default function EquipmentAllocationDetailScreen() {
                             value={formatDate(allocation.end_date!)} 
                         />
                         <DetailItem 
+                            icon="business-outline" 
+                            label="Dự án liên kết" 
+                            value={allocation.project?.name || "N/A"} 
+                        />
+                        <DetailItem 
+                            icon="barcode-outline" 
+                            label="Mã phân bổ" 
+                            value={`#${allocation.id}`} 
+                        />
+                        <DetailItem 
                             icon="person-outline" 
                             label="Người quản lý/Sử dụng" 
                             value={allocation.allocatedTo?.name || allocation.manager?.name || "Chưa bàn giao"} 
@@ -203,6 +214,38 @@ export default function EquipmentAllocationDetailScreen() {
                         </Text>
                     </View>
                 </View>
+
+                {/* Attachments Section */}
+                {allocation.attachments && allocation.attachments.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>HÌNH ẢNH / CHỨNG TỪ ({allocation.attachments.length})</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentList}>
+                            {allocation.attachments.map((file, index) => (
+                                <TouchableOpacity 
+                                    key={index} 
+                                    style={styles.attachmentItem}
+                                    onPress={() => {
+                                        const url = file.file_url;
+                                        if (url) {
+                                            Alert.alert("Chứng từ", "Bạn muốn xem file này?", [
+                                                { text: "Hủy", style: "cancel" },
+                                                { text: "Xem", onPress: () => { /* Logic */ } }
+                                            ]);
+                                        }
+                                    }}
+                                >
+                                    <Image 
+                                        source={{ uri: file.file_url }} 
+                                        style={styles.attachmentThumbnail} 
+                                    />
+                                    <Text style={styles.attachmentName} numberOfLines={1}>
+                                        {file.original_name || 'Hinh_anh'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
             </ScrollView>
         </View>
     );
@@ -344,6 +387,29 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#4B5563",
         lineHeight: 22,
+    },
+    attachmentList: {
+        flexDirection: "row",
+        marginTop: 8,
+    },
+    attachmentItem: {
+        marginRight: 16,
+        alignItems: "center",
+        width: 100,
+    },
+    attachmentThumbnail: {
+        width: 100,
+        height: 100,
+        borderRadius: 12,
+        backgroundColor: "#F9FAFB",
+    },
+    attachmentName: {
+        fontSize: 11,
+        marginTop: 6,
+        color: "#6B7280",
+        fontWeight: "500",
+        width: 100,
+        textAlign: "center",
     },
     emptyContainer: {
         flex: 1,

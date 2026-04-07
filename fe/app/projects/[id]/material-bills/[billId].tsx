@@ -10,16 +10,19 @@ import {
     RefreshControl,
     Modal,
     TextInput,
+    Image,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { materialBillApi, MaterialBill } from "@/api/materialBillApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader, PermissionGuard } from "@/components";
 import { Permissions } from "@/constants/Permissions";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function MaterialBillDetailScreen() {
     const router = useRouter();
     const { id, billId } = useLocalSearchParams<{ id: string, billId: string }>();
+    const tabBarHeight = useTabBarHeight();
     const [bill, setBill] = useState<MaterialBill | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -222,6 +225,39 @@ export default function MaterialBillDetailScreen() {
                         <Text style={styles.totalValue}>{formatCurrency(bill.total_amount)}</Text>
                     </View>
                 </View>
+                
+                {/* Attachments Section */}
+                {bill.attachments && bill.attachments.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Hình ảnh/Chứng từ ({bill.attachments.length})</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentList}>
+                            {bill.attachments.map((file, index) => (
+                                <TouchableOpacity 
+                                    key={index} 
+                                    style={styles.attachmentItem}
+                                    onPress={() => {
+                                        const url = file.file_url;
+                                        if (url) {
+                                            // Handle preview
+                                            Alert.alert("Chứng từ", "Bạn muốn xem file này?", [
+                                                { text: "Hủy", style: "cancel" },
+                                                { text: "Xem", onPress: () => { /* Logic */ } }
+                                            ]);
+                                        }
+                                    }}
+                                >
+                                    <Image 
+                                        source={{ uri: file.file_url }} 
+                                        style={styles.attachmentThumbnail} 
+                                    />
+                                    <Text style={styles.attachmentName} numberOfLines={1}>
+                                        {file.original_name || 'Hinh_anh'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
 
                 {/* Approval History */}
                 {(bill.management_approved_by || bill.accountant_approved_by || bill.status === 'rejected') && (
@@ -287,11 +323,11 @@ export default function MaterialBillDetailScreen() {
                     </View>
                 )}
 
-                <View style={{ height: 100 }} />
+                <View style={{ height: tabBarHeight + 120 }} />
             </ScrollView>
 
             {/* Action Buttons */}
-            <View style={styles.actionBar}>
+            <View style={[styles.actionBar, { paddingBottom: Math.max(tabBarHeight, 20) }]}>
                 {bill.status === 'draft' && (
                     <View style={styles.actionButtonGroup}>
                         <TouchableOpacity
@@ -659,5 +695,26 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#6B7280',
         marginTop: 2,
+    },
+    attachmentList: {
+        flexDirection: "row",
+        marginTop: 8,
+    },
+    attachmentItem: {
+        marginRight: 16,
+        alignItems: "center",
+        width: 100,
+    },
+    attachmentThumbnail: {
+        width: 100,
+        height: 100,
+        borderRadius: 8,
+        backgroundColor: "#F3F4F6",
+    },
+    attachmentName: {
+        fontSize: 10,
+        marginTop: 4,
+        color: "#6B7280",
+        textAlign: "center",
     },
 });

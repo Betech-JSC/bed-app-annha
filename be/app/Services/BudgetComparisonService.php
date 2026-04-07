@@ -160,6 +160,49 @@ class BudgetComparisonService
     }
 
     /**
+     * So sánh budget vs actual theo từng nhóm chi phí (Cost Group)
+     * 
+     * @param ProjectBudget $budget
+     * @return array
+     */
+    public function compareByCostGroup(ProjectBudget $budget): array
+    {
+        $comparison = $this->compareBudget($budget);
+        $items = $comparison['items'];
+        
+        $groups = [];
+        foreach ($items as $item) {
+            $costGroup = $item->costGroup;
+            $groupId = $item->cost_group_id ?: 0;
+            $groupName = $costGroup ? $costGroup->name : 'Chưa phân nhóm';
+            
+            if (!isset($groups[$groupId])) {
+                $groups[$groupId] = [
+                    'id' => $groupId,
+                    'name' => $groupName,
+                    'estimated' => 0,
+                    'actual' => 0,
+                    'items_count' => 0,
+                ];
+            }
+            
+            $groups[$groupId]['estimated'] += (float) $item->estimated_amount;
+            $groups[$groupId]['actual'] += (float) $item->actual_amount;
+            $groups[$groupId]['items_count']++;
+        }
+        
+        // Finalize calculations for each group
+        return array_map(function ($group) {
+            $group['variance'] = $group['actual'] - $group['estimated'];
+            $group['variance_percentage'] = $group['estimated'] > 0 
+                ? round(($group['variance'] / $group['estimated']) * 100, 2) 
+                : 0;
+            $group['is_over_budget'] = $group['actual'] > $group['estimated'];
+            return $group;
+        }, array_values($groups));
+    }
+
+    /**
      * Phân tích variance theo thời gian
      * 
      * @param Project $project

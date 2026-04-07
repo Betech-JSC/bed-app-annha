@@ -1,4 +1,5 @@
 import api from "./api";
+import { UploadedFile } from "./attachmentApi";
 
 export interface MaterialBillItem {
     id?: number;
@@ -49,6 +50,7 @@ export interface MaterialBill {
         name: string;
     };
     items?: MaterialBillItem[];
+    attachments?: UploadedFile[];
 }
 
 export const materialBillApi = {

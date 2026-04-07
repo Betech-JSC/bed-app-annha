@@ -22,7 +22,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function CreateBudgetItemScreen() {
     const router = useRouter();
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, mode, budgetId } = useLocalSearchParams<{ 
+        id: string;
+        mode?: string;
+        budgetId?: string;
+    }>();
     const tabBarHeight = useTabBarHeight();
     const insets = useSafeAreaInsets();
     const [costGroups, setCostGroups] = useState<CostGroup[]>([]);
@@ -68,7 +72,10 @@ export default function CreateBudgetItemScreen() {
             };
 
             // Store item data in AsyncStorage temporarily
-            const storageKey = `budget_create_item_${id}`;
+            const storageKey = mode === 'edit' && budgetId 
+                ? `budget_edit_item_${budgetId}`
+                : `budget_create_item_${id}`;
+                
             await AsyncStorage.setItem(storageKey, JSON.stringify(itemPayload));
 
             router.back();

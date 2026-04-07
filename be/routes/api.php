@@ -312,6 +312,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/budgets/{id}/compare', [BudgetController::class, 'compareWithActual'])->middleware('permission:budgets.view,projectId');
         Route::put('/{projectId}/budgets/{id}', [BudgetController::class, 'update'])->middleware('permission:budgets.update,projectId');
         Route::delete('/{projectId}/budgets/{id}', [BudgetController::class, 'destroy'])->middleware('permission:budgets.delete,projectId');
+        Route::post('/{projectId}/budgets/{id}/submit', [BudgetController::class, 'submitForApproval'])->middleware('permission:budgets.update,projectId');
+        Route::post('/{projectId}/budgets/{id}/approve', [BudgetController::class, 'approve'])->middleware('permission:budgets.approve,projectId');
+        Route::post('/{projectId}/budgets/{id}/reject', [BudgetController::class, 'reject'])->middleware('permission:budgets.approve,projectId');
+        Route::post('/{projectId}/budgets/{id}/activate', [BudgetController::class, 'activate'])->middleware('permission:budgets.approve,projectId');
+        Route::post('/{projectId}/budgets/{id}/archive', [BudgetController::class, 'archive'])->middleware('permission:budgets.approve,projectId');
         Route::post('/{projectId}/budgets/sync', [BudgetController::class, 'sync'])->middleware('permission:budgets.update,projectId');
         Route::post('/{projectId}/budgets/{id}/sync', [BudgetController::class, 'sync'])->middleware('permission:budgets.update,projectId');
 

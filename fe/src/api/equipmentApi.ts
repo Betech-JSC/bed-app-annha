@@ -1,4 +1,5 @@
 import api from "./api";
+import { Attachment } from "./attachmentApi";
 
 export interface Equipment {
   id: number;
@@ -50,6 +51,7 @@ export interface EquipmentAllocation {
   updated_at: string;
   equipment?: Equipment;
   project?: any;
+  attachments?: Attachment[];
 }
 
 export interface EquipmentMaintenance {
@@ -157,6 +159,7 @@ export const equipmentApi = {
     return_date?: string;
     // Cho THUÊ (rent):
     rental_fee?: number;
+    attachment_ids?: number[];
   }) => {
     const response = await api.post(`/projects/${projectId}/equipment/allocations`, data);
     return response.data;

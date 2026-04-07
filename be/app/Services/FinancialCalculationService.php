@@ -97,7 +97,7 @@ class FinancialCalculationService
         $otherCosts = (float) $otherCostsQuery->sum('amount');
 
         // Tổng chi phí công trình thực tế (Actual Spent)
-        $totalCosts = $subcontractorCosts + $otherCosts;
+        $totalCosts = $subcontractorCosts + $payrollCosts + $otherCosts;
 
         $result = [
             'subcontractor_costs' => $subcontractorCosts,

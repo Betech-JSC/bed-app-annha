@@ -22,10 +22,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function EditBudgetItemScreen() {
     const router = useRouter();
-    const { id, index, itemData: itemDataParam } = useLocalSearchParams<{
+    const { id, index, itemData: itemDataParam, mode, budgetId } = useLocalSearchParams<{
         id: string;
         index: string;
         itemData?: string;
+        mode?: string;
+        budgetId?: string;
     }>();
     const tabBarHeight = useTabBarHeight();
     const insets = useSafeAreaInsets();
@@ -51,9 +53,6 @@ export default function EditBudgetItemScreen() {
                     description: parsed.description || "",
                     estimated_amount: parsed.estimated_amount || 0,
                 });
-                if (parsed.cost_group_id) {
-                    // Will be set after costGroups load
-                }
             } catch (error) {
                 console.error("Error parsing item data:", error);
             }
@@ -95,7 +94,10 @@ export default function EditBudgetItemScreen() {
             };
 
             // Store item data in AsyncStorage temporarily with index
-            const storageKey = `budget_create_item_${id}_${index}`;
+            const storageKey = mode === 'edit' && budgetId 
+                ? `budget_edit_item_${budgetId}_${index}`
+                : `budget_create_item_${id}_${index}`;
+                
             await AsyncStorage.setItem(storageKey, JSON.stringify({ ...itemPayload, index: parseInt(index) }));
 
             router.back();

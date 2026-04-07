@@ -351,7 +351,7 @@ class ProjectMonitoringService
     protected function checkBudgetRisk(Project $project): array
     {
         $budget = $project->budgets()
-            ->where('status', 'approved')
+            ->whereIn('status', ['approved', 'active', 'draft'])
             ->orderBy('budget_date', 'desc')
             ->first();
 

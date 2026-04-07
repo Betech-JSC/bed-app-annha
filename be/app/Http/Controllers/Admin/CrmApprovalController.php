@@ -169,7 +169,7 @@ class CrmApprovalController extends Controller
         $defectItemsFormatted = $defectItems->map(fn(Defect $d) => $this->formatDefectItem($d));
 
         // ─── Project Budgets (Ngân sách chưa duyệt) ───
-        $budgetItems = ProjectBudget::where('status', 'draft')
+        $budgetItems = ProjectBudget::whereIn('status', ['draft', 'pending_approval'])
             ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();

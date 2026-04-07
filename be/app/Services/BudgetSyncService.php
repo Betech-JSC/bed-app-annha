@@ -30,7 +30,7 @@ class BudgetSyncService
             ];
         }
 
-        $budgets = $project->budgets()->where('status', 'approved')->get();
+        $budgets = $project->budgets()->whereIn('status', ['approved', 'active', 'draft'])->get();
         
         if ($budgets->isEmpty()) {
             return [
@@ -90,8 +90,13 @@ class BudgetSyncService
             ->sum('amount');
 
         // Cập nhật actual_cost và remaining_budget cho budget
-        $budget->actual_cost = (float) $totalActualCost;
-        $budget->remaining_budget = max(0, $budget->total_budget - $budget->actual_cost);
+        // Sử dụng number_format để chuyển sang string, tránh cảnh báo conversion sang decimal
+        $actualCostStr = number_format((float) $totalActualCost, 2, '.', '');
+        $budget->actual_cost = $actualCostStr;
+        
+        $totalBudget = (float) ($budget->total_budget ?? 0);
+        $remainingBudgetStr = number_format($totalBudget - (float) $totalActualCost, 2, '.', '');
+        $budget->remaining_budget = $remainingBudgetStr;
         $budget->save();
 
         // Cập nhật actual_amount cho từng budget item
@@ -116,14 +121,14 @@ class BudgetSyncService
                 ->where('status', 'approved')
                 ->sum('amount');
             
-            $item->actual_amount = (float) $actualAmount;
-            $item->remaining_amount = max(0, $item->estimated_amount - $item->actual_amount);
+            $item->actual_amount = number_format((float) $actualAmount, 2, '.', '');
+            $estimatedAmount = (float) ($item->estimated_amount ?? 0);
+            $item->remaining_amount = number_format($estimatedAmount - (float) $actualAmount, 2, '.', '');
             $item->save();
         } else {
             // Nếu không có cost_group_id, có thể là chi phí khác
-            // Tạm thời set actual_amount = 0 hoặc có thể cải thiện logic sau
-            $item->actual_amount = 0;
-            $item->remaining_amount = $item->estimated_amount;
+            $item->actual_amount = '0.00';
+            $item->remaining_amount = number_format((float) ($item->estimated_amount ?? 0), 2, '.', '');
             $item->save();
         }
     }

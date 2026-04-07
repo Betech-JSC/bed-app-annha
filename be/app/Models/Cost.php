@@ -437,10 +437,15 @@ class Cost extends Model
         });
 
         static::saved(function ($cost) {
-            // Đồng bộ trạng thái về Phiếu vật tư nếu có liên kết
-            if ($cost->material_bill_id) {
-                $cost->syncToMaterialBill();
-            }
+        // Đồng bộ trạng thái về Phiếu vật tư nếu có liên kết
+        if ($cost->material_bill_id) {
+            $cost->syncToMaterialBill();
+        }
+
+        // Đồng bộ trạng thái về Phiếu thanh toán thầu phụ nếu có liên kết
+        if ($cost->subcontractor_payment_id) {
+            $cost->syncToSubcontractorPayment();
+        }
         });
     }
 
@@ -481,6 +486,45 @@ class Cost extends Model
             if ($newBillStatus === 'approved') {
                 $bill->triggerApprovalSideEffects();
             }
+        }
+    }
+
+    /**
+     * Đồng bộ trạng thái về Phiếu thanh toán thầu phụ nếu có liên kết
+     */
+    public function syncToSubcontractorPayment(): void
+    {
+        $payment = SubcontractorPayment::find($this->subcontractor_payment_id);
+        if (!$payment) return;
+
+        $newPaymentStatus = match ($this->status) {
+            'approved' => 'paid',
+            'pending_management_approval' => 'pending_management_approval',
+            'pending_accountant_approval' => 'pending_accountant_confirmation',
+            'rejected' => 'rejected',
+            default => 'draft',
+        };
+
+        if ($payment->status !== $newPaymentStatus) {
+            $payment->status = $newPaymentStatus;
+            
+            if ($this->status === 'approved') {
+                $payment->approved_by = $payment->approved_by ?: $this->management_approved_by;
+                $payment->approved_at = $payment->approved_at ?: $this->management_approved_at;
+                $payment->paid_by = $this->accountant_approved_by;
+                $payment->paid_at = $this->accountant_approved_at;
+                
+                // Cập nhật công nợ nhà thầu phụ (nếu có logic recordPayment)
+                if ($payment->subcontractor && method_exists($payment->subcontractor, 'recordPayment')) {
+                    $payment->subcontractor->recordPayment($payment->amount);
+                }
+            } elseif ($this->status === 'rejected') {
+                $payment->rejected_by = $this->management_approved_by ?: $this->accountant_approved_by;
+                $payment->rejected_at = now();
+                $payment->rejection_reason = $this->rejected_reason;
+            }
+            
+            $payment->save(['timestamps' => false]);
         }
     }
 

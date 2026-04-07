@@ -17,7 +17,8 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { equipmentApi, Equipment } from "@/api/equipmentApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput, UniversalFileUploader } from "@/components";
+import { UploadedFile } from "@/components/UniversalFileUploader";
 
 interface UserOption {
     id: number;
@@ -45,6 +46,7 @@ export default function CreateEquipmentAllocationScreen() {
     const [allocatedTo, setAllocatedTo] = useState<UserOption | null>(null);
     const [manager, setManager] = useState<UserOption | null>(null);
     const [handoverDate, setHandoverDate] = useState(new Date());
+    const [attachments, setAttachments] = useState<UploadedFile[]>([]);
 
     // Selector States
     const [showEquipmentModal, setShowEquipmentModal] = useState(false);
@@ -113,9 +115,14 @@ export default function CreateEquipmentAllocationScreen() {
             if (allocationType === "rent") {
                 payload.rental_fee = rentalFee;
             } else {
-                payload.allocated_to = allocatedTo?.id;
                 payload.manager_id = manager?.id;
                 payload.handover_date = handoverDate.toISOString().split("T")[0];
+            }
+
+            if (attachments.length > 0) {
+                payload.attachment_ids = attachments
+                    .map((a) => a.attachment_id || a.id)
+                    .filter((id): id is number => !!id);
             }
 
             const response = await equipmentApi.createAllocation(id!, payload);
@@ -286,6 +293,15 @@ export default function CreateEquipmentAllocationScreen() {
                             </View>
                         </View>
                     )}
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>HÌNH ẢNH / CHỨNG TỪ (HÌNH PHIẾU)</Text>
+                        <UniversalFileUploader 
+                            onUploadComplete={setAttachments} 
+                            initialFiles={attachments}
+                            maxFiles={5}
+                        />
+                    </View>
 
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>GHI CHÚ</Text>

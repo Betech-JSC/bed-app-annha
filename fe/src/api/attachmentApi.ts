@@ -15,6 +15,8 @@ export interface Attachment {
   attachment_id?: number; // For compatibility with upload response
 }
 
+export type UploadedFile = Attachment; // Alias for compatibility with components
+
 export interface UploadResponse {
   success: boolean;
   file_url: string;

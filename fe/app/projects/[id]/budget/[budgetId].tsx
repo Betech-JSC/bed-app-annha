@@ -38,9 +38,12 @@ export default function BudgetDetailScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [comparisonData, setComparisonData] = useState<any>(null);
     const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
-    const [activeTab, setActiveTab] = useState<"overview" | "items">("overview");
+    const [activeTab, setActiveTab] = useState<"overview" | "items" | "groups">("overview");
     const [permissionDenied, setPermissionDenied] = useState(false);
     const [permissionMessage, setPermissionMessage] = useState("");
+    const [actionLoading, setActionLoading] = useState(false);
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [rejectReason, setRejectReason] = useState("");
 
     useEffect(() => {
         loadBudget();
@@ -91,6 +94,137 @@ export default function BudgetDetailScreen() {
         }
     };
 
+    // ====== Workflow Actions ======
+
+    const handleSubmitForApproval = () => {
+        Alert.alert(
+            "Gửi duyệt",
+            "Bạn có chắc chắn muốn gửi ngân sách này để duyệt?",
+            [
+                { text: "Hủy", style: "cancel" },
+                {
+                    text: "Gửi duyệt",
+                    onPress: async () => {
+                        try {
+                            setActionLoading(true);
+                            const response = await budgetApi.submitForApproval(Number(id), Number(budgetId));
+                            if (response.success) {
+                                Alert.alert("Thành công", response.message);
+                                setBudget(response.data);
+                            }
+                        } catch (error: any) {
+                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể gửi duyệt");
+                        } finally {
+                            setActionLoading(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    const handleApprove = () => {
+        Alert.alert(
+            "Duyệt ngân sách",
+            "Bạn có chắc chắn muốn duyệt ngân sách này?",
+            [
+                { text: "Hủy", style: "cancel" },
+                {
+                    text: "Duyệt",
+                    onPress: async () => {
+                        try {
+                            setActionLoading(true);
+                            const response = await budgetApi.approve(Number(id), Number(budgetId));
+                            if (response.success) {
+                                Alert.alert("Thành công", response.message);
+                                setBudget(response.data);
+                            }
+                        } catch (error: any) {
+                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể duyệt");
+                        } finally {
+                            setActionLoading(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    const handleReject = async () => {
+        if (!rejectReason.trim()) {
+            Alert.alert("Lỗi", "Vui lòng nhập lý do từ chối");
+            return;
+        }
+        try {
+            setActionLoading(true);
+            const response = await budgetApi.reject(Number(id), Number(budgetId), rejectReason);
+            if (response.success) {
+                setShowRejectModal(false);
+                setRejectReason("");
+                Alert.alert("Thành công", response.message);
+                setBudget(response.data);
+            }
+        } catch (error: any) {
+            Alert.alert("Lỗi", error.response?.data?.message || "Không thể từ chối");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleActivate = () => {
+        Alert.alert(
+            "Áp dụng ngân sách",
+            "Ngân sách sẽ được áp dụng cho dự án. Bạn có chắc chắn?",
+            [
+                { text: "Hủy", style: "cancel" },
+                {
+                    text: "Áp dụng",
+                    onPress: async () => {
+                        try {
+                            setActionLoading(true);
+                            const response = await budgetApi.activate(Number(id), Number(budgetId));
+                            if (response.success) {
+                                Alert.alert("Thành công", response.message);
+                                setBudget(response.data);
+                            }
+                        } catch (error: any) {
+                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể áp dụng");
+                        } finally {
+                            setActionLoading(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    const handleArchive = () => {
+        Alert.alert(
+            "Lưu trữ ngân sách",
+            "Ngân sách sẽ được lưu trữ và không thể chỉnh sửa. Bạn có chắc chắn?",
+            [
+                { text: "Hủy", style: "cancel" },
+                {
+                    text: "Lưu trữ",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            setActionLoading(true);
+                            const response = await budgetApi.archive(Number(id), Number(budgetId));
+                            if (response.success) {
+                                Alert.alert("Thành công", response.message);
+                                setBudget(response.data);
+                            }
+                        } catch (error: any) {
+                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể lưu trữ");
+                        } finally {
+                            setActionLoading(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -268,6 +402,8 @@ export default function BudgetDetailScreen() {
 
     const getStatusColor = (status: string) => {
         switch (status) {
+            case "pending_approval":
+                return "#F97316";
             case "approved":
                 return "#10B981";
             case "active":
@@ -277,6 +413,39 @@ export default function BudgetDetailScreen() {
             default:
                 return "#F59E0B";
         }
+    };
+
+    const getStatusLabel = (status: string) => {
+        switch (status) {
+            case "pending_approval": return "Chờ duyệt";
+            case "approved": return "Đã duyệt";
+            case "active": return "Đang áp dụng";
+            case "archived": return "Đã lưu trữ";
+            default: return "Nháp";
+        }
+    };
+
+    const getStatusIcon = (status: string) => {
+        switch (status) {
+            case "pending_approval": return "time-outline";
+            case "approved": return "checkmark-circle-outline";
+            case "active": return "flash-outline";
+            case "archived": return "archive-outline";
+            default: return "document-text-outline";
+        }
+    };
+
+    const WORKFLOW_STEPS = [
+        { key: "draft", label: "Nháp", icon: "document-text-outline" },
+        { key: "pending_approval", label: "Chờ duyệt", icon: "time-outline" },
+        { key: "approved", label: "Đã duyệt", icon: "checkmark-circle-outline" },
+        { key: "active", label: "Áp dụng", icon: "flash-outline" },
+        { key: "archived", label: "Lưu trữ", icon: "archive-outline" },
+    ];
+
+    const getStepIndex = (status: string) => {
+        const idx = WORKFLOW_STEPS.findIndex(s => s.key === status);
+        return idx >= 0 ? idx : 0;
     };
 
     if (loading) {
@@ -323,18 +492,22 @@ export default function BudgetDetailScreen() {
                         >
                             <Ionicons name="download-outline" size={20} color="#10B981" />
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.headerButton}
-                            onPress={() => router.push(`/projects/${id}/budget/${budgetId}/edit`)}
-                        >
-                            <Ionicons name="pencil" size={20} color="#3B82F6" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.headerButton}
-                            onPress={handleDelete}
-                        >
-                            <Ionicons name="trash" size={20} color="#EF4444" />
-                        </TouchableOpacity>
+                        {budget.status === "draft" && (
+                            <>
+                                <TouchableOpacity
+                                    style={styles.headerButton}
+                                    onPress={() => router.push(`/projects/${id}/budget/${budgetId}/edit`)}
+                                >
+                                    <Ionicons name="pencil" size={20} color="#3B82F6" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.headerButton}
+                                    onPress={handleDelete}
+                                >
+                                    <Ionicons name="trash" size={20} color="#EF4444" />
+                                </TouchableOpacity>
+                            </>
+                        )}
                     </View>
                 }
             />
@@ -345,6 +518,114 @@ export default function BudgetDetailScreen() {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                 }
             >
+                {/* Workflow Stepper */}
+                <View style={styles.workflowSection}>
+                    <View style={styles.stepperContainer}>
+                        {WORKFLOW_STEPS.map((step, index) => {
+                            const currentIndex = getStepIndex(budget.status);
+                            const isCompleted = index < currentIndex;
+                            const isCurrent = index === currentIndex;
+                            const stepColor = isCompleted ? "#10B981" : isCurrent ? getStatusColor(budget.status) : "#D1D5DB";
+                            return (
+                                <React.Fragment key={step.key}>
+                                    <View style={styles.stepItem}>
+                                        <View style={[
+                                            styles.stepDot,
+                                            { backgroundColor: isCompleted ? "#10B981" : isCurrent ? stepColor : "#F3F4F6", borderColor: stepColor }
+                                        ]}>
+                                            <Ionicons
+                                                name={isCompleted ? "checkmark" : (step.icon as any)}
+                                                size={isCurrent ? 14 : 12}
+                                                color={isCompleted || isCurrent ? "#FFFFFF" : "#9CA3AF"}
+                                            />
+                                        </View>
+                                        <Text style={[
+                                            styles.stepLabel,
+                                            isCurrent && { color: stepColor, fontWeight: "700" },
+                                            isCompleted && { color: "#10B981" },
+                                        ]}>{step.label}</Text>
+                                    </View>
+                                    {index < WORKFLOW_STEPS.length - 1 && (
+                                        <View style={[
+                                            styles.stepLine,
+                                            { backgroundColor: isCompleted ? "#10B981" : "#E5E7EB" }
+                                        ]} />
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
+                    </View>
+
+                    {/* Workflow Action Buttons */}
+                    <View style={styles.workflowActions}>
+                        {budget.status === "draft" && hasPermission(Permissions.BUDGET_UPDATE) && (
+                            <TouchableOpacity
+                                style={[styles.workflowButton, styles.workflowButtonPrimary]}
+                                onPress={handleSubmitForApproval}
+                                disabled={actionLoading}
+                            >
+                                {actionLoading ? (
+                                    <ActivityIndicator color="#FFFFFF" size="small" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="send" size={18} color="#FFFFFF" />
+                                        <Text style={styles.workflowButtonTextLight}>Gửi Duyệt</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
+
+                        {budget.status === "pending_approval" && hasPermission(Permissions.BUDGET_APPROVE) && (
+                            <View style={styles.workflowActionRow}>
+                                <TouchableOpacity
+                                    style={[styles.workflowButton, styles.workflowButtonApprove, { flex: 1 }]}
+                                    onPress={handleApprove}
+                                    disabled={actionLoading}
+                                >
+                                    <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                                    <Text style={styles.workflowButtonTextLight}>Duyệt</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.workflowButton, styles.workflowButtonReject, { flex: 1 }]}
+                                    onPress={() => setShowRejectModal(true)}
+                                    disabled={actionLoading}
+                                >
+                                    <Ionicons name="close-circle" size={18} color="#FFFFFF" />
+                                    <Text style={styles.workflowButtonTextLight}>Từ chối</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {budget.status === "approved" && hasPermission(Permissions.BUDGET_APPROVE) && (
+                            <TouchableOpacity
+                                style={[styles.workflowButton, styles.workflowButtonActivate]}
+                                onPress={handleActivate}
+                                disabled={actionLoading}
+                            >
+                                {actionLoading ? (
+                                    <ActivityIndicator color="#FFFFFF" size="small" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="flash" size={18} color="#FFFFFF" />
+                                        <Text style={styles.workflowButtonTextLight}>Áp Dụng Ngân Sách</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
+
+                        {budget.status === "active" && hasPermission(Permissions.BUDGET_APPROVE) && (
+                            <TouchableOpacity
+                                style={[styles.workflowButton, styles.workflowButtonArchive]}
+                                onPress={handleArchive}
+                                disabled={actionLoading}
+                            >
+                                <Ionicons name="archive" size={18} color="#FFFFFF" />
+                                <Text style={styles.workflowButtonTextLight}>Lưu Trữ</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+
                 {/* Thông tin cơ bản */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
@@ -379,17 +660,33 @@ export default function BudgetDetailScreen() {
                                 { backgroundColor: getStatusColor(budget.status) + "20" },
                             ]}
                         >
+                            <Ionicons name={getStatusIcon(budget.status) as any} size={14} color={getStatusColor(budget.status)} style={{ marginRight: 4 }} />
                             <Text style={[styles.statusText, { color: getStatusColor(budget.status) }]}>
-                                {budget.status === "approved"
-                                    ? "Đã duyệt"
-                                    : budget.status === "active"
-                                        ? "Đang áp dụng"
-                                        : budget.status === "archived"
-                                            ? "Đã lưu trữ"
-                                            : "Nháp"}
+                                {getStatusLabel(budget.status)}
                             </Text>
                         </View>
                     </View>
+
+                    {budget.approver && (
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Người duyệt:</Text>
+                            <Text style={styles.infoValue}>{budget.approver.name}</Text>
+                        </View>
+                    )}
+
+                    {budget.approved_at && (
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Ngày duyệt:</Text>
+                            <Text style={styles.infoValue}>{new Date(budget.approved_at).toLocaleDateString("vi-VN")}</Text>
+                        </View>
+                    )}
+
+                    {budget.creator && (
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Người tạo:</Text>
+                            <Text style={styles.infoValue}>{budget.creator.name}</Text>
+                        </View>
+                    )}
 
                     {budget.notes && (
                         <View style={styles.infoRow}>
@@ -442,6 +739,14 @@ export default function BudgetDetailScreen() {
                     >
                         <Text style={[styles.tabText, activeTab === "items" && styles.tabTextActive]}>
                             Hạng mục ({budget.items?.length || 0})
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.tab, activeTab === "groups" && styles.tabActive]}
+                        onPress={() => setActiveTab("groups")}
+                    >
+                        <Text style={[styles.tabText, activeTab === "groups" && styles.tabTextActive]}>
+                            Phân nhóm
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -711,7 +1016,129 @@ export default function BudgetDetailScreen() {
                         )}
                     </View>
                 )}
+
+                {/* Groups Tab */}
+                {activeTab === "groups" && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <Ionicons name="grid-outline" size={20} color="#3B82F6" />
+                            <Text style={styles.sectionTitle}>Theo nhóm chi phí</Text>
+                        </View>
+
+                        {comparisonData?.group_comparison && comparisonData.group_comparison.length > 0 ? (
+                            comparisonData.group_comparison.map((group: any, index: number) => (
+                                <View 
+                                    key={group.id || index} 
+                                    style={[
+                                        styles.itemCard,
+                                        group.is_over_budget && styles.itemCardOverBudget
+                                    ]}
+                                >
+                                    <View style={styles.itemHeader}>
+                                        <View style={styles.itemHeaderLeft}>
+                                            <View style={styles.itemTitleRow}>
+                                                <Text style={styles.itemName}>{group.name}</Text>
+                                                {group.is_over_budget && (
+                                                    <View style={styles.overBudgetBadge}>
+                                                        <Ionicons name="warning" size={14} color="#EF4444" />
+                                                        <Text style={styles.overBudgetText}>Vượt</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Text style={styles.itemCostGroup}>{group.items_count} hạng mục</Text>
+                                        </View>
+                                        <View style={styles.itemHeaderRight}>
+                                            <Text style={styles.itemAmount}>
+                                                {formatCurrency(group.estimated)}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.itemProgressContainer}>
+                                        <View style={styles.itemProgressBar}>
+                                            <View
+                                                style={[
+                                                    styles.itemProgressFill,
+                                                    {
+                                                        width: `${Math.min(group.variance_percentage + 100 > 100 ? 100 : (group.actual / group.estimated * 100), 100)}%`,
+                                                        backgroundColor: group.is_over_budget
+                                                            ? "#EF4444"
+                                                            : (group.actual / group.estimated * 100) > 80
+                                                                ? "#F59E0B"
+                                                                : "#10B981",
+                                                    },
+                                                ]}
+                                            />
+                                        </View>
+                                        <View style={styles.itemProgressInfo}>
+                                            <Text style={styles.itemProgressText}>
+                                                Dự toán: {formatCurrency(group.estimated)}
+                                            </Text>
+                                            <Text style={[
+                                                styles.itemProgressText,
+                                                { color: group.is_over_budget ? "#EF4444" : "#6B7280" }
+                                            ]}>
+                                                Đã chi: {formatCurrency(group.actual)}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            ))
+                        ) : (
+                            <View style={styles.emptyItemsContainer}>
+                                <Ionicons name="grid-outline" size={48} color="#9CA3AF" />
+                                <Text style={styles.emptyItemsText}>Chưa có dữ liệu phân nhóm</Text>
+                            </View>
+                        )}
+                    </View>
+                )}
             </ScrollView>
+
+            {/* Reject Modal */}
+            <Modal
+                visible={showRejectModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowRejectModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.rejectModalContent}>
+                        <Text style={styles.rejectModalTitle}>Từ chối ngân sách</Text>
+                        <Text style={styles.rejectModalSubtitle}>
+                            Vui lòng nhập lý do từ chối để người tạo có thể chỉnh sửa lại.
+                        </Text>
+                        <TextInput
+                            style={styles.rejectReasonInput}
+                            placeholder="Nhập lý do từ chối..."
+                            placeholderTextColor="#9CA3AF"
+                            value={rejectReason}
+                            onChangeText={setRejectReason}
+                            multiline
+                            numberOfLines={4}
+                            textAlignVertical="top"
+                        />
+                        <View style={styles.rejectModalActions}>
+                            <TouchableOpacity
+                                style={styles.rejectModalCancel}
+                                onPress={() => { setShowRejectModal(false); setRejectReason(""); }}
+                            >
+                                <Text style={styles.rejectModalCancelText}>Hủy</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.rejectModalSubmit, !rejectReason.trim() && { opacity: 0.5 }]}
+                                onPress={handleReject}
+                                disabled={actionLoading || !rejectReason.trim()}
+                            >
+                                {actionLoading ? (
+                                    <ActivityIndicator color="#FFFFFF" size="small" />
+                                ) : (
+                                    <Text style={styles.rejectModalSubmitText}>Xác nhận từ chối</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -1260,5 +1687,153 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: "#E5E7EB",
     },
-});
 
+    // ====== Workflow Stepper Styles ======
+    workflowSection: {
+        backgroundColor: "#FFFFFF",
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderRadius: 16,
+        padding: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    stepperContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 16,
+    },
+    stepItem: {
+        alignItems: "center",
+        gap: 4,
+    },
+    stepDot: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 2,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    stepLabel: {
+        fontSize: 10,
+        color: "#9CA3AF",
+        fontWeight: "500",
+        marginTop: 2,
+    },
+    stepLine: {
+        flex: 1,
+        height: 2,
+        marginHorizontal: 4,
+        marginBottom: 20,
+        borderRadius: 1,
+    },
+
+    // ====== Workflow Action Buttons ======
+    workflowActions: {
+        marginTop: 4,
+    },
+    workflowActionRow: {
+        flexDirection: "row",
+        gap: 12,
+    },
+    workflowButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+    },
+    workflowButtonPrimary: {
+        backgroundColor: "#3B82F6",
+    },
+    workflowButtonApprove: {
+        backgroundColor: "#10B981",
+    },
+    workflowButtonReject: {
+        backgroundColor: "#EF4444",
+    },
+    workflowButtonActivate: {
+        backgroundColor: "#8B5CF6",
+    },
+    workflowButtonArchive: {
+        backgroundColor: "#6B7280",
+    },
+    workflowButtonTextLight: {
+        color: "#FFFFFF",
+        fontSize: 15,
+        fontWeight: "700",
+    },
+
+    // ====== Reject Modal Styles ======
+    rejectModalContent: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 20,
+        padding: 24,
+        width: "90%",
+        maxWidth: 400,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 24,
+        elevation: 10,
+    },
+    rejectModalTitle: {
+        fontSize: 20,
+        fontWeight: "700",
+        color: "#1F2937",
+        marginBottom: 8,
+    },
+    rejectModalSubtitle: {
+        fontSize: 14,
+        color: "#6B7280",
+        marginBottom: 16,
+        lineHeight: 20,
+    },
+    rejectReasonInput: {
+        borderWidth: 1,
+        borderColor: "#D1D5DB",
+        borderRadius: 12,
+        padding: 14,
+        fontSize: 15,
+        color: "#1F2937",
+        minHeight: 100,
+        backgroundColor: "#F9FAFB",
+    },
+    rejectModalActions: {
+        flexDirection: "row",
+        gap: 12,
+        marginTop: 20,
+    },
+    rejectModalCancel: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#D1D5DB",
+        alignItems: "center",
+    },
+    rejectModalCancelText: {
+        color: "#6B7280",
+        fontSize: 15,
+        fontWeight: "600",
+    },
+    rejectModalSubmit: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 12,
+        backgroundColor: "#EF4444",
+        alignItems: "center",
+    },
+    rejectModalSubmitText: {
+        color: "#FFFFFF",
+        fontSize: 15,
+        fontWeight: "700",
+    },
+});

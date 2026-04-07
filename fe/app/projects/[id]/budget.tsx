@@ -110,9 +110,15 @@ export default function BudgetScreen() {
 
     // Calculate summary statistics
     const summaryStats = useMemo(() => {
-        const activeBudgets = budgets.filter(b => b.status === "approved" || b.status === "active");
-        const totalBudget = activeBudgets.reduce((sum, b) => sum + b.total_budget, 0);
-        const totalRemaining = activeBudgets.reduce((sum, b) => sum + b.remaining_budget, 0);
+        let activeBudgets = budgets.filter(b => b.status === "approved" || b.status === "active");
+        
+        // If no approved budget, use the latest draft budget for summary calculation
+        if (activeBudgets.length === 0 && budgets.length > 0) {
+            activeBudgets = [budgets[0]]; // budgets is already sorted by date desc
+        }
+        
+        const totalBudget = activeBudgets.reduce((sum, b) => sum + (b.total_budget || 0), 0);
+        const totalRemaining = activeBudgets.reduce((sum, b) => sum + (b.remaining_budget || 0), 0);
         const totalUsed = totalBudget - totalRemaining;
         const utilization = totalBudget > 0 ? (totalUsed / totalBudget) * 100 : 0;
 
@@ -221,13 +227,15 @@ export default function BudgetScreen() {
                                 styles.statusBadge,
                                 {
                                     backgroundColor:
-                                        item.status === "approved"
-                                            ? "#10B98120"
-                                            : item.status === "active"
-                                                ? "#3B82F620"
-                                                : item.status === "archived"
-                                                    ? "#6B728020"
-                                                    : "#F59E0B20",
+                                        item.status === "pending_approval"
+                                            ? "#F9731620"
+                                            : item.status === "approved"
+                                                ? "#10B98120"
+                                                : item.status === "active"
+                                                    ? "#3B82F620"
+                                                    : item.status === "archived"
+                                                        ? "#6B728020"
+                                                        : "#F59E0B20",
                                 },
                             ]}
                         >
@@ -236,23 +244,27 @@ export default function BudgetScreen() {
                                     styles.statusText,
                                     {
                                         color:
-                                            item.status === "approved"
-                                                ? "#10B981"
-                                                : item.status === "active"
-                                                    ? "#3B82F6"
-                                                    : item.status === "archived"
-                                                        ? "#6B7280"
-                                                        : "#F59E0B",
+                                            item.status === "pending_approval"
+                                                ? "#F97316"
+                                                : item.status === "approved"
+                                                    ? "#10B981"
+                                                    : item.status === "active"
+                                                        ? "#3B82F6"
+                                                        : item.status === "archived"
+                                                            ? "#6B7280"
+                                                            : "#F59E0B",
                                     },
                                 ]}
                             >
-                                {item.status === "approved"
-                                    ? "Đã duyệt"
-                                    : item.status === "active"
-                                        ? "Đang áp dụng"
-                                        : item.status === "archived"
-                                            ? "Đã lưu trữ"
-                                            : "Nháp"}
+                                {item.status === "pending_approval"
+                                    ? "Chờ duyệt"
+                                    : item.status === "approved"
+                                        ? "Đã duyệt"
+                                        : item.status === "active"
+                                            ? "Đang áp dụng"
+                                            : item.status === "archived"
+                                                ? "Đã lưu trữ"
+                                                : "Nháp"}
                             </Text>
                         </View>
                         <TouchableOpacity
@@ -524,6 +536,17 @@ export default function BudgetScreen() {
                             >
                                 <Text style={filterStatus === "draft" ? styles.filterOptionActive : styles.filterOptionText}>
                                     Nháp
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.filterOption}
+                                onPress={() => {
+                                    setFilterStatus("pending_approval");
+                                    setShowFilterModal(false);
+                                }}
+                            >
+                                <Text style={filterStatus === "pending_approval" ? styles.filterOptionActive : styles.filterOptionText}>
+                                    Chờ duyệt
                                 </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
