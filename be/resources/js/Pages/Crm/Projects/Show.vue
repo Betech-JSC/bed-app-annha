@@ -1659,56 +1659,160 @@
         </div>
       </a-tab-pane>
 
-      <!-- ============ EQUIPMENT TAB (Giống APP) ============ -->
+      <!-- ============ EQUIPMENT TAB — 3 Sub-tabs (Giống APP: Thuê / Mua / Sử dụng) ============ -->
       <a-tab-pane key="equipment" v-if="isTabVisible('equipment')">
-        <template #tab><a-tooltip title="Quản lý thiết bị phân bổ cho dự án: thuê, có sẵn, bàn giao" placement="bottom">Thiết bị ({{ projectEquipment?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Thuê, mua, sử dụng thiết bị dự án — phiếu duyệt + nhập kho" placement="bottom">Thiết bị ({{ totalEquipmentCount }})</a-tooltip></template>
         <div class="p-4">
-          <div class="flex justify-end mb-3">
-            <a-button v-if="can('equipment.create')" type="primary" size="small" @click="openEquipmentModal()">
-              <template #icon><PlusOutlined /></template>Phân bổ thiết bị
-            </a-button>
+          <!-- Sub-tab switcher -->
+          <div class="flex items-center gap-2 mb-4">
+            <a-button :type="eqSubTab === 'rental' ? 'primary' : 'default'" size="small" @click="eqSubTab = 'rental'">🏗️ Thuê ({{ equipmentRentals?.length || 0 }})</a-button>
+            <a-button :type="eqSubTab === 'purchase' ? 'primary' : 'default'" size="small" @click="eqSubTab = 'purchase'">🛒 Mua ({{ equipmentPurchases?.length || 0 }})</a-button>
+            <a-button :type="eqSubTab === 'usage' ? 'primary' : 'default'" size="small" @click="eqSubTab = 'usage'">📦 Sử dụng ({{ assetUsages?.length || 0 }})</a-button>
           </div>
 
-          <a-table :columns="equipmentCols" :data-source="projectEquipment || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
-            :custom-row="(record) => ({ onClick: () => openEquipmentDetail(record), style: 'cursor: pointer' })">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'name'">
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center"><span class="text-amber-600 text-xs">🏗️</span></div>
-                  <div>
-                    <div class="font-semibold text-gray-800">{{ record.name }}</div>
-                    <div v-if="record.code" class="text-[10px] text-gray-400 font-mono">{{ record.code }}</div>
-                  </div>
-                </div>
-              </template>
-              <template v-else-if="column.key === 'type'">
-                <a-tag class="rounded-full text-xs">{{ eqTypeLabel(record.type) }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="eqStatusColor(record.status)" class="rounded-full text-xs">{{ eqStatusLabel(record.status) }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'allocation'">
-                <template v-if="record.allocations?.length">
-                  <div v-for="a in record.allocations.slice(0,1)" :key="a.id">
-                    <a-tag :color="a.allocation_type === 'rent' ? 'blue' : 'green'" class="rounded-full text-xs">{{ a.allocation_type === 'rent' ? 'Thuê' : 'Có sẵn' }}</a-tag>
-                    <span class="text-xs text-gray-500 ml-1">{{ fmtDate(a.start_date) }}</span>
-                    <span v-if="a.rental_fee" class="text-xs text-emerald-600 ml-1">{{ fmt(a.rental_fee) }}</span>
-                  </div>
+          <!-- ===== RENTAL SUB-TAB ===== -->
+          <div v-if="eqSubTab === 'rental'">
+            <!-- Summary -->
+            <div class="grid grid-cols-4 gap-3 mb-4">
+              <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
+                <div class="text-[11px] text-gray-400">Tổng phiếu</div>
+                <div class="text-lg font-bold text-blue-700">{{ equipmentRentals?.length || 0 }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
+                <div class="text-[11px] text-gray-400">Tổng chi phí</div>
+                <div class="text-lg font-bold text-emerald-600">{{ fmt((equipmentRentals || []).reduce((s,r) => s + (r.total_cost || 0), 0)) }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
+                <div class="text-[11px] text-gray-400">Hoàn tất</div>
+                <div class="text-lg font-bold text-green-600">{{ (equipmentRentals || []).filter(r => r.status === 'completed').length }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+                <div class="text-[11px] text-gray-400">Chờ duyệt</div>
+                <div class="text-lg font-bold text-amber-600">{{ (equipmentRentals || []).filter(r => ['pending_management','pending_accountant'].includes(r.status)).length }}</div>
+              </div>
+            </div>
+            <div class="flex justify-end mb-3">
+              <a-button v-if="can('equipment.create')" type="primary" size="small" @click="openRentalModal()">
+                <template #icon><PlusOutlined /></template>Tạo phiếu thuê
+              </a-button>
+            </div>
+            <a-table :columns="rentalCols" :data-source="equipmentRentals || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+              :customRow="(r) => ({ onClick: () => openRentalDetail(r), style: 'cursor: pointer' })">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'equipment_name'">
+                  <div class="font-semibold text-gray-800">{{ record.equipment_name }}</div>
+                  <div class="text-[10px] text-gray-400">{{ record.supplier?.name || '—' }}</div>
                 </template>
-                <span v-else class="text-xs text-gray-400">—</span>
+                <template v-else-if="column.key === 'period'">
+                  <span class="text-xs">{{ fmtDate(record.rental_start_date) }} → {{ fmtDate(record.rental_end_date) }}</span>
+                </template>
+                <template v-else-if="column.key === 'total_cost'">
+                  <span class="font-bold text-emerald-600">{{ fmt(record.total_cost) }}</span>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="eqWorkflowColor(record.status)" class="rounded-full text-[10px]">{{ eqWorkflowLabel(record.status) }}</a-tag>
+                </template>
               </template>
-              <template v-else-if="column.key === 'actions'">
-                <div class="flex gap-1">
-                  <template v-for="a in (record.allocations || []).filter(x => x.status === 'active')" :key="a.id">
-                    <a-popconfirm title="Hoàn trả thiết bị?" @confirm="returnEquipmentAction(record, a)">
-                      <a-button type="text" size="small" class="text-orange-500"><CloseCircleOutlined /> Trả</a-button>
-                    </a-popconfirm>
-                  </template>
-                </div>
+            </a-table>
+            <a-empty v-if="!equipmentRentals?.length" description="Chưa có phiếu thuê thiết bị" />
+          </div>
+
+          <!-- ===== PURCHASE SUB-TAB ===== -->
+          <div v-else-if="eqSubTab === 'purchase'">
+            <div class="grid grid-cols-4 gap-3 mb-4">
+              <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 border border-purple-100/60">
+                <div class="text-[11px] text-gray-400">Tổng phiếu</div>
+                <div class="text-lg font-bold text-purple-700">{{ equipmentPurchases?.length || 0 }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
+                <div class="text-[11px] text-gray-400">Tổng giá trị</div>
+                <div class="text-lg font-bold text-emerald-600">{{ fmt((equipmentPurchases || []).reduce((s,p) => s + (p.total_amount || 0), 0)) }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
+                <div class="text-[11px] text-gray-400">Nhập kho</div>
+                <div class="text-lg font-bold text-green-600">{{ (equipmentPurchases || []).filter(p => p.status === 'completed').length }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+                <div class="text-[11px] text-gray-400">Chờ duyệt</div>
+                <div class="text-lg font-bold text-amber-600">{{ (equipmentPurchases || []).filter(p => ['pending_management','pending_accountant'].includes(p.status)).length }}</div>
+              </div>
+            </div>
+            <div class="flex justify-end mb-3">
+              <a-button v-if="can('equipment.create')" type="primary" size="small" @click="openPurchaseModal()">
+                <template #icon><PlusOutlined /></template>Tạo phiếu mua
+              </a-button>
+            </div>
+            <a-table :columns="purchaseCols" :data-source="equipmentPurchases || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+              :customRow="(p) => ({ onClick: () => openPurchaseDetail(p), style: 'cursor: pointer' })">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'id'">
+                  <div class="font-semibold text-blue-600">#{{ record.id }}</div>
+                  <div class="text-[10px] text-gray-400">{{ fmtDate(record.created_at) }}</div>
+                </template>
+                <template v-else-if="column.key === 'items'">
+                  <div v-for="(item, idx) in (record.items || []).slice(0,2)" :key="idx" class="text-xs">
+                    {{ item.name }} <span class="text-gray-400">x{{ item.quantity }}</span>
+                  </div>
+                  <span v-if="(record.items?.length || 0) > 2" class="text-[10px] text-gray-400">+{{ record.items.length - 2 }} mặt hàng</span>
+                </template>
+                <template v-else-if="column.key === 'total_amount'">
+                  <span class="font-bold text-emerald-600">{{ fmt(record.total_amount) }}</span>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="eqWorkflowColor(record.status)" class="rounded-full text-[10px]">{{ eqWorkflowLabel(record.status) }}</a-tag>
+                </template>
               </template>
-            </template>
-          </a-table>
-          <a-empty v-if="!projectEquipment?.length" description="Chưa có thiết bị nào trong dự án" />
+            </a-table>
+            <a-empty v-if="!equipmentPurchases?.length" description="Chưa có phiếu mua thiết bị" />
+          </div>
+
+          <!-- ===== USAGE SUB-TAB ===== -->
+          <div v-else-if="eqSubTab === 'usage'">
+            <div class="grid grid-cols-4 gap-3 mb-4">
+              <div class="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-xl p-3 border border-teal-100/60">
+                <div class="text-[11px] text-gray-400">Tổng phiếu</div>
+                <div class="text-lg font-bold text-teal-700">{{ assetUsages?.length || 0 }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
+                <div class="text-[11px] text-gray-400">Đang dùng</div>
+                <div class="text-lg font-bold text-blue-600">{{ (assetUsages || []).filter(u => u.status === 'in_use').length }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+                <div class="text-[11px] text-gray-400">Chờ nhận</div>
+                <div class="text-lg font-bold text-amber-600">{{ (assetUsages || []).filter(u => u.status === 'pending_receive').length }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
+                <div class="text-[11px] text-gray-400">Đã trả</div>
+                <div class="text-lg font-bold text-green-600">{{ (assetUsages || []).filter(u => u.status === 'returned').length }}</div>
+              </div>
+            </div>
+            <div class="flex justify-end mb-3">
+              <a-button v-if="can('equipment.create')" type="primary" size="small" @click="openUsageModal()">
+                <template #icon><PlusOutlined /></template>Mượn thiết bị
+              </a-button>
+            </div>
+            <a-table :columns="usageCols" :data-source="assetUsages || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+              :customRow="(u) => ({ onClick: () => openUsageDetail(u), style: 'cursor: pointer' })">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'asset'">
+                  <div class="font-semibold text-gray-800">{{ record.asset?.name || '—' }}</div>
+                  <div class="text-[10px] text-gray-400 font-mono">{{ record.asset?.code || '' }}</div>
+                </template>
+                <template v-else-if="column.key === 'receiver'">
+                  <span class="text-sm">{{ record.receiver?.name || '—' }}</span>
+                </template>
+                <template v-else-if="column.key === 'quantity'">{{ record.quantity }}</template>
+                <template v-else-if="column.key === 'dates'">
+                  <div class="text-xs">Nhận: {{ fmtDate(record.received_date) }}</div>
+                  <div v-if="record.returned_date" class="text-xs text-green-600">Trả: {{ fmtDate(record.returned_date) }}</div>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="usageStatusColor(record.status)" class="rounded-full text-[10px]">{{ usageStatusLabel(record.status) }}</a-tag>
+                </template>
+              </template>
+            </a-table>
+            <a-empty v-if="!assetUsages?.length" description="Chưa có phiếu mượn thiết bị" />
+          </div>
         </div>
       </a-tab-pane>
 
@@ -2849,20 +2953,20 @@
       <!-- Action Footer -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
         <div class="flex gap-2">
-          <a-popconfirm v-if="materialDetail.status === 'draft' && can('material.delete')" title="Xóa phiếu nhập này?" @confirm="deleteBill(materialDetail)">
+          <a-popconfirm v-if="['draft', 'rejected'].includes(materialDetail.status) && can('material.delete')" title="Xóa phiếu nhập này?" @confirm="deleteBill(materialDetail)">
             <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
           </a-popconfirm>
-          <a-button v-if="materialDetail.status === 'draft'" size="small" @click="openBillModal(materialDetail)"><EditOutlined /> Sửa</a-button>
+          <a-button v-if="['draft', 'rejected'].includes(materialDetail.status)" size="small" @click="openBillModal(materialDetail)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
-          <template v-if="materialDetail.status === 'draft' && can('material.update')">
+          <template v-if="['draft', 'rejected'].includes(materialDetail.status) && can('material.update')">
             <a-button type="primary" @click="submitBill(materialDetail)">Gửi duyệt</a-button>
           </template>
-          <template v-if="materialDetail.status === 'pending_management' && can('cost.approve_management')">
+          <template v-if="materialDetail.status === 'pending_management' && can('cost.approve.management')">
             <a-button type="primary" class="bg-green-600 border-green-600" @click="approveBillManagement(materialDetail)">BĐH Duyệt</a-button>
             <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
           </template>
-          <template v-if="materialDetail.status === 'pending_accountant' && can('cost.approve_accountant')">
+          <template v-if="materialDetail.status === 'pending_accountant' && can('cost.approve.accountant')">
             <a-button type="primary" class="bg-green-600 border-green-600" @click="approveBillAccountant(materialDetail)">KT Xác nhận</a-button>
             <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
           </template>
@@ -2873,68 +2977,219 @@
 
   <!-- EQUIPMENT DETAIL DRAWER -->
   <a-drawer v-model:open="showEquipmentDetailDrawer" title="Chi tiết Thiết bị" :width="560" @close="equipmentDetail = null" destroy-on-close class="crm-drawer">
-    <div v-if="equipmentDetail" class="space-y-6 pb-24">
-      <!-- Header -->
+    <!-- Legacy drawer kept for compatibility if needed, but we now use specific ones below -->
+  </a-drawer>
+
+  <!-- RENTAL DETAIL DRAWER -->
+  <a-drawer v-model:open="showRentalDetailDrawer" title="Chi tiết Phiếu thuê thiết bị" :width="560" @close="selectedRental = null" destroy-on-close class="crm-drawer">
+    <div v-if="selectedRental" class="space-y-6 pb-24">
       <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-xl bg-amber-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-amber-100">🏗️</div>
+          <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-100">🏗️</div>
           <div>
-            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã TB: {{ equipmentDetail.code || '—' }}</div>
-            <div class="text-lg font-bold text-gray-800">{{ equipmentDetail.name }}</div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã Phiếu: #{{ selectedRental.id }}</div>
+            <div class="text-lg font-bold text-gray-800">{{ selectedRental.equipment_name }}</div>
           </div>
         </div>
-        <a-tag :color="eqStatusColor(equipmentDetail.status)" class="rounded-full px-4 py-1 text-xs font-semibold">{{ eqStatusLabel(equipmentDetail.status) }}</a-tag>
+        <a-tag :color="eqWorkflowColor(selectedRental.status)" class="rounded-full px-4 py-1 text-xs font-semibold">{{ eqWorkflowLabel(selectedRental.status) }}</a-tag>
       </div>
 
-      <!-- Summary -->
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-amber-500"><TeamOutlined /> Thông tin phân bổ</div>
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500 font-mono"><DollarOutlined /> Thông tin thuê</div>
         <div class="grid grid-cols-1 gap-1 text-sm">
           <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
-            <span class="text-gray-400">Loại thiết bị</span>
-            <a-tag class="rounded-full text-xs">{{ eqTypeLabel(equipmentDetail.type) }}</a-tag>
+            <span class="text-gray-400">Nhà cung cấp</span>
+            <span class="font-semibold text-gray-700">{{ selectedRental.supplier?.name || '—' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Thời gian</span>
+            <span class="font-semibold text-gray-700">{{ fmtDate(selectedRental.rental_start_date) }} → {{ fmtDate(selectedRental.rental_end_date) }}</span>
           </div>
           <div class="flex justify-between items-center py-2.5">
-            <span class="text-gray-400">Trạng thái dự án</span>
-            <span class="font-bold text-gray-700">{{ equipmentDetail.allocations?.filter(x => x.status === 'active').length ? 'Đang sử dụng' : 'Đã hoàn trả' }}</span>
+            <span class="text-gray-400">Tổng chi phí</span>
+            <span class="font-bold text-emerald-600 text-lg">{{ fmt(selectedRental.total_cost) }}</span>
           </div>
         </div>
       </div>
 
-      <!-- Allocations History -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-amber-500"><HistoryOutlined /> Lịch sử phân bổ</div>
-        <div v-if="equipmentDetail.allocations?.length" class="space-y-4">
-          <div v-for="a in equipmentDetail.allocations" :key="a.id" class="p-4 rounded-xl border border-gray-50 bg-gray-50/30 relative group">
-            <div class="flex justify-between items-start mb-2">
-              <a-tag :color="a.allocation_type === 'rent' ? 'blue' : 'green'" class="rounded-full text-[10px]">{{ a.allocation_type === 'rent' ? 'Thuê' : 'Có sẵn' }}</a-tag>
-              <a-tag :color="a.status === 'active' ? 'green' : 'default'" class="rounded-full text-[10px]">{{ a.status === 'active' ? 'Đang dùng' : 'Đã trả' }}</a-tag>
-            </div>
-            <div class="grid grid-cols-2 gap-y-2 text-xs">
-              <div class="text-gray-400">Số lượng: <span class="text-gray-700 font-bold ml-1">{{ a.quantity }}</span></div>
-              <div v-if="a.rental_fee" class="text-gray-400">Phí: <span class="text-emerald-600 font-bold ml-1">{{ fmt(a.rental_fee) }}</span></div>
-              <div class="text-gray-400">Bắt đầu: <span class="text-gray-700 ml-1">{{ fmtDate(a.start_date) }}</span></div>
-              <div class="text-gray-400">Kết thúc: <span class="text-gray-700 ml-1">{{ a.return_date ? fmtDate(a.return_date) : (a.end_date ? fmtDate(a.end_date) : '...') }}</span></div>
-              <div v-if="a.manager" class="text-gray-400 col-span-2">Phụ trách: <span class="text-gray-700 ml-1">{{ a.manager.name }}</span></div>
-            </div>
-            <div v-if="a.notes" class="mt-2 text-[11px] text-gray-400 italic">📝 {{ a.notes }}</div>
-            
-            <!-- Context Action -->
-            <div v-if="a.status === 'active'" class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition">
-               <a-popconfirm title="Hoàn trả thiết bị?" @confirm="returnEquipmentAction(equipmentDetail, a)">
-                  <a-button size="small" type="primary" ghost danger>Hoàn trả</a-button>
-               </a-popconfirm>
-            </div>
-          </div>
-        </div>
-        <a-empty v-else :image="null" description="Chưa có dữ liệu" />
+      <div v-if="selectedRental.notes" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2 text-gray-400"><EditOutlined /> Ghi chú</div>
+        <div class="text-sm text-gray-600 leading-relaxed">{{ selectedRental.notes }}</div>
       </div>
 
-      <!-- Action Footer -->
-      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
-        <div class="flex gap-2">
-           <a-button type="text" @click="equipmentDetail = null">Đóng</a-button>
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-indigo-500"><FileOutlined /> Tệp đính kèm ({{ selectedRental.attachments?.length || 0 }})</div>
+        <div v-if="selectedRental.attachments?.length" class="space-y-2">
+          <div v-for="file in selectedRental.attachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+             <div class="flex items-center gap-3">
+                <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
+                <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
+                <FileOutlined v-else class="text-gray-400" />
+                <span class="text-xs font-medium text-gray-700">{{ file.original_name }}</span>
+             </div>
+             <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+          </div>
         </div>
+        <a-empty v-else :image="null" description="Không có tệp" class="my-0" />
+      </div>
+
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
+         <div>
+           <a-popconfirm v-if="selectedRental.status === 'draft'" title="Xóa phiếu thuê này?" @confirm="deleteRental(selectedRental); showRentalDetailDrawer = false">
+             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
+           </a-popconfirm>
+         </div>
+         <div class="flex gap-2">
+           <a-button @click="showRentalDetailDrawer = false">Đóng</a-button>
+           <a-button v-if="selectedRental.status === 'draft'" @click="openRentalModal(selectedRental)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="selectedRental.status === 'draft'" type="primary" @click="submitRental(selectedRental)">Gửi duyệt</a-button>
+           <a-button v-if="selectedRental.status === 'pending_management'" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveRentalMgmt(selectedRental)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
+           <a-button v-if="selectedRental.status === 'pending_accountant'" type="primary" @click="confirmRentalKT(selectedRental)"><CheckSquareOutlined /> KT Xác nhận</a-button>
+           <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status)" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
+             <template #description>
+               <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
+             </template>
+             <a-button danger>Từ chối</a-button>
+           </a-popconfirm>
+         </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- PURCHASE DETAIL DRAWER -->
+  <a-drawer v-model:open="showPurchaseDetailDrawer" title="Chi tiết Phiếu mua thiết bị" :width="560" @close="selectedPurchase = null" destroy-on-close class="crm-drawer">
+    <div v-if="selectedPurchase" class="space-y-6 pb-24">
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-purple-100">🛒</div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã Phiếu: #{{ selectedPurchase.id }}</div>
+            <div class="text-lg font-bold text-gray-800">Mua thiết bị dự án</div>
+          </div>
+        </div>
+        <a-tag :color="eqWorkflowColor(selectedPurchase.status)" class="rounded-full px-4 py-1 text-xs font-semibold">{{ eqWorkflowLabel(selectedPurchase.status) }}</a-tag>
+      </div>
+
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-purple-500"><PlusOutlined /> Danh sách mặt hàng</div>
+        <div class="space-y-3">
+          <div v-for="(item, idx) in selectedPurchase.items" :key="idx" class="flex justify-between items-center p-3 rounded-xl bg-gray-50 border border-gray-100">
+            <div>
+              <div class="text-sm font-bold text-gray-700">{{ item.name }}</div>
+              <div class="text-[10px] text-gray-400">Mã: {{ item.code || '—' }} — SL: {{ item.quantity }}</div>
+            </div>
+            <div class="text-sm font-bold text-emerald-600">{{ fmt(item.quantity * item.unit_price) }}</div>
+          </div>
+          <div class="flex justify-between items-center pt-3 border-t border-gray-100 px-1">
+            <span class="text-sm font-bold text-gray-500">Tổng cộng:</span>
+            <span class="text-lg font-extrabold text-emerald-600">{{ fmt(selectedPurchase.total_amount) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-indigo-500"><FileOutlined /> Tệp đính kèm ({{ selectedPurchase.attachments?.length || 0 }})</div>
+        <div v-if="selectedPurchase.attachments?.length" class="space-y-2">
+          <div v-for="file in selectedPurchase.attachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+             <div class="flex items-center gap-3">
+                <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
+                <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
+                <FileOutlined v-else class="text-gray-400" />
+                <span class="text-xs font-medium text-gray-700">{{ file.original_name }}</span>
+             </div>
+             <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+          </div>
+        </div>
+        <a-empty v-else :image="null" description="Không có tệp" class="my-0" />
+      </div>
+
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
+         <div>
+           <a-popconfirm v-if="selectedPurchase.status === 'draft'" title="Xóa phiếu mua này?" @confirm="deletePurchase(selectedPurchase); showPurchaseDetailDrawer = false">
+             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
+           </a-popconfirm>
+         </div>
+         <div class="flex gap-2">
+           <a-button @click="showPurchaseDetailDrawer = false">Đóng</a-button>
+           <a-button v-if="selectedPurchase.status === 'draft'" @click="openPurchaseModal(selectedPurchase)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="selectedPurchase.status === 'draft'" type="primary" @click="submitPurchase(selectedPurchase)">Gửi duyệt</a-button>
+           <a-button v-if="selectedPurchase.status === 'pending_management'" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approvePurchaseMgmt(selectedPurchase)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
+           <a-button v-if="selectedPurchase.status === 'pending_accountant'" type="primary" @click="confirmPurchaseKT(selectedPurchase)"><CheckSquareOutlined /> KT Xác nhận</a-button>
+           <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedPurchase.status)" title="Từ chối phiếu mua?" @confirm="rejectPurchase(selectedPurchase)">
+             <template #description>
+               <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
+             </template>
+             <a-button danger>Từ chối</a-button>
+           </a-popconfirm>
+         </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- USAGE DETAIL DRAWER -->
+  <a-drawer v-model:open="showUsageDetailDrawer" title="Chi tiết sử dụng thiết bị" :width="560" @close="selectedUsage = null" destroy-on-close class="crm-drawer">
+    <div v-if="selectedUsage" class="space-y-6 pb-24">
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-teal-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-teal-100">📦</div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã Mượn: #{{ selectedUsage.id }}</div>
+            <div class="text-lg font-bold text-gray-800">{{ selectedUsage.asset?.name || 'Thiết bị kho' }}</div>
+          </div>
+        </div>
+        <a-tag :color="usageStatusColor(selectedUsage.status)" class="rounded-full px-4 py-1 text-xs font-semibold">{{ usageStatusLabel(selectedUsage.status) }}</a-tag>
+      </div>
+
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-teal-500"><UserOutlined /> Thông tin sử dụng</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Người nhận</span>
+            <span class="font-semibold text-gray-700">{{ selectedUsage.receiver?.name || '—' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Số lượng</span>
+            <span class="font-bold text-gray-700">{{ selectedUsage.quantity }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Ngày nhận</span>
+            <span class="font-semibold text-gray-700">{{ fmtDate(selectedUsage.received_date) }}</span>
+          </div>
+          <div v-if="selectedUsage.returned_date" class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">Ngày trả</span>
+            <span class="font-semibold text-green-600">{{ fmtDate(selectedUsage.returned_date) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="selectedUsage.attachments?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-indigo-500"><FileOutlined /> Tệp đính kèm ({{ selectedUsage.attachments.length }})</div>
+        <div class="space-y-2">
+          <div v-for="file in selectedUsage.attachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+             <div class="flex items-center gap-3">
+                <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
+                <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
+                <FileOutlined v-else class="text-gray-400" />
+                <span class="text-xs font-medium text-gray-700">{{ file.original_name }}</span>
+             </div>
+             <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+          </div>
+        </div>
+      </div>
+
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
+         <div>
+           <a-popconfirm v-if="selectedUsage.status === 'pending_receive'" title="Xóa phiếu mượn này?" @confirm="deleteUsage(selectedUsage); showUsageDetailDrawer = false">
+             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
+           </a-popconfirm>
+         </div>
+         <div class="flex gap-2">
+           <a-button @click="showUsageDetailDrawer = false">Đóng</a-button>
+           <a-button v-if="selectedUsage.status === 'pending_receive'" @click="openUsageModal(selectedUsage)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="selectedUsage.status === 'pending_receive'" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="confirmReceive(selectedUsage)"><CheckCircleOutlined /> Xác nhận nhận</a-button>
+           <a-button v-if="selectedUsage.status === 'in_use'" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturn(selectedUsage)">Yêu cầu trả</a-button>
+           <a-button v-if="selectedUsage.status === 'pending_return'" type="primary" @click="confirmReturn(selectedUsage)"><CheckSquareOutlined /> Xác nhận trả</a-button>
+         </div>
       </div>
     </div>
   </a-drawer>
@@ -4050,8 +4305,8 @@
           <span class="text-white text-lg">🧱</span>
         </div>
         <div>
-          <div class="text-base font-bold text-gray-800">Tạo Phiếu Nhập Vật Liệu</div>
-          <div class="text-xs text-gray-400 font-normal">Tạo bill nhập vật liệu → gửi duyệt BĐH → KT xác nhận thanh toán</div>
+          <div class="text-base font-bold text-gray-800">{{ isEditBill ? 'Cập nhật Phiếu Nhập Vật Liệu' : 'Tạo Phiếu Nhập Vật Liệu' }}</div>
+          <div class="text-xs text-gray-400 font-normal">{{ isEditBill ? 'Chỉnh sửa thông tin phiếu nhập vật liệu đã có' : 'Tạo bill nhập vật liệu → gửi duyệt BĐH → KT xác nhận thanh toán' }}</div>
         </div>
       </div>
     </template>
@@ -4164,8 +4419,8 @@
       </div>
 
       <!-- Submit -->
-      <a-button v-if="billForm.items.length" type="primary" block size="large" :loading="submittingBill" @click="submitCreateBill" :disabled="!billForm.bill_date">
-        <CheckOutlined /> Tạo phiếu nhập vật liệu
+      <a-button v-if="billForm.items.length" type="primary" block size="large" :loading="submittingBill" @click="submitBillForm" :disabled="!billForm.bill_date">
+        <CheckOutlined /> {{ isEditBill ? 'Cập nhật phiếu nhập vật liệu' : 'Tạo phiếu nhập vật liệu' }}
       </a-button>
     </div>
   </a-modal>
@@ -4181,49 +4436,125 @@
 
 
 
-  <!-- ==================== EQUIPMENT ALLOCATION MODAL ==================== -->
-  <a-modal v-model:open="showEquipmentModal" title="Phân Bổ Thiết Bị" :width="600" @ok="submitEquipmentAllocation" ok-text="Phân bổ" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :confirm-loading="submittingEquipment">
+  <!-- ==================== EQUIPMENT RENTAL MODAL ==================== -->
+  <a-modal v-model:open="showRentalModal" :title="isEditRental ? 'Cập nhật Phiếu Thuê Thiết Bị' : 'Tạo Phiếu Thuê Thiết Bị'" :width="640" @ok="submitRentalForm" :ok-text="isEditRental ? 'Cập nhật' : 'Tạo phiếu'" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Chọn thiết bị" required>
-        <a-select v-model:value="eqForm.equipment_id" show-search option-filter-prop="label" placeholder="Tìm thiết bị..." size="large" class="w-full">
+      <a-form-item label="Tên thiết bị thuê" required>
+        <a-input v-model:value="rentalForm.equipment_name" size="large" placeholder="VD: Máy đào CAT 320..." />
+      </a-form-item>
+      <a-row :gutter="12">
+        <a-col :span="12">
+          <a-form-item label="Chọn thiết bị (có sẵn)">
+            <a-select v-model:value="rentalForm.equipment_id" show-search option-filter-prop="label" placeholder="— Tùy chọn —" size="large" class="w-full" allow-clear>
+              <a-select-option v-for="e in allEquipment" :key="e.id" :value="e.id" :label="e.name">{{ e.name }} <span class="text-gray-400 text-xs">({{ e.code }})</span></a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Nhà cung cấp">
+            <a-select v-model:value="rentalForm.supplier_id" show-search option-filter-prop="label" placeholder="Chọn NCC..." size="large" class="w-full" allow-clear>
+              <a-select-option v-for="s in suppliers" :key="s.id" :value="s.id" :label="s.name">{{ s.name }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="12">
+        <a-col :span="8">
+          <a-form-item label="Ngày bắt đầu" required><a-date-picker v-model:value="rentalForm.rental_start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Ngày kết thúc" required><a-date-picker v-model:value="rentalForm.rental_end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Tổng chi phí (VNĐ)" required>
+            <a-input-number v-model:value="rentalForm.total_cost" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" />
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-form-item label="Ghi chú"><a-textarea v-model:value="rentalForm.notes" :rows="2" placeholder="Ghi chú..." /></a-form-item>
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp đính kèm</div>
+        <input type="file" multiple @change="e => rentalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="rentalFiles.length" class="text-[10px] text-green-600 mt-1">{{ rentalFiles.length }} tệp đã chọn</div>
+      </div>
+    </a-form>
+  </a-modal>
+
+  <!-- ==================== EQUIPMENT PURCHASE MODAL ==================== -->
+  <a-modal v-model:open="showPurchaseModal" :title="isEditPurchase ? 'Cập nhật Phiếu Mua Thiết Bị' : 'Tạo Phiếu Mua Thiết Bị'" :width="700" @ok="submitPurchaseForm" :ok-text="isEditPurchase ? 'Cập nhật' : 'Tạo phiếu'" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+    <a-form layout="vertical" class="mt-4">
+      <div class="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="font-semibold text-gray-700 flex items-center gap-2">
+            <span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-purple-400 to-purple-600"></span>
+            Danh sách thiết bị mua
+          </h4>
+          <a-button type="dashed" size="small" @click="addPurchaseItem"><PlusOutlined /> Thêm</a-button>
+        </div>
+        <div v-for="(item, idx) in purchaseForm.items" :key="idx" class="flex gap-2 items-end mb-2">
+          <div class="flex-1">
+            <div v-if="idx === 0" class="text-[10px] text-gray-400 mb-1">Tên thiết bị *</div>
+            <a-input v-model:value="item.name" size="small" placeholder="Tên thiết bị..." />
+          </div>
+          <div class="w-24">
+            <div v-if="idx === 0" class="text-[10px] text-gray-400 mb-1">Mã</div>
+            <a-input v-model:value="item.code" size="small" placeholder="Mã" />
+          </div>
+          <div class="w-16">
+            <div v-if="idx === 0" class="text-[10px] text-gray-400 mb-1">SL</div>
+            <a-input-number v-model:value="item.quantity" :min="1" size="small" class="w-full" />
+          </div>
+          <div class="w-32">
+            <div v-if="idx === 0" class="text-[10px] text-gray-400 mb-1">Đơn giá (VNĐ)</div>
+            <a-input-number v-model:value="item.unit_price" :min="0" size="small" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" />
+          </div>
+          <div class="w-24 text-right text-xs font-bold text-emerald-600 pb-0.5">{{ fmt(item.quantity * item.unit_price) }}</div>
+          <a-button v-if="purchaseForm.items.length > 1" type="text" size="small" danger @click="removePurchaseItem(idx)"><DeleteOutlined /></a-button>
+        </div>
+        <div class="border-t pt-2 mt-2 flex justify-end text-sm font-bold text-gray-700">
+          Tổng: <span class="text-emerald-600 ml-2">{{ fmt(purchaseForm.items.reduce((s, i) => s + (i.quantity * i.unit_price), 0)) }}</span>
+        </div>
+      </div>
+      <a-form-item label="Ghi chú"><a-textarea v-model:value="purchaseForm.notes" :rows="2" placeholder="Ghi chú..." /></a-form-item>
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp đính kèm</div>
+        <input type="file" multiple @change="e => purchaseFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="purchaseFiles.length" class="text-[10px] text-green-600 mt-1">{{ purchaseFiles.length }} tệp đã chọn</div>
+      </div>
+    </a-form>
+  </a-modal>
+
+  <!-- ==================== ASSET USAGE MODAL ==================== -->
+  <a-modal v-model:open="showUsageModal" :title="isEditUsage ? 'Cập nhật Mượn Thiết Bị Từ Kho' : 'Mượn Thiết Bị Từ Kho'" :width="540" @ok="submitUsageForm" :ok-text="isEditUsage ? 'Cập nhật' : 'Tạo phiếu'" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+    <a-form layout="vertical" class="mt-4">
+      <a-form-item label="Thiết bị từ kho" required>
+        <a-select v-model:value="usageForm.equipment_id" show-search option-filter-prop="label" placeholder="Tìm thiết bị..." size="large" class="w-full">
           <a-select-option v-for="e in allEquipment" :key="e.id" :value="e.id" :label="e.name">
             {{ e.name }} <span class="text-gray-400 text-xs">({{ e.code || '' }} — {{ eqStatusLabel(e.status) }})</span>
           </a-select-option>
         </a-select>
       </a-form-item>
-
-      <a-form-item label="Loại hình">
-        <a-radio-group v-model:value="eqForm.allocation_type" button-style="solid" size="large">
-          <a-radio-button value="rent">Thuê</a-radio-button>
-          <a-radio-button value="buy">Có sẵn</a-radio-button>
-        </a-radio-group>
-      </a-form-item>
-
       <a-row :gutter="12">
-        <a-col :span="8"><a-form-item label="Số lượng"><a-input-number v-model:value="eqForm.quantity" :min="1" size="large" class="w-full" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Ngày bắt đầu" required><a-date-picker v-model:value="eqForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Ngày kết thúc"><a-date-picker v-model:value="eqForm.end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="12">
+          <a-form-item label="Người nhận" required>
+            <a-select v-model:value="usageForm.receiver_id" show-search option-filter-prop="label" placeholder="Chọn người nhận..." size="large" class="w-full">
+              <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="6">
+          <a-form-item label="Số lượng"><a-input-number v-model:value="usageForm.quantity" :min="1" size="large" class="w-full" /></a-form-item>
+        </a-col>
+        <a-col :span="6">
+          <a-form-item label="Ngày nhận" required><a-date-picker v-model:value="usageForm.received_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
+        </a-col>
       </a-row>
-
-      <!-- Rent fields -->
-      <a-form-item v-if="eqForm.allocation_type === 'rent'" label="Tổng phí thuê (VNĐ)" required>
-        <a-input-number v-model:value="eqForm.rental_fee" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" />
-      </a-form-item>
-
-      <!-- Buy fields -->
-      <template v-if="eqForm.allocation_type === 'buy'">
-        <a-form-item label="Người nhận bàn giao" required>
-          <a-select v-model:value="eqForm.manager_id" show-search option-filter-prop="label" placeholder="Chọn người..." size="large" class="w-full">
-            <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }}</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-row :gutter="12">
-          <a-col :span="12"><a-form-item label="Ngày bàn giao"><a-date-picker v-model:value="eqForm.handover_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="Ngày hoàn trả"><a-date-picker v-model:value="eqForm.return_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-        </a-row>
-      </template>
-
-      <a-form-item label="Ghi chú"><a-textarea v-model:value="eqForm.notes" :rows="2" placeholder="Ghi chú (tùy chọn)..." /></a-form-item>
+      <a-form-item label="Ghi chú"><a-textarea v-model:value="usageForm.notes" :rows="2" placeholder="Ghi chú..." /></a-form-item>
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp đính kèm</div>
+        <input type="file" multiple @change="e => usageFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <div v-if="usageFiles.length" class="text-[10px] text-green-600 mt-1">{{ usageFiles.length }} tệp đã chọn</div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -4436,6 +4767,10 @@ const props = defineProps({
   suppliers: { type: Array, default: () => [] },
   projectEquipment: { type: Array, default: () => [] },
   allEquipment: { type: Array, default: () => [] },
+  equipmentRentals: { type: Array, default: () => [] },
+  equipmentPurchases: { type: Array, default: () => [] },
+  assetUsages: { type: Array, default: () => [] },
+  companyAssets: { type: Array, default: () => [] },
 })
 
 // ============ RBAC ============
@@ -6584,8 +6919,31 @@ const billFiles = ref([])
 const billForm = ref({ bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [] })
 const billItemForm = ref({ material_id: null, quantity: 1, unit_price: 0, total_price: 0 })
 
-const openBillModal = () => {
-  billForm.value = { bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [] }
+const isEditBill = ref(false)
+const editingBillId = ref(null)
+
+const openBillModal = (record = null) => {
+  if (record) {
+    isEditBill.value = true
+    editingBillId.value = record.id
+    billForm.value = {
+      bill_date: record.bill_date,
+      supplier_id: record.supplier_id,
+      cost_group_id: record.cost_group_id,
+      notes: record.notes || '',
+      items: (record.items || []).map(i => ({
+        material_id: i.material_id,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        _name: i.material?.name || '—',
+        _unit: i.material?.unit || ''
+      }))
+    }
+  } else {
+    isEditBill.value = false
+    editingBillId.value = null
+    billForm.value = { bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [] }
+  }
   billItemForm.value = { material_id: null, quantity: 1, unit_price: 0, total_price: 0 }
   showBillModal.value = true
 }
@@ -6615,22 +6973,44 @@ const addBillItem = () => {
   billItemForm.value = { material_id: null, quantity: 1, unit_price: 0, total_price: 0 }
 }
 
-const submitCreateBill = () => {
+const submitBillForm = () => {
   if (!billForm.value.items.length || !billForm.value.bill_date) return
   submittingBill.value = true
-  router.post(`/projects/${props.project.id}/material-bills`, {
-    bill_date: billForm.value.bill_date,
-    supplier_id: billForm.value.supplier_id || undefined,
-    cost_group_id: billForm.value.cost_group_id || undefined,
-    notes: billForm.value.notes || undefined,
-    items: billForm.value.items.map(i => ({
-      material_id: i.material_id,
-      quantity: i.quantity,
-      unit_price: i.unit_price,
-    })),
-  }, {
-    onSuccess: () => { showBillModal.value = false },
+  
+  const fd = new FormData()
+  fd.append('bill_date', billForm.value.bill_date)
+  if (billForm.value.supplier_id) fd.append('supplier_id', billForm.value.supplier_id)
+  if (billForm.value.cost_group_id) fd.append('cost_group_id', billForm.value.cost_group_id)
+  if (billForm.value.notes) fd.append('notes', billForm.value.notes)
+  
+  billForm.value.items.forEach((item, idx) => {
+    fd.append(`items[${idx}][material_id]`, item.material_id)
+    fd.append(`items[${idx}][quantity]`, item.quantity)
+    fd.append(`items[${idx}][unit_price]`, item.unit_price)
+  })
+
+  if (billFiles.value.length) {
+    billFiles.value.forEach(f => fd.append('files[]', f))
+  }
+
+  const url = isEditBill.value 
+    ? `/projects/${props.project.id}/material-bills/${editingBillId.value}`
+    : `/projects/${props.project.id}/material-bills`
+
+  if (isEditBill.value) fd.append('_method', 'PUT')
+
+  router.post(url, fd, {
+    onSuccess: () => { 
+      showBillModal.value = false
+      billFiles.value = []
+      // Update drawer if open
+      if (materialDetail.value) {
+        const updated = props.project.material_bills?.find(x => x.id === materialDetail.value.id)
+        if (updated) materialDetail.value = updated
+      }
+    },
     onFinish: () => { submittingBill.value = false },
+    forceFormData: true
   })
 }
 
@@ -6688,47 +7068,225 @@ const totalMaterialCost = computed(() => 0)
 const materialCols = []
 
 
-// ============ EQUIPMENT TAB (Giống APP) ============
+// ============ EQUIPMENT TAB — 3 Sub-tabs (Giống APP) ============
 const eqStatusLabel = (s) => ({ available: 'Sẵn sàng', in_use: 'Đang dùng', maintenance: 'Bảo trì', retired: 'Ngừng dùng' }[s] || s)
 const eqStatusColor = (s) => ({ available: 'green', in_use: 'blue', maintenance: 'orange', retired: 'default' }[s] || 'default')
 const eqTypeLabel = (t) => ({ owned: 'Có sẵn', rented: 'Thuê', leased: 'Thuê dài hạn' }[t] || t)
 
-const equipmentCols = [
-  { title: 'Thiết bị', key: 'name', dataIndex: 'name' },
-  { title: 'Loại', key: 'type', width: 100, align: 'center' },
-  { title: 'Trạng thái', key: 'status', width: 100, align: 'center' },
-  { title: 'Phân bổ', key: 'allocation', width: 250 },
+const eqWorkflowLabel = (s) => ({ draft: 'Nháp', pending_management: 'Chờ BĐH', pending_accountant: 'Chờ KT', completed: 'Hoàn tất', rejected: 'Từ chối' }[s] || s)
+const eqWorkflowColor = (s) => ({ draft: 'default', pending_management: 'orange', pending_accountant: 'blue', completed: 'green', rejected: 'red' }[s] || 'default')
+
+const usageStatusLabel = (s) => ({ pending_receive: 'Chờ nhận', in_use: 'Đang dùng', pending_return: 'Chờ trả', returned: 'Đã trả' }[s] || s)
+const usageStatusColor = (s) => ({ pending_receive: 'orange', in_use: 'blue', pending_return: 'purple', returned: 'green' }[s] || 'default')
+
+const eqSubTab = ref('rental')
+const rejectReason = ref('')
+
+const totalEquipmentCount = computed(() =>
+  (props.equipmentRentals?.length || 0) + (props.equipmentPurchases?.length || 0) + (props.assetUsages?.length || 0)
+)
+
+// Column definitions
+const rentalCols = [
+  { title: 'Thiết bị', key: 'equipment_name', dataIndex: 'equipment_name' },
+  { title: 'Thời gian thuê', key: 'period', width: 200 },
+  { title: 'Chi phí', key: 'total_cost', width: 140, align: 'right' },
+  { title: 'Trạng thái', key: 'status', width: 130, align: 'center' },
 ]
 
-const showEquipmentModal = ref(false)
-const submittingEquipment = ref(false)
-const eqForm = ref({
-  equipment_id: null, allocation_type: 'rent', quantity: 1,
-  start_date: dayjs().format('YYYY-MM-DD'), end_date: null, notes: '',
-  manager_id: null, handover_date: null, return_date: null, rental_fee: 0,
-})
+const purchaseCols = [
+  { title: 'Mã phiếu', key: 'id', width: 100 },
+  { title: 'Danh sách thiết bị', key: 'items' },
+  { title: 'Tổng tiền', key: 'total_amount', width: 140, align: 'right' },
+  { title: 'Trạng thái', key: 'status', width: 130, align: 'center' },
+]
 
-const openEquipmentModal = () => {
-  eqForm.value = {
-    equipment_id: null, allocation_type: 'rent', quantity: 1,
-    start_date: dayjs().format('YYYY-MM-DD'), end_date: null, notes: '',
-    manager_id: null, handover_date: null, return_date: null, rental_fee: 0,
-  }
-  showEquipmentModal.value = true
+const usageCols = [
+  { title: 'Thiết bị', key: 'asset' },
+  { title: 'Người nhận', key: 'receiver', width: 140 },
+  { title: 'SL', key: 'quantity', width: 60, align: 'center' },
+  { title: 'Thời gian', key: 'dates', width: 160 },
+  { title: 'Trạng thái', key: 'status', width: 130, align: 'center' },
+]
+
+// ---- RENTAL ----
+const showRentalModal = ref(false)
+const isEditRental = ref(false)
+const rentalForm = ref({ equipment_name: '', equipment_id: null, supplier_id: null, rental_start_date: dayjs().format('YYYY-MM-DD'), rental_end_date: '', total_cost: 0, notes: '' })
+const rentalFiles = ref([])
+const showRentalDetailDrawer = ref(false)
+const selectedRental = ref(null)
+
+const openRentalDetail = (record) => {
+  selectedRental.value = record
+  showRentalDetailDrawer.value = true
 }
 
-const submitEquipmentAllocation = () => {
-  if (!eqForm.value.equipment_id) return
-  submittingEquipment.value = true
-  router.post(`/projects/${props.project.id}/equipment/allocate`, eqForm.value, {
-    onSuccess: () => { showEquipmentModal.value = false },
-    onFinish: () => { submittingEquipment.value = false },
+const openRentalModal = (record = null) => {
+  if (record) {
+    isEditRental.value = true
+    rentalForm.value = {
+      equipment_name: record.equipment_name,
+      equipment_id: record.equipment_id,
+      supplier_id: record.supplier_id,
+      rental_start_date: record.rental_start_date,
+      rental_end_date: record.rental_end_date,
+      total_cost: record.total_cost,
+      notes: record.notes || ''
+    }
+  } else {
+    isEditRental.value = false
+    rentalForm.value = { equipment_name: '', equipment_id: null, supplier_id: null, rental_start_date: dayjs().format('YYYY-MM-DD'), rental_end_date: '', total_cost: 0, notes: '' }
+  }
+  rentalFiles.value = []
+  showRentalModal.value = true
+}
+
+const submitRentalForm = () => {
+  if (!rentalForm.value.equipment_name) return
+  const fd = new FormData()
+  Object.entries(rentalForm.value).forEach(([k, v]) => { if (v !== null && v !== undefined) fd.append(k, v) })
+  rentalFiles.value.forEach(f => fd.append('files[]', f))
+  
+  const url = isEditRental.value 
+    ? `/projects/${props.project.id}/equipment-rentals/${selectedRental.value.id}`
+    : `/projects/${props.project.id}/equipment-rentals`
+  
+  if (isEditRental.value) fd.append('_method', 'PUT')
+
+  router.post(url, fd, {
+    onSuccess: () => { showRentalModal.value = false; rentalFiles.value = []; if (selectedRental.value) selectedRental.value = props.project.equipment_rentals?.find(r => r.id === selectedRental.value.id) },
+    forceFormData: true
   })
 }
+const submitRental = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/submit`)
+const approveRentalMgmt = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/approve-management`)
+const confirmRentalKT = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/confirm-accountant`)
+const rejectRental = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/reject`, { reason: rejectReason.value }, { onSuccess: () => { rejectReason.value = '' } })
+const deleteRental = (r) => router.delete(`/projects/${props.project.id}/equipment-rentals/${r.id}`)
 
-const returnEquipmentAction = (eq, allocation) => {
-  router.post(`/projects/${props.project.id}/equipment/${allocation.id}/return`, {}, loadingOptions(`return-eq-${allocation.id}`))
+// ---- PURCHASE ----
+const showPurchaseModal = ref(false)
+const isEditPurchase = ref(false)
+const purchaseForm = ref({ notes: '', items: [{ name: '', code: '', quantity: 1, unit_price: 0 }] })
+const purchaseFiles = ref([])
+const showPurchaseDetailDrawer = ref(false)
+const selectedPurchase = ref(null)
+
+const openPurchaseDetail = (record) => {
+  selectedPurchase.value = record
+  showPurchaseDetailDrawer.value = true
 }
+
+const openPurchaseModal = (record = null) => {
+  if (record) {
+    isEditPurchase.value = true
+    purchaseForm.value = {
+      notes: record.notes || '',
+      items: record.items?.map(i => ({ name: i.name, code: i.code, quantity: i.quantity, unit_price: i.unit_price })) || []
+    }
+  } else {
+    isEditPurchase.value = false
+    purchaseForm.value = { notes: '', items: [{ name: '', code: '', quantity: 1, unit_price: 0 }] }
+  }
+  purchaseFiles.value = []
+  showPurchaseModal.value = true
+}
+
+const addPurchaseItem = () => purchaseForm.value.items.push({ name: '', code: '', quantity: 1, unit_price: 0 })
+const removePurchaseItem = (idx) => { if (purchaseForm.value.items.length > 1) purchaseForm.value.items.splice(idx, 1) }
+
+const submitPurchaseForm = () => {
+  if (!purchaseForm.value.items.some(i => i.name)) return
+  const fd = new FormData()
+  fd.append('notes', purchaseForm.value.notes || '')
+  
+  purchaseForm.value.items.forEach((item, idx) => {
+    fd.append(`items[${idx}][name]`, item.name)
+    if (item.code) fd.append(`items[${idx}][code]`, item.code)
+    fd.append(`items[${idx}][quantity]`, item.quantity)
+    fd.append(`items[${idx}][unit_price]`, item.unit_price)
+  })
+  
+  purchaseFiles.value.forEach(f => fd.append('files[]', f))
+
+  const url = isEditPurchase.value 
+    ? `/projects/${props.project.id}/equipment-purchases/${selectedPurchase.value.id}`
+    : `/projects/${props.project.id}/equipment-purchases`
+  
+  if (isEditPurchase.value) fd.append('_method', 'PUT')
+
+  router.post(url, fd, {
+    onSuccess: () => { 
+      showPurchaseModal.value = false; 
+      purchaseFiles.value = [];
+      purchaseForm.value = { notes: '', items: [{ name: '', code: '', quantity: 1, unit_price: 0 }] } 
+    },
+    forceFormData: true
+  })
+}
+const submitPurchase = (p) => router.post(`/projects/${props.project.id}/equipment-purchases/${p.id}/submit`)
+const approvePurchaseMgmt = (p) => router.post(`/projects/${props.project.id}/equipment-purchases/${p.id}/approve-management`)
+const confirmPurchaseKT = (p) => router.post(`/projects/${props.project.id}/equipment-purchases/${p.id}/confirm-accountant`)
+const rejectPurchase = (p) => router.post(`/projects/${props.project.id}/equipment-purchases/${p.id}/reject`, { reason: rejectReason.value }, { onSuccess: () => { rejectReason.value = '' } })
+const deletePurchase = (p) => router.delete(`/projects/${props.project.id}/equipment-purchases/${p.id}`)
+
+// ---- USAGE ----
+const showUsageModal = ref(false)
+const isEditUsage = ref(false)
+const usageForm = ref({ equipment_id: null, quantity: 1, receiver_id: null, received_date: dayjs().format('YYYY-MM-DD'), notes: '' })
+const usageFiles = ref([])
+const showUsageDetailDrawer = ref(false)
+const selectedUsage = ref(null)
+
+const openUsageDetail = (record) => {
+  selectedUsage.value = record
+  showUsageDetailDrawer.value = true
+}
+
+const openUsageModal = (record = null) => {
+  if (record) {
+    isEditUsage.value = true
+    usageForm.value = {
+      equipment_id: record.equipment_id,
+      quantity: record.quantity,
+      receiver_id: record.receiver_id,
+      received_date: record.received_date,
+      notes: record.notes || ''
+    }
+  } else {
+    isEditUsage.value = false
+    usageForm.value = { equipment_id: null, quantity: 1, receiver_id: null, received_date: dayjs().format('YYYY-MM-DD'), notes: '' }
+  }
+  usageFiles.value = []
+  showUsageModal.value = true
+}
+
+const submitUsageForm = () => {
+  if (!usageForm.value.equipment_id || !usageForm.value.receiver_id) return
+  const fd = new FormData()
+  Object.entries(usageForm.value).forEach(([k, v]) => { if (v !== null && v !== undefined) fd.append(k, v) })
+  usageFiles.value.forEach(f => fd.append('files[]', f))
+
+  const url = isEditUsage.value 
+    ? `/projects/${props.project.id}/asset-usages/${selectedUsage.value.id}`
+    : `/projects/${props.project.id}/asset-usages`
+  
+  if (isEditUsage.value) fd.append('_method', 'PUT')
+
+  router.post(url, fd, {
+    onSuccess: () => { 
+      showUsageModal.value = false; 
+      usageFiles.value = [];
+      usageForm.value = { equipment_id: null, quantity: 1, receiver_id: null, received_date: dayjs().format('YYYY-MM-DD'), notes: '' } 
+    },
+    forceFormData: true
+  })
+}
+const confirmReceive = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/confirm-receive`)
+const requestReturn = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/request-return`)
+const confirmReturn = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/confirm-return`)
+const deleteUsage = (u) => router.delete(`/projects/${props.project.id}/asset-usages/${u.id}`)
 </script>
 
 <style scoped>

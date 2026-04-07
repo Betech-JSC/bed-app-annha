@@ -381,6 +381,32 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/equipment/allocate', [CrmProjectsController::class, 'storeEquipmentAllocation'])->name('equipment.allocate');
         Route::post('/{project}/equipment/{allocation}/return', [CrmProjectsController::class, 'returnEquipment'])->name('equipment.return');
 
+        // Equipment Rentals (Thuê thiết bị — matching APP EquipmentRentalController)
+        Route::post('/{project}/equipment-rentals', [CrmProjectsController::class, 'storeEquipmentRental'])->name('equipment-rentals.store');
+        Route::put('/{project}/equipment-rentals/{rental}', [CrmProjectsController::class, 'updateEquipmentRental'])->name('equipment-rentals.update');
+        Route::post('/{project}/equipment-rentals/{rental}/submit', [CrmProjectsController::class, 'submitEquipmentRental'])->name('equipment-rentals.submit');
+        Route::post('/{project}/equipment-rentals/{rental}/approve-management', [CrmProjectsController::class, 'approveRentalManagement'])->name('equipment-rentals.approve.management');
+        Route::post('/{project}/equipment-rentals/{rental}/confirm-accountant', [CrmProjectsController::class, 'confirmRentalAccountant'])->name('equipment-rentals.confirm.accountant');
+        Route::post('/{project}/equipment-rentals/{rental}/reject', [CrmProjectsController::class, 'rejectEquipmentRental'])->name('equipment-rentals.reject');
+        Route::delete('/{project}/equipment-rentals/{rental}', [CrmProjectsController::class, 'destroyEquipmentRental'])->name('equipment-rentals.destroy');
+
+        // Equipment Purchases (Mua thiết bị — matching APP EquipmentPurchaseController)
+        Route::post('/{project}/equipment-purchases', [CrmProjectsController::class, 'storeEquipmentPurchase'])->name('equipment-purchases.store');
+        Route::put('/{project}/equipment-purchases/{purchase}', [CrmProjectsController::class, 'updateEquipmentPurchase'])->name('equipment-purchases.update');
+        Route::post('/{project}/equipment-purchases/{purchase}/submit', [CrmProjectsController::class, 'submitEquipmentPurchase'])->name('equipment-purchases.submit');
+        Route::post('/{project}/equipment-purchases/{purchase}/approve-management', [CrmProjectsController::class, 'approvePurchaseManagement'])->name('equipment-purchases.approve.management');
+        Route::post('/{project}/equipment-purchases/{purchase}/confirm-accountant', [CrmProjectsController::class, 'confirmPurchaseAccountant'])->name('equipment-purchases.confirm.accountant');
+        Route::post('/{project}/equipment-purchases/{purchase}/reject', [CrmProjectsController::class, 'rejectEquipmentPurchase'])->name('equipment-purchases.reject');
+        Route::delete('/{project}/equipment-purchases/{purchase}', [CrmProjectsController::class, 'destroyEquipmentPurchase'])->name('equipment-purchases.destroy');
+
+        // Asset Usages (Sử dụng tài sản — matching APP AssetUsageController)
+        Route::post('/{project}/asset-usages', [CrmProjectsController::class, 'storeAssetUsage'])->name('asset-usages.store');
+        Route::put('/{project}/asset-usages/{usage}', [CrmProjectsController::class, 'updateAssetUsage'])->name('asset-usages.update');
+        Route::post('/{project}/asset-usages/{usage}/confirm-receive', [CrmProjectsController::class, 'confirmReceiveAsset'])->name('asset-usages.confirm-receive');
+        Route::post('/{project}/asset-usages/{usage}/request-return', [CrmProjectsController::class, 'requestReturnAsset'])->name('asset-usages.request-return');
+        Route::post('/{project}/asset-usages/{usage}/confirm-return', [CrmProjectsController::class, 'confirmReturnAsset'])->name('asset-usages.confirm-return');
+        Route::delete('/{project}/asset-usages/{usage}', [CrmProjectsController::class, 'destroyAssetUsage'])->name('asset-usages.destroy');
+
         // Material Bills (matching APP MaterialBillController)
         Route::post('/{project}/material-bills', [CrmProjectsController::class, 'storeMaterialBill'])->name('material-bills.store');
         Route::put('/{project}/material-bills/{bill}', [CrmProjectsController::class, 'updateMaterialBill'])->name('material-bills.update');

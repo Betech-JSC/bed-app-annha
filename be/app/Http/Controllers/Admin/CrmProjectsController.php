@@ -254,6 +254,41 @@ class CrmProjectsController extends Controller
                 ->orderBy('name')->get();
         }
 
+        // Get equipment rentals (Thuê thiết bị — matching APP)
+        $equipmentRentals = [];
+        if (class_exists(\App\Models\EquipmentRental::class)) {
+            $equipmentRentals = \App\Models\EquipmentRental::where('project_id', $project->id)
+                ->with(['equipment:id,name,code', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments'])
+                ->orderByDesc('created_at')
+                ->get();
+        }
+
+        // Get equipment purchases (Mua thiết bị — matching APP)
+        $equipmentPurchases = [];
+        if (class_exists(\App\Models\EquipmentPurchase::class)) {
+            $equipmentPurchases = \App\Models\EquipmentPurchase::where('project_id', $project->id)
+                ->with(['items', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments'])
+                ->orderByDesc('created_at')
+                ->get();
+        }
+
+        // Get asset usages (Sử dụng tài sản từ kho — matching APP)
+        $assetUsages = [];
+        if (class_exists(\App\Models\AssetUsage::class)) {
+            $assetUsages = \App\Models\AssetUsage::where('project_id', $project->id)
+                ->with(['asset:id,name,code,category,status', 'receiver:id,name', 'creator:id,name', 'attachments'])
+                ->orderByDesc('created_at')
+                ->get();
+        }
+
+        // Get company assets for usage form
+        $companyAssets = [];
+        if (class_exists(\App\Models\CompanyAsset::class)) {
+            $companyAssets = \App\Models\CompanyAsset::where('quantity', '>', 0)
+                ->select('id', 'name', 'code', 'category', 'quantity', 'unit')
+                ->orderBy('name')->get();
+        }
+
         return Inertia::render('Crm/Projects/Show', [
             'project' => $project,
             'users' => $users,
@@ -270,6 +305,10 @@ class CrmProjectsController extends Controller
             'suppliers' => $suppliers,
             'projectEquipment' => $projectEquipment,
             'allEquipment' => $allEquipment,
+            'equipmentRentals' => $equipmentRentals,
+            'equipmentPurchases' => $equipmentPurchases,
+            'assetUsages' => $assetUsages,
+            'companyAssets' => $companyAssets,
         ]);
     }
 
@@ -3136,8 +3175,668 @@ class CrmProjectsController extends Controller
         return back()->with('success', 'Đã hoàn trả thiết bị.');
     }
 
-    // ===================================================================
-    // SUB-ITEM CRUD — Acceptance Items (matching APP AcceptanceItemController)
+    // ============================================
+    // PROJECT EQUIPMENT RENTAL — Thuê thiết bị (Giống APP)
+    // ============================================
+
+    public function updateEquipmentRental(Request $request, string $projectId, string $rentalId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
+
+        $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+        if (!in_array($rental->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ có thể sửa phiếu ở trạng thái Nháp hoặc Từ chối.');
+        }
+
+        $validated = $request->validate([
+            'equipment_name'    => 'required|string|max:255',
+            'equipment_id'      => 'nullable|exists:equipment,id',
+            'supplier_id'       => 'nullable|exists:suppliers,id',
+            'rental_start_date' => 'required|date',
+            'rental_end_date'   => 'required|date|after:rental_start_date',
+            'total_cost'        => 'required|numeric|min:0',
+            'notes'             => 'nullable|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $rental->update([
+                'equipment_name'    => $validated['equipment_name'],
+                'equipment_id'      => $validated['equipment_id'] ?? null,
+                'supplier_id'       => $validated['supplier_id'] ?? null,
+                'rental_start_date' => $validated['rental_start_date'],
+                'rental_end_date'   => $validated['rental_end_date'],
+                'total_cost'        => $validated['total_cost'],
+                'notes'             => $validated['notes'] ?? null,
+            ]);
+
+            // Update linked cost entry if exists
+            if ($rental->cost_id) {
+                $costGroup = \App\Models\CostGroup::where('code', 'equipment')
+                    ->orWhere('name', 'like', '%thiết bị%')
+                    ->where('is_active', true)
+                    ->first();
+
+                $supplierName = '';
+                if ($rental->supplier_id) {
+                    $supplier = \App\Models\Supplier::find($rental->supplier_id);
+                    $supplierName = $supplier->name ?? '';
+                }
+
+                Cost::where('id', $rental->cost_id)->update([
+                    'cost_group_id' => $costGroup ? $costGroup->id : null,
+                    'supplier_id'   => $rental->supplier_id,
+                    'name'          => "Thuê thiết bị: " . $rental->equipment_name . ($supplierName ? " - {$supplierName}" : ""),
+                    'amount'        => $rental->total_cost,
+                    'description'   => "Từ phiếu thuê thiết bị #{$rental->id}. " . ($rental->notes ?? ""),
+                    'cost_date'     => $rental->rental_start_date,
+                ]);
+            }
+
+            // Handle file uploads (append)
+            $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật phiếu thuê thiết bị.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function storeEquipmentRental(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
+
+        $validated = $request->validate([
+            'equipment_name'    => 'required|string|max:255',
+            'equipment_id'      => 'nullable|exists:equipment,id',
+            'supplier_id'       => 'nullable|exists:suppliers,id',
+            'rental_start_date' => 'required|date',
+            'rental_end_date'   => 'required|date|after:rental_start_date',
+            'total_cost'        => 'required|numeric|min:0',
+            'notes'             => 'nullable|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $rental = \App\Models\EquipmentRental::create([
+                'project_id'        => $project->id,
+                'equipment_name'    => $validated['equipment_name'],
+                'equipment_id'      => $validated['equipment_id'] ?? null,
+                'supplier_id'       => $validated['supplier_id'] ?? null,
+                'rental_start_date' => $validated['rental_start_date'],
+                'rental_end_date'   => $validated['rental_end_date'],
+                'total_cost'        => $validated['total_cost'],
+                'notes'             => $validated['notes'] ?? null,
+                'status'            => 'draft',
+                'created_by'        => $user->id,
+            ]);
+
+            // Auto-create cost entry (draft)
+            $costGroup = \App\Models\CostGroup::where('code', 'equipment')
+                ->orWhere('name', 'like', '%thiết bị%')
+                ->where('is_active', true)
+                ->first();
+
+            $supplierName = '';
+            if ($rental->supplier_id) {
+                $supplier = \App\Models\Supplier::find($rental->supplier_id);
+                $supplierName = $supplier->name ?? '';
+            }
+
+            $cost = Cost::create([
+                'project_id'    => $project->id,
+                'cost_group_id' => $costGroup ? $costGroup->id : null,
+                'category'      => 'equipment',
+                'supplier_id'   => $rental->supplier_id,
+                'name'          => "Thuê thiết bị: " . $rental->equipment_name . ($supplierName ? " - {$supplierName}" : ""),
+                'amount'        => $rental->total_cost,
+                'description'   => "Từ phiếu thuê thiết bị #{$rental->id}. " . ($rental->notes ?? ""),
+                'cost_date'     => $rental->rental_start_date,
+                'status'        => 'draft',
+                'created_by'    => $user->id,
+            ]);
+
+            $rental->update(['cost_id' => $cost->id]);
+
+            // Handle file uploads
+            $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo phiếu thuê thiết bị.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function submitEquipmentRental(string $projectId, string $rentalId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
+
+        $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+        if (!in_array($rental->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ gửi duyệt phiếu ở trạng thái Nháp hoặc Từ chối.');
+        }
+
+        $rental->update(['status' => 'pending_management', 'rejection_reason' => null]);
+        return back()->with('success', 'Đã gửi phiếu thuê để BĐH duyệt.');
+    }
+
+    public function approveRentalManagement(string $projectId, string $rentalId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
+
+        $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+        if ($rental->status !== 'pending_management') {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ BĐH duyệt.');
+        }
+
+        $rental->update([
+            'status'      => 'pending_accountant',
+            'approved_by' => $user->id,
+            'approved_at' => now(),
+        ]);
+        return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
+    }
+
+    public function confirmRentalAccountant(string $projectId, string $rentalId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
+
+        $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+        if ($rental->status !== 'pending_accountant') {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ Kế toán.');
+        }
+
+        $rental->update([
+            'status'       => 'completed',
+            'confirmed_by' => $user->id,
+            'confirmed_at' => now(),
+        ]);
+        return back()->with('success', 'Kế toán đã xác nhận chuyển khoản. Phiếu hoàn tất.');
+    }
+
+    public function rejectEquipmentRental(Request $request, string $projectId, string $rentalId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_REJECT, $project);
+
+        $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+        if (!in_array($rental->status, ['pending_management', 'pending_accountant'])) {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ duyệt.');
+        }
+
+        $validated = $request->validate(['reason' => 'required|string|max:500']);
+
+        $rental->update([
+            'status'           => 'rejected',
+            'rejection_reason' => $validated['reason'],
+            'approved_by'      => $user->id,
+            'approved_at'      => now(),
+        ]);
+        return back()->with('success', 'Đã từ chối phiếu thuê.');
+    }
+
+    public function destroyEquipmentRental(string $projectId, string $rentalId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $project);
+
+        $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+        if ($rental->status !== 'draft' && !($user instanceof \App\Models\Admin)) {
+            return back()->with('error', 'Chỉ có thể xóa phiếu ở trạng thái Nháp.');
+        }
+
+        // Delete linked cost if exists
+        if ($rental->cost_id) {
+            Cost::where('id', $rental->cost_id)->delete();
+        }
+
+        $rental->delete();
+        return back()->with('success', 'Đã xóa phiếu thuê.');
+    }
+
+    // ============================================
+    // PROJECT EQUIPMENT PURCHASE — Mua thiết bị (Giống APP)
+    // ============================================
+
+    public function updateEquipmentPurchase(Request $request, string $projectId, string $purchaseId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
+
+        $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
+        if (!in_array($purchase->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ có thể sửa phiếu ở trạng thái Nháp hoặc Từ chối.');
+        }
+
+        $validated = $request->validate([
+            'notes'              => 'nullable|string',
+            'items'              => 'required|array|min:1',
+            'items.*.name'       => 'required|string|max:255',
+            'items.*.code'       => 'nullable|string|max:100',
+            'items.*.quantity'   => 'required|integer|min:1',
+            'items.*.unit_price' => 'required|numeric|min:0',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $purchase->update([
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            // Re-create items
+            $purchase->items()->delete();
+            foreach ($validated['items'] as $itemData) {
+                $purchase->items()->create([
+                    'name'       => $itemData['name'],
+                    'code'       => $itemData['code'] ?? null,
+                    'quantity'   => $itemData['quantity'],
+                    'unit_price' => $itemData['unit_price'],
+                ]);
+            }
+
+            $purchase->recalculateTotal();
+
+            // Update linked cost entry if exists by name/category or use a systematic way
+            $itemNames = collect($validated['items'])->pluck('name')->implode(', ');
+            if (strlen($itemNames) > 100) $itemNames = substr($itemNames, 0, 97) . '...';
+            
+            Cost::where('project_id', $project->id)
+                ->where('category', 'equipment')
+                ->where('description', 'like', "Từ phiếu mua thiết bị #{$purchase->id}%")
+                ->update([
+                    'name'   => "Mua thiết bị: {$itemNames}",
+                    'amount' => $purchase->total_amount,
+                    'description' => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
+                ]);
+
+            // Handle file uploads (append)
+            $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$project->id}/{$purchase->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật phiếu mua thiết bị.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function storeEquipmentPurchase(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
+
+        $validated = $request->validate([
+            'notes'              => 'nullable|string',
+            'items'              => 'required|array|min:1',
+            'items.*.name'       => 'required|string|max:255',
+            'items.*.code'       => 'nullable|string|max:100',
+            'items.*.quantity'   => 'required|integer|min:1',
+            'items.*.unit_price' => 'required|numeric|min:0',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $purchase = \App\Models\EquipmentPurchase::create([
+                'project_id'   => $project->id,
+                'notes'        => $validated['notes'] ?? null,
+                'status'       => 'draft',
+                'total_amount' => 0,
+                'created_by'   => $user->id,
+            ]);
+
+            foreach ($validated['items'] as $itemData) {
+                $purchase->items()->create([
+                    'name'       => $itemData['name'],
+                    'code'       => $itemData['code'] ?? null,
+                    'quantity'   => $itemData['quantity'],
+                    'unit_price' => $itemData['unit_price'],
+                ]);
+            }
+
+            $purchase->recalculateTotal();
+
+            // Auto-create cost entry
+            $costGroup = \App\Models\CostGroup::where('code', 'equipment')
+                ->orWhere('name', 'like', '%thiết bị%')
+                ->where('is_active', true)
+                ->first();
+
+            $itemNames = collect($validated['items'])->pluck('name')->implode(', ');
+            if (strlen($itemNames) > 100) $itemNames = substr($itemNames, 0, 97) . '...';
+
+            Cost::create([
+                'project_id'    => $project->id,
+                'cost_group_id' => $costGroup ? $costGroup->id : null,
+                'category'      => 'equipment',
+                'name'          => "Mua thiết bị: {$itemNames}",
+                'amount'        => $purchase->total_amount,
+                'description'   => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
+                'cost_date'     => now()->toDateString(),
+                'status'        => 'draft',
+                'created_by'    => $user->id,
+            ]);
+
+            // Handle file uploads
+            $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$project->id}/{$purchase->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo phiếu mua thiết bị.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function submitEquipmentPurchase(string $projectId, string $purchaseId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
+
+        $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
+        if (!in_array($purchase->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ gửi duyệt phiếu ở trạng thái Nháp hoặc Từ chối.');
+        }
+
+        $purchase->update(['status' => 'pending_management', 'rejection_reason' => null]);
+        return back()->with('success', 'Đã gửi phiếu mua để BĐH duyệt.');
+    }
+
+    public function approvePurchaseManagement(string $projectId, string $purchaseId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
+
+        $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
+        if ($purchase->status !== 'pending_management') {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ BĐH duyệt.');
+        }
+
+        $purchase->update([
+            'status'      => 'pending_accountant',
+            'approved_by' => $user->id,
+            'approved_at' => now(),
+        ]);
+        return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
+    }
+
+    public function confirmPurchaseAccountant(string $projectId, string $purchaseId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
+
+        $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)
+            ->with('items')
+            ->findOrFail($purchaseId);
+        if ($purchase->status !== 'pending_accountant') {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ Kế toán.');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $purchase->update([
+                'status'       => 'completed',
+                'confirmed_by' => $user->id,
+                'confirmed_at' => now(),
+            ]);
+
+            // Auto-create equipment records in inventory
+            foreach ($purchase->items as $item) {
+                \App\Models\Equipment::create([
+                    'name'            => $item->name,
+                    'code'            => $item->code ?? ('EP-' . strtoupper(\Illuminate\Support\Str::random(6))),
+                    'category'        => 'purchased',
+                    'quantity'        => $item->quantity,
+                    'purchase_price'  => $item->unit_price * $item->quantity,
+                    'current_value'   => $item->unit_price * $item->quantity,
+                    'status'          => 'available',
+                    'notes'           => "Nhập từ phiếu mua #{$purchase->id} - DA: {$project->name}",
+                    'project_id'      => $project->id,
+                    'purchase_date'   => now()->toDateString(),
+                ]);
+            }
+
+            DB::commit();
+            return back()->with('success', 'Kế toán xác nhận. Thiết bị đã nhập kho.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function rejectEquipmentPurchase(Request $request, string $projectId, string $purchaseId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_REJECT, $project);
+
+        $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
+        if (!in_array($purchase->status, ['pending_management', 'pending_accountant'])) {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ duyệt.');
+        }
+
+        $validated = $request->validate(['reason' => 'required|string|max:500']);
+
+        $purchase->update([
+            'status'           => 'rejected',
+            'rejection_reason' => $validated['reason'],
+            'approved_by'      => $user->id,
+            'approved_at'      => now(),
+        ]);
+        return back()->with('success', 'Đã từ chối phiếu mua.');
+    }
+
+    public function destroyEquipmentPurchase(string $projectId, string $purchaseId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $project);
+
+        $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
+        if ($purchase->status !== 'draft' && !($user instanceof \App\Models\Admin)) {
+            return back()->with('error', 'Chỉ có thể xóa phiếu ở trạng thái Nháp.');
+        }
+
+        $purchase->items()->delete();
+        $purchase->delete();
+        return back()->with('success', 'Đã xóa phiếu mua.');
+    }
+
+    // ============================================
+    // PROJECT ASSET USAGE — Sử dụng thiết bị kho (Giống APP)
+    // ============================================
+
+    public function updateAssetUsage(Request $request, string $projectId, string $usageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
+
+        $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+        if ($usage->status !== 'pending_receive') {
+            return back()->with('error', 'Chỉ có thể sửa phiếu mượn khi người nhận chưa xác nhận.');
+        }
+
+        $validated = $request->validate([
+            'equipment_id' => 'required|exists:equipment,id',
+            'quantity'     => 'required|integer|min:1',
+            'receiver_id'  => 'required|exists:users,id',
+            'received_date' => 'required|date',
+            'notes'        => 'nullable|string',
+        ]);
+
+        $asset = \App\Models\Equipment::findOrFail($validated['equipment_id']);
+        if ($asset->status === 'retired') {
+            return back()->with('error', 'Thiết bị không còn trong kho.');
+        }
+
+        $usage->update([
+            'equipment_id'  => $validated['equipment_id'],
+            'quantity'      => $validated['quantity'],
+            'receiver_id'   => $validated['receiver_id'],
+            'received_date' => $validated['received_date'],
+            'notes'         => $validated['notes'] ?? null,
+        ]);
+
+        // Handle file uploads (append)
+        $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
+
+        return back()->with('success', 'Đã cập nhật phiếu mượn thiết bị.');
+    }
+
+    public function storeAssetUsage(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
+
+        $validated = $request->validate([
+            'equipment_id' => 'required|exists:equipment,id',
+            'quantity'     => 'required|integer|min:1',
+            'receiver_id'  => 'required|exists:users,id',
+            'received_date' => 'required|date',
+            'notes'        => 'nullable|string',
+        ]);
+
+        $asset = \App\Models\Equipment::findOrFail($validated['equipment_id']);
+        if ($asset->status === 'retired') {
+            return back()->with('error', 'Thiết bị không còn trong kho.');
+        }
+
+        $usage = \App\Models\AssetUsage::create([
+            'project_id'    => $project->id,
+            'equipment_id'  => $validated['equipment_id'],
+            'quantity'      => $validated['quantity'],
+            'receiver_id'   => $validated['receiver_id'],
+            'received_date' => $validated['received_date'],
+            'notes'         => $validated['notes'] ?? null,
+            'status'        => 'pending_receive',
+            'created_by'    => $user->id,
+        ]);
+
+        // Handle file uploads
+        $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
+
+        return back()->with('success', 'Đã tạo phiếu mượn thiết bị. Chờ người nhận xác nhận.');
+    }
+
+    public function confirmReceiveAsset(string $projectId, string $usageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+        if ($usage->status !== 'pending_receive') {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ nhận.');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $usage->update([
+                'status'        => 'in_use',
+                'received_date' => now()->toDateString(),
+            ]);
+
+            // Update asset status
+            $asset = $usage->asset;
+            if ($asset) {
+                $asset->update(['status' => 'in_use', 'assigned_to' => $usage->receiver_id]);
+            }
+
+            DB::commit();
+            return back()->with('success', 'Đã xác nhận nhận thiết bị.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function requestReturnAsset(string $projectId, string $usageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+        if ($usage->status !== 'in_use') {
+            return back()->with('error', 'Phiếu không ở trạng thái đang sử dụng.');
+        }
+
+        $usage->update(['status' => 'pending_return']);
+        return back()->with('success', 'Đã gửi yêu cầu trả thiết bị.');
+    }
+
+    public function confirmReturnAsset(string $projectId, string $usageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+        if ($usage->status !== 'pending_return') {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ xác nhận trả.');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $usage->update([
+                'status'        => 'returned',
+                'returned_date' => now()->toDateString(),
+            ]);
+
+            // Return asset to available
+            $asset = $usage->asset;
+            if ($asset) {
+                $asset->update(['status' => 'available', 'assigned_to' => null]);
+            }
+
+            DB::commit();
+            return back()->with('success', 'Đã xác nhận trả thiết bị. Thiết bị đã về kho.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function destroyAssetUsage(string $projectId, string $usageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $project);
+
+        $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+        if ($usage->status !== 'pending_receive' && !($user instanceof \App\Models\Admin)) {
+            return back()->with('error', 'Chỉ có thể xóa phiếu khi chưa nhận.');
+        }
+
+        $usage->delete();
+        return back()->with('success', 'Đã xóa phiếu mượn.');
+    }
     // ===================================================================
 
     public function storeAcceptanceItem(Request $request, string $projectId, string $stageId)
@@ -3616,8 +4315,8 @@ class CrmProjectsController extends Controller
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if ($bill->status !== 'draft') {
-            return back()->with('error', 'Chỉ sửa được phiếu ở trạng thái nháp.');
+        if (!in_array($bill->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ sửa được phiếu ở trạng thái nháp hoặc từ chối.');
         }
 
         $validated = $request->validate([
@@ -3640,6 +4339,7 @@ class CrmProjectsController extends Controller
                 'bill_date' => $validated['bill_date'] ?? $bill->bill_date,
                 'cost_group_id' => $validated['cost_group_id'] ?? $bill->cost_group_id,
                 'notes' => $validated['notes'] ?? $bill->notes,
+                'status' => 'draft', // Reset to draft on update
             ]);
 
             if (isset($validated['items'])) {
@@ -3677,8 +4377,8 @@ class CrmProjectsController extends Controller
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if ($bill->status !== 'draft') {
-            return back()->with('error', 'Chỉ xóa được phiếu ở trạng thái nháp.');
+        if (!in_array($bill->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ xóa được phiếu ở trạng thái nháp hoặc từ chối.');
         }
 
         $bill->items()->delete();
@@ -3691,11 +4391,12 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::MATERIAL_UPDATE, $project);
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if ($bill->status !== 'draft') {
-            return back()->with('error', 'Chỉ gửi được phiếu ở trạng thái nháp.');
+        if (!in_array($bill->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ gửi được phiếu ở trạng thái nháp hoặc từ chối.');
         }
 
         $bill->submitForManagementApproval();

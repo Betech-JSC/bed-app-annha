@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
 class AssetUsage extends Model
@@ -25,6 +26,7 @@ class AssetUsage extends Model
     public function asset(): BelongsTo { return $this->belongsTo(Equipment::class, 'equipment_id'); }
     public function receiver(): BelongsTo { return $this->belongsTo(User::class, 'receiver_id'); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function attachments(): MorphMany { return $this->morphMany(Attachment::class, 'attachable'); }
 
     const STATUS_LABELS = [
         'pending_receive' => 'Chờ xác nhận nhận',
