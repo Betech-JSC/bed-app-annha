@@ -25,8 +25,8 @@ import { setPermissions } from "@/reducers/permissionsSlice";
 export default function LoginScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  const [email, setEmail] = useState("superadmin.test@test.com");
-  const [password, setPassword] = useState("superadmin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
