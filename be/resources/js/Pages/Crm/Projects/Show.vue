@@ -1659,14 +1659,13 @@
         </div>
       </a-tab-pane>
 
-      <!-- ============ EQUIPMENT TAB — 3 Sub-tabs (Giống APP: Thuê / Mua / Sử dụng) ============ -->
+      <!-- ============ EQUIPMENT TAB — 2 Sub-tabs (Thuê / Sử dụng) ============ -->
       <a-tab-pane key="equipment" v-if="isTabVisible('equipment')">
-        <template #tab><a-tooltip title="Thuê, mua, sử dụng thiết bị dự án — phiếu duyệt + nhập kho" placement="bottom">Thiết bị ({{ totalEquipmentCount }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Thuê, sử dụng thiết bị dự án — phiếu duyệt 3 cấp" placement="bottom">Thiết bị ({{ totalEquipmentCount }})</a-tooltip></template>
         <div class="p-4">
           <!-- Sub-tab switcher -->
           <div class="flex items-center gap-2 mb-4">
             <a-button :type="eqSubTab === 'rental' ? 'primary' : 'default'" size="small" @click="eqSubTab = 'rental'">🏗️ Thuê ({{ equipmentRentals?.length || 0 }})</a-button>
-            <a-button :type="eqSubTab === 'purchase' ? 'primary' : 'default'" size="small" @click="eqSubTab = 'purchase'">🛒 Mua ({{ equipmentPurchases?.length || 0 }})</a-button>
             <a-button :type="eqSubTab === 'usage' ? 'primary' : 'default'" size="small" @click="eqSubTab = 'usage'">📦 Sử dụng ({{ assetUsages?.length || 0 }})</a-button>
           </div>
 
@@ -1717,55 +1716,6 @@
             <a-empty v-if="!equipmentRentals?.length" description="Chưa có phiếu thuê thiết bị" />
           </div>
 
-          <!-- ===== PURCHASE SUB-TAB ===== -->
-          <div v-else-if="eqSubTab === 'purchase'">
-            <div class="grid grid-cols-4 gap-3 mb-4">
-              <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 border border-purple-100/60">
-                <div class="text-[11px] text-gray-400">Tổng phiếu</div>
-                <div class="text-lg font-bold text-purple-700">{{ equipmentPurchases?.length || 0 }}</div>
-              </div>
-              <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
-                <div class="text-[11px] text-gray-400">Tổng giá trị</div>
-                <div class="text-lg font-bold text-emerald-600">{{ fmt((equipmentPurchases || []).reduce((s,p) => s + (p.total_amount || 0), 0)) }}</div>
-              </div>
-              <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
-                <div class="text-[11px] text-gray-400">Nhập kho</div>
-                <div class="text-lg font-bold text-green-600">{{ (equipmentPurchases || []).filter(p => p.status === 'completed').length }}</div>
-              </div>
-              <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
-                <div class="text-[11px] text-gray-400">Chờ duyệt</div>
-                <div class="text-lg font-bold text-amber-600">{{ (equipmentPurchases || []).filter(p => ['pending_management','pending_accountant'].includes(p.status)).length }}</div>
-              </div>
-            </div>
-            <div class="flex justify-end mb-3">
-              <a-button v-if="can('equipment.create')" type="primary" size="small" @click="openPurchaseModal()">
-                <template #icon><PlusOutlined /></template>Tạo phiếu mua
-              </a-button>
-            </div>
-            <a-table :columns="purchaseCols" :data-source="equipmentPurchases || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
-              :customRow="(p) => ({ onClick: () => openPurchaseDetail(p), style: 'cursor: pointer' })">
-              <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'id'">
-                  <div class="font-semibold text-blue-600">#{{ record.id }}</div>
-                  <div class="text-[10px] text-gray-400">{{ fmtDate(record.created_at) }}</div>
-                </template>
-                <template v-else-if="column.key === 'items'">
-                  <div v-for="(item, idx) in (record.items || []).slice(0,2)" :key="idx" class="text-xs">
-                    {{ item.name }} <span class="text-gray-400">x{{ item.quantity }}</span>
-                  </div>
-                  <span v-if="(record.items?.length || 0) > 2" class="text-[10px] text-gray-400">+{{ record.items.length - 2 }} mặt hàng</span>
-                </template>
-                <template v-else-if="column.key === 'total_amount'">
-                  <span class="font-bold text-emerald-600">{{ fmt(record.total_amount) }}</span>
-                </template>
-                <template v-else-if="column.key === 'status'">
-                  <a-tag :color="eqWorkflowColor(record.status)" class="rounded-full text-[10px]">{{ eqWorkflowLabel(record.status) }}</a-tag>
-                </template>
-              </template>
-            </a-table>
-            <a-empty v-if="!equipmentPurchases?.length" description="Chưa có phiếu mua thiết bị" />
-          </div>
-
           <!-- ===== USAGE SUB-TAB ===== -->
           <div v-else-if="eqSubTab === 'usage'">
             <div class="grid grid-cols-4 gap-3 mb-4">
@@ -1773,13 +1723,13 @@
                 <div class="text-[11px] text-gray-400">Tổng phiếu</div>
                 <div class="text-lg font-bold text-teal-700">{{ assetUsages?.length || 0 }}</div>
               </div>
+              <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+                <div class="text-[11px] text-gray-400">Chờ duyệt</div>
+                <div class="text-lg font-bold text-amber-600">{{ (assetUsages || []).filter(u => ['draft','pending_management','pending_accountant'].includes(u.status)).length }}</div>
+              </div>
               <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
                 <div class="text-[11px] text-gray-400">Đang dùng</div>
                 <div class="text-lg font-bold text-blue-600">{{ (assetUsages || []).filter(u => u.status === 'in_use').length }}</div>
-              </div>
-              <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
-                <div class="text-[11px] text-gray-400">Chờ nhận</div>
-                <div class="text-lg font-bold text-amber-600">{{ (assetUsages || []).filter(u => u.status === 'pending_receive').length }}</div>
               </div>
               <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
                 <div class="text-[11px] text-gray-400">Đã trả</div>
@@ -3044,8 +2994,10 @@
            <a-button v-if="selectedRental.status === 'draft'" @click="openRentalModal(selectedRental)"><EditOutlined /> Sửa</a-button>
            <a-button v-if="selectedRental.status === 'draft'" type="primary" @click="submitRental(selectedRental)">Gửi duyệt</a-button>
            <a-button v-if="selectedRental.status === 'pending_management'" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveRentalMgmt(selectedRental)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
-           <a-button v-if="selectedRental.status === 'pending_accountant'" type="primary" @click="confirmRentalKT(selectedRental)"><CheckSquareOutlined /> KT Xác nhận</a-button>
-           <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status)" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
+            <a-button v-if="selectedRental.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" @click="confirmRentalKT(selectedRental)"><CheckSquareOutlined /> KT Xác nhận</a-button>
+            <a-button v-if="selectedRental.status === 'in_use'" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturnRental(selectedRental)">Đánh dấu đã trả</a-button>
+            <a-button v-if="selectedRental.status === 'pending_return' && can('cost.approve.accountant')" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckSquareOutlined /> KT Xác nhận trả</a-button>
+            <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status)" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
              <template #description>
                <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
              </template>
@@ -3056,7 +3008,8 @@
     </div>
   </a-drawer>
 
-  <!-- PURCHASE DETAIL DRAWER -->
+  <!-- PURCHASE DETAIL DRAWER — DISABLED: Purchase chuyển sang module Kho công ty -->
+  <!--
   <a-drawer v-model:open="showPurchaseDetailDrawer" title="Chi tiết Phiếu mua thiết bị" :width="560" @close="selectedPurchase = null" destroy-on-close class="crm-drawer">
     <div v-if="selectedPurchase" class="space-y-6 pb-24">
       <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
@@ -3125,6 +3078,7 @@
       </div>
     </div>
   </a-drawer>
+  -->
 
   <!-- USAGE DETAIL DRAWER -->
   <a-drawer v-model:open="showUsageDetailDrawer" title="Chi tiết sử dụng thiết bị" :width="560" @close="selectedUsage = null" destroy-on-close class="crm-drawer">
@@ -3177,17 +3131,62 @@
         </div>
       </div>
 
+      <!-- Rejection reason -->
+      <div v-if="selectedUsage.rejection_reason" class="p-4 bg-red-50 rounded-2xl border border-red-100">
+        <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-2"><ExclamationCircleOutlined /> Lý do từ chối</div>
+        <div class="text-sm text-red-700">{{ selectedUsage.rejection_reason }}</div>
+      </div>
+
+      <!-- Approval info -->
+      <div v-if="selectedUsage.approver || selectedUsage.confirmer" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><SafetyCertificateOutlined /> Lịch sử duyệt</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div v-if="selectedUsage.approver" class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">BĐH duyệt bởi</span>
+            <span class="font-semibold text-gray-700">{{ selectedUsage.approver?.name }} · {{ fmtDate(selectedUsage.approved_at) }}</span>
+          </div>
+          <div v-if="selectedUsage.confirmer" class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">KT xác nhận bởi</span>
+            <span class="font-semibold text-gray-700">{{ selectedUsage.confirmer?.name }} · {{ fmtDate(selectedUsage.confirmed_at) }}</span>
+          </div>
+        </div>
+      </div>
+
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
          <div>
-           <a-popconfirm v-if="selectedUsage.status === 'pending_receive'" title="Xóa phiếu mượn này?" @confirm="deleteUsage(selectedUsage); showUsageDetailDrawer = false">
+           <a-popconfirm v-if="['draft','rejected'].includes(selectedUsage.status) && can('equipment.delete')" title="Xóa phiếu này?" @confirm="deleteUsage(selectedUsage); showUsageDetailDrawer = false">
              <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
            </a-popconfirm>
          </div>
          <div class="flex gap-2">
            <a-button @click="showUsageDetailDrawer = false">Đóng</a-button>
-           <a-button v-if="selectedUsage.status === 'pending_receive'" @click="openUsageModal(selectedUsage)"><EditOutlined /> Sửa</a-button>
-           <a-button v-if="selectedUsage.status === 'pending_receive'" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="confirmReceive(selectedUsage)"><CheckCircleOutlined /> Xác nhận nhận</a-button>
+
+           <!-- Draft / Rejected: Sửa + Gửi duyệt -->
+           <a-button v-if="['draft','rejected'].includes(selectedUsage.status) && can('equipment.update')" @click="openUsageModal(selectedUsage)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="['draft','rejected'].includes(selectedUsage.status) && can('equipment.update')" type="primary" @click="submitUsage(selectedUsage)"><SendOutlined /> Gửi duyệt</a-button>
+
+           <!-- Pending Management: BĐH duyệt / Từ chối -->
+           <a-button v-if="selectedUsage.status === 'pending_management' && can('cost.approve.management')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveUsageManagement(selectedUsage)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
+           <a-popconfirm v-if="selectedUsage.status === 'pending_management' && can('cost.approve.management')" title="Từ chối phiếu?" @confirm="rejectUsage(selectedUsage)" ok-text="Từ chối" cancel-text="Hủy">
+             <template #description>
+               <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
+             </template>
+             <a-button danger>Từ chối</a-button>
+           </a-popconfirm>
+
+           <!-- Pending Accountant: KT xác nhận / Từ chối -->
+           <a-button v-if="selectedUsage.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" class="!bg-purple-500 !border-purple-500 hover:!bg-purple-600" @click="confirmUsageAccountant(selectedUsage)"><CheckSquareOutlined /> KT Xác nhận</a-button>
+           <a-popconfirm v-if="selectedUsage.status === 'pending_accountant' && can('cost.approve.accountant')" title="Từ chối phiếu?" @confirm="rejectUsage(selectedUsage)" ok-text="Từ chối" cancel-text="Hủy">
+             <template #description>
+               <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
+             </template>
+             <a-button danger>Từ chối</a-button>
+           </a-popconfirm>
+
+           <!-- In Use: Yêu cầu trả -->
            <a-button v-if="selectedUsage.status === 'in_use'" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturn(selectedUsage)">Yêu cầu trả</a-button>
+
+           <!-- Pending Return: Xác nhận trả -->
            <a-button v-if="selectedUsage.status === 'pending_return'" type="primary" @click="confirmReturn(selectedUsage)"><CheckSquareOutlined /> Xác nhận trả</a-button>
          </div>
       </div>
@@ -4480,7 +4479,8 @@
     </a-form>
   </a-modal>
 
-  <!-- ==================== EQUIPMENT PURCHASE MODAL ==================== -->
+  <!-- ==================== EQUIPMENT PURCHASE MODAL — DISABLED ==================== -->
+  <!--
   <a-modal v-model:open="showPurchaseModal" :title="isEditPurchase ? 'Cập nhật Phiếu Mua Thiết Bị' : 'Tạo Phiếu Mua Thiết Bị'" :width="700" @ok="submitPurchaseForm" :ok-text="isEditPurchase ? 'Cập nhật' : 'Tạo phiếu'" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <div class="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
@@ -4506,7 +4506,7 @@
           </div>
           <div class="w-32">
             <div v-if="idx === 0" class="text-[10px] text-gray-400 mb-1">Đơn giá (VNĐ)</div>
-            <a-input-number v-model:value="item.unit_price" :min="0" size="small" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" />
+            <a-input-number v-model:value="item.unit_price" :min="0" size="small" class="w-full" />
           </div>
           <div class="w-24 text-right text-xs font-bold text-emerald-600 pb-0.5">{{ fmt(item.quantity * item.unit_price) }}</div>
           <a-button v-if="purchaseForm.items.length > 1" type="text" size="small" danger @click="removePurchaseItem(idx)"><DeleteOutlined /></a-button>
@@ -4523,6 +4523,7 @@
       </div>
     </a-form>
   </a-modal>
+  -->
 
   <!-- ==================== ASSET USAGE MODAL ==================== -->
   <a-modal v-model:open="showUsageModal" :title="isEditUsage ? 'Cập nhật Mượn Thiết Bị Từ Kho' : 'Mượn Thiết Bị Từ Kho'" :width="540" @ok="submitUsageForm" :ok-text="isEditUsage ? 'Cập nhật' : 'Tạo phiếu'" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
@@ -4745,7 +4746,7 @@ import {
   ProjectOutlined, CloudOutlined, TeamOutlined, PictureOutlined,
   FilePdfOutlined, FileWordOutlined, FileExcelOutlined, ClockCircleOutlined,
   LineChartOutlined, FileProtectOutlined, BankOutlined, HistoryOutlined,
-  FileAddOutlined
+  FileAddOutlined, SafetyCertificateOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -7073,17 +7074,17 @@ const eqStatusLabel = (s) => ({ available: 'Sẵn sàng', in_use: 'Đang dùng',
 const eqStatusColor = (s) => ({ available: 'green', in_use: 'blue', maintenance: 'orange', retired: 'default' }[s] || 'default')
 const eqTypeLabel = (t) => ({ owned: 'Có sẵn', rented: 'Thuê', leased: 'Thuê dài hạn' }[t] || t)
 
-const eqWorkflowLabel = (s) => ({ draft: 'Nháp', pending_management: 'Chờ BĐH', pending_accountant: 'Chờ KT', completed: 'Hoàn tất', rejected: 'Từ chối' }[s] || s)
-const eqWorkflowColor = (s) => ({ draft: 'default', pending_management: 'orange', pending_accountant: 'blue', completed: 'green', rejected: 'red' }[s] || 'default')
+const eqWorkflowLabel = (s) => ({ draft: 'Nháp', pending_management: 'Chờ BĐH', pending_accountant: 'Chờ KT', completed: 'Hoàn tất', in_use: 'Đang dùng', pending_return: 'Chờ xác nhận trả', returned: 'Đã hoàn trả', rejected: 'Từ chối' }[s] || s)
+const eqWorkflowColor = (s) => ({ draft: 'default', pending_management: 'orange', pending_accountant: 'blue', completed: 'green', in_use: 'geekblue', pending_return: 'purple', returned: 'cyan', rejected: 'red' }[s] || 'default')
 
-const usageStatusLabel = (s) => ({ pending_receive: 'Chờ nhận', in_use: 'Đang dùng', pending_return: 'Chờ trả', returned: 'Đã trả' }[s] || s)
-const usageStatusColor = (s) => ({ pending_receive: 'orange', in_use: 'blue', pending_return: 'purple', returned: 'green' }[s] || 'default')
+const usageStatusLabel = (s) => ({ draft: 'Nháp', pending_management: 'Chờ BĐH', pending_accountant: 'Chờ KT', approved: 'Đã duyệt', in_use: 'Đang dùng', pending_return: 'Chờ trả', returned: 'Đã trả', rejected: 'Từ chối', pending_receive: 'Chờ nhận' }[s] || s)
+const usageStatusColor = (s) => ({ draft: 'default', pending_management: 'orange', pending_accountant: 'blue', approved: 'cyan', in_use: 'geekblue', pending_return: 'purple', returned: 'green', rejected: 'red', pending_receive: 'orange' }[s] || 'default')
 
 const eqSubTab = ref('rental')
 const rejectReason = ref('')
 
 const totalEquipmentCount = computed(() =>
-  (props.equipmentRentals?.length || 0) + (props.equipmentPurchases?.length || 0) + (props.assetUsages?.length || 0)
+  (props.equipmentRentals?.length || 0) + (props.assetUsages?.length || 0)
 )
 
 // Column definitions
@@ -7164,6 +7165,8 @@ const approveRentalMgmt = (r) => router.post(`/projects/${props.project.id}/equi
 const confirmRentalKT = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/confirm-accountant`)
 const rejectRental = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/reject`, { reason: rejectReason.value }, { onSuccess: () => { rejectReason.value = '' } })
 const deleteRental = (r) => router.delete(`/projects/${props.project.id}/equipment-rentals/${r.id}`)
+const requestReturnRental = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/request-return`)
+const confirmReturnRentalAction = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/confirm-return`)
 
 // ---- PURCHASE ----
 const showPurchaseModal = ref(false)
@@ -7283,7 +7286,10 @@ const submitUsageForm = () => {
     forceFormData: true
   })
 }
-const confirmReceive = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/confirm-receive`)
+const submitUsage = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/submit`)
+const approveUsageManagement = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/approve-management`)
+const confirmUsageAccountant = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/confirm-accountant`)
+const rejectUsage = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/reject`, { rejection_reason: rejectReason.value }, { onSuccess: () => { rejectReason.value = '' } })
 const requestReturn = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/request-return`)
 const confirmReturn = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/confirm-return`)
 const deleteUsage = (u) => router.delete(`/projects/${props.project.id}/asset-usages/${u.id}`)

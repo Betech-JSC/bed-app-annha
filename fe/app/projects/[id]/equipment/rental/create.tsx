@@ -20,37 +20,29 @@ export default function CreateEquipmentRentalScreen() {
 
     // Form
     const [equipmentName, setEquipmentName] = useState("");
-    const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
     const [selectedSupplier, setSelectedSupplier] = useState<SupplierOption | null>(null);
     const [startDate, setStartDate] = useState(new Date());
     const [endDate, setEndDate] = useState<Date>(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
     const [totalCost, setTotalCost] = useState(0);
+    const [quantity, setQuantity] = useState(1);
+    const [unitPrice, setUnitPrice] = useState(0);
     const [notes, setNotes] = useState("");
     const [attachments, setAttachments] = useState<UploadedFile[]>([]);
 
+    useEffect(() => {
+        setTotalCost(quantity * unitPrice);
+    }, [quantity, unitPrice]);
+
     // Selectors
-    const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
     const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
-    const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [showSupplierModal, setShowSupplierModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
 
     useEffect(() => {
-        loadEquipmentList();
         loadSuppliers();
     }, []);
 
-    const loadEquipmentList = async () => {
-        try {
-            const res = await equipmentApi.getEquipment({ active_only: true });
-            if (res.success || res.data) {
-                const data = res.data?.data || res.data || [];
-                setEquipmentList(Array.isArray(data) ? data : []);
-            }
-        } catch (e) {
-            console.error(e);
-        }
-    };
+
 
     const loadSuppliers = async (search = "") => {
         try {
@@ -71,11 +63,11 @@ export default function CreateEquipmentRentalScreen() {
             setLoading(true);
             const payload: any = {
                 equipment_name: equipmentName.trim(),
-                equipment_id: selectedEquipment?.id,
                 supplier_id: selectedSupplier?.id,
                 rental_start_date: startDate.toISOString().split("T")[0],
                 rental_end_date: endDate.toISOString().split("T")[0],
-                total_cost: totalCost,
+                quantity: quantity,
+                unit_price: unitPrice,
                 notes: notes || undefined,
             };
 
@@ -130,7 +122,14 @@ export default function CreateEquipmentRentalScreen() {
                                 style={styles.modalItem}
                                 onPress={() => { onSelect(item); onClose(); setSearchQuery(""); }}
                             >
-                                <Text style={styles.modalItemText}>{item[labelKey]}</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.modalItemText}>{item[labelKey]}</Text>
+                                    {title.includes("tài sản") && item.remaining_quantity !== undefined && (
+                                        <Text style={{ fontSize: 12, color: "#6B7280" }}>
+                                            Còn {item.remaining_quantity} {item.unit || "cái"}
+                                        </Text>
+                                    )}
+                                </View>
                             </TouchableOpacity>
                         )}
                         ListEmptyComponent={
@@ -167,15 +166,7 @@ export default function CreateEquipmentRentalScreen() {
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>THÔNG TIN THIẾT BỊ</Text>
 
-                        <View style={styles.formGroup}>
-                            <Text style={styles.label}>Thiết bị *</Text>
-                            <TouchableOpacity style={styles.picker} onPress={() => setShowCategoryModal(true)}>
-                                <Text style={[styles.pickerText, !selectedEquipment && styles.placeholder]}>
-                                    {selectedEquipment?.name || "Chọn từ danh mục..."}
-                                </Text>
-                                <Ionicons name="chevron-down" size={18} color="#9CA3AF" />
-                            </TouchableOpacity>
-                        </View>
+
 
                         <View style={styles.formGroup}>
                             <Text style={styles.label}>Tên thiết bị *</Text>
@@ -215,9 +206,28 @@ export default function CreateEquipmentRentalScreen() {
 
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>CHI PHÍ</Text>
+                        <View style={styles.row}>
+                            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+                                <Text style={styles.label}>Số lượng *</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={quantity.toString()}
+                                    onChangeText={(t) => setQuantity(parseInt(t) || 0)}
+                                    keyboardType="numeric"
+                                />
+                            </View>
+                            <View style={[styles.formGroup, { flex: 2, marginLeft: 8 }]}>
+                                <Text style={styles.label}>Đơn giá (VNĐ) *</Text>
+                                <CurrencyInput value={unitPrice} onChangeText={setUnitPrice} />
+                            </View>
+                        </View>
                         <View style={styles.formGroup}>
-                            <Text style={styles.label}>Tổng chi phí (VNĐ) *</Text>
-                            <CurrencyInput value={totalCost} onChangeText={setTotalCost} />
+                            <Text style={styles.label}>Thành tiền (VNĐ)</Text>
+                            <View style={[styles.input, { backgroundColor: "#F3F4F6", justifyContent: "center" }]}>
+                                <Text style={{ fontSize: 16, fontWeight: "600", color: "#374151" }}>
+                                    {totalCost.toLocaleString()}
+                                </Text>
+                            </View>
                         </View>
                     </View>
 
@@ -245,7 +255,6 @@ export default function CreateEquipmentRentalScreen() {
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            {renderSelectorModal(showCategoryModal, () => setShowCategoryModal(false), "Chọn tài sản/thiết bị", equipmentList, setSelectedEquipment)}
             {renderSelectorModal(showSupplierModal, () => setShowSupplierModal(false), "Chọn NCC cho thuê", suppliers, setSelectedSupplier)}
         </View>
     );

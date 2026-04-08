@@ -13,18 +13,23 @@ import { useFocusEffect } from "expo-router";
 
 const STATUS_LABELS: Record<string, string> = {
     draft: "Nháp", pending_management: "Chờ BĐH duyệt",
-    pending_accountant: "Chờ Kế toán xác nhận", completed: "Hoàn tất", rejected: "Từ chối",
+    pending_accountant: "Chờ Kế toán xác nhận", completed: "Hoàn tất",
+    in_use: "Đang sử dụng", pending_return: "Chờ xác nhận trả", returned: "Đã hoàn trả",
+    rejected: "Từ chối",
 };
 const STATUS_COLORS: Record<string, string> = {
     draft: "#6B7280", pending_management: "#F59E0B",
-    pending_accountant: "#8B5CF6", completed: "#10B981", rejected: "#EF4444",
+    pending_accountant: "#8B5CF6", completed: "#10B981",
+    in_use: "#3B82F6", pending_return: "#F59E0B", returned: "#10B981",
+    rejected: "#EF4444",
 };
 
 const WORKFLOW_STEPS = [
     { key: "draft", label: "Nháp" },
     { key: "pending_management", label: "Chờ BĐH" },
     { key: "pending_accountant", label: "Chờ KT" },
-    { key: "completed", label: "Hoàn tất" },
+    { key: "in_use", label: "Đang dùng" },
+    { key: "returned", label: "Đã trả" },
 ];
 
 const formatCurrency = (n: number) => new Intl.NumberFormat("vi-VN").format(Math.round(n)) + " đ";
@@ -64,6 +69,8 @@ export default function RentalDetailScreen() {
                             case "submit": res = await equipmentRentalApi.submit(id!, Number(rentalId)); break;
                             case "approve": res = await equipmentRentalApi.approveManagement(id!, Number(rentalId)); break;
                             case "confirm": res = await equipmentRentalApi.confirmAccountant(id!, Number(rentalId)); break;
+                            case "requestReturn": res = await equipmentRentalApi.requestReturn(id!, Number(rentalId)); break;
+                            case "confirmReturn": res = await equipmentRentalApi.confirmReturn(id!, Number(rentalId)); break;
                             case "delete": res = await equipmentRentalApi.destroy(id!, Number(rentalId)); break;
                         }
                         if (res?.success) {
@@ -150,12 +157,13 @@ export default function RentalDetailScreen() {
 
                 {/* Info Card */}
                 <View style={styles.infoCard}>
-                    <Text style={styles.infoTitle}>Thông tin</Text>
-                    <InfoRow label="Thiết bị" value={rental.equipment_name} />
-                    <InfoRow label="Danh mục" value={rental.category?.name || "—"} />
+                    <Text style={styles.infoTitle}>Thông tin thuê</Text>
+                    <InfoRow label="Tên thiết bị" value={rental.equipment_name} />
+                    <InfoRow label="Số lượng" value={rental.quantity?.toString() || "1"} />
+                    <InfoRow label="Đơn giá" value={formatCurrency(rental.unit_price || 0)} />
+                    <InfoRow label="Tổng chi phí" value={formatCurrency(rental.total_cost)} valueColor="#059669" />
                     <InfoRow label="NCC" value={rental.supplier?.name || "—"} />
                     <InfoRow label="Thời gian" value={`${new Date(rental.rental_start_date).toLocaleDateString("vi-VN")} → ${new Date(rental.rental_end_date).toLocaleDateString("vi-VN")}`} />
-                    <InfoRow label="Tổng chi phí" value={formatCurrency(rental.total_cost)} valueColor="#059669" />
                     {rental.notes && <InfoRow label="Ghi chú" value={rental.notes} />}
                 </View>
 
@@ -221,6 +229,26 @@ export default function RentalDetailScreen() {
                         >
                             <Ionicons name="wallet" size={18} color="#FFF" />
                             <Text style={styles.actionBtnText}>Xác Nhận CK</Text>
+                        </TouchableOpacity>
+                    )}
+                    {rental.status === "in_use" && (
+                        <TouchableOpacity
+                            style={[styles.actionBtn, { backgroundColor: "#F59E0B" }]}
+                            onPress={() => handleAction("requestReturn", "Đánh dấu thiết bị đã được trả?")}
+                            disabled={actionLoading}
+                        >
+                            <Ionicons name="return-up-back" size={18} color="#FFF" />
+                            <Text style={styles.actionBtnText}>Đánh Dấu Đã Trả</Text>
+                        </TouchableOpacity>
+                    )}
+                    {rental.status === "pending_return" && hasPermission(Permissions.COST_APPROVE_ACCOUNTANT) && (
+                        <TouchableOpacity
+                            style={[styles.actionBtn, { backgroundColor: "#10B981" }]}
+                            onPress={() => handleAction("confirmReturn", "Xác nhận thiết bị đã được trả về kho?")}
+                            disabled={actionLoading}
+                        >
+                            <Ionicons name="checkmark-done-circle" size={18} color="#FFF" />
+                            <Text style={styles.actionBtnText}>KT Xác Nhận Trả</Text>
                         </TouchableOpacity>
                     )}
                     {rental.status === "draft" && (

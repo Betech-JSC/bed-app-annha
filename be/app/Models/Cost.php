@@ -30,6 +30,7 @@ class Cost extends Model
         'receipt_id',
         'material_id',
         'material_bill_id',
+        'equipment_id', // Liên kết mua thiết bị
         'equipment_allocation_id',
         'quantity',
         'unit',
@@ -67,6 +68,11 @@ class Cost extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function equipment(): BelongsTo
+    {
+        return $this->belongsTo(Equipment::class, 'equipment_id');
     }
 
     /**

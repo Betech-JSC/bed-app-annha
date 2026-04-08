@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -34,12 +35,17 @@ class Equipment extends Model
         'maintenance_interval_days',
         'last_maintenance_date',
         'next_maintenance_date',
-        'status', // available, in_use, maintenance, retired
+        'status', // draft, pending_management, pending_accountant, available, in_use, maintenance, retired
         'assigned_to',
         'project_id',
         'location',
         'notes',
         'created_by',
+        'approved_by',
+        'approved_at',
+        'confirmed_by',
+        'confirmed_at',
+        'rejection_reason',
     ];
 
     protected $appends = ['asset_code', 'monthly_depreciation', 'remaining_percent'];
@@ -53,6 +59,20 @@ class Equipment extends Model
         'purchase_date'            => 'date',
         'last_maintenance_date'    => 'date',
         'next_maintenance_date'    => 'date',
+        'approved_at'              => 'datetime',
+        'confirmed_at'             => 'datetime',
+    ];
+
+    // --- Approval Status Labels ---
+    const STATUS_LABELS = [
+        'draft'              => 'Nháp',
+        'pending_management' => 'Chờ BĐH duyệt',
+        'pending_accountant' => 'Chờ Kế toán',
+        'available'          => 'Sẵn sàng (Trong kho)',
+        'in_use'             => 'Đang sử dụng',
+        'maintenance'        => 'Bảo trì',
+        'retired'            => 'Thanh lý',
+        'rejected'           => 'Từ chối',
     ];
 
     // --- Relationships ---
@@ -70,6 +90,21 @@ class Equipment extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function confirmer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'confirmed_by');
+    }
+
+    public function attachments(): MorphMany
+    {
+        return $this->morphMany(Attachment::class, 'attachable');
     }
 
     // --- Scopes ---
@@ -105,6 +140,11 @@ class Equipment extends Model
     // QUAN HỆ
     // ==================================================================
 
+    public function cost(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Cost::class, 'equipment_id');
+    }
+
     public function allocations(): HasMany
     {
         return $this->hasMany(EquipmentAllocation::class);
@@ -120,9 +160,48 @@ class Equipment extends Model
         return $this->hasMany(AssetAssignment::class, 'equipment_id');
     }
 
+    public function usages(): HasMany
+    {
+        return $this->hasMany(AssetUsage::class, 'equipment_id');
+    }
+
     public function depreciations(): HasMany
     {
         return $this->hasMany(AssetDepreciation::class, 'equipment_id');
+    }
+
+    /**
+     * Chạy khấu hao cho 1 tháng
+     */
+    public function getRemainingQuantityAttribute(): int
+    {
+        // Tính tổng đã phân bổ (EquipmentAllocation)
+        $allocatedQty = $this->allocations()
+            ->whereIn('status', ['active'])
+            ->sum('quantity');
+
+        // Tính tổng đã mượn (AssetUsage) - Trừ ra các phiếu đã "trả"
+        $usageQty = $this->usages()
+            ->whereIn('status', ['draft', 'pending_management', 'pending_accountant', 'approved', 'in_use', 'pending_return', 'pending_receive'])
+            ->sum('quantity');
+
+        $remaining = $this->quantity - ($allocatedQty + $usageQty);
+        return max(0, $remaining);
+    }
+
+    // ==================================================================
+    // BOOT
+    // ==================================================================
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($equipment) {
+            if (empty($equipment->uuid)) {
+                $equipment->uuid = Str::uuid();
+            }
+        });
     }
 
     /**
@@ -150,20 +229,4 @@ class Equipment extends Model
 
         return $dep;
     }
-
-    // ==================================================================
-    // BOOT
-    // ==================================================================
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($equipment) {
-            if (empty($equipment->uuid)) {
-                $equipment->uuid = Str::uuid();
-            }
-        });
-    }
 }
-

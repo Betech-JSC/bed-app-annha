@@ -5,18 +5,19 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AssetUsage;
 use App\Models\Equipment;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AssetUsageController extends Controller
 {
     /**
-     * Danh sách phiếu mượn theo dự án
+     * Danh sách phiếu sử dụng thiết bị theo dự án
      */
     public function index(string $projectId, Request $request)
     {
         $query = AssetUsage::where('project_id', $projectId)
-            ->with(['asset:id,name,code,status', 'receiver:id,name', 'creator:id,name'])
+            ->with(['asset:id,name,code,status', 'receiver:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name'])
             ->orderBy('created_at', 'desc');
 
         if ($status = $request->query('status')) {
@@ -30,12 +31,12 @@ class AssetUsageController extends Controller
     }
 
     /**
-     * Chi tiết phiếu mượn
+     * Chi tiết phiếu sử dụng
      */
     public function show(string $projectId, string $id)
     {
         $usage = AssetUsage::where('project_id', $projectId)
-            ->with(['asset', 'receiver:id,name,email', 'creator:id,name,email'])
+            ->with(['asset', 'receiver:id,name,email', 'creator:id,name,email', 'approver:id,name', 'confirmer:id,name', 'attachments'])
             ->findOrFail($id);
 
         return response()->json([
@@ -59,14 +60,24 @@ class AssetUsageController extends Controller
             });
         }
 
+        $assets = $query->get(['id', 'name', 'code as asset_code', 'category', 'status', 'quantity', 'current_value']);
+        
+        // Bổ sung thuộc tính remaining_quantity và lọc
+        $filtered = $assets->map(function ($item) {
+            $item->remaining_quantity = $item->remaining_quantity; // using accessor
+            return $item;
+        })->filter(function ($item) {
+            return $item->remaining_quantity > 0;
+        })->values();
+
         return response()->json([
             'success' => true,
-            'data' => $query->get(['id', 'name', 'code as asset_code', 'category', 'status', 'current_value']),
+            'data' => $filtered,
         ]);
     }
 
     /**
-     * Tạo phiếu mượn (status = pending_receive)
+     * Tạo phiếu sử dụng thiết bị (status = draft)
      */
     public function store(string $projectId, Request $request)
     {
@@ -82,10 +93,17 @@ class AssetUsageController extends Controller
 
         $asset = Equipment::findOrFail($validated['equipment_id']);
 
-        if ($asset->status === 'retired') {
+        if (!in_array($asset->status, ['available', 'in_use'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Thiết bị không còn trong kho.',
+                'message' => 'Thiết bị hiện ' . (Equipment::STATUS_LABELS[$asset->status] ?? $asset->status) . '. Vui lòng kiểm tra lại.',
+            ], 422);
+        }
+
+        if ($validated['quantity'] > $asset->remaining_quantity) {
+            return response()->json([
+                'success' => false,
+                'message' => "Không đủ số lượng trong kho. Hiện còn {$asset->remaining_quantity} {$asset->unit}.",
             ], 422);
         }
 
@@ -96,28 +114,60 @@ class AssetUsageController extends Controller
             'receiver_id'      => $validated['receiver_id'],
             'received_date'    => $validated['received_date'],
             'notes'            => $validated['notes'] ?? null,
-            'status'           => 'pending_receive',
+            'status'           => 'draft',
             'created_by'       => $user->id,
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã tạo phiếu mượn thiết bị. Chờ người nhận xác nhận.',
+            'message' => 'Đã tạo phiếu sử dụng thiết bị.',
             'data'    => $usage->fresh(['asset:id,name,code', 'receiver:id,name', 'creator:id,name']),
         ], 201);
     }
 
     /**
-     * Xóa phiếu (chỉ khi pending_receive)
+     * Cập nhật phiếu (chỉ khi draft hoặc rejected)
+     */
+    public function update(string $projectId, string $id, Request $request)
+    {
+        $usage = AssetUsage::where('project_id', $projectId)->findOrFail($id);
+
+        if (!in_array($usage->status, ['draft', 'rejected'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể chỉnh sửa phiếu ở trạng thái Nháp hoặc Từ chối.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'equipment_id'  => 'sometimes|exists:equipment,id',
+            'quantity'      => 'sometimes|integer|min:1',
+            'receiver_id'   => 'sometimes|exists:users,id',
+            'received_date' => 'sometimes|date',
+            'notes'         => 'nullable|string',
+        ]);
+
+        $validated['status'] = 'draft'; // Reset on edit
+        $usage->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cập nhật phiếu.',
+            'data'    => $usage->fresh(['asset:id,name,code', 'receiver:id,name', 'creator:id,name']),
+        ]);
+    }
+
+    /**
+     * Xóa phiếu (chỉ khi draft hoặc rejected)
      */
     public function destroy(string $projectId, string $id)
     {
         $usage = AssetUsage::where('project_id', $projectId)->findOrFail($id);
 
-        if ($usage->status !== 'pending_receive') {
+        if (!in_array($usage->status, ['draft', 'rejected'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể xóa phiếu khi chưa nhận.',
+                'message' => 'Chỉ có thể xóa phiếu ở trạng thái Nháp hoặc Từ chối.',
             ], 422);
         }
 
@@ -125,35 +175,111 @@ class AssetUsageController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã xóa phiếu mượn.',
+            'message' => 'Đã xóa phiếu sử dụng.',
         ]);
     }
 
     // ====================================================================
-    // 2-WAY CONFIRMATION
+    // 3-LEVEL APPROVAL WORKFLOW
     // ====================================================================
 
     /**
-     * Người nhận bấm "Đã nhận" → pending_receive → in_use (trừ tồn kho)
+     * Bước 1: Người lập gửi duyệt (draft/rejected → pending_management)
      */
-    public function confirmReceive(string $projectId, string $id)
+    public function submit(string $projectId, string $id)
+    {
+        $usage = AssetUsage::where('project_id', $projectId)->findOrFail($id);
+
+        if (!in_array($usage->status, ['draft', 'rejected'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể gửi duyệt phiếu ở trạng thái Nháp hoặc Từ chối.',
+            ], 422);
+        }
+
+        $usage->update([
+            'status'           => 'pending_management',
+            'rejection_reason' => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã gửi phiếu để BĐH duyệt.',
+            'data'    => $usage->fresh(['asset', 'receiver:id,name', 'creator:id,name', 'approver:id,name']),
+        ]);
+    }
+
+    /**
+     * Bước 2a: BĐH duyệt (pending_management → pending_accountant)
+     */
+    public function approveManagement(string $projectId, string $id)
     {
         $user = auth()->user();
         $usage = AssetUsage::where('project_id', $projectId)->findOrFail($id);
 
-        if ($usage->status !== 'pending_receive') {
+        if ($usage->status !== 'pending_management') {
             return response()->json([
                 'success' => false,
-                'message' => 'Phiếu không ở trạng thái chờ nhận.',
+                'message' => 'Phiếu không ở trạng thái chờ BĐH duyệt.',
             ], 422);
         }
 
-        // Kiểm tra người nhận
-        if ($user->id !== $usage->receiver_id) {
+        $usage->update([
+            'status'      => 'pending_accountant',
+            'approved_by' => $user->id,
+            'approved_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'BĐH đã duyệt. Chuyển sang Kế toán.',
+            'data'    => $usage->fresh(['asset', 'receiver:id,name', 'creator:id,name', 'approver:id,name']),
+        ]);
+    }
+
+    /**
+     * Bước 2b: Từ chối (pending_management/pending_accountant → rejected)
+     */
+    public function reject(string $projectId, string $id, Request $request)
+    {
+        $user = auth()->user();
+        $usage = AssetUsage::where('project_id', $projectId)->findOrFail($id);
+
+        if (!in_array($usage->status, ['pending_management', 'pending_accountant'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ người nhận mới có thể xác nhận.',
-            ], 403);
+                'message' => 'Phiếu không ở trạng thái chờ duyệt.',
+            ], 422);
+        }
+
+        $request->validate(['reason' => 'required|string']);
+
+        $usage->update([
+            'status'           => 'rejected',
+            'rejection_reason' => $request->reason,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã từ chối phiếu sử dụng thiết bị.',
+            'data'    => $usage->fresh(['asset', 'receiver:id,name', 'creator:id,name', 'approver:id,name']),
+        ]);
+    }
+
+    /**
+     * Bước 3: KT xác nhận (pending_accountant → approved → auto in_use)
+     * Khi KT duyệt, thiết bị tự động chuyển sang trạng thái "Đang sử dụng"
+     */
+    public function confirmAccountant(string $projectId, string $id)
+    {
+        $user = auth()->user();
+        $usage = AssetUsage::where('project_id', $projectId)->findOrFail($id);
+
+        if ($usage->status !== 'pending_accountant') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phiếu không ở trạng thái chờ Kế toán.',
+            ], 422);
         }
 
         try {
@@ -161,19 +287,25 @@ class AssetUsageController extends Controller
 
             $usage->update([
                 'status'        => 'in_use',
+                'confirmed_by'  => $user->id,
+                'confirmed_at'  => now(),
                 'received_date' => now()->toDateString(),
             ]);
 
-            // Trừ tồn kho — chuyển sang trạng thái in_use
+            // Cập nhật trạng thái thiết bị trong kho
             $asset = $usage->asset;
-            $asset->update(['status' => 'in_use', 'assigned_to' => $user->id]);
+            if ($asset) {
+                $asset->update([
+                    'status' => 'in_use',
+                ]);
+            }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Đã xác nhận nhận thiết bị.',
-                'data'    => $usage->fresh(['asset:id,name,code,status', 'receiver:id,name', 'creator:id,name']),
+                'message' => 'KT đã xác nhận. Thiết bị chuyển sang trạng thái Đang sử dụng.',
+                'data'    => $usage->fresh(['asset', 'receiver:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name']),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -184,8 +316,12 @@ class AssetUsageController extends Controller
         }
     }
 
+    // ====================================================================
+    // LIFECYCLE MANAGEMENT (After approval)
+    // ====================================================================
+
     /**
-     * Người nhận bấm "Đã trả" → in_use → pending_return
+     * Người nhận yêu cầu trả (in_use → pending_return)
      */
     public function requestReturn(string $projectId, string $id)
     {
@@ -199,28 +335,27 @@ class AssetUsageController extends Controller
             ], 422);
         }
 
-        if ($user->id !== $usage->receiver_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ người nhận mới có thể yêu cầu trả.',
-            ], 403);
-        }
-
         $usage->update(['status' => 'pending_return']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã gửi yêu cầu trả thiết bị. Chờ người lập xác nhận.',
-            'data'    => $usage->fresh(['asset:id,name,code,status', 'receiver:id,name', 'creator:id,name']),
+            'message' => 'Đã gửi yêu cầu trả thiết bị.',
+            'data'    => $usage->fresh(['asset', 'receiver:id,name', 'creator:id,name']),
         ]);
     }
 
     /**
-     * Người lập bấm "Xác nhận đã nhận lại" → pending_return → returned (cộng lại tồn kho)
+     * KT xác nhận trả (pending_return → returned)
      */
     public function confirmReturn(string $projectId, string $id)
     {
         $user = auth()->user();
+
+        // Check KT permission
+        if (!$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) {
+            return response()->json(['success' => false, 'message' => 'Bạn không có quyền xác nhận trả.'], 403);
+        }
+
         $usage = AssetUsage::where('project_id', $projectId)->findOrFail($id);
 
         if ($usage->status !== 'pending_return') {
@@ -228,13 +363,6 @@ class AssetUsageController extends Controller
                 'success' => false,
                 'message' => 'Phiếu không ở trạng thái chờ xác nhận trả.',
             ], 422);
-        }
-
-        if ($user->id !== $usage->created_by) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ người lập phiếu mới có thể xác nhận nhận lại.',
-            ], 403);
         }
 
         try {
@@ -245,16 +373,22 @@ class AssetUsageController extends Controller
                 'returned_date' => now()->toDateString(),
             ]);
 
-            // Cộng lại tồn kho
+            // Cập nhật trạng thái thiết bị trong kho
             $asset = $usage->asset;
-            $asset->update(['status' => 'available', 'assigned_to' => null]);
+            if ($asset) {
+                // Nếu sau khi trả, số lượng còn lại bằng với số lượng tổng thì mới set available
+                $asset->refresh();
+                if ($asset->remaining_quantity >= $asset->quantity) {
+                    $asset->update(['status' => 'available']);
+                }
+            }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Đã xác nhận nhận lại thiết bị. Thiết bị đã trả về kho.',
-                'data'    => $usage->fresh(['asset:id,name,code,status', 'receiver:id,name', 'creator:id,name']),
+                'data'    => $usage->fresh(['asset', 'receiver:id,name', 'creator:id,name']),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

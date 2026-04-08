@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { equipmentRentalApi, EquipmentRental } from "@/api/equipmentRentalApi";
-import { equipmentPurchaseApi, EquipmentPurchase } from "@/api/equipmentPurchaseApi";
 import { assetUsageApi, AssetUsage } from "@/api/assetUsageApi";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
@@ -19,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useProjectPermissions } from "@/hooks/usePermissions";
 import { Permissions } from "@/constants/Permissions";
 
-type TabType = "rental" | "purchase" | "usage";
+type TabType = "rental" | "usage";
 
 const STATUS_LABELS: Record<string, string> = {
     draft: "Nháp",
@@ -27,10 +26,11 @@ const STATUS_LABELS: Record<string, string> = {
     pending_accountant: "Chờ KT",
     completed: "Hoàn tất",
     rejected: "Từ chối",
-    pending_receive: "Chờ nhận",
+    approved: "Đã duyệt",
     in_use: "Đang SD",
     pending_return: "Chờ trả",
     returned: "Đã trả",
+    pending_receive: "Chờ nhận",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -39,10 +39,11 @@ const STATUS_COLORS: Record<string, string> = {
     pending_accountant: "#8B5CF6",
     completed: "#10B981",
     rejected: "#EF4444",
-    pending_receive: "#F59E0B",
+    approved: "#06B6D4",
     in_use: "#3B82F6",
     pending_return: "#8B5CF6",
     returned: "#10B981",
+    pending_receive: "#F59E0B",
 };
 
 const formatCurrency = (amount: number) => {
@@ -61,7 +62,6 @@ export default function EquipmentModuleScreen() {
     const [refreshing, setRefreshing] = useState(false);
 
     const [rentals, setRentals] = useState<EquipmentRental[]>([]);
-    const [purchases, setPurchases] = useState<EquipmentPurchase[]>([]);
     const [usages, setUsages] = useState<AssetUsage[]>([]);
 
     const loadData = useCallback(async (isRefresh = false) => {
@@ -71,9 +71,6 @@ export default function EquipmentModuleScreen() {
             if (activeTab === "rental") {
                 const res = await equipmentRentalApi.list(id);
                 if (res.success) setRentals(res.data?.data || res.data || []);
-            } else if (activeTab === "purchase") {
-                const res = await equipmentPurchaseApi.list(id);
-                if (res.success) setPurchases(res.data?.data || res.data || []);
             } else {
                 const res = await assetUsageApi.list(id);
                 if (res.success) setUsages(res.data?.data || res.data || []);
@@ -95,7 +92,6 @@ export default function EquipmentModuleScreen() {
     const getCreateRoute = () => {
         switch (activeTab) {
             case "rental": return `/projects/${id}/equipment/rental/create`;
-            case "purchase": return `/projects/${id}/equipment/purchase/create`;
             case "usage": return `/projects/${id}/equipment/usage/create`;
         }
     };
@@ -134,47 +130,6 @@ export default function EquipmentModuleScreen() {
                 <View style={styles.cardFooter}>
                     <Ionicons name="person-outline" size={12} color="#9CA3AF" />
                     <Text style={styles.footerText}>{item.creator.name}</Text>
-                </View>
-            )}
-        </TouchableOpacity>
-    );
-
-    const renderPurchaseItem = ({ item }: { item: EquipmentPurchase }) => (
-        <TouchableOpacity
-            style={styles.card}
-            onPress={() => router.push(`/projects/${id}/equipment/purchase/${item.id}` as any)}
-            activeOpacity={0.7}
-        >
-            <View style={styles.cardHeader}>
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>
-                        Phiếu mua #{item.id}
-                    </Text>
-                    <Text style={styles.cardSubtitle}>
-                        {item.items?.length || 0} thiết bị
-                    </Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[item.status] + "20" }]}>
-                    <Text style={[styles.statusText, { color: STATUS_COLORS[item.status] }]}>
-                        {STATUS_LABELS[item.status]}
-                    </Text>
-                </View>
-            </View>
-            <View style={styles.cardMeta}>
-                <View style={styles.metaItem}>
-                    <Ionicons name="time-outline" size={14} color="#9CA3AF" />
-                    <Text style={styles.metaText}>
-                        {new Date(item.created_at).toLocaleDateString("vi-VN")}
-                    </Text>
-                </View>
-                <Text style={styles.cardAmount}>{formatCurrency(item.total_amount)}</Text>
-            </View>
-            {item.items && item.items.length > 0 && (
-                <View style={styles.cardFooter}>
-                    <Ionicons name="list-outline" size={12} color="#9CA3AF" />
-                    <Text style={styles.footerText} numberOfLines={1}>
-                        {item.items.map(i => i.name).join(", ")}
-                    </Text>
                 </View>
             )}
         </TouchableOpacity>
@@ -221,7 +176,6 @@ export default function EquipmentModuleScreen() {
             <Ionicons name="cube-outline" size={48} color="#D1D5DB" />
             <Text style={styles.emptyText}>
                 {activeTab === "rental" ? "Chưa có phiếu thuê nào" :
-                 activeTab === "purchase" ? "Chưa có phiếu mua nào" :
                  "Chưa có phiếu mượn nào"}
             </Text>
         </View>
@@ -242,17 +196,6 @@ export default function EquipmentModuleScreen() {
                     <FlatList
                         data={rentals}
                         renderItem={renderRentalItem}
-                        keyExtractor={(item) => item.id.toString()}
-                        contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 100 }]}
-                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                        ListEmptyComponent={renderEmpty}
-                    />
-                );
-            case "purchase":
-                return (
-                    <FlatList
-                        data={purchases}
-                        renderItem={renderPurchaseItem}
                         keyExtractor={(item) => item.id.toString()}
                         contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 100 }]}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -294,7 +237,6 @@ export default function EquipmentModuleScreen() {
             <View style={styles.tabBar}>
                 {([
                     { key: "rental" as TabType, label: "Thuê", icon: "cart-outline" },
-                    { key: "purchase" as TabType, label: "Mua", icon: "bag-handle-outline" },
                     { key: "usage" as TabType, label: "Sử dụng", icon: "swap-horizontal-outline" },
                 ] as const).map((tab) => (
                     <TouchableOpacity

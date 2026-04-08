@@ -46,6 +46,13 @@ class EquipmentController extends Controller
 
         $equipment = $query->paginate(20);
 
+        // Bổ sung remaining_quantity vào từng item
+        $items = $equipment->getCollection()->map(function ($item) {
+            $item->remaining_quantity = $item->remaining_quantity;
+            return $item;
+        });
+        $equipment->setCollection($items);
+
         return response()->json([
             'success' => true,
             'data' => $equipment
@@ -68,7 +75,10 @@ class EquipmentController extends Controller
             'code' => 'nullable|string|max:50|unique:equipment,code',
             'category' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
-            'status' => 'nullable|in:available,in_use,maintenance,retired',
+            'quantity' => 'nullable|integer|min:1',
+            'purchase_price' => 'nullable|numeric|min:0',
+            'unit' => 'nullable|string|max:50',
+            'status' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -80,17 +90,30 @@ class EquipmentController extends Controller
         }
 
         $equipment = Equipment::create([
-            'name' => $request->name,
-            'code' => $request->code,
-            'category' => $request->category,
-            'notes' => $request->notes,
-            'status' => $request->status ?? 'available',
+            'name'           => $request->name,
+            'code'           => $request->code,
+            'category'       => $request->category,
+            'notes'          => $request->notes,
+            'quantity'       => $request->quantity ?? 1,
+            'purchase_price' => $request->purchase_price ?? 0,
+            'unit'           => $request->unit ?? 'cái',
+            'status'         => 'draft',
+            'created_by'     => $user->id,
         ]);
+
+        // Handle attachment_ids from UniversalFileUploader
+        if ($request->has('attachment_ids')) {
+            $attachmentIds = is_array($request->attachment_ids) ? $request->attachment_ids : explode(',', $request->attachment_ids);
+            \App\Models\Attachment::whereIn('id', $attachmentIds)->update([
+                'attachable_id' => $equipment->id,
+                'attachable_type' => get_class($equipment)
+            ]);
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã tạo thiết bị thành công.',
-            'data' => $equipment
+            'message' => 'Đã tạo thiết bị (Nháp). Vui lòng gửi duyệt.',
+            'data' => $equipment->load('attachments')
         ], 201);
     }
 
@@ -105,7 +128,7 @@ class EquipmentController extends Controller
             ], 403);
         }
 
-        $equipment = Equipment::with(['allocations.project', 'maintenances'])->findOrFail($id);
+        $equipment = Equipment::with(['allocations.project', 'maintenances', 'attachments'])->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -259,7 +282,10 @@ class EquipmentController extends Controller
             'code' => 'sometimes|nullable|string|max:50|unique:equipment,code,' . $id,
             'category' => 'nullable|string|max:100',
             'notes' => 'nullable|string',
-            'status' => 'nullable|in:available,in_use,maintenance,retired',
+            'quantity' => 'sometimes|integer|min:1',
+            'purchase_price' => 'sometimes|numeric|min:0',
+            'unit' => 'nullable|string|max:50',
+            'status' => 'nullable|in:available,in_use,maintenance,retired,draft,pending_management,pending_accountant,rejected',
         ]);
 
         if ($validator->fails()) {
@@ -271,13 +297,22 @@ class EquipmentController extends Controller
         }
 
         $equipment->update($request->only([
-            'name', 'code', 'category', 'notes', 'status'
+            'name', 'code', 'category', 'notes', 'status', 'quantity', 'purchase_price', 'unit'
         ]));
+
+        // Handle attachment_ids from UniversalFileUploader
+        if ($request->has('attachment_ids')) {
+            $attachmentIds = is_array($request->attachment_ids) ? $request->attachment_ids : explode(',', $request->attachment_ids);
+            \App\Models\Attachment::whereIn('id', $attachmentIds)->update([
+                'attachable_id' => $equipment->id,
+                'attachable_type' => get_class($equipment)
+            ]);
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Đã cập nhật thiết bị thành công.',
-            'data' => $equipment
+            'data' => $equipment->load('attachments')
         ]);
     }
 
@@ -353,6 +388,22 @@ class EquipmentController extends Controller
 
         // Kiểm tra equipment
         $equipment = Equipment::findOrFail($request->equipment_id);
+
+        // Kiểm tra status
+        if (!in_array($equipment->status, ['available', 'in_use', 'returned'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Thiết bị hiện ' . (Equipment::STATUS_LABELS[$equipment->status] ?? $equipment->status) . '. Vui lòng kiểm tra lại.'
+            ], 422);
+        }
+
+        // Chặn nếu hết số lượng
+        if ($request->quantity > $equipment->remaining_quantity) {
+            return response()->json([
+                'success' => false,
+                'message' => "Không đủ số lượng trong kho. Hiện còn {$equipment->remaining_quantity} {$equipment->unit}."
+            ], 422);
+        }
 
         try {
             DB::beginTransaction();

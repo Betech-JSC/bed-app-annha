@@ -18,8 +18,10 @@ export interface EquipmentRental {
   supplier?: { id: number; name: string };
   rental_start_date: string;
   rental_end_date: string;
+  quantity: number;
+  unit_price: number;
   total_cost: number;
-  status: "draft" | "pending_management" | "pending_accountant" | "completed" | "rejected";
+  status: "draft" | "pending_management" | "pending_accountant" | "completed" | "in_use" | "pending_return" | "returned" | "rejected";
   rejection_reason?: string;
   notes?: string;
   created_by: number;
@@ -51,7 +53,9 @@ export const equipmentRentalApi = {
     supplier_id?: number;
     rental_start_date: string;
     rental_end_date: string;
-    total_cost: number;
+    quantity: number;
+    unit_price: number;
+    total_cost?: number;
     notes?: string;
     attachment_ids?: number[];
   }) => {
@@ -81,6 +85,15 @@ export const equipmentRentalApi = {
   },
   confirmAccountant: async (projectId: string | number, id: number) => {
     const response = await api.post(`/projects/${projectId}/equipment-rentals/${id}/confirm-accountant`);
+    return response.data;
+  },
+  // Return lifecycle
+  requestReturn: async (projectId: string | number, id: number) => {
+    const response = await api.post(`/projects/${projectId}/equipment-rentals/${id}/request-return`);
+    return response.data;
+  },
+  confirmReturn: async (projectId: string | number, id: number) => {
+    const response = await api.post(`/projects/${projectId}/equipment-rentals/${id}/confirm-return`);
     return response.data;
   },
 };

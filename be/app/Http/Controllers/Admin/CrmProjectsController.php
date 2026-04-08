@@ -276,7 +276,7 @@ class CrmProjectsController extends Controller
         $assetUsages = [];
         if (class_exists(\App\Models\AssetUsage::class)) {
             $assetUsages = \App\Models\AssetUsage::where('project_id', $project->id)
-                ->with(['asset:id,name,code,category,status', 'receiver:id,name', 'creator:id,name', 'attachments'])
+                ->with(['asset:id,name,code,category,status', 'receiver:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments'])
                 ->orderByDesc('created_at')
                 ->get();
         }
@@ -3363,11 +3363,11 @@ class CrmProjectsController extends Controller
         }
 
         $rental->update([
-            'status'       => 'completed',
+            'status'       => 'in_use',
             'confirmed_by' => $user->id,
             'confirmed_at' => now(),
         ]);
-        return back()->with('success', 'Kế toán đã xác nhận chuyển khoản. Phiếu hoàn tất.');
+        return back()->with('success', 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
     }
 
     public function rejectEquipmentRental(Request $request, string $projectId, string $rentalId)
@@ -3390,6 +3390,39 @@ class CrmProjectsController extends Controller
             'approved_at'      => now(),
         ]);
         return back()->with('success', 'Đã từ chối phiếu thuê.');
+    }
+
+    // ─── Rental: Người lập đánh dấu đã trả (in_use → pending_return) ───
+    public function requestReturnRental(string $projectId, string $rentalId)
+    {
+        $project = Project::findOrFail($projectId);
+        $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+
+        if ($rental->status !== 'in_use') {
+            return back()->with('error', 'Phiếu thuê không ở trạng thái đang sử dụng.');
+        }
+
+        $rental->update(['status' => 'pending_return']);
+        return back()->with('success', 'Đã gửi yêu cầu trả thiết bị thuê.');
+    }
+
+    // ─── Rental: KT xác nhận trả (pending_return → returned) ───
+    public function confirmReturnRental(string $projectId, string $rentalId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
+
+        $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+
+        if ($rental->status !== 'pending_return') {
+            return back()->with('error', 'Phiếu thuê không ở trạng thái chờ xác nhận trả.');
+        }
+
+        $rental->update([
+            'status' => 'returned',
+        ]);
+        return back()->with('success', 'Đã xác nhận trả thiết bị thuê.');
     }
 
     public function destroyEquipmentRental(string $projectId, string $rentalId)
@@ -3735,24 +3768,70 @@ class CrmProjectsController extends Controller
             'receiver_id'   => $validated['receiver_id'],
             'received_date' => $validated['received_date'],
             'notes'         => $validated['notes'] ?? null,
-            'status'        => 'pending_receive',
+            'status'        => 'draft',
             'created_by'    => $user->id,
         ]);
 
         // Handle file uploads
         $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
 
-        return back()->with('success', 'Đã tạo phiếu mượn thiết bị. Chờ người nhận xác nhận.');
+        return back()->with('success', 'Đã tạo phiếu sử dụng thiết bị.');
     }
 
-    public function confirmReceiveAsset(string $projectId, string $usageId)
+    // ─── Asset Usage: Gửi duyệt (draft/rejected → pending_management) ───
+    public function submitAssetUsage(string $projectId, string $usageId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
-        if ($usage->status !== 'pending_receive') {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ nhận.');
+
+        if (!in_array($usage->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ gửi duyệt được phiếu ở trạng thái Nháp hoặc Từ chối.');
+        }
+
+        $usage->update([
+            'status'           => 'pending_management',
+            'rejection_reason' => null,
+        ]);
+
+        return back()->with('success', 'Đã gửi phiếu để BĐH duyệt.');
+    }
+
+    // ─── Asset Usage: BĐH duyệt (pending_management → pending_accountant) ───
+    public function approveAssetUsageManagement(string $projectId, string $usageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
+
+        $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+
+        if ($usage->status !== 'pending_management') {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ BĐH duyệt.');
+        }
+
+        $usage->update([
+            'status'      => 'pending_accountant',
+            'approved_by' => $user->id,
+            'approved_at' => now(),
+        ]);
+
+        return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán xác nhận.');
+    }
+
+    // ─── Asset Usage: KT xác nhận (pending_accountant → in_use) ───
+    public function confirmAssetUsageAccountant(string $projectId, string $usageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
+
+        $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+
+        if ($usage->status !== 'pending_accountant') {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ Kế toán.');
         }
 
         try {
@@ -3760,29 +3839,55 @@ class CrmProjectsController extends Controller
 
             $usage->update([
                 'status'        => 'in_use',
+                'confirmed_by'  => $user->id,
+                'confirmed_at'  => now(),
                 'received_date' => now()->toDateString(),
             ]);
 
-            // Update asset status
+            // Cập nhật trạng thái thiết bị
             $asset = $usage->asset;
             if ($asset) {
-                $asset->update(['status' => 'in_use', 'assigned_to' => $usage->receiver_id]);
+                $asset->update([
+                    'status' => 'in_use',
+                ]);
             }
 
             DB::commit();
-            return back()->with('success', 'Đã xác nhận nhận thiết bị.');
+            return back()->with('success', 'KT đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
-    public function requestReturnAsset(string $projectId, string $usageId)
+    // ─── Asset Usage: Từ chối ───
+    public function rejectAssetUsage(Request $request, string $projectId, string $usageId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+
+        if (!in_array($usage->status, ['pending_management', 'pending_accountant'])) {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ duyệt.');
+        }
+
+        $request->validate(['rejection_reason' => 'required|string']);
+
+        $usage->update([
+            'status'           => 'rejected',
+            'rejection_reason' => $request->rejection_reason,
+        ]);
+
+        return back()->with('success', 'Đã từ chối phiếu sử dụng thiết bị.');
+    }
+
+    // ─── Asset Usage: Yêu cầu trả (in_use → pending_return) ───
+    public function requestReturnAsset(string $projectId, string $usageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+
         if ($usage->status !== 'in_use') {
             return back()->with('error', 'Phiếu không ở trạng thái đang sử dụng.');
         }
@@ -3791,10 +3896,12 @@ class CrmProjectsController extends Controller
         return back()->with('success', 'Đã gửi yêu cầu trả thiết bị.');
     }
 
+    // ─── Asset Usage: Xác nhận trả (pending_return → returned) — KT only ───
     public function confirmReturnAsset(string $projectId, string $usageId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
         if ($usage->status !== 'pending_return') {
@@ -3809,10 +3916,9 @@ class CrmProjectsController extends Controller
                 'returned_date' => now()->toDateString(),
             ]);
 
-            // Return asset to available
             $asset = $usage->asset;
             if ($asset) {
-                $asset->update(['status' => 'available', 'assigned_to' => null]);
+                $asset->update(['status' => 'available']);
             }
 
             DB::commit();
@@ -3823,6 +3929,7 @@ class CrmProjectsController extends Controller
         }
     }
 
+    // ─── Asset Usage: Xóa (draft/rejected) ───
     public function destroyAssetUsage(string $projectId, string $usageId)
     {
         $project = Project::findOrFail($projectId);
@@ -3830,12 +3937,12 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $project);
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
-        if ($usage->status !== 'pending_receive' && !($user instanceof \App\Models\Admin)) {
-            return back()->with('error', 'Chỉ có thể xóa phiếu khi chưa nhận.');
+        if (!in_array($usage->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ có thể xóa phiếu ở trạng thái Nháp hoặc Từ chối.');
         }
 
         $usage->delete();
-        return back()->with('success', 'Đã xóa phiếu mượn.');
+        return back()->with('success', 'Đã xóa phiếu sử dụng thiết bị.');
     }
     // ===================================================================
 

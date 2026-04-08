@@ -254,7 +254,7 @@ const selectedKeys = computed(() => {
   if (url.startsWith('/operations')) return ['operations-dashboard']
   if (url.startsWith('/cost-groups')) return ['cost-groups']
   if (url.startsWith('/materials')) return ['materials']
-  if (url.startsWith('/equipment')) return ['equipment']
+  if (url.startsWith('/equipment') || url.startsWith('/operations/assets')) return ['equipment']
   if (url.startsWith('/reports')) return ['reports']
   if (url.startsWith('/notifications')) return ['notifications']
   if (url.startsWith('/roles')) return ['roles']
@@ -312,7 +312,6 @@ const menuItems = computed(() => {
       label: 'Tài nguyên & Kho',
       children: [
         { key: 'materials', label: 'Vật tư xây dựng', perm: 'material.view' },
-        { key: 'equipment', label: 'Máy móc & Thiết bị', perm: 'equipment.view' },
         { key: 'suppliers', label: 'Nhà cung cấp', icon: () => h(ShopOutlined), perm: 'material.view' },
       ],
     },
@@ -324,7 +323,7 @@ const menuItems = computed(() => {
         { key: 'operations-dashboard', label: 'Tổng quan dòng tiền' },
         { key: 'reports', label: 'Báo cáo dự án', perm: 'report.view' },
         { key: 'shareholders', label: 'Nguồn vốn / Cổ đông' },
-        { key: 'company-assets', label: 'Quản lý tài sản' },
+        { key: 'equipment', label: 'Kho tài sản & Thiết bị', perm: 'equipment.view' },
         { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_financial.view' },
         { key: 'cost-groups', label: 'Nhóm chi phí', perm: 'cost.view' },
       ],

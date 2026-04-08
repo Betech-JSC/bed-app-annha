@@ -111,7 +111,7 @@ export default function OperationsDashboardScreen() {
           <Text style={styles.sectionTitle}>Quản Lý Tài Sản</Text>
           <TouchableOpacity 
             style={styles.assetPreviewCard}
-            onPress={() => router.push('/operations/assets')}
+            onPress={() => router.push('/equipment')}
           >
             <View style={styles.assetHeader}>
               <View style={styles.assetInfo}>
@@ -193,12 +193,12 @@ export default function OperationsDashboardScreen() {
 
             <TouchableOpacity 
                 style={styles.menuItem}
-                onPress={() => router.push('/operations/assets')}
+                onPress={() => router.push('/equipment')}
             >
               <View style={[styles.menuIcon, { backgroundColor: '#EC489920' }]}>
                 <Ionicons name="construct-outline" size={24} color="#EC4899" />
               </View>
-              <Text style={styles.menuText}>Tài Sản</Text>
+              <Text style={styles.menuText}>Thiết Bị</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 

@@ -7,22 +7,26 @@ export interface Equipment {
   name: string;
   code?: string;
   quantity: number;
+  remaining_quantity?: number;
   category?: string;
   type?: "owned" | "rented";
   brand?: string;
   model?: string;
   serial_number?: string;
   unit?: string;
-  status: "available" | "in_use" | "maintenance" | "retired" | "returned";
+  status: "draft" | "pending_management" | "pending_accountant" | "available" | "in_use" | "maintenance" | "retired" | "returned" | "rejected";
   purchase_price?: number;
   rental_rate_per_day?: number;
   purchase_date?: string;
+  useful_life_months?: number;
+  residual_value?: number;
   maintenance_interval_days?: number;
   notes?: string;
   created_at: string;
   updated_at: string;
   allocations?: EquipmentAllocation[];
   maintenances?: EquipmentMaintenance[];
+  attachments?: Attachment[];
 }
 
 export interface EquipmentAllocation {
@@ -81,8 +85,11 @@ export interface CreateEquipmentData {
   purchase_price?: number;
   rental_rate_per_day?: number;
   purchase_date?: string;
+  useful_life_months?: number;
+  residual_value?: number;
   maintenance_interval_days?: number;
   notes?: string;
+  attachment_ids?: number[];
 }
 
 export const equipmentApi = {
@@ -162,6 +169,24 @@ export const equipmentApi = {
     attachment_ids?: number[];
   }) => {
     const response = await api.post(`/projects/${projectId}/equipment/allocations`, data);
+    return response.data;
+  },
+
+  // Company Warehouse Workflow
+  submit: async (id: number) => {
+    const response = await api.post(`/admin/equipment/${id}/submit`);
+    return response.data;
+  },
+  approveManagement: async (id: number) => {
+    const response = await api.post(`/admin/equipment/${id}/approve-management`);
+    return response.data;
+  },
+  confirmAccountant: async (id: number) => {
+    const response = await api.post(`/admin/equipment/${id}/confirm-accountant`);
+    return response.data;
+  },
+  reject: async (id: number, reason: string) => {
+    const response = await api.post(`/admin/equipment/${id}/reject`, { reason });
     return response.data;
   },
 };

@@ -11,12 +11,15 @@ class EquipmentRental extends Model
 {
     protected $fillable = [
         'uuid', 'project_id', 'equipment_name', 'equipment_id',
+        'quantity', 'unit_price',
         'supplier_id', 'rental_start_date', 'rental_end_date', 'total_cost',
         'status', 'rejection_reason', 'notes', 'created_by',
         'approved_by', 'approved_at', 'confirmed_by', 'confirmed_at', 'cost_id',
     ];
 
     protected $casts = [
+        'quantity'          => 'integer',
+        'unit_price'        => 'decimal:2',
         'total_cost'        => 'decimal:2',
         'rental_start_date' => 'date',
         'rental_end_date'   => 'date',
@@ -39,7 +42,10 @@ class EquipmentRental extends Model
         'draft'              => 'Nháp',
         'pending_management' => 'Chờ BĐH duyệt',
         'pending_accountant' => 'Chờ Kế toán',
-        'completed'          => 'Hoàn tất',
+        'completed'          => 'Hoàn tất thanh toán',
+        'in_use'             => 'Đang sử dụng',
+        'pending_return'     => 'Chờ xác nhận trả',
+        'returned'           => 'Đã hoàn trả',
         'rejected'           => 'Từ chối',
     ];
 

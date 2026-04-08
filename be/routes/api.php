@@ -358,30 +358,37 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/approve-management', [EquipmentRentalController::class, 'approveManagement']);
             Route::post('/{id}/reject-management', [EquipmentRentalController::class, 'rejectManagement']);
             Route::post('/{id}/confirm-accountant', [EquipmentRentalController::class, 'confirmAccountant']);
+            // Return lifecycle
+            Route::post('/{id}/request-return', [EquipmentRentalController::class, 'requestReturn']);
+            Route::post('/{id}/confirm-return', [EquipmentRentalController::class, 'confirmReturn']);
         });
 
-        // ─── Equipment Module V2: Mua thiết bị ───
-        Route::prefix('{projectId}/equipment-purchases')->group(function () {
-            Route::get('/', [EquipmentPurchaseController::class, 'index']);
-            Route::post('/', [EquipmentPurchaseController::class, 'store']);
-            Route::get('/{id}', [EquipmentPurchaseController::class, 'show']);
-            Route::put('/{id}', [EquipmentPurchaseController::class, 'update']);
-            Route::delete('/{id}', [EquipmentPurchaseController::class, 'destroy']);
-            // Workflow
-            Route::post('/{id}/submit', [EquipmentPurchaseController::class, 'submit']);
-            Route::post('/{id}/approve-management', [EquipmentPurchaseController::class, 'approveManagement']);
-            Route::post('/{id}/reject-management', [EquipmentPurchaseController::class, 'rejectManagement']);
-            Route::post('/{id}/confirm-accountant', [EquipmentPurchaseController::class, 'confirmAccountant']);
-        });
+        // ─── Equipment Module V2: Mua thiết bị — DISABLED: Chuyển sang module Kho công ty ───
+        // Route::prefix('{projectId}/equipment-purchases')->group(function () {
+        //     Route::get('/', [EquipmentPurchaseController::class, 'index']);
+        //     Route::post('/', [EquipmentPurchaseController::class, 'store']);
+        //     Route::get('/{id}', [EquipmentPurchaseController::class, 'show']);
+        //     Route::put('/{id}', [EquipmentPurchaseController::class, 'update']);
+        //     Route::delete('/{id}', [EquipmentPurchaseController::class, 'destroy']);
+        //     Route::post('/{id}/submit', [EquipmentPurchaseController::class, 'submit']);
+        //     Route::post('/{id}/approve-management', [EquipmentPurchaseController::class, 'approveManagement']);
+        //     Route::post('/{id}/reject-management', [EquipmentPurchaseController::class, 'rejectManagement']);
+        //     Route::post('/{id}/confirm-accountant', [EquipmentPurchaseController::class, 'confirmAccountant']);
+        // });
 
-        // ─── Equipment Module V2: Sử dụng tài sản ───
+        // ─── Equipment Module V2: Sử dụng thiết bị (3-level approval) ───
         Route::prefix('{projectId}/asset-usages')->group(function () {
             Route::get('/', [AssetUsageController::class, 'index']);
             Route::post('/', [AssetUsageController::class, 'store']);
             Route::get('/{id}', [AssetUsageController::class, 'show']);
+            Route::put('/{id}', [AssetUsageController::class, 'update']);
             Route::delete('/{id}', [AssetUsageController::class, 'destroy']);
-            // 2-way confirmation
-            Route::post('/{id}/confirm-receive', [AssetUsageController::class, 'confirmReceive']);
+            // 3-level workflow
+            Route::post('/{id}/submit', [AssetUsageController::class, 'submit']);
+            Route::post('/{id}/approve-management', [AssetUsageController::class, 'approveManagement']);
+            Route::post('/{id}/reject', [AssetUsageController::class, 'reject']);
+            Route::post('/{id}/confirm-accountant', [AssetUsageController::class, 'confirmAccountant']);
+            // Lifecycle (after approval)
             Route::post('/{id}/request-return', [AssetUsageController::class, 'requestReturn']);
             Route::post('/{id}/confirm-return', [AssetUsageController::class, 'confirmReturn']);
         });
@@ -752,7 +759,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::delete('/{id}', [MaterialController::class, 'destroy']);
     });
 
-    // Equipment (legacy)
+    // Equipment (Company Warehouse)
     Route::prefix('equipment')->group(function () {
         Route::get('/', [EquipmentController::class, 'index']);
         Route::post('/', [EquipmentController::class, 'store']);
@@ -761,6 +768,12 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::get('/{id}/maintenance', [EquipmentController::class, 'getMaintenance']);
         Route::put('/{id}', [EquipmentController::class, 'update']);
         Route::delete('/{id}', [EquipmentController::class, 'destroy']);
+        
+        // Workflow actions (gọi từ mobile app)
+        Route::post('/{id}/submit', [\App\Http\Controllers\Admin\CrmEquipmentController::class, 'submit']);
+        Route::post('/{id}/approve-management', [\App\Http\Controllers\Admin\CrmEquipmentController::class, 'approveManagement']);
+        Route::post('/{id}/confirm-accountant', [\App\Http\Controllers\Admin\CrmEquipmentController::class, 'confirmAccountant']);
+        Route::post('/{id}/reject', [\App\Http\Controllers\Admin\CrmEquipmentController::class, 'reject']);
     });
 
     // Moved Settings: Danh mục thiết bị to settings group above

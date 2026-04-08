@@ -40,3 +40,5 @@ export { default as CurrencyInput } from "./CurrencyInput";
 export { NotificationItem } from "./NotificationItem";
 export { NotificationBadge } from "./NotificationBadge";
 export { KpiStatsChart } from "./charts/KpiStatsChart";
+export { default as PremiumSelect } from "./PremiumSelect";
+export type { SelectOption } from "./PremiumSelect";

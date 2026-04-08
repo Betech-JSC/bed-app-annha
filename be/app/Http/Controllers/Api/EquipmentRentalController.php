@@ -55,15 +55,18 @@ class EquipmentRentalController extends Controller
 
         $validated = $request->validate([
             'equipment_name'        => 'required|string|max:255',
-            'equipment_id' => 'nullable|exists:equipment,id',
+            'equipment_id'          => 'nullable|exists:equipment,id',
             'supplier_id'           => 'nullable|exists:suppliers,id',
             'rental_start_date'     => 'required|date',
             'rental_end_date'       => 'required|date|after:rental_start_date',
-            'total_cost'            => 'required|numeric|min:0',
+            'quantity'              => 'required|integer|min:1',
+            'unit_price'            => 'required|numeric|min:0',
             'notes'                 => 'nullable|string',
             'attachment_ids'        => 'nullable|array',
             'attachment_ids.*'      => 'exists:attachments,id',
         ]);
+
+        $totalCost = $validated['quantity'] * $validated['unit_price'];
 
         try {
             DB::beginTransaction();
@@ -71,11 +74,13 @@ class EquipmentRentalController extends Controller
             $rental = EquipmentRental::create([
                 'project_id'            => $projectId,
                 'equipment_name'        => $validated['equipment_name'],
-                'equipment_id' => $validated['equipment_id'] ?? null,
+                'equipment_id'          => $validated['equipment_id'] ?? null,
+                'quantity'              => $validated['quantity'],
+                'unit_price'            => $validated['unit_price'],
                 'supplier_id'           => $validated['supplier_id'] ?? null,
                 'rental_start_date'     => $validated['rental_start_date'],
                 'rental_end_date'       => $validated['rental_end_date'],
-                'total_cost'            => $validated['total_cost'],
+                'total_cost'            => $totalCost,
                 'notes'                 => $validated['notes'] ?? null,
                 'status'                => 'draft',
                 'created_by'            => $user->id,
@@ -150,25 +155,35 @@ class EquipmentRentalController extends Controller
 
         $validated = $request->validate([
             'equipment_name'        => 'sometimes|string|max:255',
-            'equipment_id' => 'nullable|exists:equipment,id',
+            'equipment_id'          => 'nullable|exists:equipment,id',
             'supplier_id'           => 'nullable|exists:suppliers,id',
             'rental_start_date'     => 'sometimes|date',
             'rental_end_date'       => 'sometimes|date|after:rental_start_date',
-            'total_cost'            => 'sometimes|numeric|min:0',
+            'quantity'              => 'sometimes|integer|min:1',
+            'unit_price'            => 'sometimes|numeric|min:0',
             'notes'                 => 'nullable|string',
             'attachment_ids'        => 'nullable|array',
             'attachment_ids.*'      => 'exists:attachments,id',
         ]);
 
+        if (isset($validated['quantity']) || isset($validated['unit_price'])) {
+            $qty = $validated['quantity'] ?? $rental->quantity;
+            $price = $validated['unit_price'] ?? $rental->unit_price;
+            $validated['total_cost'] = $qty * $price;
+        }
+
         $rental->update($validated);
 
-        // Gắn attachments mới nếu có
-        if (!empty($validated['attachment_ids'])) {
-            \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
-                ->update([
-                    'attachable_type' => EquipmentRental::class,
-                    'attachable_id'   => $rental->id,
+        // Cập nhật Cost liên quan
+        if ($rental->cost_id && (isset($validated['total_cost']) || isset($validated['notes']) || isset($validated['equipment_name']))) {
+            $cost = Cost::find($rental->cost_id);
+            if ($cost) {
+                $cost->update([
+                    'amount'      => $rental->total_cost,
+                    'description' => "Từ phiếu thuê thiết bị #{$rental->id}. " . ($rental->notes ?? ""),
+                    'name'        => "Thuê thiết bị: " . $rental->equipment_name,
                 ]);
+            }
         }
 
         return response()->json([
@@ -305,15 +320,67 @@ class EquipmentRentalController extends Controller
         }
 
         $rental->update([
-            'status'       => 'completed',
+            'status'       => 'in_use',
             'confirmed_by' => $user->id,
             'confirmed_at' => now(),
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Kế toán đã xác nhận chuyển khoản. Phiếu hoàn tất.',
+            'message' => 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.',
             'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments']),
+        ]);
+    }
+
+    /**
+     * Người lập đánh dấu đã trả (in_use → pending_return)
+     */
+    public function requestReturn(string $projectId, string $id)
+    {
+        $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
+
+        if ($rental->status !== 'in_use') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phiếu thuê không ở trạng thái đang sử dụng.',
+            ], 422);
+        }
+
+        $rental->update(['status' => 'pending_return']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã gửi yêu cầu trả thiết bị thuê.',
+            'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name']),
+        ]);
+    }
+
+    /**
+     * KT xác nhận trả (pending_return → returned)
+     */
+    public function confirmReturn(string $projectId, string $id)
+    {
+        $user = auth()->user();
+
+        if (!$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) {
+            return response()->json(['success' => false, 'message' => 'Bạn không có quyền xác nhận trả.'], 403);
+        }
+
+        $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
+
+        if ($rental->status !== 'pending_return') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phiếu thuê không ở trạng thái chờ xác nhận trả.',
+            ], 422);
+        }
+
+        $rental->update(['status' => 'returned']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã xác nhận trả thiết bị thuê.',
+            'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name']),
         ]);
     }
 }

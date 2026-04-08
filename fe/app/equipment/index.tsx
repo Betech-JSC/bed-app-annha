@@ -17,22 +17,34 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { equipmentApi, Equipment, CreateEquipmentData } from "@/api/equipmentApi";
-import { ScreenHeader, DatePickerInput, CurrencyInput, PermissionDenied } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput, PermissionDenied, UniversalFileUploader, PremiumSelect } from "@/components";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Permissions } from "@/constants/Permissions";
 import { usePermissions } from "@/hooks/usePermissions";
 
 const STATUS_LABELS: Record<string, string> = {
-    available: "Sẵn sàng",
+    draft: "Nháp",
+    pending_management: "Chờ BĐH duyệt",
+    pending_accountant: "Chờ Kế toán chi",
+    available: "Trong kho",
     in_use: "Đang sử dụng",
     maintenance: "Bảo trì",
-    retired: "Ngừng sử dụng",
+    retired: "Thanh lý",
+    rejected: "Bị từ chối",
 };
 
 const TYPE_LABELS: Record<string, string> = {
     owned: "Sở hữu",
     rented: "Thuê",
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+    computer: "Máy tính / Thiết bị VP",
+    machinery: "Máy móc công trình",
+    vehicle: "Phương tiện vận tải",
+    furniture: "Nội thất",
+    other: "Khác",
 };
 
 export default function EquipmentScreen() {
@@ -43,18 +55,37 @@ export default function EquipmentScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
     type EquipmentFormData = {
         name: string;
         code: string;
         category: string;
+        brand: string;
+        model: string;
+        serial_number: string;
+        quantity: string;
+        purchase_price: string;
+        purchase_date: string;
+        unit: string;
+        useful_life_months: string;
+        residual_value: string;
         notes: string;
+        attachment_ids: number[];
     };
     const [formData, setFormData] = useState<EquipmentFormData>({
         name: "",
         code: "",
-        category: "",
+        category: "other",
+        brand: "",
+        model: "",
+        serial_number: "",
+        quantity: "1",
+        purchase_price: "0",
+        purchase_date: "",
+        unit: "cái",
+        useful_life_months: "60",
+        residual_value: "0",
         notes: "",
+        attachment_ids: [],
     });
     const [submitting, setSubmitting] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -124,12 +155,18 @@ export default function EquipmentScreen() {
         try {
             setSubmitting(true);
 
-            const response = editingEquipment
-                ? await equipmentApi.updateEquipment(editingEquipment.id, formData)
-                : await equipmentApi.createEquipment(formData);
+            const data = {
+                ...formData,
+                quantity: parseInt(formData.quantity) || 0,
+                purchase_price: parseFloat(formData.purchase_price) || 0,
+                useful_life_months: parseInt(formData.useful_life_months) || 0,
+                residual_value: parseFloat(formData.residual_value) || 0,
+            };
+
+            const response = await equipmentApi.createEquipment(data as any);
 
             if (response.success) {
-                Alert.alert("Thành công", editingEquipment ? "Đã cập nhật thiết bị" : "Đã tạo thiết bị thành công");
+                Alert.alert("Thành công", "Đã tạo thiết bị thành công");
                 setShowCreateModal(false);
                 resetForm();
                 setErrors({});
@@ -141,17 +178,6 @@ export default function EquipmentScreen() {
         } finally {
             setSubmitting(false);
         }
-    };
-
-    const handleEdit = (item: Equipment) => {
-        setEditingEquipment(item);
-        setFormData({
-            name: item.name,
-            code: item.code || "",
-            category: item.category || "",
-            notes: (item as any).notes || "",
-        });
-        setShowCreateModal(true);
     };
 
     const handleDelete = (item: Equipment) => {
@@ -181,12 +207,21 @@ export default function EquipmentScreen() {
     };
 
     const resetForm = () => {
-        setEditingEquipment(null);
         setFormData({
             name: "",
             code: "",
-            category: "",
+            category: "other",
+            brand: "",
+            model: "",
+            serial_number: "",
+            quantity: "1",
+            purchase_price: "0",
+            purchase_date: "",
+            unit: "cái",
+            useful_life_months: "60",
+            residual_value: "0",
             notes: "",
+            attachment_ids: [],
         });
         setErrors({});
         setFocusedField(null);
@@ -194,16 +229,20 @@ export default function EquipmentScreen() {
 
     const getStatusColor = (status: string) => {
         switch (status) {
+            case "pending_management":
+                return "#F59E0B";
+            case "pending_accountant":
+                return "#3B82F6";
             case "available":
                 return "#10B981";
             case "in_use":
-                return "#3B82F6";
+                return "#8B5CF6";
             case "maintenance":
-                return "#F59E0B";
-            case "retired":
                 return "#6B7280";
+            case "rejected":
+                return "#EF4444";
             default:
-                return "#6B7280";
+                return "#9CA3AF";
         }
     };
 
@@ -230,11 +269,21 @@ export default function EquipmentScreen() {
                 </View>
             </View>
             <View style={styles.cardInfo}>
+                <View style={styles.infoRow}>
+                    <Ionicons name="apps-outline" size={14} color="#6B7280" />
+                    <Text style={styles.infoLabel}>Số lượng:</Text>
+                    <Text style={styles.infoValue}>{item.quantity || 1} {item.unit || "cái"}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                    <Ionicons name="cash-outline" size={14} color="#6B7280" />
+                    <Text style={styles.infoLabel}>Giá trị:</Text>
+                    <Text style={styles.infoValue}>{formatCurrency((item.quantity || 1) * (item.purchase_price || 0))}</Text>
+                </View>
                 {item.category && (
                     <View style={styles.infoRow}>
                         <Ionicons name="folder-outline" size={14} color="#6B7280" />
                         <Text style={styles.infoLabel}>Danh mục:</Text>
-                        <Text style={styles.infoValue}>{item.category}</Text>
+                        <Text style={styles.infoValue}>{CATEGORY_LABELS[item.category] || item.category}</Text>
                     </View>
                 )}
             </View>
@@ -246,15 +295,6 @@ export default function EquipmentScreen() {
                     <Ionicons name="eye" size={18} color="#3B82F6" />
                     <Text style={styles.actionText}>Chi tiết</Text>
                 </TouchableOpacity>
-                <PermissionGuard permission={Permissions.EQUIPMENT_UPDATE}>
-                    <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={() => handleEdit(item)}
-                    >
-                        <Ionicons name="pencil" size={18} color="#3B82F6" />
-                        <Text style={styles.actionText}>Sửa</Text>
-                    </TouchableOpacity>
-                </PermissionGuard>
                 <PermissionGuard permission={Permissions.EQUIPMENT_DELETE}>
                     <TouchableOpacity
                         style={[styles.actionButton, styles.deleteButton]}
@@ -272,7 +312,7 @@ export default function EquipmentScreen() {
         <View style={styles.container}>
             {/* ... ScreenHeader ... */}
             <ScreenHeader
-                title="Kho Tài Sản Thiết Bị"
+                title="Kho Thiết Bị"
                 showBackButton
                 rightComponent={
                     <PermissionGuard permission={Permissions.EQUIPMENT_CREATE}>
@@ -351,7 +391,6 @@ export default function EquipmentScreen() {
                 />
             )}
 
-            {/* Create/Edit Modal */}
             <Modal
                 visible={showCreateModal}
                 animationType="slide"
@@ -360,7 +399,7 @@ export default function EquipmentScreen() {
             >
                 <View style={styles.modalContent}>
                     <ScreenHeader
-                        title={editingEquipment ? "Sửa Thiết Bị" : "Tạo Thiết Bị"}
+                        title="Tạo Thiết Bị Mới"
                         leftComponent={
                             <TouchableOpacity onPress={() => setShowCreateModal(false)}>
                                 <Ionicons name="close" size={24} color="#1F2937" />
@@ -372,66 +411,32 @@ export default function EquipmentScreen() {
                         style={styles.modalBody}
                         contentContainerStyle={styles.modalBodyContent}
                         keyboardShouldPersistTaps="handled"
-                        showsVerticalScrollIndicator={true}
-                        nestedScrollEnabled={true}
                     >
-
-
-
-
-                        {/* Thông tin thiết bị */}
+                        {/* 1. Thông tin cơ bản */}
                         <View style={styles.formSection}>
                             <View style={styles.sectionHeader}>
-                                <Ionicons name="construct-outline" size={20} color="#3B82F6" />
-                                <Text style={styles.sectionTitle}>Thông tin thiết bị</Text>
+                                <Ionicons name="information-circle-outline" size={20} color="#3B82F6" />
+                                <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
                             </View>
 
                             <View style={styles.formGroup}>
-                                <View style={styles.labelContainer}>
-                                    <Text style={styles.label}>Tên thiết bị</Text>
-                                    <Text style={styles.required}>*</Text>
-                                </View>
+                                <Text style={styles.label}>Tên thiết bị <Text style={styles.required}>*</Text></Text>
                                 <TextInput
-                                    style={[
-                                        styles.input,
-                                        focusedField === "name" && styles.inputFocused,
-                                        errors.name && styles.inputError,
-                                    ]}
-                                    placeholder="Nhập tên thiết bị"
-                                    placeholderTextColor="#9CA3AF"
+                                    style={[styles.input, focusedField === "name" && styles.inputFocused, errors.name && styles.inputError]}
+                                    placeholder="VD: Máy xúc Hitachi 200"
                                     value={formData.name}
-                                    onChangeText={(text) => {
-                                        setFormData({ ...formData, name: text });
-                                        if (errors.name) setErrors({ ...errors, name: "" });
-                                    }}
+                                    onChangeText={(text) => setFormData({ ...formData, name: text })}
                                     onFocus={() => setFocusedField("name")}
-                                    onBlur={() => {
-                                        setFocusedField(null);
-                                        if (!formData.name || formData.name.trim() === "") {
-                                            setErrors({ ...errors, name: "Tên thiết bị là bắt buộc" });
-                                        }
-                                    }}
+                                    onBlur={() => setFocusedField(null)}
                                 />
-                                {errors.name && (
-                                    <View style={styles.errorContainer}>
-                                        <Ionicons name="alert-circle" size={14} color="#EF4444" />
-                                        <Text style={styles.errorText}>{errors.name}</Text>
-                                    </View>
-                                )}
+                                {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
                             </View>
 
                             <View style={styles.formGroup}>
-                                <View style={styles.labelContainer}>
-                                    <Text style={styles.label}>Mã thiết bị</Text>
-                                    <Text style={styles.optional}>(Tùy chọn)</Text>
-                                </View>
+                                <Text style={styles.label}>Mã định danh</Text>
                                 <TextInput
-                                    style={[
-                                        styles.input,
-                                        focusedField === "code" && styles.inputFocused,
-                                    ]}
-                                    placeholder="Nhập mã thiết bị"
-                                    placeholderTextColor="#9CA3AF"
+                                    style={[styles.input, focusedField === "code" && styles.inputFocused]}
+                                    placeholder="VD: EQ-001"
                                     value={formData.code}
                                     onChangeText={(text) => setFormData({ ...formData, code: text })}
                                     onFocus={() => setFocusedField("code")}
@@ -439,70 +444,164 @@ export default function EquipmentScreen() {
                                 />
                             </View>
 
-                            <View style={styles.formGroup}>
-                                <Text style={styles.label}>Danh mục</Text>
-                                <TextInput
-                                    style={[
-                                        styles.input,
-                                        focusedField === "category" && styles.inputFocused,
-                                    ]}
-                                    placeholder="Nhập danh mục"
-                                    placeholderTextColor="#9CA3AF"
-                                    value={formData.category}
-                                    onChangeText={(text) => setFormData({ ...formData, category: text })}
-                                    onFocus={() => setFocusedField("category")}
-                                    onBlur={() => setFocusedField(null)}
-                                />
+                            <PremiumSelect
+                                label="Danh mục"
+                                value={formData.category}
+                                options={Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }))}
+                                onSelect={(val) => setFormData({ ...formData, category: val as string })}
+                            />
+                        </View>
+
+                        {/* 2. Thông kỹ thuật */}
+                        <View style={styles.formSection}>
+                            <View style={styles.sectionHeader}>
+                                <Ionicons name="construct-outline" size={20} color="#3B82F6" />
+                                <Text style={styles.sectionTitle}>Thông số kỹ thuật</Text>
+                            </View>
+
+                            <View style={styles.grid2Col}>
+                                <View style={[styles.formGroup, { flex: 1 }]}>
+                                    <Text style={styles.label}>Thương hiệu</Text>
+                                    <TextInput
+                                        style={[styles.input, focusedField === "brand" && styles.inputFocused]}
+                                        placeholder="Hitachi, Komatsu..."
+                                        value={formData.brand}
+                                        onChangeText={(text) => setFormData({ ...formData, brand: text })}
+                                        onFocus={() => setFocusedField("brand")}
+                                    />
+                                </View>
+                                <View style={[styles.formGroup, { flex: 1, marginLeft: 12 }]}>
+                                    <Text style={styles.label}>Model</Text>
+                                    <TextInput
+                                        style={[styles.input, focusedField === "model" && styles.inputFocused]}
+                                        placeholder="Zaxis 200..."
+                                        value={formData.model}
+                                        onChangeText={(text) => setFormData({ ...formData, model: text })}
+                                        onFocus={() => setFocusedField("model")}
+                                    />
+                                </View>
                             </View>
 
                             <View style={styles.formGroup}>
-                                <Text style={styles.label}>Mô tả / Ghi chú</Text>
+                                <Text style={styles.label}>Số Serial / Khung</Text>
                                 <TextInput
-                                    style={[
-                                        styles.input,
-                                        styles.textArea,
-                                        focusedField === "notes" && styles.inputFocused,
-                                    ]}
-                                    placeholder="Nhập mô tả chi tiết"
-                                    placeholderTextColor="#9CA3AF"
-                                    value={formData.notes}
-                                    onChangeText={(text) => setFormData({ ...formData, notes: text })}
-                                    onFocus={() => setFocusedField("notes")}
-                                    onBlur={() => setFocusedField(null)}
-                                    multiline
-                                    numberOfLines={4}
-                                    textAlignVertical="top"
+                                    style={[styles.input, focusedField === "serial_number" && styles.inputFocused]}
+                                    placeholder="Nhập số máy"
+                                    value={formData.serial_number}
+                                    onChangeText={(text) => setFormData({ ...formData, serial_number: text })}
+                                    onFocus={() => setFocusedField("serial_number")}
                                 />
                             </View>
                         </View>
 
-                        {/* Submit Button */}
-                        <View style={styles.buttonContainer}>
-                            <TouchableOpacity
-                                style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-                                onPress={handleCreate}
-                                disabled={submitting}
-                                activeOpacity={0.8}
-                            >
-                                {submitting ? (
-                                    <View style={styles.buttonContent}>
-                                        <ActivityIndicator color="#FFFFFF" size="small" />
-                                        <Text style={styles.submitButtonText}>Đang xử lý...</Text>
-                                    </View>
-                                ) : (
-                                    <View style={styles.buttonContent}>
-                                        <Ionicons
-                                            name={editingEquipment ? "checkmark-circle" : "add-circle"}
-                                            size={20}
-                                            color="#FFFFFF"
-                                        />
-                                        <Text style={styles.submitButtonText}>
-                                            {editingEquipment ? "Cập Nhật" : "Tạo Mới"}
-                                        </Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
+                        {/* 3. Mua sắm & Giá trị */}
+                        <View style={styles.formSection}>
+                            <View style={styles.sectionHeader}>
+                                <Ionicons name="receipt-outline" size={20} color="#3B82F6" />
+                                <Text style={styles.sectionTitle}>Mua sắm & Giá trị</Text>
+                            </View>
+
+                            <View style={styles.grid2Col}>
+                                <View style={[styles.formGroup, { flex: 1 }]}>
+                                    <Text style={styles.label}>Số lượng</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        keyboardType="numeric"
+                                        value={formData.quantity}
+                                        onChangeText={(text) => setFormData({ ...formData, quantity: text })}
+                                    />
+                                </View>
+                                <View style={[styles.formGroup, { flex: 1, marginLeft: 12 }]}>
+                                    <Text style={styles.label}>Đơn vị</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Cái, Bộ..."
+                                        value={formData.unit}
+                                        onChangeText={(text) => setFormData({ ...formData, unit: text })}
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.formGroup}>
+                                <Text style={styles.label}>Đơn giá (VNĐ)</Text>
+                                <CurrencyInput
+                                    value={parseFloat(formData.purchase_price) || 0}
+                                    onChangeText={(val) => setFormData({ ...formData, purchase_price: val.toString() })}
+                                />
+                            </View>
+
+                            <View style={styles.formGroup}>
+                                <Text style={styles.label}>Ngày mua</Text>
+                                <DatePickerInput
+                                    value={formData.purchase_date}
+                                    onDateChange={(date) => setFormData({ ...formData, purchase_date: date })}
+                                />
+                            </View>
+
+                            <View style={styles.grid2Col}>
+                                <View style={[styles.formGroup, { flex: 1 }]}>
+                                    <Text style={styles.label}>Sử dụng (Tháng)</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        keyboardType="numeric"
+                                        value={formData.useful_life_months}
+                                        onChangeText={(text) => setFormData({ ...formData, useful_life_months: text })}
+                                    />
+                                </View>
+                                <View style={[styles.formGroup, { flex: 1, marginLeft: 12 }]}>
+                                    <Text style={styles.label}>Thanh lý (VNĐ)</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        keyboardType="numeric"
+                                        value={formData.residual_value}
+                                        onChangeText={(text) => setFormData({ ...formData, residual_value: text })}
+                                    />
+                                </View>
+                            </View>
                         </View>
+
+                        {/* 4. Hồ sơ đính kèm */}
+                        <View style={styles.formSection}>
+                            <View style={styles.sectionHeader}>
+                                <Ionicons name="attach" size={20} color="#3B82F6" />
+                                <Text style={styles.sectionTitle}>Chứng từ đính kèm</Text>
+                            </View>
+                            <UniversalFileUploader
+                                multiple={true}
+                                onUploadComplete={(files) => {
+                                    setFormData(prev => ({ 
+                                        ...prev, 
+                                        attachment_ids: files.map(f => f.attachment_id || f.id).filter(id => !!id) as number[]
+                                    }));
+                                }}
+                            />
+                        </View>
+
+                        {/* 5. Ghi chú */}
+                        <View style={styles.formGroup}>
+                            <Text style={styles.label}>Ghi chú thêm</Text>
+                            <TextInput
+                                style={[styles.input, styles.textArea]}
+                                multiline
+                                numberOfLines={3}
+                                placeholder="Các thông tin lưu ý khác..."
+                                value={formData.notes}
+                                onChangeText={(text) => setFormData({ ...formData, notes: text })}
+                            />
+                        </View>
+
+                        {/* Submit */}
+                        <TouchableOpacity
+                            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+                            onPress={handleCreate}
+                            disabled={submitting}
+                        >
+                            {submitting ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={styles.submitButtonText}>Tạo Thiết Bị Mới</Text>
+                            )}
+                        </TouchableOpacity>
                     </ScrollView>
                 </View>
             </Modal>
@@ -644,7 +743,7 @@ const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
         backgroundColor: "#F9FAFB",
-        paddingTop: 40,
+        paddingTop: Platform.OS === "ios" ? 40 : 0,
     },
     modalContent: {
         flex: 1,
@@ -882,6 +981,10 @@ const styles = StyleSheet.create({
     filterChipTextActive: {
         color: '#3B82F6',
         fontWeight: '600',
+    },
+    grid2Col: {
+        flexDirection: "row",
+        alignItems: "center",
     },
 });
 

@@ -69,7 +69,7 @@ export default function CreateAssetUsageScreen() {
                 notes: notes || undefined,
             });
             if (res.success) {
-                Alert.alert("Thành công", "Đã tạo phiếu mượn thiết bị.", [
+                Alert.alert("Thành công", "Phiếu đã được tạo (Nháp). Hãy gửi duyệt khi sẵn sàng.", [
                     { text: "OK", onPress: () => router.back() }
                 ]);
             }
@@ -178,7 +178,9 @@ export default function CreateAssetUsageScreen() {
                                             <Text style={styles.modalItemSub}>{item.asset_code} • {item.category || "—"}</Text>
                                         </View>
                                         <View style={styles.stockBadge}>
-                                            <Text style={styles.stockText}>Còn trong kho</Text>
+                                            <Text style={styles.stockText}>
+                                                Còn {item.remaining_quantity ?? item.quantity} {item.unit || 'cái'}
+                                            </Text>
                                         </View>
                                     </TouchableOpacity>
                                 )}
