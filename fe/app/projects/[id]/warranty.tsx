@@ -454,78 +454,208 @@ export default function WarrantyScreen() {
   };
 
   const renderWarrantyItem = (item: ProjectWarranty) => {
+    const isCustomer = project?.customer_id?.toString() === user?.id?.toString();
+    const canApprove = hasPermission(Permissions.WARRANTY_APPROVE) || isCustomer;
+
     return (
-      <TouchableOpacity 
-        key={item.uuid} 
-        style={styles.card}
-        onPress={() => setSelectedWarranty(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.infoRow}>
-            <Ionicons name="shield-checkmark" size={20} color="#6366F1" />
-            <Text style={styles.cardTitle}>Bảo hành #{item.id}</Text>
+      <View key={item.uuid} style={styles.card}>
+        <TouchableOpacity 
+          onPress={() => setSelectedWarranty(item)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Phiếu Bảo Hành</Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusColors[item.status] + "15", borderColor: statusColors[item.status] + "30" }]}>
+              <Text style={[styles.statusText, { color: statusColors[item.status] }]}>{statusLabels[item.status]}</Text>
+            </View>
+            <View style={styles.headerRightActions}>
+              {item.status === "draft" && hasPermission(Permissions.WARRANTY_UPDATE) && (
+                <TouchableOpacity onPress={() => openEditWarranty(item)} style={styles.headerIconBtn}>
+                  <Ionicons name="create-outline" size={20} color="#3B82F6" />
+                </TouchableOpacity>
+              )}
+              {hasPermission(Permissions.WARRANTY_DELETE) && (
+                <TouchableOpacity onPress={() => handleDeleteWarranty(item.uuid)} style={styles.headerIconBtn}>
+                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-          <View style={[styles.statusBadge, { 
-            backgroundColor: (statusColors[item.status] || '#64748B') + '10',
-            borderColor: (statusColors[item.status] || '#64748B') + '25',
-          }]}>
-            <Text style={[styles.statusText, { color: statusColors[item.status] || '#64748B' }]}>
-              {statusLabels[item.status] || item.status}
-            </Text>
+          
+          <View style={styles.cardBody}>
+            <View style={styles.infoRow}>
+              <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Ngày bàn giao:</Text>
+              <Text style={styles.infoValue}>{format(new Date(item.handover_date), "dd/MM/yyyy")}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Ionicons name="time-outline" size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Thời hạn:</Text>
+              <Text style={styles.infoValue}>
+                {format(new Date(item.warranty_start_date), "dd/MM/yyyy")} - {format(new Date(item.warranty_end_date), "dd/MM/yyyy")}
+              </Text>
+            </View>
+
+            <View style={styles.contentBox}>
+              <Text style={styles.contentText} numberOfLines={2}>{item.warranty_content}</Text>
+            </View>
           </View>
-        </View>
-        
-        <View style={styles.cardBody}>
-          <View style={styles.infoRow}>
-            <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-            <Text style={styles.infoLabel}>Ngày bàn giao:</Text>
-            <Text style={styles.infoValue}>{format(new Date(item.handover_date), "dd/MM/yyyy")}</Text>
+        </TouchableOpacity>
+
+        {item.status === "draft" && hasPermission(Permissions.WARRANTY_UPDATE) && (
+          <View style={styles.actionRow}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => handleSubmitWarranty(item.uuid)}
+            >
+              <LinearGradient
+                colors={buttonGradients.submit}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gradientActionBtn}
+              >
+                <Text style={styles.actionButtonText}>Gửi cho khách hàng duyệt</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.contentText} numberOfLines={2}>{item.warranty_content}</Text>
-        </View>
-      </TouchableOpacity>
+        )}
+
+        {item.status === "pending_customer" && canApprove && (
+          <View style={styles.actionRow}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => handleReject(item.uuid)}
+            >
+              <LinearGradient
+                colors={buttonGradients.reject}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gradientActionBtn}
+              >
+                <Text style={styles.actionButtonText}>Từ chối</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => handleApprove(item.uuid)}
+            >
+              <LinearGradient
+                colors={buttonGradients.approve}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gradientActionBtn}
+              >
+                <Text style={styles.actionButtonText}>Duyệt</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
     );
   };
 
   const renderMaintenanceItem = (item: ProjectMaintenance) => {
+    const isCustomer = project?.customer_id?.toString() === user?.id?.toString();
+    const canApprove = hasPermission(Permissions.WARRANTY_APPROVE) || isCustomer;
+
     return (
-      <TouchableOpacity 
-        key={item.uuid} 
-        style={styles.card}
-        onPress={() => setSelectedMaintenance(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.infoRow}>
-            <Ionicons name="construct" size={20} color="#F59E0B" />
-            <Text style={styles.cardTitle}>Bảo trì #{item.id}</Text>
+      <View key={item.uuid} style={styles.card}>
+        <TouchableOpacity 
+          onPress={() => setSelectedMaintenance(item)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Lịch Bảo Trì</Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusColors[item.status] + "15", borderColor: statusColors[item.status] + "30" }]}>
+              <Text style={[styles.statusText, { color: statusColors[item.status] }]}>{statusLabels[item.status] || "Hoàn thành"}</Text>
+            </View>
+            <View style={styles.headerRightActions}>
+              {item.status === "draft" && hasPermission(Permissions.WARRANTY_UPDATE) && (
+                <TouchableOpacity onPress={() => openEditMaintenance(item)} style={styles.headerIconBtn}>
+                  <Ionicons name="create-outline" size={20} color="#3B82F6" />
+                </TouchableOpacity>
+              )}
+              {hasPermission(Permissions.WARRANTY_DELETE) && (
+                <TouchableOpacity onPress={() => handleDeleteMaintenance(item.uuid)} style={styles.headerIconBtn}>
+                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-          <View style={[styles.statusBadge, { 
-            backgroundColor: (statusColors[item.status] || '#6B7280') + '10',
-            borderColor: (statusColors[item.status] || '#6B7280') + '25',
-          }]}>
-            <Text style={[styles.statusText, { color: statusColors[item.status] || '#6B7280' }]}>
-              {statusLabels[item.status] || item.status}
-            </Text>
+          
+          <View style={styles.cardBody}>
+            <View style={styles.infoRow}>
+              <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Ngày thực hiện:</Text>
+              <Text style={styles.infoValue}>{format(new Date(item.maintenance_date), "dd/MM/yyyy")}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Ionicons name="repeat-outline" size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Lần tiếp theo:</Text>
+              <Text style={[styles.infoValue, { color: "#3B82F6", fontWeight: "bold" }]}>
+                {format(new Date(item.next_maintenance_date), "dd/MM/yyyy")}
+              </Text>
+            </View>
+
+            {item.notes && (
+              <View style={styles.notesBox}>
+                <Text style={styles.notesText}>{item.notes}</Text>
+              </View>
+            )}
           </View>
-        </View>
-        
-        <View style={styles.cardBody}>
-          <View style={styles.infoRow}>
-            <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-            <Text style={styles.infoLabel}>Ngày thực hiện:</Text>
-            <Text style={styles.infoValue}>{format(new Date(item.maintenance_date), "dd/MM/yyyy")}</Text>
+        </TouchableOpacity>
+
+        {item.status === "draft" && hasPermission(Permissions.WARRANTY_UPDATE) && (
+          <View style={styles.actionRow}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => handleSubmitMaintenance(item.uuid)}
+            >
+              <LinearGradient
+                colors={buttonGradients.submit}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gradientActionBtn}
+              >
+                <Text style={styles.actionButtonText}>Gửi cho khách hàng duyệt</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="repeat-outline" size={16} color="#F59E0B" />
-            <Text style={styles.infoLabel}>Kế hoạch tiếp:</Text>
-            <Text style={[styles.infoValue, { color: "#F59E0B", fontWeight: "bold" }]}>
-              {format(new Date(item.next_maintenance_date), "dd/MM/yyyy")}
-            </Text>
+        )}
+
+        {item.status === "pending_customer" && canApprove && (
+          <View style={styles.actionRow}>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => handleRejectMaintenance(item.uuid)}
+            >
+              <LinearGradient
+                colors={buttonGradients.reject}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gradientActionBtn}
+              >
+                <Text style={styles.actionButtonText}>Từ chối</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => handleApproveMaintenance(item.uuid)}
+            >
+              <LinearGradient
+                colors={buttonGradients.approve}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gradientActionBtn}
+              >
+                <Text style={styles.actionButtonText}>Duyệt</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
-        </View>
-      </TouchableOpacity>
+        )}
+      </View>
     );
   };
 
@@ -807,293 +937,290 @@ export default function WarrantyScreen() {
         </View>
       </Modal>
 
-      {/* Detail Drawer (Drawer-style Modal) */}
-      <Modal
-        visible={!!(selectedWarranty || selectedMaintenance)}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => { setSelectedWarranty(null); setSelectedMaintenance(null); }}
-      >
-        <TouchableOpacity 
-          style={styles.drawerBackdrop} 
-          activeOpacity={1} 
-          onPress={() => { setSelectedWarranty(null); setSelectedMaintenance(null); }}
-        />
-        <View style={styles.drawerContainer}>
-          <View style={styles.drawerIndicator} />
+      {/* Warranty Detail Modal */}
+      <Modal visible={!!selectedWarranty} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSelectedWarranty(null)}>
+        <SafeAreaView style={styles.fullscreenModalContainer}>
           <View style={styles.fullscreenHeader}>
-            <Text style={styles.fullscreenHeaderTitle}>Chi tiết công việc</Text>
-            <TouchableOpacity onPress={() => { setSelectedWarranty(null); setSelectedMaintenance(null); }}>
-              <Ionicons name="close-circle" size={28} color="#9CA3AF" />
+            <TouchableOpacity onPress={() => setSelectedWarranty(null)} style={styles.closeButton}>
+              <Ionicons name="close" size={28} color="#1F2937" />
             </TouchableOpacity>
+            <Text style={styles.fullscreenTitle}>Chi tiết phiếu bảo hành</Text>
+            <View style={{ width: 44 }} />
           </View>
 
-          <View style={styles.fullscreenBody}>
-            <ScrollView contentContainerStyle={styles.fullscreenScrollContent} showsVerticalScrollIndicator={false}>
-              {selectedWarranty && (
-                <View style={styles.fullscreenSection}>
-                   <View style={styles.fullscreenHeaderSection}>
-                    <View style={styles.fullscreenIconContainer}>
-                      <Ionicons name="shield-checkmark-outline" size={32} color="#FFFFFF" />
-                    </View>
-                    <View>
-                      <Text style={styles.fullscreenTitle}>Phiếu Bảo Hành #{selectedWarranty.id}</Text>
-                      <View style={[styles.statusBadge, { 
-                        backgroundColor: (statusColors[selectedWarranty.status] || '#64748B') + '15',
-                        borderColor: (statusColors[selectedWarranty.status] || '#64748B') + '40'
-                      }]}>
-                        <Text style={[styles.statusText, { color: statusColors[selectedWarranty.status] || '#64748B' }]}>
-                          {statusLabels[selectedWarranty.status] || selectedWarranty.status}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
+          {selectedWarranty && (
+            <ScrollView style={styles.fullscreenBody}>
+              <View style={[styles.detailStatusBadge, { backgroundColor: statusColors[selectedWarranty.status] + "20", borderColor: statusColors[selectedWarranty.status] + "40" }]}>
+                <Text style={[styles.detailStatusText, { color: statusColors[selectedWarranty.status] }]}>{statusLabels[selectedWarranty.status] || "Hoàn thành"}</Text>
+              </View>
 
-                  <View style={styles.fullscreenInfoCard}>
-                    <View style={styles.fullscreenInfoRow}>
-                      <Ionicons name="calendar-outline" size={18} color="#6366F1" />
-                      <Text style={styles.fullscreenInfoLabel}>Ngày bàn giao:</Text>
-                      <Text style={styles.fullscreenInfoValue}>{format(new Date(selectedWarranty.handover_date), "dd/MM/yyyy")}</Text>
-                    </View>
-                    <View style={styles.fullscreenInfoRow}>
-                      <Ionicons name="time-outline" size={18} color="#6366F1" />
-                      <Text style={styles.fullscreenInfoLabel}>Thời hạn BH:</Text>
-                      <Text style={styles.fullscreenInfoValue}>{format(new Date(selectedWarranty.warranty_start_date), "dd/MM/yyyy")} → {format(new Date(selectedWarranty.warranty_end_date), "dd/MM/yyyy")}</Text>
-                    </View>
-                  </View>
+              <View style={styles.infoCard}>
+                <View style={styles.fullscreenInfoRow}>
+                  <Text style={styles.fullscreenInfoLabel}>Ngày bàn giao</Text>
+                  <Text style={styles.fullscreenInfoValue}>{format(new Date(selectedWarranty.handover_date), "dd/MM/yyyy")}</Text>
+                </View>
+                <View style={styles.fullscreenDivider} />
+                <View style={styles.fullscreenInfoRow}>
+                  <Text style={styles.fullscreenInfoLabel}>Ngày bắt đầu</Text>
+                  <Text style={styles.fullscreenInfoValue}>{format(new Date(selectedWarranty.warranty_start_date), "dd/MM/yyyy")}</Text>
+                </View>
+                <View style={styles.fullscreenDivider} />
+                <View style={styles.fullscreenInfoRow}>
+                  <Text style={styles.fullscreenInfoLabel}>Ngày kết thúc</Text>
+                  <Text style={styles.fullscreenInfoValue}>{format(new Date(selectedWarranty.warranty_end_date), "dd/MM/yyyy")}</Text>
+                </View>
+                <View style={styles.fullscreenDivider} />
+                <View style={styles.fullscreenInfoRow}>
+                  <Text style={styles.fullscreenInfoLabel}>Người tạo</Text>
+                  <Text style={styles.fullscreenInfoValue}>{selectedWarranty.creator?.name || "N/A"}</Text>
+                </View>
+              </View>
 
-                  <View style={styles.fullscreenContentSection}>
-                    <Text style={styles.fullscreenLabel}>Nội dung bảo hành:</Text>
-                    <Text style={styles.fullscreenText}>{selectedWarranty.warranty_content}</Text>
-                  </View>
+              <View style={styles.descriptionSection}>
+                <Text style={styles.fullscreenSectionTitle}>Nội dung bảo hành</Text>
+                <View style={styles.readOnlyDescription}>
+                  <Text style={styles.descriptionText}>{selectedWarranty.warranty_content}</Text>
+                </View>
+              </View>
 
-                   <View style={styles.fullscreenFilesSection}>
-                    <Text style={styles.fullscreenLabel}>Hồ sơ đính kèm:</Text>
-                    {selectedWarranty.attachments && selectedWarranty.attachments.length > 0 ? (
-                      <View style={styles.fullscreenFileList}>
-                        {selectedWarranty.attachments.map((file: any, index: number) => (
-                          <TouchableOpacity 
-                            key={file.id || index} 
-                            style={styles.fullscreenFileItem}
-                            onPress={() => {
-                               if (file.type === 'image' || (file.original_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.original_name))) {
-                                setActiveAttachments(selectedWarranty.attachments!.map(a => ({ uri: a.file_url || a.url, name: a.original_name })));
-                                setInitialImageIndex(index);
-                                setImageViewerVisible(true);
-                              } else {
-                                Linking.openURL(file.file_url || file.url || "").catch(err => {
-                                  console.error("Failed to open URL:", err);
-                                  Alert.alert("Lỗi", "Không thể mở tệp này");
-                                });
-                              }
-                            }}
-                          >
-                            <Ionicons 
-                              name={file.type === 'image' || (file.original_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.original_name)) ? "image-outline" : "document-outline"} 
-                              size={24} 
-                              color="#6366F1" 
-                            />
-                            <Text style={styles.attachmentName} numberOfLines={1}>{file.original_name}</Text>
-                            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    ) : (
-                       <Text style={styles.emptyTextSmall}>Không có hồ sơ đính kèm</Text>
-                    )}
+              {selectedWarranty.notes && (
+                <View style={styles.descriptionSection}>
+                  <Text style={styles.fullscreenSectionTitle}>Ghi chú</Text>
+                  <View style={styles.readOnlyDescription}>
+                    <Text style={styles.descriptionText}>{selectedWarranty.notes}</Text>
                   </View>
                 </View>
               )}
 
-              {selectedMaintenance && (
-                <View style={styles.fullscreenSection}>
-                  <View style={styles.fullscreenHeaderSection}>
-                    <View style={[styles.fullscreenIconContainer, { backgroundColor: '#F59E0B' }]}>
-                      <Ionicons name="construct-outline" size={32} color="#FFFFFF" />
-                    </View>
-                    <View>
-                      <Text style={styles.fullscreenTitle}>Phiếu Bảo Trì #{selectedMaintenance.id}</Text>
-                      <View style={[styles.statusBadge, { 
-                        backgroundColor: (statusColors[selectedMaintenance.status] || '#6B7280') + '15',
-                        borderColor: (statusColors[selectedMaintenance.status] || '#6B7280') + '40'
-                      }]}>
-                        <Text style={[styles.statusText, { color: statusColors[selectedMaintenance.status] || '#6B7280' }]}>
-                          {statusLabels[selectedMaintenance.status] || selectedMaintenance.status}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.fullscreenInfoCard}>
-                    <View style={styles.fullscreenInfoRow}>
-                      <Ionicons name="calendar-outline" size={18} color="#F59E0B" />
-                      <Text style={styles.fullscreenInfoLabel}>Ngày thực hiện:</Text>
-                      <Text style={styles.fullscreenInfoValue}>{format(new Date(selectedMaintenance.maintenance_date), "dd/MM/yyyy")}</Text>
-                    </View>
-                    <View style={styles.fullscreenInfoRow}>
-                      <Ionicons name="notifications-outline" size={18} color="#F59E0B" />
-                      <Text style={styles.fullscreenInfoLabel}>Bảo trì tiếp theo:</Text>
-                      <Text style={[styles.fullscreenInfoValue, { color: '#F59E0B', fontWeight: 'bold' }]}>
-                        {format(new Date(selectedMaintenance.next_maintenance_date), "dd/MM/yyyy")}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.fullscreenContentSection}>
-                    <Text style={styles.fullscreenLabel}>Ghi chú:</Text>
-                    <Text style={styles.fullscreenText}>{selectedMaintenance.notes || "Không có ghi chú"}</Text>
-                  </View>
-
-                  <View style={styles.fullscreenFilesSection}>
-                    <Text style={styles.fullscreenLabel}>Hình ảnh & Hồ sơ bảo trì:</Text>
-                    {selectedMaintenance.attachments && selectedMaintenance.attachments.length > 0 ? (
-                      <View style={styles.fullscreenFileList}>
-                        {selectedMaintenance.attachments.map((file: any, index: number) => (
-                          <TouchableOpacity 
-                            key={file.id || index} 
-                            style={styles.fullscreenFileItem}
-                            onPress={() => {
-                              if (file.type === 'image' || (file.original_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.original_name))) {
-                                setActiveAttachments(selectedMaintenance.attachments!.map(a => ({ uri: a.file_url || a.url, name: a.original_name })));
-                                setInitialImageIndex(index);
-                                setImageViewerVisible(true);
-                              } else {
-                                Linking.openURL(file.file_url || file.url || "").catch(err => {
-                                  console.error("Failed to open URL:", err);
-                                  Alert.alert("Lỗi", "Không thể mở tệp này");
-                                });
-                              }
-                            }}
-                          >
-                            <Ionicons 
-                              name={file.type === 'image' || (file.original_name && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.original_name)) ? "image-outline" : "document-outline"} 
-                              size={24} 
-                              color="#6366F1" 
-                            />
-                            <Text style={styles.attachmentName} numberOfLines={1}>{file.original_name}</Text>
-                            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    ) : (
-                      <Text style={styles.emptyTextSmall}>Không có hồ sơ đính kèm</Text>
-                    )}
+              {selectedWarranty.attachments && selectedWarranty.attachments.length > 0 && (
+                <View style={styles.descriptionSection}>
+                  <Text style={styles.sectionTitle}>Tài liệu đính kèm ({selectedWarranty.attachments.length})</Text>
+                  <View style={styles.attachmentList}>
+                    {selectedWarranty.attachments.map((file, idx) => (
+                      <TouchableOpacity 
+                        key={idx} 
+                        style={styles.attachmentItem}
+                        onPress={() => {
+                          const allFiles = selectedWarranty.attachments!;
+                          if (file.type === "image" || (file.original_name && /\.(jpg|jpeg|png|gif)$/i.test(file.original_name)) || (file.mime_type && file.mime_type.startsWith('image/'))) {
+                            const imageFiles = allFiles.filter(f => f.type === "image" || (f.original_name && /\.(jpg|jpeg|png|gif)$/i.test(f.original_name)) || (f.mime_type && f.mime_type.startsWith('image/')));
+                            const index = imageFiles.findIndex(f => f.uuid === file.uuid || f.id === file.id);
+                            setActiveAttachments(imageFiles.map(f => ({ uri: f.file_url || f.url, name: f.original_name })));
+                            setInitialImageIndex(index !== -1 ? index : 0);
+                            setImageViewerVisible(true);
+                          } else if (file.file_url || file.url) {
+                            Linking.openURL(file.file_url || file.url || "").catch(err => {
+                              console.error("Failed to open URL:", err);
+                              Alert.alert("Lỗi", "Không thể mở tệp này");
+                            });
+                          }
+                        }}
+                      >
+                        <Ionicons 
+                          name={file.type === 'image' || (file.original_name && /\.(jpg|jpeg|png|gif)$/i.test(file.original_name)) ? "image-outline" : "document-outline"} 
+                          size={24} 
+                          color="#3B82F6" 
+                        />
+                        <Text style={styles.attachmentName} numberOfLines={1}>{file.original_name}</Text>
+                        <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 </View>
               )}
             </ScrollView>
-          </View>
+          )}
 
-          {/* Drawer Footer */}
-          <View style={[styles.fullscreenFooter, { paddingBottom: insets.bottom + 16 }]}>
-            {/* Maintenance Approval */}
-            {selectedMaintenance && selectedMaintenance.status === "pending_customer" && (hasPermission(Permissions.WARRANTY_APPROVE) || project?.customer_id?.toString() === user?.id?.toString()) && (
+          <View style={styles.fullscreenFooter}>
+            {selectedWarranty && selectedWarranty.status === "pending_customer" && (hasPermission(Permissions.WARRANTY_APPROVE) || project?.customer_id?.toString() === user?.id?.toString()) ? (
               <View style={styles.footerActionRow}>
                 <TouchableOpacity 
                   style={styles.footerActionButton} 
-                  onPress={() => {
-                    handleRejectMaintenance(selectedMaintenance.uuid);
-                    setSelectedMaintenance(null);
-                  }}
+                  onPress={() => handleReject(selectedWarranty.uuid)}
                 >
-                  <LinearGradient colors={buttonGradients.reject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientButton}>
+                  <LinearGradient
+                    colors={buttonGradients.reject}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.gradientButton}
+                  >
                     <Text style={styles.footerActionText}>Từ chối</Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={styles.footerActionButton} 
-                  onPress={() => {
-                    handleApproveMaintenance(selectedMaintenance.uuid);
-                    setSelectedMaintenance(null);
-                  }}
+                  onPress={() => handleApprove(selectedWarranty.uuid)}
                 >
-                  <LinearGradient colors={buttonGradients.approve} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientButton}>
+                  <LinearGradient
+                    colors={buttonGradients.approve}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.gradientButton}
+                  >
                     <Text style={styles.footerActionText}>Duyệt</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
+            ) : (
+              <TouchableOpacity style={styles.footerSaveButton} onPress={() => setSelectedWarranty(null)}>
+                <LinearGradient
+                  colors={buttonGradients.close}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.gradientButton}
+                >
+                  <Text style={styles.footerSaveText}>Đóng</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             )}
-
-            {/* Warranty Approval */}
-            {selectedWarranty && selectedWarranty.status === "pending_customer" && (hasPermission(Permissions.WARRANTY_APPROVE) || project?.customer_id?.toString() === user?.id?.toString()) && (
-              <View style={styles.footerActionRow}>
-                <TouchableOpacity 
-                  style={styles.footerActionButton} 
-                  onPress={() => {
-                    handleReject(selectedWarranty.uuid);
-                    setSelectedWarranty(null);
-                  }}
-                >
-                  <LinearGradient colors={buttonGradients.reject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientButton}>
-                    <Text style={styles.footerActionText}>Từ chối</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.footerActionButton} 
-                  onPress={() => {
-                    handleApprove(selectedWarranty.uuid);
-                    setSelectedWarranty(null);
-                  }}
-                >
-                  <LinearGradient colors={buttonGradients.approve} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientButton}>
-                    <Text style={styles.footerActionText}>Duyệt</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* General Edit/Submit Buttons */}
-            {((selectedWarranty && selectedWarranty.status === 'draft') || (selectedMaintenance && selectedMaintenance.status === 'draft')) && (
-              <View style={styles.footerActionRow}>
-                <TouchableOpacity 
-                  style={styles.footerActionButton} 
-                  onPress={() => {
-                    if (selectedWarranty) {
-                      openEditWarranty(selectedWarranty);
-                      setSelectedWarranty(null);
-                    } else if (selectedMaintenance) {
-                      openEditMaintenance(selectedMaintenance);
-                      setSelectedMaintenance(null);
-                    }
-                  }}
-                >
-                  <LinearGradient colors={buttonGradients.submit} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientButton}>
-                    <Text style={styles.footerActionText}>Chỉnh sửa</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.footerActionButton} 
-                  onPress={() => {
-                    if (selectedWarranty) {
-                      handleSubmitWarranty(selectedWarranty.uuid);
-                      setSelectedWarranty(null);
-                    } else if (selectedMaintenance) {
-                      handleSubmitMaintenance(selectedMaintenance.uuid);
-                      setSelectedMaintenance(null);
-                    }
-                  }}
-                >
-                  <LinearGradient colors={buttonGradients.approve} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientButton}>
-                     <Text style={styles.footerActionText}>Gửi duyệt</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <TouchableOpacity style={styles.footerSaveButton} onPress={() => { setSelectedWarranty(null); setSelectedMaintenance(null); }}>
-              <LinearGradient colors={buttonGradients.close} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientButton}>
-                <Text style={styles.footerSaveText}>Đóng</Text>
-              </LinearGradient>
-            </TouchableOpacity>
           </View>
-          
+
+          {/* ImageViewer inside modal context */}
           <ImageViewer
             visible={imageViewerVisible}
             images={activeAttachments}
             initialIndex={initialImageIndex}
             onClose={() => setImageViewerVisible(false)}
           />
-        </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Maintenance Detail Modal */}
+      <Modal visible={!!selectedMaintenance} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSelectedMaintenance(null)}>
+        <SafeAreaView style={styles.fullscreenModalContainer}>
+          <View style={styles.fullscreenHeader}>
+            <TouchableOpacity onPress={() => setSelectedMaintenance(null)} style={styles.closeButton}>
+              <Ionicons name="close" size={28} color="#1F2937" />
+            </TouchableOpacity>
+            <Text style={styles.fullscreenTitle}>Chi tiết phiếu bảo trì</Text>
+            <View style={{ width: 44 }} />
+          </View>
+
+          {selectedMaintenance && (
+            <ScrollView style={styles.fullscreenBody}>
+              <View style={[styles.detailStatusBadge, { backgroundColor: statusColors[selectedMaintenance.status] + "20", borderColor: statusColors[selectedMaintenance.status] + "40" }]}>
+                <Text style={[styles.detailStatusText, { color: statusColors[selectedMaintenance.status] }]}>{statusLabels[selectedMaintenance.status] || "Hoàn thành"}</Text>
+              </View>
+
+              <View style={styles.infoCard}>
+                <View style={styles.fullscreenInfoRow}>
+                  <Text style={styles.fullscreenInfoLabel}>Ngày bảo trì</Text>
+                  <Text style={styles.fullscreenInfoValue}>{format(new Date(selectedMaintenance.maintenance_date), "dd/MM/yyyy")}</Text>
+                </View>
+                <View style={styles.fullscreenDivider} />
+                <View style={styles.fullscreenInfoRow}>
+                  <Text style={styles.fullscreenInfoLabel}>Lần bảo trì tiếp theo</Text>
+                  <Text style={[styles.fullscreenInfoValue, { color: '#3B82F6', fontWeight: 'bold' }]}>
+                    {format(new Date(selectedMaintenance.next_maintenance_date), "dd/MM/yyyy")}
+                  </Text>
+                </View>
+                <View style={styles.fullscreenDivider} />
+                <View style={styles.fullscreenInfoRow}>
+                  <Text style={styles.fullscreenInfoLabel}>Người thực hiện</Text>
+                  <Text style={styles.fullscreenInfoValue}>{selectedMaintenance.creator?.name || "N/A"}</Text>
+                </View>
+              </View>
+
+              {selectedMaintenance.notes && (
+                <View style={styles.descriptionSection}>
+                  <Text style={styles.fullscreenSectionTitle}>Nội dung / Ghi chú</Text>
+                  <View style={styles.readOnlyDescription}>
+                    <Text style={styles.descriptionText}>{selectedMaintenance.notes}</Text>
+                  </View>
+                </View>
+              )}
+
+              {selectedMaintenance.attachments && selectedMaintenance.attachments.length > 0 && (
+                <View style={styles.descriptionSection}>
+                  <Text style={styles.sectionTitle}>Tài liệu đính kèm ({selectedMaintenance.attachments.length})</Text>
+                  <View style={styles.attachmentList}>
+                    {selectedMaintenance.attachments.map((file, idx) => (
+                      <TouchableOpacity 
+                        key={idx} 
+                        style={styles.attachmentItem}
+                        onPress={() => {
+                          const allFiles = selectedMaintenance.attachments!;
+                          if (file.type === "image" || (file.original_name && /\.(jpg|jpeg|png|gif)$/i.test(file.original_name)) || (file.mime_type && file.mime_type.startsWith('image/'))) {
+                            const imageFiles = allFiles.filter(f => f.type === "image" || (f.original_name && /\.(jpg|jpeg|png|gif)$/i.test(f.original_name)) || (f.mime_type && f.mime_type.startsWith('image/')));
+                            const index = imageFiles.findIndex(f => f.uuid === file.uuid || f.id === file.id);
+                            setActiveAttachments(imageFiles.map(f => ({ uri: f.file_url || f.url, name: f.original_name })));
+                            setInitialImageIndex(index !== -1 ? index : 0);
+                            setImageViewerVisible(true);
+                          } else if (file.file_url || file.url) {
+                            Linking.openURL(file.file_url || file.url || "").catch(err => {
+                              console.error("Failed to open URL:", err);
+                              Alert.alert("Lỗi", "Không thể mở tệp này");
+                            });
+                          }
+                        }}
+                      >
+                        <Ionicons 
+                          name={file.type === 'image' || (file.original_name && /\.(jpg|jpeg|png|gif)$/i.test(file.original_name)) ? "image-outline" : "document-outline"} 
+                          size={24} 
+                          color="#3B82F6" 
+                        />
+                        <Text style={styles.attachmentName} numberOfLines={1}>{file.original_name}</Text>
+                        <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          )}
+
+          <View style={styles.fullscreenFooter}>
+            {selectedMaintenance && selectedMaintenance.status === "pending_customer" && (hasPermission(Permissions.WARRANTY_APPROVE) || project?.customer_id?.toString() === user?.id?.toString()) ? (
+              <View style={styles.footerActionRow}>
+                <TouchableOpacity 
+                  style={styles.footerActionButton} 
+                  onPress={() => handleRejectMaintenance(selectedMaintenance.uuid)}
+                >
+                  <LinearGradient
+                    colors={buttonGradients.reject}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.gradientButton}
+                  >
+                    <Text style={styles.footerActionText}>Từ chối</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.footerActionButton} 
+                  onPress={() => handleApproveMaintenance(selectedMaintenance.uuid)}
+                >
+                  <LinearGradient
+                    colors={buttonGradients.approve}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.gradientButton}
+                  >
+                    <Text style={styles.footerActionText}>Duyệt</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.footerSaveButton} onPress={() => setSelectedMaintenance(null)}>
+                <LinearGradient
+                  colors={buttonGradients.close}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.gradientButton}
+                >
+                  <Text style={styles.footerSaveText}>Đóng</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* ImageViewer inside modal context */}
+          <ImageViewer
+            visible={imageViewerVisible}
+            images={activeAttachments}
+            initialIndex={initialImageIndex}
+            onClose={() => setImageViewerVisible(false)}
+          />
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -1611,113 +1738,7 @@ const styles = StyleSheet.create({
   footerActionText: {
     color: "#FFFFFF",
     fontSize: 16,
+    fontWeight: "bold",
     letterSpacing: 0.5,
-  },
-  // Drawer Styles
-  drawerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  drawerContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#F9FAFB',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    height: '85%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 20,
-    overflow: 'hidden',
-  },
-  drawerIndicator: {
-    width: 40,
-    height: 5,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 2.5,
-    alignSelf: 'center',
-    marginTop: 12,
-  },
-  fullscreenHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#9CA3AF',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  fullscreenScrollContent: {
-    paddingBottom: 40,
-  },
-  fullscreenSection: {
-    padding: 20,
-  },
-  fullscreenHeaderSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 24,
-  },
-  fullscreenIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: '#6366F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  fullscreenInfoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  fullscreenLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  fullscreenText: {
-    fontSize: 15,
-    color: '#4B5563',
-    lineHeight: 24,
-  },
-  fullscreenContentSection: {
-    marginBottom: 24,
-  },
-  fullscreenFilesSection: {
-    marginBottom: 24,
-  },
-  fullscreenFileList: {
-    gap: 12,
-  },
-  fullscreenFileItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    gap: 12,
-  },
-  emptyTextSmall: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    fontStyle: 'italic',
   },
 });

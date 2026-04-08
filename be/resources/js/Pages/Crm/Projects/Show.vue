@@ -1277,49 +1277,36 @@
 1277: 
       <!-- ============ WARRANTY TAB ============ -->
       <a-tab-pane key="warranty" v-if="isTabVisible('warranty')">
-        <template #tab><a-tooltip title="Quản lý bảo hành: phiếu bàn giao, thời gian bảo hành, chốt với khách hàng" placement="bottom">Phiếu Bảo hành ({{ project.warranties?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý bảo hành: phiếu bàn giao, thời gian bảo hành, luồng duyệt khách hàng" placement="bottom">Phiếu Bảo hành ({{ project.warranties?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('warranty.create')" type="primary" size="small" @click="openWarrantyModal()">
               <template #icon><PlusOutlined /></template>Tạo phiếu bảo hành
             </a-button>
           </div>
-          <div v-if="project.warranties?.length" class="space-y-4">
-            <div v-for="w in project.warranties" :key="w.id" class="bg-white border rounded-2xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer group" @click="openWarrantyDetail(w)">
+          <div v-if="project.warranties?.length" class="space-y-3">
+            <div v-for="w in project.warranties" :key="w.id"
+                 class="bg-white border rounded-2xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                 @click="openWarrantyDetail(w)">
               <div class="p-4 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white"><SafetyOutlined /></div>
+                  <div class="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white"><SafetyCertificateOutlined /></div>
                   <div>
-                    <div class="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">Phiếu bảo hành #{{ w.id }}</div>
+                    <div class="font-semibold text-gray-800">Phiếu bảo hành #{{ w.id }}</div>
                     <div class="text-xs text-gray-400">Ngày bàn giao: {{ fmtDate(w.handover_date) }} | Thời gian: {{ fmtDate(w.warranty_start_date) }} → {{ fmtDate(w.warranty_end_date) }}</div>
                   </div>
                 </div>
-                <div class="flex items-center gap-4">
+                <div class="flex items-center gap-3">
                   <a-tag :color="w.status === 'approved' ? 'green' : w.status === 'rejected' ? 'red' : w.status === 'pending_customer' ? 'orange' : 'default'" class="rounded-full text-xs">
-                    {{ w.status === 'approved' ? 'Khách đã duyệt' : w.status === 'rejected' ? 'Từ chối' : w.status === 'pending_customer' ? 'Đang chờ duyệt' : 'Nháp' }}
+                    {{ w.status === 'approved' ? 'Đã duyệt' : w.status === 'rejected' ? 'Từ chối' : w.status === 'pending_customer' ? 'Chờ KH duyệt' : 'Nháp' }}
                   </a-tag>
-                  <div class="flex gap-1" v-if="can('warranty.update')" @click.stop>
-                    <a-button type="text" size="small" @click="openWarrantyModal(w)"><EditOutlined class="text-blue-500" /></a-button>
-                    <!-- Approval actions -->
-                    <a-space size="small" v-if="w.status === 'draft' && can('warranty.approve')">
-                       <a-button type="text" size="small" @click="submitWarranty(w)" title="Gửi duyệt"><SendOutlined class="text-blue-500" /></a-button>
-                    </a-space>
-                    <a-space size="small" v-if="w.status === 'pending_customer' && can('warranty.approve')">
-                       <a-button type="text" size="small" @click="approveWarranty(w)" title="Duyệt"><CheckCircleOutlined class="text-green-500" /></a-button>
-                       <a-button type="text" size="small" @click="rejectWarranty(w)" title="Từ chối"><CloseCircleOutlined class="text-red-500" /></a-button>
-                    </a-space>
+                  <div v-if="w.attachments?.length" class="text-xs text-gray-400">
+                    <PaperClipOutlined /> {{ w.attachments.length }}
                   </div>
                 </div>
               </div>
-              <div class="px-4 pb-4">
-                <div class="text-sm text-gray-600 mb-2 truncate max-w-2xl">{{ w.warranty_content }}</div>
-                <div v-if="w.attachments?.length" class="flex gap-2 flex-wrap">
-                  <a v-for="att in w.attachments" :key="att.id" :href="att.full_url" target="_blank" class="text-xs bg-gray-50 px-2 py-1 rounded border hover:bg-gray-100 flex items-center gap-1" @click.stop>
-                    <FilePdfOutlined v-if="att.extension === 'pdf'" />
-                    <FileImageOutlined v-else />
-                    {{ att.original_name }}
-                  </a>
-                </div>
+              <div class="px-4 pb-3">
+                <div class="text-sm text-gray-500 line-clamp-2">{{ w.warranty_content }}</div>
               </div>
             </div>
           </div>
@@ -1329,46 +1316,65 @@
 
       <!-- ============ MAINTENANCES TAB ============ -->
       <a-tab-pane key="maintenances" v-if="isTabVisible('maintenances')">
-        <template #tab><a-tooltip title="Lịch sử trì định kỳ (6 tháng/lần)" placement="bottom">Bảo trì ({{ project.maintenances?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Lịch sử bảo trì định kỳ (6 tháng/lần) — Luồng duyệt: Nháp → Chờ KH duyệt → Đã duyệt" placement="bottom">Bảo trì ({{ project.maintenances?.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-between items-center mb-3">
              <div class="text-xs text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100 flex items-center gap-1">
-               <NotificationOutlined class="animate-bounce" /> Nhắc bảo trì định kỳ 6 tháng/lần
+               <ClockCircleOutlined class="animate-bounce" /> Nhắc bảo trì định kỳ 6 tháng/lần
              </div>
              <a-button v-if="can('warranty.create')" type="primary" size="small" @click="openMaintenanceModal()">
                <template #icon><PlusOutlined /></template>Ghi nhận bảo trì
              </a-button>
           </div>
-          <a-table :columns="maintenanceCols" :data-source="project.maintenances || []" :pagination="false" row-key="id" size="small" class="crm-table" :custom-row="(record) => ({ onClick: () => openMaintenanceDetail(record), class: 'cursor-pointer hover-row' })">
+          <!-- Summary Cards -->
+          <div class="grid grid-cols-4 gap-3 mb-4">
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📋</span></div>
+                <span class="text-[11px] text-gray-400">Tổng phiếu</span>
+              </div>
+              <div class="text-lg font-bold text-gray-800">{{ project.maintenances?.length || 0 }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
+                <span class="text-[11px] text-gray-400">Đã duyệt</span>
+              </div>
+              <div class="text-lg font-bold text-green-600">{{ (project.maintenances || []).filter(m => m.status === 'approved').length }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
+                <span class="text-[11px] text-gray-400">Chờ duyệt</span>
+              </div>
+              <div class="text-lg font-bold text-amber-600">{{ (project.maintenances || []).filter(m => m.status === 'pending_customer').length }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl p-3 border border-gray-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-gray-500/10 flex items-center justify-center"><span class="text-gray-600 text-xs">📝</span></div>
+                <span class="text-[11px] text-gray-400">Nháp</span>
+              </div>
+              <div class="text-lg font-bold text-gray-600">{{ (project.maintenances || []).filter(m => m.status === 'draft').length }}</div>
+            </div>
+          </div>
+          <a-table :columns="maintenanceCols" :data-source="project.maintenances || []" :pagination="false" row-key="id" size="small" class="crm-table hover-row"
+            :custom-row="(record) => ({ onClick: () => openMaintenanceDetail(record), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
                <template v-if="column.key === 'maintenance_date'">{{ fmtDate(record.maintenance_date) }}</template> 
                <template v-else-if="column.key === 'next_date'">
                  <span class="font-bold" :class="isPast(record.next_maintenance_date) ? 'text-red-500' : 'text-blue-600'">{{ fmtDate(record.next_maintenance_date) }}</span>
                </template>
                <template v-else-if="column.key === 'status'">
-                 <a-tag :color="record.status === 'approved' ? 'green' : record.status === 'pending_customer' ? 'orange' : record.status === 'rejected' ? 'red' : 'default'" class="rounded-full text-[10px]">
-                   {{ record.status === 'approved' ? 'Khách đã duyệt' : record.status === 'pending_customer' ? 'Chờ duyệt' : record.status === 'rejected' ? 'Từ chối' : 'Nháp' }}
-                 </a-tag>
+                 <a-tag :color="maintenanceStatusColors[record.status]" class="rounded-full text-xs">{{ maintenanceStatusLabels[record.status] || record.status }}</a-tag>
                </template>
+               <template v-else-if="column.key === 'creator'">{{ record.creator?.name || '—' }}</template>
                <template v-else-if="column.key === 'attachments'">
-                 <div v-if="record.attachments?.length" class="flex gap-1 justify-center">
+                 <div v-if="record.attachments?.length" class="flex gap-1">
                    <a-tooltip v-for="att in record.attachments" :key="att.id" :title="att.original_name">
                      <a :href="att.full_url" target="_blank" class="text-blue-500" @click.stop><PaperClipOutlined /></a>
                    </a-tooltip>
                  </div>
                  <span v-else class="text-gray-300">—</span>
-               </template>
-               <template v-else-if="column.key === 'action'">
-                 <div class="flex gap-1 justify-end" @click.stop>
-                   <a-button v-if="record.status === 'draft' && can('warranty.update')" type="text" size="small" @click="openMaintenanceModal(record)"><EditOutlined class="text-blue-500" /></a-button>
-                   <a-space size="small" v-if="record.status === 'draft' && can('warranty.approve')">
-                     <a-button type="text" size="small" @click="submitMaintenance(record)" title="Gửi duyệt"><SendOutlined class="text-blue-500" /></a-button>
-                   </a-space>
-                   <a-space size="small" v-if="record.status === 'pending_customer' && can('warranty.approve')">
-                     <a-button type="text" size="small" @click="approveMaintenance(record)" title="Duyệt"><CheckCircleOutlined class="text-green-500" /></a-button>
-                     <a-button type="text" size="small" @click="rejectMaintenance(record)" title="Từ chối"><CloseCircleOutlined class="text-red-500" /></a-button>
-                   </a-space>
-                 </div>
                </template>
             </template>
           </a-table>
@@ -3858,154 +3864,6 @@
     </div>
   </a-drawer>
 
-  <!-- WARRANTY DETAIL DRAWER -->
-  <a-drawer v-model:open="showWarrantyDetailDrawer" title="Chi tiết Phiếu Bảo Hành" :width="560" @close="warrantyDetail = null" destroy-on-close class="crm-drawer">
-    <div v-if="warrantyDetail" class="space-y-6 pb-24">
-      <!-- Header -->
-      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-100"><SafetyOutlined class="text-2xl" /></div>
-          <div>
-            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Số phiếu: #{{ warrantyDetail.id }}</div>
-            <div class="text-lg font-bold text-gray-800">Phiếu bảo hành</div>
-          </div>
-        </div>
-        <a-tag :color="warrantyDetail.status === 'approved' ? 'green' : warrantyDetail.status === 'pending_customer' ? 'orange' : warrantyDetail.status === 'rejected' ? 'red' : 'default'" class="rounded-full px-4 py-1 text-xs font-semibold">
-          {{ warrantyDetail.status === 'approved' ? 'Khách đã duyệt' : warrantyDetail.status === 'pending_customer' ? 'Chờ duyệt' : warrantyDetail.status === 'rejected' ? 'Từ chối' : 'Nháp' }}
-        </a-tag>
-      </div>
-
-      <!-- Info Card -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><InfoCircleOutlined /> Thông tin chung</div>
-        <div class="grid grid-cols-1 gap-1 text-sm">
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
-            <span class="text-gray-400">Ngày bàn giao</span>
-            <span class="font-bold text-gray-800">{{ fmtDate(warrantyDetail.handover_date) }}</span>
-          </div>
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
-            <span class="text-gray-400">Ngày bắt đầu BH</span>
-            <span class="font-medium text-gray-700">{{ fmtDate(warrantyDetail.warranty_start_date) }}</span>
-          </div>
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
-            <span class="text-gray-400">Ngày kết thúc BH</span>
-            <span class="font-bold text-blue-600">{{ fmtDate(warrantyDetail.warranty_end_date) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Content -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><FileTextOutlined /> Nội dung bảo hành</div>
-        <div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ warrantyDetail.warranty_content }}</div>
-      </div>
-
-      <!-- Attachments -->
-      <div v-if="warrantyDetail.attachments?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><PaperClipOutlined /> Tệp đính kèm</div>
-        <div class="flex flex-col gap-2">
-          <a v-for="att in warrantyDetail.attachments" :key="att.id" :href="att.full_url" target="_blank" class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 hover:bg-gray-100 transition">
-            <div class="w-8 h-8 rounded bg-white flex items-center justify-center border">
-              <FilePdfOutlined v-if="att.extension === 'pdf'" class="text-red-500" />
-              <FileImageOutlined v-else class="text-blue-500" />
-            </div>
-            <div class="flex-1 overflow-hidden">
-              <div class="text-xs font-semibold text-gray-700 truncate">{{ att.original_name }}</div>
-              <div class="text-[10px] text-gray-400 uppercase">{{ att.extension }} • {{ (att.size / 1024).toFixed(1) }} KB</div>
-            </div>
-            <DownloadOutlined class="text-gray-400" />
-          </a>
-        </div>
-      </div>
-
-      <!-- Detail Footer Actions -->
-      <div class="fixed bottom-0 left-0 right-0 p-5 bg-white border-t border-gray-100 flex gap-3 justify-end z-10" v-if="can('warranty.approve')">
-        <template v-if="warrantyDetail.status === 'draft'">
-          <a-button type="primary" @click="submitWarranty(warrantyDetail)">Gửi duyệt</a-button>
-        </template>
-        <template v-if="warrantyDetail.status === 'pending_customer'">
-          <a-button type="primary" class="bg-green-600 border-green-600" @click="approveWarranty(warrantyDetail)">Duyệt (CĐT/KH)</a-button>
-          <a-button danger ghost @click="rejectWarranty(warrantyDetail)">Từ chối</a-button>
-        </template>
-        <a-button @click="showWarrantyDetailDrawer = false">Đóng</a-button>
-      </div>
-    </div>
-  </a-drawer>
-
-  <!-- MAINTENANCE DETAIL DRAWER -->
-  <a-drawer v-model:open="showMaintenanceDetailDrawer" title="Chi tiết Phiếu Bảo Trì" :width="560" @close="maintenanceDetail = null" destroy-on-close class="crm-drawer">
-    <div v-if="maintenanceDetail" class="space-y-6 pb-24">
-      <!-- Header -->
-      <div class="bg-gray-100 p-5 rounded-2xl border border-gray-200 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-xl bg-orange-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-orange-100"><ToolOutlined class="text-2xl" /></div>
-          <div>
-            <div class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-0.5">Số phiếu: #{{ maintenanceDetail.id }}</div>
-            <div class="text-lg font-bold text-gray-800">Phiếu bảo trì định kỳ</div>
-          </div>
-        </div>
-        <a-tag :color="maintenanceDetail.status === 'approved' ? 'green' : maintenanceDetail.status === 'pending_customer' ? 'orange' : maintenanceDetail.status === 'rejected' ? 'red' : 'default'" class="rounded-full px-4 py-1 text-xs font-semibold">
-          {{ maintenanceDetail.status === 'approved' ? 'Khách đã duyệt' : maintenanceDetail.status === 'pending_customer' ? 'Chờ duyệt' : maintenanceDetail.status === 'rejected' ? 'Từ chối' : 'Nháp' }}
-        </a-tag>
-      </div>
-
-      <!-- Info Card -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-orange-500"><InfoCircleOutlined /> Lịch bảo trì</div>
-        <div class="grid grid-cols-1 gap-1 text-sm">
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
-            <span class="text-gray-400">Ngày thực hiện</span>
-            <span class="font-bold text-gray-800">{{ fmtDate(maintenanceDetail.maintenance_date) }}</span>
-          </div>
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
-            <span class="text-gray-400">Lần bảo trì tiếp theo</span>
-            <span class="font-bold text-blue-600">{{ fmtDate(maintenanceDetail.next_maintenance_date) }}</span>
-          </div>
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50" v-if="maintenanceDetail.created_at">
-            <span class="text-gray-400">Ngày tạo</span>
-            <span class="text-gray-600">{{ fmtDate(maintenanceDetail.created_at) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Content -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-orange-500"><FileTextOutlined /> Ghi chú bảo trì</div>
-        <div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ maintenanceDetail.notes || 'Không có ghi chú' }}</div>
-      </div>
-
-      <!-- Attachments -->
-      <div v-if="maintenanceDetail.attachments?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-orange-500"><PaperClipOutlined /> Hình ảnh & Hồ sơ</div>
-        <div class="flex flex-col gap-2">
-          <a v-for="att in maintenanceDetail.attachments" :key="att.id" :href="att.full_url" target="_blank" class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 hover:bg-gray-100 transition">
-            <div class="w-8 h-8 rounded bg-white flex items-center justify-center border">
-              <FileImageOutlined v-if="att.mime_type?.startsWith('image/')" class="text-blue-500" />
-              <FilePdfOutlined v-else-if="att.extension === 'pdf'" class="text-red-500" />
-              <FileOutlined v-else class="text-gray-400" />
-            </div>
-            <div class="flex-1 overflow-hidden">
-              <div class="text-xs font-semibold text-gray-700 truncate">{{ att.original_name }}</div>
-              <div class="text-[10px] text-gray-400 uppercase">{{ att.extension }} • {{ (att.size / 1024).toFixed(1) }} KB</div>
-            </div>
-          </a>
-        </div>
-      </div>
-
-      <!-- Detail Footer Actions -->
-      <div class="fixed bottom-0 left-0 right-0 p-5 bg-white border-t border-gray-100 flex gap-3 justify-end z-10" v-if="can('warranty.approve')">
-        <template v-if="maintenanceDetail.status === 'draft'">
-          <a-button type="primary" @click="submitMaintenance(maintenanceDetail)">Gửi duyệt</a-button>
-        </template>
-        <template v-if="maintenanceDetail.status === 'pending_customer'">
-          <a-button type="primary" class="bg-green-600 border-green-600" @click="approveMaintenance(maintenanceDetail)">Duyệt bảo trì</a-button>
-          <a-button danger ghost @click="rejectMaintenance(maintenanceDetail)">Từ chối</a-button>
-        </template>
-        <a-button @click="showMaintenanceDetailDrawer = false">Đóng</a-button>
-      </div>
-    </div>
-  </a-drawer>
-
   <a-drawer v-model:open="showSubPayDrawer" title="Ghi nhận thanh toán NTP" :width="520" @close="showSubPayDrawer = false" destroy-on-close class="crm-drawer">
      <div v-if="subDetail" class="bg-white rounded-xl p-4 mb-4 border border-gray-100">
         <div class="flex items-center justify-between mb-3">
@@ -4991,7 +4849,7 @@
   </a-modal>
 
   <!-- ============ MAINTENANCE MODAL ============ -->
-  <a-modal v-model:open="showMaintenanceModal" title="Ghi nhận bảo trì định kỳ" :width="540" @ok="submitMaintenanceForm" :confirm-loading="savingMaintenance" ok-text="Ghi nhận" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showMaintenanceModal" :title="isEditMaintenance ? 'Cập nhật phiếu bảo trì' : 'Ghi nhận bảo trì định kỳ'" :width="540" @ok="submitMaintenanceForm" :confirm-loading="savingMaintenance" :ok-text="isEditMaintenance ? 'Cập nhật' : 'Ghi nhận'" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Ngày bảo trì" required><a-date-picker v-model:value="maintenanceForm.maintenance_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
       <a-form-item label="Nội dung thực hiện" required><a-textarea v-model:value="maintenanceForm.notes" :rows="4" placeholder="Mô tả các công việc bảo trì đã thực hiện..." /></a-form-item>
@@ -5006,6 +4864,211 @@
       </div>
     </a-form>
   </a-modal>
+
+  <!-- ============ MAINTENANCE DETAIL DRAWER ============ -->
+  <a-drawer v-model:open="showMaintenanceDetailDrawer" title="Chi tiết Phiếu Bảo trì" :width="560" @close="maintenanceDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="maintenanceDetail" class="space-y-6 pb-24">
+      <!-- Header -->
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-teal-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-teal-100">🔧</div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã phiếu: #{{ maintenanceDetail.id }}</div>
+            <div class="text-lg font-bold text-gray-800">Phiếu bảo trì định kỳ</div>
+          </div>
+        </div>
+        <a-tag :color="maintenanceStatusColors[maintenanceDetail.status]" class="rounded-full px-4 py-1 text-xs font-semibold">{{ maintenanceStatusLabels[maintenanceDetail.status] || maintenanceDetail.status }}</a-tag>
+      </div>
+
+      <!-- Timeline Info -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-teal-500"><CalendarOutlined /> Thời gian bảo trì</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Ngày thực hiện</span>
+            <span class="font-bold text-gray-800">{{ fmtDate(maintenanceDetail.maintenance_date) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Lần bảo trì tiếp theo</span>
+            <span class="font-bold" :class="isPast(maintenanceDetail.next_maintenance_date) ? 'text-red-500' : 'text-blue-600'">
+              {{ fmtDate(maintenanceDetail.next_maintenance_date) }}
+              <a-tag v-if="isPast(maintenanceDetail.next_maintenance_date)" color="red" class="ml-1 text-[10px] rounded-full">QUÁ HẠN</a-tag>
+            </span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Người tạo</span>
+            <span class="font-semibold text-gray-700">{{ maintenanceDetail.creator?.name || '—' }}</span>
+          </div>
+          <div v-if="maintenanceDetail.approver" class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Người duyệt</span>
+            <span class="font-semibold text-green-600">{{ maintenanceDetail.approver?.name || '—' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">Ngày tạo phiếu</span>
+            <span class="font-medium text-gray-600">{{ fmtDate(maintenanceDetail.created_at) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2 text-teal-500"><FileOutlined /> Nội dung bảo trì</div>
+        <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-100">{{ maintenanceDetail.notes || 'Không có nội dung' }}</div>
+      </div>
+
+      <!-- Attachments -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-teal-500"><CameraOutlined /> Hình ảnh / Biên bản ({{ maintenanceDetail.attachments?.length || 0 }})</div>
+        </div>
+        <div v-if="maintenanceDetail.attachments?.length" class="flex flex-wrap gap-2">
+          <div v-for="att in maintenanceDetail.attachments" :key="att.id"
+               class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+               @click="openFilePreview(att)">
+            <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+              {{ fileExt(att).toUpperCase() }}
+            </div>
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+              <EyeOutlined class="text-white text-lg" />
+            </div>
+          </div>
+        </div>
+        <a-empty v-else :image="null" description="Chưa có ảnh / biên bản" class="text-gray-300 my-0 py-2" />
+      </div>
+
+      <!-- Approval Flow Visualization -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-teal-500"><HistoryOutlined /> Luồng duyệt</div>
+        <div class="flex items-center gap-2">
+          <div class="flex flex-col items-center">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                 :class="maintenanceDetail.status !== 'draft' ? 'bg-green-500' : 'bg-blue-500 ring-2 ring-blue-200'">1</div>
+            <div class="text-[10px] text-gray-500 mt-1 font-semibold">Nháp</div>
+          </div>
+          <div class="flex-1 h-0.5 rounded" :class="['pending_customer','approved'].includes(maintenanceDetail.status) ? 'bg-green-400' : 'bg-gray-200'"></div>
+          <div class="flex flex-col items-center">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                 :class="maintenanceDetail.status === 'approved' ? 'bg-green-500' : maintenanceDetail.status === 'pending_customer' ? 'bg-amber-500 ring-2 ring-amber-200' : maintenanceDetail.status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'">2</div>
+            <div class="text-[10px] text-gray-500 mt-1 font-semibold">Chờ KH</div>
+          </div>
+          <div class="flex-1 h-0.5 rounded" :class="maintenanceDetail.status === 'approved' ? 'bg-green-400' : 'bg-gray-200'"></div>
+          <div class="flex flex-col items-center">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                 :class="maintenanceDetail.status === 'approved' ? 'bg-green-500 text-white ring-2 ring-green-200' : maintenanceDetail.status === 'rejected' ? 'bg-red-500 text-white' : 'bg-gray-300 text-gray-500'">
+              {{ maintenanceDetail.status === 'rejected' ? '✗' : '3' }}
+            </div>
+            <div class="text-[10px] text-gray-500 mt-1 font-semibold">{{ maintenanceDetail.status === 'rejected' ? 'Từ chối' : 'Duyệt' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <div class="flex gap-2">
+          <a-popconfirm v-if="can('warranty.delete') && ['draft','rejected'].includes(maintenanceDetail.status)" title="Xóa phiếu bảo trì?" @confirm="deleteMaintenance(maintenanceDetail)">
+            <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
+          </a-popconfirm>
+          <a-button v-if="can('warranty.update') && ['draft','rejected'].includes(maintenanceDetail.status)" type="text" @click="editMaintenanceFromDrawer(maintenanceDetail)">
+            <template #icon><EditOutlined /></template> Sửa
+          </a-button>
+        </div>
+        <div class="flex gap-2">
+          <!-- Draft → Submit for customer approval -->
+          <a-button v-if="maintenanceDetail.status === 'draft' && can('warranty.update')" type="primary" @click="submitMaintenanceForApproval(maintenanceDetail)">
+            <template #icon><SendOutlined /></template>Gửi KH duyệt
+          </a-button>
+          <!-- Pending Customer → Approve / Reject -->
+          <template v-if="maintenanceDetail.status === 'pending_customer' && can('warranty.approve')">
+            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveMaintenanceRecord(maintenanceDetail)">
+              <template #icon><CheckCircleOutlined /></template>Duyệt
+            </a-button>
+            <a-button danger ghost @click="rejectMaintenanceRecord(maintenanceDetail)">
+              <template #icon><CloseCircleOutlined /></template>Từ chối
+            </a-button>
+          </template>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- ============ WARRANTY DETAIL DRAWER ============ -->
+  <a-drawer v-model:open="showWarrantyDetailDrawer" title="Chi tiết Phiếu Bảo hành" :width="560" @close="warrantyDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="warrantyDetail" class="space-y-6 pb-24">
+      <!-- Header -->
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-100"><SafetyCertificateOutlined class="text-xl" /></div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Phiếu bảo hành #{{ warrantyDetail.id }}</div>
+            <div class="text-lg font-bold text-gray-800">Bảo hành dự án</div>
+          </div>
+        </div>
+        <a-tag :color="warrantyDetail.status === 'approved' ? 'green' : warrantyDetail.status === 'rejected' ? 'red' : warrantyDetail.status === 'pending_customer' ? 'orange' : 'default'" class="rounded-full px-4 py-1 text-xs font-semibold">
+          {{ warrantyDetail.status === 'approved' ? 'Đã duyệt' : warrantyDetail.status === 'rejected' ? 'Từ chối' : warrantyDetail.status === 'pending_customer' ? 'Chờ KH duyệt' : 'Nháp' }}
+        </a-tag>
+      </div>
+
+      <!-- Timeline -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><CalendarOutlined /> Thông tin bảo hành</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Ngày bàn giao</span>
+            <span class="font-bold text-gray-800">{{ fmtDate(warrantyDetail.handover_date) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Thời gian bảo hành</span>
+            <span class="font-bold text-blue-600">{{ fmtDate(warrantyDetail.warranty_start_date) }} → {{ fmtDate(warrantyDetail.warranty_end_date) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Người tạo</span>
+            <span class="font-semibold text-gray-700">{{ warrantyDetail.creator?.name || '—' }}</span>
+          </div>
+          <div v-if="warrantyDetail.approver" class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">Người duyệt</span>
+            <span class="font-semibold text-green-600">{{ warrantyDetail.approver?.name || '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2 text-blue-500"><FileProtectOutlined /> Nội dung bảo hành</div>
+        <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-100">{{ warrantyDetail.warranty_content || 'Không có nội dung' }}</div>
+      </div>
+
+      <!-- Attachments -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ ({{ warrantyDetail.attachments?.length || 0 }})</div>
+        <div v-if="warrantyDetail.attachments?.length" class="flex flex-wrap gap-2">
+          <div v-for="att in warrantyDetail.attachments" :key="att.id"
+               class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+               @click="openFilePreview(att)">
+            <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">{{ fileExt(att).toUpperCase() }}</div>
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition"><EyeOutlined class="text-white text-lg" /></div>
+          </div>
+        </div>
+        <a-empty v-else :image="null" description="Chưa có chứng từ" class="text-gray-300 my-0 py-2" />
+      </div>
+
+      <!-- Action Footer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+        <div class="flex gap-2">
+          <a-button v-if="can('warranty.update')" type="text" @click="editWarrantyFromDrawer(warrantyDetail)">
+            <template #icon><EditOutlined /></template> Sửa
+          </a-button>
+        </div>
+        <div class="flex gap-2">
+          <template v-if="warrantyDetail.status === 'draft' && can('warranty.approve')">
+            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveWarranty(warrantyDetail)">Duyệt</a-button>
+            <a-button danger ghost @click="rejectWarranty(warrantyDetail)">Từ chối</a-button>
+          </template>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
 
 </div> <!-- End Root Div -->
 </template>
@@ -5032,7 +5095,7 @@ import {
   ProjectOutlined, CloudOutlined, TeamOutlined, PictureOutlined,
   FilePdfOutlined, FileWordOutlined, FileExcelOutlined, ClockCircleOutlined,
   LineChartOutlined, FileProtectOutlined, BankOutlined, HistoryOutlined,
-  FileAddOutlined, SafetyCertificateOutlined
+  FileAddOutlined, SafetyCertificateOutlined, PaperClipOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -7595,33 +7658,36 @@ const editingWarrantyId = ref(null)
 const savingWarranty = ref(false)
 const warrantyForm = ref({ handover_date: dayjs().format('YYYY-MM-DD'), warranty_start_date: dayjs().format('YYYY-MM-DD'), warranty_end_date: dayjs().add(12, 'month').format('YYYY-MM-DD'), warranty_content: '' })
 const warrantyFiles = ref([])
+
+// Warranty Detail Drawer
 const showWarrantyDetailDrawer = ref(false)
 const warrantyDetail = ref(null)
-const showMaintenanceDetailDrawer = ref(false)
-const maintenanceDetail = ref(null)
-
-const openWarrantyDetail = (w) => {
-  warrantyDetail.value = w
-  showWarrantyDetailDrawer.value = true
-}
-
-const openMaintenanceDetail = (m) => {
-  maintenanceDetail.value = m
-  showMaintenanceDetailDrawer.value = true
-}
+const openWarrantyDetail = (w) => { warrantyDetail.value = w; showWarrantyDetailDrawer.value = true }
+const editWarrantyFromDrawer = (w) => { showWarrantyDetailDrawer.value = false; openWarrantyModal(w) }
 
 const showMaintenanceModal = ref(false)
+const isEditMaintenance = ref(false)
+const editingMaintenanceUuid = ref(null)
 const savingMaintenance = ref(false)
 const maintenanceForm = ref({ maintenance_date: dayjs().format('YYYY-MM-DD'), notes: '' })
 const maintenanceFiles = ref([])
 
+// Maintenance Detail Drawer
+const showMaintenanceDetailDrawer = ref(false)
+const maintenanceDetail = ref(null)
+const openMaintenanceDetail = (m) => { maintenanceDetail.value = m; showMaintenanceDetailDrawer.value = true }
+
+// Status labels & colors
+const maintenanceStatusLabels = { draft: 'Nháp', pending_customer: 'Chờ KH duyệt', approved: 'Đã duyệt', rejected: 'Từ chối' }
+const maintenanceStatusColors = { draft: 'default', pending_customer: 'orange', approved: 'green', rejected: 'red' }
+
 const maintenanceCols = [
-  { title: 'Ngày bảo trì', key: 'maintenance_date', width: 140 },
-  { title: 'Nội dung', dataIndex: 'notes', key: 'notes' },
-  { title: 'Lần tiếp theo', key: 'next_date', width: 150 },
-  { title: 'Trạng thái', key: 'status', width: 120, align: 'center' },
-  { title: 'Chứng từ', key: 'attachments', width: 100, align: 'center' },
-  { title: '', key: 'action', width: 80, align: 'right' },
+  { title: 'Ngày bảo trì', key: 'maintenance_date', width: 130 },
+  { title: 'Nội dung', dataIndex: 'notes', key: 'notes', ellipsis: true },
+  { title: 'Người tạo', key: 'creator', width: 120 },
+  { title: 'Lần tiếp theo', key: 'next_date', width: 140 },
+  { title: 'Trạng thái', key: 'status', width: 130, align: 'center' },
+  { title: 'Chứng từ', key: 'attachments', width: 80, align: 'center' },
 ]
 
 const isPast = (date) => dayjs(date).isBefore(dayjs(), 'day')
@@ -7629,7 +7695,7 @@ const isPast = (date) => dayjs(date).isBefore(dayjs(), 'day')
 const openWarrantyModal = (w = null) => {
   if (w) {
     isEditWarranty.value = true
-    editingWarrantyId.value = w.uuid || w.id
+    editingWarrantyId.value = w.id
     warrantyForm.value = {
       handover_date: w.handover_date,
       warranty_start_date: w.warranty_start_date,
@@ -7669,8 +7735,8 @@ const approveWarranty = (w) => {
   Modal.confirm({
     title: 'Xác nhận duyệt',
     content: 'Bạn có chắc chắn muốn duyệt phiếu bảo hành này trên danh nghĩa khách hàng?',
-    onOk: () => router.post(`/projects/${props.project.id}/warranties/${w.uuid || w.id}/approve`, {}, {
-      onSuccess: () => { if(warrantyDetail.value && (warrantyDetail.value.uuid === w.uuid || warrantyDetail.value.id === w.id)) warrantyDetail.value.status = 'approved' }
+    onOk: () => router.post(`/projects/${props.project.id}/warranties/${w.id}/approve`, {}, {
+      onSuccess: () => { showWarrantyDetailDrawer.value = false; warrantyDetail.value = null }
     })
   })
 }
@@ -7679,48 +7745,8 @@ const rejectWarranty = (w) => {
   Modal.confirm({
     title: 'Từ chối',
     content: 'Bạn có chắc chắn muốn từ chối phiếu bảo hành này?',
-    onOk: () => router.post(`/projects/${props.project.id}/warranties/${w.uuid || w.id}/reject`, {}, {
-      onSuccess: () => { if(warrantyDetail.value && (warrantyDetail.value.uuid === w.uuid || warrantyDetail.value.id === w.id)) warrantyDetail.value.status = 'rejected' }
-    })
-  })
-}
-
-const submitWarranty = (w) => {
-  Modal.confirm({
-    title: 'Gửi duyệt',
-    content: 'Gửi phiếu bảo hành cho khách hàng duyệt?',
-    onOk: () => router.post(`/projects/${props.project.id}/warranties/${w.uuid || w.id}/submit`, {}, {
-      onSuccess: () => { if(warrantyDetail.value && (warrantyDetail.value.uuid === w.uuid || warrantyDetail.value.id === w.id)) warrantyDetail.value.status = 'pending_customer' }
-    })
-  })
-}
-
-const approveMaintenance = (m) => {
-  Modal.confirm({
-    title: 'Xác nhận duyệt bảo trì',
-    content: 'Bạn có chắc chắn muốn duyệt phiếu bảo trì này?',
-    onOk: () => router.post(`/projects/${props.project.id}/maintenances/${m.uuid || m.id}/approve`, {}, {
-      onSuccess: () => { if(maintenanceDetail.value && (maintenanceDetail.value.uuid === m.uuid || maintenanceDetail.value.id === m.id)) maintenanceDetail.value.status = 'approved' }
-    })
-  })
-}
-
-const rejectMaintenance = (m) => {
-  Modal.confirm({
-    title: 'Từ chối bảo trì',
-    content: 'Từ chối phiếu bảo trì này?',
-    onOk: () => router.post(`/projects/${props.project.id}/maintenances/${m.uuid || m.id}/reject`, {}, {
-      onSuccess: () => { if(maintenanceDetail.value && (maintenanceDetail.value.uuid === m.uuid || maintenanceDetail.value.id === m.id)) maintenanceDetail.value.status = 'rejected' }
-    })
-  })
-}
-
-const submitMaintenance = (m) => {
-  Modal.confirm({
-    title: 'Gửi duyệt bảo trì',
-    content: 'Gửi phiếu bảo trì cho khách hàng duyệt?',
-    onOk: () => router.post(`/projects/${props.project.id}/maintenances/${m.uuid || m.id}/submit`, {}, {
-      onSuccess: () => { if(maintenanceDetail.value && (maintenanceDetail.value.uuid === m.uuid || maintenanceDetail.value.id === m.id)) maintenanceDetail.value.status = 'pending_customer' }
+    onOk: () => router.post(`/projects/${props.project.id}/warranties/${w.id}/reject`, {}, {
+      onSuccess: () => { showWarrantyDetailDrawer.value = false; warrantyDetail.value = null }
     })
   })
 }
@@ -7728,19 +7754,21 @@ const submitMaintenance = (m) => {
 const openMaintenanceModal = (m = null) => {
   if (m) {
     isEditMaintenance.value = true
-    editingMaintenanceId.value = m.uuid || m.id
-    maintenanceForm.value = { maintenance_date: m.maintenance_date, notes: m.notes }
+    editingMaintenanceUuid.value = m.uuid
+    maintenanceForm.value = { maintenance_date: m.maintenance_date, notes: m.notes || '' }
   } else {
     isEditMaintenance.value = false
-    editingMaintenanceId.value = null
+    editingMaintenanceUuid.value = null
     maintenanceForm.value = { maintenance_date: dayjs().format('YYYY-MM-DD'), notes: '' }
   }
   maintenanceFiles.value = []
   showMaintenanceModal.value = true
 }
 
-const isEditMaintenance = ref(false)
-const editingMaintenanceId = ref(null)
+const editMaintenanceFromDrawer = (m) => {
+  showMaintenanceDetailDrawer.value = false
+  openMaintenanceModal(m)
+}
 
 const submitMaintenanceForm = () => {
   if (!maintenanceForm.value.maintenance_date || !maintenanceForm.value.notes) return
@@ -7749,16 +7777,53 @@ const submitMaintenanceForm = () => {
   Object.entries(maintenanceForm.value).forEach(([k, v]) => { if (v) fd.append(k, v) })
   maintenanceFiles.value.forEach(f => fd.append('files[]', f))
   
-  const url = isEditMaintenance.value 
-    ? `/projects/${props.project.id}/maintenances/${editingMaintenanceId.value}`
+  const url = isEditMaintenance.value
+    ? `/projects/${props.project.id}/maintenances/${editingMaintenanceUuid.value}`
     : `/projects/${props.project.id}/maintenances`
-
+  
   if (isEditMaintenance.value) fd.append('_method', 'PUT')
 
   router.post(url, fd, {
     forceFormData: true,
     onSuccess: () => { showMaintenanceModal.value = false; maintenanceFiles.value = [] },
     onFinish: () => { savingMaintenance.value = false }
+  })
+}
+
+// Maintenance Approval Workflow
+const submitMaintenanceForApproval = (m) => {
+  Modal.confirm({
+    title: 'Gửi khách hàng duyệt',
+    content: 'Bạn có chắc chắn muốn gửi phiếu bảo trì này cho khách hàng duyệt?',
+    onOk: () => router.post(`/projects/${props.project.id}/maintenances/${m.uuid}/submit`, {}, {
+      onSuccess: () => { showMaintenanceDetailDrawer.value = false; maintenanceDetail.value = null }
+    })
+  })
+}
+
+const approveMaintenanceRecord = (m) => {
+  Modal.confirm({
+    title: 'Xác nhận duyệt',
+    content: 'Bạn có chắc chắn muốn duyệt phiếu bảo trì này trên danh nghĩa khách hàng?',
+    onOk: () => router.post(`/projects/${props.project.id}/maintenances/${m.uuid}/approve`, {}, {
+      onSuccess: () => { showMaintenanceDetailDrawer.value = false; maintenanceDetail.value = null }
+    })
+  })
+}
+
+const rejectMaintenanceRecord = (m) => {
+  Modal.confirm({
+    title: 'Từ chối phiếu bảo trì',
+    content: 'Bạn có chắc chắn muốn từ chối phiếu bảo trì này?',
+    onOk: () => router.post(`/projects/${props.project.id}/maintenances/${m.uuid}/reject`, {}, {
+      onSuccess: () => { showMaintenanceDetailDrawer.value = false; maintenanceDetail.value = null }
+    })
+  })
+}
+
+const deleteMaintenance = (m) => {
+  router.delete(`/projects/${props.project.id}/maintenances/${m.uuid}`, {
+    onSuccess: () => { showMaintenanceDetailDrawer.value = false; maintenanceDetail.value = null }
   })
 }
 </script>

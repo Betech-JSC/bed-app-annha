@@ -159,7 +159,11 @@ class CrmProjectsController extends Controller
             'risks.owner',
             'contract.attachments',
             'warranties.attachments',
+            'warranties.creator',
+            'warranties.approver',
             'maintenances.attachments',
+            'maintenances.creator',
+            'maintenances.approver',
             'attachments' => function ($q) {
                 $q->latest();
             },
@@ -5069,7 +5073,7 @@ class CrmProjectsController extends Controller
                 'project_id' => $project->id,
                 'maintenance_date' => $validated['maintenance_date'],
                 'next_maintenance_date' => $nextDate,
-                'status' => \App\Models\ProjectMaintenance::STATUS_APPROVED,
+                'status' => \App\Models\ProjectMaintenance::STATUS_DRAFT,
                 'notes' => $validated['notes'] ?? null,
                 'created_by' => $user->id,
             ]);
@@ -5085,6 +5089,114 @@ class CrmProjectsController extends Controller
     }
 
     /**
+     * Update project maintenance
+     */
+    public function updateProjectMaintenance(Request $request, string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_UPDATE, $project);
+
+        $maintenance = \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+
+        if (!in_array($maintenance->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ sửa được phiếu ở trạng thái nháp hoặc từ chối.');
+        }
+
+        $validated = $request->validate([
+            'maintenance_date' => 'required|date',
+            'notes' => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $nextDate = \Carbon\Carbon::parse($validated['maintenance_date'])->addMonths(6);
+
+            $maintenance->update([
+                'maintenance_date' => $validated['maintenance_date'],
+                'next_maintenance_date' => $nextDate,
+                'notes' => $validated['notes'] ?? $maintenance->notes,
+                'status' => \App\Models\ProjectMaintenance::STATUS_DRAFT,
+            ]);
+
+            $this->attachFilesToEntity($request, $maintenance, "maintenances/{$project->id}");
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật phiếu bảo trì.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Submit project maintenance for customer approval (draft → pending_customer)
+     */
+    public function submitProjectMaintenance(string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_UPDATE, $project);
+
+        $maintenance = \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+
+        if ($maintenance->status !== \App\Models\ProjectMaintenance::STATUS_DRAFT) {
+            return back()->with('error', 'Chỉ gửi duyệt được phiếu ở trạng thái nháp.');
+        }
+
+        $maintenance->update([
+            'status' => \App\Models\ProjectMaintenance::STATUS_PENDING_CUSTOMER,
+        ]);
+
+        return back()->with('success', 'Đã gửi phiếu bảo trì cho khách hàng duyệt.');
+    }
+
+    /**
+     * Approve project maintenance (pending_customer → approved)
+     */
+    public function approveProjectMaintenance(Request $request, string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $project);
+
+        $maintenance = \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+
+        if ($maintenance->status !== \App\Models\ProjectMaintenance::STATUS_PENDING_CUSTOMER) {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ KH duyệt.');
+        }
+
+        $maintenance->update([
+            'status' => \App\Models\ProjectMaintenance::STATUS_APPROVED,
+            'approved_by' => $user->id,
+        ]);
+
+        return back()->with('success', 'Đã duyệt phiếu bảo trì.');
+    }
+
+    /**
+     * Reject project maintenance (pending_customer → rejected)
+     */
+    public function rejectProjectMaintenance(Request $request, string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $project);
+
+        $maintenance = \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+
+        if ($maintenance->status !== \App\Models\ProjectMaintenance::STATUS_PENDING_CUSTOMER) {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ duyệt.');
+        }
+
+        $maintenance->update([
+            'status' => \App\Models\ProjectMaintenance::STATUS_REJECTED,
+        ]);
+
+        return back()->with('success', 'Đã từ chối phiếu bảo trì.');
+    }
+
+    /**
      * Delete project maintenance
      */
     public function destroyProjectMaintenance(string $projectId, string $uuid)
@@ -5093,7 +5205,13 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::WARRANTY_DELETE, $project);
 
-        \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail()->delete();
+        $maintenance = \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+
+        if (!in_array($maintenance->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ xóa được phiếu ở trạng thái nháp hoặc từ chối.');
+        }
+
+        $maintenance->delete();
 
         return back()->with('success', 'Đã xóa phiếu bảo trì.');
     }

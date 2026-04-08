@@ -458,6 +458,10 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
             Route::delete('/warranties/{uuid}', [CrmProjectsController::class, 'destroyProjectWarranty'])->name('warranties.destroy');
 
             Route::post('/maintenances', [CrmProjectsController::class, 'storeProjectMaintenance'])->name('maintenances.store');
+            Route::put('/maintenances/{uuid}', [CrmProjectsController::class, 'updateProjectMaintenance'])->name('maintenances.update');
+            Route::post('/maintenances/{uuid}/submit', [CrmProjectsController::class, 'submitProjectMaintenance'])->name('maintenances.submit');
+            Route::post('/maintenances/{uuid}/approve', [CrmProjectsController::class, 'approveProjectMaintenance'])->name('maintenances.approve');
+            Route::post('/maintenances/{uuid}/reject', [CrmProjectsController::class, 'rejectProjectMaintenance'])->name('maintenances.reject');
             Route::delete('/maintenances/{uuid}', [CrmProjectsController::class, 'destroyProjectMaintenance'])->name('maintenances.destroy');
         });
         Route::get('/{project}/change-requests/{cr}', fn($project) => redirect("/projects/{$project}?tab=change_requests"))->name('change-requests.show');
