@@ -158,6 +158,8 @@ class CrmProjectsController extends Controller
             },
             'risks.owner',
             'contract.attachments',
+            'warranties.attachments',
+            'maintenances.attachments',
             'attachments' => function ($q) {
                 $q->latest();
             },
@@ -4920,5 +4922,179 @@ class CrmProjectsController extends Controller
     public function laborProductivityDashboard(Request $request, string $projectId)
     {
         return app(\App\Http\Controllers\Api\LaborProductivityController::class)->dashboard($request, $projectId);
+    }
+
+    // ===================================================================
+    // WARRANTY & MAINTENANCE MODULE
+    // ===================================================================
+
+    /**
+     * Store a new project warranty
+     */
+    public function storeProjectWarranty(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_CREATE, $project);
+
+        $validated = $request->validate([
+            'handover_date' => 'required|date',
+            'warranty_content' => 'required|string',
+            'warranty_start_date' => 'required|date',
+            'warranty_end_date' => 'required|date|after_or_equal:warranty_start_date',
+            'notes' => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $warranty = \App\Models\ProjectWarranty::create(array_merge($validated, [
+                'project_id' => $project->id,
+                'status' => \App\Models\ProjectWarranty::STATUS_DRAFT,
+                'created_by' => $user->id,
+            ]));
+
+            $this->attachFilesToEntity($request, $warranty, "warranties/{$project->id}");
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo phiếu bảo hành.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi tạo phiếu bảo hành: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Update project warranty
+     */
+    public function updateProjectWarranty(Request $request, string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_UPDATE, $project);
+
+        $warranty = \App\Models\ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+        
+        $validated = $request->validate([
+            'handover_date' => 'required|date',
+            'warranty_content' => 'required|string',
+            'warranty_start_date' => 'required|date',
+            'warranty_end_date' => 'required|date|after_or_equal:warranty_start_date',
+            'notes' => 'nullable|string',
+            'status' => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $warranty->update($validated);
+            $this->attachFilesToEntity($request, $warranty, "warranties/{$project->id}");
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật phiếu bảo hành.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi cập nhật phiếu bảo hành: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Approve project warranty (Khách hàng duyệt)
+     */
+    public function approveProjectWarranty(Request $request, string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        // Permission check: normally this would be a customer, but in CRM admin can act on behalf if they have permission
+        $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $project);
+
+        $warranty = \App\Models\ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+        
+        $warranty->update([
+            'status' => \App\Models\ProjectWarranty::STATUS_APPROVED,
+            'approved_by' => $user->id,
+        ]);
+
+        return back()->with('success', 'Đã duyệt phiếu bảo hành.');
+    }
+
+    /**
+     * Reject project warranty
+     */
+    public function rejectProjectWarranty(Request $request, string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $project);
+
+        $warranty = \App\Models\ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+        
+        $warranty->update(['status' => \App\Models\ProjectWarranty::STATUS_REJECTED]);
+
+        return back()->with('success', 'Đã từ chối phiếu bảo hành.');
+    }
+
+    /**
+     * Delete project warranty
+     */
+    public function destroyProjectWarranty(string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_DELETE, $project);
+
+        \App\Models\ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail()->delete();
+
+        return back()->with('success', 'Đã xóa phiếu bảo hành.');
+    }
+
+    /**
+     * Store project maintenance
+     */
+    public function storeProjectMaintenance(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_CREATE, $project);
+
+        $validated = $request->validate([
+            'maintenance_date' => 'required|date',
+            'notes' => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            // Calculate next maintenance date (6 months later)
+            $nextDate = \Carbon\Carbon::parse($validated['maintenance_date'])->addMonths(6);
+
+            $maintenance = \App\Models\ProjectMaintenance::create([
+                'project_id' => $project->id,
+                'maintenance_date' => $validated['maintenance_date'],
+                'next_maintenance_date' => $nextDate,
+                'status' => \App\Models\ProjectMaintenance::STATUS_APPROVED,
+                'notes' => $validated['notes'] ?? null,
+                'created_by' => $user->id,
+            ]);
+
+            $this->attachFilesToEntity($request, $maintenance, "maintenances/{$project->id}");
+
+            DB::commit();
+            return back()->with('success', 'Đã tạo phiếu bảo trì. Lần bảo trì tiếp theo dự kiến: ' . $nextDate->format('d/m/Y'));
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi tạo phiếu bảo trì: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Delete project maintenance
+     */
+    public function destroyProjectMaintenance(string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_DELETE, $project);
+
+        \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail()->delete();
+
+        return back()->with('success', 'Đã xóa phiếu bảo trì.');
     }
 }

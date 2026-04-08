@@ -54,6 +54,7 @@ export default function ProjectDetailLayout() {
       <Stack.Screen name="monitoring" />
       <Stack.Screen name="summary-report" />
       <Stack.Screen name="summary-report/cost-details" />
+      <Stack.Screen name="warranty" />
     </Stack>
   );
 }

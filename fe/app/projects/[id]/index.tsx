@@ -258,6 +258,13 @@ export default function ProjectDetailScreen() {
       permission: Permissions.PROGRESS_VIEW,
     },
     {
+      title: "Bảo Hành & Bảo Trì",
+      icon: "shield-checkmark-outline",
+      route: `/projects/${id}/warranty`,
+      color: "#10B981",
+      permission: Permissions.WARRANTY_VIEW,
+    },
+    {
       title: "Giám Sát Dự Án",
       icon: "eye-outline",
       route: `/projects/${id}/monitoring`,

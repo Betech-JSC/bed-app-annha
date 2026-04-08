@@ -346,6 +346,15 @@ export const Permissions = {
     PROJECT_SUMMARY_REPORT_VIEW: 'report.project_summary.view',
 
     // ===================================================================
+    // WARRANTY MODULE
+    // ===================================================================
+    WARRANTY_VIEW: 'warranty.view',
+    WARRANTY_CREATE: 'warranty.create',
+    WARRANTY_UPDATE: 'warranty.update',
+    WARRANTY_DELETE: 'warranty.delete',
+    WARRANTY_APPROVE: 'warranty.approve',
+
+    // ===================================================================
     // SETTINGS MODULE
     // ===================================================================
     SETTINGS_VIEW: 'settings.view',

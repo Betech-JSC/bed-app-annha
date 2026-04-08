@@ -448,6 +448,18 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::get('/{project}/additional-costs', fn($project) => redirect("/projects/{$project}?tab=additional_costs"))->name('additional-costs.index');
         Route::get('/{project}/additional-costs/{ac}', fn($project) => redirect("/projects/{$project}?tab=additional_costs"))->name('additional-costs.show');
         Route::get('/{project}/change-requests', fn($project) => redirect("/projects/{$project}?tab=change_requests"))->name('change-requests.index');
+
+        // Warranty & Maintenance
+        Route::prefix('/{project}')->group(function () {
+            Route::post('/warranties', [CrmProjectsController::class, 'storeProjectWarranty'])->name('warranties.store');
+            Route::put('/warranties/{uuid}', [CrmProjectsController::class, 'updateProjectWarranty'])->name('warranties.update');
+            Route::post('/warranties/{uuid}/approve', [CrmProjectsController::class, 'approveProjectWarranty'])->name('warranties.approve');
+            Route::post('/warranties/{uuid}/reject', [CrmProjectsController::class, 'rejectProjectWarranty'])->name('warranties.reject');
+            Route::delete('/warranties/{uuid}', [CrmProjectsController::class, 'destroyProjectWarranty'])->name('warranties.destroy');
+
+            Route::post('/maintenances', [CrmProjectsController::class, 'storeProjectMaintenance'])->name('maintenances.store');
+            Route::delete('/maintenances/{uuid}', [CrmProjectsController::class, 'destroyProjectMaintenance'])->name('maintenances.destroy');
+        });
         Route::get('/{project}/change-requests/{cr}', fn($project) => redirect("/projects/{$project}?tab=change_requests"))->name('change-requests.show');
         Route::get('/{project}/subcontractors/{sub}', fn($project) => redirect("/projects/{$project}?tab=subcontractors"))->name('subcontractors.show');
         Route::get('/{project}/subcontractors/{sub}/payments/{payment}', fn($project) => redirect("/projects/{$project}?tab=subcontractors"))->name('subcontractors.payments.show');

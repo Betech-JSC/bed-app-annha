@@ -17,6 +17,8 @@ use App\Models\ConstructionLog;
 use App\Models\ScheduleAdjustment;
 use App\Models\Defect;
 use App\Models\ProjectBudget;
+use App\Models\EquipmentRental;
+use App\Models\AssetUsage;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -32,6 +34,9 @@ class CrmApprovalController extends Controller
      */
     public function index(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $allProjectIds = $user->isSuperAdmin() ? [] : $user->projects()->pluck('projects.id')->toArray();
+
         // ─── Management Level (BĐH) — Show All (Draft, Pending, Management, Rejected) ───
         $managementItems = Cost::whereIn('status', ['draft', 'pending', 'pending_management_approval', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'attachments'])
@@ -175,6 +180,74 @@ class CrmApprovalController extends Controller
             ->get();
         $budgetItemsFormatted = $budgetItems->map(fn(ProjectBudget $b) => $this->formatBudget($b));
 
+        // ─── Thuê thiết bị (Equipment rentals) ───
+        $equipmentRentalManagement = EquipmentRental::whereIn('status', ['pending_management', 'rejected'])
+            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
+                if (!$user->isSuperAdmin()) {
+                    $q->whereIn('id', $allProjectIds);
+                }
+            })
+            ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+        $equipmentRentalManagementFormatted = $equipmentRentalManagement->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
+
+        $equipmentRentalAccountant = EquipmentRental::where('status', 'pending_accountant')
+            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
+                if (!$user->isSuperAdmin()) {
+                    $q->whereIn('id', $allProjectIds);
+                }
+            })
+            ->with(['project:id,name,code', 'creator:id,name,email', 'approver:id,name', 'attachments'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+        $equipmentRentalAccountantFormatted = $equipmentRentalAccountant->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
+
+        $equipmentRentalReturn = EquipmentRental::where('status', 'pending_return')
+            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
+                if (!$user->isSuperAdmin()) {
+                    $q->whereIn('id', $allProjectIds);
+                }
+            })
+            ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+        $equipmentRentalReturnFormatted = $equipmentRentalReturn->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
+
+        // ─── Sử dụng thiết bị (Asset usages) ───
+        $assetUsageManagement = AssetUsage::whereIn('status', ['pending_management', 'rejected'])
+            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
+                if (!$user->isSuperAdmin()) {
+                    $q->whereIn('id', $allProjectIds);
+                }
+            })
+            ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+        $assetUsageManagementFormatted = $assetUsageManagement->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
+
+        $assetUsageAccountant = AssetUsage::where('status', 'pending_accountant')
+            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
+                if (!$user->isSuperAdmin()) {
+                    $q->whereIn('id', $allProjectIds);
+                }
+            })
+            ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'approver:id,name', 'attachments'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+        $assetUsageAccountantFormatted = $assetUsageAccountant->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
+
+        $assetUsageReturn = AssetUsage::where('status', 'pending_return')
+            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
+                if (!$user->isSuperAdmin()) {
+                    $q->whereIn('id', $allProjectIds);
+                }
+            })
+            ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+        $assetUsageReturnFormatted = $assetUsageReturn->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
+
         // ─── Recently processed feed ───
         $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
@@ -212,6 +285,18 @@ class CrmApprovalController extends Controller
             ->limit(5)
             ->get();
 
+        $recentRentals = EquipmentRental::whereIn('status', ['in_use', 'returned', 'rejected'])
+            ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
+            ->orderBy('updated_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        $recentUsages = AssetUsage::whereIn('status', ['in_use', 'returned', 'rejected'])
+            ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
+            ->orderBy('updated_at', 'desc')
+            ->limit(10)
+            ->get();
+
         $recentItems = collect([])
             ->concat($recentCosts->map(fn(Cost $item) => $this->formatItem($item)))
             ->concat($recentCR->map(fn(ChangeRequest $item) => $this->formatChangeRequestItem($item)))
@@ -219,6 +304,8 @@ class CrmApprovalController extends Controller
             ->concat($recentSubPayments->map(fn(SubcontractorPayment $item) => $this->formatSubPaymentItem($item)))
             ->concat($recentAcceptances->map(fn(AcceptanceStage $item) => $this->formatAcceptanceItem($item, 'Nghiệm thu', 'customer')))
             ->concat($recentBudgets->map(fn(ProjectBudget $item) => $this->formatBudget($item)))
+            ->concat($recentRentals->map(fn(EquipmentRental $item) => $this->formatEquipmentRentalItem($item)))
+            ->concat($recentUsages->map(fn(AssetUsage $item) => $this->formatAssetUsageItem($item)))
             ->sortByDesc('created_at')
             ->take(30)
             ->values();
@@ -235,7 +322,14 @@ class CrmApprovalController extends Controller
             'pending_management' => $isCustomer ? 0 : $realPendingManagement,
             'pending_accountant' => $isCustomer ? 0 : $realPendingAccountant,
             'pending_acceptance' => $realPendingAcceptance,
-            'pending_others' => $isCustomer ? 0 : ($changeRequestItems->count() + $additionalCostItems->count() + $subPaymentManagement->count() + $materialBillManagementItemsFormatted->count()),
+            'pending_others' => $isCustomer ? 0 : (
+                $changeRequestItems->count() + 
+                $additionalCostItems->count() + 
+                $subPaymentManagement->count() + 
+                $materialBillManagementItemsFormatted->count() +
+                $equipmentRentalManagement->count() +
+                $assetUsageManagement->count()
+            ),
             'approved_today' => Cost::where('status', 'approved')->whereDate('updated_at', today())->count(),
             'rejected_today' => Cost::where('status', 'rejected')->whereDate('updated_at', today())->count(),
             'total_pending_amount' => $isCustomer 
@@ -264,6 +358,12 @@ class CrmApprovalController extends Controller
             'scheduleAdjustmentItems' => $scheduleAdjustmentItemsFormatted->values(),
             'defectItems' => $defectItemsFormatted->values(),
             'budgetItems' => $budgetItemsFormatted->values(),
+            'equipmentRentalManagementItems' => $equipmentRentalManagementFormatted->values(),
+            'equipmentRentalAccountantItems' => $equipmentRentalAccountantFormatted->values(),
+            'equipmentRentalReturnItems' => $equipmentRentalReturnFormatted->values(),
+            'assetUsageManagementItems' => $assetUsageManagementFormatted->values(),
+            'assetUsageAccountantItems' => $assetUsageAccountantFormatted->values(),
+            'assetUsageReturnItems' => $assetUsageReturnFormatted->values(),
             'recentItems' => $recentItems,
             'stats' => $stats,
         ]);
@@ -1169,6 +1269,56 @@ class CrmApprovalController extends Controller
                 'size' => $a->file_size_formatted,
             ]),
             'attachments_count' => $budget->attachments->count(),
+        ];
+    }
+
+    private function formatEquipmentRentalItem(EquipmentRental $rental): array
+    {
+        return [
+            'id' => $rental->id,
+            'type' => 'equipment_rental',
+            'type_label' => 'Thuê thiết bị',
+            'title' => $rental->equipment_name ?? "Thuê thiết bị",
+            'subtitle' => ($rental->project->code ?? '') . ' - ' . ($rental->project->name ?? 'Dự án'),
+            'amount' => (float) $rental->total_cost,
+            'status' => $rental->status,
+            'status_label' => $rental::STATUS_LABELS[$rental->status] ?? $rental->status,
+            'created_by' => $rental->creator->name ?? 'N/A',
+            'created_at' => optional($rental->created_at)->format('d/m/Y H:i') ?? '',
+            'description' => $rental->notes,
+            'project_id' => $rental->project_id,
+            'attachments' => $rental->attachments->map(fn($a) => [
+                'id' => $a->id,
+                'name' => $a->file_name,
+                'url' => $a->file_url,
+                'size' => $a->file_size_formatted,
+            ]),
+            'attachments_count' => $rental->attachments->count(),
+        ];
+    }
+
+    private function formatAssetUsageItem(AssetUsage $usage): array
+    {
+        return [
+            'id' => $usage->id,
+            'type' => 'asset_usage',
+            'type_label' => 'Sử dụng T.bị',
+            'title' => ($usage->asset->name ?? "Thiết bị") . " (x{$usage->quantity})",
+            'subtitle' => ($usage->project->code ?? '') . ' - ' . ($usage->project->name ?? 'Dự án'),
+            'amount' => 0,
+            'status' => $usage->status,
+            'status_label' => $usage::STATUS_LABELS[$usage->status] ?? $usage->status,
+            'created_by' => $usage->creator->name ?? 'N/A',
+            'created_at' => optional($usage->created_at)->format('d/m/Y H:i') ?? '',
+            'description' => $usage->notes,
+            'project_id' => $usage->project_id,
+            'attachments' => $usage->attachments->map(fn($a) => [
+                'id' => $a->id,
+                'name' => $a->file_name,
+                'url' => $a->file_url,
+                'size' => $a->file_size_formatted,
+            ]),
+            'attachments_count' => $usage->attachments->count(),
         ];
     }
 

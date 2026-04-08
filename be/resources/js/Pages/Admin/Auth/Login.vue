@@ -146,9 +146,9 @@ import {
 } from '@ant-design/icons-vue'
 
 const form = useForm({
-  email: '',
-  password: '',
-  remember: false,
+  email: 'admin_full@betech.com',
+  password: 'Betech@2026',
+  remember: true,
 })
 
 const loginError = ref('')

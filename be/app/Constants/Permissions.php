@@ -105,6 +105,15 @@ class Permissions
     public const EQUIPMENT_DELETE = 'equipment.delete';
     public const EQUIPMENT_APPROVE = 'equipment.approve';
 
+    // ===================================================================
+    // WARRANTY MODULE
+    // ===================================================================
+    public const WARRANTY_VIEW = 'warranty.view';
+    public const WARRANTY_CREATE = 'warranty.create';
+    public const WARRANTY_UPDATE = 'warranty.update';
+    public const WARRANTY_DELETE = 'warranty.delete';
+    public const WARRANTY_APPROVE = 'warranty.approve';
+
 
     // ===================================================================
     // REPORT MODULE
@@ -673,6 +682,13 @@ class Permissions
             // Settings
             self::SETTINGS_VIEW,
             self::SETTINGS_MANAGE,
+
+            // Warranty
+            self::WARRANTY_VIEW,
+            self::WARRANTY_CREATE,
+            self::WARRANTY_UPDATE,
+            self::WARRANTY_DELETE,
+            self::WARRANTY_APPROVE,
         ];
     }
 
@@ -931,6 +947,13 @@ class Permissions
             ],
             'project_summary_report' => [
                 self::PROJECT_SUMMARY_REPORT_VIEW,
+            ],
+            'warranty' => [
+                self::WARRANTY_VIEW,
+                self::WARRANTY_CREATE,
+                self::WARRANTY_UPDATE,
+                self::WARRANTY_DELETE,
+                self::WARRANTY_APPROVE,
             ],
         ];
     }

@@ -90,6 +90,10 @@ class HandleInertiaRequests extends Middleware
                     if (class_exists('App\Models\Defect')) $count += \App\Models\Defect::where('status', 'fixed')->count();
                     if (class_exists('App\Models\ProjectBudget')) $count += \App\Models\ProjectBudget::where('status', 'pending')->count();
                     
+                    // Equipment modules
+                    if (class_exists('App\Models\EquipmentRental')) $count += \App\Models\EquipmentRental::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])->count();
+                    if (class_exists('App\Models\AssetUsage')) $count += \App\Models\AssetUsage::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])->count();
+                    
                     return $count;
                 } catch (\Exception $e) {
                     return 0; // Return 0 gracefully if any DB error

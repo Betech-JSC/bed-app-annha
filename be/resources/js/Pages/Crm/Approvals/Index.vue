@@ -453,6 +453,12 @@ const props = defineProps({
   scheduleAdjustmentItems: { type: Array, default: () => [] },
   defectItems: { type: Array, default: () => [] },
   budgetItems: { type: Array, default: () => [] },
+  equipmentRentalManagementItems: { type: Array, default: () => [] },
+  equipmentRentalAccountantItems: { type: Array, default: () => [] },
+  equipmentRentalReturnItems: { type: Array, default: () => [] },
+  assetUsageManagementItems: { type: Array, default: () => [] },
+  assetUsageAccountantItems: { type: Array, default: () => [] },
+  assetUsageReturnItems: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
   auth: { type: Object, required: true }, // Add auth for role-based UI
@@ -486,6 +492,8 @@ const typeColors = {
   schedule_adjustment: 'red',
   defect: 'volcano',
   budget: 'blue',
+  equipment_rental: 'cyan',
+  asset_usage: 'blue',
 }
 
 const statusViMap = {
@@ -516,6 +524,11 @@ const statusViMap = {
   owner_approved: 'CĐT đã duyệt',
   fixed: 'Đã sửa — Chờ xác nhận', 
   verified: 'Đã xác nhận',
+  pending_management: 'Chờ BĐH duyệt',
+  pending_accountant: 'Chờ KT xác nhận',
+  pending_return: 'Đang dùng — Chờ trả',
+  in_use: 'Đang sử dụng',
+  returned: 'Đã hoàn trả',
 }
 
 const historyStatusColor = (status) => {
@@ -534,12 +547,16 @@ const roleItemsMap = computed(() => ({
     ...props.additionalCostItems.map(i => ({ ...i, _approveType: 'additional_cost' })),
     ...props.materialBillManagementItems.map(i => ({ ...i, _approveType: 'material_bill' })),
     ...props.budgetItems.map(i => ({ ...i, _approveType: 'budget' })),
+    ...props.equipmentRentalManagementItems.map(i => ({ ...i, _approveType: 'equipment_rental_management' })),
+    ...props.assetUsageManagementItems.map(i => ({ ...i, _approveType: 'asset_usage_management' })),
   ],
   accountant: [
     ...props.accountantItems.map(i => ({ ...i, _approveType: 'accountant' })),
     ...props.subPaymentAccountantItems.map(i => ({ ...i, _approveType: 'sub_payment_confirm' })),
     ...props.paidPaymentItems.map(i => ({ ...i, _approveType: 'project_payment_confirm' })),
     ...props.materialBillAccountantItems.map(i => ({ ...i, _approveType: 'material_bill' })),
+    ...props.equipmentRentalAccountantItems.map(i => ({ ...i, _approveType: 'equipment_rental_accountant' })),
+    ...props.assetUsageAccountantItems.map(i => ({ ...i, _approveType: 'asset_usage_accountant' })),
   ],
   customer: [
     ...props.customerAcceptanceItems.map(i => ({ ...i, _approveType: 'acceptance' })),
@@ -555,6 +572,8 @@ const roleItemsMap = computed(() => ({
     ...props.constructionLogItems.map(i => ({ ...i, _approveType: 'construction_log' })),
     ...props.scheduleAdjustmentItems.map(i => ({ ...i, _approveType: 'schedule_adjustment' })),
     ...props.defectItems.map(i => ({ ...i, _approveType: 'defect_verify' })),
+    ...props.equipmentRentalReturnItems.map(i => ({ ...i, _approveType: 'equipment_rental_return' })),
+    ...props.assetUsageReturnItems.map(i => ({ ...i, _approveType: 'asset_usage_return' })),
   ],
 }))
 
@@ -566,9 +585,9 @@ const activeItems = computed(() => {
   // Filter by category
   if (activeCategory.value !== 'all') {
     items = items.filter(i => {
-      if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget'].includes(i.type)
+      if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget', 'equipment_rental'].includes(i.type)
       if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance'].includes(i.type)
-      if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'construction_log', 'schedule_adjustment', 'defect'].includes(i.type)
+      if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'construction_log', 'schedule_adjustment', 'defect', 'asset_usage'].includes(i.type)
       return true
     })
   }
@@ -576,10 +595,10 @@ const activeItems = computed(() => {
   // Filter by status (Only apply if not 'all')
   if (activeStatus.value !== 'all') {
     items = items.filter(i => {
-      if (activeStatus.value === 'pending') return ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed'].includes(i.status)
+      if (activeStatus.value === 'pending') return ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'pending_return', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed'].includes(i.status)
       if (activeStatus.value === 'draft') return i.status === 'draft'
       if (activeStatus.value === 'rejected') return i.status === 'rejected'
-      if (activeStatus.value === 'approved') return ['approved', 'confirmed', 'paid', 'customer_approved'].includes(i.status)
+      if (activeStatus.value === 'approved') return ['approved', 'confirmed', 'paid', 'customer_approved', 'in_use', 'returned'].includes(i.status)
       return true
     })
   }
@@ -669,6 +688,12 @@ const approveUrlMap = {
   schedule_adjustment: (r) => `/approvals/schedule-adjustment/${r.id}/approve`,
   defect_verify: (r) => `/approvals/defect/${r.id}/verify`,
   budget: (r) => `/approvals/budget/${r.id}/approve`,
+  equipment_rental_management: (r) => `/projects/${r.project_id}/equipment-rentals/${r.id}/approve-management`,
+  equipment_rental_accountant: (r) => `/projects/${r.project_id}/equipment-rentals/${r.id}/confirm-accountant`,
+  equipment_rental_return: (r) => `/projects/${r.project_id}/equipment-rentals/${r.id}/confirm-return`,
+  asset_usage_management: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/approve-management`,
+  asset_usage_accountant: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/confirm-accountant`,
+  asset_usage_return: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/confirm-return`,
 }
 
 const approveLabels = {
@@ -691,6 +716,12 @@ const approveLabels = {
   schedule_adjustment: 'Duyệt điều chỉnh tiến độ',
   defect_verify: 'Xác nhận lỗi đã sửa',
   budget: 'Duyệt ngân sách dự án',
+  equipment_rental_management: 'BĐH duyệt thuê thiết bị',
+  equipment_rental_accountant: 'KT xác nhận thuê thiết bị',
+  equipment_rental_return: 'Xác nhận trả thiết bị thuê',
+  asset_usage_management: 'BĐH duyệt sử dụng thiết bị',
+  asset_usage_accountant: 'KT xác nhận sử dụng thiết bị',
+  asset_usage_return: 'Xác nhận trả thiết bị kho',
 }
 
 const handleApproveByType = (record) => {
@@ -747,6 +778,10 @@ const rejectUrlMap = {
   schedule_adjustment: (r) => `/approvals/schedule-adjustment/${r.id}/reject`,
   defect_verify: (r) => `/approvals/defect/${r.id}/reject`,
   budget: (r) => `/approvals/budget/${r.id}/reject`,
+  equipment_rental_management: (r) => `/projects/${r.project_id}/equipment-rentals/${r.id}/reject`,
+  equipment_rental_accountant: (r) => `/projects/${r.project_id}/equipment-rentals/${r.id}/reject`,
+  asset_usage_management: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/reject`,
+  asset_usage_accountant: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/reject`,
 }
 
 const openRejectModal = (record) => {

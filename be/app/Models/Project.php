@@ -146,6 +146,16 @@ class Project extends Model
         return $this->hasMany(Invoice::class);
     }
 
+    public function warranties(): HasMany
+    {
+        return $this->hasMany(ProjectWarranty::class);
+    }
+
+    public function maintenances(): HasMany
+    {
+        return $this->hasMany(ProjectMaintenance::class);
+    }
+
     public function receipts(): HasMany
     {
         return $this->hasMany(Receipt::class);

@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\ChangeRequestController;
 use App\Http\Controllers\Api\ProjectEvmController;
 use App\Http\Controllers\Api\PredictiveAnalyticsController;
 use App\Http\Controllers\Api\ProjectCommentController;
+use App\Http\Controllers\Api\ProjectWarrantyController;
 use App\Http\Controllers\Api\ProjectSummaryReportController;
 use App\Http\Controllers\Api\ProjectMonitoringController;
 use App\Http\Controllers\Api\ProjectDocumentController;
@@ -567,6 +568,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/subcontractor-payments/{id}/approve', [SubcontractorPaymentController::class, 'approve'])->middleware('permission:subcontractor_payment.approve,projectId');
         Route::post('/{projectId}/subcontractor-payments/{id}/reject', [SubcontractorPaymentController::class, 'reject'])->middleware('permission:subcontractor_payment.approve,projectId');
         Route::post('/{projectId}/subcontractor-payments/{id}/mark-paid', [SubcontractorPaymentController::class, 'markAsPaid'])->middleware('permission:subcontractor_payment.mark_paid,projectId');
+
+        // Warranty & Maintenance
+        Route::get('/{projectId}/warranties', [ProjectWarrantyController::class, 'index'])->middleware('permission:warranty.view,projectId');
+        Route::post('/{projectId}/warranties', [ProjectWarrantyController::class, 'storeWarranty'])->middleware('permission:warranty.create,projectId');
+        Route::put('/{projectId}/warranties/{uuid}', [ProjectWarrantyController::class, 'updateWarranty'])->middleware('permission:warranty.update,projectId');
+        Route::post('/{projectId}/warranties/{uuid}/submit', [ProjectWarrantyController::class, 'submitWarranty'])->middleware('permission:warranty.update,projectId');
+        Route::post('/{projectId}/warranties/{uuid}/approve', [ProjectWarrantyController::class, 'approveWarranty'])->middleware('permission:warranty.approve,projectId');
+        Route::post('/{projectId}/warranties/{uuid}/reject', [ProjectWarrantyController::class, 'rejectWarranty'])->middleware('permission:warranty.approve,projectId');
+        Route::delete('/{projectId}/warranties/{uuid}', [ProjectWarrantyController::class, 'destroyWarranty'])->middleware('permission:warranty.delete,projectId');
+        Route::post('/{projectId}/maintenances', [ProjectWarrantyController::class, 'storeMaintenance'])->middleware('permission:warranty.create,projectId');
+        Route::put('/{projectId}/maintenances/{uuid}', [ProjectWarrantyController::class, 'updateMaintenance'])->middleware('permission:warranty.update,projectId');
+        Route::post('/{projectId}/maintenances/{uuid}/submit', [ProjectWarrantyController::class, 'submitMaintenance'])->middleware('permission:warranty.update,projectId');
+        Route::post('/{projectId}/maintenances/{uuid}/approve', [ProjectWarrantyController::class, 'approveMaintenance'])->middleware('permission:warranty.approve,projectId');
+        Route::post('/{projectId}/maintenances/{uuid}/reject', [ProjectWarrantyController::class, 'rejectMaintenance'])->middleware('permission:warranty.approve,projectId');
+        Route::delete('/{projectId}/maintenances/{uuid}', [ProjectWarrantyController::class, 'destroyMaintenance'])->middleware('permission:warranty.delete,projectId');
     });
 
     // Acceptance Templates (outside projects prefix)
