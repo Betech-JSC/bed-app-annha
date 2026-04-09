@@ -72,6 +72,22 @@ class CrmRolesController extends Controller
             ->select('id', 'name', 'email')
             ->get();
 
+        // Build role templates with permission IDs resolved from names
+        $permissionNameToId = $permissions->pluck('id', 'name')->toArray();
+        $roleTemplates = collect($this->getRoleTemplates())->map(function ($tpl) use ($permissionNameToId) {
+            return [
+                'name'        => $tpl['name'],
+                'description' => $tpl['description'],
+                'icon'        => $tpl['icon'],
+                'color'       => $tpl['color'],
+                'permissions' => collect($tpl['permission_names'])
+                    ->map(fn($name) => $permissionNameToId[$name] ?? null)
+                    ->filter()
+                    ->values()
+                    ->toArray(),
+            ];
+        })->values();
+
         return Inertia::render('Crm/Roles/Index', [
             'roles' => $roles,
             'groupedPermissions' => $groupedPermissions,
@@ -81,6 +97,7 @@ class CrmRolesController extends Controller
                 'label' => $p->description ?: $p->name,
             ]),
             'users' => $users,
+            'roleTemplates' => $roleTemplates,
         ]);
     }
 
@@ -270,4 +287,253 @@ class CrmRolesController extends Controller
             'general' => 'Chung',
         ][$key] ?? ucfirst(str_replace('_', ' ', $key));
     }
+
+    /**
+     * Predefined role templates with suggested permissions
+     */
+    private function getRoleTemplates(): array
+    {
+        return [
+            [
+                'name' => 'Giám đốc / Ban lãnh đạo',
+                'description' => 'Toàn quyền quản lý hệ thống, xem tất cả báo cáo và phê duyệt',
+                'icon' => 'crown',
+                'color' => '#D4AF37',
+                'permission_names' => [
+                    // Dự án
+                    'project.view', 'project.create', 'project.update', 'project.delete', 'project.manage',
+                    'project.comment.view', 'project.comment.create',
+                    'progress.view',
+                    'project.task.view',
+                    'project.phase.view',
+                    'project.document.view', 'project.document.upload', 'project.document.delete',
+                    'project.risk.view', 'project.risk.create', 'project.risk.update', 'project.risk.delete',
+                    'project.monitoring.view',
+                    // Tài chính
+                    'cost.view', 'cost.approve.management',
+                    'additional_cost.view', 'additional_cost.approve',
+                    'budgets.view', 'budgets.create', 'budgets.update', 'budgets.approve',
+                    'payment.view', 'payment.approve',
+                    'invoice.view', 'invoice.approve',
+                    'input_invoice.view',
+                    'contract.view', 'contract.create', 'contract.update', 'contract.approve.level_2',
+                    'revenue.view', 'revenue.dashboard', 'revenue.export',
+                    'receipts.view',
+                    'finance.view', 'finance.manage',
+                    // Nghiệm thu
+                    'acceptance.view', 'acceptance.approve.level_2',
+                    // Nhà thầu phụ & NCC
+                    'subcontractor.view',
+                    'subcontractor_payment.view', 'subcontractor_payment.approve',
+                    'suppliers.view',
+                    'supplier.contract.view', 'supplier.contract.approve',
+                    // Thiết bị & Vật tư
+                    'material.view', 'material.approve',
+                    'equipment.view', 'equipment.approve',
+                    // Nhân sự & KPI
+                    'personnel.view',
+                    'kpi.view', 'kpi.verify',
+                    // Báo cáo
+                    'report.view', 'report.export', 'report.financial', 'report.progress',
+                    'report.project_summary.view',
+                    'evm.view', 'predictive.view',
+                    'company_financial.view',
+                    // Vận hành
+                    'shareholder.view', 'shareholder.create', 'shareholder.update', 'shareholder.delete',
+                    'company_asset.view', 'company_asset.create', 'company_asset.update',
+                    'operations.dashboard.view',
+                    // Bảo hành
+                    'warranty.view', 'warranty.approve',
+                    // Cài đặt
+                    'settings.view', 'settings.manage',
+                ],
+            ],
+            [
+                'name' => 'Quản lý dự án (PM)',
+                'description' => 'Quản lý toàn bộ hoạt động trong dự án, duyệt nghiệm thu, theo dõi chi phí & tiến độ',
+                'icon' => 'project',
+                'color' => '#1B4F72',
+                'permission_names' => [
+                    // Dự án
+                    'project.view', 'project.create', 'project.update', 'project.manage',
+                    'project.comment.view', 'project.comment.create', 'project.comment.update', 'project.comment.delete',
+                    'progress.view', 'progress.update',
+                    'project.task.view', 'project.task.create', 'project.task.update', 'project.task.delete',
+                    'project.phase.view', 'project.phase.create', 'project.phase.update', 'project.phase.delete',
+                    'project.document.view', 'project.document.upload', 'project.document.delete',
+                    'project.risk.view', 'project.risk.create', 'project.risk.update', 'project.risk.delete',
+                    'project.monitoring.view',
+                    // Tài chính
+                    'cost.view', 'cost.create', 'cost.update', 'cost.submit',
+                    'additional_cost.view', 'additional_cost.create', 'additional_cost.update',
+                    'budgets.view', 'budgets.create', 'budgets.update',
+                    'payment.view', 'payment.create',
+                    'invoice.view', 'invoice.create',
+                    'contract.view', 'contract.create', 'contract.update', 'contract.approve.level_1',
+                    'revenue.view',
+                    'finance.view',
+                    // Nghiệm thu
+                    'acceptance.view', 'acceptance.create', 'acceptance.update', 'acceptance.attach_files',
+                    'acceptance.approve.level_2',
+                    'acceptance.template.view',
+                    // Nhà thầu phụ
+                    'subcontractor.view', 'subcontractor.create', 'subcontractor.update',
+                    'subcontractor_payment.view', 'subcontractor_payment.create',
+                    // NCC
+                    'suppliers.view',
+                    'supplier.contract.view', 'supplier.contract.create',
+                    'supplier.acceptance.view', 'supplier.acceptance.create',
+                    // Thiết bị & Vật tư
+                    'material.view', 'material.create', 'material.update',
+                    'equipment.view', 'equipment.create', 'equipment.update',
+                    // Nhật ký
+                    'log.view', 'log.approve',
+                    'document.view', 'document.upload',
+                    'defect.view', 'defect.create', 'defect.update',
+                    // Nhân sự
+                    'personnel.view', 'personnel.assign', 'personnel.remove',
+                    'kpi.view', 'kpi.create', 'kpi.update',
+                    'attendance.view', 'attendance.manage',
+                    'labor_productivity.view',
+                    // Yêu cầu thay đổi & Sự cố
+                    'change_request.view', 'change_request.create', 'change_request.update', 'change_request.approve',
+                    'issue.view', 'issue.create', 'issue.update', 'issue.resolve',
+                    // Gantt
+                    'gantt.view', 'gantt.update',
+                    'wbs.template.view', 'wbs.template.create',
+                    // Báo cáo
+                    'report.view', 'report.export', 'report.progress',
+                    'evm.view', 'predictive.view',
+                    // Bảo hành
+                    'warranty.view', 'warranty.create', 'warranty.update',
+                ],
+            ],
+            [
+                'name' => 'Kế toán / Tài chính',
+                'description' => 'Quản lý thu chi, hóa đơn, xác nhận thanh toán, phiếu thu/chi',
+                'icon' => 'dollar',
+                'color' => '#27AE60',
+                'permission_names' => [
+                    'project.view',
+                    // Chi phí
+                    'cost.view', 'cost.create', 'cost.update', 'cost.approve.accountant',
+                    'additional_cost.view', 'additional_cost.confirm',
+                    // Thanh toán
+                    'payment.view', 'payment.create', 'payment.update', 'payment.confirm',
+                    // Hóa đơn
+                    'invoice.view', 'invoice.create', 'invoice.update', 'invoice.send',
+                    'input_invoice.view', 'input_invoice.create', 'input_invoice.update',
+                    // Hợp đồng
+                    'contract.view',
+                    // Ngân sách
+                    'budgets.view',
+                    // Doanh thu
+                    'revenue.view', 'revenue.dashboard', 'revenue.export',
+                    // Phiếu thu/chi
+                    'receipts.view', 'receipts.create', 'receipts.update', 'receipts.verify',
+                    // Tài chính
+                    'finance.view', 'finance.manage',
+                    // NTP thanh toán
+                    'subcontractor_payment.view', 'subcontractor_payment.mark_paid',
+                    // Báo cáo
+                    'report.view', 'report.export', 'report.financial',
+                    'company_financial.view',
+                    // Tài sản
+                    'company_asset.view', 'company_asset.depreciate',
+                ],
+            ],
+            [
+                'name' => 'Giám sát công trình',
+                'description' => 'Giám sát tiến độ, duyệt nghiệm thu cấp 1, theo dõi nhật ký & lỗi',
+                'icon' => 'eye',
+                'color' => '#E67E22',
+                'permission_names' => [
+                    'project.view',
+                    'project.comment.view', 'project.comment.create',
+                    'progress.view', 'progress.update',
+                    'project.task.view', 'project.task.update',
+                    'project.phase.view',
+                    'project.document.view',
+                    'project.monitoring.view',
+                    // Nghiệm thu
+                    'acceptance.view', 'acceptance.create', 'acceptance.update', 'acceptance.attach_files',
+                    'acceptance.approve.level_1',
+                    'acceptance.template.view',
+                    // Nhật ký & Lỗi
+                    'log.view', 'log.create', 'log.update', 'log.approve',
+                    'defect.view', 'defect.create', 'defect.update', 'defect.verify',
+                    // Vật tư  & Thiết bị
+                    'material.view', 'material.create',
+                    'equipment.view',
+                    // Sự cố
+                    'issue.view', 'issue.create', 'issue.update',
+                    'change_request.view',
+                    // Chấm công
+                    'attendance.view', 'attendance.approve',
+                    'labor_productivity.view', 'labor_productivity.create', 'labor_productivity.update',
+                    // Gantt
+                    'gantt.view',
+                    // Bảo hành
+                    'warranty.view', 'warranty.create',
+                    // Tài liệu
+                    'document.view', 'document.upload',
+                ],
+            ],
+            [
+                'name' => 'Nhân viên kỹ thuật / Thi công',
+                'description' => 'Nhập liệu công việc, báo cáo tiến độ, chấm công, nhật ký hằng ngày',
+                'icon' => 'tool',
+                'color' => '#2E86C1',
+                'permission_names' => [
+                    'project.view',
+                    'project.comment.view', 'project.comment.create',
+                    'progress.view',
+                    'project.task.view', 'project.task.update',
+                    'project.document.view',
+                    // Nhật ký
+                    'log.view', 'log.create', 'log.update',
+                    // Lỗi
+                    'defect.view', 'defect.create',
+                    // Vật tư & Thiết bị
+                    'material.view', 'material.create',
+                    'equipment.view',
+                    // Chấm công
+                    'attendance.view', 'attendance.check_in',
+                    'labor_productivity.view',
+                    // Sự cố
+                    'issue.view', 'issue.create',
+                    // Tài liệu
+                    'document.view',
+                    // Gantt (chỉ xem)
+                    'gantt.view',
+                ],
+            ],
+            [
+                'name' => 'Khách hàng / Chủ đầu tư',
+                'description' => 'Xem tiến độ, nghiệm thu, xác nhận thanh toán, phê duyệt yêu cầu thay đổi',
+                'icon' => 'user',
+                'color' => '#8E44AD',
+                'permission_names' => [
+                    'project.view',
+                    'progress.view',
+                    'project.document.view',
+                    'project.monitoring.view',
+                    // Nghiệm thu
+                    'acceptance.view', 'acceptance.approve.level_3',
+                    // Thanh toán
+                    'payment.view', 'payment.mark_paid_by_customer',
+                    'additional_cost.view', 'additional_cost.mark_paid_by_customer',
+                    // Hợp đồng
+                    'contract.view', 'contract.approve.level_2',
+                    // Yêu cầu thay đổi
+                    'change_request.view', 'change_request.approve',
+                    // Báo cáo
+                    'report.view', 'report.progress',
+                    // Bảo hành
+                    'warranty.view',
+                ],
+            ],
+        ];
+    }
 }
+

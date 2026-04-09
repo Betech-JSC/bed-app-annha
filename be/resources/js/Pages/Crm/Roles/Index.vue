@@ -81,13 +81,48 @@
   <a-modal
     v-model:open="showModal"
     :title="editingRole ? 'Chỉnh sửa vai trò' : 'Tạo vai trò mới'"
-    :width="800"
+    :width="850"
     :footer="null"
     class="role-modal"
     centered
     destroyOnClose
   >
     <div class="py-4">
+      <!-- ========== ROLE TEMPLATES (only when creating) ========== -->
+      <div v-if="!editingRole && roleTemplates?.length" class="mb-6">
+        <div class="template-section-header">
+          <ThunderboltOutlined class="mr-2" />
+          <span>Chọn mẫu vai trò gợi ý</span>
+          <span class="template-hint">— click để áp dụng, có thể tùy chỉnh thêm sau</span>
+        </div>
+        <div class="template-grid">
+          <div
+            v-for="(tpl, idx) in roleTemplates"
+            :key="idx"
+            class="template-card"
+            :class="{ 'template-card--active': activeTemplate === idx }"
+            @click="applyTemplate(tpl, idx)"
+          >
+            <div class="template-card__icon" :style="{ background: tpl.color + '18', color: tpl.color }">
+              <CrownOutlined v-if="tpl.icon === 'crown'" />
+              <ProjectOutlined v-else-if="tpl.icon === 'project'" />
+              <DollarOutlined v-else-if="tpl.icon === 'dollar'" />
+              <EyeOutlined v-else-if="tpl.icon === 'eye'" />
+              <ToolOutlined v-else-if="tpl.icon === 'tool'" />
+              <UserOutlined v-else />
+            </div>
+            <div class="template-card__info">
+              <div class="template-card__name">{{ tpl.name }}</div>
+              <div class="template-card__desc">{{ tpl.description }}</div>
+            </div>
+            <div class="template-card__badge">
+              <a-badge :count="tpl.permissions.length" :number-style="{ backgroundColor: tpl.color }" />
+            </div>
+            <CheckCircleFilled v-if="activeTemplate === idx" class="template-card__check" :style="{ color: tpl.color }" />
+          </div>
+        </div>
+      </div>
+
       <!-- Basic Info -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
@@ -191,7 +226,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { Modal, message } from 'ant-design-vue'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
@@ -209,6 +244,13 @@ import {
   FolderOutlined,
   CheckOutlined,
   CloseOutlined,
+  ThunderboltOutlined,
+  CrownOutlined,
+  ProjectOutlined,
+  DollarOutlined,
+  EyeOutlined,
+  ToolOutlined,
+  CheckCircleFilled,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -218,10 +260,12 @@ const props = defineProps({
   groupedPermissions: Array,
   allPermissions: Array,
   users: Array,
+  roleTemplates: Array,
 })
 
 const showModal = ref(false)
 const editingRole = ref(null)
+const activeTemplate = ref(null)
 const activePermGroups = ref(props.groupedPermissions?.map(g => g.key) || [])
 
 const form = useForm({
@@ -235,6 +279,7 @@ const totalUsersAssigned = computed(() => (props.roles || []).reduce((sum, r) =>
 
 const openCreateModal = () => {
   editingRole.value = null
+  activeTemplate.value = null
   form.reset()
   form.permissions = []
   showModal.value = true
@@ -242,10 +287,27 @@ const openCreateModal = () => {
 
 const openEditModal = (role) => {
   editingRole.value = role
+  activeTemplate.value = null
   form.name = role.name
   form.description = role.description || ''
   form.permissions = [...role.permissions]
   showModal.value = true
+}
+
+const applyTemplate = (tpl, idx) => {
+  if (activeTemplate.value === idx) {
+    // Deselect template
+    activeTemplate.value = null
+    form.name = ''
+    form.description = ''
+    form.permissions = []
+    return
+  }
+  activeTemplate.value = idx
+  form.name = tpl.name
+  form.description = tpl.description
+  form.permissions = [...tpl.permissions]
+  message.success(`Đã áp dụng mẫu "${tpl.name}" — ${tpl.permissions.length} quyền`)
 }
 
 const confirmDelete = (role) => {
@@ -262,6 +324,7 @@ const confirmDelete = (role) => {
 }
 
 const togglePermission = (id) => {
+  activeTemplate.value = null // clear template selection when manually editing
   const idx = form.permissions.indexOf(id)
   if (idx > -1) {
     form.permissions.splice(idx, 1)
@@ -275,21 +338,25 @@ const countSelectedInGroup = (group) => {
 }
 
 const selectGroup = (group) => {
+  activeTemplate.value = null
   group.items.forEach(p => {
     if (!form.permissions.includes(p.id)) form.permissions.push(p.id)
   })
 }
 
 const deselectGroup = (group) => {
+  activeTemplate.value = null
   const ids = group.items.map(p => p.id)
   form.permissions = form.permissions.filter(id => !ids.includes(id))
 }
 
 const selectAllPermissions = () => {
+  activeTemplate.value = null
   form.permissions = (props.allPermissions || []).map(p => p.id)
 }
 
 const deselectAllPermissions = () => {
+  activeTemplate.value = null
   form.permissions = []
 }
 
@@ -370,6 +437,94 @@ const submitForm = () => {
   background: #FAFBFC;
 }
 .role-card__meta { font-size: 12px; color: #9CA3AF; }
+
+/* ─── Template Section ─── */
+.template-section-header {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1F2937;
+  margin-bottom: 12px;
+}
+.template-hint {
+  font-weight: 400;
+  font-size: 12px;
+  color: #9CA3AF;
+  margin-left: 4px;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.template-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 2px solid #E8ECF1;
+  background: white;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.template-card:hover {
+  border-color: #B0C4DE;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+}
+.template-card--active {
+  border-color: #1B4F72;
+  background: linear-gradient(135deg, rgba(27,79,114,0.03), rgba(46,134,193,0.05));
+  box-shadow: 0 0 0 1px rgba(27,79,114,0.2), 0 4px 16px rgba(27,79,114,0.1);
+}
+
+.template-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.template-card__info {
+  flex: 1;
+  min-width: 0;
+}
+.template-card__name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1F2937;
+  line-height: 1.3;
+}
+.template-card__desc {
+  font-size: 11px;
+  color: #9CA3AF;
+  margin-top: 2px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.template-card__badge {
+  flex-shrink: 0;
+}
+
+.template-card__check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 18px;
+}
 
 /* ─── Permission Collapse ─── */
 .permission-collapse :deep(.ant-collapse-header) {
