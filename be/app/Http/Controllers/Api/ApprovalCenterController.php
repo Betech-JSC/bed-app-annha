@@ -17,6 +17,8 @@ use App\Models\SubcontractorAcceptance;
 use App\Models\SupplierAcceptance;
 use App\Models\Defect;
 use App\Models\ProjectBudget;
+use App\Models\EquipmentRental;
+use App\Models\AssetUsage;
 use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -810,7 +812,7 @@ class ApprovalCenterController extends Controller
         // 16. PROJECT BUDGETS (Duyệt ngân sách dự án)
         // ================================================================
         if ($type === 'all' || $type === 'budget') {
-            $budgets = \App\Models\ProjectBudget::where('status', 'draft')
+            $budgets = \App\Models\ProjectBudget::whereIn('status', ['draft', 'pending_approval'])
                 ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'creator:id,name'])
                 ->orderBy('created_at', 'desc')
@@ -847,12 +849,121 @@ class ApprovalCenterController extends Controller
         }
 
         // ================================================================
-        // 17. RECENT ACTIVITY (History)
+        // 17. EQUIPMENT RENTALS (Thuê thiết bị)
+        // ================================================================
+        if ($type === 'all' || $type === 'equipment_rental') {
+            $equipmentRentalClass = 'App\\Models\\EquipmentRental';
+            if (class_exists($equipmentRentalClass)) {
+                $rentals = $equipmentRentalClass::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])
+                    ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
+                    ->with(['project:id,name,code', 'creator:id,name,email'])
+                    ->orderBy('created_at', 'desc')
+                    ->get();
+
+                if ($rentals->isNotEmpty()) {
+                    $result['summary'][] = [
+                        'type' => 'equipment_rental',
+                        'label' => 'Thuê thiết bị',
+                        'icon' => 'construct-outline',
+                        'color' => '#06B6D4',
+                        'total' => $rentals->count(),
+                        'pending_management' => $rentals->where('status', 'pending_management')->count(),
+                        'pending_accountant' => $rentals->where('status', 'pending_accountant')->count(),
+                    ];
+
+                    foreach ($rentals as $rental) {
+                        $level = match($rental->status) {
+                            'pending_management' => 'management',
+                            'pending_accountant' => 'accountant',
+                            'pending_return' => 'management',
+                            default => 'management',
+                        };
+                        $result['items'][] = [
+                            'id' => $rental->id,
+                            'type' => 'equipment_rental',
+                            'title' => $rental->equipment_name ?? $rental->name ?? "Thuê TB #{$rental->id}",
+                            'subtitle' => ($rental->project->code ?? '') . ' - ' . ($rental->project->name ?? 'Dự án'),
+                            'amount' => (float) ($rental->total_cost ?? $rental->rental_cost ?? 0),
+                            'status' => $rental->status,
+                            'status_label' => $this->getStatusLabel($rental->status),
+                            'created_by' => $rental->creator->name ?? 'N/A',
+                            'created_at' => $rental->created_at->toISOString(),
+                            'description' => $rental->notes ?? null,
+                            'project_id' => $rental->project_id,
+                            'route' => "/projects/{$rental->project_id}",
+                            'can_approve' => ($rental->status === 'pending_management' && $canApproveManagement) ||
+                                            ($rental->status === 'pending_accountant' && $canApproveAccountant) ||
+                                            ($rental->status === 'pending_return'),
+                            'approval_level' => $level,
+                        ];
+                    }
+                }
+            }
+        }
+
+        // ================================================================
+        // 18. ASSET USAGES (Sử dụng thiết bị từ kho)
+        // ================================================================
+        if ($type === 'all' || $type === 'asset_usage') {
+            $assetUsageClass = 'App\\Models\\AssetUsage';
+            if (class_exists($assetUsageClass)) {
+                $usages = $assetUsageClass::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])
+                    ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
+                    ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name'])
+                    ->orderBy('created_at', 'desc')
+                    ->get();
+
+                if ($usages->isNotEmpty()) {
+                    $result['summary'][] = [
+                        'type' => 'asset_usage',
+                        'label' => 'Sử dụng TB',
+                        'icon' => 'hardware-chip-outline',
+                        'color' => '#3B82F6',
+                        'total' => $usages->count(),
+                        'pending_management' => $usages->where('status', 'pending_management')->count(),
+                        'pending_accountant' => $usages->where('status', 'pending_accountant')->count(),
+                    ];
+
+                    foreach ($usages as $usage) {
+                        $level = match($usage->status) {
+                            'pending_management' => 'management',
+                            'pending_accountant' => 'accountant',
+                            'pending_return' => 'management',
+                            default => 'management',
+                        };
+                        $result['items'][] = [
+                            'id' => $usage->id,
+                            'type' => 'asset_usage',
+                            'title' => $usage->asset->name ?? "SD TB #{$usage->id}",
+                            'subtitle' => ($usage->project->code ?? '') . ' - ' . ($usage->project->name ?? 'Dự án'),
+                            'amount' => 0,
+                            'status' => $usage->status,
+                            'status_label' => $this->getStatusLabel($usage->status),
+                            'created_by' => $usage->creator->name ?? 'N/A',
+                            'created_at' => $usage->created_at->toISOString(),
+                            'description' => $usage->notes ?? null,
+                            'project_id' => $usage->project_id,
+                            'route' => "/projects/{$usage->project_id}",
+                            'can_approve' => ($usage->status === 'pending_management' && $canApproveManagement) ||
+                                            ($usage->status === 'pending_accountant' && $canApproveAccountant) ||
+                                            ($usage->status === 'pending_return'),
+                            'approval_level' => $level,
+                        ];
+                    }
+                }
+            }
+        }
+
+        // ================================================================
+        // 19. RECENT ACTIVITY (History) — Project-scoped
         // ================================================================
         $recentActions = collect();
         
-        // Fetch recently approved/rejected costs
+        // Fetch recently approved/rejected costs (project-scoped)
         $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
+            ->when(!$isSuperAdmin, fn($q) => $q->where(function($sq) use ($myProjectIds) {
+                $sq->whereIn('project_id', $myProjectIds)->orWhereNull('project_id');
+            }))
             ->with(['creator:id,name', 'costGroup:id,name', 'project:id,name,code', 'attachments'])
             ->where('updated_at', '>=', now()->subDays(7))
             ->orderBy('updated_at', 'desc')
@@ -873,14 +984,15 @@ class ApprovalCenterController extends Controller
                 'updated_at' => $cost->updated_at->toISOString(),
                 'project_id' => $cost->project_id,
                 'description' => $cost->description,
-                'rejected_reason' => $cost->rejected_reason, // Assuming this field exists or from log
+                'rejected_reason' => $cost->rejected_reason,
                 'can_approve' => false,
                 'approval_level' => 'history',
             ]);
         }
 
-        // Fetch recently processed acceptance stages
+        // Fetch recently processed acceptance stages (project-scoped)
         $recentAcceptances = AcceptanceStage::whereIn('status', ['customer_approved', 'rejected'])
+            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
             ->with(['project:id,name,code', 'task:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(10)
@@ -908,11 +1020,23 @@ class ApprovalCenterController extends Controller
         $result['recent_items'] = $recentActions->sortByDesc('updated_at')->values()->all();
 
         // ================================================================
-        // STATS OVERVIEW
+        // STATS OVERVIEW — Project-scoped
         // ================================================================
-        $pendingAmount = Cost::whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])->sum('amount');
-        $approvedToday = Cost::where('status', 'approved')->whereDate('updated_at', today())->count();
-        $rejectedToday = Cost::where('status', 'rejected')->whereDate('updated_at', today())->count();
+        $pendingAmount = Cost::whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])
+            ->when(!$isSuperAdmin, fn($q) => $q->where(function($sq) use ($myProjectIds) {
+                $sq->whereIn('project_id', $myProjectIds)->orWhereNull('project_id');
+            }))
+            ->sum('amount');
+        $approvedToday = Cost::where('status', 'approved')->whereDate('updated_at', today())
+            ->when(!$isSuperAdmin, fn($q) => $q->where(function($sq) use ($myProjectIds) {
+                $sq->whereIn('project_id', $myProjectIds)->orWhereNull('project_id');
+            }))
+            ->count();
+        $rejectedToday = Cost::where('status', 'rejected')->whereDate('updated_at', today())
+            ->when(!$isSuperAdmin, fn($q) => $q->where(function($sq) use ($myProjectIds) {
+                $sq->whereIn('project_id', $myProjectIds)->orWhereNull('project_id');
+            }))
+            ->count();
         
         $result['stats'] = [
             'pending_total' => array_sum(array_column($result['summary'], 'total')),
@@ -967,7 +1091,7 @@ class ApprovalCenterController extends Controller
     public function quickApprove(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment,defect,budget',
+            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment,defect,budget,equipment_rental,asset_usage',
             'id' => 'required|integer',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -1253,6 +1377,58 @@ class ApprovalCenterController extends Controller
                     ]);
                     DB::commit();
                     return response()->json(['success' => true, 'message' => 'Đã duyệt ngân sách dự án']);
+
+                // ─── Equipment Rental ───
+                case 'equipment_rental':
+                    $rentalClass = 'App\\Models\\EquipmentRental';
+                    if (!class_exists($rentalClass)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
+                    }
+                    $rental = $rentalClass::findOrFail($id);
+                    if ($rental->status === 'pending_management' && method_exists($rental, 'approveByManagement')) {
+                        $rental->approveByManagement($user);
+                        DB::commit();
+                        return response()->json(['success' => true, 'message' => 'Đã duyệt thuê thiết bị (BĐH)']);
+                    }
+                    if ($rental->status === 'pending_accountant' && method_exists($rental, 'approveByAccountant')) {
+                        $rental->approveByAccountant($user);
+                        DB::commit();
+                        return response()->json(['success' => true, 'message' => 'Đã xác nhận thuê thiết bị (KT)']);
+                    }
+                    if ($rental->status === 'pending_return' && method_exists($rental, 'confirmReturn')) {
+                        $rental->confirmReturn($user);
+                        DB::commit();
+                        return response()->json(['success' => true, 'message' => 'Đã xác nhận trả thiết bị thuê']);
+                    }
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => 'Phiếu thuê không ở trạng thái chờ duyệt'], 400);
+
+                // ─── Asset Usage ───
+                case 'asset_usage':
+                    $usageClass = 'App\\Models\\AssetUsage';
+                    if (!class_exists($usageClass)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
+                    }
+                    $usage = $usageClass::findOrFail($id);
+                    if ($usage->status === 'pending_management' && method_exists($usage, 'approveByManagement')) {
+                        $usage->approveByManagement($user);
+                        DB::commit();
+                        return response()->json(['success' => true, 'message' => 'Đã duyệt sử dụng thiết bị (BĐH)']);
+                    }
+                    if ($usage->status === 'pending_accountant' && method_exists($usage, 'approveByAccountant')) {
+                        $usage->approveByAccountant($user);
+                        DB::commit();
+                        return response()->json(['success' => true, 'message' => 'Đã xác nhận sử dụng thiết bị (KT)']);
+                    }
+                    if ($usage->status === 'pending_return' && method_exists($usage, 'confirmReturn')) {
+                        $usage->confirmReturn($user);
+                        DB::commit();
+                        return response()->json(['success' => true, 'message' => 'Đã xác nhận trả thiết bị kho']);
+                    }
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => 'Phiếu sử dụng TB không ở trạng thái chờ duyệt'], 400);
             }
 
             DB::rollBack();
@@ -1274,7 +1450,7 @@ class ApprovalCenterController extends Controller
     public function quickReject(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment,defect,budget',
+            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment,defect,budget,equipment_rental,asset_usage',
             'id' => 'required|integer',
             'reason' => 'required|string|max:500',
         ]);
@@ -1423,6 +1599,62 @@ class ApprovalCenterController extends Controller
                     }
                     DB::commit();
                     return response()->json(['success' => true, 'message' => 'Đã từ chối điều chỉnh tiến độ']);
+
+                case 'defect':
+                    $defect = Defect::findOrFail($request->id);
+                    if ($defect->status !== 'fixed') {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Lỗi chưa được báo đã sửa'], 400);
+                    }
+                    $defect->update([
+                        'status' => 'open',
+                        'rejected_reason' => $request->reason,
+                    ]);
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã từ chối xác nhận sửa lỗi']);
+
+                case 'budget':
+                    $budget = ProjectBudget::findOrFail($request->id);
+                    $budget->update([
+                        'status' => 'rejected',
+                        'rejected_reason' => $request->reason,
+                        'rejected_by' => $user->id,
+                        'rejected_at' => now(),
+                    ]);
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã từ chối ngân sách dự án']);
+
+                case 'equipment_rental':
+                    $rentalClass = 'App\\Models\\EquipmentRental';
+                    if (!class_exists($rentalClass)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
+                    }
+                    $rental = $rentalClass::findOrFail($request->id);
+                    if (method_exists($rental, 'reject')) {
+                        $rental->reject($request->reason, $user);
+                        DB::commit();
+                        return response()->json(['success' => true, 'message' => 'Đã từ chối thuê thiết bị']);
+                    }
+                    $rental->update(['status' => 'rejected', 'rejected_reason' => $request->reason]);
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã từ chối thuê thiết bị']);
+
+                case 'asset_usage':
+                    $usageClass = 'App\\Models\\AssetUsage';
+                    if (!class_exists($usageClass)) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
+                    }
+                    $usage = $usageClass::findOrFail($request->id);
+                    if (method_exists($usage, 'reject')) {
+                        $usage->reject($request->reason, $user);
+                        DB::commit();
+                        return response()->json(['success' => true, 'message' => 'Đã từ chối sử dụng thiết bị']);
+                    }
+                    $usage->update(['status' => 'rejected', 'rejected_reason' => $request->reason]);
+                    DB::commit();
+                    return response()->json(['success' => true, 'message' => 'Đã từ chối sử dụng thiết bị']);
             }
 
             DB::rollBack();
@@ -1472,6 +1704,8 @@ class ApprovalCenterController extends Controller
             'schedule_adjustment' => ScheduleAdjustment::class,
             'defect' => Defect::class,
             'budget' => ProjectBudget::class,
+            'equipment_rental' => EquipmentRental::class,
+            'asset_usage' => AssetUsage::class,
         ];
 
         if (isset($modelMap[$type])) {
@@ -1678,6 +1912,17 @@ class ApprovalCenterController extends Controller
                     ], 403);
                 }
                 break;
+
+            case 'equipment_rental':
+            case 'asset_usage':
+                if (!$user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT)
+                    && !$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Bạn không có quyền duyệt thiết bị.'
+                    ], 403);
+                }
+                break;
         }
 
         return true;
@@ -1700,6 +1945,7 @@ class ApprovalCenterController extends Controller
             'paid', 'customer_paid' => 'Đã thanh toán',
             'rejected' => 'Từ chối',
             'fixed' => 'Đã sửa - Chờ xác nhận',
+            'pending_return' => 'Chờ xác nhận trả',
             default => $status,
         };
     }
@@ -1801,6 +2047,20 @@ class ApprovalCenterController extends Controller
                 'required_role_short' => 'GS',
                 'required_role_icon' => 'bug-outline',
                 'required_role_color' => '#F43F5E',
+            ],
+            'equipment_rental' => [
+                'required_role' => 'project_owner',
+                'required_role_label' => 'Ban ĐH / Kế toán',
+                'required_role_short' => 'BĐH',
+                'required_role_icon' => 'construct-outline',
+                'required_role_color' => '#06B6D4',
+            ],
+            'asset_usage' => [
+                'required_role' => 'project_owner',
+                'required_role_label' => 'Ban ĐH / Kế toán',
+                'required_role_short' => 'BĐH',
+                'required_role_icon' => 'hardware-chip-outline',
+                'required_role_color' => '#3B82F6',
             ],
             default => [
                 'required_role' => 'admin',
