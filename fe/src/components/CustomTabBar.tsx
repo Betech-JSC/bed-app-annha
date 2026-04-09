@@ -64,13 +64,6 @@ const tabs: TabItem[] = [
     ],
   },
   {
-    name: "Báo Cáo",
-    route: "/(tabs)/reports",
-    icon: "bar-chart-outline",
-    iconFocused: "bar-chart",
-    permission: Permissions.REPORT_VIEW,
-  },
-  {
     name: "Cấu Hình",
     route: "/(tabs)/settings",
     icon: "settings-outline",

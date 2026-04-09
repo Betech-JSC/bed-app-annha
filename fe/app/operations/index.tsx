@@ -14,11 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components';
 import { operationsApi, OperationsDashboard } from '@/api/operationsApi';
 import { formatVND } from '@/utils/format';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Permissions } from '@/constants/Permissions';
 
 const { width } = Dimensions.get('window');
 
 export default function OperationsDashboardScreen() {
   const router = useRouter();
+  const { hasPermission, hasAnyPermission } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState<OperationsDashboard | null>(null);
@@ -83,143 +86,165 @@ export default function OperationsDashboardScreen() {
       >
         <View style={styles.content}>
           {/* Tài chính tổng quát */}
-          <Text style={styles.sectionTitle}>Tài Chính Tổng Quát</Text>
-          <View style={styles.statsGrid}>
-            <StatCard 
-              title="Tổng Vốn Công Ty" 
-              value={data?.total_capital || 0} 
-              icon="business-outline" 
-              color="#8B5CF6" 
-            />
-            <StatCard 
-              title="Doanh Thu Dự Án" 
-              value={data?.project_revenue || 0} 
-              icon="trending-up-outline" 
-              color="#10B981" 
-              subValue={data?.project_costs}
-              subLabel="Chi phí"
-            />
-            <StatCard 
-              title="Chi Phí Vận Hành" 
-              value={data?.operations_costs || 0} 
-              icon="cash-outline" 
-              color="#F59E0B" 
-            />
-          </View>
+          {hasAnyPermission([Permissions.COST_VIEW, Permissions.REPORT_FINANCIAL]) && (
+            <>
+              <Text style={styles.sectionTitle}>Tài Chính Tổng Quát</Text>
+              <View style={styles.statsGrid}>
+                <StatCard 
+                  title="Tổng Vốn Công Ty" 
+                  value={data?.total_capital || 0} 
+                  icon="business-outline" 
+                  color="#8B5CF6" 
+                />
+                <StatCard 
+                  title="Doanh Thu Dự Án" 
+                  value={data?.project_revenue || 0} 
+                  icon="trending-up-outline" 
+                  color="#10B981" 
+                  subValue={data?.project_costs}
+                  subLabel="Chi phí"
+                />
+                <StatCard 
+                  title="Chi Phí Vận Hành" 
+                  value={data?.operations_costs || 0} 
+                  icon="cash-outline" 
+                  color="#F59E0B" 
+                />
+              </View>
+            </>
+          )}
 
           {/* Quản lý Tài sản */}
-          <Text style={styles.sectionTitle}>Quản Lý Tài Sản</Text>
-          <TouchableOpacity 
-            style={styles.assetPreviewCard}
-            onPress={() => router.push('/equipment')}
-          >
-            <View style={styles.assetHeader}>
-              <View style={styles.assetInfo}>
-                <Text style={styles.assetMainValue}>{data?.assets?.total || 0}</Text>
-                <Text style={styles.assetMainLabel}>Tổng tài sản</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
-            </View>
-            
-            <View style={styles.assetDetails}>
-              <View style={styles.assetDetailItem}>
-                <Text style={styles.assetDetailLabel}>Giá trị hiện tại</Text>
-                <Text style={styles.assetDetailValue}>{formatVND(data?.assets?.total_value || 0)}</Text>
-              </View>
-              <View style={styles.assetDetailItem}>
-                <Text style={styles.assetDetailLabel}>Khấu hao lũy kế</Text>
-                <Text style={[styles.assetDetailValue, { color: '#EF4444' }]}>
-                  -{formatVND(data?.assets?.total_depreciation || 0)}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
+          {hasPermission(Permissions.COMPANY_ASSET_VIEW) && (
+            <>
+              <Text style={styles.sectionTitle}>Quản Lý Tài Sản</Text>
+              <TouchableOpacity 
+                style={styles.assetPreviewCard}
+                onPress={() => router.push('/equipment')}
+              >
+                <View style={styles.assetHeader}>
+                  <View style={styles.assetInfo}>
+                    <Text style={styles.assetMainValue}>{data?.assets?.total || 0}</Text>
+                    <Text style={styles.assetMainLabel}>Tổng tài sản</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
+                </View>
+                
+                <View style={styles.assetDetails}>
+                  <View style={styles.assetDetailItem}>
+                    <Text style={styles.assetDetailLabel}>Giá trị hiện tại</Text>
+                    <Text style={styles.assetDetailValue}>{formatVND(data?.assets?.total_value || 0)}</Text>
+                  </View>
+                  <View style={styles.assetDetailItem}>
+                    <Text style={styles.assetDetailLabel}>Khấu hao lũy kế</Text>
+                    <Text style={[styles.assetDetailValue, { color: '#EF4444' }]}>
+                      -{formatVND(data?.assets?.total_depreciation || 0)}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
           
           {/* Quản lý Vật liệu */}
-          <Text style={styles.sectionTitle}>Quản Lý Kho Vật Liệu</Text>
-          <TouchableOpacity 
-            style={[styles.assetPreviewCard, { borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}
-            onPress={() => router.push('/materials')}
-          >
-            <View style={styles.assetHeader}>
-              <View style={styles.assetInfo}>
-                <Text style={styles.assetMainValue}>{data?.materials?.total_items || 0}</Text>
-                <Text style={styles.assetMainLabel}>Mặt hàng</Text>
-              </View>
-              {data?.materials?.low_stock_count ? (
-                  <View style={styles.lowStockBadge}>
-                    <Text style={styles.lowStockText}>{data.materials.low_stock_count} Sắp hết</Text>
+          {hasPermission(Permissions.MATERIAL_VIEW) && (
+            <>
+              <Text style={styles.sectionTitle}>Quản Lý Kho Vật Liệu</Text>
+              <TouchableOpacity 
+                style={[styles.assetPreviewCard, { borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}
+                onPress={() => router.push('/materials')}
+              >
+                <View style={styles.assetHeader}>
+                  <View style={styles.assetInfo}>
+                    <Text style={styles.assetMainValue}>{data?.materials?.total_items || 0}</Text>
+                    <Text style={styles.assetMainLabel}>Mặt hàng</Text>
                   </View>
-              ) : null}
-              <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
-            </View>
-            
-            <View style={styles.assetDetails}>
-              <View style={styles.assetDetailItem}>
-                <Text style={styles.assetDetailLabel}>Giá trị tồn kho</Text>
-                <Text style={styles.assetDetailValue}>{formatVND(data?.materials?.total_value || 0)}</Text>
-              </View>
-              <View style={styles.assetDetailItem}>
-                <Text style={styles.assetDetailLabel}>Tình trạng</Text>
-                <Text style={[styles.assetDetailValue, { color: (data?.materials?.low_stock_count ?? 0) > 0 ? '#EF4444' : '#10B981' }]}>
-                  {(data?.materials?.low_stock_count ?? 0) > 0 ? 'Cảnh báo tồn' : 'Ổn định'}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
+                  {data?.materials?.low_stock_count ? (
+                      <View style={styles.lowStockBadge}>
+                        <Text style={styles.lowStockText}>{data.materials.low_stock_count} Sắp hết</Text>
+                      </View>
+                  ) : null}
+                  <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
+                </View>
+                
+                <View style={styles.assetDetails}>
+                  <View style={styles.assetDetailItem}>
+                    <Text style={styles.assetDetailLabel}>Giá trị tồn kho</Text>
+                    <Text style={styles.assetDetailValue}>{formatVND(data?.materials?.total_value || 0)}</Text>
+                  </View>
+                  <View style={styles.assetDetailItem}>
+                    <Text style={styles.assetDetailLabel}>Tình trạng</Text>
+                    <Text style={[styles.assetDetailValue, { color: (data?.materials?.low_stock_count ?? 0) > 0 ? '#EF4444' : '#10B981' }]}>
+                      {(data?.materials?.low_stock_count ?? 0) > 0 ? 'Cảnh báo tồn' : 'Ổn định'}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
 
           {/* Menu chức năng nhanh */}
           <Text style={styles.sectionTitle}>Chức Năng</Text>
           <View style={styles.menuGrid}>
-            <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => router.push('/operations/shareholders')}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: '#8B5CF620' }]}>
-                <Ionicons name="people-outline" size={24} color="#8B5CF6" />
-              </View>
-              <Text style={styles.menuText}>Cổ Đông</Text>
-            </TouchableOpacity>
+            {hasPermission(Permissions.SHAREHOLDER_VIEW) && (
+              <TouchableOpacity 
+                  style={styles.menuItem}
+                  onPress={() => router.push('/operations/shareholders')}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: '#8B5CF620' }]}>
+                  <Ionicons name="people-outline" size={24} color="#8B5CF6" />
+                </View>
+                <Text style={styles.menuText}>Cổ Đông</Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => router.push('/materials')}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: '#3B82F620' }]}>
-                <Ionicons name="cube-outline" size={24} color="#3B82F6" />
-              </View>
-              <Text style={styles.menuText}>Vật Liệu</Text>
-            </TouchableOpacity>
+            {hasPermission(Permissions.MATERIAL_VIEW) && (
+              <TouchableOpacity 
+                  style={styles.menuItem}
+                  onPress={() => router.push('/materials')}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: '#3B82F620' }]}>
+                  <Ionicons name="cube-outline" size={24} color="#3B82F6" />
+                </View>
+                <Text style={styles.menuText}>Vật Liệu</Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => router.push('/equipment')}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: '#EC489920' }]}>
-                <Ionicons name="construct-outline" size={24} color="#EC4899" />
-              </View>
-              <Text style={styles.menuText}>Thiết Bị</Text>
-            </TouchableOpacity>
+            {hasPermission(Permissions.EQUIPMENT_VIEW) && (
+              <TouchableOpacity 
+                  style={styles.menuItem}
+                  onPress={() => router.push('/equipment')}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: '#EC489920' }]}>
+                  <Ionicons name="construct-outline" size={24} color="#EC4899" />
+                </View>
+                <Text style={styles.menuText}>Thiết Bị</Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => router.push('/company-costs')}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: '#06B6D420' }]}>
-                <Ionicons name="wallet-outline" size={24} color="#06B6D4" />
-              </View>
-              <Text style={styles.menuText}>Chi Phí CP</Text>
-            </TouchableOpacity>
+            {hasAnyPermission([Permissions.COST_VIEW, Permissions.ADDITIONAL_COST_VIEW]) && (
+              <TouchableOpacity 
+                  style={styles.menuItem}
+                  onPress={() => router.push('/company-costs')}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: '#06B6D420' }]}>
+                  <Ionicons name="wallet-outline" size={24} color="#06B6D4" />
+                </View>
+                <Text style={styles.menuText}>Chi Phí CP</Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => router.push('/company-financial')}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: '#10B98120' }]}>
-                <Ionicons name="bar-chart-outline" size={24} color="#10B981" />
-              </View>
-              <Text style={styles.menuText}>Báo Cáo</Text>
-            </TouchableOpacity>
+            {hasPermission(Permissions.REPORT_FINANCIAL) && (
+              <TouchableOpacity 
+                  style={styles.menuItem}
+                  onPress={() => router.push('/company-financial')}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: '#10B98120' }]}>
+                  <Ionicons name="bar-chart-outline" size={24} color="#10B981" />
+                </View>
+                <Text style={styles.menuText}>Báo Cáo</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </ScrollView>

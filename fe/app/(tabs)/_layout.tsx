@@ -41,19 +41,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="reports"
-        options={{
-          title: "Báo Cáo",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? "bar-chart" : "bar-chart-outline"}
-              size={focused ? 26 : 24}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="settings"
         options={{
           title: "Cấu Hình",

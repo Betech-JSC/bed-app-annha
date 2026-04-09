@@ -321,7 +321,6 @@ const menuItems = computed(() => {
       label: 'Vận hành',
       children: [
         { key: 'operations-dashboard', label: 'Tổng quan dòng tiền', perm: 'operations.dashboard.view' },
-        { key: 'reports', label: 'Báo cáo dự án', perm: 'report.view' },
         { key: 'shareholders', label: 'Nguồn vốn / Cổ đông', perm: 'shareholder.view' },
         { key: 'equipment', label: 'Kho tài sản & Thiết bị', perm: 'company_asset.view' },
         { key: 'company-costs', label: 'Chi phí công ty', perm: 'cost.view' },
@@ -384,7 +383,6 @@ const handleMenuClick = ({ key }) => {
     dashboard: '/',
     approvals: '/approvals',
     projects: '/projects',
-    reports: '/reports',
     finance: '/finance',
     'company-costs': '/finance/company-costs',
     'cost-groups': '/cost-groups',

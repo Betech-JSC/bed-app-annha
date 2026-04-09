@@ -8,7 +8,6 @@ use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
-use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\FileController;
 use App\Http\Controllers\Admin\CrmSystemLogController;
 
@@ -36,10 +35,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [UserController::class, 'destroy'])->name('destroy');
         });
 
-        // Reports & Analytics
-        Route::prefix('reports')->name('reports.')->group(function () {
-            Route::get('/', [ReportController::class, 'index'])->name('index');
-        });
 
         // Notifications Management
         Route::prefix('notifications')->name('notifications.')->group(function () {
@@ -101,7 +96,6 @@ use App\Http\Controllers\Admin\CrmCostGroupsController;
 use App\Http\Controllers\Admin\CrmEquipmentController;
 use App\Http\Controllers\Admin\CrmSettingsController;
 use App\Http\Controllers\Admin\CrmApprovalController;
-use App\Http\Controllers\Admin\CrmReportController;
 use App\Http\Controllers\Admin\CrmRolesController;
 use App\Http\Controllers\Admin\CrmNotificationController;
 use App\Http\Controllers\Admin\CrmFilesController;
@@ -185,8 +179,6 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/budget/{id}/reject', [CrmApprovalController::class, 'rejectBudget'])->name('budget.reject');
     });
 
-    // Reports (Báo cáo dự án)
-    Route::get('/reports', [CrmReportController::class, 'index'])->name('reports.index');
 
     // Roles & Permissions (Phân quyền vai trò)
     Route::prefix('roles')->name('roles.')->group(function () {

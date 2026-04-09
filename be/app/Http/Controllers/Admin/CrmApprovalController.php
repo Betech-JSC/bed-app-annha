@@ -41,6 +41,7 @@ class CrmApprovalController extends Controller
 
         // ─── Management Level (BĐH) — Show All (Draft, Pending, Management, Rejected) ───
         $managementItems = Cost::whereIn('status', ['draft', 'pending', 'pending_management_approval', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -48,6 +49,7 @@ class CrmApprovalController extends Controller
 
         // ─── Accountant Level (KT) — Show All (Accountant, Approved, Rejected) ───
         $accountantItems = Cost::whereIn('status', ['pending_accountant_approval', 'approved', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -55,6 +57,7 @@ class CrmApprovalController extends Controller
 
         // ─── Nghiệm thu chờ GS duyệt ───
         $acceptanceSupervisorItems = AcceptanceStage::where('status', 'pending')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -62,6 +65,7 @@ class CrmApprovalController extends Controller
 
         // ─── Nghiệm thu chờ QLDA duyệt ───
         $acceptancePMItems = AcceptanceStage::where('status', 'supervisor_approved')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'supervisorApprover:id,name', 'task:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->get();
@@ -69,20 +73,23 @@ class CrmApprovalController extends Controller
 
         // ─── Customer Acceptance (Khách hàng duyệt nghiệm thu) ───
         $customerAcceptanceItems = AcceptanceStage::where('status', 'project_manager_approved')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'projectManagerApprover:id,name', 'task:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->get();
         $customerAcceptanceItemsFormatted = $customerAcceptanceItems->map(fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ KH duyệt', 'customer'));
 
-        // ─── Change Requests — Show All ───
+        // ─── Change Requests ───
         $changeRequestItems = ChangeRequest::whereIn('status', ['submitted', 'under_review', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'requester:id,name,email', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
         $changeRequestItemsFormatted = $changeRequestItems->map(fn(ChangeRequest $cr) => $this->formatChangeRequestItem($cr));
 
-        // ─── Additional Costs — Show All ───
+        // ─── Additional Costs ───
         $additionalCostItems = AdditionalCost::whereIn('status', ['pending', 'pending_approval', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'proposer:id,name,email', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -90,12 +97,14 @@ class CrmApprovalController extends Controller
 
         // ─── Subcontractor Payments chờ duyệt ───
         $subPaymentManagement = SubcontractorPayment::whereIn('status', ['pending_management_approval', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
         $subPaymentManagementFormatted = $subPaymentManagement->map(fn(SubcontractorPayment $p) => $this->formatSubPaymentItem($p));
 
         $subPaymentAccountant = SubcontractorPayment::where('status', 'pending_accountant_confirmation')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'approver:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -103,6 +112,7 @@ class CrmApprovalController extends Controller
 
         // ─── Hợp đồng chờ Khách hàng duyệt ───
         $contractItems = Contract::where('status', 'pending_customer_approval')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->get();
@@ -110,6 +120,7 @@ class CrmApprovalController extends Controller
 
         // ─── Thanh toán dự án chờ Khách hàng duyệt ───
         $pendingPaymentItems = ProjectPayment::where('status', 'customer_pending_approval')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'contract:id,contract_value', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->get();
@@ -117,6 +128,7 @@ class CrmApprovalController extends Controller
 
         // ─── Thanh toán dự án khách đã trả (Chờ KT xác nhận) ───
         $paidPaymentItems = ProjectPayment::where('status', 'customer_paid')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'contract:id,contract_value', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->get();
@@ -128,12 +140,14 @@ class CrmApprovalController extends Controller
         $materialBillClass = 'App\\Models\\MaterialBill';
         if (class_exists($materialBillClass)) {
             $materialBillManagementItemsFormatted = $materialBillClass::whereIn('status', ['draft', 'pending', 'pending_management', 'rejected'])
+                ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
                 ->with(['creator:id,name,email', 'project:id,name,code', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(fn($b) => $this->formatMaterialBillItem($b));
 
             $materialBillAccountantItemsFormatted = $materialBillClass::where('status', 'pending_accountant')
+                ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
                 ->with(['creator:id,name,email', 'project:id,name,code', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get()
@@ -142,6 +156,7 @@ class CrmApprovalController extends Controller
 
         // ─── Nghiệm thu NTP chờ duyệt ───
         $subAcceptanceItems = SubcontractorAcceptance::where('status', 'pending')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -149,13 +164,15 @@ class CrmApprovalController extends Controller
 
         // ─── Nghiệm thu NCC chờ duyệt ───
         $supplierAcceptanceItems = SupplierAcceptance::where('status', 'pending')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['supplier:id,name', 'project:id,name,code', 'creator:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
         $supplierAcceptanceItemsFormatted = $supplierAcceptanceItems->map(fn(SupplierAcceptance $sa) => $this->formatSupplierAcceptanceItem($sa));
 
-        // ─── Nhật ký công trường — Show All ───
+        // ─── Nhật ký công trường ───
         $constructionLogItems = ConstructionLog::whereIn('approval_status', ['pending', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
             ->orderBy('log_date', 'desc')
             ->get();
@@ -163,6 +180,7 @@ class CrmApprovalController extends Controller
 
         // ─── Điều chỉnh tiến độ chờ duyệt ───
         $scheduleAdjustmentItems = ScheduleAdjustment::where('status', 'pending')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -170,6 +188,7 @@ class CrmApprovalController extends Controller
 
         // ─── Lỗi nghiệm thu chờ xác nhận (fixed → chờ GS/QLDA verify) ───
         $defectItems = Defect::where('status', 'fixed')
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'reporter:id,name', 'fixer:id,name', 'task:id,name', 'acceptanceStage:id,name', 'attachments'])
             ->orderBy('fixed_at', 'desc')
             ->get();
@@ -177,6 +196,7 @@ class CrmApprovalController extends Controller
 
         // ─── Project Budgets (Ngân sách chưa duyệt) ───
         $budgetItems = ProjectBudget::whereIn('status', ['draft', 'pending_approval'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -252,48 +272,56 @@ class CrmApprovalController extends Controller
 
         // ─── Recently processed feed ───
         $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(15)
             ->get();
 
         $recentCR = ChangeRequest::whereIn('status', ['approved', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'requester:id,name,email', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentAC = AdditionalCost::whereIn('status', ['approved', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'proposer:id,name,email', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentSubPayments = SubcontractorPayment::whereIn('status', ['paid', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentAcceptances = AcceptanceStage::whereIn('status', ['customer_approved', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentBudgets = ProjectBudget::whereIn('status', ['approved', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentRentals = EquipmentRental::whereIn('status', ['in_use', 'returned', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(10)
             ->get();
 
         $recentUsages = AssetUsage::whereIn('status', ['in_use', 'returned', 'rejected'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(10)
@@ -313,9 +341,15 @@ class CrmApprovalController extends Controller
             ->values();
 
         // ─── Actually Pending Stats (Exclude Draft/Rejected for KPIs) ───
-        $realPendingManagement = Cost::whereIn('status', ['pending', 'pending_management_approval'])->count();
-        $realPendingAccountant = Cost::whereIn('status', ['pending_accountant_approval'])->count();
-        $realPendingAcceptance = AcceptanceStage::whereIn('status', ['pending', 'supervisor_approved', 'project_manager_approved'])->count();
+        $realPendingManagement = Cost::whereIn('status', ['pending', 'pending_management_approval'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
+            ->count();
+        $realPendingAccountant = Cost::whereIn('status', ['pending_accountant_approval'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
+            ->count();
+        $realPendingAcceptance = AcceptanceStage::whereIn('status', ['pending', 'supervisor_approved', 'project_manager_approved'])
+            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
+            ->count();
         
         // Security Check: If user is a customer, only count items they are supposed to see
         $isCustomer = Auth::user()->role === 'customer';
@@ -332,11 +366,19 @@ class CrmApprovalController extends Controller
                 $equipmentRentalManagement->count() +
                 $assetUsageManagement->count()
             ),
-            'approved_today' => Cost::where('status', 'approved')->whereDate('updated_at', today())->count(),
-            'rejected_today' => Cost::where('status', 'rejected')->whereDate('updated_at', today())->count(),
+            'approved_today' => Cost::where('status', 'approved')->whereDate('updated_at', today())
+                ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
+                ->count(),
+            'rejected_today' => Cost::where('status', 'rejected')->whereDate('updated_at', today())
+                ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
+                ->count(),
             'total_pending_amount' => $isCustomer 
-                ? ProjectPayment::where('status', 'customer_pending_approval')->sum('amount')
-                : Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])->sum('amount'),
+                ? ProjectPayment::where('status', 'customer_pending_approval')
+                    ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
+                    ->sum('amount')
+                : Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])
+                    ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
+                    ->sum('amount'),
         ];
 
         return Inertia::render('Crm/Approvals/Index', [
