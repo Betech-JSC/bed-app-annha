@@ -2622,7 +2622,8 @@ class CrmProjectsController extends Controller
         DB::beginTransaction();
         $totalBudget = collect($validated['items'])->sum('estimated_amount');
 
-        $budget = ProjectBudget::create([
+        $budget = new ProjectBudget();
+        $budget->forceFill([
             'project_id' => $project->id,
             'name' => $validated['name'],
             'version' => $validated['version'] ?? '1.0',
@@ -2634,6 +2635,7 @@ class CrmProjectsController extends Controller
             'status' => $validated['status'] ?? 'draft',
             'created_by' => $user->id,
         ]);
+        $budget->save();
 
         foreach ($validated['items'] as $i => $item) {
             BudgetItem::create([
