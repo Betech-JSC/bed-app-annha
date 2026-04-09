@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\Kpi;
 use App\Models\Project;
 use App\Models\User;
@@ -14,8 +15,11 @@ use Inertia\Inertia;
 
 class CrmKpiController extends Controller
 {
+    use CrmAuthorization;
     public function index(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::KPI_VIEW);
         $query = Kpi::with([
             'user:id,name,email,image',
             'project:id,name,code',
@@ -137,6 +141,8 @@ class CrmKpiController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::KPI_CREATE);
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'project_id' => 'nullable|exists:projects,id',
@@ -160,6 +166,8 @@ class CrmKpiController extends Controller
 
     public function update(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::KPI_UPDATE);
         $kpi = Kpi::findOrFail($id);
 
         $validated = $request->validate([
@@ -186,6 +194,8 @@ class CrmKpiController extends Controller
 
     public function destroy($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::KPI_DELETE);
         Kpi::findOrFail($id)->delete();
         return redirect()->back()->with('success', 'Đã xóa KPI.');
     }
@@ -195,6 +205,8 @@ class CrmKpiController extends Controller
      */
     public function verify(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::KPI_VERIFY);
         $kpi = Kpi::findOrFail($id);
 
         $validated = $request->validate([
@@ -211,6 +223,8 @@ class CrmKpiController extends Controller
      */
     public function updateProgress(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::KPI_UPDATE);
         $kpi = Kpi::findOrFail($id);
 
         $validated = $request->validate([

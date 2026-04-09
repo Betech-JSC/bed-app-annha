@@ -3,21 +3,26 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\User;
 use App\Models\Department;
 use App\Models\Role;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class CrmHrController extends Controller
 {
+    use CrmAuthorization;
     /**
      * Employees list
      */
     public function employees(Request $request)
     {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
         $query = User::with(['roles', 'department']);
 
         if ($search = $request->query('search')) {
@@ -54,6 +59,8 @@ class CrmHrController extends Controller
 
     public function storeEmployee(Request $request)
     {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'nullable|string|max:255',
@@ -84,6 +91,8 @@ class CrmHrController extends Controller
 
     public function updateEmployee(Request $request, $id)
     {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
         $user = User::findOrFail($id);
 
         $validated = $request->validate([
@@ -121,6 +130,8 @@ class CrmHrController extends Controller
 
     public function destroyEmployee($id)
     {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_REMOVE);
         User::findOrFail($id)->delete();
         return redirect()->route('crm.hr.employees')->with('success', 'Đã xóa nhân viên.');
     }
@@ -130,6 +141,8 @@ class CrmHrController extends Controller
      */
     public function departments(Request $request)
     {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
         $departments = Department::with('manager:id,name', 'parent:id,name')
             ->withCount('employees as users_count')
             ->orderBy('name')
@@ -147,6 +160,8 @@ class CrmHrController extends Controller
      */
     public function orgChart()
     {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
         $departments = Department::with([
             'manager:id,name,email,image',
             'employees:id,name,email,image,department_id',
@@ -180,6 +195,8 @@ class CrmHrController extends Controller
 
     public function storeDepartment(Request $request)
     {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50|unique:departments,code',
@@ -193,6 +210,8 @@ class CrmHrController extends Controller
 
     public function updateDepartment(Request $request, $id)
     {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
         $dept = Department::findOrFail($id);
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -207,6 +226,8 @@ class CrmHrController extends Controller
 
     public function destroyDepartment($id)
     {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_REMOVE);
         Department::findOrFail($id)->delete();
         return back()->with('success', 'Đã xóa phòng ban.');
     }

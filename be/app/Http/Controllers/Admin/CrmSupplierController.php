@@ -3,15 +3,20 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 class CrmSupplierController extends Controller
 {
+    use CrmAuthorization;
     public function index(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUPPLIER_VIEW);
         $query = Supplier::withCount(['contracts', 'acceptances'])->orderByDesc('created_at');
 
         // Filters
@@ -61,6 +66,8 @@ class CrmSupplierController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUPPLIER_CREATE);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'required|string|max:50|unique:suppliers,code',
@@ -89,6 +96,8 @@ class CrmSupplierController extends Controller
 
     public function update(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUPPLIER_UPDATE);
         $supplier = Supplier::findOrFail($id);
 
         $validated = $request->validate([
@@ -114,6 +123,8 @@ class CrmSupplierController extends Controller
 
     public function destroy($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUPPLIER_DELETE);
         $supplier = Supplier::findOrFail($id);
 
         // Optional: check if supplier has contracts/acceptances before deleting

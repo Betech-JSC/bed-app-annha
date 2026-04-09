@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\Subcontractor;
 use App\Models\Project;
 use App\Models\GlobalSubcontractor;
@@ -14,8 +15,11 @@ use Inertia\Inertia;
 
 class CrmSubcontractorController extends Controller
 {
+    use CrmAuthorization;
     public function index(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_VIEW);
         $query = Subcontractor::with([
             'project:id,name,code',
             'approver:id,name',
@@ -130,6 +134,8 @@ class CrmSubcontractorController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_CREATE);
         $validated = $request->validate([
             'project_id' => 'required|exists:projects,id',
             'name' => 'required|string|max:255',
@@ -157,6 +163,8 @@ class CrmSubcontractorController extends Controller
 
     public function update(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_UPDATE);
         $sub = Subcontractor::findOrFail($id);
 
         $validated = $request->validate([
@@ -181,6 +189,8 @@ class CrmSubcontractorController extends Controller
 
     public function destroy($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_DELETE);
         $sub = Subcontractor::findOrFail($id);
 
         // Detach costs

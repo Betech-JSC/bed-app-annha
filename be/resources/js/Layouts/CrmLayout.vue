@@ -312,7 +312,7 @@ const menuItems = computed(() => {
       label: 'Tài nguyên & Kho',
       children: [
         { key: 'materials', label: 'Vật tư xây dựng', perm: 'material.view' },
-        { key: 'suppliers', label: 'Nhà cung cấp', icon: () => h(ShopOutlined), perm: 'material.view' },
+        { key: 'suppliers', label: 'Nhà cung cấp', icon: () => h(ShopOutlined), perm: 'suppliers.view' },
       ],
     },
     {
@@ -320,11 +320,11 @@ const menuItems = computed(() => {
       icon: () => h(BankOutlined),
       label: 'Vận hành',
       children: [
-        { key: 'operations-dashboard', label: 'Tổng quan dòng tiền' },
+        { key: 'operations-dashboard', label: 'Tổng quan dòng tiền', perm: 'operations.dashboard.view' },
         { key: 'reports', label: 'Báo cáo dự án', perm: 'report.view' },
-        { key: 'shareholders', label: 'Nguồn vốn / Cổ đông' },
-        { key: 'equipment', label: 'Kho tài sản & Thiết bị', perm: 'equipment.view' },
-        { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_financial.view' },
+        { key: 'shareholders', label: 'Nguồn vốn / Cổ đông', perm: 'shareholder.view' },
+        { key: 'equipment', label: 'Kho tài sản & Thiết bị', perm: 'company_asset.view' },
+        { key: 'company-costs', label: 'Chi phí công ty', perm: 'cost.view' },
         { key: 'cost-groups', label: 'Nhóm chi phí', perm: 'cost.view' },
       ],
     },

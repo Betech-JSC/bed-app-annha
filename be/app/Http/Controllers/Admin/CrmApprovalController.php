@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\Cost;
 use App\Models\AcceptanceStage;
 use App\Models\AcceptanceItem;
@@ -29,6 +30,7 @@ use Inertia\Inertia;
 
 class CrmApprovalController extends Controller
 {
+    use CrmAuthorization;
     /**
      * Display the Approval Center page — grouped by approval level.
      */
@@ -377,6 +379,7 @@ class CrmApprovalController extends Controller
     {
         $cost = Cost::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $cost->project);
 
         if (!in_array($cost->status, ['draft', 'pending', 'pending_management_approval', 'rejected'])) {
             return back()->with('error', 'Chi phí không ở trạng thái có thể duyệt');
@@ -412,6 +415,7 @@ class CrmApprovalController extends Controller
     {
         $cost = Cost::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $cost->project);
 
         if ($cost->status !== 'pending_accountant_approval') {
             return back()->with('error', 'Chi phí không ở trạng thái chờ KT xác nhận');
@@ -452,6 +456,7 @@ class CrmApprovalController extends Controller
         $request->validate(['reason' => 'required|string|max:500']);
         $cost = Cost::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COST_REJECT, $cost->project);
 
         if (!in_array($cost->status, ['pending_management_approval', 'pending_accountant_approval'])) {
             return back()->with('error', 'Chi phí không ở trạng thái chờ duyệt');
@@ -490,6 +495,7 @@ class CrmApprovalController extends Controller
     {
         $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $stage->project);
 
         if ($stage->status !== 'pending') {
             return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ GS duyệt');
@@ -514,6 +520,7 @@ class CrmApprovalController extends Controller
     {
         $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $stage->project);
 
         if ($stage->status !== 'supervisor_approved') {
             return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ QLDA duyệt');
@@ -538,6 +545,7 @@ class CrmApprovalController extends Controller
     {
         $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $stage->project);
 
         if ($stage->status !== 'project_manager_approved') {
             return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ KH duyệt');
@@ -563,6 +571,7 @@ class CrmApprovalController extends Controller
         $request->validate(['reason' => 'required|string|max:500']);
         $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $stage->project);
 
         try {
             DB::beginTransaction();
@@ -583,6 +592,7 @@ class CrmApprovalController extends Controller
     {
         $cr = ChangeRequest::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $cr->project);
 
         try {
             DB::beginTransaction();
@@ -604,6 +614,7 @@ class CrmApprovalController extends Controller
         $request->validate(['reason' => 'required|string|max:500']);
         $cr = ChangeRequest::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $cr->project);
 
         try {
             DB::beginTransaction();
@@ -624,6 +635,7 @@ class CrmApprovalController extends Controller
     {
         $ac = AdditionalCost::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ADDITIONAL_COST_APPROVE, $ac->project);
 
         try {
             DB::beginTransaction();
@@ -645,6 +657,7 @@ class CrmApprovalController extends Controller
         $request->validate(['reason' => 'required|string|max:500']);
         $ac = AdditionalCost::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ADDITIONAL_COST_APPROVE, $ac->project);
 
         try {
             DB::beginTransaction();
@@ -665,6 +678,7 @@ class CrmApprovalController extends Controller
     {
         $payment = SubcontractorPayment::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $payment->project);
 
         try {
             DB::beginTransaction();
@@ -685,6 +699,7 @@ class CrmApprovalController extends Controller
     {
         $payment = SubcontractorPayment::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID, $payment->project);
 
         // Financial Gatekeeper: Ensure attachments exist for financial flow
         if ($payment->attachments()->count() === 0) {
@@ -711,6 +726,7 @@ class CrmApprovalController extends Controller
         $request->validate(['reason' => 'required|string|max:500']);
         $payment = SubcontractorPayment::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $payment->project);
 
         try {
             DB::beginTransaction();
@@ -736,6 +752,7 @@ class CrmApprovalController extends Controller
 
         $bill = $materialBillClass::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::MATERIAL_APPROVE, $bill->project);
 
         try {
             DB::beginTransaction();
@@ -774,6 +791,7 @@ class CrmApprovalController extends Controller
 
         $bill = $materialBillClass::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::MATERIAL_APPROVE, $bill->project);
 
         if (!in_array($bill->status, ['pending_management', 'pending_accountant'])) {
             return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ duyệt');
@@ -799,7 +817,9 @@ class CrmApprovalController extends Controller
 
     public function approveContract(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
         $contract = Contract::findOrFail($id);
+        $this->crmRequire($user, Permissions::CONTRACT_VIEW, $contract->project);
         try {
             $contract->approve();
             return back()->with('success', 'Đã duyệt hợp đồng');
@@ -811,7 +831,9 @@ class CrmApprovalController extends Controller
     public function rejectContract(Request $request, $id)
     {
         $request->validate(['reason' => 'required|string']);
+        $user = Auth::guard('admin')->user();
         $contract = Contract::findOrFail($id);
+        $this->crmRequire($user, Permissions::CONTRACT_VIEW, $contract->project);
         $contract->reject($request->reason);
         return back()->with('success', 'Đã từ chối hợp đồng');
     }
@@ -820,6 +842,7 @@ class CrmApprovalController extends Controller
     {
         $payment = ProjectPayment::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::PAYMENT_APPROVE, $payment->project);
         $payment->approveByCustomer($user);
         return back()->with('success', 'Đã duyệt thanh toán dự án');
     }
@@ -828,6 +851,7 @@ class CrmApprovalController extends Controller
     {
         $payment = ProjectPayment::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $payment->project);
         
         try {
             DB::beginTransaction();
@@ -844,6 +868,8 @@ class CrmApprovalController extends Controller
     {
         $request->validate(['reason' => 'required|string']);
         $payment = ProjectPayment::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::PAYMENT_APPROVE, $payment->project);
         $payment->update([
             'status' => 'pending',
             'notes' => ($payment->notes ? $payment->notes . "\n" : '') . "Từ chối: " . $request->reason
@@ -855,13 +881,16 @@ class CrmApprovalController extends Controller
     {
         $budget = ProjectBudget::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::BUDGET_APPROVE, $budget->project);
         $budget->update(['status' => 'approved', 'approved_by' => $user->id, 'approved_at' => now()]);
         return back()->with('success', 'Đã duyệt ngân sách');
     }
 
     public function rejectBudget(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
         $budget = ProjectBudget::findOrFail($id);
+        $this->crmRequire($user, Permissions::BUDGET_APPROVE, $budget->project);
         $budget->update(['status' => 'draft']);
         return back()->with('success', 'Đã từ chối ngân sách');
     }
@@ -870,6 +899,7 @@ class CrmApprovalController extends Controller
     {
         $log = ConstructionLog::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::LOG_APPROVE, $log->project);
         $log->update(['approval_status' => 'approved', 'approved_by' => $user->id, 'approved_at' => now()]);
         return back()->with('success', 'Đã duyệt nhật ký');
     }
@@ -879,6 +909,7 @@ class CrmApprovalController extends Controller
         $request->validate(['reason' => 'required|string']);
         $log = ConstructionLog::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::LOG_APPROVE, $log->project);
         $log->update(['approval_status' => 'rejected', 'rejected_by' => $user->id, 'rejected_at' => now(), 'rejection_reason' => $request->reason]);
         return back()->with('success', 'Đã từ chối nhật ký');
     }
@@ -887,6 +918,7 @@ class CrmApprovalController extends Controller
     {
         $defect = Defect::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::DEFECT_VERIFY, $defect->project);
         $defect->markAsVerified($user);
         return back()->with('success', 'Đã xác nhận lỗi đã sửa');
     }
@@ -895,6 +927,8 @@ class CrmApprovalController extends Controller
     {
         $request->validate(['reason' => 'required|string']);
         $defect = Defect::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::DEFECT_VERIFY, $defect->project);
         $defect->update(['status' => 'open', 'rejection_reason' => $request->reason]);
         return back()->with('success', 'Đã từ chối xác nhận lỗi');
     }
@@ -903,6 +937,7 @@ class CrmApprovalController extends Controller
     {
         $adj = ScheduleAdjustment::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::GANTT_UPDATE, $adj->project);
         $adj->approve($user);
         return back()->with('success', 'Đã duyệt điều chỉnh tiến độ');
     }
@@ -912,6 +947,7 @@ class CrmApprovalController extends Controller
         $request->validate(['reason' => 'required|string']);
         $adj = ScheduleAdjustment::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::GANTT_UPDATE, $adj->project);
         $adj->reject($user, $request->reason);
         return back()->with('success', 'Đã từ chối điều chỉnh tiến độ');
     }

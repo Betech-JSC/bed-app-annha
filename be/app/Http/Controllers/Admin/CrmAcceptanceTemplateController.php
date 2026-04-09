@@ -3,23 +3,28 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\AcceptanceTemplate;
 use App\Models\AcceptanceCriterion;
 use App\Models\AcceptanceTemplateImage;
 use App\Models\AcceptanceTemplateDocument;
 use App\Models\Attachment;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class CrmAcceptanceTemplateController extends Controller
 {
+    use CrmAuthorization;
     /**
      * Danh sách tất cả bộ tài liệu nghiệm thu
      */
     public function index(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_TEMPLATE_VIEW);
         $templates = AcceptanceTemplate::query()
             ->withCount(['criteria', 'images', 'documents'])
             ->with(['images', 'documents'])
@@ -72,6 +77,8 @@ class CrmAcceptanceTemplateController extends Controller
      */
     public function show($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_TEMPLATE_VIEW);
         $template = AcceptanceTemplate::with(['criteria' => fn($q) => $q->orderBy('order'), 'images', 'documents'])
             ->findOrFail($id);
 
@@ -114,6 +121,8 @@ class CrmAcceptanceTemplateController extends Controller
      */
     public function store(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_TEMPLATE_CREATE);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:2000',
@@ -164,6 +173,8 @@ class CrmAcceptanceTemplateController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_TEMPLATE_UPDATE);
         $template = AcceptanceTemplate::findOrFail($id);
 
         $validated = $request->validate([
@@ -238,6 +249,8 @@ class CrmAcceptanceTemplateController extends Controller
      */
     public function toggleActive($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_TEMPLATE_UPDATE);
         $template = AcceptanceTemplate::findOrFail($id);
         $template->update(['is_active' => !$template->is_active]);
 
@@ -250,6 +263,8 @@ class CrmAcceptanceTemplateController extends Controller
      */
     public function destroy($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_TEMPLATE_DELETE);
         $template = AcceptanceTemplate::findOrFail($id);
 
         try {
@@ -275,6 +290,8 @@ class CrmAcceptanceTemplateController extends Controller
      */
     public function uploadDocuments(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_TEMPLATE_UPDATE);
         $template = AcceptanceTemplate::findOrFail($id);
 
         $request->validate([

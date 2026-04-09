@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\Equipment;
 use App\Models\AssetAssignment;
 use App\Models\Contract;
@@ -12,17 +13,21 @@ use App\Models\Shareholder;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class CrmOperationsController extends Controller
 {
+    use CrmAuthorization;
     // ================================================================
     // DASHBOARD — Tổng hợp dòng tiền
     // ================================================================
     public function index()
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::OPERATIONS_DASHBOARD_VIEW);
         // Nguồn vốn
         $totalCapital = Shareholder::active()->sum('contributed_amount');
         $shareholderCount = Shareholder::active()->count();
@@ -112,6 +117,8 @@ class CrmOperationsController extends Controller
     // ================================================================
     public function shareholders()
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SHAREHOLDER_VIEW);
         $shareholders = Shareholder::with('creator:id,name')
             ->orderByDesc('contributed_amount')
             ->get();
@@ -126,6 +133,8 @@ class CrmOperationsController extends Controller
 
     public function storeShareholder(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SHAREHOLDER_CREATE);
         $validated = $request->validate([
             'name'               => 'required|string|max:255',
             'phone'              => 'nullable|string|max:20',
@@ -143,6 +152,8 @@ class CrmOperationsController extends Controller
 
     public function updateShareholder(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SHAREHOLDER_UPDATE);
         $shareholder = Shareholder::findOrFail($id);
 
         $validated = $request->validate([
@@ -163,6 +174,8 @@ class CrmOperationsController extends Controller
 
     public function destroyShareholder($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SHAREHOLDER_DELETE);
         Shareholder::findOrFail($id)->delete();
         return redirect()->back()->with('success', 'Đã xóa cổ đông.');
     }
@@ -172,6 +185,8 @@ class CrmOperationsController extends Controller
     // ================================================================
     public function assets(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_ASSET_VIEW);
         $query = Equipment::with(['assignedTo:id,name', 'project:id,name', 'creator:id,name'])
             ->orderByDesc('created_at');
 
@@ -223,6 +238,8 @@ class CrmOperationsController extends Controller
 
     public function storeAsset(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_ASSET_CREATE);
         $validated = $request->validate([
             'name'                => 'required|string|max:255',
             'category'            => 'required|in:computer,machinery,vehicle,furniture,other',
@@ -250,6 +267,8 @@ class CrmOperationsController extends Controller
 
     public function updateAsset(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_ASSET_UPDATE);
         $asset = Equipment::findOrFail($id);
 
         $validated = $request->validate([
@@ -272,12 +291,16 @@ class CrmOperationsController extends Controller
 
     public function destroyAsset($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_ASSET_DELETE);
         Equipment::findOrFail($id)->delete();
         return redirect()->back()->with('success', 'Đã xóa tài sản.');
     }
 
     public function assignAsset(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_ASSET_ASSIGN);
         $asset = Equipment::findOrFail($id);
 
         $validated = $request->validate([
@@ -319,6 +342,8 @@ class CrmOperationsController extends Controller
 
     public function runDepreciation()
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_ASSET_DEPRECIATE);
         $assets = Equipment::active()
             ->where('current_value', '>', DB::raw('residual_value'))
             ->get();

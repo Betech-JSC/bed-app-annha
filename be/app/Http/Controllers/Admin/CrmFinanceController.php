@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\Contract;
 use App\Models\Cost;
 use App\Models\CostGroup;
@@ -17,8 +18,11 @@ use Inertia\Inertia;
 
 class CrmFinanceController extends Controller
 {
+    use CrmAuthorization;
     public function index(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::FINANCE_VIEW);
         // Summary stats
         $totalContractValue = Contract::sum('contract_value');
         $totalCosts = Cost::sum('amount');
@@ -52,6 +56,8 @@ class CrmFinanceController extends Controller
      */
     public function companyCosts(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COST_VIEW);
         $query = Cost::companyCosts()
             ->with(['creator:id,name', 'managementApprover:id,name', 'accountantApprover:id,name', 'costGroup:id,name', 'supplier:id,name', 'attachments'])
             ->orderByDesc('cost_date');
@@ -186,6 +192,8 @@ class CrmFinanceController extends Controller
      */
     public function storeCompanyCost(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COST_CREATE);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -221,6 +229,8 @@ class CrmFinanceController extends Controller
      */
     public function updateCompanyCost(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COST_UPDATE);
         $cost = Cost::companyCosts()->findOrFail($id);
 
         if (!in_array($cost->status, ['draft', 'rejected'])) {
@@ -249,6 +259,8 @@ class CrmFinanceController extends Controller
      */
     public function destroyCompanyCost($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COST_DELETE);
         $cost = Cost::companyCosts()->findOrFail($id);
 
         if (!in_array($cost->status, ['draft', 'rejected'])) {
@@ -265,6 +277,8 @@ class CrmFinanceController extends Controller
      */
     public function submitCompanyCost($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COST_SUBMIT);
         $cost = Cost::companyCosts()->findOrFail($id);
 
         if (!$cost->submitForManagementApproval()) {
