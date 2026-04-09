@@ -637,8 +637,8 @@ class RolePermissionSeeder extends Seeder
             Permissions::ACCEPTANCE_VIEW,
             Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
 
-            // Cost
-            Permissions::COST_VIEW,
+            // Cost (REMOVED - sensitive internal data)
+            // Permissions::COST_VIEW,
 
             // Contract
             Permissions::CONTRACT_VIEW,
@@ -672,8 +672,8 @@ class RolePermissionSeeder extends Seeder
             Permissions::REPORT_EXPORT,
             Permissions::REPORT_PROGRESS,
 
-            // Revenue
-            Permissions::REVENUE_VIEW,
+            // Revenue (REMOVED - sensitive internal data)
+            // Permissions::REVENUE_VIEW,
         ];
 
         $permissionIds = Permission::whereIn('name', $permissions)->pluck('id');

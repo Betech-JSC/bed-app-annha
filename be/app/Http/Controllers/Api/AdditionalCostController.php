@@ -8,16 +8,19 @@ use App\Models\Project;
 use App\Constants\Permissions;
 use App\Services\NotificationService;
 use App\Models\Notification;
+use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AdditionalCostController extends Controller
 {
     protected $notificationService;
+    protected $authService;
 
-    public function __construct(NotificationService $notificationService)
+    public function __construct(NotificationService $notificationService, AuthorizationService $authService)
     {
         $this->notificationService = $notificationService;
+        $this->authService = $authService;
     }
 
     /**
@@ -28,11 +31,10 @@ class AdditionalCostController extends Controller
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        // Check RBAC permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_VIEW)) {
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_VIEW, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xem chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_VIEW
+                'message' => 'Bạn không có quyền xem chi phí phát sinh của dự án này.'
             ], 403);
         }
 
@@ -54,6 +56,13 @@ class AdditionalCostController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_CREATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo chi phí phát sinh cho dự án này.'
+            ], 403);
+        }
 
         // Check RBAC permission
         if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_CREATE)) {
@@ -105,7 +114,7 @@ class AdditionalCostController extends Controller
                 Notification::TYPE_WORKFLOW,
                 Notification::CATEGORY_WORKFLOW_APPROVAL,
                 "Yêu cầu duyệt chi phí phát sinh",
-                "Có một yêu cầu chi phí phát sinh mới cho dự án '{$project->name}' với số tiền " . number_format($cost->amount) . " VND. Vui lòng kiểm tra và duyệt.",
+                "Có một yêu cầu chi phí phát sinh mới cho dự án '{$project->name}' với số tiền " . number_format((float)$cost->amount) . " VND. Vui lòng kiểm tra và duyệt.",
                 [
                     'project_id' => $project->id,
                     'cost_id' => $cost->id,
@@ -139,11 +148,10 @@ class AdditionalCostController extends Controller
 
         $user = auth()->user();
 
-        // Check RBAC permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER)) {
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền đánh dấu đã thanh toán. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER
+                'message' => 'Bạn không có quyền đánh dấu đã thanh toán cho dự án này.'
             ], 403);
         }
 
@@ -214,11 +222,10 @@ class AdditionalCostController extends Controller
 
         $user = auth()->user();
 
-        // Check RBAC permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_CONFIRM)) {
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_CONFIRM, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xác nhận chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_CONFIRM
+                'message' => 'Bạn không có quyền xác nhận chi phí phát sinh cho dự án này.'
             ], 403);
         }
 
@@ -251,11 +258,10 @@ class AdditionalCostController extends Controller
 
         $user = auth()->user();
 
-        // Check RBAC permission (Khách hàng hoặc người có quyền duyệt)
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_APPROVE)) {
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_APPROVE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền duyệt chi phí phát sinh.'
+                'message' => 'Bạn không có quyền duyệt chi phí phát sinh cho dự án này.'
             ], 403);
         }
 
@@ -300,7 +306,7 @@ class AdditionalCostController extends Controller
                 Notification::TYPE_WORKFLOW,
                 Notification::CATEGORY_WORKFLOW_APPROVAL,
                 "Chi phí phát sinh đã được duyệt",
-                "Chi phí phát sinh " . number_format($cost->amount) . " VND cho dự án '{$project->name}' đã được duyệt và cộng vào hợp đồng.",
+                "Chi phí phát sinh " . number_format((float)$cost->amount) . " VND cho dự án '{$project->name}' đã được duyệt và cộng vào hợp đồng.",
                 [
                     'project_id' => $project->id,
                     'cost_id' => $cost->id,
@@ -335,11 +341,10 @@ class AdditionalCostController extends Controller
 
         $user = auth()->user();
 
-        // Check RBAC permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_REJECT)) {
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_REJECT, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền từ chối chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_REJECT
+                'message' => 'Bạn không có quyền từ chối chi phí phát sinh cho dự án này.'
             ], 403);
         }
 
@@ -367,11 +372,10 @@ class AdditionalCostController extends Controller
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        // Check RBAC permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_VIEW)) {
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_VIEW, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xem chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_VIEW
+                'message' => 'Bạn không có quyền xem chi phí phát sinh của dự án này.'
             ], 403);
         }
 
@@ -394,11 +398,10 @@ class AdditionalCostController extends Controller
         $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
         $user = auth()->user();
 
-        // Check RBAC permission - user must be able to update the cost
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_UPDATE)) {
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_UPDATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền cập nhật chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_UPDATE
+                'message' => 'Bạn không có quyền cập nhật chi phí phát sinh này.'
             ], 403);
         }
 
@@ -448,11 +451,10 @@ class AdditionalCostController extends Controller
         $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
         $user = auth()->user();
 
-        // Check RBAC permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_DELETE)) {
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_DELETE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền xóa chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_DELETE
+                'message' => 'Bạn không có quyền xóa chi phí phát sinh này.'
             ], 403);
         }
 

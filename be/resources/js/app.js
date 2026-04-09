@@ -13,8 +13,17 @@ createInertiaApp({
   },
   title: title => title ? `${title} - BED CRM` : 'BED CRM',
   setup({ el, App, props, plugin }) {
-    createApp({ render: () => h(App, props) })
-      .use(plugin)
+    const app = createApp({ render: () => h(App, props) })
+    
+    // Global permission helper
+    app.config.globalProperties.$can = (perm) => {
+      const user = props.initialPage.props.auth?.user
+      if (!user) return false
+      if (user.super_admin) return true
+      return (user.permissions || []).includes(perm)
+    }
+
+    app.use(plugin)
       .use(Antd)
       .mount(el)
   },

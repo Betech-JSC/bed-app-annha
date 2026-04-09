@@ -35,41 +35,41 @@ class AuthorizationService
      */
     public function can(User $user, string $permission, $project = null): bool
     {
-        // Nếu không có project context → check global permission
+        // 1. Super Admin / Management bypass
+        // Users with PROJECT_MANAGE or SETTINGS_MANAGE are considered global admins for project data
+        if ($user->owner || $user->isSuperAdmin() 
+            || $user->hasPermission(Permissions::PROJECT_MANAGE)
+            || $user->hasPermission(Permissions::SETTINGS_MANAGE)) {
+            return true;
+        }
+
+        // 2. Global check (no project context)
         if (!$project) {
             return $user->hasPermission($permission);
         }
 
-        // Resolve project ID
+        // 3. Resolve project ID
         $projectId = $project instanceof Project ? $project->id : $project;
 
-        // Check nếu user đã được assign vào project
+        // 4. Check project assignment
         $personnel = ProjectPersonnel::where('project_id', $projectId)
             ->where('user_id', $user->id)
             ->first();
 
         if ($personnel) {
-            // Check project-specific permissions (explicit overrides in JSON column)
+            // Check project-specific permission overrides (JSON column)
             if ($personnel->permissions && is_array($personnel->permissions) && count($personnel->permissions) > 0) {
-                if (in_array('*', $personnel->permissions)) {
-                    return true;
-                }
-                if (in_array($permission, $personnel->permissions)) {
+                if (in_array('*', $personnel->permissions) || in_array($permission, $personnel->permissions)) {
                     return true;
                 }
             }
 
-            // NOTE: project_personnel.role_id references personnel_roles table (NOT system roles).
-            // PersonnelRole defines project-level roles (PM, supervisor, accountant...)
-            // with their own canView/canEdit/canApprove methods.
-            // DO NOT resolve system Role permissions from PersonnelRole codes.
-
-            // Fallback về global permissions (system role)
-            return $user->hasPermission($permission);
-        } else {
-            // User chưa được assign → check global permissions
+            // Fallback to global permissions ONLY if the user is assigned to the project
             return $user->hasPermission($permission);
         }
+
+        // 5. If NOT assigned and NOT a global admin → Deny access to project-specific data
+        return false;
     }
 
     /**

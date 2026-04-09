@@ -130,6 +130,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Projects mà user được phân công vào (thông qua project_personnel pivot table)
+     */
+    public function projects(): BelongsToMany
+    {
+        return $this->belongsToMany(Project::class, 'project_personnel', 'user_id', 'project_id');
+    }
+
+    /**
      * Project personnel records của user
      */
     public function personnel(): HasMany

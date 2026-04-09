@@ -7,16 +7,34 @@ use App\Models\EquipmentRental;
 use App\Constants\Permissions;
 use App\Models\Cost;
 use App\Models\CostGroup;
+use App\Models\Project;
+use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class EquipmentRentalController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách phiếu thuê thiết bị theo dự án
      */
     public function index(string $projectId, Request $request)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem phiếu thuê thiết bị của dự án này.'
+            ], 403);
+        }
+
         $query = EquipmentRental::where('project_id', $projectId)
             ->with(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name'])
             ->orderBy('created_at', 'desc');
@@ -36,6 +54,16 @@ class EquipmentRentalController extends Controller
      */
     public function show(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem phiếu thuê thiết bị này.'
+            ], 403);
+        }
+
         $rental = EquipmentRental::where('project_id', $projectId)
             ->with(['equipment', 'supplier', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments'])
             ->findOrFail($id);
@@ -51,7 +79,15 @@ class EquipmentRentalController extends Controller
      */
     public function store(string $projectId, Request $request)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_CREATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo phiếu thuê thiết bị cho dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'equipment_name'        => 'required|string|max:255',
@@ -144,6 +180,16 @@ class EquipmentRentalController extends Controller
      */
     public function update(string $projectId, string $id, Request $request)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật phiếu thuê thiết bị này.'
+            ], 403);
+        }
+
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
         if (!in_array($rental->status, ['draft', 'rejected'])) {
@@ -198,6 +244,16 @@ class EquipmentRentalController extends Controller
      */
     public function destroy(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_DELETE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa phiếu thuê thiết bị này.'
+            ], 403);
+        }
+
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
         if ($rental->status !== 'draft') {
@@ -224,6 +280,16 @@ class EquipmentRentalController extends Controller
      */
     public function submit(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền gửi duyệt phiếu thuê thiết bị này.'
+            ], 403);
+        }
+
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
         if (!in_array($rental->status, ['draft', 'rejected'])) {
@@ -250,7 +316,16 @@ class EquipmentRentalController extends Controller
      */
     public function approveManagement(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_APPROVE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền duyệt phiếu thuê thiết bị này.'
+            ], 403);
+        }
+
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
         if ($rental->status !== 'pending_management') {
@@ -278,7 +353,16 @@ class EquipmentRentalController extends Controller
      */
     public function rejectManagement(string $projectId, string $id, Request $request)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_APPROVE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền từ chối phiếu thuê thiết bị này.'
+            ], 403);
+        }
+
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
         if ($rental->status !== 'pending_management') {
@@ -309,7 +393,16 @@ class EquipmentRentalController extends Controller
      */
     public function confirmAccountant(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::COST_APPROVE_ACCOUNTANT, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xác nhận thanh toán thiết bị này.'
+            ], 403);
+        }
+
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
         if ($rental->status !== 'pending_accountant') {
@@ -337,6 +430,16 @@ class EquipmentRentalController extends Controller
      */
     public function requestReturn(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền yêu cầu trả thiết bị này.'
+            ], 403);
+        }
+
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
         if ($rental->status !== 'in_use') {
@@ -360,9 +463,10 @@ class EquipmentRentalController extends Controller
      */
     public function confirmReturn(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        if (!$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) {
+        if (!$this->authService->can($user, Permissions::COST_APPROVE_ACCOUNTANT, $project)) {
             return response()->json(['success' => false, 'message' => 'Bạn không có quyền xác nhận trả.'], 403);
         }
 

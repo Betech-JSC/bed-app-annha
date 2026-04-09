@@ -7,17 +7,34 @@ use App\Models\Project;
 use App\Models\Subcontractor;
 use App\Models\GlobalSubcontractor;
 use App\Models\Cost;
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class SubcontractorController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách nhà thầu phụ
      */
     public function index(string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::SUBCONTRACTOR_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem nhà thầu phụ của dự án này.'
+            ], 403);
+        }
+
         $subcontractors = $project->subcontractors()
             ->with(['approver', 'attachments', 'items', 'payments' => function ($q) {
                 $q->orderByDesc('created_at');
@@ -36,6 +53,16 @@ class SubcontractorController extends Controller
      */
     public function show(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::SUBCONTRACTOR_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi tiết nhà thầu phụ này.'
+            ], 403);
+        }
+
         $subcontractor = Subcontractor::where('project_id', $projectId)
             ->with(['approver', 'attachments', 'items', 'payments', 'project'])
             ->findOrFail($id);
@@ -51,6 +78,16 @@ class SubcontractorController extends Controller
      */
     public function destroy(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::SUBCONTRACTOR_DELETE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa nhà thầu phụ của dự án này.'
+            ], 403);
+        }
+
         $subcontractor = Subcontractor::where('project_id', $projectId)->findOrFail($id);
         
         // Xử lý chi phí liên quan: Set subcontractor_id = null để giữ lại dữ liệu chi phí
@@ -70,8 +107,17 @@ class SubcontractorController extends Controller
      */
     public function approve(Request $request, string $projectId, string $id)
     {
-        $subcontractor = Subcontractor::where('project_id', $projectId)->findOrFail($id);
+        $project = Project::findOrFail($projectId);
         $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::SUBCONTRACTOR_APPROVE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền duyệt nhà thầu phụ của dự án này.'
+            ], 403);
+        }
+
+        $subcontractor = Subcontractor::where('project_id', $projectId)->findOrFail($id);
 
         $subcontractor->approve($user);
 
@@ -88,6 +134,14 @@ class SubcontractorController extends Controller
     public function store(Request $request, string $projectId)
     {
         $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::SUBCONTRACTOR_CREATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền thêm nhà thầu phụ cho dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'global_subcontractor_id' => 'nullable|exists:global_subcontractors,id',
@@ -178,6 +232,16 @@ class SubcontractorController extends Controller
      */
     public function update(Request $request, string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::SUBCONTRACTOR_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật nhà thầu phụ của dự án này.'
+            ], 403);
+        }
+
         $subcontractor = Subcontractor::where('project_id', $projectId)->findOrFail($id);
 
         $validated = $request->validate([

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\GlobalSubcontractor;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 
 class GlobalSubcontractorController extends Controller
@@ -13,6 +14,10 @@ class GlobalSubcontractorController extends Controller
      */
     public function index(Request $request)
     {
+        if (!auth()->user()->hasPermission(Permissions::SETTINGS_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền truy cập danh sách thầu phụ hệ thống.'], 403);
+        }
+
         $query = GlobalSubcontractor::query();
 
         // Search
@@ -45,6 +50,10 @@ class GlobalSubcontractorController extends Controller
      */
     public function store(Request $request)
     {
+        if (!auth()->user()->hasPermission(Permissions::SETTINGS_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền thực hiện hành động này.'], 403);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'nullable|string|max:255',
@@ -73,6 +82,10 @@ class GlobalSubcontractorController extends Controller
      */
     public function show(string $id)
     {
+        if (!auth()->user()->hasPermission(Permissions::SETTINGS_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền xem thầu phụ hệ thống.'], 403);
+        }
+
         $subcontractor = GlobalSubcontractor::findOrFail($id);
 
         return response()->json([
@@ -86,6 +99,10 @@ class GlobalSubcontractorController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        if (!auth()->user()->hasPermission(Permissions::SETTINGS_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền cập nhật thầu phụ hệ thống.'], 403);
+        }
+
         $subcontractor = GlobalSubcontractor::findOrFail($id);
 
         $validated = $request->validate([
@@ -116,6 +133,10 @@ class GlobalSubcontractorController extends Controller
      */
     public function destroy(string $id)
     {
+        if (!auth()->user()->hasPermission(Permissions::SETTINGS_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền xóa thầu phụ hệ thống.'], 403);
+        }
+
         $subcontractor = GlobalSubcontractor::findOrFail($id);
         $subcontractor->delete();
 

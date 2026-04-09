@@ -34,6 +34,7 @@ const tabs: TabItem[] = [
     icon: "people-outline",
     iconFocused: "people",
     permissionList: [
+      Permissions.PERSONNEL_VIEW,
       Permissions.HR_EMPLOYEE_VIEW,
       Permissions.HR_PAYROLL_VIEW,
       Permissions.HR_TIME_TRACKING_VIEW,

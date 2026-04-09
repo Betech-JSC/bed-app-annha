@@ -39,6 +39,10 @@ class ApprovalCenterController extends Controller
         $user = Auth::user();
         $type = $request->get('type', 'all');
 
+        // RBAC: Get projects assigned to user (unless super admin)
+        $isSuperAdmin = $user->isSuperAdmin();
+        $myProjectIds = $isSuperAdmin ? [] : $user->projects()->pluck('projects.id')->toArray();
+
         $result = [
             'summary' => [],
             'items' => [],
@@ -117,6 +121,7 @@ class ApprovalCenterController extends Controller
 
             if ($canApproveManagement) {
                 $mgmtPending = Cost::whereNotNull('project_id')
+                    ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                     ->where('status', 'pending_management_approval')
                     ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code'])
                     ->orderBy('created_at', 'desc')
@@ -126,6 +131,7 @@ class ApprovalCenterController extends Controller
 
             if ($canApproveAccountant) {
                 $acctPending = Cost::whereNotNull('project_id')
+                    ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                     ->where('status', 'pending_accountant_approval')
                     ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name'])
                     ->withCount('attachments')
@@ -178,6 +184,7 @@ class ApprovalCenterController extends Controller
             $materialBillClass = 'App\\Models\\MaterialBill';
             if (class_exists($materialBillClass)) {
                 $materialBills = $materialBillClass::whereIn('status', ['pending_management', 'pending_accountant'])
+                    ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                     ->with(['creator:id,name,email', 'project:id,name,code'])
                     ->withCount('attachments')
                     ->orderBy('created_at', 'desc')
@@ -223,6 +230,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'acceptance_supervisor') {
             $acceptanceSupervisor = AcceptanceStage::where('status', 'pending')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -262,6 +270,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'acceptance_pm') {
             $acceptancePM = AcceptanceStage::where('status', 'supervisor_approved')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'supervisorApprover:id,name', 'task:id,name'])
                 ->orderBy('updated_at', 'desc')
                 ->get();
@@ -301,6 +310,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'acceptance') {
             $acceptanceStages = AcceptanceStage::where('status', 'project_manager_approved')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'projectManagerApprover:id,name'])
                 ->orderBy('project_manager_approved_at', 'desc')
                 ->get();
@@ -340,6 +350,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'change_request') {
             $changeRequests = ChangeRequest::whereIn('status', ['submitted', 'under_review'])
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'requester:id,name,email'])
                 ->orderBy('submitted_at', 'desc')
                 ->get();
@@ -380,6 +391,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'additional_cost') {
             $additionalCosts = AdditionalCost::whereIn('status', ['pending', 'pending_approval'])
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'proposer:id,name,email'])
                 ->withCount('attachments')
                 ->orderBy('created_at', 'desc')
@@ -421,6 +433,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'sub_payment') {
             $subPayments = SubcontractorPayment::whereIn('status', ['pending_management_approval', 'pending_accountant_confirmation'])
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'approver:id,name'])
                 ->withCount('attachments')
                 ->orderBy('created_at', 'desc')
@@ -467,6 +480,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'contract') {
             $contracts = Contract::where('status', 'pending_customer_approval')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code'])
                 ->orderBy('updated_at', 'desc')
                 ->get();
@@ -506,6 +520,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'payment') {
             $payments = ProjectPayment::where('status', 'customer_pending_approval')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'contract:id,uuid,contract_value'])
                 ->withCount('attachments')
                 ->orderBy('updated_at', 'desc')
@@ -547,6 +562,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'sub_acceptance') {
             $subAcceptances = SubcontractorAcceptance::where('status', 'pending')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -587,6 +603,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'supplier_acceptance') {
             $supplierAcceptances = SupplierAcceptance::where('status', 'pending')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['supplier:id,name', 'project:id,name,code', 'creator:id,name'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -628,6 +645,9 @@ class ApprovalCenterController extends Controller
         if ($type === 'all' || $type === 'acceptance_item') {
             $acceptanceItems = AcceptanceItem::where('acceptance_status', 'pending')
                 ->whereDate('end_date', '<=', now())
+                ->whereHas('acceptanceStage', function($q) use ($isSuperAdmin, $myProjectIds) {
+                    $q->when(!$isSuperAdmin, fn($sq) => $sq->whereIn('project_id', $myProjectIds));
+                })
                 ->with(['acceptanceStage.project:id,name,code', 'creator:id,name', 'task:id,name'])
                 ->orderBy('end_date', 'asc')
                 ->get();
@@ -668,6 +688,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'construction_log') {
             $pendingLogs = ConstructionLog::where('approval_status', 'pending')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'creator:id,name', 'task:id,name'])
                 ->orderBy('log_date', 'desc')
                 ->get();
@@ -707,6 +728,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'schedule_adjustment') {
             $adjustments = ScheduleAdjustment::where('status', 'pending')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'task:id,name'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -748,6 +770,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'defect') {
             $defects = \App\Models\Defect::where('status', 'fixed')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'fixer:id,name', 'reporter:id,name'])
                 ->orderBy('fixed_at', 'desc')
                 ->get();
@@ -788,6 +811,7 @@ class ApprovalCenterController extends Controller
         // ================================================================
         if ($type === 'all' || $type === 'budget') {
             $budgets = \App\Models\ProjectBudget::where('status', 'draft')
+                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $myProjectIds))
                 ->with(['project:id,name,code', 'creator:id,name'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -1422,8 +1446,54 @@ class ApprovalCenterController extends Controller
     private function checkApprovalPermission($user, string $type, int $id)
     {
         // Owner (super admin flag) bypasses all checks
-        if ($user->owner) {
+        if ($user->owner || $user->isSuperAdmin()) {
             return true;
+        }
+
+        // Project-based filtering for relevant types
+        $projectIds = $user->projects()->pluck('projects.id')->toArray();
+
+        // ─── Project Assignment Check ───
+        $modelMap = [
+            'project_cost' => Cost::class,
+            'material_bill' => 'App\\Models\\MaterialBill',
+            'acceptance' => AcceptanceStage::class,
+            'acceptance_supervisor' => AcceptanceStage::class,
+            'acceptance_pm' => AcceptanceStage::class,
+            'change_request' => ChangeRequest::class,
+            'additional_cost' => AdditionalCost::class,
+            'sub_payment' => SubcontractorPayment::class,
+            'contract' => Contract::class,
+            'payment' => ProjectPayment::class,
+            'sub_acceptance' => SubcontractorAcceptance::class,
+            'supplier_acceptance' => SupplierAcceptance::class,
+            'acceptance_item' => AcceptanceItem::class,
+            'construction_log' => ConstructionLog::class,
+            'schedule_adjustment' => ScheduleAdjustment::class,
+            'defect' => Defect::class,
+            'budget' => ProjectBudget::class,
+        ];
+
+        if (isset($modelMap[$type])) {
+            $modelClass = $modelMap[$type];
+            if (class_exists($modelClass)) {
+                $item = $modelClass::find($id);
+                if ($item) {
+                     $pid = null;
+                     if (isset($item->project_id)) {
+                         $pid = $item->project_id;
+                     } elseif ($type === 'acceptance_item' && $item->acceptanceStage) {
+                         $pid = $item->acceptanceStage->project_id;
+                     }
+
+                     if ($pid !== null && !in_array($pid, $projectIds)) {
+                         return response()->json([
+                             'success' => false,
+                             'message' => 'Bạn không được phân công vào dự án này.'
+                         ], 403);
+                     }
+                }
+            }
         }
 
         switch ($type) {

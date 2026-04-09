@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectBudget;
 use App\Models\BudgetItem;
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
 use App\Services\ProjectService;
 use App\Services\FinancialCalculationService;
 use App\Services\BudgetComparisonService;
@@ -20,31 +22,33 @@ class BudgetController extends Controller
     protected $financialCalculationService;
     protected $budgetComparisonService;
     protected $budgetSyncService;
+    protected $authService;
 
     public function __construct(
         ProjectService $projectService,
         FinancialCalculationService $financialCalculationService,
         BudgetComparisonService $budgetComparisonService,
-        BudgetSyncService $budgetSyncService
+        BudgetSyncService $budgetSyncService,
+        AuthorizationService $authService
     ) {
         $this->projectService = $projectService;
         $this->financialCalculationService = $financialCalculationService;
         $this->budgetComparisonService = $budgetComparisonService;
         $this->budgetSyncService = $budgetSyncService;
+        $this->authService = $authService;
     }
 
     public function index(string $projectId)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.view')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_VIEW, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền xem ngân sách.'
+                'message' => 'Bạn không có quyền xem ngân sách của dự án này.'
             ], 403);
         }
-
-        $project = Project::findOrFail($projectId);
         $budgets = $project->budgets()
             ->with(['items.costGroup', 'creator', 'approver', 'project'])
             ->orderBy('budget_date', 'desc')
@@ -58,16 +62,15 @@ class BudgetController extends Controller
 
     public function store(Request $request, string $projectId)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.create')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_CREATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền tạo ngân sách.'
+                'message' => 'Bạn không có quyền tạo ngân sách cho dự án này.'
             ], 403);
         }
-
-        $project = Project::findOrFail($projectId);
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
@@ -143,12 +146,13 @@ class BudgetController extends Controller
 
     public function show(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.view')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_VIEW, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền xem ngân sách.'
+                'message' => 'Bạn không có quyền xem ngân sách của dự án này.'
             ], 403);
         }
 
@@ -170,12 +174,13 @@ class BudgetController extends Controller
 
     public function compareWithActual(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.view')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_VIEW, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền xem so sánh ngân sách.'
+                'message' => 'Bạn không có quyền xem so sánh ngân sách dự án này.'
             ], 403);
         }
 
@@ -213,12 +218,13 @@ class BudgetController extends Controller
 
     public function update(Request $request, string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.update')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_UPDATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền cập nhật ngân sách.'
+                'message' => 'Bạn không có quyền cập nhật ngân sách cho dự án này.'
             ], 403);
         }
 
@@ -314,12 +320,13 @@ class BudgetController extends Controller
 
     public function destroy(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.delete')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_DELETE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền xóa ngân sách.'
+                'message' => 'Bạn không có quyền xóa ngân sách của dự án này.'
             ], 403);
         }
 
@@ -345,12 +352,13 @@ class BudgetController extends Controller
      */
     public function submitForApproval(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        if (!$user->hasPermission('budgets.update')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_UPDATE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền gửi duyệt ngân sách.'
+                'message' => 'Bạn không có quyền gửi duyệt ngân sách dự án này.'
             ], 403);
         }
 
@@ -384,12 +392,13 @@ class BudgetController extends Controller
      */
     public function approve(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        if (!$user->hasPermission('budgets.approve')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_APPROVE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền duyệt ngân sách.'
+                'message' => 'Bạn không có quyền duyệt ngân sách dự án này.'
             ], 403);
         }
 
@@ -420,12 +429,13 @@ class BudgetController extends Controller
      */
     public function reject(Request $request, string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        if (!$user->hasPermission('budgets.approve')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_APPROVE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền từ chối ngân sách.'
+                'message' => 'Bạn không có quyền từ chối ngân sách dự án này.'
             ], 403);
         }
 
@@ -463,12 +473,13 @@ class BudgetController extends Controller
      */
     public function activate(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        if (!$user->hasPermission('budgets.approve')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_APPROVE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền áp dụng ngân sách.'
+                'message' => 'Bạn không có quyền áp dụng ngân sách dự án này.'
             ], 403);
         }
 
@@ -498,12 +509,13 @@ class BudgetController extends Controller
      */
     public function archive(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        if (!$user->hasPermission('budgets.approve')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_APPROVE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền lưu trữ ngân sách.'
+                'message' => 'Bạn không có quyền lưu trữ ngân sách dự án này.'
             ], 403);
         }
 
@@ -530,12 +542,13 @@ class BudgetController extends Controller
      */
     public function sync(string $projectId, ?string $id = null)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
         
-        if (!$user->hasPermission('budgets.view')) {
+        if (!$this->authService->can($user, Permissions::BUDGET_VIEW, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không có quyền đồng bộ ngân sách.'
+                'message' => 'Bạn không có quyền đồng bộ ngân sách dự án này.'
             ], 403);
         }
 

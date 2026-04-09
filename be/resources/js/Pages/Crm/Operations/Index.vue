@@ -3,11 +3,11 @@
 
   <PageHeader title="Vận Hành" subtitle="Dashboard dòng tiền, nguồn vốn và tài sản công ty">
     <template #actions>
-      <a-button type="primary" size="large" class="rounded-xl" style="background: linear-gradient(135deg, #1B4F72, #2E86C1);" @click="router.visit('/operations/shareholders')">
+      <a-button v-if="$can('shareholder.view')" type="primary" size="large" class="rounded-xl" style="background: linear-gradient(135deg, #1B4F72, #2E86C1);" @click="router.visit('/operations/shareholders')">
         <template #icon><TeamOutlined /></template>
         Cổ đông
       </a-button>
-      <a-button size="large" class="rounded-xl" @click="router.visit('/operations/assets')">
+      <a-button v-if="$can('company_asset.view')" size="large" class="rounded-xl" @click="router.visit('/operations/assets')">
         <template #icon><ToolOutlined /></template>
         Tài sản
       </a-button>

@@ -444,13 +444,13 @@ class ProjectPaymentController extends Controller
             ->findOrFail($id);
 
         $user = auth()->user();
-        $project = $payment->project;
+        $project = Project::findOrFail($projectId);
 
         // Check RBAC permission
-        if (!$user->hasPermission(Permissions::PAYMENT_APPROVE)) {
+        if (!$this->authService->can($user, Permissions::PAYMENT_APPROVE, $project)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền từ chối thanh toán.'
+                'message' => 'Bạn không có quyền từ chối thanh toán của dự án này.'
             ], 403);
         }
 

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use App\Constants\Permissions;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -71,28 +72,63 @@ class HandleInertiaRequests extends Middleware
             },
             'pending_approvals_count' => function () use ($request) {
                 // Return total count of all pending operations across CRM modules
-                if (!$request->user('admin')) return 0;
+                $user = $request->user('admin') ?? $request->user();
+                if (!$user) return 0;
                 
                 try {
                     $count = 0;
-                    if (class_exists('App\Models\Cost')) $count += \App\Models\Cost::whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])->count();
-                    if (class_exists('App\Models\AcceptanceStage')) $count += \App\Models\AcceptanceStage::whereIn('status', ['pending', 'supervisor_approved', 'project_manager_approved'])->count();
-                    if (class_exists('App\Models\ChangeRequest')) $count += \App\Models\ChangeRequest::where('status', 'pending')->count();
-                    if (class_exists('App\Models\AdditionalCost')) $count += \App\Models\AdditionalCost::where('status', 'pending')->count();
-                    if (class_exists('App\Models\SubcontractorPayment')) $count += \App\Models\SubcontractorPayment::whereIn('status', ['pending_management_approval', 'pending_accountant_confirmation'])->count();
-                    if (class_exists('App\Models\Contract')) $count += \App\Models\Contract::where('status', 'pending')->count();
-                    if (class_exists('App\Models\ProjectPayment')) $count += \App\Models\ProjectPayment::whereIn('status', ['customer_pending_approval', 'customer_paid'])->count();
-                    if (class_exists('App\Models\MaterialBill')) $count += \App\Models\MaterialBill::whereIn('status', ['pending_management', 'pending_accountant'])->count();
-                    if (class_exists('App\Models\SubcontractorAcceptance')) $count += \App\Models\SubcontractorAcceptance::where('status', 'pending')->count();
-                    if (class_exists('App\Models\SupplierAcceptance')) $count += \App\Models\SupplierAcceptance::where('status', 'pending')->count();
-                    if (class_exists('App\Models\ConstructionLog')) $count += \App\Models\ConstructionLog::where('approval_status', 'pending')->count();
-                    if (class_exists('App\Models\ScheduleAdjustment')) $count += \App\Models\ScheduleAdjustment::where('status', 'pending')->count();
-                    if (class_exists('App\Models\Defect')) $count += \App\Models\Defect::where('status', 'fixed')->count();
-                    if (class_exists('App\Models\ProjectBudget')) $count += \App\Models\ProjectBudget::where('status', 'pending')->count();
+                    
+                    // Only count what the user can actually see/approve
+                    if ($user->hasAnyPermission([Permissions::COST_APPROVE_MANAGEMENT, Permissions::COST_APPROVE_ACCOUNTANT])) {
+                        if (class_exists('App\Models\Cost')) $count += \App\Models\Cost::whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])->count();
+                    }
+                    
+                    if ($user->hasAnyPermission([Permissions::ACCEPTANCE_APPROVE_LEVEL_1, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, Permissions::ACCEPTANCE_APPROVE_LEVEL_3])) {
+                        if (class_exists('App\Models\AcceptanceStage')) $count += \App\Models\AcceptanceStage::whereIn('status', ['pending', 'supervisor_approved', 'project_manager_approved'])->count();
+                    }
+
+                    if ($user->hasPermission(Permissions::PROJECT_UPDATE)) {
+                        if (class_exists('App\Models\ChangeRequest')) $count += \App\Models\ChangeRequest::where('status', 'pending')->count();
+                        if (class_exists('App\Models\ScheduleAdjustment')) $count += \App\Models\ScheduleAdjustment::where('status', 'pending')->count();
+                    }
+
+                    if ($user->hasPermission(Permissions::ADDITIONAL_COST_APPROVE)) {
+                        if (class_exists('App\Models\AdditionalCost')) $count += \App\Models\AdditionalCost::where('status', 'pending')->count();
+                    }
+
+                    if ($user->hasPermission(Permissions::SUBCONTRACTOR_PAYMENT_APPROVE)) {
+                        if (class_exists('App\Models\SubcontractorPayment')) $count += \App\Models\SubcontractorPayment::whereIn('status', ['pending_management_approval', 'pending_accountant_confirmation'])->count();
+                    }
+
+                    if ($user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_1) || $user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_2)) {
+                        if (class_exists('App\Models\Contract')) $count += \App\Models\Contract::where('status', 'pending')->count();
+                    }
+
+                    if ($user->hasPermission(Permissions::PAYMENT_CONFIRM)) {
+                        if (class_exists('App\Models\ProjectPayment')) $count += \App\Models\ProjectPayment::whereIn('status', ['customer_pending_approval', 'customer_paid'])->count();
+                    }
+
+                    if ($user->hasAnyPermission([Permissions::MATERIAL_APPROVE, Permissions::COST_APPROVE_ACCOUNTANT])) {
+                        if (class_exists('App\Models\MaterialBill')) $count += \App\Models\MaterialBill::whereIn('status', ['pending_management', 'pending_accountant'])->count();
+                    }
+
+                    if ($user->hasPermission(Permissions::LOG_APPROVE)) {
+                        if (class_exists('App\Models\ConstructionLog')) $count += \App\Models\ConstructionLog::where('approval_status', 'pending')->count();
+                    }
+
+                    if ($user->hasPermission(Permissions::DEFECT_VERIFY)) {
+                        if (class_exists('App\Models\Defect')) $count += \App\Models\Defect::where('status', 'fixed')->count();
+                    }
+
+                    if ($user->hasPermission(Permissions::PROJECT_MANAGE)) {
+                        if (class_exists('App\Models\ProjectBudget')) $count += \App\Models\ProjectBudget::where('status', 'pending')->count();
+                    }
                     
                     // Equipment modules
-                    if (class_exists('App\Models\EquipmentRental')) $count += \App\Models\EquipmentRental::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])->count();
-                    if (class_exists('App\Models\AssetUsage')) $count += \App\Models\AssetUsage::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])->count();
+                    if ($user->hasPermission(Permissions::EQUIPMENT_APPROVE)) {
+                        if (class_exists('App\Models\EquipmentRental')) $count += \App\Models\EquipmentRental::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])->count();
+                        if (class_exists('App\Models\AssetUsage')) $count += \App\Models\AssetUsage::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])->count();
+                    }
                     
                     return $count;
                 } catch (\Exception $e) {

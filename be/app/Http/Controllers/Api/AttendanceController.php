@@ -6,17 +6,38 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\WorkShift;
 use App\Models\ShiftAssignment;
+use App\Models\Project;
+use App\Constants\Permissions;
+use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
 
 class AttendanceController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     // ===== CHẤM CÔNG =====
 
     /** Danh sách chấm công (theo project hoặc tổng) */
     public function index(Request $request): JsonResponse
     {
+        $user = auth()->user();
+        $projectId = $request->project_id;
+        
+        if ($projectId) {
+            $project = Project::findOrFail($projectId);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_VIEW, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền xem chấm công dự án này.'], 403);
+            }
+        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_VIEW)) {
+             return response()->json(['success' => false, 'message' => 'Không có quyền xem chấm công hệ thống.'], 403);
+        }
+
         $query = Attendance::with(['user:id,name,email', 'project:id,name', 'approver:id,name']);
 
         if ($request->project_id) $query->forProject($request->project_id);
@@ -43,6 +64,14 @@ class AttendanceController extends Controller
         ]);
 
         $user = $request->user();
+
+        if ($request->project_id) {
+            $project = Project::findOrFail($request->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_CHECK_IN, $project)) {
+                return response()->json(['success' => false, 'message' => 'Bạn không thuộc dự án này để check-in.'], 403);
+            }
+        }
+
         $today = Carbon::today()->toDateString();
 
         $existing = Attendance::where('user_id', $user->id)->where('work_date', $today)->first();
@@ -56,7 +85,7 @@ class AttendanceController extends Controller
                 'project_id' => $request->project_id,
                 'check_in' => Carbon::now()->format('H:i:s'),
                 'status' => Carbon::now()->hour >= 8 && Carbon::now()->minute > 15 ? 'late' : 'present',
-                'check_in_method' => $request->method ?? 'manual',
+                'check_in_method' => $request->input('method') ?? 'manual',
                 'latitude' => $request->latitude,
                 'longitude' => $request->longitude,
                 'note' => $request->note,
@@ -117,6 +146,16 @@ class AttendanceController extends Controller
                 'note' => 'nullable|string|max:500',
             ]);
 
+            $user = auth()->user();
+            if ($request->project_id) {
+                $project = Project::findOrFail($request->project_id);
+                if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
+                    return response()->json(['success' => false, 'message' => 'Không có quyền quản lý chấm công dự án này.'], 403);
+                }
+            } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền quản lý chấm công hệ thống.'], 403);
+            }
+
             $data = $request->only(['user_id', 'project_id', 'work_date', 'check_in', 'check_out', 'status', 'note', 'check_in_method', 'overtime_hours']);
 
             if ($request->filled(['check_in', 'check_out'])) {
@@ -161,8 +200,19 @@ class AttendanceController extends Controller
     public function approve(Request $request, $id): JsonResponse
     {
         $attendance = Attendance::findOrFail($id);
+        $user = $request->user();
+
+        if ($attendance->project_id) {
+            $project = Project::findOrFail($attendance->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_APPROVE, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền duyệt chấm công dự án này.'], 403);
+            }
+        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_APPROVE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền duyệt chấm công hệ thống.'], 403);
+        }
+
         $attendance->update([
-            'approved_by' => $request->user()->id,
+            'approved_by' => $user->id,
             'approved_at' => now(),
         ]);
 
@@ -177,6 +227,16 @@ class AttendanceController extends Controller
             'month' => 'required|integer|between:1,12',
             'project_id' => 'nullable|exists:projects,id',
         ]);
+
+        $user = auth()->user();
+        if ($request->project_id) {
+            $project = Project::findOrFail($request->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_VIEW, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền xem thống kê dự án này.'], 403);
+            }
+        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_VIEW)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền xem thống kê chấm công hệ thống.'], 403);
+        }
 
         $query = Attendance::forMonth($request->year, $request->month);
         if ($request->project_id) $query->forProject($request->project_id);
@@ -214,6 +274,14 @@ class AttendanceController extends Controller
     /** Danh sách ca */
     public function shifts(Request $request): JsonResponse
     {
+        $user = auth()->user();
+        if ($request->project_id) {
+            $project = Project::findOrFail($request->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_VIEW, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền xem danh sách ca dự án này.'], 403);
+            }
+        }
+
         $query = WorkShift::query();
         if ($request->project_id) $query->where('project_id', $request->project_id);
         if ($request->active_only) $query->where('is_active', true);
@@ -233,6 +301,16 @@ class AttendanceController extends Controller
             'overtime_multiplier' => 'nullable|numeric|min:1|max:5',
         ]);
 
+        $user = auth()->user();
+        if ($request->project_id) {
+            $project = Project::findOrFail($request->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền quản lý ca dự án này.'], 403);
+            }
+        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền quản lý ca hệ thống.'], 403);
+        }
+
         $shift = WorkShift::create($request->all());
         return response()->json(['message' => 'Tạo ca thành công', 'data' => $shift], 201);
     }
@@ -241,6 +319,17 @@ class AttendanceController extends Controller
     public function updateShift(Request $request, $id): JsonResponse
     {
         $shift = WorkShift::findOrFail($id);
+        $user = auth()->user();
+
+        if ($shift->project_id) {
+            $project = Project::findOrFail($shift->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền cập nhật ca của dự án này.'], 403);
+            }
+        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền cập nhật ca hệ thống.'], 403);
+        }
+
         $shift->update($request->all());
         return response()->json(['message' => 'Cập nhật ca thành công', 'data' => $shift]);
     }
@@ -248,7 +337,19 @@ class AttendanceController extends Controller
     /** Xóa ca */
     public function deleteShift($id): JsonResponse
     {
-        WorkShift::findOrFail($id)->delete();
+        $shift = WorkShift::findOrFail($id);
+        $user = auth()->user();
+
+        if ($shift->project_id) {
+            $project = Project::findOrFail($shift->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền xóa ca của dự án này.'], 403);
+            }
+        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền xóa ca hệ thống.'], 403);
+        }
+
+        $shift->delete();
         return response()->json(['message' => 'Đã xóa ca']);
     }
 
@@ -270,6 +371,16 @@ class AttendanceController extends Controller
     /** Phân ca hàng loạt */
     public function assignShifts(Request $request): JsonResponse
     {
+        $user = auth()->user();
+        if ($request->project_id) {
+            $project = Project::findOrFail($request->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền phân ca dự án này.'], 403);
+            }
+        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền phân ca hệ thống.'], 403);
+        }
+
         $request->validate([
             'work_shift_id' => 'required|exists:work_shifts,id',
             'user_ids' => 'required|array|min:1',
@@ -301,7 +412,19 @@ class AttendanceController extends Controller
     /** Xóa phân ca */
     public function removeAssignment($id): JsonResponse
     {
-        ShiftAssignment::findOrFail($id)->delete();
+        $assignment = ShiftAssignment::findOrFail($id);
+        $user = auth()->user();
+
+        if ($assignment->project_id) {
+            $project = Project::findOrFail($assignment->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền xóa phân ca dự án này.'], 403);
+            }
+        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền xóa phân ca hệ thống.'], 403);
+        }
+
+        $assignment->delete();
         return response()->json(['message' => 'Đã xóa phân ca']);
     }
 }

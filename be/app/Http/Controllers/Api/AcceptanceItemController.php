@@ -7,6 +7,7 @@ use App\Models\AcceptanceStage;
 use App\Models\AcceptanceItem;
 use App\Models\Project;
 use App\Models\Attachment;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -29,7 +30,7 @@ class AcceptanceItemController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_VIEW, $project)) {
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_VIEW, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xem hạng mục nghiệm thu của dự án này.'
@@ -88,6 +89,13 @@ class AcceptanceItemController extends Controller
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
+
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_CREATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo hạng mục nghiệm thu cho dự án này.'
+            ], 403);
+        }
 
         try {
             DB::beginTransaction();
@@ -159,7 +167,7 @@ class AcceptanceItemController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_VIEW, $project)) {
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_VIEW, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xem chi tiết hạng mục nghiệm thu này.'
@@ -196,6 +204,13 @@ class AcceptanceItemController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật hạng mục nghiệm thu này.'
+            ], 403);
+        }
 
         // Không cho phép chỉnh sửa nếu đã được nghiệm thu
         if ($item->acceptance_status === 'approved') {
@@ -241,6 +256,14 @@ class AcceptanceItemController extends Controller
         $project = Project::findOrFail($projectId);
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_DELETE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa hạng mục nghiệm thu này.'
+            ], 403);
+        }
 
         // Không cho phép xóa nếu đã được nghiệm thu
         if ($item->acceptance_status === 'approved') {
@@ -267,6 +290,13 @@ class AcceptanceItemController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_APPROVE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền duyệt hạng mục nghiệm thu này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'notes' => 'nullable|string',
@@ -305,6 +335,13 @@ class AcceptanceItemController extends Controller
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
 
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_APPROVE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền từ chối hạng mục nghiệm thu này.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'rejection_reason' => 'required|string|max:1000',
         ]);
@@ -340,6 +377,14 @@ class AcceptanceItemController extends Controller
         $project = Project::findOrFail($projectId);
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền reset trạng thái hạng mục này.'
+            ], 403);
+        }
 
         $success = $item->resetAcceptance();
 
@@ -364,6 +409,14 @@ class AcceptanceItemController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền sắp xếp hạng mục của dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'items' => 'required|array',
@@ -405,6 +458,13 @@ class AcceptanceItemController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền đính kèm file cho dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'attachment_ids' => 'required|array',
@@ -452,6 +512,13 @@ class AcceptanceItemController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_CREATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền gửi duyệt hạng mục của dự án này.'
+            ], 403);
+        }
 
         // Cho phép gửi lại khi ở trạng thái draft hoặc rejected
         if (!in_array($item->workflow_status, ['draft', 'rejected'])) {
@@ -515,7 +582,7 @@ class AcceptanceItemController extends Controller
         $user = $request->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_1)) {
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 1 - Giám sát).'
@@ -567,7 +634,7 @@ class AcceptanceItemController extends Controller
         $user = $request->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 2 - Quản lý dự án).'
@@ -646,7 +713,7 @@ class AcceptanceItemController extends Controller
         }
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3)) {
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 3 - Khách hàng).'

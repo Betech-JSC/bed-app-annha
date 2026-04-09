@@ -169,6 +169,7 @@ class Permissions
     public const SUBCONTRACTOR_CREATE = 'subcontractor.create';
     public const SUBCONTRACTOR_UPDATE = 'subcontractor.update';
     public const SUBCONTRACTOR_DELETE = 'subcontractor.delete';
+    public const SUBCONTRACTOR_APPROVE = 'subcontractor.approve';
 
     // ===================================================================
     // SUBCONTRACTOR PAYMENT MODULE

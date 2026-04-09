@@ -9,16 +9,34 @@ use App\Models\Equipment;
 use App\Constants\Permissions;
 use App\Models\Cost;
 use App\Models\CostGroup;
+use App\Models\Project;
+use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class EquipmentPurchaseController extends Controller
 {
+    protected $authService;
+
+    public function __construct(AuthorizationService $authService)
+    {
+        $this->authService = $authService;
+    }
     /**
      * Danh sách phiếu mua thiết bị theo dự án
      */
     public function index(string $projectId, Request $request)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem phiếu mua thiết bị của dự án này.'
+            ], 403);
+        }
+
         $query = EquipmentPurchase::where('project_id', $projectId)
             ->with(['items', 'creator:id,name', 'approver:id,name', 'confirmer:id,name'])
             ->orderBy('created_at', 'desc');
@@ -38,6 +56,16 @@ class EquipmentPurchaseController extends Controller
      */
     public function show(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_VIEW, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem phiếu mua thiết bị này.'
+            ], 403);
+        }
+
         $purchase = EquipmentPurchase::where('project_id', $projectId)
             ->with(['items', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments'])
             ->findOrFail($id);
@@ -53,7 +81,15 @@ class EquipmentPurchaseController extends Controller
      */
     public function store(string $projectId, Request $request)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_CREATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo phiếu mua thiết bị cho dự án này.'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'notes'              => 'nullable|string',
@@ -142,6 +178,16 @@ class EquipmentPurchaseController extends Controller
      */
     public function update(string $projectId, string $id, Request $request)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật phiếu mua thiết bị này.'
+            ], 403);
+        }
+
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
         if (!in_array($purchase->status, ['draft', 'rejected'])) {
@@ -212,6 +258,16 @@ class EquipmentPurchaseController extends Controller
      */
     public function destroy(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_DELETE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa phiếu mua thiết bị này.'
+            ], 403);
+        }
+
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
         if ($purchase->status !== 'draft') {
@@ -235,6 +291,16 @@ class EquipmentPurchaseController extends Controller
 
     public function submit(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền gửi duyệt phiếu mua thiết bị này.'
+            ], 403);
+        }
+
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
         if (!in_array($purchase->status, ['draft', 'rejected'])) {
@@ -265,7 +331,16 @@ class EquipmentPurchaseController extends Controller
 
     public function approveManagement(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_APPROVE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền duyệt phiếu mua thiết bị này.'
+            ], 403);
+        }
+
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
         if ($purchase->status !== 'pending_management') {
@@ -290,7 +365,16 @@ class EquipmentPurchaseController extends Controller
 
     public function rejectManagement(string $projectId, string $id, Request $request)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_APPROVE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền từ chối phiếu mua thiết bị này.'
+            ], 403);
+        }
+
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
         if ($purchase->status !== 'pending_management') {
@@ -321,7 +405,16 @@ class EquipmentPurchaseController extends Controller
      */
     public function confirmAccountant(string $projectId, string $id)
     {
+        $project = Project::findOrFail($projectId);
         $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::COST_APPROVE_ACCOUNTANT, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xác nhận thanh toán mua thiết bị này.'
+            ], 403);
+        }
+
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
         if ($purchase->status !== 'pending_accountant') {
