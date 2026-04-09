@@ -205,11 +205,12 @@ class CrmProjectsController extends Controller
             $globalSubcontractors = \App\Models\GlobalSubcontractor::orderBy('name')->get(['id', 'name', 'category', 'bank_name', 'bank_account_number', 'bank_account_name']);
         }
 
-        // Get leaf tasks (no children) for construction log form
+        // Get leaf tasks (no children) for construction log form — sorted by date
         $projectTasks = \App\Models\ProjectTask::where('project_id', $project->id)
             ->whereNull('deleted_at')
             ->whereDoesntHave('children', fn($q) => $q->whereNull('deleted_at'))
-            ->select('id', 'name', 'parent_id')
+            ->select('id', 'name', 'parent_id', 'start_date')
+            ->orderByDesc('start_date')
             ->orderBy('name')
             ->get();
 

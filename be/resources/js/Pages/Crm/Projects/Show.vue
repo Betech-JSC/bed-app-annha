@@ -2458,7 +2458,12 @@
       </a-row>
       <a-form-item label="Công việc liên quan">
         <a-select v-model:value="logForm.task_id" size="large" class="w-full" placeholder="Chọn công việc (tùy chọn)" allow-clear show-search :filter-option="(input, opt) => opt.label?.toLowerCase().includes(input.toLowerCase())" @change="onLogTaskChange">
-          <a-select-option v-for="t in projectTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+          <a-select-option v-for="t in projectTasks" :key="t.id" :value="t.id" :label="t.name">
+            <div class="flex justify-between items-center w-full">
+              <span>{{ t.name }}</span>
+              <span v-if="t.start_date" class="text-[10px] text-gray-400 font-normal ml-2">🕒 {{ dayjs(t.start_date).format('DD/MM/YYYY') }}</span>
+            </div>
+          </a-select-option>
         </a-select>
         <div v-if="logForm.task_id && logTaskCurrentProgress !== null" class="text-xs text-blue-500 mt-1">
           Tiến độ hiện tại: <strong>{{ logTaskCurrentProgress }}%</strong>
