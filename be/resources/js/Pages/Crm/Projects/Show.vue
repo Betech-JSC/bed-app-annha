@@ -334,7 +334,12 @@
                     </td>
                     <td class="text-center py-2 px-3"><a-tag :color="priorityColors[task.priority]" class="rounded-full text-xs">{{ priorityLabels[task.priority] || task.priority }}</a-tag></td>
                     <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[task.status]" class="rounded-full text-xs">{{ taskStatusLabels[task.status] || task.status }}</a-tag></td>
-                    <td class="py-2 px-3"><a-progress :percent="parseFloat(task.progress_percentage || 0)" size="small" :stroke-color="parseFloat(task.progress_percentage || 0) >= 100 ? '#27AE60' : '#1B4F72'" /></td>
+                    <td class="py-2 px-3">
+                      <a-progress :percent="parseFloat(task.progress_percentage || 0)" size="small" :stroke-color="parseFloat(task.progress_percentage || 0) >= 100 && isAccepted(task) ? '#27AE60' : (parseFloat(task.progress_percentage || 0) >= 100 ? '#FAAD14' : '#1B4F72')" />
+                      <div v-if="parseFloat(task.progress_percentage || 0) >= 100 && !isAccepted(task)" class="text-[10px] text-amber-500 mt-0.5 font-bold flex items-center gap-1">
+                        <ClockCircleOutlined /> Đang chờ nghiệm thu
+                      </div>
+                    </td>
                     <td class="text-center py-2 px-3 text-xs text-gray-500">
                       <span v-if="task.start_date">{{ fmtDate(task.start_date) }}</span>
                       <span v-if="task.start_date && task.end_date"> ~ </span>
@@ -363,7 +368,12 @@
                       </td>
                       <td class="text-center py-2 px-3"><a-tag :color="priorityColors[child.priority]" class="rounded-full text-xs">{{ priorityLabels[child.priority] || child.priority }}</a-tag></td>
                       <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[child.status]" class="rounded-full text-xs">{{ taskStatusLabels[child.status] || child.status }}</a-tag></td>
-                      <td class="py-2 px-3"><a-progress :percent="parseFloat(child.progress_percentage || 0)" size="small" :stroke-color="parseFloat(child.progress_percentage || 0) >= 100 ? '#27AE60' : '#2E86C1'" /></td>
+                      <td class="py-2 px-3">
+                        <a-progress :percent="parseFloat(child.progress_percentage || 0)" size="small" :stroke-color="parseFloat(child.progress_percentage || 0) >= 100 && isAccepted(child) ? '#27AE60' : (parseFloat(child.progress_percentage || 0) >= 100 ? '#FAAD14' : '#2E86C1')" />
+                        <div v-if="parseFloat(child.progress_percentage || 0) >= 100 && !isAccepted(child)" class="text-[10px] text-amber-500 mt-0.5 font-bold flex items-center gap-1">
+                          <ClockCircleOutlined /> Đang chờ nghiệm thu
+                        </div>
+                      </td>
                       <td class="text-center py-2 px-3 text-xs text-gray-500">
                         <span v-if="child.start_date">{{ fmtDate(child.start_date) }}</span>
                         <span v-if="child.start_date && child.end_date"> ~ </span>
@@ -2287,9 +2297,9 @@
         <a-col :span="12">
           <a-form-item label="Đợt thanh toán số">
             <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Đợt thanh toán số</span></template>
-            <a-input-number v-model:value="paymentForm.payment_number" :min="1" size="large" placeholder="VD: 1, 2, 3..." class="w-full rounded-xl border-gray-200">
+            <a-input v-model:value="paymentForm.payment_number" size="large" placeholder="Tự động" disabled class="w-full rounded-xl border-gray-200">
               <template #prefix><FileTextOutlined class="text-gray-400" /></template>
-            </a-input-number>
+            </a-input>
           </a-form-item>
         </a-col>
         <a-col :span="12" v-if="project.contract">
@@ -5133,6 +5143,18 @@ const can = (perm) => {
 const fmt = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v) : '0 ₫'
 const fmtDate = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY') : '—'
 const fmtDateTime = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY HH:mm') : '—'
+const isAccepted = (task) => {
+  if (!task) return false
+  if (!task.parent_id) {
+    // Category A: check acceptanceStages (eager loaded)
+    const stages = task.acceptance_stages || []
+    if (stages.length === 0) return false
+    return stages.some(s => s.status === 'customer_approved')
+  } else {
+    // Category B: check acceptanceItem (eager loaded)
+    return task.acceptance_item?.workflow_status === 'customer_approved'
+  }
+}
 const totalCosts = computed(() => (props.project.costs || []).reduce((s, c) => s + Number(c.amount || 0), 0))
 
 // ============ OVERVIEW COMPUTED ============
@@ -5999,7 +6021,7 @@ const paymentForm = ref({ payment_number: '', contract_id: null, notes: '', amou
 const openPaymentModal = (p = null) => {
   editingPayment.value = p
   modalFiles.value = []
-  paymentForm.value = p ? { payment_number: p.payment_number, contract_id: p.contract_id || null, notes: p.notes || '', amount: p.amount, due_date: p.due_date } : { payment_number: (props.project.payments?.length || 0) + 1, contract_id: props.project.contract?.id || null, notes: '', amount: null, due_date: null }
+  paymentForm.value = p ? { payment_number: p.payment_number, contract_id: p.contract_id || null, notes: p.notes || '', amount: p.amount, due_date: p.due_date } : { payment_number: '', contract_id: props.project.contract?.id || null, notes: '', amount: null, due_date: null }
   showPaymentModal.value = true
 }
 const savePayment = () => {

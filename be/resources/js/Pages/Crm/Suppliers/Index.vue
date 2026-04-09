@@ -135,7 +135,7 @@
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Mã NCC <span class="text-red-500">*</span></label>
-          <a-input v-model:value="form.code" placeholder="VD: HP001" size="large" />
+          <a-input v-model:value="form.code" placeholder="Tự động" size="large" disabled />
           <div v-if="form.errors.code" class="text-red-500 text-xs mt-1">{{ form.errors.code }}</div>
         </div>
       </div>

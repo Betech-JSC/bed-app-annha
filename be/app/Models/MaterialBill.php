@@ -9,10 +9,16 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 use App\Traits\NotifiesUsers;
+use App\Traits\HasAutoCode;
 
 class MaterialBill extends Model
 {
-    use SoftDeletes, NotifiesUsers;
+    use SoftDeletes, NotifiesUsers, HasAutoCode;
+
+    public function getCodeColumn(): string
+    {
+        return 'bill_number';
+    }
 
     protected $fillable = [
         'uuid',

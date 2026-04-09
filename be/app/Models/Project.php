@@ -9,10 +9,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use App\Traits\HasAutoCode;
 
 class Project extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasAutoCode;
 
     protected $fillable = [
         'uuid',
@@ -21,6 +22,7 @@ class Project extends Model
         'description',
         'customer_id',
         'project_manager_id',
+        'supervisor_id',
         'start_date',
         'end_date',
         'status',
@@ -50,6 +52,11 @@ class Project extends Model
     public function projectManager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'project_manager_id');
+    }
+
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'supervisor_id');
     }
 
     public function creator(): BelongsTo
@@ -127,10 +134,7 @@ class Project extends Model
         return $this->hasMany(ProjectTask::class)->orderBy('order');
     }
 
-    public function timeTrackings(): HasMany
-    {
-        return $this->hasMany(TimeTracking::class);
-    }
+    // TimeTracking relationship removed - module not found
 
     // Payrolls relationship removed - HR module deleted
 
@@ -171,15 +175,7 @@ class Project extends Model
         return $this->hasMany(EquipmentAllocation::class);
     }
 
-    public function leaveRequests(): HasMany
-    {
-        return $this->hasMany(LeaveRequest::class);
-    }
-
-    public function performanceEvaluations(): HasMany
-    {
-        return $this->hasMany(PerformanceEvaluation::class);
-    }
+    // LeaveRequest and PerformanceEvaluation relationships removed - modules not found
 
     public function comments(): HasMany
     {
@@ -267,40 +263,6 @@ class Project extends Model
             if (empty($project->uuid)) {
                 $project->uuid = Str::uuid();
             }
-            if (empty($project->code)) {
-                $project->code = static::generateCode();
-            }
         });
-    }
-
-    public static function generateCode(): string
-    {
-        $date = now()->format('dmy'); // DDMMYYYY format
-        $prefix = 'ANNHA-' . $date . '-';
-        
-        // Tìm số thứ tự cao nhất trong ngày (bao gồm cả soft-deleted)
-        $lastProject = static::withTrashed()
-            ->where('code', 'like', $prefix . '%')
-            ->orderByDesc('code')
-            ->first();
-        
-        $sequence = 1;
-        if ($lastProject && preg_match('/(\d+)$/', $lastProject->code, $matches)) {
-            $sequence = (int)$matches[1] + 1;
-        }
-        
-        // Format sequence với 2 chữ số (01, 02, ...)
-        $code = $prefix . str_pad($sequence, 2, '0', STR_PAD_LEFT);
-        
-        // Đảm bảo không trùng (trường hợp hiếm)
-        $maxAttempts = 10;
-        $attempt = 0;
-        while (static::withTrashed()->where('code', $code)->exists() && $attempt < $maxAttempts) {
-            $sequence++;
-            $code = $prefix . str_pad($sequence, 2, '0', STR_PAD_LEFT);
-            $attempt++;
-        }
-        
-        return $code;
     }
 }

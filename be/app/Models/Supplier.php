@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use App\Traits\HasAutoCode;
 
 class Supplier extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasAutoCode;
 
     protected $fillable = [
         'uuid',

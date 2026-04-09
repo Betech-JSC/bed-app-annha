@@ -45,7 +45,7 @@
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
         <a-col :span="16"><a-form-item label="Tên vật tư" required><a-input v-model:value="form.name" size="large" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Mã"><a-input v-model:value="form.code" size="large" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Mã"><a-input v-model:value="form.code" size="large" disabled placeholder="Tự động" /></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
         <a-col :span="8"><a-form-item label="Đơn vị" required><a-input v-model:value="form.unit" placeholder="thùng, kg..." size="large" /></a-form-item></a-col>

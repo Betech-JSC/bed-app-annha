@@ -8,10 +8,16 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
 use App\Traits\NotifiesUsers;
+use App\Traits\HasAutoCode;
 
 class ProjectPayment extends Model
 {
-    use NotifiesUsers;
+    use NotifiesUsers, HasAutoCode;
+
+    public function getCodeColumn(): string
+    {
+        return 'payment_number';
+    }
     protected $fillable = [
         'uuid',
         'project_id',

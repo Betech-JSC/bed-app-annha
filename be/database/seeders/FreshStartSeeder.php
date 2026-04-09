@@ -130,8 +130,6 @@ class FreshStartSeeder extends Seeder
             // Misc
             'reminders',
             'personal_access_tokens',
-            'cost_groups',
-            'departments',
 
             // Materials master (nếu muốn xóa luôn kho vật tư — uncomment nếu cần)
             // 'materials',

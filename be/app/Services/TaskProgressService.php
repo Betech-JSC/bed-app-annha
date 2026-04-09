@@ -64,9 +64,13 @@ class TaskProgressService
     {
         $today = Carbon::today();
         
-        // If progress is 100%, status is always completed
+        // If progress is 100%, status is potentially completed
         if ($progressPercentage >= 100) {
-            return 'completed';
+            // NEW RULE: Parent items completed only when all sub-items are fully accepted
+            if ($this->canParentBeCompleted($task)) {
+                return 'completed';
+            }
+            return 'in_progress'; // Remain in-progress until accepted
         }
 
         // If no start date, cannot determine status
@@ -151,38 +155,72 @@ class TaskProgressService
      * @param ProjectTask $parentTask
      * @return bool
      */
-    public function canParentBeCompleted(ProjectTask $parentTask): bool
+    public function canParentBeCompleted(ProjectTask $task): bool
     {
-        $children = ProjectTask::where('parent_id', $parentTask->id)
+        // 1. Check if the task itself is accepted if it's a leaf/standalone task
+        // But typically root tasks (Category A) are parent containers.
+        if (!$this->isTaskAccepted($task)) {
+            return false;
+        }
+
+        $children = ProjectTask::where('parent_id', $task->id)
             ->whereNull('deleted_at')
             ->get();
 
         if ($children->isEmpty()) {
             // No children, check its own progress
-            $progress = $this->calculateProgressFromLogs($parentTask);
+            $progress = $this->calculateProgressFromLogs($task);
             return $progress >= 100;
         }
 
-        // All children must be 100%
+        // All children must be 100% AND accepted
         foreach ($children as $child) {
             $childProgress = $this->calculateProgressFromLogs($child);
             
-            // If child has children, check recursively
-            $childChildren = ProjectTask::where('parent_id', $child->id)
-                ->whereNull('deleted_at')
-                ->count();
-            if ($childChildren > 0) {
-                if (!$this->canParentBeCompleted($child)) {
-                    return false;
-                }
-            } else {
-                if ($childProgress < 100) {
-                    return false;
-                }
+            // Recurse to handle nested hierarchies
+            if (!$this->canParentBeCompleted($child)) {
+                return false;
+            }
+
+            if ($childProgress < 100) {
+                return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * Check if a task is "customer accepted" based on Acceptance module
+     * 
+     * @param ProjectTask $task
+     * @return bool
+     */
+    public function isTaskAccepted(ProjectTask $task): bool
+    {
+        // A. Root Task (Category A) check
+        if (!$task->parent_id) {
+            $stage = AcceptanceStage::where('task_id', $task->id)->first();
+            if ($stage) {
+                return $stage->status === 'customer_approved';
+            }
+            // If a root task has no acceptance stage yet, and it's 100%, 
+            // the service will eventually auto-create one. 
+            // Until then, it's NOT accepted.
+            return false;
+        }
+
+        // B. Sub-task (Category B) check
+        // Check if there's an AcceptanceItem linked to this task
+        $item = \App\Models\AcceptanceItem::where('task_id', $task->id)->first();
+        if ($item) {
+            return $item->workflow_status === 'customer_approved';
+        }
+
+        // If no direct link found, it's considered "accepted" by default 
+        // IF it has no acceptance requirements defined for it.
+        // However, standard logic suggests sub-tasks at 100% should be in an AcceptanceItem.
+        return true; 
     }
 
     /**

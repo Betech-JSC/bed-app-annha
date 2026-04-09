@@ -129,7 +129,9 @@ class CrmProjectsController extends Controller
             'subcontractors.attachments',
             'subcontractors.approver',
             'constructionLogs' => function ($q) {
-                $q->with(['creator', 'task', 'attachments'])->latest('log_date');
+                $q->with(['creator', 'task', 'attachments'])
+                    ->orderByDesc('log_date')
+                    ->orderByDesc('created_at');
             },
             'acceptanceStages' => function ($q) {
                 $q->with([
@@ -214,8 +216,8 @@ class CrmProjectsController extends Controller
         // Get ALL tasks with hierarchy for progress tab (like mobile overview)
         $allTasks = \App\Models\ProjectTask::where('project_id', $project->id)
             ->whereNull('deleted_at')
-            ->with(['assignedUser:id,name', 'children' => function ($q) {
-                $q->whereNull('deleted_at')->orderBy('order');
+            ->with(['assignedUser:id,name', 'acceptanceItem', 'acceptanceStages', 'children' => function ($q) {
+                $q->whereNull('deleted_at')->with(['assignedUser:id,name', 'acceptanceItem', 'acceptanceStages'])->orderBy('order');
             }])
             ->orderBy('order')
             ->get();
@@ -2655,8 +2657,8 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::BUDGET_UPDATE, $project);
 
         $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
-        if (in_array($budget->status, ['approved', 'archived'])) {
-            return back()->with('error', 'Không thể cập nhật ngân sách đã duyệt/lưu trữ.');
+        if (in_array($budget->status, ['active', 'archived'])) {
+            return back()->with('error', 'Không thể cập nhật ngân sách đã kích hoạt/lưu trữ.');
         }
 
         $validated = $request->validate([
@@ -2717,8 +2719,8 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::BUDGET_DELETE, $project);
 
         $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
-        if (in_array($budget->status, ['approved', 'archived'])) {
-            return back()->with('error', 'Không thể xóa ngân sách đã duyệt.');
+        if (in_array($budget->status, ['active', 'archived'])) {
+            return back()->with('error', 'Không thể xóa ngân sách đã kích hoạt.');
         }
         $budget->delete();
         return back()->with('success', 'Đã xóa ngân sách.');

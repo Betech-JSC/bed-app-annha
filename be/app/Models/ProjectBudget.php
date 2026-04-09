@@ -6,12 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use App\Traits\HasAutoCode;
 
 class ProjectBudget extends Model
 {
+    use HasAutoCode;
+
     protected $fillable = [
         'uuid',
         'project_id',
+        'code',
         'name',
         'version',
         'total_budget',

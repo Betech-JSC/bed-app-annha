@@ -5,9 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
+use App\Traits\HasAutoCode;
 
 class Receipt extends Model
 {
+    use HasAutoCode;
+
+    public function getCodeColumn(): string
+    {
+        return 'receipt_number';
+    }
     protected $fillable = [
         'uuid',
         'project_id',
@@ -72,9 +79,6 @@ class Receipt extends Model
         static::creating(function ($receipt) {
             if (empty($receipt->uuid)) {
                 $receipt->uuid = Str::uuid();
-            }
-            if (empty($receipt->receipt_number)) {
-                $receipt->receipt_number = 'RCP-' . date('Ymd') . '-' . strtoupper(Str::random(6));
             }
         });
     }

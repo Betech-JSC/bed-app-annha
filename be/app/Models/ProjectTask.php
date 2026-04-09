@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -99,6 +100,14 @@ class ProjectTask extends Model
     public function acceptanceStages(): HasMany
     {
         return $this->hasMany(AcceptanceStage::class, 'task_id');
+    }
+
+    /**
+     * Acceptance item linked to this task (sub-task - Category B)
+     */
+    public function acceptanceItem(): HasOne
+    {
+        return $this->hasOne(AcceptanceItem::class, 'task_id');
     }
 
     public function creator(): BelongsTo
