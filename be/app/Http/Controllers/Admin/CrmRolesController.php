@@ -184,46 +184,46 @@ class CrmRolesController extends Controller
     private function translateGroup(string $key): string
     {
         return [
-            // Core
-            'project' => 'Dự án',
-            'progress' => 'Tiến độ',
+            // Core — Dự án
+            'project' => 'Quản lý dự án',
+            'progress' => 'Tiến độ thi công',
             'project.comment' => 'Bình luận dự án',
-            'project.task' => 'Công việc dự án',
+            'project.task' => 'Công việc / Hạng mục',
             'project.phase' => 'Giai đoạn dự án',
             'project.document' => 'Tài liệu dự án',
             'project.risk' => 'Rủi ro dự án',
             'project.monitoring' => 'Giám sát dự án',
 
-            // Finance
+            // Finance — Tài chính
             'cost' => 'Chi phí nội bộ',
             'additional_cost' => 'Chi phí phát sinh',
             'company_cost' => 'Chi phí công ty',
-            'payment' => 'Thanh toán',
+            'payment' => 'Đợt thanh toán (KH)',
             'invoice' => 'Hóa đơn đầu ra',
             'input_invoice' => 'Hóa đơn đầu vào',
-            'contract' => 'Hợp đồng',
+            'contract' => 'Hợp đồng dự án',
             'revenue' => 'Doanh thu',
-            'budgets' => 'Ngân sách',
-            'receipts' => 'Phiếu thu/chi',
+            'budgets' => 'Ngân sách dự án',
+            'receipts' => 'Phiếu thu / Phiếu chi',
             'report' => 'Báo cáo',
+            'finance' => 'Tổng hợp tài chính',
 
-            // Resources
-            'material' => 'Vật tư/Vật liệu',
+            // Resources — Nguồn lực
+            'material' => 'Kho vật tư / Vật liệu',
             'material_bill' => 'Phiếu xuất vật tư',
             'equipment' => 'Thiết bị',
             'personnel' => 'Nhân sự dự án',
 
-            // Quality
-            'acceptance' => 'Nghiệm thu',
+            // Quality — Chất lượng
+            'acceptance' => 'Nghiệm thu công trình',
             'acceptance.template' => 'Mẫu nghiệm thu',
-            'defect' => 'Lỗi phát sinh',
+            'defect' => 'Lỗi / Khuyết tật',
             'change_request' => 'Yêu cầu thay đổi',
-            'issue' => 'Sự cố/Vấn đề',
-            'evm' => 'Phân tích EVM',
+            'issue' => 'Sự cố / Vấn đề',
 
             // Subcontractors & Suppliers
             'subcontractor' => 'Nhà thầu phụ',
-            'subcontractor_payment' => 'Thanh toán NTP',
+            'subcontractor_payment' => 'Thanh toán nhà thầu phụ',
             'subcontractor.contract' => 'Hợp đồng thầu phụ',
             'subcontractor.acceptance' => 'Nghiệm thu thầu phụ',
             'subcontractor.progress' => 'Tiến độ thầu phụ',
@@ -231,14 +231,40 @@ class CrmRolesController extends Controller
             'supplier.contract' => 'Hợp đồng NCC',
             'supplier.acceptance' => 'Nghiệm thu NCC',
 
-            // Operations
-            'document' => 'Tài liệu',
+            // Documents & Logs
+            'document' => 'Tài liệu chung',
             'log' => 'Nhật ký công trình',
             'reminder' => 'Nhắc nhở',
 
-            // HR & System
-            'kpi' => 'KPI Nhân sự',
+            // HR & KPI
+            'kpi' => 'KPI nhân sự',
             'departments' => 'Phòng ban',
+            'attendance' => 'Chấm công',
+            'labor_productivity' => 'Năng suất lao động',
+
+            // Gantt & WBS
+            'gantt' => 'Biểu đồ Gantt / WBS',
+            'wbs' => 'Cấu trúc WBS',
+
+            // Analysis
+            'evm' => 'Phân tích giá trị thu được (EVM)',
+            'evm_predictive' => 'EVM & Dự báo',
+            'predictive' => 'Dự báo chi phí & tiến độ',
+
+            // Operations — Vận hành
+            'operations' => 'Vận hành công ty',
+            'shareholder' => 'Cổ đông',
+            'company_asset' => 'Tài sản công ty',
+            'company_financial' => 'Tài chính toàn công ty',
+
+            // Reports
+            'project_monitoring' => 'Giám sát dự án',
+            'project_summary_report' => 'Báo cáo tổng hợp dự án',
+
+            // Warranty
+            'warranty' => 'Bảo hành & Bảo trì',
+
+            // System
             'settings' => 'Cài đặt hệ thống',
 
             'general' => 'Chung',

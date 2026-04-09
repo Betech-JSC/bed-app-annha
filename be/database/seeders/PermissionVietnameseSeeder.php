@@ -10,287 +10,436 @@ class PermissionVietnameseSeeder extends Seeder
     public function run(): void
     {
         $map = [
-            // ===== DỰ ÁN =====
-            'project.view' => 'Xem danh sách dự án',
-            'project.create' => 'Tạo dự án mới',
-            'project.update' => 'Chỉnh sửa dự án',
-            'project.delete' => 'Xóa dự án',
-            'project.manage' => 'Quản lý toàn quyền dự án',
+            // ===================================================================
+            // DỰ ÁN
+            // ===================================================================
+            'project.view'    => 'Xem danh sách & chi tiết dự án',
+            'project.create'  => 'Tạo dự án mới',
+            'project.update'  => 'Chỉnh sửa thông tin dự án',
+            'project.delete'  => 'Xóa dự án',
+            'project.manage'  => 'Quản lý toàn quyền dự án',
 
             // Bình luận dự án
-            'project.comment.view' => 'Xem bình luận dự án',
+            'project.comment.view'   => 'Xem bình luận trong dự án',
             'project.comment.create' => 'Viết bình luận dự án',
             'project.comment.update' => 'Sửa bình luận dự án',
             'project.comment.delete' => 'Xóa bình luận dự án',
 
             // Tiến độ
-            'progress.view' => 'Xem tiến độ dự án',
-            'progress.update' => 'Cập nhật tiến độ dự án',
+            'progress.view'   => 'Xem tiến độ thi công',
+            'progress.update' => 'Cập nhật tiến độ thi công',
 
-            // Công việc dự án
-            'project.task.view' => 'Xem công việc dự án',
-            'project.task.create' => 'Tạo công việc dự án',
-            'project.task.update' => 'Sửa công việc dự án',
-            'project.task.delete' => 'Xóa công việc dự án',
+            // Công việc dự án (Task/WBS)
+            'project.task.view'   => 'Xem danh sách công việc',
+            'project.task.create' => 'Tạo công việc / hạng mục mới',
+            'project.task.update' => 'Sửa công việc / hạng mục',
+            'project.task.delete' => 'Xóa công việc / hạng mục',
 
             // Giai đoạn dự án
-            'project.phase.view' => 'Xem giai đoạn dự án',
+            'project.phase.view'   => 'Xem giai đoạn dự án',
             'project.phase.create' => 'Tạo giai đoạn dự án',
             'project.phase.update' => 'Sửa giai đoạn dự án',
             'project.phase.delete' => 'Xóa giai đoạn dự án',
 
             // Tài liệu dự án
-            'project.document.view' => 'Xem tài liệu dự án',
+            'project.document.view'   => 'Xem tài liệu dự án',
             'project.document.upload' => 'Tải lên tài liệu dự án',
             'project.document.delete' => 'Xóa tài liệu dự án',
 
             // Rủi ro dự án
-            'project.risk.view' => 'Xem rủi ro dự án',
-            'project.risk.create' => 'Tạo rủi ro dự án',
-            'project.risk.update' => 'Sửa rủi ro dự án',
-            'project.risk.delete' => 'Xóa rủi ro dự án',
+            'project.risk.view'   => 'Xem danh sách rủi ro',
+            'project.risk.create' => 'Tạo hồ sơ rủi ro mới',
+            'project.risk.update' => 'Cập nhật thông tin rủi ro',
+            'project.risk.delete' => 'Xóa hồ sơ rủi ro',
 
             // Giám sát dự án
-            'project.monitoring.view' => 'Xem giám sát dự án',
+            'project.monitoring.view' => 'Xem tổng quan giám sát dự án',
 
-            // ===== CHI PHÍ (NỘI BỘ) =====
-            'cost.view' => 'Xem chi phí nội bộ',
-            'cost.create' => 'Tạo chi phí nội bộ',
-            'cost.update' => 'Sửa chi phí nội bộ',
-            'cost.delete' => 'Xóa chi phí nội bộ',
-            'cost.submit' => 'Gửi duyệt chi phí nội bộ',
-            'cost.approve.management' => 'Duyệt chi phí (Ban quản lý)',
-            'cost.approve.accountant' => 'Duyệt chi phí (Kế toán)',
-            'cost.reject' => 'Từ chối chi phí nội bộ',
+            // ===================================================================
+            // CHI PHÍ NỘI BỘ
+            // ===================================================================
+            'cost.view'               => 'Xem danh sách chi phí nội bộ',
+            'cost.create'             => 'Tạo khoản chi phí nội bộ',
+            'cost.update'             => 'Sửa thông tin chi phí nội bộ',
+            'cost.delete'             => 'Xóa khoản chi phí nội bộ',
+            'cost.submit'             => 'Gửi chi phí chờ duyệt',
+            'cost.approve.management' => 'Ban quản lý duyệt chi phí',
+            'cost.approve.accountant' => 'Kế toán xác nhận chi phí',
+            'cost.reject'             => 'Từ chối chi phí nội bộ',
 
-            // ===== CHI PHÍ PHÁT SINH =====
-            'additional_cost.view' => 'Xem chi phí phát sinh',
-            'additional_cost.create' => 'Tạo chi phí phát sinh',
-            'additional_cost.update' => 'Sửa chi phí phát sinh',
-            'additional_cost.delete' => 'Xóa chi phí phát sinh',
-            'additional_cost.approve' => 'Duyệt chi phí phát sinh',
-            'additional_cost.confirm' => 'Xác nhận chi phí phát sinh',
-            'additional_cost.reject' => 'Từ chối chi phí phát sinh',
-            'additional_cost.mark_paid_by_customer' => 'Xác nhận KH đã thanh toán CPPS',
+            // ===================================================================
+            // CHI PHÍ PHÁT SINH
+            // ===================================================================
+            'additional_cost.view'                 => 'Xem chi phí phát sinh',
+            'additional_cost.create'               => 'Tạo khoản chi phí phát sinh',
+            'additional_cost.update'               => 'Sửa chi phí phát sinh',
+            'additional_cost.delete'               => 'Xóa chi phí phát sinh',
+            'additional_cost.approve'              => 'Duyệt chi phí phát sinh',
+            'additional_cost.reject'               => 'Từ chối chi phí phát sinh',
+            'additional_cost.confirm'              => 'Kế toán xác nhận đã nhận tiền phát sinh',
+            'additional_cost.mark_paid_by_customer' => 'Khách hàng xác nhận đã thanh toán CP phát sinh',
 
-            // ===== VẬT LIỆU =====
-            'material.view' => 'Xem vật tư/vật liệu',
-            'material.create' => 'Tạo vật tư/vật liệu',
-            'material.update' => 'Sửa vật tư/vật liệu',
-            'material.delete' => 'Xóa vật tư/vật liệu',
-            'material.approve' => 'Duyệt yêu cầu vật tư',
+            // ===================================================================
+            // VẬT TƯ / VẬT LIỆU
+            // ===================================================================
+            'material.view'    => 'Xem kho vật tư / vật liệu',
+            'material.create'  => 'Thêm vật tư vào kho',
+            'material.update'  => 'Sửa thông tin vật tư',
+            'material.delete'  => 'Xóa vật tư khỏi kho',
+            'material.approve' => 'Duyệt yêu cầu xuất vật tư',
 
-            // ===== THIẾT BỊ =====
-            'equipment.view' => 'Xem thiết bị',
-            'equipment.create' => 'Tạo thiết bị',
-            'equipment.update' => 'Sửa thiết bị',
-            'equipment.delete' => 'Xóa thiết bị',
+            // ===================================================================
+            // THIẾT BỊ
+            // ===================================================================
+            'equipment.view'    => 'Xem danh sách thiết bị',
+            'equipment.create'  => 'Thêm thiết bị mới',
+            'equipment.update'  => 'Sửa thông tin thiết bị',
+            'equipment.delete'  => 'Xóa thiết bị',
             'equipment.approve' => 'Duyệt yêu cầu thiết bị',
 
-            // ===== BÁO CÁO =====
-            'report.view' => 'Xem báo cáo',
-            'report.export' => 'Xuất báo cáo (Excel/PDF)',
-            'report.financial' => 'Xem báo cáo tài chính',
-            'report.progress' => 'Xem báo cáo tiến độ',
-            'report.project_summary.view' => 'Xem tổng hợp dự án',
+            // ===================================================================
+            // BẢO HÀNH & BẢO TRÌ
+            // ===================================================================
+            'warranty.view'    => 'Xem danh sách bảo hành',
+            'warranty.create'  => 'Tạo phiếu bảo hành mới',
+            'warranty.update'  => 'Cập nhật thông tin bảo hành',
+            'warranty.delete'  => 'Xóa phiếu bảo hành',
+            'warranty.approve' => 'Duyệt yêu cầu bảo hành',
 
-            // ===== HÓA ĐƠN ĐẦU RA =====
-            'invoice.view' => 'Xem hóa đơn đầu ra',
-            'invoice.create' => 'Tạo hóa đơn đầu ra',
-            'invoice.update' => 'Sửa hóa đơn đầu ra',
-            'invoice.delete' => 'Xóa hóa đơn đầu ra',
+            // ===================================================================
+            // BÁO CÁO
+            // ===================================================================
+            'report.view'                 => 'Xem trang báo cáo',
+            'report.export'               => 'Xuất báo cáo ra Excel / PDF',
+            'report.financial'            => 'Xem báo cáo tài chính',
+            'report.progress'             => 'Xem báo cáo tiến độ',
+            'report.project_summary.view' => 'Xem báo cáo tổng hợp dự án',
+
+            // ===================================================================
+            // HÓA ĐƠN ĐẦU RA (cho khách hàng)
+            // ===================================================================
+            'invoice.view'    => 'Xem hóa đơn đầu ra',
+            'invoice.create'  => 'Tạo hóa đơn đầu ra',
+            'invoice.update'  => 'Sửa hóa đơn đầu ra',
+            'invoice.delete'  => 'Xóa hóa đơn đầu ra',
             'invoice.approve' => 'Duyệt hóa đơn đầu ra',
-            'invoice.send' => 'Gửi hóa đơn đầu ra',
+            'invoice.send'    => 'Gửi hóa đơn cho khách hàng',
 
-            // ===== HÓA ĐƠN ĐẦU VÀO =====
-            'input_invoice.view' => 'Xem hóa đơn đầu vào',
-            'input_invoice.create' => 'Tạo hóa đơn đầu vào',
+            // ===================================================================
+            // HÓA ĐƠN ĐẦU VÀO (từ nhà cung cấp)
+            // ===================================================================
+            'input_invoice.view'   => 'Xem hóa đơn đầu vào',
+            'input_invoice.create' => 'Nhập hóa đơn đầu vào',
             'input_invoice.update' => 'Sửa hóa đơn đầu vào',
             'input_invoice.delete' => 'Xóa hóa đơn đầu vào',
 
-            // ===== HỢP ĐỒNG =====
-            'contract.view' => 'Xem hợp đồng',
-            'contract.create' => 'Tạo hợp đồng',
-            'contract.update' => 'Sửa hợp đồng',
-            'contract.delete' => 'Xóa hợp đồng',
-            'contract.approve.level_1' => 'Duyệt hợp đồng (Kỹ thuật)',
-            'contract.approve.level_2' => 'Phê duyệt hợp đồng (Ban GĐ)',
+            // ===================================================================
+            // HỢP ĐỒNG
+            // ===================================================================
+            'contract.view'           => 'Xem hợp đồng dự án',
+            'contract.create'         => 'Tạo hợp đồng mới',
+            'contract.update'         => 'Sửa thông tin hợp đồng',
+            'contract.delete'         => 'Xóa hợp đồng',
+            'contract.approve.level_1' => 'Duyệt hợp đồng — cấp Kỹ thuật',
+            'contract.approve.level_2' => 'Phê duyệt hợp đồng — cấp Ban Giám đốc',
 
-            // ===== THANH TOÁN =====
-            'payment.view' => 'Xem đợt thanh toán',
-            'payment.create' => 'Tạo đợt thanh toán',
-            'payment.update' => 'Sửa đợt thanh toán',
-            'payment.delete' => 'Xóa đợt thanh toán',
-            'payment.confirm' => 'Kế toán xác nhận đã nhận tiền',
-            'payment.mark_paid_by_customer' => 'KH xác nhận đã chuyển tiền',
+            // ===================================================================
+            // THANH TOÁN (đợt thanh toán từ KH)
+            // ===================================================================
+            'payment.view'                 => 'Xem các đợt thanh toán',
+            'payment.create'               => 'Tạo đợt thanh toán mới',
+            'payment.update'               => 'Sửa thông tin đợt thanh toán',
+            'payment.delete'               => 'Xóa đợt thanh toán',
+            'payment.confirm'              => 'Kế toán xác nhận đã nhận tiền',
+            'payment.approve'              => 'Duyệt đợt thanh toán',
+            'payment.mark_paid_by_customer' => 'Khách hàng xác nhận đã chuyển tiền',
 
-            // ===== NHÀ THẦU PHỤ =====
-            'subcontractor.view' => 'Xem nhà thầu phụ',
-            'subcontractor.create' => 'Tạo nhà thầu phụ',
-            'subcontractor.update' => 'Sửa nhà thầu phụ',
+            // ===================================================================
+            // NHÀ THẦU PHỤ
+            // ===================================================================
+            'subcontractor.view'   => 'Xem danh sách nhà thầu phụ',
+            'subcontractor.create' => 'Thêm nhà thầu phụ',
+            'subcontractor.update' => 'Sửa thông tin nhà thầu phụ',
             'subcontractor.delete' => 'Xóa nhà thầu phụ',
 
-            // Thanh toán thầu phụ
-            'subcontractor_payment.view' => 'Xem thanh toán NTP',
-            'subcontractor_payment.create' => 'Tạo thanh toán NTP',
-            'subcontractor_payment.update' => 'Sửa thanh toán NTP',
-            'subcontractor_payment.delete' => 'Xóa thanh toán NTP',
-            'subcontractor_payment.approve' => 'Duyệt thanh toán NTP',
-            'subcontractor_payment.mark_paid' => 'Đánh dấu đã trả tiền NTP',
+            // Thanh toán nhà thầu phụ
+            'subcontractor_payment.view'      => 'Xem thanh toán nhà thầu phụ',
+            'subcontractor_payment.create'    => 'Tạo yêu cầu thanh toán NTP',
+            'subcontractor_payment.update'    => 'Sửa thanh toán nhà thầu phụ',
+            'subcontractor_payment.delete'    => 'Xóa thanh toán nhà thầu phụ',
+            'subcontractor_payment.approve'   => 'Duyệt thanh toán nhà thầu phụ',
+            'subcontractor_payment.mark_paid' => 'Xác nhận đã trả tiền cho NTP',
 
-            // ===== TÀI LIỆU =====
-            'document.view' => 'Xem tài liệu',
-            'document.upload' => 'Tải lên tài liệu',
+            // ===================================================================
+            // TÀI LIỆU
+            // ===================================================================
+            'document.view'   => 'Xem danh sách tài liệu',
+            'document.upload' => 'Tải lên tài liệu mới',
             'document.delete' => 'Xóa tài liệu',
 
-            // ===== NHẬT KÝ CÔNG TRÌNH =====
-            'log.view' => 'Xem nhật ký công trình',
-            'log.create' => 'Tạo nhật ký công trình',
-            'log.update' => 'Sửa nhật ký công trình',
-            'log.delete' => 'Xóa nhật ký công trình',
+            // ===================================================================
+            // NHẬT KÝ CÔNG TRÌNH
+            // ===================================================================
+            'log.view'    => 'Xem nhật ký công trình',
+            'log.create'  => 'Viết nhật ký công trình',
+            'log.update'  => 'Sửa nhật ký công trình',
+            'log.delete'  => 'Xóa nhật ký công trình',
+            'log.approve' => 'Duyệt nhật ký công trình',
 
-            // ===== LỖI PHÁT SINH =====
-            'defect.view' => 'Xem lỗi phát sinh',
-            'defect.create' => 'Tạo lỗi phát sinh',
-            'defect.update' => 'Sửa lỗi phát sinh',
-            'defect.delete' => 'Xóa lỗi phát sinh',
-            'defect.verify' => 'Xác minh lỗi phát sinh',
+            // ===================================================================
+            // LỖI / KHUYẾT TẬT (Defects)
+            // ===================================================================
+            'defect.view'   => 'Xem danh sách lỗi / khuyết tật',
+            'defect.create' => 'Báo cáo lỗi mới',
+            'defect.update' => 'Cập nhật tình trạng lỗi',
+            'defect.delete' => 'Xóa báo cáo lỗi',
+            'defect.verify' => 'Xác nhận lỗi đã được sửa',
 
-            // ===== NHÂN SỰ DỰ ÁN =====
-            'personnel.view' => 'Xem nhân sự dự án',
-            'personnel.assign' => 'Gán nhân sự vào dự án',
+            // ===================================================================
+            // NHÂN SỰ DỰ ÁN
+            // ===================================================================
+            'personnel.view'   => 'Xem nhân sự tham gia dự án',
+            'personnel.assign' => 'Thêm nhân sự vào dự án',
             'personnel.remove' => 'Gỡ nhân sự khỏi dự án',
 
-            // ===== DOANH THU =====
-            'revenue.view' => 'Xem doanh thu',
-            'revenue.dashboard' => 'Xem dashboard doanh thu',
-            'revenue.export' => 'Xuất báo cáo doanh thu',
+            // ===================================================================
+            // KPI NHÂN SỰ
+            // ===================================================================
+            'kpi.view'   => 'Xem chỉ tiêu KPI nhân sự',
+            'kpi.create' => 'Tạo chỉ tiêu KPI',
+            'kpi.update' => 'Sửa chỉ tiêu KPI',
+            'kpi.delete' => 'Xóa chỉ tiêu KPI',
+            'kpi.verify' => 'Đánh giá / xác nhận KPI',
 
-            // ===== NGÂN SÁCH =====
-            'budgets.view' => 'Xem ngân sách',
-            'budgets.create' => 'Tạo ngân sách',
-            'budgets.update' => 'Sửa ngân sách',
-            'budgets.delete' => 'Xóa ngân sách',
+            // ===================================================================
+            // DOANH THU
+            // ===================================================================
+            'revenue.view'      => 'Xem thông tin doanh thu',
+            'revenue.dashboard' => 'Xem bảng thống kê doanh thu',
+            'revenue.export'    => 'Xuất báo cáo doanh thu',
 
-            // ===== NGHIỆM THU =====
-            'acceptance.view' => 'Xem nghiệm thu',
-            'acceptance.create' => 'Tạo nghiệm thu',
-            'acceptance.update' => 'Sửa nghiệm thu',
-            'acceptance.delete' => 'Xóa nghiệm thu',
-            'acceptance.approve.level_1' => 'Duyệt nghiệm thu cấp 1',
-            'acceptance.approve.level_2' => 'Duyệt nghiệm thu cấp 2',
-            'acceptance.approve.level_3' => 'Duyệt nghiệm thu cấp 3',
-            'acceptance.attach_files' => 'Đính kèm file nghiệm thu',
+            // ===================================================================
+            // NGÂN SÁCH DỰ ÁN
+            // ===================================================================
+            'budgets.view'    => 'Xem ngân sách dự án',
+            'budgets.create'  => 'Tạo ngân sách dự án',
+            'budgets.update'  => 'Sửa ngân sách dự án',
+            'budgets.delete'  => 'Xóa ngân sách dự án',
+            'budgets.approve' => 'Duyệt ngân sách dự án',
+
+            // ===================================================================
+            // NGHIỆM THU
+            // ===================================================================
+            'acceptance.view'           => 'Xem hồ sơ nghiệm thu',
+            'acceptance.create'         => 'Tạo đợt nghiệm thu mới',
+            'acceptance.update'         => 'Sửa thông tin nghiệm thu',
+            'acceptance.delete'         => 'Xóa đợt nghiệm thu',
+            'acceptance.attach_files'   => 'Đính kèm tài liệu nghiệm thu',
+            'acceptance.approve.level_1' => 'Giám sát duyệt nghiệm thu',
+            'acceptance.approve.level_2' => 'Quản lý dự án duyệt nghiệm thu',
+            'acceptance.approve.level_3' => 'Khách hàng phê duyệt nghiệm thu',
 
             // Mẫu nghiệm thu
-            'acceptance.template.view' => 'Xem mẫu nghiệm thu',
-            'acceptance.template.create' => 'Tạo mẫu nghiệm thu',
+            'acceptance.template.view'   => 'Xem bộ mẫu nghiệm thu',
+            'acceptance.template.create' => 'Tạo mẫu nghiệm thu mới',
             'acceptance.template.update' => 'Sửa mẫu nghiệm thu',
             'acceptance.template.delete' => 'Xóa mẫu nghiệm thu',
 
-            // ===== PHIẾU THU/CHI =====
-            'receipts.view' => 'Xem phiếu thu/chi',
-            'receipts.create' => 'Tạo phiếu thu/chi',
-            'receipts.update' => 'Sửa phiếu thu/chi',
-            'receipts.delete' => 'Xóa phiếu thu/chi',
-            'receipts.verify' => 'Xác minh phiếu thu/chi',
+            // ===================================================================
+            // PHIẾU THU / CHI
+            // ===================================================================
+            'receipts.view'   => 'Xem phiếu thu / phiếu chi',
+            'receipts.create' => 'Tạo phiếu thu / phiếu chi',
+            'receipts.update' => 'Sửa phiếu thu / phiếu chi',
+            'receipts.delete' => 'Xóa phiếu thu / phiếu chi',
+            'receipts.verify' => 'Xác minh phiếu thu / phiếu chi',
 
-            // ===== NHÀ CUNG CẤP =====
-            'suppliers.view' => 'Xem nhà cung cấp',
-            'suppliers.create' => 'Tạo nhà cung cấp',
-            'suppliers.update' => 'Sửa nhà cung cấp',
+            // ===================================================================
+            // NHÀ CUNG CẤP
+            // ===================================================================
+            'suppliers.view'   => 'Xem danh sách nhà cung cấp',
+            'suppliers.create' => 'Thêm nhà cung cấp mới',
+            'suppliers.update' => 'Sửa thông tin nhà cung cấp',
             'suppliers.delete' => 'Xóa nhà cung cấp',
 
             // Hợp đồng NCC
-            'supplier.contract.view' => 'Xem hợp đồng NCC',
-            'supplier.contract.create' => 'Tạo hợp đồng NCC',
-            'supplier.contract.update' => 'Sửa hợp đồng NCC',
-            'supplier.contract.delete' => 'Xóa hợp đồng NCC',
+            'supplier.contract.view'    => 'Xem hợp đồng nhà cung cấp',
+            'supplier.contract.create'  => 'Tạo hợp đồng với NCC',
+            'supplier.contract.update'  => 'Sửa hợp đồng NCC',
+            'supplier.contract.delete'  => 'Xóa hợp đồng NCC',
             'supplier.contract.approve' => 'Duyệt hợp đồng NCC',
 
             // Nghiệm thu NCC
-            'supplier.acceptance.view' => 'Xem nghiệm thu NCC',
-            'supplier.acceptance.create' => 'Tạo nghiệm thu NCC',
+            'supplier.acceptance.view'   => 'Xem nghiệm thu nhà cung cấp',
+            'supplier.acceptance.create' => 'Tạo biên bản nghiệm thu NCC',
             'supplier.acceptance.update' => 'Sửa nghiệm thu NCC',
             'supplier.acceptance.delete' => 'Xóa nghiệm thu NCC',
 
-            // ===== YÊU CẦU THAY ĐỔI =====
-            'change_request.view' => 'Xem yêu cầu thay đổi',
-            'change_request.create' => 'Tạo yêu cầu thay đổi',
-            'change_request.update' => 'Sửa yêu cầu thay đổi',
-            'change_request.delete' => 'Xóa yêu cầu thay đổi',
+            // ===================================================================
+            // YÊU CẦU THAY ĐỔI (Change Request)
+            // ===================================================================
+            'change_request.view'    => 'Xem yêu cầu thay đổi',
+            'change_request.create'  => 'Tạo yêu cầu thay đổi mới',
+            'change_request.update'  => 'Sửa yêu cầu thay đổi',
+            'change_request.delete'  => 'Xóa yêu cầu thay đổi',
             'change_request.approve' => 'Duyệt yêu cầu thay đổi',
-            'change_request.reject' => 'Từ chối yêu cầu thay đổi',
+            'change_request.reject'  => 'Từ chối yêu cầu thay đổi',
 
-            // ===== SỰ CỐ =====
-            'issue.view' => 'Xem sự cố/vấn đề',
-            'issue.create' => 'Tạo sự cố/vấn đề',
-            'issue.update' => 'Sửa sự cố/vấn đề',
-            'issue.delete' => 'Xóa sự cố/vấn đề',
-            'issue.resolve' => 'Giải quyết sự cố',
+            // ===================================================================
+            // SỰ CỐ / VẤN ĐỀ (Issues)
+            // ===================================================================
+            'issue.view'    => 'Xem danh sách sự cố',
+            'issue.create'  => 'Báo cáo sự cố mới',
+            'issue.update'  => 'Cập nhật sự cố',
+            'issue.delete'  => 'Xóa sự cố',
+            'issue.resolve' => 'Đánh dấu đã giải quyết sự cố',
 
-            // ===== EVM =====
-            'evm.view' => 'Xem phân tích EVM',
-            'evm.create' => 'Tạo bản ghi EVM',
+            // ===================================================================
+            // GANTT & BIỂU ĐỒ TIẾN ĐỘ (WBS)
+            // ===================================================================
+            'gantt.view'         => 'Xem biểu đồ Gantt tiến độ',
+            'gantt.update'       => 'Chỉnh sửa biểu đồ Gantt',
+            'wbs.template.view'  => 'Xem mẫu cấu trúc WBS',
+            'wbs.template.create' => 'Tạo mẫu cấu trúc WBS',
 
-            // ===== KPI NHÂN SỰ =====
-            'kpi.view' => 'Xem KPI nhân sự',
-            'kpi.create' => 'Tạo KPI nhân sự',
-            'kpi.update' => 'Sửa KPI nhân sự',
-            'kpi.delete' => 'Xóa KPI nhân sự',
-            'kpi.verify' => 'Xác minh/Đánh giá KPI',
+            // ===================================================================
+            // TỔNG HỢP TÀI CHÍNH
+            // ===================================================================
+            'finance.view'   => 'Xem tổng hợp tài chính dự án',
+            'finance.manage' => 'Quản lý dữ liệu tài chính',
 
-            // ===== CÀI ĐẶT =====
-            'settings.view' => 'Xem cài đặt hệ thống',
-            'settings.manage' => 'Quản lý cài đặt hệ thống',
+            // ===================================================================
+            // CHẤM CÔNG
+            // ===================================================================
+            'attendance.view'     => 'Xem bảng chấm công',
+            'attendance.check_in' => 'Điểm danh vào / ra',
+            'attendance.manage'   => 'Quản lý dữ liệu chấm công',
+            'attendance.approve'  => 'Duyệt bản ghi chấm công',
 
-            // ===== PHÒNG BAN =====
-            'departments.view' => 'Xem phòng ban',
-            'departments.create' => 'Tạo phòng ban',
-            'departments.update' => 'Sửa phòng ban',
+            // ===================================================================
+            // NĂNG SUẤT LAO ĐỘNG
+            // ===================================================================
+            'labor_productivity.view'   => 'Xem báo cáo năng suất lao động',
+            'labor_productivity.create' => 'Nhập dữ liệu năng suất',
+            'labor_productivity.update' => 'Sửa dữ liệu năng suất',
+            'labor_productivity.delete' => 'Xóa dữ liệu năng suất',
+
+            // ===================================================================
+            // PHÂN TÍCH EVM & DỰ BÁO
+            // ===================================================================
+            'evm.view'        => 'Xem phân tích giá trị thu được (EVM)',
+            'predictive.view' => 'Xem dự báo chi phí & tiến độ',
+
+            // ===================================================================
+            // TÀI CHÍNH CÔNG TY
+            // ===================================================================
+            'company_financial.view' => 'Xem báo cáo tài chính toàn công ty',
+
+            // ===================================================================
+            // VẬN HÀNH — CỔ ĐÔNG
+            // ===================================================================
+            'shareholder.view'   => 'Xem danh sách cổ đông',
+            'shareholder.create' => 'Thêm cổ đông mới',
+            'shareholder.update' => 'Sửa thông tin cổ đông',
+            'shareholder.delete' => 'Xóa cổ đông',
+
+            // ===================================================================
+            // VẬN HÀNH — TÀI SẢN CÔNG TY
+            // ===================================================================
+            'company_asset.view'       => 'Xem danh sách tài sản công ty',
+            'company_asset.create'     => 'Thêm tài sản công ty',
+            'company_asset.update'     => 'Sửa thông tin tài sản',
+            'company_asset.delete'     => 'Xóa tài sản công ty',
+            'company_asset.assign'     => 'Phân bổ tài sản cho dự án / bộ phận',
+            'company_asset.depreciate' => 'Chạy tính khấu hao tài sản',
+
+            'operations.dashboard.view' => 'Xem tổng quan vận hành công ty',
+
+            // ===================================================================
+            // CÀI ĐẶT HỆ THỐNG
+            // ===================================================================
+            'settings.view'   => 'Xem cài đặt hệ thống',
+            'settings.manage' => 'Thay đổi cài đặt hệ thống',
+
+            // ===================================================================
+            // PHIẾU XUẤT VẬT TƯ
+            // ===================================================================
+            'material_bill.view'               => 'Xem phiếu xuất vật tư',
+            'material_bill.create'             => 'Tạo phiếu xuất vật tư',
+            'material_bill.update'             => 'Sửa phiếu xuất vật tư',
+            'material_bill.delete'             => 'Xóa phiếu xuất vật tư',
+            'material_bill.approve'            => 'Duyệt phiếu xuất vật tư',
+            'material_bill.approve.management' => 'Ban quản lý duyệt phiếu vật tư',
+            'material_bill.approve.accountant' => 'Kế toán xác nhận phiếu vật tư',
+            'material_bill.reject'             => 'Từ chối phiếu xuất vật tư',
+
+            // ===================================================================
+            // PHÒNG BAN
+            // ===================================================================
+            'departments.view'   => 'Xem danh sách phòng ban',
+            'departments.create' => 'Tạo phòng ban mới',
+            'departments.update' => 'Sửa thông tin phòng ban',
             'departments.delete' => 'Xóa phòng ban',
 
-            // ===== PHIẾU VẬT TƯ =====
-            'material_bill.view' => 'Xem phiếu xuất vật tư',
-            'material_bill.create' => 'Tạo phiếu xuất vật tư',
-            'material_bill.update' => 'Sửa phiếu xuất vật tư',
-            'material_bill.delete' => 'Xóa phiếu xuất vật tư',
-            'material_bill.approve' => 'Duyệt phiếu xuất vật tư',
-
-            // ===== NHẮC NHỞ =====
-            'reminder.view' => 'Xem nhắc nhở',
-            'reminder.create' => 'Tạo nhắc nhở',
+            // ===================================================================
+            // NHẮC NHỞ
+            // ===================================================================
+            'reminder.view'   => 'Xem danh sách nhắc nhở',
+            'reminder.create' => 'Tạo lịch nhắc nhở',
             'reminder.update' => 'Sửa nhắc nhở',
             'reminder.delete' => 'Xóa nhắc nhở',
 
-            // ===== CHI PHÍ CÔNG TY =====
-            'company_cost.view' => 'Xem chi phí công ty',
-            'company_cost.create' => 'Tạo chi phí công ty',
-            'company_cost.update' => 'Sửa chi phí công ty',
-            'company_cost.delete' => 'Xóa chi phí công ty',
-            'company_cost.submit' => 'Gửi duyệt chi phí công ty',
-            'company_cost.approve.management' => 'Duyệt chi phí công ty (BQL)',
-            'company_cost.approve.accountant' => 'Duyệt chi phí công ty (KT)',
-            'company_cost.reject' => 'Từ chối chi phí công ty',
+            // ===================================================================
+            // CHI PHÍ CÔNG TY (không thuộc dự án)
+            // ===================================================================
+            'company_cost.view'               => 'Xem chi phí vận hành công ty',
+            'company_cost.create'             => 'Tạo khoản chi phí công ty',
+            'company_cost.update'             => 'Sửa chi phí công ty',
+            'company_cost.delete'             => 'Xóa chi phí công ty',
+            'company_cost.submit'             => 'Gửi chi phí công ty chờ duyệt',
+            'company_cost.approve.management' => 'Ban quản lý duyệt chi phí công ty',
+            'company_cost.approve.accountant' => 'Kế toán xác nhận chi phí công ty',
+            'company_cost.reject'             => 'Từ chối chi phí công ty',
 
-            // ===== THẦU PHỤ (SETTINGS) =====
-            'subcontractor.contract.view' => 'Xem hợp đồng thầu phụ',
-            'subcontractor.contract.create' => 'Tạo hợp đồng thầu phụ',
-            'subcontractor.contract.update' => 'Sửa hợp đồng thầu phụ',
-            'subcontractor.contract.delete' => 'Xóa hợp đồng thầu phụ',
+            // ===================================================================
+            // HỢP ĐỒNG THẦU PHỤ (Settings)
+            // ===================================================================
+            'subcontractor.contract.view'    => 'Xem hợp đồng thầu phụ',
+            'subcontractor.contract.create'  => 'Tạo hợp đồng thầu phụ',
+            'subcontractor.contract.update'  => 'Sửa hợp đồng thầu phụ',
+            'subcontractor.contract.delete'  => 'Xóa hợp đồng thầu phụ',
             'subcontractor.contract.approve' => 'Duyệt hợp đồng thầu phụ',
-            'subcontractor.acceptance.view' => 'Xem nghiệm thu thầu phụ',
-            'subcontractor.acceptance.create' => 'Tạo nghiệm thu thầu phụ',
+
+            // Nghiệm thu thầu phụ
+            'subcontractor.acceptance.view'   => 'Xem nghiệm thu thầu phụ',
+            'subcontractor.acceptance.create' => 'Tạo biên bản nghiệm thu NTP',
             'subcontractor.acceptance.update' => 'Sửa nghiệm thu thầu phụ',
             'subcontractor.acceptance.delete' => 'Xóa nghiệm thu thầu phụ',
-            'subcontractor.progress.view' => 'Xem tiến độ thầu phụ',
+
+            // Tiến độ thầu phụ
+            'subcontractor.progress.view'   => 'Xem tiến độ thầu phụ',
             'subcontractor.progress.update' => 'Cập nhật tiến độ thầu phụ',
         ];
 
+        $updated = 0;
+        $notFound = [];
+
         foreach ($map as $name => $description) {
-            Permission::where('name', $name)->update(['description' => $description]);
+            $affected = Permission::where('name', $name)->update(['description' => $description]);
+            if ($affected > 0) {
+                $updated++;
+            } else {
+                $notFound[] = $name;
+            }
         }
 
-        $this->command->info('Updated ' . count($map) . ' permissions with Vietnamese descriptions.');
+        $this->command->info("✅ Đã cập nhật {$updated} quyền với mô tả tiếng Việt.");
+
+        if (!empty($notFound)) {
+            $this->command->warn('⚠️  Các quyền sau không tìm thấy trong DB (có thể chưa được seed):');
+            foreach ($notFound as $name) {
+                $this->command->warn("   - {$name}");
+            }
+        }
     }
 }
