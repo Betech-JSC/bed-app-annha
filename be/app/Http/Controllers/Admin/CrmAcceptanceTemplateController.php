@@ -269,4 +269,60 @@ class CrmAcceptanceTemplateController extends Controller
             return back()->with('error', 'Không thể xóa bộ tài liệu này. Có thể đang được sử dụng.');
         }
     }
+
+    /**
+     * Upload tài liệu cho bộ tài liệu nghiệm thu
+     */
+    public function uploadDocuments(Request $request, $id)
+    {
+        $template = AcceptanceTemplate::findOrFail($id);
+
+        $request->validate([
+            'files' => 'required|array|min:1',
+            'files.*' => 'required|file|max:20480|mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $currentMaxOrder = AcceptanceTemplateDocument::where('acceptance_template_id', $template->id)->max('order') ?? 0;
+
+            foreach ($request->file('files') as $index => $file) {
+                $path = $file->store("acceptance-templates/{$template->id}", 'public');
+
+                $attachment = Attachment::create([
+                    'original_name' => $file->getClientOriginalName(),
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_url' => \Illuminate\Support\Facades\Storage::url($path),
+                    'mime_type' => $file->getClientMimeType(),
+                    'file_size' => $file->getSize(),
+                    'type' => 'acceptance_template_document',
+                    'attachable_type' => AcceptanceTemplate::class,
+                    'attachable_id' => $template->id,
+                    'uploaded_by' => auth('admin')->id(),
+                ]);
+
+                AcceptanceTemplateDocument::create([
+                    'acceptance_template_id' => $template->id,
+                    'attachment_id' => $attachment->id,
+                    'order' => $currentMaxOrder + $index + 1,
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã upload tài liệu thành công.',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error uploading acceptance template documents', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi upload tài liệu.',
+            ], 500);
+        }
+    }
 }

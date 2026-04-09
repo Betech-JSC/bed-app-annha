@@ -103,6 +103,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::with([
             'customer',
+            'projectManager',
             'payments.attachments',
             'payments.confirmer',
             'payments.customerApprover',
@@ -2658,6 +2659,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::BUDGET_UPDATE, $project);
 
         $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
+        // Only block active/archived — approved budgets are still editable (not yet applied to lifecycle)
         if (in_array($budget->status, ['active', 'archived'])) {
             return back()->with('error', 'Không thể cập nhật ngân sách đã kích hoạt/lưu trữ.');
         }

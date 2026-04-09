@@ -1049,13 +1049,13 @@
                   </div>
                   <a-tag :color="budgetStatusColors[budget.status]" class="rounded-full text-xs">{{ budgetStatusLabels[budget.status] || budget.status }}</a-tag>
                   <div class="flex gap-1">
-                    <a-tooltip v-if="can('budgets.update') && !['approved','archived'].includes(budget.status)" title="Sửa">
+                    <a-tooltip v-if="can('budgets.update') && !['active','archived'].includes(budget.status)" title="Sửa">
                       <a-button type="text" size="small" @click.stop="openBudgetModal(budget)"><EditOutlined class="text-blue-500" /></a-button>
                     </a-tooltip>
                     <a-tooltip v-if="can('budgets.update') && budget.status === 'draft'" title="Duyệt">
                       <a-button type="text" size="small" @click.stop="approveBudget(budget)"><CheckCircleOutlined class="text-green-500" /></a-button>
                     </a-tooltip>
-                    <a-popconfirm v-if="can('budgets.delete') && !['approved','archived'].includes(budget.status)" title="Xóa?" @confirm="deleteBudget(budget)">
+                    <a-popconfirm v-if="can('budgets.delete') && !['active','archived'].includes(budget.status)" title="Xóa?" @confirm="deleteBudget(budget)">
                       <a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button>
                     </a-popconfirm>
                   </div>

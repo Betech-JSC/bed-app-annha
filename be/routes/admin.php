@@ -520,6 +520,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/', [CrmAcceptanceTemplateController::class, 'store'])->name('store');
         Route::put('/{id}', [CrmAcceptanceTemplateController::class, 'update'])->name('update');
         Route::put('/{id}/toggle-active', [CrmAcceptanceTemplateController::class, 'toggleActive'])->name('toggle-active');
+        Route::post('/{id}/upload-documents', [CrmAcceptanceTemplateController::class, 'uploadDocuments'])->name('upload-documents');
         Route::delete('/{id}', [CrmAcceptanceTemplateController::class, 'destroy'])->name('destroy');
     });
 

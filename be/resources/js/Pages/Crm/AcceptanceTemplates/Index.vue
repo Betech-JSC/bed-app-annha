@@ -244,7 +244,7 @@
 
         <div v-if="detailData.description">
           <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">Mô tả</div>
-          <div class="text-sm text-gray-600 bg-gray-50 rounded-xl p-4">{{ detailData.description }}</div>
+          <div class="text-sm text-gray-600 bg-gray-50 rounded-xl p-4" style="white-space: pre-line;">{{ detailData.description }}</div>
         </div>
 
         <!-- Criteria -->
@@ -301,6 +301,28 @@
             </a>
           </div>
         </div>
+
+        <!-- Upload Documents -->
+        <div class="border-t border-dashed pt-4 mt-2">
+          <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2 flex items-center gap-1">
+            <UploadOutlined /> Upload tài liệu
+          </div>
+          <input
+            type="file"
+            multiple
+            ref="docUploadInput"
+            @change="onDocFilesSelect"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+            class="block w-full text-xs py-2 px-3 border border-dashed border-gray-300 rounded-xl hover:border-blue-400 transition cursor-pointer"
+          />
+          <div v-if="docUploadFiles.length" class="mt-2 space-y-1">
+            <div class="text-[10px] text-green-600 font-medium">{{ docUploadFiles.length }} tệp đã chọn</div>
+            <a-button type="primary" size="small" class="rounded-lg" :loading="docUploading" @click="uploadDocuments">
+              <template #icon><UploadOutlined /></template>
+              Upload tài liệu
+            </a-button>
+          </div>
+        </div>
       </div>
 
       <div class="mt-8 flex gap-3">
@@ -335,6 +357,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   OrderedListOutlined,
+  UploadOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -515,6 +538,49 @@ const confirmDelete = (tpl) => {
       })
     },
   })
+}
+
+// ─── Document Upload ───
+const docUploadFiles = ref([])
+const docUploading = ref(false)
+const docUploadInput = ref(null)
+
+const onDocFilesSelect = (e) => {
+  docUploadFiles.value = [...(e.target.files || [])]
+}
+
+const uploadDocuments = async () => {
+  if (!detailData.value || !docUploadFiles.value.length) return
+  docUploading.value = true
+
+  const fd = new FormData()
+  docUploadFiles.value.forEach(f => fd.append('files[]', f))
+
+  try {
+    const res = await fetch(`/acceptance-templates/${detailData.value.id}/upload-documents`, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+      },
+      body: fd,
+    })
+    const json = await res.json()
+    if (json.success) {
+      message.success(`Đã upload ${docUploadFiles.value.length} tệp tài liệu`)
+      // Refresh detail data
+      openDetail(detailData.value)
+      // Refresh page data
+      router.reload({ preserveScroll: true })
+    } else {
+      message.error(json.message || 'Lỗi upload')
+    }
+  } catch (err) {
+    message.error('Lỗi upload tài liệu')
+  } finally {
+    docUploading.value = false
+    docUploadFiles.value = []
+    if (docUploadInput.value) docUploadInput.value.value = ''
+  }
 }
 </script>
 
