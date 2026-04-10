@@ -19,6 +19,21 @@ import { ScreenHeader } from '@/components';
 import { operationsApi, CompanyAsset } from '@/api/operationsApi';
 import { formatVND } from '@/utils/format';
 
+const ASSET_STATUS_LABELS: Record<string, string> = {
+  in_use: 'Đang dùng',
+  available: 'Sẵn dùng',
+  maintenance: 'Bảo trì',
+  retired: 'Thanh lý',
+};
+
+const ASSET_CATEGORY_LABELS: Record<string, string> = {
+  computer: 'Máy tính',
+  machinery: 'Máy móc',
+  vehicle: 'Xe cộ',
+  office: 'Văn phòng',
+  other: 'Khác',
+};
+
 export default function AssetsScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -179,7 +194,7 @@ export default function AssetsScreen() {
                     <Text style={styles.name}>{item.name}</Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                    <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>{item.status}</Text>
+                    <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>{ASSET_STATUS_LABELS[item.status] || item.status}</Text>
                   </View>
                 </View>
                 
@@ -229,7 +244,7 @@ export default function AssetsScreen() {
                         style={[styles.catItem, form.category === cat && styles.catItemActive]}
                         onPress={() => setForm({...form, category: cat as any})}
                     >
-                        <Text style={[styles.catText, form.category === cat && styles.catTextActive]}>{cat}</Text>
+                        <Text style={[styles.catText, form.category === cat && styles.catTextActive]}>{ASSET_CATEGORY_LABELS[cat] || cat}</Text>
                     </TouchableOpacity>
                 ))}
               </View>

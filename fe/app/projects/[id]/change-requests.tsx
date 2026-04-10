@@ -273,6 +273,31 @@ export default function ChangeRequestsScreen() {
   );
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Nháp',
+  submitted: 'Đã gửi',
+  under_review: 'Đang xem xét',
+  approved: 'Đã duyệt',
+  rejected: 'Từ chối',
+  implemented: 'Đã thực hiện',
+  cancelled: 'Đã hủy',
+};
+
+const PRIORITY_LABELS: Record<string, string> = {
+  urgent: 'Khẩn cấp',
+  high: 'Cao',
+  medium: 'Trung bình',
+  low: 'Thấp',
+};
+
+const CHANGE_TYPE_LABELS: Record<string, string> = {
+  scope: 'Phạm vi',
+  schedule: 'Tiến độ',
+  cost: 'Chi phí',
+  quality: 'Chất lượng',
+  resource: 'Nhân lực',
+};
+
 function ChangeRequestCard({
   changeRequest,
   onPress,
@@ -362,7 +387,7 @@ function ChangeRequestCard({
               <Text
                 style={[styles.statusText, { color: getStatusColor(changeRequest.status) }]}
               >
-                {changeRequest.status}
+                {STATUS_LABELS[changeRequest.status] || changeRequest.status}
               </Text>
             </View>
             <View
@@ -374,10 +399,10 @@ function ChangeRequestCard({
               <Text
                 style={[styles.priorityText, { color: getPriorityColor(changeRequest.priority) }]}
               >
-                {changeRequest.priority}
+                {PRIORITY_LABELS[changeRequest.priority] || changeRequest.priority}
               </Text>
             </View>
-            <Text style={styles.changeRequestType}>{changeRequest.change_type}</Text>
+            <Text style={styles.changeRequestType}>{CHANGE_TYPE_LABELS[changeRequest.change_type] || changeRequest.change_type}</Text>
           </View>
         </View>
         <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />

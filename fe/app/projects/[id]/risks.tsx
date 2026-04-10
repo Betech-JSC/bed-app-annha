@@ -18,6 +18,30 @@ import { ScreenHeader, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function ProjectRisksScreen() {
+  const RISK_STATUS_LABELS: Record<string, string> = {
+    identified: 'Đã nhận diện',
+    analyzed: 'Đã phân tích',
+    monitored: 'Đang theo dõi',
+    mitigated: 'Đã giảm thiểu',
+    closed: 'Đã đóng',
+  };
+
+  const RISK_CATEGORY_LABELS: Record<string, string> = {
+    schedule: 'Tiến độ',
+    cost: 'Chi phí',
+    quality: 'Chất lượng',
+    scope: 'Phạm vi',
+    resource: 'Nhân lực',
+    technical: 'Kỹ thuật',
+    external: 'Bên ngoài',
+  };
+
+  const RISK_LEVEL_LABELS: Record<string, string> = {
+    critical: 'Nghiêm trọng',
+    high: 'Cao',
+    medium: 'Trung bình',
+    low: 'Thấp',
+  };
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const tabBarHeight = useTabBarHeight();
@@ -160,28 +184,28 @@ export default function ProjectRisksScreen() {
         <View style={styles.summaryContainer}>
           <View style={styles.summaryCard}>
             <Text style={[styles.summaryValue, { color: "#DC2626" }]}>{criticalRisks.length}</Text>
-            <Text style={styles.summaryLabel}>Critical</Text>
+            <Text style={styles.summaryLabel}>Nghiêm trọng</Text>
           </View>
           <View style={styles.summaryCard}>
             <Text style={[styles.summaryValue, { color: "#EF4444" }]}>{highRisks.length}</Text>
-            <Text style={styles.summaryLabel}>High</Text>
+            <Text style={styles.summaryLabel}>Cao</Text>
           </View>
           <View style={styles.summaryCard}>
             <Text style={[styles.summaryValue, { color: "#F59E0B" }]}>{mediumRisks.length}</Text>
-            <Text style={styles.summaryLabel}>Medium</Text>
+            <Text style={styles.summaryLabel}>Trung bình</Text>
           </View>
           <View style={styles.summaryCard}>
             <Text style={[styles.summaryValue, { color: "#10B981" }]}>{lowRisks.length}</Text>
-            <Text style={styles.summaryLabel}>Low</Text>
+            <Text style={styles.summaryLabel}>Thấp</Text>
           </View>
         </View>
 
         {/* Critical Risks */}
         {criticalRisks.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Rủi ro Critical ({criticalRisks.length})</Text>
+            <Text style={styles.sectionTitle}>Rủi ro Nghiêm trọng ({criticalRisks.length})</Text>
             {criticalRisks.map((risk) => (
-              <RiskCard key={risk.id} risk={risk} onPress={() => router.push(`/projects/${id}/risks/${risk.id}`)} />
+              <RiskCard key={risk.id} risk={risk} onPress={() => router.push(`/projects/${id}/risks/${risk.id}`)} statusLabels={RISK_STATUS_LABELS} categoryLabels={RISK_CATEGORY_LABELS} />
             ))}
           </View>
         )}
@@ -189,9 +213,9 @@ export default function ProjectRisksScreen() {
         {/* High Risks */}
         {highRisks.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Rủi ro High ({highRisks.length})</Text>
+            <Text style={styles.sectionTitle}>Rủi ro Cao ({highRisks.length})</Text>
             {highRisks.map((risk) => (
-              <RiskCard key={risk.id} risk={risk} onPress={() => router.push(`/projects/${id}/risks/${risk.id}`)} />
+              <RiskCard key={risk.id} risk={risk} onPress={() => router.push(`/projects/${id}/risks/${risk.id}`)} statusLabels={RISK_STATUS_LABELS} categoryLabels={RISK_CATEGORY_LABELS} />
             ))}
           </View>
         )}
@@ -199,9 +223,9 @@ export default function ProjectRisksScreen() {
         {/* Medium Risks */}
         {mediumRisks.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Rủi ro Medium ({mediumRisks.length})</Text>
+            <Text style={styles.sectionTitle}>Rủi ro Trung bình ({mediumRisks.length})</Text>
             {mediumRisks.map((risk) => (
-              <RiskCard key={risk.id} risk={risk} onPress={() => router.push(`/projects/${id}/risks/${risk.id}`)} />
+              <RiskCard key={risk.id} risk={risk} onPress={() => router.push(`/projects/${id}/risks/${risk.id}`)} statusLabels={RISK_STATUS_LABELS} categoryLabels={RISK_CATEGORY_LABELS} />
             ))}
           </View>
         )}
@@ -209,9 +233,9 @@ export default function ProjectRisksScreen() {
         {/* Low Risks */}
         {lowRisks.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Rủi ro Low ({lowRisks.length})</Text>
+            <Text style={styles.sectionTitle}>Rủi ro Thấp ({lowRisks.length})</Text>
             {lowRisks.map((risk) => (
-              <RiskCard key={risk.id} risk={risk} onPress={() => router.push(`/projects/${id}/risks/${risk.id}`)} />
+              <RiskCard key={risk.id} risk={risk} onPress={() => router.push(`/projects/${id}/risks/${risk.id}`)} statusLabels={RISK_STATUS_LABELS} categoryLabels={RISK_CATEGORY_LABELS} />
             ))}
           </View>
         )}
@@ -228,7 +252,7 @@ export default function ProjectRisksScreen() {
   );
 }
 
-function RiskCard({ risk, onPress }: { risk: ProjectRisk; onPress: () => void }) {
+function RiskCard({ risk, onPress, statusLabels, categoryLabels }: { risk: ProjectRisk; onPress: () => void; statusLabels: Record<string, string>; categoryLabels: Record<string, string> }) {
   const getRiskLevelColor = (level?: string) => {
     switch (level) {
       case "critical":
@@ -300,10 +324,10 @@ function RiskCard({ risk, onPress }: { risk: ProjectRisk; onPress: () => void })
           <View style={styles.riskMeta}>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(risk.status) + "20" }]}>
               <Text style={[styles.statusText, { color: getStatusColor(risk.status) }]}>
-                {risk.status}
+                {statusLabels[risk.status] || risk.status}
               </Text>
             </View>
-            <Text style={styles.riskCategory}>{risk.category}</Text>
+            <Text style={styles.riskCategory}>{categoryLabels[risk.category] || risk.category}</Text>
           </View>
         </View>
         <View style={[styles.riskScoreBadge, { backgroundColor: getRiskLevelColor(risk.risk_level) + "20" }]}>
