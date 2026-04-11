@@ -18,6 +18,8 @@ use App\Models\Defect;
 use App\Models\ProjectBudget;
 use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
+use App\Models\User;
+use App\Constants\Permissions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
