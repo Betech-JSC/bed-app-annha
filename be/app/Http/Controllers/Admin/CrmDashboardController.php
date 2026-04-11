@@ -12,14 +12,17 @@ use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\Notification;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class CrmDashboardController extends Controller
 {
+    use CrmAuthorization;
+
     public function index()
     {
-        crmRequire(Permissions::CRM_DASHBOARD_VIEW);
+        $this->crmRequire(Auth::guard('admin')->user(), Permissions::CRM_DASHBOARD_VIEW);
 
         $now = Carbon::now();
         $startOfMonth = $now->copy()->startOfMonth();

@@ -288,7 +288,6 @@ class CrmRolesController extends Controller
             'settings' => 'Cài đặt hệ thống',
 
             'general' => 'Chung',
-            'company_cost' => 'Chi phí vận hành công ty',
         ][$key] ?? ucfirst(str_replace('_', ' ', $key));
     }
 
