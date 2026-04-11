@@ -78,7 +78,7 @@
         <template v-else-if="column.key === 'roles'">
           <div class="flex flex-wrap gap-1">
             <a-tag v-for="role in (record.roles || [])" :key="role.id" color="blue" class="rounded-full text-xs">
-              {{ role.name }}
+              {{ roleLabels[role.name] || role.name }}
             </a-tag>
             <span v-if="!record.roles?.length" class="text-gray-400 text-xs">—</span>
           </div>
@@ -195,6 +195,21 @@ const props = defineProps({
 const loading = ref(false)
 const showModal = ref(false)
 const editingEmployee = ref(null)
+
+const roleLabels = {
+  super_admin: 'Super Admin',
+  'Ban Dieu Hanh': 'Ban Điều Hành',
+  'Ban Điều Hành': 'Ban Điều Hành',
+  project_manager: 'Quản lý dự án',
+  site_supervisor: 'Giám sát công trường',
+  accountant: 'Kế toán',
+  project_owner: 'Chủ đầu tư',
+  client: 'Khách hàng',
+  staff: 'Nhân viên',
+  admin: 'Quản trị viên',
+  hr: 'Nhân sự',
+  warehouse: 'Thủ kho',
+}
 
 const columns = [
   { title: 'Nhân viên', key: 'name', width: 280 },

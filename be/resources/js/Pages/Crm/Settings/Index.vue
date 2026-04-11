@@ -319,17 +319,54 @@
                 <div class="flex flex-wrap gap-1">
                   <a-tag v-if="record.super_admin" color="error" class="rounded-full px-3">Super Admin</a-tag>
                   <a-tag v-for="role in record.roles" :key="role" color="blue" class="rounded-full px-3">
-                    {{ role }}
+                    {{ roleLabels[role] || role }}
                   </a-tag>
                 </div>
               </template>
               <template v-else-if="column.key === 'actions'">
-                <a-button type="text" shape="circle"><EditOutlined /></a-button>
+                <a-button type="text" shape="circle" @click="openEditAdmin(record)"><EditOutlined /></a-button>
               </template>
             </template>
           </a-table>
         </div>
       </a-tab-pane>
+
+      <!-- Admin Edit Modal -->
+      <a-modal
+        v-model:open="showAdminEditModal"
+        title="Chỉnh sửa quản trị viên"
+        ok-text="Lưu"
+        cancel-text="Hủy"
+        :width="520"
+        @ok="saveAdmin"
+        :confirm-loading="adminSaving"
+        centered
+        destroy-on-close
+      >
+        <div class="space-y-4 mt-4" v-if="editingAdmin">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Tên</label>
+            <a-input v-model:value="adminForm.name" size="large" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <a-input v-model:value="adminForm.email" size="large" disabled />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu mới (để trống nếu không đổi)</label>
+            <a-input-password v-model:value="adminForm.password" size="large" placeholder="••••••••" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Vai trò</label>
+            <div class="flex flex-wrap gap-1">
+              <a-tag v-for="role in editingAdmin.roles" :key="role" color="blue" class="rounded-full px-3">
+                {{ roleLabels[role] || role }}
+              </a-tag>
+            </div>
+            <div class="text-xs text-gray-400 mt-2">Để thay đổi vai trò, vui lòng vào Quản lý nhân sự → Chỉnh sửa</div>
+          </div>
+        </div>
+      </a-modal>
 
       <!-- Tab 5: Roles -->
       <a-tab-pane key="roles" tab="Vai trò & Quyền">
@@ -422,6 +459,52 @@ const props = defineProps({
 })
 
 const activeTab = ref(new URLSearchParams(window.location.search).get('tab') || 'system')
+
+// Vietnamese role labels
+const roleLabels = {
+  super_admin: 'Super Admin',
+  'Ban Dieu Hanh': 'Ban Điều Hành',
+  'Ban Điều Hành': 'Ban Điều Hành',
+  project_manager: 'Quản lý dự án',
+  site_supervisor: 'Giám sát công trường',
+  accountant: 'Kế toán',
+  project_owner: 'Chủ đầu tư',
+  client: 'Khách hàng',
+  staff: 'Nhân viên',
+  admin: 'Quản trị viên',
+  hr: 'Nhân sự',
+  warehouse: 'Thủ kho',
+}
+
+// Admin Edit
+const showAdminEditModal = ref(false)
+const editingAdmin = ref(null)
+const adminSaving = ref(false)
+const adminForm = ref({ name: '', email: '', password: '' })
+
+const openEditAdmin = (record) => {
+  editingAdmin.value = record
+  adminForm.value = { name: record.name, email: record.email, password: '' }
+  showAdminEditModal.value = true
+}
+
+const saveAdmin = () => {
+  adminSaving.value = true
+  const data = { name: adminForm.value.name }
+  if (adminForm.value.password) data.password = adminForm.value.password
+  router.put(`/hr/employees/${editingAdmin.value.id}`, data, {
+    preserveState: true,
+    onSuccess: () => {
+      showAdminEditModal.value = false
+      adminSaving.value = false
+      message.success('Đã cập nhật thông tin quản trị viên!')
+    },
+    onError: () => {
+      adminSaving.value = false
+      message.error('Lỗi cập nhật quản trị viên')
+    },
+  })
+}
 
 // ========== Branding & Logo ==========
 const logoInput = ref(null)

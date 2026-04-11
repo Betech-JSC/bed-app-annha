@@ -13,8 +13,18 @@ use Inertia\Inertia;
 
 class CrmSettingsController extends Controller
 {
+    private function guardSuperAdmin()
+    {
+        $user = \Illuminate\Support\Facades\Auth::guard('admin')->user();
+        if (!$user || !$user->isSuperAdmin()) {
+            abort(403, 'Chỉ Super Admin mới được phép truy cập trang Cấu hình hệ thống.');
+        }
+    }
+
     public function index()
     {
+        $this->guardSuperAdmin();
+
         // Show users that have roles (CRM users)
         $admins = \App\Models\User::has('roles')->with('roles')->get()->map(function ($user) {
             return [
@@ -88,6 +98,7 @@ class CrmSettingsController extends Controller
      */
     public function updateSetting(Request $request)
     {
+        $this->guardSuperAdmin();
         $request->validate([
             'key' => 'required|string',
             'value' => 'nullable|string',
@@ -106,6 +117,7 @@ class CrmSettingsController extends Controller
      */
     public function uploadLogo(Request $request)
     {
+        $this->guardSuperAdmin();
         $request->validate([
             'logo' => 'required|image|mimes:png,jpg,jpeg,svg,webp|max:2048',
         ]);
@@ -131,6 +143,7 @@ class CrmSettingsController extends Controller
      */
     public function updateSmtp(Request $request)
     {
+        $this->guardSuperAdmin();
         $request->validate([
             'host' => 'required|string|max:255',
             'port' => 'required|integer|min:1|max:65535',
@@ -166,6 +179,7 @@ class CrmSettingsController extends Controller
      */
     public function testSmtp(Request $request)
     {
+        $this->guardSuperAdmin();
         $request->validate([
             'email' => 'required|email',
         ]);

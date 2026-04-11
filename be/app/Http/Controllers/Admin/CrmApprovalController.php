@@ -41,6 +41,7 @@ class CrmApprovalController extends Controller
 
         // ─── Management Level (BĐH) — Show All (Draft, Pending, Management, Rejected) ───
         $managementItems = Cost::whereIn('status', ['draft', 'pending', 'pending_management_approval', 'rejected'])
+            ->whereNull('material_bill_id')
             ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'attachments'])
             ->orderBy('created_at', 'desc')
@@ -49,6 +50,7 @@ class CrmApprovalController extends Controller
 
         // ─── Accountant Level (KT) — Show All (Accountant, Approved, Rejected) ───
         $accountantItems = Cost::whereIn('status', ['pending_accountant_approval', 'approved', 'rejected'])
+            ->whereNull('material_bill_id')
             ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
@@ -272,6 +274,7 @@ class CrmApprovalController extends Controller
 
         // ─── Recently processed feed ───
         $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
+            ->whereNull('material_bill_id')
             ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')

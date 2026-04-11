@@ -70,7 +70,7 @@ class CrmSupplierController extends Controller
         $this->crmRequire($user, Permissions::SUPPLIER_CREATE);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:50|unique:suppliers,code',
+            'code' => 'nullable|string|max:50|unique:suppliers,code',
             'category' => 'nullable|string|max:255',
             'contact_person' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:20',
@@ -83,6 +83,13 @@ class CrmSupplierController extends Controller
             'description' => 'nullable|string|max:1000',
             'status' => 'required|in:active,inactive',
         ]);
+
+        // Auto-generate code if not provided
+        if (empty($validated['code'])) {
+            $lastSupplier = Supplier::where('code', 'like', 'NCC-%')->orderByRaw("CAST(SUBSTRING(code, 5) AS UNSIGNED) DESC")->first();
+            $nextNumber = $lastSupplier ? ((int) substr($lastSupplier->code, 4)) + 1 : 1;
+            $validated['code'] = 'NCC-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+        }
 
         Supplier::create([
             ...$validated,

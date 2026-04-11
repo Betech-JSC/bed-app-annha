@@ -3502,6 +3502,33 @@
         </div>
       </div>
 
+      <!-- Hình ảnh đính kèm -->
+      <div v-if="defectDetail.attachments?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-orange-500"><PictureOutlined /> Hình ảnh lỗi ({{ defectDetail.attachments.length }})</div>
+        <div class="grid grid-cols-3 gap-3">
+          <div
+            v-for="att in defectDetail.attachments"
+            :key="att.id"
+            class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-gray-100 hover:border-blue-300 transition-all"
+            @click="openFilePreview(att)"
+          >
+            <img
+              v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
+              :src="att.file_url"
+              :alt="att.original_name || 'Ảnh lỗi'"
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+            />
+            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400">
+              <FileOutlined class="text-2xl mb-1" />
+              <span class="text-[10px] px-2 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
+            </div>
+            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+              <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Action Footer -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
         <div class="flex gap-2">
