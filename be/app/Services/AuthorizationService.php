@@ -28,16 +28,27 @@ class AuthorizationService
     /**
      * Check if user has permission for a specific project
      * 
-     * @param User $user
+     * @param $user
      * @param string $permission Permission constant (e.g., Permissions::CONTRACT_VIEW)
      * @param Project|int|null $project Project model, project ID, or null for global check
      * @return bool
      */
-    public function can(User $user, string $permission, $project = null): bool
+    public function can($user, string $permission, $project = null): bool
     {
+        if (!$user) return false;
+
         // 1. Super Admin / Management bypass
-        // Users with PROJECT_MANAGE or SETTINGS_MANAGE are considered global admins for project data
-        if ($user->owner || $user->isSuperAdmin() 
+        // For Admin model: check super_admin property
+        // For User model: check isSuperAdmin() method or owner flag
+        $isGlobalAdmin = false;
+        if ($user instanceof \App\Models\Admin) {
+            $isGlobalAdmin = $user->super_admin;
+        } elseif ($user instanceof \App\Models\User) {
+            $isGlobalAdmin = $user->owner || $user->isSuperAdmin();
+        }
+
+        // Generic bypass for specific management permissions
+        if ($isGlobalAdmin 
             || $user->hasPermission(Permissions::PROJECT_MANAGE)
             || $user->hasPermission(Permissions::SETTINGS_MANAGE)) {
             return true;
@@ -75,12 +86,13 @@ class AuthorizationService
     /**
      * Get all permissions for user in a project
      * 
-     * @param User $user
+     * @param $user
      * @param Project|int $project
      * @return array Array of permission strings
      */
-    public function getProjectPermissions(User $user, $project): array
+    public function getProjectPermissions($user, $project): array
     {
+        if (!$user) return [];
         // Resolve project ID
         $projectId = $project instanceof Project ? $project->id : $project;
 
@@ -125,12 +137,12 @@ class AuthorizationService
     /**
      * Require permission - throw exception if not authorized
      * 
-     * @param User $user
+     * @param $user
      * @param string $permission
      * @param Project|int|null $project
      * @throws \Illuminate\Http\Exceptions\HttpResponseException
      */
-    public function require(User $user, string $permission, $project = null): void
+    public function require($user, string $permission, $project = null): void
     {
         if (!$this->can($user, $permission, $project)) {
             $projectId = $project instanceof Project ? $project->id : ($project ?? 'global');
@@ -141,24 +153,31 @@ class AuthorizationService
     /**
      * Check if user is super admin (có tất cả permissions)
      * 
-     * @param User $user
+     * @param $user
      * @return bool
      * @deprecated Sử dụng hasPermission() thay vì check này
      */
-    public function isSuperAdmin(User $user): bool
+    public function isSuperAdmin($user): bool
     {
-        return $user->isSuperAdmin();
+        if (!$user) return false;
+        
+        if ($user instanceof \App\Models\Admin) {
+            return $user->super_admin;
+        }
+        
+        return $user instanceof \App\Models\User && $user->isSuperAdmin();
     }
 
     /**
      * Check if user is assigned to project
      * 
-     * @param User $user
+     * @param $user
      * @param Project|int $project
      * @return bool
      */
-    public function isAssignedToProject(User $user, $project): bool
+    public function isAssignedToProject($user, $project): bool
     {
+        if (!$user || !($user instanceof \App\Models\User)) return false;
         $projectId = $project instanceof Project ? $project->id : $project;
 
         return ProjectPersonnel::where('project_id', $projectId)

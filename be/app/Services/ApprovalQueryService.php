@@ -56,7 +56,8 @@ class ApprovalQueryService
             || $user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)
             || $user->hasPermission(Permissions::FINANCE_MANAGE);
 
-        $projectIds = ($isSuperAdmin || $isGlobalApprover) ? [] : $user->projects()->pluck('projects.id')->toArray();
+        $canSeeAllProjects = $isSuperAdmin || $isGlobalApprover;
+        $projectIds = $canSeeAllProjects ? [] : $user->projects()->pluck('projects.id')->toArray();
 
         $data = [];
 
@@ -66,13 +67,13 @@ class ApprovalQueryService
         if ($this->shouldInclude($type, ['all', 'project_cost', 'company_cost'])) {
             $data['costs_management'] = $this->getCosts(
                 ['draft', 'pending', 'pending_management_approval', 'rejected'],
-                $isSuperAdmin, $projectIds,
+                $canSeeAllProjects, $projectIds,
                 ['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'attachments']
             );
 
             $data['costs_accountant'] = $this->getCosts(
                 ['pending_accountant_approval', 'approved'],
-                $isSuperAdmin, $projectIds,
+                $canSeeAllProjects, $projectIds,
                 ['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments']
             );
         }
@@ -82,7 +83,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'acceptance_supervisor'])) {
             $data['acceptance_supervisor'] = AcceptanceStage::where('status', 'pending')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -90,7 +91,7 @@ class ApprovalQueryService
 
         if ($this->shouldInclude($type, ['all', 'acceptance_pm'])) {
             $data['acceptance_pm'] = AcceptanceStage::where('status', 'supervisor_approved')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'supervisorApprover:id,name', 'task:id,name', 'attachments'])
                 ->orderBy('updated_at', 'desc')
                 ->get();
@@ -98,7 +99,7 @@ class ApprovalQueryService
 
         if ($this->shouldInclude($type, ['all', 'acceptance', 'acceptance_customer'])) {
             $data['acceptance_customer'] = AcceptanceStage::where('status', 'project_manager_approved')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'projectManagerApprover:id,name', 'task:id,name', 'attachments'])
                 ->orderBy('updated_at', 'desc')
                 ->get();
@@ -110,8 +111,8 @@ class ApprovalQueryService
         if ($this->shouldInclude($type, ['all', 'acceptance_item'])) {
             $data['acceptance_items'] = AcceptanceItem::where('acceptance_status', 'pending')
                 ->whereDate('end_date', '<=', now())
-                ->whereHas('acceptanceStage', function($q) use ($isSuperAdmin, $projectIds) {
-                    $q->when(!$isSuperAdmin, fn($sq) => $sq->whereIn('project_id', $projectIds));
+                ->whereHas('acceptanceStage', function($q) use ($canSeeAllProjects, $projectIds) {
+                    $q->when(!$canSeeAllProjects, fn($sq) => $sq->whereIn('project_id', $projectIds));
                 })
                 ->with(['acceptanceStage.project:id,name,code', 'creator:id,name', 'task:id,name'])
                 ->orderBy('end_date', 'asc')
@@ -123,7 +124,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'change_request'])) {
             $data['change_requests'] = ChangeRequest::whereIn('status', ['submitted', 'under_review', 'rejected'])
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'requester:id,name,email', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -134,7 +135,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'additional_cost'])) {
             $data['additional_costs'] = AdditionalCost::whereIn('status', ['pending', 'pending_approval', 'rejected'])
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'proposer:id,name,email', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -145,13 +146,13 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'sub_payment'])) {
             $data['sub_payments_management'] = SubcontractorPayment::whereIn('status', ['pending_management_approval', 'rejected'])
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
             $data['sub_payments_accountant'] = SubcontractorPayment::where('status', 'pending_accountant_confirmation')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'approver:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -162,7 +163,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'contract'])) {
             $data['contracts'] = Contract::where('status', 'pending_customer_approval')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'attachments'])
                 ->orderBy('updated_at', 'desc')
                 ->get();
@@ -173,13 +174,13 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'payment'])) {
             $data['payments_pending'] = ProjectPayment::where('status', 'customer_pending_approval')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'contract:id,contract_value', 'attachments'])
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
             $data['payments_paid'] = ProjectPayment::where('status', 'customer_paid')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'contract:id,contract_value', 'attachments'])
                 ->orderBy('updated_at', 'desc')
                 ->get();
@@ -192,13 +193,13 @@ class ApprovalQueryService
             $materialBillClass = 'App\\Models\\MaterialBill';
             if (class_exists($materialBillClass)) {
                 $data['material_bills_management'] = $materialBillClass::whereIn('status', ['draft', 'pending', 'pending_management', 'rejected'])
-                    ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                    ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                     ->with(['creator:id,name,email', 'project:id,name,code', 'attachments'])
                     ->orderBy('created_at', 'desc')
                     ->get();
 
                 $data['material_bills_accountant'] = $materialBillClass::where('status', 'pending_accountant')
-                    ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                    ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                     ->with(['creator:id,name,email', 'project:id,name,code', 'attachments'])
                     ->orderBy('created_at', 'desc')
                     ->get();
@@ -213,7 +214,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'sub_acceptance'])) {
             $data['sub_acceptances'] = SubcontractorAcceptance::where('status', 'pending')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -224,7 +225,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'supplier_acceptance'])) {
             $data['supplier_acceptances'] = SupplierAcceptance::where('status', 'pending')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['supplier:id,name', 'project:id,name,code', 'creator:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -235,7 +236,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'construction_log'])) {
             $data['construction_logs'] = ConstructionLog::whereIn('approval_status', ['pending', 'rejected'])
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
                 ->orderBy('log_date', 'desc')
                 ->get();
@@ -246,7 +247,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'schedule_adjustment'])) {
             $data['schedule_adjustments'] = ScheduleAdjustment::where('status', 'pending')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -257,7 +258,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'defect'])) {
             $data['defects'] = Defect::where('status', 'fixed')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'reporter:id,name', 'fixer:id,name', 'task:id,name', 'acceptanceStage:id,name', 'attachments'])
                 ->orderBy('fixed_at', 'desc')
                 ->get();
@@ -268,7 +269,7 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'budget'])) {
             $data['budgets'] = ProjectBudget::whereIn('status', ['draft', 'pending_approval'])
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -279,19 +280,19 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'equipment_rental'])) {
             $data['equipment_rentals_management'] = EquipmentRental::whereIn('status', ['pending_management', 'rejected'])
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
             $data['equipment_rentals_accountant'] = EquipmentRental::where('status', 'pending_accountant')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'approver:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
             $data['equipment_rentals_return'] = EquipmentRental::where('status', 'pending_return')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -302,19 +303,19 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'asset_usage'])) {
             $data['asset_usages_management'] = AssetUsage::whereIn('status', ['pending_management', 'rejected'])
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
             $data['asset_usages_accountant'] = AssetUsage::where('status', 'pending_accountant')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'approver:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
             $data['asset_usages_return'] = AssetUsage::where('status', 'pending_return')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -323,12 +324,12 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         // RECENT ACTIVITY (Hoạt động gần đây)
         // ═══════════════════════════════════════════════════════════════
-        $data['recent'] = $this->getRecentActivity($isSuperAdmin, $projectIds);
+        $data['recent'] = $this->getRecentActivity($canSeeAllProjects, $projectIds);
 
         // ═══════════════════════════════════════════════════════════════
         // STATS / KPI
         // ═══════════════════════════════════════════════════════════════
-        $data['stats'] = $this->getStats($user, $isSuperAdmin, $projectIds, $data);
+        $data['stats'] = $this->getStats($user, $canSeeAllProjects, $projectIds, $data);
 
         return $data;
     }
@@ -345,15 +346,15 @@ class ApprovalQueryService
      * Query costs with built-in duplicate prevention.
      * ALWAYS excludes costs linked to MaterialBills or SubcontractorPayments.
      */
-    private function getCosts(array $statuses, bool $isSuperAdmin, array $projectIds, array $relations): Collection
+    private function getCosts(array $statuses, bool $canSeeAllProjects, array $projectIds, array $relations): Collection
     {
         return Cost::whereIn('status', $statuses)
             ->whereNull('material_bill_id')
             ->whereNull('subcontractor_payment_id')
-            ->when(!$isSuperAdmin, function ($q) use ($projectIds) {
-                // For non-SuperAdmins: 
+            ->when(!$canSeeAllProjects, function ($q) use ($projectIds) {
+                // For non-Global/SuperAdmins: 
                 // 1. Show Project Costs they belong to.
-                // 2. Show Company Costs (project_id IS NULL) - permissions will be checked in controller/policies.
+                // 2. Show Company Costs (project_id IS NULL)
                 return $q->where(function ($sq) use ($projectIds) {
                     $sq->whereIn('project_id', $projectIds)
                        ->orWhereNull('project_id');
@@ -368,61 +369,61 @@ class ApprovalQueryService
     // RECENT ACTIVITY
     // =========================================================================
 
-    private function getRecentActivity(bool $isSuperAdmin, array $projectIds): array
+    private function getRecentActivity(bool $canSeeAllProjects, array $projectIds): array
     {
         $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
             ->whereNull('material_bill_id')
             ->whereNull('subcontractor_payment_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(15)
             ->get();
 
         $recentCR = ChangeRequest::whereIn('status', ['approved', 'rejected'])
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->with(['project:id,name,code', 'requester:id,name,email', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentAC = AdditionalCost::whereIn('status', ['approved', 'rejected'])
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->with(['project:id,name,code', 'proposer:id,name,email', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentSubPayments = SubcontractorPayment::whereIn('status', ['paid', 'rejected'])
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentAcceptances = AcceptanceStage::whereIn('status', ['customer_approved', 'rejected'])
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentBudgets = ProjectBudget::whereIn('status', ['approved', 'rejected'])
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(5)
             ->get();
 
         $recentRentals = EquipmentRental::whereIn('status', ['in_use', 'returned', 'rejected'])
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(10)
             ->get();
 
         $recentUsages = AssetUsage::whereIn('status', ['in_use', 'returned', 'rejected'])
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
             ->limit(10)
@@ -444,22 +445,22 @@ class ApprovalQueryService
     // STATS / KPI
     // =========================================================================
 
-    private function getStats($user, bool $isSuperAdmin, array $projectIds, array $data): array
+    private function getStats($user, bool $canSeeAllProjects, array $projectIds, array $data): array
     {
         $isCustomer = $user->role === 'customer';
 
         $realPendingManagement = Cost::whereIn('status', ['pending', 'pending_management_approval'])
             ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->count();
 
         $realPendingAccountant = Cost::whereIn('status', ['pending_accountant_approval'])
             ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->count();
 
         $realPendingAcceptance = AcceptanceStage::whereIn('status', ['pending', 'supervisor_approved', 'project_manager_approved'])
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->count();
 
         // Count other pending items from already-loaded data
@@ -475,21 +476,21 @@ class ApprovalQueryService
 
         $approvedToday = Cost::where('status', 'approved')->whereDate('updated_at', today())
             ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->count();
 
         $rejectedToday = Cost::where('status', 'rejected')->whereDate('updated_at', today())
             ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-            ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+            ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
             ->count();
 
         $totalPendingAmount = $isCustomer
             ? ProjectPayment::where('status', 'customer_pending_approval')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->sum('amount')
             : Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])
                 ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-                ->when(!$isSuperAdmin, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->sum('amount');
 
         return [

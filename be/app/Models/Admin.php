@@ -91,4 +91,12 @@ class Admin extends Authenticatable
     {
         return $this->roles()->where('name', $roleName)->exists();
     }
+
+    /**
+     * Kiểm tra admin có phải super admin không (để tương thích với User model)
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->super_admin;
+    }
 }

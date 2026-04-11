@@ -38,21 +38,13 @@ use Inertia\Inertia;
 
 class CrmProjectsController extends Controller
 {
+    use CrmAuthorization;
+
     protected $authService;
 
     public function __construct(AuthorizationService $authService)
     {
         $this->authService = $authService;
-    }
-
-    /**
-     * CRM admin users are Admin model, not User model.
-     * AuthorizationService expects User. Skip check for Admin (full access).
-     */
-    protected function crmRequire($user, string $permission, $project = null): void
-    {
-        if ($user instanceof \App\Models\Admin) return; // Admin has full access
-        $this->authService->require($user, $permission, $project);
     }
 
     /**

@@ -215,15 +215,18 @@ class User extends Authenticatable
      */
     public function isSuperAdmin(): bool
     {
-        // Check nếu user có tất cả permissions (thông qua role hoặc direct)
-        // Có thể check bằng cách so sánh số lượng permissions với tổng số permissions trong hệ thống
-        $allPermissions = \App\Models\Permission::count();
-        $userPermissions = count($this->getPermissionsArray());
+        // Check if user has explicit 'super_admin' role
+        if ($this->roles()->where('name', 'super_admin')->exists()) {
+            return true;
+        }
 
-        // Nếu user có >= 90% permissions → coi như super admin
-        // Hoặc có thể check permission cụ thể như 'settings.manage'
-        return $userPermissions >= ($allPermissions * 0.9)
-            || $this->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE);
+        // Fallback: Check if user has ALL permissions
+        // (Useful for systems where roles might be renamed but permissions remain)
+        $allPermissions = \App\Models\Permission::count();
+        if ($allPermissions === 0) return false;
+        
+        $userPermissions = count($this->getPermissionsArray());
+        return $userPermissions === $allPermissions;
     }
 
     /**
