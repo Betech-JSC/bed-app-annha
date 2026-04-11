@@ -42,15 +42,17 @@ class CrmApprovalController extends Controller
         // ─── Management Level (BĐH) — Show All (Draft, Pending, Management, Rejected) ───
         $managementItems = Cost::whereIn('status', ['draft', 'pending', 'pending_management_approval', 'rejected'])
             ->whereNull('material_bill_id')
+            ->whereNull('subcontractor_payment_id')
             ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'attachments'])
             ->orderBy('created_at', 'desc')
             ->get();
         $managementItemsFormatted = $managementItems->map(fn(Cost $cost) => $this->formatItem($cost));
 
-        // ─── Accountant Level (KT) — Show All (Accountant, Approved, Rejected) ───
-        $accountantItems = Cost::whereIn('status', ['pending_accountant_approval', 'approved', 'rejected'])
+        // ─── Accountant Level (KT) — Only show accountant-relevant statuses (no rejected — that's in management tab) ───
+        $accountantItems = Cost::whereIn('status', ['pending_accountant_approval', 'approved'])
             ->whereNull('material_bill_id')
+            ->whereNull('subcontractor_payment_id')
             ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
             ->orderBy('created_at', 'desc')
@@ -275,6 +277,7 @@ class CrmApprovalController extends Controller
         // ─── Recently processed feed ───
         $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
             ->whereNull('material_bill_id')
+            ->whereNull('subcontractor_payment_id')
             ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
             ->orderBy('updated_at', 'desc')
@@ -345,9 +348,11 @@ class CrmApprovalController extends Controller
 
         // ─── Actually Pending Stats (Exclude Draft/Rejected for KPIs) ───
         $realPendingManagement = Cost::whereIn('status', ['pending', 'pending_management_approval'])
+            ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
             ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->count();
         $realPendingAccountant = Cost::whereIn('status', ['pending_accountant_approval'])
+            ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
             ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
             ->count();
         $realPendingAcceptance = AcceptanceStage::whereIn('status', ['pending', 'supervisor_approved', 'project_manager_approved'])
@@ -370,9 +375,11 @@ class CrmApprovalController extends Controller
                 $assetUsageManagement->count()
             ),
             'approved_today' => Cost::where('status', 'approved')->whereDate('updated_at', today())
+                ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
                 ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
                 ->count(),
             'rejected_today' => Cost::where('status', 'rejected')->whereDate('updated_at', today())
+                ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
                 ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
                 ->count(),
             'total_pending_amount' => $isCustomer 
@@ -380,6 +387,7 @@ class CrmApprovalController extends Controller
                     ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
                     ->sum('amount')
                 : Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])
+                    ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
                     ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
                     ->sum('amount'),
         ];
