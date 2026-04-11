@@ -427,46 +427,55 @@ import {
   DownloadOutlined,
   InfoCircleOutlined,
   ArrowRightOutlined,
+  AppstoreOutlined,
+  FilterOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
 defineOptions({ layout: CrmLayout })
 
 const props = defineProps({
-  managementItems: { type: Array, default: () => [] },
-  accountantItems: { type: Array, default: () => [] },
-  acceptanceSupervisorItems: { type: Array, default: () => [] },
-  acceptancePMItems: { type: Array, default: () => [] },
-  customerAcceptanceItems: { type: Array, default: () => [] },
-  changeRequestItems: { type: Array, default: () => [] },
-  additionalCostItems: { type: Array, default: () => [] },
-  subPaymentManagementItems: { type: Array, default: () => [] },
-  subPaymentAccountantItems: { type: Array, default: () => [] },
-  contractItems: { type: Array, default: () => [] },
-  pendingPaymentItems: { type: Array, default: () => [] },
-  paidPaymentItems: { type: Array, default: () => [] },
-  materialBillManagementItems: { type: Array, default: () => [] },
-  materialBillAccountantItems: { type: Array, default: () => [] },
-  subAcceptanceItems: { type: Array, default: () => [] },
-  supplierAcceptanceItems: { type: Array, default: () => [] },
-  constructionLogItems: { type: Array, default: () => [] },
-  scheduleAdjustmentItems: { type: Array, default: () => [] },
-  defectItems: { type: Array, default: () => [] },
-  budgetItems: { type: Array, default: () => [] },
-  equipmentRentalManagementItems: { type: Array, default: () => [] },
-  equipmentRentalAccountantItems: { type: Array, default: () => [] },
-  equipmentRentalReturnItems: { type: Array, default: () => [] },
-  assetUsageManagementItems: { type: Array, default: () => [] },
-  assetUsageAccountantItems: { type: Array, default: () => [] },
-  assetUsageReturnItems: { type: Array, default: () => [] },
+  roleGroups: { type: Object, default: () => ({}) },
   recentItems: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
-  auth: { type: Object, required: true }, // Add auth for role-based UI
+  auth: { type: Object, required: true },
+  userPermissions: { type: Object, default: () => ({}) },
 })
 
 const currentUserRole = computed(() => props.auth.user.role)
 
-const activeRole = ref(currentUserRole.value === 'customer' ? 'customer' : 'management')
+// Unified mapping of role keys to permission flags
+const rolePermissionMap = {
+  management: 'can_management',
+  accountant: 'can_accountant',
+  project_manager: 'can_pm',
+  supervisor: 'can_supervisor',
+  customer: 'can_customer',
+}
+
+// ─── Role-based items mapping (Simplified from Backend) ───
+const roleItemsMap = computed(() => ({
+  management: props.roleGroups.management || [],
+  accountant: props.roleGroups.accountant || [],
+  customer: props.roleGroups.customer || [],
+  project_manager: props.roleGroups.project_manager || [],
+  supervisor: props.roleGroups.supervisor || [],
+}))
+
+// ─── Initial Tab Selection (Smart Logic) ───
+const getInitialRole = () => {
+  // If user has specific items waiting, pick the first one with items
+  const rolesWithItems = Object.keys(roleItemsMap.value).filter(role => 
+    props.userPermissions[rolePermissionMap[role]] && roleItemsMap.value[role].length > 0
+  )
+  if (rolesWithItems.length > 0) return rolesWithItems[0]
+
+  // Otherwise pick first permitted role
+  const permittedRoles = Object.keys(rolePermissionMap).filter(role => props.userPermissions[rolePermissionMap[role]])
+  return permittedRoles[0] || 'management'
+}
+
+const activeRole = ref(getInitialRole())
 const activeCategory = ref('all')
 const activeStatus = ref('all')
 const rejectModalVisible = ref(false)
@@ -539,45 +548,7 @@ const historyStatusColor = (status) => {
   return 'orange'
 }
 
-// ─── Role-based items mapping ───
-const roleItemsMap = computed(() => ({
-  management: [
-    ...props.managementItems.map(i => ({ ...i, _approveType: 'management' })),
-    ...props.subPaymentManagementItems.map(i => ({ ...i, _approveType: 'sub_payment' })),
-    ...props.additionalCostItems.map(i => ({ ...i, _approveType: 'additional_cost' })),
-    ...props.materialBillManagementItems.map(i => ({ ...i, _approveType: 'material_bill' })),
-    ...props.budgetItems.map(i => ({ ...i, _approveType: 'budget' })),
-    ...props.equipmentRentalManagementItems.map(i => ({ ...i, _approveType: 'equipment_rental_management' })),
-    ...props.assetUsageManagementItems.map(i => ({ ...i, _approveType: 'asset_usage_management' })),
-  ],
-  accountant: [
-    ...props.accountantItems.map(i => ({ ...i, _approveType: 'accountant' })),
-    ...props.subPaymentAccountantItems.map(i => ({ ...i, _approveType: 'sub_payment_confirm' })),
-    ...props.paidPaymentItems.map(i => ({ ...i, _approveType: 'project_payment_confirm' })),
-    ...props.materialBillAccountantItems.map(i => ({ ...i, _approveType: 'material_bill' })),
-    ...props.equipmentRentalAccountantItems.map(i => ({ ...i, _approveType: 'equipment_rental_accountant' })),
-    ...props.assetUsageAccountantItems.map(i => ({ ...i, _approveType: 'asset_usage_accountant' })),
-  ],
-  customer: [
-    ...props.customerAcceptanceItems.map(i => ({ ...i, _approveType: 'acceptance' })),
-    ...props.contractItems.map(i => ({ ...i, _approveType: 'contract' })),
-    ...props.pendingPaymentItems.map(i => ({ ...i, _approveType: 'project_payment' })),
-  ],
-  operations: [
-    ...props.acceptanceSupervisorItems.map(i => ({ ...i, _approveType: 'acceptance_supervisor' })),
-    ...props.acceptancePMItems.map(i => ({ ...i, _approveType: 'acceptance_pm' })),
-    ...props.changeRequestItems.map(i => ({ ...i, _approveType: 'change_request' })),
-    ...props.subAcceptanceItems.map(i => ({ ...i, _approveType: 'sub_acceptance' })),
-    ...props.supplierAcceptanceItems.map(i => ({ ...i, _approveType: 'supplier_acceptance' })),
-    ...props.constructionLogItems.map(i => ({ ...i, _approveType: 'construction_log' })),
-    ...props.scheduleAdjustmentItems.map(i => ({ ...i, _approveType: 'schedule_adjustment' })),
-    ...props.defectItems.map(i => ({ ...i, _approveType: 'defect_verify' })),
-    ...props.equipmentRentalReturnItems.map(i => ({ ...i, _approveType: 'equipment_rental_return' })),
-    ...props.assetUsageReturnItems.map(i => ({ ...i, _approveType: 'asset_usage_return' })),
-  ],
-}))
 
-// Sort by date descending so newest items always appear first
 // Sort and Filter active items
 const activeItems = computed(() => {
   let items = roleItemsMap.value[activeRole.value] || []
@@ -592,7 +563,7 @@ const activeItems = computed(() => {
     })
   }
 
-  // Filter by status (Only apply if not 'all')
+  // Filter by status
   if (activeStatus.value !== 'all') {
     items = items.filter(i => {
       if (activeStatus.value === 'pending') return ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'pending_return', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed'].includes(i.status)
@@ -616,22 +587,21 @@ const totalPending = computed(() =>
   Object.values(roleItemsMap.value).reduce((sum, arr) => sum + arr.length, 0)
 )
 
-// ─── Role tabs (UX Optimized per user role) ───
+// ─── Role tabs (UX Optimized per permissions) ───
 const roleTabs = computed(() => {
   const allTabs = [
-    { key: 'management', label: 'Ban Điều Hành', icon: BankOutlined, count: roleItemsMap.value.management.length },
+    { key: 'management', label: 'BĐH', icon: BankOutlined, count: roleItemsMap.value.management.length },
     { key: 'accountant', label: 'Kế Toán', icon: DollarOutlined, count: roleItemsMap.value.accountant.length },
+    { key: 'project_manager', label: 'QLDA (PM)', icon: ToolOutlined, count: roleItemsMap.value.project_manager.length },
+    { key: 'supervisor', label: 'Giám Sát', icon: SafetyCertificateOutlined, count: roleItemsMap.value.supervisor.length },
     { key: 'customer', label: 'Khách Hàng', icon: TeamOutlined, count: roleItemsMap.value.customer.length },
-    { key: 'operations', label: 'Vận Hành', icon: ToolOutlined, count: roleItemsMap.value.operations.length },
   ]
   
-  // If user is a customer, only show the customer tab for focus and security
-  if (currentUserRole.value === 'customer') {
-    return allTabs.filter(tab => tab.key === 'customer')
-  }
-  
-  // For admin/staff, they can see all (existing behavior)
-  return allTabs
+  // Only show tabs where the user has explicit permission
+  return allTabs.filter(tab => {
+    const permissionKey = rolePermissionMap[tab.key]
+    return props.userPermissions[permissionKey]
+  })
 })
 
 // ─── Table columns ───

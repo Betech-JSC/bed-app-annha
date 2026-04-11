@@ -21,6 +21,7 @@ use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Constants\Permissions;
 use App\Services\ApprovalQueryService;
+use App\Services\ApprovalActionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -29,10 +30,14 @@ use Illuminate\Support\Str;
 class ApprovalCenterController extends Controller
 {
     protected $approvalQueryService;
+    protected $approvalActionService;
 
-    public function __construct(ApprovalQueryService $approvalQueryService)
-    {
+    public function __construct(
+        ApprovalQueryService $approvalQueryService,
+        ApprovalActionService $approvalActionService
+    ) {
         $this->approvalQueryService = $approvalQueryService;
+        $this->approvalActionService = $approvalActionService;
     }
 
     /**
@@ -48,13 +53,14 @@ class ApprovalCenterController extends Controller
     {
         $user = Auth::user();
         $type = $request->get('type', 'all');
+        $fetchType = in_array($type, ['management', 'accountant', 'project_manager', 'supervisor', 'customer']) ? 'all' : $type;
 
         // Determine user's approval capabilities for 'can_approve' flags
         $canApproveManagement = $user->hasPermission('cost.approve.management') || $user->hasPermission('cost.approve_management');
         $canApproveAccountant = $user->hasPermission('cost.approve.accountant') || $user->hasPermission('cost.approve_accountant');
 
         // FETCH CENTRALIZED DATA
-        $data = $this->approvalQueryService->getApprovalData($user, $type);
+        $data = $this->approvalQueryService->getApprovalData($user, $fetchType);
         
         $result = [
             'summary' => [],
@@ -108,215 +114,236 @@ class ApprovalCenterController extends Controller
     }
 
     /**
-     * Map data to Mobile API format (all categories)
+     * Map data to Mobile API format (grouped by Role Buckets)
      */
     private function buildMobileItems($data, $type, $canApproveManagement, $canApproveAccountant)
     {
         $items = [];
         
-        // 1. Costs (Company & Project)
-        $costs = $data['costs_management']->concat($data['costs_accountant'])->unique('id');
-        foreach ($costs as $c) {
-            if ($type === 'all' || ($type === 'company_cost' && !$c->project_id) || ($type === 'project_cost' && $c->project_id)) {
-                $items[] = $this->mapCostToItem($c, $c->project_id ? 'project_cost' : 'company_cost', $canApproveManagement, $canApproveAccountant);
+        // --- 1. MANAGEMENT BUCKET (Ban điều hành) ---
+        // Project costs pending mgmt
+        foreach ($data['costs_management']->whereNotNull('project_id') as $c) {
+            if ($type === 'all' || $type === 'management' || $type === 'project_cost') {
+                $items[] = array_merge($this->mapCostToItem($c, 'project_cost', $canApproveManagement, false), ['role_group' => 'management']);
             }
         }
-
-        // 2. Material Bills
-        if ($type === 'all' || $type === 'material_bill') {
-            foreach ($data['material_bills_management']->concat($data['material_bills_accountant'])->unique('id') as $b) {
+        // Company costs pending mgmt
+        foreach ($data['costs_management']->whereNull('project_id') as $c) {
+            if ($type === 'all' || $type === 'management' || $type === 'company_cost') {
+                $items[] = array_merge($this->mapCostToItem($c, 'company_cost', $canApproveManagement, false), ['role_group' => 'management']);
+            }
+        }
+        // Material Bills (mgmt)
+        if ($type === 'all' || $type === 'management' || $type === 'material_bill') {
+            foreach ($data['material_bills_management']->unique('id') as $b) {
                 $items[] = [
                     'id' => $b->id, 'type' => 'material_bill', 'title' => 'Vật tư: ' . ($b->bill_number ?? "#{$b->id}"),
                     'subtitle' => $b->project->name ?? 'Dự án', 'amount' => (float) ($b->total_amount ?? 0),
                     'status' => $b->status, 'status_label' => $this->getStatusLabel($b->status),
                     'created_by' => $b->creator->name ?? 'N/A', 'created_at' => $b->created_at->toISOString(),
                     'project_id' => $b->project_id, 'can_approve' => true,
-                    'approval_level' => $b->status === 'pending_accountant' ? 'accountant' : 'management',
+                    'approval_level' => 'management', 'role_group' => 'management',
                 ];
             }
         }
-
-        // 3. Acceptance Stages & Items
-        if ($type === 'all' || $type === 'acceptance') {
-            $stages = [
-                ['coll' => $data['acceptance_supervisor'], 'level' => 'supervisor', 'label' => 'GS duyệt'],
-                ['coll' => $data['acceptance_pm'], 'level' => 'project_manager', 'label' => 'QLDA duyệt'],
-                ['coll' => $data['acceptance_customer'], 'level' => 'customer', 'label' => 'KH duyệt'],
-            ];
-            foreach ($stages as $s) {
-                foreach ($s['coll'] as $st) {
-                    $items[] = [
-                        'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
-                        'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
-                        'status' => $st->status, 'status_label' => $s['label'],
-                        'created_by' => $st->task->assignee->name ?? ($st->project->projectManager->name ?? 'PM'), 
-                        'created_at' => $st->created_at->toISOString(),
-                        'project_id' => $st->project_id, 'can_approve' => true, 'approval_level' => $s['level'],
-                    ];
-                }
-            }
-        }
-        if ($type === 'all' || $type === 'acceptance_item') {
-            foreach ($data['acceptance_items'] ?? [] as $ai) {
-                $items[] = [
-                    'id' => $ai->id, 'type' => 'acceptance_item', 'title' => 'Hạng mục: ' . ($ai->task->name ?? "HM #{$ai->id}"),
-                    'subtitle' => $ai->acceptanceStage->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => 'pending', 'status_label' => 'Chờ NT',
-                    'created_by' => $ai->creator->name ?? 'N/A', 'created_at' => $ai->created_at->toISOString(),
-                    'project_id' => $ai->acceptanceStage->project_id ?? null, 'can_approve' => true, 'approval_level' => 'supervisor',
-                ];
-            }
-        }
-
-        // 4. CR & AC
-        if ($type === 'all' || $type === 'change_request') {
+        // CR, AC, Budgets, Sub Acceptances
+        if ($type === 'all' || $type === 'management' || $type === 'change_request') {
             foreach ($data['change_requests'] as $item) {
                 $items[] = [
                     'id' => $item->id, 'type' => 'change_request', 'title' => 'CR: ' . $item->title,
                     'subtitle' => $item->project->name ?? 'Dự án', 'amount' => 0,
                     'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status),
                     'created_by' => $item->requester->name ?? 'N/A', 'created_at' => $item->created_at->toISOString(),
-                    'project_id' => $item->project_id, 'can_approve' => true, 'approval_level' => 'management',
+                    'project_id' => $item->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'management',
                 ];
             }
         }
-        if ($type === 'all' || $type === 'additional_cost') {
+        if ($type === 'all' || $type === 'management' || $type === 'additional_cost') {
             foreach ($data['additional_costs'] as $item) {
                 $items[] = [
                     'id' => $item->id, 'type' => 'additional_cost', 'title' => 'Phát sinh: ' . $item->name,
                     'subtitle' => $item->project->name ?? 'Dự án', 'amount' => (float) $item->amount,
                     'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status),
                     'created_by' => $item->proposer->name ?? 'N/A', 'created_at' => $item->created_at->toISOString(),
-                    'project_id' => $item->project_id, 'can_approve' => true, 'approval_level' => 'management',
+                    'project_id' => $item->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'management',
                 ];
             }
         }
-
-        // 5. Payments & NTP
-        if ($type === 'all' || $type === 'sub_payment') {
-            foreach ($data['sub_payments_management']->concat($data['sub_payments_accountant'])->unique('id') as $p) {
-                $items[] = [
-                    'id' => $p->id, 'type' => 'sub_payment', 'title' => 'TT NTP: ' . ($p->subcontractor->name ?? 'NTP'),
-                    'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
-                    'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
-                    'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
-                    'project_id' => $p->project_id, 'can_approve' => true, 'approval_level' => str_contains($p->status, 'management') ? 'management' : 'accountant',
-                ];
-            }
-        }
-        if ($type === 'all' || $type === 'sub_acceptance') {
-            foreach ($data['sub_acceptances'] ?? [] as $sa) {
-                $items[] = [
-                    'id' => $sa->id, 'type' => 'sub_acceptance', 'title' => 'NT NTP: ' . ($sa->subcontractor->name ?? 'NTP'),
-                    'subtitle' => $sa->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $sa->status, 'status_label' => 'Chờ duyệt',
-                    'created_by' => $sa->creator->name ?? 'N/A', 'created_at' => $sa->created_at->toISOString(),
-                    'project_id' => $sa->project_id, 'can_approve' => true, 'approval_level' => 'management',
-                ];
-            }
-        }
-        if ($type === 'all' || $type === 'supplier_acceptance') {
-            foreach ($data['supplier_acceptances'] ?? [] as $sa) {
-                $items[] = [
-                    'id' => $sa->id, 'type' => 'supplier_acceptance', 'title' => 'NT NCC: ' . ($sa->supplier->name ?? 'NCC'),
-                    'subtitle' => $sa->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $sa->status, 'status_label' => 'Chờ duyệt',
-                    'created_by' => $sa->creator->name ?? 'N/A', 'created_at' => $sa->created_at->toISOString(),
-                    'project_id' => $sa->project_id, 'can_approve' => true, 'approval_level' => 'management',
-                ];
-            }
-        }
-
-        // 6. Contracts & Project Payments
-        if ($type === 'all' || $type === 'contract') {
-            foreach ($data['contracts'] as $c) {
-                $items[] = [
-                    'id' => $c->id, 'type' => 'contract', 'title' => 'HĐ Hướng: ' . ($c->contract_number ?? "#{$c->id}"),
-                    'subtitle' => $c->project->name ?? 'Dự án', 'amount' => (float) $c->contract_value,
-                    'status' => $c->status, 'status_label' => $this->getStatusLabel($c->status),
-                    'created_by' => 'Hệ thống', 'created_at' => $c->updated_at->toISOString(),
-                    'project_id' => $c->project_id, 'can_approve' => true, 'approval_level' => 'customer',
-                ];
-            }
-        }
-        if ($type === 'all' || $type === 'payment') {
-            foreach ($data['payments_pending']->concat($data['payments_paid'])->unique('id') as $p) {
-                $items[] = [
-                    'id' => $p->id, 'type' => 'payment', 'title' => 'TT Dự án: ' . ($p->payment_name ?? 'Thanh toán'),
-                    'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
-                    'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
-                    'created_by' => 'Hệ thống', 'created_at' => $p->updated_at->toISOString(),
-                    'project_id' => $p->project_id, 'can_approve' => true, 'approval_level' => $p->status === 'customer_pending_approval' ? 'customer' : 'accountant',
-                ];
-            }
-        }
-
-        // 7. Equipments & Assets
-        if ($type === 'all' || $type === 'equipment_rental') {
-            foreach ($data['equipment_rentals_management']->concat($data['equipment_rentals_accountant'])->concat($data['equipment_rentals_return'])->unique('id') as $r) {
-                $items[] = [
-                    'id' => $r->id, 'type' => 'equipment_rental', 'title' => $r->equipment_name ?? "Thuê TB #{$r->id}",
-                    'subtitle' => $r->project->name ?? 'Dự án', 'amount' => (float) $r->total_cost,
-                    'status' => $r->status, 'status_label' => $this->getStatusLabel($r->status),
-                    'created_by' => $r->creator->name ?? 'N/A', 'created_at' => $r->created_at->toISOString(),
-                    'project_id' => $r->project_id, 'can_approve' => true, 'approval_level' => str_contains($r->status, 'accountant') ? 'accountant' : 'management',
-                ];
-            }
-        }
-        if ($type === 'all' || $type === 'asset_usage') {
-            foreach ($data['asset_usages_management']->concat($data['asset_usages_accountant'])->concat($data['asset_usages_return'])->unique('id') as $u) {
-                $items[] = [
-                    'id' => $u->id, 'type' => 'asset_usage', 'title' => 'Sử dụng: ' . ($u->asset->name ?? "TS #{$u->id}"),
-                    'subtitle' => $u->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $u->status, 'status_label' => $this->getStatusLabel($u->status),
-                    'created_by' => $u->creator->name ?? 'N/A', 'created_at' => $u->created_at->toISOString(),
-                    'project_id' => $u->project_id, 'can_approve' => true, 'approval_level' => str_contains($u->status, 'accountant') ? 'accountant' : 'management',
-                ];
-            }
-        }
-
-        // 8. Site Reports & Others
-        if ($type === 'all' || $type === 'construction_log') {
-            foreach ($data['construction_logs'] ?? [] as $log) {
-                $items[] = [
-                    'id' => $log->id, 'type' => 'construction_log', 'title' => 'Nhật ký: ' . ($log->log_date ? date('d/m/Y', strtotime($log->log_date)) : "#{$log->id}"),
-                    'subtitle' => $log->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $log->approval_status, 'status_label' => $this->getStatusLabel($log->approval_status),
-                    'created_by' => $log->creator->name ?? 'GS', 'created_at' => $log->created_at->toISOString(),
-                    'project_id' => $log->project_id, 'can_approve' => true, 'approval_level' => 'management',
-                ];
-            }
-        }
-        if ($type === 'all' || $type === 'schedule_adjustment') {
-            foreach ($data['schedule_adjustments'] ?? [] as $adj) {
-                $items[] = [
-                    'id' => $adj->id, 'type' => 'schedule_adjustment', 'title' => 'Đ/c tiến độ: ' . ($adj->task->name ?? "CV #{$adj->task_id}"),
-                    'subtitle' => $adj->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $adj->status, 'status_label' => 'Chờ duyệt',
-                    'created_by' => $adj->creator->name ?? 'N/A', 'created_at' => $adj->created_at->toISOString(),
-                    'project_id' => $adj->project_id, 'can_approve' => true, 'approval_level' => 'management',
-                ];
-            }
-        }
-        if ($type === 'all' || $type === 'defect') {
-            foreach ($data['defects'] ?? [] as $d) {
-                $items[] = [
-                    'id' => $d->id, 'type' => 'defect', 'title' => 'Lỗi: ' . ($d->name ?? "Lỗi #{$d->id}"),
-                    'subtitle' => $d->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $d->status, 'status_label' => $this->getStatusLabel($d->status),
-                    'created_by' => $d->fixer->name ?? 'Kỹ thuật', 'created_at' => $d->updated_at->toISOString(),
-                    'project_id' => $d->project_id, 'can_approve' => true, 'approval_level' => 'supervisor',
-                ];
-            }
-        }
-        if ($type === 'all' || $type === 'budget') {
+        if ($type === 'all' || $type === 'management' || $type === 'budget') {
             foreach ($data['budgets'] ?? [] as $b) {
                 $items[] = [
                     'id' => $b->id, 'type' => 'budget', 'title' => 'Ngân sách: ' . ($b->project->name ?? "Dự án"),
                     'subtitle' => 'Phiên bản ' . $b->version, 'amount' => (float) $b->total_budget,
                     'status' => $b->status, 'status_label' => $this->getStatusLabel($b->status),
                     'created_by' => $b->creator->name ?? 'N/A', 'created_at' => $b->created_at->toISOString(),
-                    'project_id' => $b->project_id, 'can_approve' => true, 'approval_level' => 'management',
+                    'project_id' => $b->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'management',
+                ];
+            }
+        }
+        // Sub/Supplier Acceptances (typically mgmt)
+        if ($type === 'all' || $type === 'management' || $type === 'sub_acceptance') {
+            foreach ($data['sub_acceptances'] ?? [] as $sa) {
+                $items[] = [
+                    'id' => $sa->id, 'type' => 'sub_acceptance', 'title' => 'NT NTP: ' . ($sa->subcontractor->name ?? 'NTP'),
+                    'subtitle' => $sa->project->name ?? 'Dự án', 'amount' => 0,
+                    'status' => $sa->status, 'status_label' => 'Chờ duyệt',
+                    'created_by' => $sa->creator->name ?? 'N/A', 'created_at' => $sa->created_at->toISOString(),
+                    'project_id' => $sa->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'management'
+                ];
+            }
+        }
+
+        // --- 2. ACCOUNTANT BUCKET (Kế toán) ---
+        foreach ($data['costs_accountant'] as $c) {
+            if ($type === 'all' || $type === 'accountant' || $type === 'project_cost' || $type === 'company_cost') {
+                $items[] = array_merge($this->mapCostToItem($c, $c->project_id ? 'project_cost' : 'company_cost', false, $canApproveAccountant), ['role_group' => 'accountant']);
+            }
+        }
+        if ($type === 'all' || $type === 'accountant' || $type === 'material_bill') {
+            foreach ($data['material_bills_accountant']->unique('id') as $b) {
+                $items[] = [
+                    'id' => $b->id, 'type' => 'material_bill', 'title' => 'Vật tư: ' . ($b->bill_number ?? "#{$b->id}"),
+                    'subtitle' => $b->project->name ?? 'Dự án', 'amount' => (float) ($b->total_amount ?? 0),
+                    'status' => $b->status, 'status_label' => $this->getStatusLabel($b->status),
+                    'created_by' => $b->creator->name ?? 'N/A', 'created_at' => $b->created_at->toISOString(),
+                    'project_id' => $b->project_id, 'can_approve' => true,
+                    'approval_level' => 'accountant', 'role_group' => 'accountant'
+                ];
+            }
+        }
+        if ($type === 'all' || $type === 'accountant' || $type === 'sub_payment') {
+            foreach ($data['sub_payments_management']->concat($data['sub_payments_accountant'])->unique('id') as $p) {
+                $level = str_contains($p->status, 'management') ? 'management' : 'accountant';
+                if ($type === 'all' || $type === $level || $type === 'sub_payment') {
+                    $items[] = [
+                        'id' => $p->id, 'type' => 'sub_payment', 'title' => 'TT NTP: ' . ($p->subcontractor->name ?? 'NTP'),
+                        'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
+                        'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
+                        'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
+                        'project_id' => $p->project_id, 'can_approve' => true, 'approval_level' => $level, 'role_group' => $level === 'management' ? 'management' : 'accountant'
+                    ];
+                }
+            }
+        }
+
+        // --- 3. PROJECT MANAGER BUCKET (QLDA) ---
+        if ($type === 'all' || $type === 'project_manager' || $type === 'acceptance') {
+            foreach ($data['acceptance_pm'] as $st) {
+                $items[] = [
+                    'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
+                    'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
+                    'status' => $st->status, 'status_label' => 'QLDA duyệt',
+                    'created_by' => $st->task->assignee->name ?? ($st->project->projectManager->name ?? 'PM'), 
+                    'created_at' => $st->created_at->toISOString(),
+                    'project_id' => $st->project_id, 'can_approve' => true, 'approval_level' => 'project_manager', 'role_group' => 'project_manager'
+                ];
+            }
+        }
+        if ($type === 'all' || $type === 'project_manager' || $type === 'schedule_adjustment') {
+            foreach ($data['schedule_adjustments'] ?? [] as $adj) {
+                $items[] = [
+                    'id' => $adj->id, 'type' => 'schedule_adjustment', 'title' => 'Đ/c tiến độ: ' . ($adj->task->name ?? "CV #{$adj->task_id}"),
+                    'subtitle' => $adj->project->name ?? 'Dự án', 'amount' => 0,
+                    'status' => $adj->status, 'status_label' => 'Chờ duyệt',
+                    'created_by' => $adj->creator->name ?? 'N/A', 'created_at' => $adj->created_at->toISOString(),
+                    'project_id' => $adj->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'project_manager'
+                ];
+            }
+        }
+        if ($type === 'all' || $type === 'project_manager' || $type === 'construction_log') {
+            foreach ($data['construction_logs'] ?? [] as $log) {
+                $items[] = [
+                    'id' => $log->id, 'type' => 'construction_log', 'title' => 'Nhật ký: ' . ($log->log_date ? date('d/m/Y', strtotime($log->log_date)) : "#{$log->id}"),
+                    'subtitle' => $log->project->name ?? 'Dự án', 'amount' => 0,
+                    'status' => $log->approval_status, 'status_label' => $this->getStatusLabel($log->approval_status),
+                    'created_by' => $log->creator->name ?? 'GS', 'created_at' => $log->created_at->toISOString(),
+                    'project_id' => $log->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'project_manager'
+                ];
+            }
+        }
+
+        // --- 4. SUPERVISOR BUCKET (Giám sát) ---
+        if ($type === 'all' || $type === 'supervisor' || $type === 'acceptance') {
+            foreach ($data['acceptance_supervisor'] as $st) {
+                $items[] = [
+                    'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
+                    'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
+                    'status' => $st->status, 'status_label' => 'GS duyệt',
+                    'created_by' => $st->task->assignee->name ?? 'NV', 
+                    'created_at' => $st->created_at->toISOString(),
+                    'project_id' => $st->project_id, 'can_approve' => true, 'approval_level' => 'supervisor', 'role_group' => 'supervisor'
+                ];
+            }
+        }
+        if ($type === 'all' || $type === 'supervisor' || $type === 'acceptance_item') {
+            foreach ($data['acceptance_items'] ?? [] as $ai) {
+                $items[] = [
+                    'id' => $ai->id, 'type' => 'acceptance_item', 'title' => 'Hạng mục: ' . ($ai->task->name ?? "HM #{$ai->id}"),
+                    'subtitle' => $ai->acceptanceStage->project->name ?? 'Dự án', 'amount' => 0,
+                    'status' => 'pending', 'status_label' => 'Chờ NT',
+                    'created_by' => $ai->creator->name ?? 'N/A', 'created_at' => $ai->created_at->toISOString(),
+                    'project_id' => $ai->acceptanceStage->project_id ?? null, 'can_approve' => true, 'approval_level' => 'supervisor', 'role_group' => 'supervisor'
+                ];
+            }
+        }
+        if ($type === 'all' || $type === 'supervisor' || $type === 'defect') {
+            foreach ($data['defects'] ?? [] as $d) {
+                $items[] = [
+                    'id' => $d->id, 'type' => 'defect', 'title' => 'Lỗi: ' . ($d->name ?? "Lỗi #{$d->id}"),
+                    'subtitle' => $d->project->name ?? 'Dự án', 'amount' => 0,
+                    'status' => $d->status, 'status_label' => $this->getStatusLabel($d->status),
+                    'created_by' => $d->fixer->name ?? 'Kỹ thuật', 'created_at' => $d->updated_at->toISOString(),
+                    'project_id' => $d->project_id, 'can_approve' => true, 'approval_level' => 'supervisor', 'role_group' => 'supervisor'
+                ];
+            }
+        }
+
+        // --- 5. CUSTOMER BUCKET (Khách hàng) ---
+        if ($type === 'all' || $type === 'customer' || $type === 'acceptance') {
+            foreach ($data['acceptance_customer'] as $st) {
+                $items[] = [
+                    'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
+                    'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
+                    'status' => $st->status, 'status_label' => 'KH duyệt',
+                    'created_by' => $st->project->projectManager->name ?? 'PM', 
+                    'created_at' => $st->created_at->toISOString(),
+                    'project_id' => $st->project_id, 'can_approve' => true, 'approval_level' => 'customer', 'role_group' => 'customer'
+                ];
+            }
+        }
+        if ($type === 'all' || $type === 'customer' || $type === 'contract') {
+            foreach ($data['contracts'] as $c) {
+                $items[] = [
+                    'id' => $c->id, 'type' => 'contract', 'title' => 'HĐ Hướng: ' . ($c->contract_number ?? "#{$c->id}"),
+                    'subtitle' => $c->project->name ?? 'Dự án', 'amount' => (float) $c->contract_value,
+                    'status' => $c->status, 'status_label' => $this->getStatusLabel($c->status),
+                    'created_by' => 'Hệ thống', 'created_at' => $c->updated_at->toISOString(),
+                    'project_id' => $c->project_id, 'can_approve' => true, 'approval_level' => 'customer', 'role_group' => 'customer'
+                ];
+            }
+        }
+        if ($type === 'all' || $type === 'customer' || $type === 'payment') {
+            foreach ($data['payments_pending']->unique('id') as $p) {
+                $items[] = [
+                    'id' => $p->id, 'type' => 'payment', 'title' => 'TT Dự án: ' . ($p->payment_name ?? 'Thanh toán'),
+                    'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
+                    'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
+                    'created_by' => 'Hệ thống', 'created_at' => $p->updated_at->toISOString(),
+                    'project_id' => $p->project_id, 'can_approve' => true, 'approval_level' => 'customer', 'role_group' => 'customer'
+                ];
+            }
+        }
+
+        // Equipment/Assets (typically management or accountant)
+        if ($type === 'all' || $type === 'equipment_rental') {
+            foreach ($data['equipment_rentals_management']->concat($data['equipment_rentals_accountant'])->concat($data['equipment_rentals_return'])->unique('id') as $r) {
+                $level = str_contains($r->status, 'accountant') ? 'accountant' : 'management';
+                $items[] = [
+                    'id' => $r->id, 'type' => 'equipment_rental', 'title' => $r->equipment_name ?? "Thuê TB #{$r->id}",
+                    'subtitle' => $r->project->name ?? 'Dự án', 'amount' => (float) $r->total_cost,
+                    'status' => $r->status, 'status_label' => $this->getStatusLabel($r->status),
+                    'created_by' => $r->creator->name ?? 'N/A', 'created_at' => $r->created_at->toISOString(),
+                    'project_id' => $r->project_id, 'can_approve' => true, 'approval_level' => $level, 'role_group' => $level
                 ];
             }
         }
@@ -347,35 +374,41 @@ class ApprovalCenterController extends Controller
     }
 
     /**
-     * Build mobile-specific summary array
+     * Build mobile-specific summary array (by Role Group)
      */
-    private function buildMobileSummary($data, $type)
+    private function buildMobileSummary($data, $currentType)
     {
+        // 1. Calculate counts for each role group
+        $counts = [
+            'management' => 0,
+            'accountant' => 0,
+            'project_manager' => 0,
+            'supervisor' => 0,
+            'customer' => 0,
+        ];
+
+        // This ensures exact counts matching buildMobileItems
+        $items = $this->buildMobileItems($data, 'all', true, true);
+        foreach ($items as $it) {
+            if (isset($it['role_group']) && isset($counts[$it['role_group']])) {
+                $counts[$it['role_group']]++;
+            }
+        }
+
         $summary = [];
-        $costs = $data['costs_management']->concat($data['costs_accountant'])->unique('id');
-        
-        if ($costs->isNotEmpty()) {
-            $c = $costs->whereNull('project_id');
-            if ($c->count() > 0 && ($type === 'all' || $type === 'company_cost')) 
-                $summary[] = ['type' => 'company_cost', 'label' => 'Chi phí công ty', 'icon' => 'wallet-outline', 'color' => '#F59E0B', 'total' => $c->count()];
-            
-            $p = $costs->whereNotNull('project_id');
-            if ($p->count() > 0 && ($type === 'all' || $type === 'project_cost')) 
-                $summary[] = ['type' => 'project_cost', 'label' => 'Chi phí dự án', 'icon' => 'construct-outline', 'color' => '#3B82F6', 'total' => $p->count()];
-        }
+        $groups = [
+            ['type' => 'management', 'label' => 'Ban điều hành', 'icon' => 'business-outline', 'color' => '#F59E0B'],
+            ['type' => 'accountant', 'label' => 'Kế toán', 'icon' => 'calculator-outline', 'color' => '#10B981'],
+            ['type' => 'project_manager', 'label' => 'Quản lý dự án', 'icon' => 'construct-outline', 'color' => '#3B82F6'],
+            ['type' => 'supervisor', 'label' => 'Giám sát', 'icon' => 'search-outline', 'color' => '#8B5CF6'],
+            ['type' => 'customer', 'label' => 'Khách hàng', 'icon' => 'person-outline', 'color' => '#EF4444'],
+        ];
 
-        if ($type === 'all' || $type === 'material_bill') {
-            $b = $data['material_bills_management']->concat($data['material_bills_accountant'])->unique('id')->count();
-            if ($b > 0) $summary[] = ['type' => 'material_bill', 'label' => 'Phiếu vật tư', 'icon' => 'cube-outline', 'color' => '#8B5CF6', 'total' => $b];
+        foreach ($groups as $g) {
+            if ($counts[$g['type']] > 0) {
+                $summary[] = array_merge($g, ['total' => $counts[$g['type']]]);
+            }
         }
-        
-        if ($type === 'all' || $type === 'acceptance') {
-            $a = $data['acceptance_supervisor']->count() + $data['acceptance_pm']->count() + $data['acceptance_customer']->count();
-            if ($a > 0) $summary[] = ['type' => 'acceptance', 'label' => 'Nghiệm thu', 'icon' => 'checkmark-circle-outline', 'color' => '#10B981', 'total' => $a];
-        }
-
-        // Add more summaries if needed for high-level filtering on mobile
-        // but let's keep it clean as per current app design
 
         return $summary;
     }
@@ -387,7 +420,7 @@ class ApprovalCenterController extends Controller
     public function quickApprove(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment,defect,budget,equipment_rental,asset_usage',
+            'type' => 'required|string',
             'id' => 'required|integer',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -397,347 +430,44 @@ class ApprovalCenterController extends Controller
         $id = $request->id;
 
         // ─── RBAC: Check permission before approving ───
+        // Pass the RAW type to perm check as it needs to see 'project_cost' etc. to check the right statuses
         $permCheck = $this->checkApprovalPermission($user, $type, $id);
         if ($permCheck !== true) {
             return $permCheck;
         }
 
-        try {
-            DB::beginTransaction();
-
-            switch ($type) {
-                // ─── Cost (Company + Project) ───
-                case 'company_cost':
-                case 'project_cost':
-                    $cost = Cost::findOrFail($id);
-
-                    if ($cost->status === 'pending_management_approval') {
-                        if (!$cost->approveByManagement($user)) {
-                            DB::rollBack();
-                            return response()->json(['success' => false, 'message' => 'Không thể duyệt'], 400);
-                        }
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã duyệt chi phí (Ban điều hành)']);
-                    }
-
-                    if ($cost->status === 'pending_accountant_approval') {
-                        if (!$cost->approveByAccountant($user)) {
-                            DB::rollBack();
-                            return response()->json(['success' => false, 'message' => 'Không thể xác nhận'], 400);
-                        }
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã xác nhận chi phí (Kế toán)']);
-                    }
-
-                    DB::rollBack();
-                    return response()->json(['success' => false, 'message' => 'Chi phí không ở trạng thái chờ duyệt'], 400);
-
-                // ─── Material Bill ───
-                case 'material_bill':
-                    $billClass = 'App\\Models\\MaterialBill';
-                    if (!class_exists($billClass)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
-                    }
-                    $bill = $billClass::findOrFail($id);
-
-                    if ($bill->status === 'pending_management' && method_exists($bill, 'approveByManagement')) {
-                        $bill->approveByManagement($user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã duyệt phiếu vật tư (BĐH)']);
-                    }
-                    if ($bill->status === 'pending_accountant' && method_exists($bill, 'approveByAccountant')) {
-                        $bill->approveByAccountant($user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã xác nhận phiếu vật tư (KT)']);
-                    }
-                    DB::rollBack();
-                    return response()->json(['success' => false, 'message' => 'Phiếu không ở trạng thái chờ duyệt'], 400);
-
-                // ─── Acceptance Stage (KH duyệt) ───
-                case 'acceptance':
-                    $stage = AcceptanceStage::findOrFail($id);
-                    if ($stage->status !== 'project_manager_approved') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Nghiệm thu không ở trạng thái chờ KH duyệt'], 400);
-                    }
-                    if (!$stage->approveCustomer($user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt nghiệm thu'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt nghiệm thu (Khách hàng)']);
-
-                // ─── Acceptance Supervisor (GS duyệt) ───
-                case 'acceptance_supervisor':
-                    $stage = AcceptanceStage::findOrFail($id);
-                    if ($stage->status !== 'pending') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Nghiệm thu không ở trạng thái chờ GS duyệt'], 400);
-                    }
-                    if (!$stage->approveSupervisor($user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt nghiệm thu (GS)'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'GS đã duyệt nghiệm thu']);
-
-                // ─── Acceptance PM (QLDA duyệt) ───
-                case 'acceptance_pm':
-                    $stage = AcceptanceStage::findOrFail($id);
-                    if ($stage->status !== 'supervisor_approved') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Nghiệm thu không ở trạng thái chờ QLDA duyệt'], 400);
-                    }
-                    if (!$stage->approveProjectManager($user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt nghiệm thu (QLDA)'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'QLDA đã duyệt nghiệm thu']);
-
-                // ─── Change Request ───
-                case 'change_request':
-                    $cr = ChangeRequest::findOrFail($id);
-                    if (!in_array($cr->status, ['submitted', 'under_review'])) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Yêu cầu thay đổi không ở trạng thái chờ duyệt'], 400);
-                    }
-                    if (!$cr->approve($user, $request->notes)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt yêu cầu thay đổi'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt yêu cầu thay đổi']);
-
-                // ─── Additional Cost ───
-                case 'additional_cost':
-                    $ac = AdditionalCost::findOrFail($id);
-                    if (!in_array($ac->status, ['pending', 'pending_approval'])) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Chi phí phát sinh không ở trạng thái chờ duyệt'], 400);
-                    }
-                    if (!$ac->approve($user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt chi phí phát sinh'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt chi phí phát sinh']);
-
-                // ─── Subcontractor Payment ───
-                case 'sub_payment':
-                    $sp = SubcontractorPayment::findOrFail($id);
-                    if ($sp->status === 'pending_management_approval') {
-                        if (!$sp->approve($user)) {
-                            DB::rollBack();
-                            return response()->json(['success' => false, 'message' => 'Không thể duyệt thanh toán NTP'], 400);
-                        }
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã duyệt thanh toán NTP (BĐH)']);
-                    }
-                    if ($sp->status === 'pending_accountant_confirmation') {
-                        if (!$sp->markAsPaid($user)) {
-                            DB::rollBack();
-                            return response()->json(['success' => false, 'message' => 'Không thể xác nhận thanh toán NTP'], 400);
-                        }
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã xác nhận thanh toán NTP (Kế toán)']);
-                    }
-                    DB::rollBack();
-                    return response()->json(['success' => false, 'message' => 'Thanh toán NTP không ở trạng thái chờ duyệt'], 400);
-
-                // ─── Contract (KH duyệt) ───
-                case 'contract':
-                    $contract = Contract::findOrFail($id);
-                    if ($contract->status !== 'pending_customer_approval') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Hợp đồng không ở trạng thái chờ KH duyệt'], 400);
-                    }
-                    if (!$contract->approve($user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt hợp đồng'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt hợp đồng']);
-
-                // ─── Project Payment (KH duyệt) ───
-                case 'payment':
-                    $payment = ProjectPayment::findOrFail($id);
-                    if ($payment->status !== 'customer_pending_approval') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Thanh toán không ở trạng thái chờ KH duyệt'], 400);
-                    }
-                    if (!$payment->approveByCustomer($user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt thanh toán'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt đợt thanh toán (Khách hàng)']);
-
-                // ─── Subcontractor Acceptance ───
-                case 'sub_acceptance':
-                    $sa = SubcontractorAcceptance::findOrFail($id);
-                    if ($sa->status !== 'pending') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Nghiệm thu NTP không ở trạng thái chờ duyệt'], 400);
-                    }
-                    if (!$sa->approve($user, $request->notes)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt nghiệm thu NTP'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt nghiệm thu NTP']);
-
-                // ─── Supplier Acceptance ───
-                case 'supplier_acceptance':
-                    $sa = SupplierAcceptance::findOrFail($id);
-                    if ($sa->status !== 'pending') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Nghiệm thu NCC không ở trạng thái chờ duyệt'], 400);
-                    }
-                    if (!$sa->approve($user, $request->notes)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt nghiệm thu NCC'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt nghiệm thu NCC']);
-
-                // ─── Acceptance Item ───
-                case 'acceptance_item':
-                    $ai = AcceptanceItem::findOrFail($id);
-                    if ($ai->acceptance_status !== 'pending' || !$ai->is_completed) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Hạng mục không ở trạng thái chờ nghiệm thu'], 400);
-                    }
-                    if (!$ai->approve($user, $request->notes)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt hạng mục nghiệm thu'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt nghiệm thu hạng mục']);
-
-                // ─── Construction Log ───
-                case 'construction_log':
-                    $log = ConstructionLog::findOrFail($id);
-                    if ($log->approval_status !== 'pending') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Nhật ký không ở trạng thái chờ duyệt'], 400);
-                    }
-                    $log->update([
-                        'approval_status' => 'approved',
-                        'approved_by' => $user->id,
-                        'approved_at' => now(),
-                    ]);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt nhật ký công trường']);
-
-                // ─── Schedule Adjustment ───
-                case 'schedule_adjustment':
-                    $adj = ScheduleAdjustment::findOrFail($id);
-                    if ($adj->status !== 'pending') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Điều chỉnh không ở trạng thái chờ duyệt'], 400);
-                    }
-                    if (!$adj->approve($user, $request->notes)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể duyệt điều chỉnh tiến độ'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt điều chỉnh tiến độ']);
-
-                // ─── Defect Verification ───
-                case 'defect':
-                    $defect = Defect::findOrFail($id);
-                    if ($defect->status !== 'fixed') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Lỗi chưa được báo đã sửa'], 400);
-                    }
-                    if (!$defect->markAsVerified($user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể xác nhận lỗi'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã xác nhận lỗi đã sửa']);
-
-                // ─── Project Budget ───
-                case 'budget':
-                    $budget = ProjectBudget::findOrFail($id);
-                    if ($budget->status === 'approved') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Ngân sách đã được duyệt từ trước'], 400);
-                    }
-                    $budget->update([
-                        'status' => 'approved',
-                        'approved_by' => $user->id,
-                        'approved_at' => now(),
-                    ]);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã duyệt ngân sách dự án']);
-
-                // ─── Equipment Rental ───
-                case 'equipment_rental':
-                    $rentalClass = 'App\\Models\\EquipmentRental';
-                    if (!class_exists($rentalClass)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
-                    }
-                    $rental = $rentalClass::findOrFail($id);
-                    if ($rental->status === 'pending_management' && method_exists($rental, 'approveByManagement')) {
-                        $rental->approveByManagement($user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã duyệt thuê thiết bị (BĐH)']);
-                    }
-                    if ($rental->status === 'pending_accountant' && method_exists($rental, 'approveByAccountant')) {
-                        $rental->approveByAccountant($user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã xác nhận thuê thiết bị (KT)']);
-                    }
-                    if ($rental->status === 'pending_return' && method_exists($rental, 'confirmReturn')) {
-                        $rental->confirmReturn($user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã xác nhận trả thiết bị thuê']);
-                    }
-                    DB::rollBack();
-                    return response()->json(['success' => false, 'message' => 'Phiếu thuê không ở trạng thái chờ duyệt'], 400);
-
-                // ─── Asset Usage ───
-                case 'asset_usage':
-                    $usageClass = 'App\\Models\\AssetUsage';
-                    if (!class_exists($usageClass)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
-                    }
-                    $usage = $usageClass::findOrFail($id);
-                    if ($usage->status === 'pending_management' && method_exists($usage, 'approveByManagement')) {
-                        $usage->approveByManagement($user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã duyệt sử dụng thiết bị (BĐH)']);
-                    }
-                    if ($usage->status === 'pending_accountant' && method_exists($usage, 'approveByAccountant')) {
-                        $usage->approveByAccountant($user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã xác nhận sử dụng thiết bị (KT)']);
-                    }
-                    if ($usage->status === 'pending_return' && method_exists($usage, 'confirmReturn')) {
-                        $usage->confirmReturn($user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã xác nhận trả thiết bị kho']);
-                    }
-                    DB::rollBack();
-                    return response()->json(['success' => false, 'message' => 'Phiếu sử dụng TB không ở trạng thái chờ duyệt'], 400);
-            }
-
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Loại không hợp lệ'], 400);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Lỗi: ' . $e->getMessage(),
-            ], 500);
+        // ─── Service Type Mapping ───
+        // Map APP-specific types to Service-compatible types based on current status
+        $serviceType = $type;
+        if ($type === 'project_cost' || $type === 'company_cost') {
+            $cost = \App\Models\Cost::findOrFail($id);
+            $serviceType = ($cost->status === 'pending_accountant_approval') ? 'accountant' : 'management';
+        } elseif ($type === 'equipment_rental') {
+            $rental = \App\Models\EquipmentRental::findOrFail($id);
+            if ($rental->status === 'pending_management') $serviceType = 'equipment_rental_management';
+            elseif ($rental->status === 'pending_accountant') $serviceType = 'equipment_rental_accountant';
+            elseif ($rental->status === 'pending_return') $serviceType = 'equipment_rental_return';
+        } elseif ($type === 'asset_usage') {
+            $usage = \App\Models\AssetUsage::findOrFail($id);
+            if ($usage->status === 'pending_management') $serviceType = 'asset_usage_management';
+            elseif ($usage->status === 'pending_accountant') $serviceType = 'asset_usage_accountant';
+            elseif ($usage->status === 'pending_return') $serviceType = 'asset_usage_return';
+        } elseif ($type === 'sub_payment') {
+            $p = \App\Models\SubcontractorPayment::findOrFail($id);
+            $serviceType = ($p->status === 'pending_accountant_confirmation') ? 'sub_payment_confirm' : 'sub_payment';
+        } elseif ($type === 'payment') {
+            $p = \App\Models\ProjectPayment::findOrFail($id);
+            $serviceType = ($p->status === 'accountant_pending_confirmation') ? 'project_payment_confirm' : 'project_payment';
         }
+
+        $result = $this->approvalActionService->approve($user, $serviceType, $id, ['notes' => $request->notes]);
+
+        if ($result['success']) {
+            return response()->json(['success' => true, 'message' => $result['message']]);
+        }
+        return response()->json(['success' => false, 'message' => $result['message']], 400);
     }
+
 
     /**
      * Quick reject action directly from approval center.
@@ -746,220 +476,40 @@ class ApprovalCenterController extends Controller
     public function quickReject(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:company_cost,project_cost,material_bill,acceptance,acceptance_supervisor,acceptance_pm,change_request,additional_cost,sub_payment,contract,payment,sub_acceptance,supplier_acceptance,acceptance_item,construction_log,schedule_adjustment,defect,budget,equipment_rental,asset_usage',
+            'type' => 'required|string',
             'id' => 'required|integer',
             'reason' => 'required|string|max:500',
         ]);
 
         $user = Auth::user();
+        $type = $request->type;
+        $id = $request->id;
 
         // ─── RBAC: Check permission before rejecting ───
-        $permCheck = $this->checkApprovalPermission($user, $request->type, $request->id);
+        $permCheck = $this->checkApprovalPermission($user, $type, $id);
         if ($permCheck !== true) {
             return $permCheck;
         }
 
-        try {
-            DB::beginTransaction();
-
-            switch ($request->type) {
-                case 'company_cost':
-                case 'project_cost':
-                    $cost = Cost::findOrFail($request->id);
-                    if (!$cost->reject($request->reason, $user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể từ chối'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối chi phí']);
-
-                case 'material_bill':
-                    $billClass = 'App\\Models\\MaterialBill';
-                    if (!class_exists($billClass)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
-                    }
-                    $bill = $billClass::findOrFail($request->id);
-                    if (method_exists($bill, 'reject')) {
-                        $bill->reject($request->reason, $user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã từ chối phiếu vật tư']);
-                    }
-                    DB::rollBack();
-                    return response()->json(['success' => false, 'message' => 'Không thể từ chối'], 400);
-
-                case 'acceptance':
-                    $stage = AcceptanceStage::findOrFail($request->id);
-                    if (!$stage->reject($request->reason, $user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể từ chối nghiệm thu'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu']);
-
-                case 'acceptance_supervisor':
-                    $stage = AcceptanceStage::findOrFail($request->id);
-                    if ($stage->status !== 'pending') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Nghiệm thu không ở trạng thái chờ GS duyệt'], 400);
-                    }
-                    $stage->reject($request->reason, $user);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu (GS)']);
-
-                case 'acceptance_pm':
-                    $stage = AcceptanceStage::findOrFail($request->id);
-                    if ($stage->status !== 'supervisor_approved') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Nghiệm thu không ở trạng thái chờ QLDA duyệt'], 400);
-                    }
-                    $stage->reject($request->reason, $user);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu (QLDA)']);
-
-                case 'change_request':
-                    $cr = ChangeRequest::findOrFail($request->id);
-                    if (!$cr->reject($user, $request->reason)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể từ chối yêu cầu thay đổi'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối yêu cầu thay đổi']);
-
-                case 'additional_cost':
-                    $ac = AdditionalCost::findOrFail($request->id);
-                    if (!$ac->reject($request->reason, $user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể từ chối CP phát sinh'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối chi phí phát sinh']);
-
-                case 'sub_payment':
-                    $sp = SubcontractorPayment::findOrFail($request->id);
-                    if (!$sp->reject($user, $request->reason)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể từ chối thanh toán NTP'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối thanh toán NTP']);
-
-                case 'contract':
-                    $contract = Contract::findOrFail($request->id);
-                    $contract->reject($request->reason);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối hợp đồng']);
-
-                case 'payment':
-                    $payment = ProjectPayment::findOrFail($request->id);
-                    $payment->update(['status' => 'rejected', 'rejected_reason' => $request->reason]);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối đợt thanh toán']);
-
-                case 'sub_acceptance':
-                    $sa = SubcontractorAcceptance::findOrFail($request->id);
-                    $sa->reject($request->reason, $user);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu NTP']);
-
-                case 'supplier_acceptance':
-                    $sa = SupplierAcceptance::findOrFail($request->id);
-                    $sa->reject($request->reason, $user);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu NCC']);
-
-                case 'acceptance_item':
-                    $ai = AcceptanceItem::findOrFail($request->id);
-                    if (!$ai->reject($request->reason, $user)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể từ chối hạng mục'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối nghiệm thu hạng mục']);
-
-                case 'construction_log':
-                    $log = ConstructionLog::findOrFail($request->id);
-                    $log->update([
-                        'approval_status' => 'rejected',
-                        'approved_by' => $user->id,
-                        'approved_at' => now(),
-                    ]);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối nhật ký công trường']);
-
-                case 'schedule_adjustment':
-                    $adj = ScheduleAdjustment::findOrFail($request->id);
-                    if (!$adj->reject($user, $request->reason)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Không thể từ chối điều chỉnh tiến độ'], 400);
-                    }
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối điều chỉnh tiến độ']);
-
-                case 'defect':
-                    $defect = Defect::findOrFail($request->id);
-                    if ($defect->status !== 'fixed') {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Lỗi chưa được báo đã sửa'], 400);
-                    }
-                    $defect->update([
-                        'status' => 'open',
-                        'rejected_reason' => $request->reason,
-                    ]);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối xác nhận sửa lỗi']);
-
-                case 'budget':
-                    $budget = ProjectBudget::findOrFail($request->id);
-                    $budget->update([
-                        'status' => 'rejected',
-                        'rejected_reason' => $request->reason,
-                        'rejected_by' => $user->id,
-                        'rejected_at' => now(),
-                    ]);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối ngân sách dự án']);
-
-                case 'equipment_rental':
-                    $rentalClass = 'App\\Models\\EquipmentRental';
-                    if (!class_exists($rentalClass)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
-                    }
-                    $rental = $rentalClass::findOrFail($request->id);
-                    if (method_exists($rental, 'reject')) {
-                        $rental->reject($request->reason, $user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã từ chối thuê thiết bị']);
-                    }
-                    $rental->update(['status' => 'rejected', 'rejected_reason' => $request->reason]);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối thuê thiết bị']);
-
-                case 'asset_usage':
-                    $usageClass = 'App\\Models\\AssetUsage';
-                    if (!class_exists($usageClass)) {
-                        DB::rollBack();
-                        return response()->json(['success' => false, 'message' => 'Module không tồn tại'], 400);
-                    }
-                    $usage = $usageClass::findOrFail($request->id);
-                    if (method_exists($usage, 'reject')) {
-                        $usage->reject($request->reason, $user);
-                        DB::commit();
-                        return response()->json(['success' => true, 'message' => 'Đã từ chối sử dụng thiết bị']);
-                    }
-                    $usage->update(['status' => 'rejected', 'rejected_reason' => $request->reason]);
-                    DB::commit();
-                    return response()->json(['success' => true, 'message' => 'Đã từ chối sử dụng thiết bị']);
-            }
-
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Loại không hợp lệ'], 400);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
+        // ─── Service Type Mapping ───
+        $serviceType = $type;
+        if ($type === 'project_cost' || $type === 'company_cost') {
+            $cost = \App\Models\Cost::findOrFail($id);
+            $serviceType = ($cost->status === 'pending_accountant_approval') ? 'accountant' : 'management';
+        } elseif ($type === 'equipment_rental') {
+            $serviceType = 'equipment_rental_management'; // Rental reject is usually a single state
+        } elseif ($type === 'asset_usage') {
+            $serviceType = 'asset_usage_management';
+        } elseif ($type === 'payment') {
+            $serviceType = 'project_payment';
         }
+
+        $result = $this->approvalActionService->reject($user, $serviceType, $id, $request->reason);
+
+        if ($result['success']) {
+            return response()->json(['success' => true, 'message' => $result['message']]);
+        }
+        return response()->json(['success' => false, 'message' => $result['message']], 400);
     }
 
     /**

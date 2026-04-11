@@ -22,6 +22,7 @@ use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Models\User;
 use App\Services\ApprovalQueryService;
+use App\Services\ApprovalActionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -34,10 +35,14 @@ class CrmApprovalController extends Controller
     use CrmAuthorization;
 
     protected $approvalQueryService;
+    protected $approvalActionService;
 
-    public function __construct(ApprovalQueryService $approvalQueryService)
-    {
+    public function __construct(
+        ApprovalQueryService $approvalQueryService,
+        ApprovalActionService $approvalActionService
+    ) {
         $this->approvalQueryService = $approvalQueryService;
+        $this->approvalActionService = $approvalActionService;
     }
 
     /**
@@ -106,35 +111,76 @@ class CrmApprovalController extends Controller
             ->take(30)
             ->values();
 
+        // ─────────────────────────────────────────────────────────────────────
+        // GROUP ITEMS BY ROLE BUCKET (Web CRM) — WITH STRICT RBAC FILTERING
+        // ─────────────────────────────────────────────────────────────────────
+        $roleGroups = [
+            'management' => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT)
+                ? collect([])
+                    ->concat($managementItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'management'])))
+                    ->concat($additionalCostItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'additional_cost'])))
+                    ->concat($subPaymentManagementFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'sub_payment'])))
+                    ->concat($materialBillManagementItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'material_bill'])))
+                    ->concat($budgetItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'budget'])))
+                    ->concat($equipmentRentalManagementFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_management'])))
+                    ->concat($assetUsageManagementFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_management'])))
+                    ->values()
+                : collect([]),
+
+            'accountant' => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT)
+                ? collect([])
+                    ->concat($accountantItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'accountant'])))
+                    ->concat($subPaymentAccountantFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'sub_payment_confirm'])))
+                    ->concat($paidPaymentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'project_payment_confirm'])))
+                    ->concat($materialBillAccountantItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'material_bill'])))
+                    ->concat($equipmentRentalAccountantFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_accountant'])))
+                    ->concat($assetUsageAccountantFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_accountant'])))
+                    ->values()
+                : collect([]),
+
+            'project_manager' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2)
+                ? collect([])
+                    ->concat($acceptancePMItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'acceptance_pm'])))
+                    ->concat($changeRequestItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'change_request'])))
+                    ->concat($constructionLogItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'construction_log'])))
+                    ->concat($scheduleAdjustmentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'schedule_adjustment'])))
+                    ->concat($equipmentRentalReturnFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_return'])))
+                    ->concat($assetUsageReturnFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_return'])))
+                    ->values()
+                : collect([]),
+
+            'supervisor' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1)
+                ? collect([])
+                    ->concat($acceptanceSupervisorItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'acceptance_supervisor'])))
+                    ->concat($subAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'sub_acceptance'])))
+                    ->concat($supplierAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'supplier_acceptance'])))
+                    ->concat($defectItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'defect_verify'])))
+                    ->values()
+                : collect([]),
+
+            'customer' => ($this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $this->crmCan($user, Permissions::PAYMENT_APPROVE))
+                ? collect([])
+                    ->concat($customerAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'acceptance'])))
+                    ->concat($contractItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'contract'])))
+                    ->concat($pendingPaymentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'project_payment'])))
+                    ->values()
+                : collect([]),
+        ];
+
+        // Add a "permissions" map to help UI decide initial tab
+        $userPermissions = [
+            'can_management' => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT),
+            'can_accountant' => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT),
+            'can_pm' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2),
+            'can_supervisor' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1),
+            'can_customer' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $this->crmCan($user, Permissions::PAYMENT_APPROVE),
+        ];
+
         return Inertia::render('Crm/Approvals/Index', [
-            'managementItems' => $managementItemsFormatted->values(),
-            'accountantItems' => $accountantItemsFormatted->values(),
-            'acceptanceSupervisorItems' => $acceptanceSupervisorItemsFormatted->values(),
-            'acceptancePMItems' => $acceptancePMItemsFormatted->values(),
-            'customerAcceptanceItems' => $customerAcceptanceItemsFormatted->values(),
-            'changeRequestItems' => $changeRequestItemsFormatted->values(),
-            'additionalCostItems' => $additionalCostItemsFormatted->values(),
-            'subPaymentManagementItems' => $subPaymentManagementFormatted->values(),
-            'subPaymentAccountantItems' => $subPaymentAccountantFormatted->values(),
-            'contractItems' => $contractItemsFormatted->values(),
-            'pendingPaymentItems' => $pendingPaymentItemsFormatted->values(),
-            'paidPaymentItems' => $paidPaymentItemsFormatted->values(),
-            'materialBillManagementItems' => $materialBillManagementItemsFormatted->values(),
-            'materialBillAccountantItems' => $materialBillAccountantItemsFormatted->values(),
-            'subAcceptanceItems' => $subAcceptanceItemsFormatted->values(),
-            'supplierAcceptanceItems' => $supplierAcceptanceItemsFormatted->values(),
-            'constructionLogItems' => $constructionLogItemsFormatted->values(),
-            'scheduleAdjustmentItems' => $scheduleAdjustmentItemsFormatted->values(),
-            'defectItems' => $defectItemsFormatted->values(),
-            'budgetItems' => $budgetItemsFormatted->values(),
-            'equipmentRentalManagementItems' => $equipmentRentalManagementFormatted->values(),
-            'equipmentRentalAccountantItems' => $equipmentRentalAccountantFormatted->values(),
-            'equipmentRentalReturnItems' => $equipmentRentalReturnFormatted->values(),
-            'assetUsageManagementItems' => $assetUsageManagementFormatted->values(),
-            'assetUsageAccountantItems' => $assetUsageAccountantFormatted->values(),
-            'assetUsageReturnItems' => $assetUsageReturnFormatted->values(),
+            'roleGroups' => $roleGroups,
             'recentItems' => $recentItems,
             'stats' => $data['stats'],
+            'userPermissions' => $userPermissions,
         ]);
     }
 
@@ -148,34 +194,12 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $cost->project);
 
-        if (!in_array($cost->status, ['draft', 'pending', 'pending_management_approval', 'rejected'])) {
-            return back()->with('error', 'Chi phí không ở trạng thái có thể duyệt');
+        $result = $this->approvalActionService->approve($user, 'management', $id);
+
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
         }
-
-        try {
-            DB::beginTransaction();
-
-            $result = $cost->approveByManagement($user);
-
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể duyệt chi phí này — trạng thái không hợp lệ');
-            }
-
-            DB::commit();
-
-            Log::info('CRM: BĐH approved cost', [
-                'cost_id' => $cost->id,
-                'approved_by' => $user->id,
-                'amount' => $cost->amount,
-            ]);
-
-            return back()->with('success', "Đã duyệt chi phí \"{$cost->name}\" (Ban điều hành)");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('CRM: Cost approval failed', ['cost_id' => $id, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Lỗi hệ thống khi duyệt chi phí');
-        }
+        return back()->with('error', $result['message']);
     }
 
     public function approveAccountant(Request $request, $id)
@@ -184,74 +208,36 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $cost->project);
 
-        if ($cost->status !== 'pending_accountant_approval') {
-            return back()->with('error', 'Chi phí không ở trạng thái chờ KT xác nhận');
+        $result = $this->approvalActionService->approve($user, 'accountant', $id);
+
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
         }
-
-        // Financial Gatekeeper: Ensure attachments exist for financial flow
-        if ($cost->attachments()->count() === 0) {
-            return back()->with('error', 'Yêu cầu thanh toán bắt buộc phải có file chứng từ đi kèm mới có thể xác nhận.');
-        }
-
-        try {
-            DB::beginTransaction();
-            $result = $cost->approveByAccountant($user);
-
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể xác nhận chi phí này — trạng thái không hợp lệ');
-            }
-
-            DB::commit();
-
-            Log::info('CRM: KT confirmed cost', [
-                'cost_id' => $cost->id,
-                'confirmed_by' => $user->id,
-                'amount' => $cost->amount,
-            ]);
-
-            return back()->with('success', "Đã xác nhận chi phí \"{$cost->name}\" (Kế toán)");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('CRM: Cost accountant approval failed', ['cost_id' => $id, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Lỗi hệ thống khi xác nhận chi phí');
-        }
+        return back()->with('error', $result['message']);
     }
 
+    /**
+     * Universal Reject Method
+     */
     public function reject(Request $request, $id)
     {
-        $request->validate(['reason' => 'required|string|max:500']);
-        $cost = Cost::findOrFail($id);
+        $request->validate([
+            'reason' => 'required|string|max:500',
+            'type' => 'nullable|string'
+        ]);
+
+        $type = $request->get('type', 'management');
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::COST_REJECT, $cost->project);
+        
+        // Basic requirement check (can be refined per type if needed)
+        $this->crmRequire($user, Permissions::COST_REJECT);
 
-        if (!in_array($cost->status, ['pending_management_approval', 'pending_accountant_approval'])) {
-            return back()->with('error', 'Chi phí không ở trạng thái chờ duyệt');
+        $result = $this->approvalActionService->reject($user, $type, $id, $request->reason);
+
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
         }
-
-        try {
-            DB::beginTransaction();
-            $result = $cost->reject($request->reason, $user);
-
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể từ chối chi phí này');
-            }
-
-            DB::commit();
-
-            Log::info('CRM: Cost rejected', [
-                'cost_id' => $cost->id,
-                'rejected_by' => $user->id,
-                'reason' => $request->reason,
-            ]);
-
-            return back()->with('success', "Đã từ chối chi phí \"{$cost->name}\"");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('CRM: Cost rejection failed', ['cost_id' => $id, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Lỗi hệ thống khi từ chối chi phí');
-        }
+        return back()->with('error', $result['message']);
     }
 
     // =========================================================================
@@ -260,52 +246,25 @@ class CrmApprovalController extends Controller
 
     public function approveSupervisorAcceptance(Request $request, $id)
     {
-        $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $stage->project);
+        // Permission check done in Service, but we can do a high-level one here too
+        $result = $this->approvalActionService->approve($user, 'acceptance_supervisor', $id);
 
-        if ($stage->status !== 'pending') {
-            return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ GS duyệt');
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
         }
-
-        try {
-            DB::beginTransaction();
-            $result = $stage->approveSupervisor($user);
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể duyệt nghiệm thu (GS)');
-            }
-            DB::commit();
-            return back()->with('success', "GS đã duyệt nghiệm thu \"{$stage->name}\"");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi duyệt nghiệm thu (GS)');
-        }
+        return back()->with('error', $result['message']);
     }
 
     public function approvePMAcceptance(Request $request, $id)
     {
-        $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $stage->project);
+        $result = $this->approvalActionService->approve($user, 'acceptance_pm', $id);
 
-        if ($stage->status !== 'supervisor_approved') {
-            return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ QLDA duyệt');
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
         }
-
-        try {
-            DB::beginTransaction();
-            $result = $stage->approveProjectManager($user);
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể duyệt nghiệm thu (QLDA)');
-            }
-            DB::commit();
-            return back()->with('success', "QLDA đã duyệt nghiệm thu \"{$stage->name}\"");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi duyệt nghiệm thu (QLDA)');
-        }
+        return back()->with('error', $result['message']);
     }
 
     public function approveCustomerAcceptance(Request $request, $id)
@@ -357,42 +316,15 @@ class CrmApprovalController extends Controller
 
     public function approveChangeRequest(Request $request, $id)
     {
-        $cr = ChangeRequest::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $cr->project);
+        $result = $this->approvalActionService->approve($user, 'change_request', $id, ['notes' => $request->input('notes')]);
 
-        try {
-            DB::beginTransaction();
-            $result = $cr->approve($user, $request->input('notes'));
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể duyệt yêu cầu thay đổi');
-            }
-            DB::commit();
-            return back()->with('success', "Đã duyệt yêu cầu thay đổi \"{$cr->title}\"");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi duyệt yêu cầu thay đổi');
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
         }
+        return back()->with('error', $result['message']);
     }
 
-    public function rejectChangeRequest(Request $request, $id)
-    {
-        $request->validate(['reason' => 'required|string|max:500']);
-        $cr = ChangeRequest::findOrFail($id);
-        $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $cr->project);
-
-        try {
-            DB::beginTransaction();
-            $cr->reject($user, $request->reason);
-            DB::commit();
-            return back()->with('success', "Đã từ chối yêu cầu thay đổi \"{$cr->title}\"");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi từ chối yêu cầu thay đổi');
-        }
-    }
 
     // =========================================================================
     // ADDITIONAL COST APPROVAL
@@ -400,42 +332,15 @@ class CrmApprovalController extends Controller
 
     public function approveAdditionalCost(Request $request, $id)
     {
-        $ac = AdditionalCost::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ADDITIONAL_COST_APPROVE, $ac->project);
+        $result = $this->approvalActionService->approve($user, 'additional_cost', $id);
 
-        try {
-            DB::beginTransaction();
-            $result = $ac->approve($user);
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể duyệt chi phí phát sinh');
-            }
-            DB::commit();
-            return back()->with('success', 'Đã duyệt chi phí phát sinh');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi duyệt chi phí phát sinh');
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
         }
+        return back()->with('error', $result['message']);
     }
 
-    public function rejectAdditionalCost(Request $request, $id)
-    {
-        $request->validate(['reason' => 'required|string|max:500']);
-        $ac = AdditionalCost::findOrFail($id);
-        $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ADDITIONAL_COST_APPROVE, $ac->project);
-
-        try {
-            DB::beginTransaction();
-            $ac->reject($request->reason, $user);
-            DB::commit();
-            return back()->with('success', 'Đã từ chối chi phí phát sinh');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi từ chối chi phí phát sinh');
-        }
-    }
 
     // =========================================================================
     // SUBCONTRACTOR PAYMENT
