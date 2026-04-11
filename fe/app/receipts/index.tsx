@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import { receiptApi, Receipt, CreateReceiptData } from "@/api/receiptApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import BackButton from "@/components/BackButton";
+import { ScreenHeader, PermissionDenied } from '@/components';
 import { CurrencyInput, DatePickerInput } from "@/components";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
@@ -45,6 +45,8 @@ export default function ReceiptsScreen() {
     const [submitting, setSubmitting] = useState(false);
     const [filterType, setFilterType] = useState<"all" | "purchase" | "expense" | "payment">("all");
     const [filterStatus, setFilterStatus] = useState<"all" | "draft" | "verified" | "cancelled">("all");
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [permissionMessage, setPermissionMessage] = useState('');
 
     useEffect(() => {
         loadReceipts();
@@ -54,6 +56,7 @@ export default function ReceiptsScreen() {
     const loadReceipts = async () => {
         try {
             setLoading(true);
+            setPermissionDenied(false);
             const params: any = {};
             if (filterType !== "all") params.type = filterType;
             if (filterStatus !== "all") params.status = filterStatus;
@@ -61,8 +64,12 @@ export default function ReceiptsScreen() {
             if (response.success) {
                 setReceipts(response.data.data || []);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error loading receipts:", error);
+            if (error.response?.status === 403) {
+                setPermissionDenied(true);
+                setPermissionMessage(error.response?.data?.message || 'Bạn không có quyền xem chứng từ.');
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -71,7 +78,7 @@ export default function ReceiptsScreen() {
 
     const loadProjects = async () => {
         try {
-            const response = await projectApi.getProjects({ per_page: 1000 });
+            const response = await projectApi.getProjects({ per_page: 1000 } as any);
             if (response.success) {
                 setProjects(response.data.data || []);
             }
@@ -273,11 +280,19 @@ export default function ReceiptsScreen() {
 
     const filteredReceipts = receipts;
 
+    if (permissionDenied) {
+        return (
+            <View style={styles.container}>
+                <ScreenHeader title="Chứng Từ" showBackButton />
+                <PermissionDenied message={permissionMessage} />
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <BackButton />
-                <Text style={styles.headerTitle}>Chứng Từ</Text>
+                <ScreenHeader title="Chứng Từ" showBackButton />
                 <TouchableOpacity
                     style={styles.addButton}
                     onPress={() => {
@@ -690,12 +705,13 @@ const styles = StyleSheet.create({
         backgroundColor: "rgba(0, 0, 0, 0.5)",
         justifyContent: "flex-end",
     },
-    modalContent: {
+    modalContainer: {
+        flex: 1,
         backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: "90%",
-        padding: 16,
+    },
+    modalContent: {
+        flex: 1,
+        backgroundColor: "#FFFFFF",
     },
     modalHeader: {
         flexDirection: "row",
@@ -713,6 +729,10 @@ const styles = StyleSheet.create({
     },
     modalBody: {
         flex: 1,
+    },
+    modalBodyContent: {
+        padding: 16,
+        paddingBottom: 40,
     },
     formGroup: {
         marginBottom: 16,

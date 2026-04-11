@@ -5,17 +5,20 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ChangeRequest;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ChangeRequestController extends Controller
 {
+    use ApiAuthorization;
     /**
      * Danh sách change requests của project
      */
     public function index(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire($request->user(), Permissions::CHANGE_REQUEST_VIEW, $project);
 
         $query = $project->changeRequests()
             ->with([
@@ -54,6 +57,7 @@ class ChangeRequestController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
+        $this->apiRequire($user, Permissions::CHANGE_REQUEST_CREATE, $project);
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -102,6 +106,8 @@ class ChangeRequestController extends Controller
     public function show(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire(auth()->user(), Permissions::CHANGE_REQUEST_VIEW, $project);
+
         $changeRequest = $project->changeRequests()
             ->with(['requester', 'reviewer', 'approver'])
             ->findOrFail($id);
@@ -120,6 +126,7 @@ class ChangeRequestController extends Controller
         $project = Project::findOrFail($projectId);
         $changeRequest = $project->changeRequests()->findOrFail($id);
         $user = auth()->user();
+        $this->apiRequire($user, Permissions::CHANGE_REQUEST_UPDATE, $project);
 
         // Chỉ cho phép cập nhật khi ở trạng thái draft
         if ($changeRequest->status !== 'draft') {
@@ -163,6 +170,8 @@ class ChangeRequestController extends Controller
     public function destroy(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire(auth()->user(), Permissions::CHANGE_REQUEST_DELETE, $project);
+
         $changeRequest = $project->changeRequests()->findOrFail($id);
 
         // Chỉ cho phép xóa khi ở trạng thái draft hoặc cancelled
@@ -196,6 +205,7 @@ class ChangeRequestController extends Controller
         $project = Project::findOrFail($projectId);
         $changeRequest = $project->changeRequests()->findOrFail($id);
         $user = auth()->user();
+        $this->apiRequire($user, Permissions::CHANGE_REQUEST_CREATE, $project);
 
         // Chỉ người tạo mới có thể gửi
         if ($changeRequest->requested_by !== $user->id) {
@@ -229,6 +239,7 @@ class ChangeRequestController extends Controller
         $project = Project::findOrFail($projectId);
         $changeRequest = $project->changeRequests()->findOrFail($id);
         $user = auth()->user();
+        $this->apiRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $project);
 
         $validated = $request->validate([
             'notes' => 'nullable|string|max:2000',
@@ -258,6 +269,7 @@ class ChangeRequestController extends Controller
         $project = Project::findOrFail($projectId);
         $changeRequest = $project->changeRequests()->findOrFail($id);
         $user = auth()->user();
+        $this->apiRequire($user, Permissions::CHANGE_REQUEST_REJECT, $project);
 
         $validated = $request->validate([
             'reason' => 'required|string|max:2000',
@@ -285,6 +297,8 @@ class ChangeRequestController extends Controller
     public function markAsImplemented(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire(auth()->user(), Permissions::CHANGE_REQUEST_UPDATE, $project);
+
         $changeRequest = $project->changeRequests()->findOrFail($id);
 
         try {

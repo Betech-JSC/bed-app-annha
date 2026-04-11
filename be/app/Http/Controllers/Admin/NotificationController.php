@@ -121,7 +121,7 @@ class NotificationController extends Controller
      */
     public function create(): Response
     {
-        $users = User::select('id', 'name', 'email', 'role')
+        $users = User::select('id', 'name', 'email')
             ->whereNotNull('fcm_token')
             ->get()
             ->map(function ($user) {
@@ -129,7 +129,6 @@ class NotificationController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'role' => $user->role,
                 ];
             });
 

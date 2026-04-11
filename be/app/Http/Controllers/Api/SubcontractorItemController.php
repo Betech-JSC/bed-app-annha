@@ -6,17 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Subcontractor;
 use App\Models\SubcontractorItem;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class SubcontractorItemController extends Controller
 {
+    use ApiAuthorization;
     /**
      * Danh sách hạng mục của nhà thầu phụ
      */
     public function index(string $projectId, string $subcontractorId)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire(auth()->user(), Permissions::SUBCONTRACTOR_VIEW, $project);
+
         $subcontractor = Subcontractor::where('project_id', $project->id)
             ->findOrFail($subcontractorId);
 
@@ -34,6 +38,8 @@ class SubcontractorItemController extends Controller
     public function store(Request $request, string $projectId, string $subcontractorId)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_UPDATE, $project);
+
         $subcontractor = Subcontractor::where('project_id', $project->id)
             ->findOrFail($subcontractorId);
 
@@ -82,6 +88,8 @@ class SubcontractorItemController extends Controller
     public function update(Request $request, string $projectId, string $subcontractorId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_UPDATE, $project);
+
         $subcontractor = Subcontractor::where('project_id', $project->id)
             ->findOrFail($subcontractorId);
         $item = SubcontractorItem::where('subcontractor_id', $subcontractor->id)
@@ -111,6 +119,8 @@ class SubcontractorItemController extends Controller
     public function destroy(string $projectId, string $subcontractorId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire(auth()->user(), Permissions::SUBCONTRACTOR_DELETE, $project);
+
         $subcontractor = Subcontractor::where('project_id', $project->id)
             ->findOrFail($subcontractorId);
         $item = SubcontractorItem::where('subcontractor_id', $subcontractor->id)
@@ -130,6 +140,8 @@ class SubcontractorItemController extends Controller
     public function reorder(Request $request, string $projectId, string $subcontractorId)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_UPDATE, $project);
+
         $subcontractor = Subcontractor::where('project_id', $project->id)
             ->findOrFail($subcontractorId);
 

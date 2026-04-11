@@ -56,8 +56,8 @@ class ApprovalCenterController extends Controller
         $fetchType = in_array($type, ['management', 'accountant', 'project_manager', 'supervisor', 'customer']) ? 'all' : $type;
 
         // Determine user's approval capabilities for 'can_approve' flags
-        $canApproveManagement = $user->hasPermission('cost.approve.management') || $user->hasPermission('cost.approve_management');
-        $canApproveAccountant = $user->hasPermission('cost.approve.accountant') || $user->hasPermission('cost.approve_accountant');
+        $canApproveManagement = $user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_MANAGEMENT) || $user->isSuperAdmin();
+        $canApproveAccountant = $user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_ACCOUNTANT) || $user->isSuperAdmin();
 
         // FETCH CENTRALIZED DATA
         $data = $this->approvalQueryService->getApprovalData($user, $fetchType);
@@ -76,22 +76,46 @@ class ApprovalCenterController extends Controller
         // 2. Build Items Array
         $result['items'] = $this->buildMobileItems($data, $type, $canApproveManagement, $canApproveAccountant);
 
-        // 3. Build Recent Activity (formatted from service)
+        // 3. Build Recent Activity (formatted from service, filtered by permissions)
         $recent = $data['recent'];
         $recentActions = collect([]);
-        foreach ($recent['costs'] as $item) $recentActions->push($this->mapCostToItem($item, $item->project_id ? 'project_cost' : 'company_cost', false, false));
-        foreach ($recent['change_requests'] as $item) $recentActions->push(['id' => $item->id, 'type' => 'change_request', 'title' => 'CR: ' . $item->title, 'subtitle' => $item->project->name ?? 'Dự án', 'amount' => 0, 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
-        foreach ($recent['acceptances'] as $item) $recentActions->push(['id' => $item->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($item->task->name ?? 'Công việc'), 'subtitle' => $item->project->name ?? 'Dự án', 'amount' => 0, 'status' => $item->status, 'status_label' => 'Đã duyệt', 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
+        
+        // Use the same visibility flags as buildMobileItems
+        $showManagement = $user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_MANAGEMENT) || $user->isSuperAdmin();
+        $showAccountant = $user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_ACCOUNTANT) || $user->isSuperAdmin();
+        $showPM = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2) || $user->hasPermission(Permissions::CHANGE_REQUEST_APPROVE) || $user->hasPermission(Permissions::BUDGET_APPROVE) || $user->isSuperAdmin();
+        $showSupervisor = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1) || $user->hasPermission(Permissions::LOG_APPROVE) || $user->isSuperAdmin();
+        $showCustomer = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_2) || $user->hasPermission(Permissions::PAYMENT_APPROVE) || $user->isSuperAdmin();
+
+        if ($showManagement || $showAccountant) {
+            foreach ($recent['costs'] as $item) {
+                $isMgmt = str_contains($item->status, 'management');
+                if (($isMgmt && $showManagement) || (!$isMgmt && $showAccountant)) {
+                    $recentActions->push($this->mapCostToItem($item, $item->project_id ? 'project_cost' : 'company_cost', false, false));
+                }
+            }
+        }
+        
+        if ($showPM && isset($recent['change_requests'])) {
+            foreach ($recent['change_requests'] as $item) {
+                $recentActions->push(['id' => $item->id, 'type' => 'change_request', 'title' => 'CR: ' . $item->title, 'subtitle' => $item->project->name ?? 'Dự án', 'amount' => 0, 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
+            }
+        }
+        
+        if (($showPM || $showSupervisor || $showCustomer) && isset($recent['acceptances'])) {
+            foreach ($recent['acceptances'] as $item) {
+                $recentActions->push(['id' => $item->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($item->task->name ?? 'Công việc'), 'subtitle' => $item->project->name ?? 'Dự án', 'amount' => 0, 'status' => $item->status, 'status_label' => 'Đã duyệt', 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
+            }
+        }
         
         $result['recent_items'] = $recentActions->sortByDesc('created_at')->values()->all();
 
-        // 4. Stats Overview
-        $stats = $data['stats'];
+        // 4. Stats Overview (calculated based on filtered items only)
         $result['stats'] = [
-            'pending_total' => array_sum(array_column($result['summary'], 'total')),
-            'pending_amount' => (float) $stats['total_pending_amount'],
-            'approved_today' => (int) $stats['approved_today'],
-            'rejected_today' => (int) $stats['rejected_today'],
+            'pending_total' => (int) count($result['items']),
+            'pending_amount' => (float) array_sum(array_column($result['items'], 'amount')),
+            'approved_today' => (int) ($data['stats']['approved_today'] ?? 0),
+            'rejected_today' => (int) ($data['stats']['rejected_today'] ?? 0),
         ];
 
         // 5. Post-processing (Injecting role info, sorting, etc.)
@@ -114,236 +138,303 @@ class ApprovalCenterController extends Controller
     }
 
     /**
-     * Map data to Mobile API format (grouped by Role Buckets)
+     * Build mobile-specific items array (for Dashboard/List view)
      */
-    private function buildMobileItems($data, $type, $canApproveManagement, $canApproveAccountant)
+    private function buildMobileItems($data, $type = 'all', $canApproveManagement = false, $canApproveAccountant = false)
     {
         $items = [];
+        $user = Auth::user();
         
-        // --- 1. MANAGEMENT BUCKET (Ban điều hành) ---
-        // Project costs pending mgmt
-        foreach ($data['costs_management']->whereNotNull('project_id') as $c) {
-            if ($type === 'all' || $type === 'management' || $type === 'project_cost') {
-                $items[] = array_merge($this->mapCostToItem($c, 'project_cost', $canApproveManagement, false), ['role_group' => 'management']);
-            }
-        }
-        // Company costs pending mgmt
-        foreach ($data['costs_management']->whereNull('project_id') as $c) {
-            if ($type === 'all' || $type === 'management' || $type === 'company_cost') {
-                $items[] = array_merge($this->mapCostToItem($c, 'company_cost', $canApproveManagement, false), ['role_group' => 'management']);
-            }
-        }
-        // Material Bills (mgmt)
-        if ($type === 'all' || $type === 'management' || $type === 'material_bill') {
-            foreach ($data['material_bills_management']->unique('id') as $b) {
-                $items[] = [
-                    'id' => $b->id, 'type' => 'material_bill', 'title' => 'Vật tư: ' . ($b->bill_number ?? "#{$b->id}"),
-                    'subtitle' => $b->project->name ?? 'Dự án', 'amount' => (float) ($b->total_amount ?? 0),
-                    'status' => $b->status, 'status_label' => $this->getStatusLabel($b->status),
-                    'created_by' => $b->creator->name ?? 'N/A', 'created_at' => $b->created_at->toISOString(),
-                    'project_id' => $b->project_id, 'can_approve' => true,
-                    'approval_level' => 'management', 'role_group' => 'management',
-                ];
-            }
-        }
-        // CR, AC, Budgets, Sub Acceptances
-        if ($type === 'all' || $type === 'management' || $type === 'change_request') {
-            foreach ($data['change_requests'] as $item) {
-                $items[] = [
-                    'id' => $item->id, 'type' => 'change_request', 'title' => 'CR: ' . $item->title,
-                    'subtitle' => $item->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status),
-                    'created_by' => $item->requester->name ?? 'N/A', 'created_at' => $item->created_at->toISOString(),
-                    'project_id' => $item->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'management',
-                ];
-            }
-        }
-        if ($type === 'all' || $type === 'management' || $type === 'additional_cost') {
-            foreach ($data['additional_costs'] as $item) {
-                $items[] = [
-                    'id' => $item->id, 'type' => 'additional_cost', 'title' => 'Phát sinh: ' . $item->name,
-                    'subtitle' => $item->project->name ?? 'Dự án', 'amount' => (float) $item->amount,
-                    'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status),
-                    'created_by' => $item->proposer->name ?? 'N/A', 'created_at' => $item->created_at->toISOString(),
-                    'project_id' => $item->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'management',
-                ];
-            }
-        }
-        if ($type === 'all' || $type === 'management' || $type === 'budget') {
-            foreach ($data['budgets'] ?? [] as $b) {
-                $items[] = [
-                    'id' => $b->id, 'type' => 'budget', 'title' => 'Ngân sách: ' . ($b->project->name ?? "Dự án"),
-                    'subtitle' => 'Phiên bản ' . $b->version, 'amount' => (float) $b->total_budget,
-                    'status' => $b->status, 'status_label' => $this->getStatusLabel($b->status),
-                    'created_by' => $b->creator->name ?? 'N/A', 'created_at' => $b->created_at->toISOString(),
-                    'project_id' => $b->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'management',
-                ];
-            }
-        }
-        // Sub/Supplier Acceptances (typically mgmt)
-        if ($type === 'all' || $type === 'management' || $type === 'sub_acceptance') {
-            foreach ($data['sub_acceptances'] ?? [] as $sa) {
-                $items[] = [
-                    'id' => $sa->id, 'type' => 'sub_acceptance', 'title' => 'NT NTP: ' . ($sa->subcontractor->name ?? 'NTP'),
-                    'subtitle' => $sa->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $sa->status, 'status_label' => 'Chờ duyệt',
-                    'created_by' => $sa->creator->name ?? 'N/A', 'created_at' => $sa->created_at->toISOString(),
-                    'project_id' => $sa->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'management'
-                ];
-            }
-        }
+        // Determine role-based visibility permissions
+        $showManagement = $user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_MANAGEMENT) || $user->isSuperAdmin();
+        $showAccountant = $user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_ACCOUNTANT) || $user->isSuperAdmin();
+        $showPM = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2) || $user->hasPermission(Permissions::CHANGE_REQUEST_APPROVE) || $user->hasPermission(Permissions::BUDGET_APPROVE) || $user->isSuperAdmin();
+        $showSupervisor = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1) || $user->hasPermission(Permissions::LOG_APPROVE) || $user->isSuperAdmin();
+        $showCustomer = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_2) || $user->hasPermission(Permissions::PAYMENT_APPROVE) || $user->isSuperAdmin();
 
-        // --- 2. ACCOUNTANT BUCKET (Kế toán) ---
-        foreach ($data['costs_accountant'] as $c) {
-            if ($type === 'all' || $type === 'accountant' || $type === 'project_cost' || $type === 'company_cost') {
-                $items[] = array_merge($this->mapCostToItem($c, $c->project_id ? 'project_cost' : 'company_cost', false, $canApproveAccountant), ['role_group' => 'accountant']);
+        // --- 1. MANAGEMENT BUCKET (Ban điều hành) ---
+        if ($showManagement) {
+            // Project costs pending mgmt
+            foreach ($data['costs_management']->whereNotNull('project_id') as $c) {
+                if ($type === 'all' || $type === 'management' || $type === 'project_cost') {
+                    $items[] = array_merge($this->mapCostToItem($c, 'project_cost', $canApproveManagement, false), ['role_group' => 'management']);
+                }
             }
-        }
-        if ($type === 'all' || $type === 'accountant' || $type === 'material_bill') {
-            foreach ($data['material_bills_accountant']->unique('id') as $b) {
-                $items[] = [
-                    'id' => $b->id, 'type' => 'material_bill', 'title' => 'Vật tư: ' . ($b->bill_number ?? "#{$b->id}"),
-                    'subtitle' => $b->project->name ?? 'Dự án', 'amount' => (float) ($b->total_amount ?? 0),
-                    'status' => $b->status, 'status_label' => $this->getStatusLabel($b->status),
-                    'created_by' => $b->creator->name ?? 'N/A', 'created_at' => $b->created_at->toISOString(),
-                    'project_id' => $b->project_id, 'can_approve' => true,
-                    'approval_level' => 'accountant', 'role_group' => 'accountant'
-                ];
+            // Company costs pending mgmt
+            foreach ($data['costs_management']->whereNull('project_id') as $c) {
+                if ($type === 'all' || $type === 'management' || $type === 'company_cost') {
+                    $items[] = array_merge($this->mapCostToItem($c, 'company_cost', $canApproveManagement, false), ['role_group' => 'management']);
+                }
             }
-        }
-        if ($type === 'all' || $type === 'accountant' || $type === 'sub_payment') {
-            foreach ($data['sub_payments_management']->concat($data['sub_payments_accountant'])->unique('id') as $p) {
-                $level = str_contains($p->status, 'management') ? 'management' : 'accountant';
-                if ($type === 'all' || $type === $level || $type === 'sub_payment') {
+            // Material Bills (mgmt)
+            if ($type === 'all' || $type === 'management' || $type === 'material_bill') {
+                foreach ($data['material_bills_management'] ?? [] as $b) {
                     $items[] = [
-                        'id' => $p->id, 'type' => 'sub_payment', 'title' => 'TT NTP: ' . ($p->subcontractor->name ?? 'NTP'),
-                        'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
-                        'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
-                        'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
-                        'project_id' => $p->project_id, 'can_approve' => true, 'approval_level' => $level, 'role_group' => $level === 'management' ? 'management' : 'accountant'
+                        'id' => $b->id, 'type' => 'material_bill', 'title' => 'Vật tư: ' . ($b->bill_number ?? "#{$b->id}"),
+                        'subtitle' => $b->project->name ?? 'Dự án', 'amount' => (float) ($b->total_amount ?? 0),
+                        'status' => $b->status, 'status_label' => $this->getStatusLabel($b->status),
+                        'created_by' => $b->creator->name ?? 'N/A', 'created_at' => $b->created_at->toISOString(),
+                        'project_id' => $b->project_id, 'can_approve' => $canApproveManagement,
+                        'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($b),
+                        'attachments_count' => $b->attachments->count(),
+                    ];
+                }
+            }
+            // CR, AC, Budgets, Sub Acceptances
+            if ($type === 'all' || $type === 'management' || $type === 'change_request') {
+                foreach ($data['change_requests'] ?? [] as $cr) {
+                    $canApproveCR = $user->hasPermission(Permissions::CHANGE_REQUEST_APPROVE) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $cr->id, 'type' => 'change_request', 'title' => 'CR: ' . $cr->title,
+                        'subtitle' => $cr->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $cr->status, 'status_label' => $this->getStatusLabel($cr->status),
+                        'created_by' => $cr->requester->name ?? 'N/A', 'created_at' => $cr->created_at->toISOString(),
+                        'project_id' => $cr->project_id, 'can_approve' => $canApproveCR, 'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($cr),
+                        'attachments_count' => $cr->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'management' || $type === 'additional_cost') {
+                foreach ($data['additional_costs'] ?? [] as $ac) {
+                    $canApproveAC = $user->hasPermission(Permissions::ADDITIONAL_COST_APPROVE) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $ac->id, 'type' => 'additional_cost', 'title' => 'Phát sinh: ' . $ac->name,
+                        'subtitle' => $ac->project->name ?? 'Dự án', 'amount' => (float) $ac->amount,
+                        'status' => $ac->status, 'status_label' => $this->getStatusLabel($ac->status),
+                        'created_by' => $ac->proposer->name ?? 'N/A', 'created_at' => $ac->created_at->toISOString(),
+                        'project_id' => $ac->project_id, 'can_approve' => $canApproveAC, 'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($ac),
+                        'attachments_count' => $ac->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'management' || $type === 'budget') {
+                foreach ($data['budgets'] ?? [] as $b) {
+                    $canApproveBudget = $user->hasPermission(Permissions::BUDGET_APPROVE) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $b->id, 'type' => 'budget', 'title' => 'Ngân sách: ' . ($b->project->name ?? "Dự án"),
+                        'subtitle' => 'Phiên bản ' . $b->version, 'amount' => (float) $b->total_budget,
+                        'status' => $b->status, 'status_label' => $this->getStatusLabel($b->status),
+                        'created_by' => $b->creator->name ?? 'N/A', 'created_at' => $b->created_at->toISOString(),
+                        'project_id' => $b->project_id, 'can_approve' => $canApproveBudget, 'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($b),
+                        'attachments_count' => $b->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'management' || $type === 'sub_acceptance') {
+                foreach ($data['sub_acceptances'] ?? [] as $sa) {
+                    $canApproveSubAcc = $user->hasPermission(Permissions::SUBCONTRACTOR_APPROVE) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $sa->id, 'type' => 'sub_acceptance', 'title' => 'NT NTP: ' . ($sa->subcontractor->name ?? 'NTP'),
+                        'subtitle' => $sa->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $sa->status, 'status_label' => 'Chờ duyệt',
+                        'created_by' => $sa->creator->name ?? 'N/A', 'created_at' => $sa->created_at->toISOString(),
+                        'project_id' => $sa->project_id, 'can_approve' => $canApproveSubAcc, 'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($sa),
+                        'attachments_count' => $sa->attachments->count(),
                     ];
                 }
             }
         }
 
+        // --- 2. ACCOUNTANT BUCKET (Kế toán) ---
+        if ($showAccountant) {
+            foreach ($data['costs_accountant'] ?? [] as $c) {
+                if ($type === 'all' || $type === 'accountant' || $type === 'project_cost' || $type === 'company_cost') {
+                    $items[] = array_merge($this->mapCostToItem($c, $c->project_id ? 'project_cost' : 'company_cost', false, $canApproveAccountant), ['role_group' => 'accountant']);
+                }
+            }
+            if ($type === 'all' || $type === 'accountant' || $type === 'material_bill') {
+                foreach ($data['material_bills_accountant'] ?? [] as $b) {
+                    $items[] = [
+                        'id' => $b->id, 'type' => 'material_bill', 'title' => 'Vật tư: ' . ($b->bill_number ?? "#{$b->id}"),
+                        'subtitle' => $b->project->name ?? 'Dự án', 'amount' => (float) ($b->total_amount ?? 0),
+                        'status' => $b->status, 'status_label' => $this->getStatusLabel($b->status),
+                        'created_by' => $b->creator->name ?? 'N/A', 'created_at' => $b->created_at->toISOString(),
+                        'project_id' => $b->project_id, 'can_approve' => $canApproveAccountant,
+                        'approval_level' => 'accountant', 'role_group' => 'accountant',
+                        'attachments' => $this->formatAttachments($b),
+                        'attachments_count' => $b->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'accountant' || $type === 'sub_payment') {
+                foreach (($data['sub_payments_management'] ?? collect())->concat($data['sub_payments_accountant'] ?? collect())->unique('id') as $p) {
+                    $level = str_contains($p->status, 'management') ? 'management' : 'accountant';
+                    if ($type === 'all' || $type === $level || $type === 'sub_payment') {
+                        $canApproveSubPay = ($level === 'management' ? $canApproveManagement : $canApproveAccountant);
+                        $items[] = [
+                            'id' => $p->id, 'type' => 'sub_payment', 'title' => 'TT NTP: ' . ($p->subcontractor->name ?? 'NTP'),
+                            'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
+                            'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
+                            'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
+                            'project_id' => $p->project_id, 'can_approve' => $canApproveSubPay, 'approval_level' => $level, 'role_group' => $level === 'management' ? 'management' : 'accountant',
+                            'attachments' => $this->formatAttachments($p),
+                            'attachments_count' => $p->attachments->count(),
+                        ];
+                    }
+                }
+            }
+        }
+
         // --- 3. PROJECT MANAGER BUCKET (QLDA) ---
-        if ($type === 'all' || $type === 'project_manager' || $type === 'acceptance') {
-            foreach ($data['acceptance_pm'] as $st) {
-                $items[] = [
-                    'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
-                    'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $st->status, 'status_label' => 'QLDA duyệt',
-                    'created_by' => $st->task->assignee->name ?? ($st->project->projectManager->name ?? 'PM'), 
-                    'created_at' => $st->created_at->toISOString(),
-                    'project_id' => $st->project_id, 'can_approve' => true, 'approval_level' => 'project_manager', 'role_group' => 'project_manager'
-                ];
+        if ($showPM) {
+            if ($type === 'all' || $type === 'project_manager' || $type === 'acceptance') {
+                foreach ($data['acceptance_pm'] ?? [] as $st) {
+                    $canApprovePM = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
+                        'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $st->status, 'status_label' => 'QLDA duyệt',
+                        'created_by' => $st->task->assignee->name ?? ($st->project->projectManager->name ?? 'PM'), 
+                        'created_at' => $st->created_at->toISOString(),
+                        'project_id' => $st->project_id, 'can_approve' => $canApprovePM, 'approval_level' => 'project_manager', 'role_group' => 'project_manager',
+                        'attachments' => $this->formatAttachments($st),
+                        'attachments_count' => $st->attachments->count(),
+                    ];
+                }
             }
-        }
-        if ($type === 'all' || $type === 'project_manager' || $type === 'schedule_adjustment') {
-            foreach ($data['schedule_adjustments'] ?? [] as $adj) {
-                $items[] = [
-                    'id' => $adj->id, 'type' => 'schedule_adjustment', 'title' => 'Đ/c tiến độ: ' . ($adj->task->name ?? "CV #{$adj->task_id}"),
-                    'subtitle' => $adj->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $adj->status, 'status_label' => 'Chờ duyệt',
-                    'created_by' => $adj->creator->name ?? 'N/A', 'created_at' => $adj->created_at->toISOString(),
-                    'project_id' => $adj->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'project_manager'
-                ];
+            if ($type === 'all' || $type === 'project_manager' || $type === 'schedule_adjustment') {
+                foreach ($data['schedule_adjustments'] ?? [] as $adj) {
+                    $canApproveSchedule = $user->hasPermission(Permissions::PROGRESS_UPDATE) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $adj->id, 'type' => 'schedule_adjustment', 'title' => 'Đ/c tiến độ: ' . ($adj->task->name ?? "CV #{$adj->task_id}"),
+                        'subtitle' => $adj->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $adj->status, 'status_label' => 'Chờ duyệt',
+                        'created_by' => $adj->creator->name ?? 'N/A', 'created_at' => $adj->created_at->toISOString(),
+                        'project_id' => $adj->project_id, 'can_approve' => $canApproveSchedule, 'approval_level' => 'management', 'role_group' => 'project_manager',
+                        'attachments' => $this->formatAttachments($adj),
+                        'attachments_count' => $adj->attachments->count(),
+                    ];
+                }
             }
-        }
-        if ($type === 'all' || $type === 'project_manager' || $type === 'construction_log') {
-            foreach ($data['construction_logs'] ?? [] as $log) {
-                $items[] = [
-                    'id' => $log->id, 'type' => 'construction_log', 'title' => 'Nhật ký: ' . ($log->log_date ? date('d/m/Y', strtotime($log->log_date)) : "#{$log->id}"),
-                    'subtitle' => $log->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $log->approval_status, 'status_label' => $this->getStatusLabel($log->approval_status),
-                    'created_by' => $log->creator->name ?? 'GS', 'created_at' => $log->created_at->toISOString(),
-                    'project_id' => $log->project_id, 'can_approve' => true, 'approval_level' => 'management', 'role_group' => 'project_manager'
-                ];
+            if ($type === 'all' || $type === 'project_manager' || $type === 'construction_log') {
+                foreach ($data['construction_logs'] ?? [] as $log) {
+                    $canApproveLog = $user->hasPermission(Permissions::LOG_APPROVE) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $log->id, 'type' => 'construction_log', 'title' => 'Nhật ký: ' . ($log->log_date ? date('d/m/Y', strtotime($log->log_date)) : "#{$log->id}"),
+                        'subtitle' => $log->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $log->approval_status, 'status_label' => $this->getStatusLabel($log->approval_status),
+                        'created_by' => $log->creator->name ?? 'GS', 'created_at' => $log->created_at->toISOString(),
+                        'project_id' => $log->project_id, 'can_approve' => $canApproveLog, 'approval_level' => 'management', 'role_group' => 'project_manager',
+                        'attachments' => $this->formatAttachments($log),
+                        'attachments_count' => $log->attachments->count(),
+                    ];
+                }
             }
         }
 
         // --- 4. SUPERVISOR BUCKET (Giám sát) ---
-        if ($type === 'all' || $type === 'supervisor' || $type === 'acceptance') {
-            foreach ($data['acceptance_supervisor'] as $st) {
-                $items[] = [
-                    'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
-                    'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $st->status, 'status_label' => 'GS duyệt',
-                    'created_by' => $st->task->assignee->name ?? 'NV', 
-                    'created_at' => $st->created_at->toISOString(),
-                    'project_id' => $st->project_id, 'can_approve' => true, 'approval_level' => 'supervisor', 'role_group' => 'supervisor'
-                ];
+        if ($showSupervisor) {
+            if ($type === 'all' || $type === 'supervisor' || $type === 'acceptance') {
+                foreach ($data['acceptance_supervisor'] ?? [] as $st) {
+                    $canApproveSupervisor = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
+                        'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $st->status, 'status_label' => 'GS duyệt',
+                        'created_by' => $st->task->assignee->name ?? 'NV', 
+                        'created_at' => $st->created_at->toISOString(),
+                        'project_id' => $st->project_id, 'can_approve' => $canApproveSupervisor, 'approval_level' => 'supervisor', 'role_group' => 'supervisor',
+                        'attachments' => $this->formatAttachments($st),
+                        'attachments_count' => $st->attachments->count(),
+                    ];
+                }
             }
-        }
-        if ($type === 'all' || $type === 'supervisor' || $type === 'acceptance_item') {
-            foreach ($data['acceptance_items'] ?? [] as $ai) {
-                $items[] = [
-                    'id' => $ai->id, 'type' => 'acceptance_item', 'title' => 'Hạng mục: ' . ($ai->task->name ?? "HM #{$ai->id}"),
-                    'subtitle' => $ai->acceptanceStage->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => 'pending', 'status_label' => 'Chờ NT',
-                    'created_by' => $ai->creator->name ?? 'N/A', 'created_at' => $ai->created_at->toISOString(),
-                    'project_id' => $ai->acceptanceStage->project_id ?? null, 'can_approve' => true, 'approval_level' => 'supervisor', 'role_group' => 'supervisor'
-                ];
+            if ($type === 'all' || $type === 'supervisor' || $type === 'acceptance_item') {
+                foreach ($data['acceptance_items'] ?? [] as $ai) {
+                    $canApproveSupervisorAction = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $ai->id, 'type' => 'acceptance_item', 'title' => 'Hạng mục: ' . ($ai->task->name ?? "HM #{$ai->id}"),
+                        'subtitle' => $ai->acceptanceStage->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => 'pending', 'status_label' => 'Chờ NT',
+                        'created_by' => $ai->creator->name ?? 'N/A', 'created_at' => $ai->created_at->toISOString(),
+                        'project_id' => $ai->acceptanceStage->project_id ?? null, 'can_approve' => $canApproveSupervisorAction, 'approval_level' => 'supervisor', 'role_group' => 'supervisor',
+                        'attachments' => $this->formatAttachments($ai),
+                        'attachments_count' => $ai->attachments ? $ai->attachments->count() : 0,
+                    ];
+                }
             }
-        }
-        if ($type === 'all' || $type === 'supervisor' || $type === 'defect') {
-            foreach ($data['defects'] ?? [] as $d) {
-                $items[] = [
-                    'id' => $d->id, 'type' => 'defect', 'title' => 'Lỗi: ' . ($d->name ?? "Lỗi #{$d->id}"),
-                    'subtitle' => $d->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $d->status, 'status_label' => $this->getStatusLabel($d->status),
-                    'created_by' => $d->fixer->name ?? 'Kỹ thuật', 'created_at' => $d->updated_at->toISOString(),
-                    'project_id' => $d->project_id, 'can_approve' => true, 'approval_level' => 'supervisor', 'role_group' => 'supervisor'
-                ];
+            if ($type === 'all' || $type === 'supervisor' || $type === 'defect') {
+                foreach ($data['defects'] ?? [] as $d) {
+                    $canApproveDefect = $user->hasPermission(Permissions::DEFECT_VERIFY) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $d->id, 'type' => 'defect', 'title' => 'Lỗi: ' . ($d->name ?? "Lỗi #{$d->id}"),
+                        'subtitle' => $d->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $d->status, 'status_label' => $this->getStatusLabel($d->status),
+                        'created_by' => $d->fixer->name ?? 'Kỹ thuật', 'created_at' => $d->updated_at->toISOString(),
+                        'project_id' => $d->project_id, 'can_approve' => $canApproveDefect, 'approval_level' => 'supervisor', 'role_group' => 'supervisor',
+                        'attachments' => $this->formatAttachments($d),
+                        'attachments_count' => $d->attachments ? $d->attachments->count() : 0,
+                    ];
+                }
             }
         }
 
         // --- 5. CUSTOMER BUCKET (Khách hàng) ---
-        if ($type === 'all' || $type === 'customer' || $type === 'acceptance') {
-            foreach ($data['acceptance_customer'] as $st) {
-                $items[] = [
-                    'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
-                    'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
-                    'status' => $st->status, 'status_label' => 'KH duyệt',
-                    'created_by' => $st->project->projectManager->name ?? 'PM', 
-                    'created_at' => $st->created_at->toISOString(),
-                    'project_id' => $st->project_id, 'can_approve' => true, 'approval_level' => 'customer', 'role_group' => 'customer'
-                ];
+        if ($showCustomer) {
+            if ($type === 'all' || $type === 'customer' || $type === 'acceptance') {
+                foreach ($data['acceptance_customer'] ?? [] as $st) {
+                    $canApproveCustomerAcc = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $st->id, 'type' => 'acceptance', 'title' => 'NT: ' . ($st->task->name ?? 'Công việc'),
+                        'subtitle' => $st->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $st->status, 'status_label' => 'KH duyệt',
+                        'created_by' => $st->project->projectManager->name ?? 'PM', 
+                        'created_at' => $st->created_at->toISOString(),
+                        'project_id' => $st->project_id, 'can_approve' => $canApproveCustomerAcc, 'approval_level' => 'customer', 'role_group' => 'customer',
+                        'attachments' => $this->formatAttachments($st),
+                        'attachments_count' => $st->attachments->count(),
+                    ];
+                }
             }
-        }
-        if ($type === 'all' || $type === 'customer' || $type === 'contract') {
-            foreach ($data['contracts'] as $c) {
-                $items[] = [
-                    'id' => $c->id, 'type' => 'contract', 'title' => 'HĐ Hướng: ' . ($c->contract_number ?? "#{$c->id}"),
-                    'subtitle' => $c->project->name ?? 'Dự án', 'amount' => (float) $c->contract_value,
-                    'status' => $c->status, 'status_label' => $this->getStatusLabel($c->status),
-                    'created_by' => 'Hệ thống', 'created_at' => $c->updated_at->toISOString(),
-                    'project_id' => $c->project_id, 'can_approve' => true, 'approval_level' => 'customer', 'role_group' => 'customer'
-                ];
+            if ($type === 'all' || $type === 'customer' || $type === 'contract') {
+                foreach ($data['contracts'] ?? [] as $c) {
+                    $canApproveContract = $user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_2) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $c->id, 'type' => 'contract', 'title' => 'HĐ Hướng: ' . ($c->contract_number ?? "#{$c->id}"),
+                        'subtitle' => $c->project->name ?? 'Dự án', 'amount' => (float) $c->contract_value,
+                        'status' => $c->status, 'status_label' => $this->getStatusLabel($c->status),
+                        'created_by' => 'Hệ thống', 'created_at' => $c->updated_at->toISOString(),
+                        'project_id' => $c->project_id, 'can_approve' => $canApproveContract, 'approval_level' => 'customer', 'role_group' => 'customer',
+                        'attachments' => $this->formatAttachments($c),
+                        'attachments_count' => $c->attachments->count(),
+                    ];
+                }
             }
-        }
-        if ($type === 'all' || $type === 'customer' || $type === 'payment') {
-            foreach ($data['payments_pending']->unique('id') as $p) {
-                $items[] = [
-                    'id' => $p->id, 'type' => 'payment', 'title' => 'TT Dự án: ' . ($p->payment_name ?? 'Thanh toán'),
-                    'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
-                    'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
-                    'created_by' => 'Hệ thống', 'created_at' => $p->updated_at->toISOString(),
-                    'project_id' => $p->project_id, 'can_approve' => true, 'approval_level' => 'customer', 'role_group' => 'customer'
-                ];
+            if ($type === 'all' || $type === 'customer' || $type === 'payment') {
+                foreach (($data['payments_pending'] ?? collect())->unique('id') as $p) {
+                    $canApprovePayment = $user->hasPermission(Permissions::PAYMENT_APPROVE) || $user->isSuperAdmin();
+                    $items[] = [
+                        'id' => $p->id, 'type' => 'payment', 'title' => 'TT Dự án: ' . ($p->payment_name ?? 'Thanh toán'),
+                        'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
+                        'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
+                        'created_by' => 'Hệ thống', 'created_at' => $p->updated_at->toISOString(),
+                        'project_id' => $p->project_id, 'can_approve' => $canApprovePayment, 'approval_level' => 'customer', 'role_group' => 'customer',
+                        'attachments' => $this->formatAttachments($p),
+                        'attachments_count' => $p->attachments->count(),
+                    ];
+                }
             }
         }
 
         // Equipment/Assets (typically management or accountant)
-        if ($type === 'all' || $type === 'equipment_rental') {
-            foreach ($data['equipment_rentals_management']->concat($data['equipment_rentals_accountant'])->concat($data['equipment_rentals_return'])->unique('id') as $r) {
+        if (($showManagement || $showAccountant) && ($type === 'all' || $type === 'equipment_rental')) {
+            $rentals = ($data['equipment_rentals_management'] ?? collect())->concat($data['equipment_rentals_accountant'] ?? collect())->concat($data['equipment_rentals_return'] ?? collect())->unique('id');
+            foreach ($rentals as $r) {
                 $level = str_contains($r->status, 'accountant') ? 'accountant' : 'management';
+                $canApproveRental = ($level === 'management' ? $canApproveManagement : $canApproveAccountant);
                 $items[] = [
                     'id' => $r->id, 'type' => 'equipment_rental', 'title' => $r->equipment_name ?? "Thuê TB #{$r->id}",
                     'subtitle' => $r->project->name ?? 'Dự án', 'amount' => (float) $r->total_cost,
                     'status' => $r->status, 'status_label' => $this->getStatusLabel($r->status),
                     'created_by' => $r->creator->name ?? 'N/A', 'created_at' => $r->created_at->toISOString(),
-                    'project_id' => $r->project_id, 'can_approve' => true, 'approval_level' => $level, 'role_group' => $level
+                    'project_id' => $r->project_id, 'can_approve' => $canApproveRental, 'approval_level' => $level, 'role_group' => $level,
+                    'attachments' => $this->formatAttachments($r),
+                    'attachments_count' => $r->attachments->count(),
                 ];
             }
         }
@@ -370,7 +461,28 @@ class ApprovalCenterController extends Controller
             'route' => $cost->project_id ? "/projects/{$cost->project_id}/costs" : "/finance/costs",
             'can_approve' => str_contains($cost->status, 'management') ? $canApproveManagement : $canApproveAccountant,
             'approval_level' => str_contains($cost->status, 'management') ? 'management' : 'accountant',
+            'attachments' => $this->formatAttachments($cost),
+            'attachments_count' => $cost->attachments->count(),
+            'description' => $cost->description,
         ];
+    }
+
+    /**
+     * Format attachments for mobile consumption
+     */
+    private function formatAttachments($model): array
+    {
+        if (!$model || !method_exists($model, 'attachments') || !$model->attachments) {
+            return [];
+        }
+
+        return $model->attachments->map(fn($a) => [
+            'id' => $a->id,
+            'name' => $a->original_name ?? $a->file_name,
+            'url' => str_starts_with($a->file_url, 'http') ? $a->file_url : asset($a->file_url),
+            'size' => $a->file_size_formatted ?? '',
+            'type' => $a->mime_type ?? 'application/octet-stream',
+        ])->toArray();
     }
 
     /**
@@ -378,6 +490,8 @@ class ApprovalCenterController extends Controller
      */
     private function buildMobileSummary($data, $currentType)
     {
+        $user = Auth::user();
+        
         // 1. Calculate counts for each role group
         $counts = [
             'management' => 0,
@@ -388,6 +502,7 @@ class ApprovalCenterController extends Controller
         ];
 
         // This ensures exact counts matching buildMobileItems
+        // We simulate a 'master' view to get counts, but redistribution happens in buildMobileItems
         $items = $this->buildMobileItems($data, 'all', true, true);
         foreach ($items as $it) {
             if (isset($it['role_group']) && isset($counts[$it['role_group']])) {
@@ -404,8 +519,18 @@ class ApprovalCenterController extends Controller
             ['type' => 'customer', 'label' => 'Khách hàng', 'icon' => 'person-outline', 'color' => '#EF4444'],
         ];
 
+        // Determine visibility based on explicit permissions (Authority/Thẩm quyền)
+        $visibility = [
+            'management' => $user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_MANAGEMENT) || $user->isSuperAdmin(),
+            'accountant' => $user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_ACCOUNTANT) || $user->isSuperAdmin(),
+            'project_manager' => $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2) || $user->hasPermission(Permissions::CHANGE_REQUEST_APPROVE) || $user->hasPermission(Permissions::BUDGET_APPROVE) || $user->isSuperAdmin(),
+            'supervisor' => $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1) || $user->hasPermission(Permissions::LOG_APPROVE) || $user->isSuperAdmin(),
+            'customer' => $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_2) || $user->hasPermission(Permissions::PAYMENT_APPROVE) || $user->isSuperAdmin(),
+        ];
+
         foreach ($groups as $g) {
-            if ($counts[$g['type']] > 0) {
+            // Show the tab only if the user HAS authority for that bucket
+            if ($visibility[$g['type']] ?? false) {
                 $summary[] = array_merge($g, ['total' => $counts[$g['type']]]);
             }
         }

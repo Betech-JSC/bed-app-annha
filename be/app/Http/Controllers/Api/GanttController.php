@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ScheduleAdjustment;
 use App\Services\GanttService;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class GanttController extends Controller
 {
+    use ApiAuthorization;
     protected GanttService $ganttService;
 
     public function __construct(GanttService $ganttService)
@@ -23,6 +25,8 @@ class GanttController extends Controller
      */
     public function ganttData(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::GANTT_VIEW, $projectId);
+
         $data = $this->ganttService->getGanttData((int) $projectId);
 
         return response()->json([
@@ -36,6 +40,8 @@ class GanttController extends Controller
      */
     public function cpm(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::GANTT_VIEW, $projectId);
+
         $data = $this->ganttService->calculateCPM((int) $projectId);
 
         return response()->json([
@@ -49,6 +55,8 @@ class GanttController extends Controller
      */
     public function autoAdjust(Request $request, string $projectId)
     {
+        $this->apiRequire($request->user(), Permissions::GANTT_UPDATE, $projectId);
+
         $validator = Validator::make($request->all(), [
             'task_id'      => 'required|exists:project_tasks,id',
             'new_duration' => 'nullable|integer|min:1',
@@ -78,6 +86,8 @@ class GanttController extends Controller
      */
     public function delayWarnings(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::GANTT_VIEW, $projectId);
+
         $warnings = $this->ganttService->checkScheduleDelays((int) $projectId);
 
         return response()->json([
@@ -95,6 +105,8 @@ class GanttController extends Controller
      */
     public function progressComparison(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::GANTT_VIEW, $projectId);
+
         $ganttData = $this->ganttService->getGanttData((int) $projectId);
         $comparison = [];
 
@@ -130,6 +142,8 @@ class GanttController extends Controller
      */
     public function adjustments(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::GANTT_VIEW, $projectId);
+
         $adjustments = ScheduleAdjustment::where('project_id', $projectId)
             ->with(['task', 'creator', 'approver'])
             ->orderByDesc('created_at')
@@ -146,6 +160,8 @@ class GanttController extends Controller
      */
     public function createAdjustment(Request $request, string $projectId)
     {
+        $this->apiRequire($request->user(), Permissions::GANTT_UPDATE, $projectId);
+
         $validator = Validator::make($request->all(), [
             'task_id'        => 'required|exists:project_tasks,id',
             'proposed_start' => 'nullable|date',
@@ -189,6 +205,8 @@ class GanttController extends Controller
      */
     public function approveAdjustment(string $projectId, string $adjustmentId)
     {
+        $this->apiRequire(auth()->user(), Permissions::GANTT_UPDATE, $projectId);
+
         $adjustment = ScheduleAdjustment::where('project_id', $projectId)
             ->findOrFail($adjustmentId);
 
@@ -224,6 +242,8 @@ class GanttController extends Controller
      */
     public function rejectAdjustment(Request $request, string $projectId, string $adjustmentId)
     {
+        $this->apiRequire($request->user(), Permissions::GANTT_UPDATE, $projectId);
+
         $adjustment = ScheduleAdjustment::where('project_id', $projectId)
             ->findOrFail($adjustmentId);
 

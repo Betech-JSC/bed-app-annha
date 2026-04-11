@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\CompanyFinancialReportService;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
 
 class CompanyFinancialReportController extends Controller
 {
+    use ApiAuthorization;
     protected $reportService;
 
     public function __construct(CompanyFinancialReportService $reportService)
@@ -24,6 +26,8 @@ class CompanyFinancialReportController extends Controller
      */
     public function summary(Request $request): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW);
+
         try {
             $startDate = $request->start_date 
                 ? Carbon::parse($request->start_date) 
@@ -54,6 +58,8 @@ class CompanyFinancialReportController extends Controller
      */
     public function profitLoss(Request $request): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW);
+
         try {
             $startDate = $request->start_date 
                 ? Carbon::parse($request->start_date) 
@@ -84,6 +90,8 @@ class CompanyFinancialReportController extends Controller
      */
     public function trend(Request $request): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW);
+
         try {
             $months = $request->months ?? 6;
             $months = min(max($months, 1), 24); // Giới hạn 1-24 tháng
@@ -109,6 +117,8 @@ class CompanyFinancialReportController extends Controller
      */
     public function compare(Request $request): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW);
+
         try {
             $request->validate([
                 'period1_start' => 'required|date',

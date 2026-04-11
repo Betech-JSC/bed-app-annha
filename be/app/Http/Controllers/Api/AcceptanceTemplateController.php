@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AcceptanceTemplate;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AcceptanceTemplateController extends Controller
 {
+    use ApiAuthorization;
     /**
      * Danh sách templates
      */
@@ -49,6 +51,8 @@ class AcceptanceTemplateController extends Controller
      */
     public function store(Request $request)
     {
+        $this->apiRequire($request->user(), Permissions::SETTINGS_MANAGE);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -155,6 +159,8 @@ class AcceptanceTemplateController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        $this->apiRequire($request->user(), Permissions::SETTINGS_MANAGE);
+
         $template = AcceptanceTemplate::findOrFail($id);
 
         $validated = $request->validate([
@@ -294,6 +300,8 @@ class AcceptanceTemplateController extends Controller
      */
     public function destroy(string $id)
     {
+        $this->apiRequire(auth()->user(), Permissions::SETTINGS_MANAGE);
+
         $template = AcceptanceTemplate::findOrFail($id);
 
         try {

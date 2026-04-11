@@ -34,7 +34,7 @@ class AttendanceController extends Controller
             if (!$this->authService->can($user, Permissions::ATTENDANCE_VIEW, $project)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền xem chấm công dự án này.'], 403);
             }
-        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_VIEW)) {
+        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_VIEW)) {
              return response()->json(['success' => false, 'message' => 'Không có quyền xem chấm công hệ thống.'], 403);
         }
 
@@ -152,7 +152,7 @@ class AttendanceController extends Controller
                 if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
                     return response()->json(['success' => false, 'message' => 'Không có quyền quản lý chấm công dự án này.'], 403);
                 }
-            } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+            } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền quản lý chấm công hệ thống.'], 403);
             }
 
@@ -207,7 +207,7 @@ class AttendanceController extends Controller
             if (!$this->authService->can($user, Permissions::ATTENDANCE_APPROVE, $project)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền duyệt chấm công dự án này.'], 403);
             }
-        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_APPROVE)) {
+        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_APPROVE)) {
             return response()->json(['success' => false, 'message' => 'Không có quyền duyệt chấm công hệ thống.'], 403);
         }
 
@@ -234,7 +234,7 @@ class AttendanceController extends Controller
             if (!$this->authService->can($user, Permissions::ATTENDANCE_VIEW, $project)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền xem thống kê dự án này.'], 403);
             }
-        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_VIEW)) {
+        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_VIEW)) {
             return response()->json(['success' => false, 'message' => 'Không có quyền xem thống kê chấm công hệ thống.'], 403);
         }
 
@@ -307,7 +307,7 @@ class AttendanceController extends Controller
             if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền quản lý ca dự án này.'], 403);
             }
-        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
             return response()->json(['success' => false, 'message' => 'Không có quyền quản lý ca hệ thống.'], 403);
         }
 
@@ -326,7 +326,7 @@ class AttendanceController extends Controller
             if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền cập nhật ca của dự án này.'], 403);
             }
-        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
             return response()->json(['success' => false, 'message' => 'Không có quyền cập nhật ca hệ thống.'], 403);
         }
 
@@ -345,7 +345,7 @@ class AttendanceController extends Controller
             if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền xóa ca của dự án này.'], 403);
             }
-        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
             return response()->json(['success' => false, 'message' => 'Không có quyền xóa ca hệ thống.'], 403);
         }
 
@@ -377,7 +377,7 @@ class AttendanceController extends Controller
             if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền phân ca dự án này.'], 403);
             }
-        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
             return response()->json(['success' => false, 'message' => 'Không có quyền phân ca hệ thống.'], 403);
         }
 
@@ -420,7 +420,7 @@ class AttendanceController extends Controller
             if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền xóa phân ca dự án này.'], 403);
             }
-        } elseif (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
+        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_MANAGE)) {
             return response()->json(['success' => false, 'message' => 'Không có quyền xóa phân ca hệ thống.'], 403);
         }
 

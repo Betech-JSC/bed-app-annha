@@ -4,14 +4,18 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\LaborProductivity;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class LaborProductivityController extends Controller
 {
+    use ApiAuthorization;
     /** Danh sách năng suất lao động theo dự án */
     public function index(Request $request, $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::LABOR_PRODUCTIVITY_VIEW, $projectId);
+
         $query = LaborProductivity::with(['user:id,name', 'task:id,name', 'creator:id,name'])
             ->forProject($projectId);
 
@@ -27,6 +31,8 @@ class LaborProductivityController extends Controller
     /** Tạo ghi nhận năng suất */
     public function store(Request $request, $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::LABOR_PRODUCTIVITY_CREATE, $projectId);
+
         $request->validate([
             'user_id' => 'nullable|exists:users,id',
             'task_id' => 'nullable|exists:project_tasks,id',
@@ -57,6 +63,8 @@ class LaborProductivityController extends Controller
     /** Cập nhật */
     public function update(Request $request, $projectId, $id): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::LABOR_PRODUCTIVITY_UPDATE, $projectId);
+
         $record = LaborProductivity::where('project_id', $projectId)->findOrFail($id);
         $record->update($request->all());
 
@@ -67,8 +75,10 @@ class LaborProductivityController extends Controller
     }
 
     /** Xóa */
-    public function destroy($projectId, $id): JsonResponse
+    public function destroy(Request $request, $projectId, $id): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::LABOR_PRODUCTIVITY_DELETE, $projectId);
+
         LaborProductivity::where('project_id', $projectId)->findOrFail($id)->delete();
         return response()->json(['message' => 'Đã xóa']);
     }
@@ -76,6 +86,8 @@ class LaborProductivityController extends Controller
     /** Dashboard năng suất */
     public function dashboard(Request $request, $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::LABOR_PRODUCTIVITY_VIEW, $projectId);
+
         $query = LaborProductivity::forProject($projectId);
 
         if ($request->from) $query->where('record_date', '>=', $request->from);

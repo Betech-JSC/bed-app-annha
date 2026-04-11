@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Services\PredictiveAnalyticsService;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 
 class PredictiveAnalyticsController extends Controller
 {
+    use ApiAuthorization;
     protected $analyticsService;
 
     public function __construct(PredictiveAnalyticsService $analyticsService)
@@ -21,6 +23,8 @@ class PredictiveAnalyticsController extends Controller
      */
     public function predictCompletion(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::PROJECT_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         $prediction = $this->analyticsService->predictCompletionDate($project);
 
@@ -35,6 +39,8 @@ class PredictiveAnalyticsController extends Controller
      */
     public function predictCost(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         $prediction = $this->analyticsService->predictFinalCost($project);
 
@@ -49,6 +55,8 @@ class PredictiveAnalyticsController extends Controller
      */
     public function analyzeDelayRisk(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::PROJECT_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         $analysis = $this->analyticsService->analyzeDelayRisk($project);
 
@@ -63,6 +71,8 @@ class PredictiveAnalyticsController extends Controller
      */
     public function analyzeCostRisk(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         $analysis = $this->analyticsService->analyzeCostOverrunRisk($project);
 
@@ -77,6 +87,8 @@ class PredictiveAnalyticsController extends Controller
      */
     public function fullAnalysis(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::PROJECT_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         $analysis = $this->analyticsService->getPredictiveAnalysis($project);
 

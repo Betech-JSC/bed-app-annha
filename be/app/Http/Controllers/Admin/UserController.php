@@ -19,11 +19,13 @@ class UserController extends Controller
      */
     public function index(): Response
     {
-        $query = User::with(['wallet']);
+        $query = User::with(['wallet', 'roles']);
 
-        // Filter theo role
-        if (Request::has('role') && in_array(Request::get('role'), ['sender', 'customer'])) {
-            $query->where('role', Request::get('role'));
+        // Filter theo role (Duyệt qua các role mới)
+        if (Request::has('role_id')) {
+            $query->whereHas('roles', function($q) {
+                $q->where('roles.id', Request::get('role_id'));
+            });
         }
 
         // Filter theo status
@@ -62,7 +64,7 @@ class UserController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
-                'role' => $user->role,
+                'roles_list' => $user->roles->pluck('name')->join(', '),
                 'avatar' => $user->avatar,
                 'wallet_balance' => $user->wallet ? $user->wallet->balance : 0,
                 'created_at' => $user->created_at->format('Y-m-d H:i:s'),
@@ -82,8 +84,9 @@ class UserController extends Controller
         $users->appends(Request::all());
 
         return Inertia::render('Admin/Users/Index', [
-            'filters' => Request::only('search', 'role', 'status', 'sort_by', 'sort_order'),
+            'filters' => Request::only(['search', 'role_id', 'status', 'sort_by', 'sort_order']),
             'users' => $users,
+            'roles' => \App\Models\Role::select('id', 'name')->get(),
         ]);
     }
 
@@ -92,14 +95,14 @@ class UserController extends Controller
      */
     public function show($id): Response
     {
-        $user = User::with(['wallet', 'transactions' => function ($q) {
+        $user = User::with(['wallet', 'roles', 'transactions' => function ($q) {
             $q->latest()->limit(10);
         }])->withTrashed()->findOrFail($id);
 
         // Thống kê
-        $ordersAsSender = \App\Models\Order::where('sender_id', $user->id)->count();
-        $ordersAsCustomer = \App\Models\Order::where('customer_id', $user->id)->count();
-        $flightsCount = \App\Models\Flight::where('customer_id', $user->id)->count();
+        $ordersAsSender = class_exists('\App\Models\Order') ? \App\Models\Order::where('sender_id', $user->id)->count() : 0;
+        $ordersAsCustomer = class_exists('\App\Models\Order') ? \App\Models\Order::where('customer_id', $user->id)->count() : 0;
+        $flightsCount = class_exists('\App\Models\Flight') ? \App\Models\Flight::where('customer_id', $user->id)->count() : 0;
 
         return Inertia::render('Admin/Users/Show', [
             'user' => [
@@ -107,7 +110,7 @@ class UserController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
-                'role' => $user->role,
+                'roles' => $user->roles,
                 'avatar' => $user->avatar,
                 'wallet' => $user->wallet,
                 'recent_transactions' => $user->transactions,
@@ -131,21 +134,26 @@ class UserController extends Controller
     {
         $user = User::withTrashed()->findOrFail($id);
 
-        Request::validate([
+        $validated = Request::validate([
             'name' => 'sometimes|string|max:255',
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'phone' => 'sometimes|string|max:20',
-            'role' => ['sometimes', Rule::in(['sender', 'customer'])],
+            'role_ids' => 'sometimes|array',
+            'role_ids.*' => 'exists:roles,id',
             'password' => 'sometimes|string|min:6',
         ]);
 
-        $data = Request::only('name', 'email', 'phone', 'role');
+        $data = Request::only(['name', 'email', 'phone']);
 
-        if (Request::has('password')) {
+        if (Request::has('password') && Request::get('password')) {
             $data['password'] = Hash::make(Request::get('password'));
         }
 
         $user->update($data);
+
+        if (Request::has('role_ids')) {
+            $user->roles()->sync(Request::get('role_ids'));
+        }
 
         return redirect()->back()->with('success', 'Cập nhật thông tin người dùng thành công');
     }
@@ -189,13 +197,16 @@ class UserController extends Controller
     {
         $user = User::withTrashed()->findOrFail($id);
 
-        // Kiểm tra đơn hàng đang xử lý
-        $activeOrders = \App\Models\Order::where(function ($q) use ($user) {
-            $q->where('sender_id', $user->id)
-                ->orWhere('customer_id', $user->id);
-        })
+        // Kiểm tra đơn hàng đang xử lý (Nếu có dùng bảng Order)
+        $activeOrders = 0;
+        if (class_exists('\App\Models\Order')) {
+            $activeOrders = \App\Models\Order::where(function ($q) use ($user) {
+                $q->where('sender_id', $user->id)
+                    ->orWhere('customer_id', $user->id);
+            })
             ->whereIn('status', ['confirmed', 'picked_up', 'in_transit', 'arrived', 'delivered'])
             ->count();
+        }
 
         if ($activeOrders > 0) {
             return redirect()->back()->with('error', 'Không thể xóa tài khoản vì có đơn hàng đang xử lý');

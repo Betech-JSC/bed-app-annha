@@ -447,7 +447,7 @@ class ApprovalQueryService
 
     private function getStats($user, bool $canSeeAllProjects, array $projectIds, array $data): array
     {
-        $isCustomer = $user->role === 'customer';
+        $isCustomer = $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_3);
 
         $realPendingManagement = Cost::whereIn('status', ['pending', 'pending_management_approval'])
             ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')

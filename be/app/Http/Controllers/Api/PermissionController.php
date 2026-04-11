@@ -26,7 +26,7 @@ class PermissionController extends Controller
         }
 
         // Super admins/owners get wildcard permission
-        if ($user->owner || $user->role === 'admin' || $user->isSuperAdmin()) {
+        if ($user->owner || $user->isAdmin() || $user->isSuperAdmin()) {
             return response()->json([
                 'success' => true,
                 'data' => ['*'],

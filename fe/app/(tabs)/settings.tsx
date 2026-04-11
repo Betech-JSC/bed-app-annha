@@ -196,7 +196,9 @@ export default function SettingsScreen() {
             <View style={styles.userBadges}>
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
-                  {user?.role?.toUpperCase() || "USER"}
+                  {user?.roles && user.roles.length > 0 
+                    ? user.roles.map(r => r.name).join(', ') 
+                    : (user?.role?.toUpperCase() || "USER")}
                 </Text>
               </View>
               {user?.owner && (

@@ -86,17 +86,14 @@ class ProjectController extends Controller
         // Search
         $search = $request->query('search');
 
-        // Thử lấy users có role = 'customer' hoặc có role "Khách hàng" trong bảng roles
+        // Thử lấy users có các role liên quan đến "Khách hàng"
         $customerQuery = User::whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->where('role', 'customer')
-                    ->orWhereHas('roles', function ($roleQuery) {
-                        $roleQuery->where(function ($rq) {
-                            $rq->where('name', 'like', '%khách hàng%')
-                                ->orWhere('name', 'like', '%customer%')
-                                ->orWhere('name', 'like', '%Khách hàng%');
-                        });
-                    });
+            ->whereHas('roles', function ($roleQuery) {
+                $roleQuery->where(function ($rq) {
+                    $rq->where('name', 'like', '%khách hàng%')
+                        ->orWhere('name', 'like', '%customer%')
+                        ->orWhere('name', 'like', '%Khách hàng%');
+                });
             });
 
         // Apply search nếu có
@@ -115,10 +112,9 @@ class ProjectController extends Controller
             'phone',
         ]);
 
-        // Nếu không có customers theo điều kiện trên, lấy tất cả users (trừ admin và nhân sự nội bộ)
+        // Nếu không có customers theo điều kiện trên, lấy tất cả users (trừ nhân sự nội bộ)
         if ($customers->isEmpty()) {
             $fallbackQuery = User::whereNull('deleted_at')
-                ->where('role', '!=', 'admin')
                 ->whereDoesntHave('employeeProfile'); // Không phải nhân sự nội bộ
 
             // Apply search nếu có
@@ -139,8 +135,7 @@ class ProjectController extends Controller
 
             // Nếu vẫn không có, lấy tất cả users (trừ admin) - fallback cuối cùng
             if ($customers->isEmpty()) {
-                $finalQuery = User::whereNull('deleted_at')
-                    ->where('role', '!=', 'admin');
+                $finalQuery = User::whereNull('deleted_at');
 
                 // Apply search nếu có
                 if ($search) {
@@ -175,28 +170,26 @@ class ProjectController extends Controller
     {
         $query = User::whereNull('deleted_at');
 
-        // Ưu tiên: admin, users có role quản lý, hoặc users nội bộ
+        // Ưu tiên: users có role quản lý, hoặc users nội bộ
         $managerQuery = clone $query;
         $managerQuery->where(function ($q) {
-            $q->where('role', 'admin')
-                ->orWhereHas('roles', function ($roleQuery) {
-                    $roleQuery->where(function ($rq) {
-                        $rq->where('name', 'like', '%quản lý%')
-                            ->orWhere('name', 'like', '%manager%')
-                            ->orWhere('name', 'like', '%Quản lý%')
-                            ->orWhere('name', 'like', '%Ban điều hành%')
-                            ->orWhere('name', 'like', '%Management%');
-                    });
-                })
-                ->orWhereHas('employeeProfile');
+            $q->whereHas('roles', function ($roleQuery) {
+                $roleQuery->where(function ($rq) {
+                    $rq->where('name', 'like', '%quản lý%')
+                        ->orWhere('name', 'like', '%manager%')
+                        ->orWhere('name', 'like', '%Quản lý%')
+                        ->orWhere('name', 'like', '%Ban điều hành%')
+                        ->orWhere('name', 'like', '%Management%');
+                });
+            })
+            ->orWhereHas('employeeProfile');
         });
 
         $managers = $managerQuery->get();
 
-        // Nếu không có managers theo điều kiện trên, lấy tất cả users (trừ customer và subcontractor)
+        // Nếu không có managers theo điều kiện trên, lấy tất cả users
         if ($managers->isEmpty()) {
-            $query->where('role', '!=', 'customer')
-                ->where('role', '!=', 'subcontractor');
+            // No strict filter
         } else {
             $query = $managerQuery;
         }
@@ -215,7 +208,6 @@ class ProjectController extends Controller
             'name',
             'email',
             'phone',
-            'role',
         ]);
 
         return response()->json([
@@ -245,7 +237,6 @@ class ProjectController extends Controller
             'name',
             'email',
             'phone',
-            'role',
         ]);
 
         return response()->json([

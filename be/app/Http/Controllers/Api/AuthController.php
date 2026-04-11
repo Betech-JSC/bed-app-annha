@@ -19,7 +19,7 @@ class AuthController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'email' => 'required|string|email|max:255',
-                'password' => 'required|string|min:8',
+                'password' => 'required|string',
                 'fcm_token' => 'nullable|string', // FCM token từ frontend
             ]);
 
@@ -124,7 +124,7 @@ class AuthController extends Controller
             $validator = Validator::make($request->all(), [
                 'token' => 'required|string',
                 'email' => 'required|string|email|max:255',
-                'password' => 'required|string|min:8|confirmed',
+                'password' => 'required|string|confirmed',
             ]);
 
             if ($validator->fails()) {

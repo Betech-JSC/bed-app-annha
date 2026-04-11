@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Services\EvmCalculationService;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
 class ProjectEvmController extends Controller
 {
+    use ApiAuthorization;
     protected $evmService;
 
     public function __construct(EvmCalculationService $evmService)
@@ -22,6 +24,8 @@ class ProjectEvmController extends Controller
      */
     public function calculate(string $projectId, Request $request)
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         
         $asOfDate = $request->query('as_of_date') 
@@ -42,6 +46,8 @@ class ProjectEvmController extends Controller
      */
     public function latest(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         $metric = $this->evmService->getLatestMetrics($project);
 
@@ -61,6 +67,8 @@ class ProjectEvmController extends Controller
      */
     public function history(string $projectId, Request $request)
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         
         $startDate = $request->query('start_date') 
@@ -83,6 +91,8 @@ class ProjectEvmController extends Controller
      */
     public function analyze(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         $analysis = $this->evmService->analyzePerformance($project);
 

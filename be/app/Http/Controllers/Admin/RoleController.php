@@ -47,6 +47,7 @@ class RoleController extends Controller
         return Inertia::render('Admin/Roles/Index', [
             'roles' => $roles,
             'permissions' => $permissions,
+            'groupedPermissions' => $this->getGroupedPermissions(),
         ]);
     }
 
@@ -65,6 +66,7 @@ class RoleController extends Controller
 
         return Inertia::render('Admin/Roles/Create', [
             'permissions' => $permissions,
+            'groupedPermissions' => $this->getGroupedPermissions(),
         ]);
     }
 
@@ -136,6 +138,7 @@ class RoleController extends Controller
                 'created_at' => $role->created_at->format('Y-m-d H:i:s'),
             ],
             'allPermissions' => $allPermissions,
+            'groupedPermissions' => $this->getGroupedPermissions(),
         ]);
     }
 
@@ -162,6 +165,7 @@ class RoleController extends Controller
                 'permission_ids' => $role->permissions->pluck('id')->toArray(),
             ],
             'permissions' => $permissions,
+            'groupedPermissions' => $this->getGroupedPermissions(),
         ]);
     }
 
@@ -191,6 +195,32 @@ class RoleController extends Controller
         }
 
         return redirect()->route('admin.roles.index')->with('success', 'Đã cập nhật role thành công');
+    }
+
+    private function getGroupedPermissions(): array
+    {
+        $groupedPermissions = \App\Constants\Permissions::groupedByModule();
+        $permissionsWithModule = [];
+        
+        foreach ($groupedPermissions as $module => $permNames) {
+            $modulePerms = Permission::whereIn('name', $permNames)->get()->map(function ($perm) {
+                return [
+                    'id' => $perm->id,
+                    'name' => $perm->name,
+                    'description' => $perm->description ?? '',
+                ];
+            });
+
+            if ($modulePerms->isNotEmpty()) {
+                $permissionsWithModule[] = [
+                    'module' => $module,
+                    'module_name' => ucfirst(str_replace('_', ' ', $module)),
+                    'permissions' => $modulePerms,
+                ];
+            }
+        }
+
+        return $permissionsWithModule;
     }
 
     /**

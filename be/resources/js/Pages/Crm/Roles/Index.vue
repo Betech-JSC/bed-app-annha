@@ -145,28 +145,44 @@
           </div>
         </div>
 
+        <div class="mb-4">
+          <a-input-search
+            v-model:value="searchQuery"
+            placeholder="Tìm kiếm quyền hoặc mô tả..."
+            allow-clear
+            size="large"
+            class="rounded-xl shadow-sm"
+          />
+        </div>
+
         <a-collapse
           v-model:activeKey="activePermGroups"
           :bordered="false"
           class="permission-collapse"
         >
           <a-collapse-panel
-            v-for="group in groupedPermissions"
+            v-for="group in filteredGroups"
             :key="group.key"
-            :header="null"
           >
             <template #header>
-              <div class="perm-group-header">
-                <span class="perm-group-icon">
-                  <FolderOutlined />
-                </span>
-                <span class="perm-group-name">{{ group.group }}</span>
-                <a-badge
-                  :count="countSelectedInGroup(group)"
-                  :number-style="{ backgroundColor: countSelectedInGroup(group) > 0 ? '#1B4F72' : '#d9d9d9' }"
-                  class="ml-2"
-                />
-                <span class="perm-group-total">/ {{ group.items.length }}</span>
+              <div class="perm-group-header flex items-center justify-between w-full pr-4">
+                <div class="flex items-center">
+                  <span class="perm-group-icon">
+                    <FolderOutlined />
+                  </span>
+                  <span class="perm-group-name ml-2">{{ group.group }}</span>
+                  <a-tag color="blue" class="ml-2 rounded-lg border-0" :style="{ background: 'rgba(27, 79, 114, 0.08)', color: '#1B4F72' }">
+                    {{ countSelectedInGroup(group) }} / {{ group.items.length }}
+                  </a-tag>
+                </div>
+                <a-checkbox
+                  :checked="isGroupAllSelected(group)"
+                  :indeterminate="isGroupIndeterminate(group)"
+                  @click.stop
+                  @change="(e) => toggleGroupPermissions(group, e.target.checked)"
+                >
+                  Chọn cả nhóm
+                </a-checkbox>
               </div>
             </template>
 
@@ -187,24 +203,18 @@
                 </div>
               </label>
             </div>
-
-            <!-- Group quick actions -->
-            <div class="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-              <a-button size="small" type="dashed" @click="selectGroup(group)">
-                <CheckOutlined class="mr-1" /> Chọn cả nhóm
-              </a-button>
-              <a-button size="small" type="dashed" @click="deselectGroup(group)">
-                <CloseOutlined class="mr-1" /> Bỏ nhóm
-              </a-button>
-            </div>
           </a-collapse-panel>
+
+          <div v-if="filteredGroups.length === 0" class="py-12 text-center text-gray-400">
+            <Empty description="Không tìm thấy quyền nào khớp với từ khóa" />
+          </div>
         </a-collapse>
       </div>
 
       <!-- Selected summary -->
-      <div class="selected-summary">
+      <div class="selected-summary border border-blue-100 shadow-sm">
         <SafetyOutlined class="mr-2" style="color: #1B4F72;" />
-        <span class="font-semibold">{{ form.permissions.length }}</span> quyền đã chọn
+        <span class="font-semibold text-lg mx-1">{{ form.permissions.length }}</span> quyền đã chọn cho vai trò này
       </div>
 
       <!-- Actions -->
@@ -266,6 +276,7 @@ const props = defineProps({
 const showModal = ref(false)
 const editingRole = ref(null)
 const activeTemplate = ref(null)
+const searchQuery = ref('')
 const activePermGroups = ref(props.groupedPermissions?.map(g => g.key) || [])
 
 const form = useForm({
@@ -274,12 +285,31 @@ const form = useForm({
   permissions: [],
 })
 
+// Filter groups and permissions based on search query
+const filteredGroups = computed(() => {
+  if (!searchQuery.value) return props.groupedPermissions || []
+
+  const query = searchQuery.value.toLowerCase()
+  return (props.groupedPermissions || []).map(group => {
+    const filteredItems = (group.items || []).filter(p => 
+      p.label.toLowerCase().includes(query) || 
+      p.name.toLowerCase().includes(query)
+    )
+    
+    if (filteredItems.length > 0) {
+      return { ...group, items: filteredItems }
+    }
+    return null
+  }).filter(Boolean)
+})
+
 const totalPermissions = computed(() => props.allPermissions?.length || 0)
 const totalUsersAssigned = computed(() => (props.roles || []).reduce((sum, r) => sum + (r.users_count || 0), 0))
 
 const openCreateModal = () => {
   editingRole.value = null
   activeTemplate.value = null
+  searchQuery.value = ''
   form.reset()
   form.permissions = []
   showModal.value = true
@@ -288,6 +318,7 @@ const openCreateModal = () => {
 const openEditModal = (role) => {
   editingRole.value = role
   activeTemplate.value = null
+  searchQuery.value = ''
   form.name = role.name
   form.description = role.description || ''
   form.permissions = [...role.permissions]
@@ -334,20 +365,34 @@ const togglePermission = (id) => {
 }
 
 const countSelectedInGroup = (group) => {
-  return group.items.filter(p => form.permissions.includes(p.id)).length
+  return (group.items || []).filter(p => form.permissions.includes(p.id)).length
 }
 
-const selectGroup = (group) => {
-  activeTemplate.value = null
-  group.items.forEach(p => {
-    if (!form.permissions.includes(p.id)) form.permissions.push(p.id)
-  })
+const isGroupAllSelected = (group) => {
+  if (!group.items?.length) return false
+  return group.items.every(p => form.permissions.includes(p.id))
 }
 
-const deselectGroup = (group) => {
+const isGroupIndeterminate = (group) => {
+  const selectedCount = countSelectedInGroup(group)
+  return selectedCount > 0 && selectedCount < group.items.length
+}
+
+const toggleGroupPermissions = (group, checked) => {
   activeTemplate.value = null
-  const ids = group.items.map(p => p.id)
-  form.permissions = form.permissions.filter(id => !ids.includes(id))
+  const itemIds = group.items.map(p => p.id)
+  
+  if (checked) {
+    // Add missing IDs
+    const current = [...form.permissions]
+    itemIds.forEach(id => {
+      if (!current.includes(id)) current.push(id)
+    })
+    form.permissions = current
+  } else {
+    // Remove IDs
+    form.permissions = form.permissions.filter(id => !itemIds.includes(id))
+  }
 }
 
 const selectAllPermissions = () => {

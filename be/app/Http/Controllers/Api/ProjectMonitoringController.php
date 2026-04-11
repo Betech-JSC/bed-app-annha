@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Services\ProjectMonitoringService;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 
 class ProjectMonitoringController extends Controller
 {
+    use ApiAuthorization;
     protected $monitoringService;
 
     public function __construct(ProjectMonitoringService $monitoringService)
@@ -35,6 +37,8 @@ class ProjectMonitoringController extends Controller
      */
     public function projectMonitoring(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::PROJECT_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         $data = $this->monitoringService->getProjectMonitoringData($project);
 

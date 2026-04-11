@@ -7,17 +7,20 @@ use App\Models\Defect;
 use App\Models\DefectHistory;
 use App\Models\Project;
 use App\Models\Attachment;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DefectController extends Controller
 {
+    use ApiAuthorization;
     /**
      * Danh sách lỗi
      */
     public function index(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire($request->user(), Permissions::DEFECT_VIEW, $project);
 
         $query = $project->defects()
             ->with([
@@ -58,6 +61,7 @@ class DefectController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
+        $this->apiRequire($user, Permissions::DEFECT_CREATE, $project);
 
         $validated = $request->validate([
             'task_id' => 'nullable|exists:project_tasks,id',
@@ -149,6 +153,8 @@ class DefectController extends Controller
      */
     public function update(Request $request, string $projectId, string $id)
     {
+        $this->apiRequire($request->user(), Permissions::DEFECT_UPDATE, $projectId);
+
         $defect = Defect::where('project_id', $projectId)->findOrFail($id);
         $user = auth()->user();
 
@@ -257,6 +263,8 @@ class DefectController extends Controller
      */
     public function show(string $projectId, string $id)
     {
+        $this->apiRequire(auth()->user(), Permissions::DEFECT_VIEW, $projectId);
+
         $defect = Defect::where('project_id', $projectId)
             ->with([
                 'reporter',
@@ -284,6 +292,8 @@ class DefectController extends Controller
      */
     public function verifyCriteria(Request $request, string $projectId, string $id)
     {
+        $this->apiRequire($request->user(), Permissions::DEFECT_VERIFY, $projectId);
+
         $defect = Defect::where('project_id', $projectId)->findOrFail($id);
         $user = auth()->user();
 

@@ -215,6 +215,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::REVENUE_VIEW,
             Permissions::REVENUE_DASHBOARD,
             Permissions::REVENUE_EXPORT,
+            Permissions::DASHBOARD_VIEW,
 
             // Settings
             Permissions::SETTINGS_VIEW,
@@ -309,6 +310,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::REVENUE_VIEW,
             Permissions::REVENUE_DASHBOARD,
             Permissions::REVENUE_EXPORT,
+            Permissions::DASHBOARD_VIEW,
         ];
 
         $permissionIds = Permission::whereIn('name', $permissions)->pluck('id');
@@ -446,6 +448,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::REVENUE_VIEW,
             Permissions::REVENUE_DASHBOARD,
             Permissions::REVENUE_EXPORT,
+            Permissions::DASHBOARD_VIEW,
 
             // Settings
             Permissions::SETTINGS_VIEW,

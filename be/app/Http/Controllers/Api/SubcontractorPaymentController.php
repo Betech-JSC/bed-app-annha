@@ -6,17 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Subcontractor;
 use App\Models\SubcontractorPayment;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class SubcontractorPaymentController extends Controller
 {
+    use ApiAuthorization;
     /**
      * Danh sách thanh toán nhà thầu phụ
      */
     public function index(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_VIEW, $project);
         
         $query = SubcontractorPayment::where('project_id', $project->id)
             ->with(['subcontractor', 'creator', 'approver', 'payer']);
@@ -44,6 +47,8 @@ class SubcontractorPaymentController extends Controller
      */
     public function show(string $projectId, string $id)
     {
+        $this->apiRequire(auth()->user(), Permissions::SUBCONTRACTOR_PAYMENT_VIEW, $projectId);
+
         $payment = SubcontractorPayment::where('project_id', $projectId)
             ->with(['subcontractor', 'project', 'creator', 'approver', 'payer'])
             ->findOrFail($id);
@@ -61,6 +66,7 @@ class SubcontractorPaymentController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = $request->user();
+        $this->apiRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_CREATE, $project);
 
         $validated = $request->validate([
             'subcontractor_id' => 'required|exists:subcontractors,id',
@@ -119,6 +125,8 @@ class SubcontractorPaymentController extends Controller
      */
     public function update(Request $request, string $projectId, string $id)
     {
+        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_UPDATE, $projectId);
+
         $payment = SubcontractorPayment::where('project_id', $projectId)
             ->findOrFail($id);
 
@@ -171,6 +179,8 @@ class SubcontractorPaymentController extends Controller
      */
     public function destroy(string $projectId, string $id)
     {
+        $this->apiRequire(auth()->user(), Permissions::SUBCONTRACTOR_PAYMENT_DELETE, $projectId);
+
         $payment = SubcontractorPayment::where('project_id', $projectId)
             ->findOrFail($id);
 
@@ -195,6 +205,8 @@ class SubcontractorPaymentController extends Controller
      */
     public function submit(Request $request, string $projectId, string $id)
     {
+        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_CREATE, $projectId);
+
         $payment = SubcontractorPayment::where('project_id', $projectId)
             ->findOrFail($id);
         $user = $request->user();
@@ -223,6 +235,8 @@ class SubcontractorPaymentController extends Controller
      */
     public function approve(Request $request, string $projectId, string $id)
     {
+        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $projectId);
+
         $payment = SubcontractorPayment::where('project_id', $projectId)
             ->findOrFail($id);
         $user = $request->user();
@@ -259,6 +273,8 @@ class SubcontractorPaymentController extends Controller
      */
     public function reject(Request $request, string $projectId, string $id)
     {
+        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $projectId);
+
         $payment = SubcontractorPayment::where('project_id', $projectId)
             ->findOrFail($id);
         $user = $request->user();
@@ -303,6 +319,8 @@ class SubcontractorPaymentController extends Controller
      */
     public function markAsPaid(Request $request, string $projectId, string $id)
     {
+        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID, $projectId);
+
         $payment = SubcontractorPayment::where('project_id', $projectId)
             ->findOrFail($id);
         $user = $request->user();

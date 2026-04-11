@@ -30,7 +30,6 @@ class User extends Authenticatable
         'avatar',
         'first_name',
         'last_name',
-        'role',
         'department_id',
         'provider',
         'provider_id',
@@ -92,12 +91,9 @@ class User extends Authenticatable
 
     public function scopeWhereRole($query, $role)
     {
-        switch ($role) {
-            case 'user':
-                return $query->where('owner', false);
-            case 'owner':
-                return $query->where('owner', true);
-        }
+        return $query->whereHas('roles', function($q) use ($role) {
+            $q->where('name', $role);
+        });
     }
 
     public function scopeFilter($query, array $filters)

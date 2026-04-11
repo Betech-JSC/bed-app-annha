@@ -5,18 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectRisk;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class ProjectRiskController extends Controller
 {
+    use ApiAuthorization;
     /**
      * Danh sách rủi ro của project
      */
     public function index(string $projectId, Request $request)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire($request->user(), Permissions::PROJECT_RISK_VIEW, $project);
 
         $query = $project->risks()
             ->with([
@@ -62,6 +65,7 @@ class ProjectRiskController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
+        $this->apiRequire($user, Permissions::PROJECT_RISK_CREATE, $project);
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -113,6 +117,8 @@ class ProjectRiskController extends Controller
     public function show(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire(auth()->user(), Permissions::PROJECT_RISK_VIEW, $project);
+
         $risk = $project->risks()->with(['owner', 'identifier', 'updater'])->findOrFail($id);
 
         return response()->json([
@@ -129,6 +135,7 @@ class ProjectRiskController extends Controller
         $project = Project::findOrFail($projectId);
         $risk = $project->risks()->findOrFail($id);
         $user = auth()->user();
+        $this->apiRequire($user, Permissions::PROJECT_RISK_UPDATE, $project);
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
@@ -173,6 +180,8 @@ class ProjectRiskController extends Controller
     public function destroy(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire(auth()->user(), Permissions::PROJECT_RISK_DELETE, $project);
+
         $risk = $project->risks()->findOrFail($id);
 
         try {
@@ -196,6 +205,8 @@ class ProjectRiskController extends Controller
     public function markAsResolved(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire(auth()->user(), Permissions::PROJECT_RISK_UPDATE, $project);
+
         $risk = $project->risks()->findOrFail($id);
 
         try {

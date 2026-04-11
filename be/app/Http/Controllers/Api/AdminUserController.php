@@ -63,7 +63,9 @@ class AdminUserController extends Controller
 
         // Filter theo role (chỉ admin)
         if ($request->has('role') && $request->role === 'admin') {
-            $query->where('role', 'admin');
+            $query->whereHas('roles', function($q) {
+                $q->where('name', 'Admin')->orWhere('name', 'super_admin');
+            });
         }
 
         // Filter theo status (active/banned)
@@ -101,7 +103,6 @@ class AdminUserController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
-                'role' => $user->role,
                 'avatar' => $user->avatar,
                 'roles' => $user->roles,
                 'created_at' => $user->created_at,
@@ -153,7 +154,6 @@ class AdminUserController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'phone' => $user->phone,
-                    'role' => $user->role,
                     'avatar' => $user->avatar,
                     'fcm_token' => $user->fcm_token,
                     'roles' => $user->roles,
@@ -188,7 +188,8 @@ class AdminUserController extends Controller
             'name' => 'sometimes|string|max:255',
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'phone' => 'sometimes|string|max:20',
-            'role' => ['sometimes', Rule::in(['admin'])],
+            'role_ids' => 'sometimes|array',
+            'role_ids.*' => 'exists:roles,id',
             'password' => 'sometimes|string|min:6',
         ]);
 
@@ -197,6 +198,10 @@ class AdminUserController extends Controller
         }
 
         $user->update($validated);
+
+        if (isset($validated['role_ids'])) {
+            $user->roles()->sync($validated['role_ids']);
+        }
 
         return response()->json([
             'success' => true,

@@ -5,18 +5,23 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MaterialQuota;
 use App\Services\MaterialQuotaService;
+use App\Constants\Permissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class MaterialQuotaController extends Controller
 {
+    use ApiAuthorization;
+
     public function __construct(private MaterialQuotaService $quotaService) {}
 
     /**
      * GET /api/projects/{projectId}/materials/inventory
      */
-    public function inventory(int $projectId): JsonResponse
+    public function inventory(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::MATERIAL_VIEW, $projectId);
+
         $data = $this->quotaService->getInventory($projectId);
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -24,8 +29,10 @@ class MaterialQuotaController extends Controller
     /**
      * GET /api/projects/{projectId}/materials/quotas
      */
-    public function quotas(int $projectId): JsonResponse
+    public function quotas(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::MATERIAL_VIEW, $projectId);
+
         $data = $this->quotaService->getQuotas($projectId);
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -35,6 +42,8 @@ class MaterialQuotaController extends Controller
      */
     public function storeQuota(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::MATERIAL_CREATE, $projectId);
+
         $validated = $request->validate([
             'material_id'      => 'required|exists:materials,id',
             'task_id'          => 'nullable|exists:project_tasks,id',
@@ -57,6 +66,8 @@ class MaterialQuotaController extends Controller
      */
     public function updateQuota(Request $request, int $projectId, int $id): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::MATERIAL_UPDATE, $projectId);
+
         $quota = MaterialQuota::where('project_id', $projectId)->findOrFail($id);
 
         $validated = $request->validate([
@@ -73,8 +84,10 @@ class MaterialQuotaController extends Controller
     /**
      * GET /api/projects/{projectId}/materials/warnings
      */
-    public function warnings(int $projectId): JsonResponse
+    public function warnings(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::MATERIAL_VIEW, $projectId);
+
         $data = $this->quotaService->getWarnings($projectId);
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -84,6 +97,8 @@ class MaterialQuotaController extends Controller
      */
     public function importMaterial(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::MATERIAL_CREATE, $projectId);
+
         $validated = $request->validate([
             'material_id'        => 'required|exists:materials,id',
             'quantity'           => 'required|numeric|min:0.001',
@@ -109,6 +124,8 @@ class MaterialQuotaController extends Controller
      */
     public function exportMaterial(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::MATERIAL_CREATE, $projectId);
+
         $validated = $request->validate([
             'material_id'        => 'required|exists:materials,id',
             'quantity'           => 'required|numeric|min:0.001',
@@ -136,6 +153,7 @@ class MaterialQuotaController extends Controller
      */
     public function history(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::MATERIAL_VIEW, $projectId);
         $materialId = $request->query('material_id');
         $data = $this->quotaService->getHistory($projectId, $materialId);
         return response()->json(['success' => true, 'data' => $data]);
@@ -144,8 +162,10 @@ class MaterialQuotaController extends Controller
     /**
      * POST /api/projects/{projectId}/materials/sync-inventory
      */
-    public function syncInventory(int $projectId): JsonResponse
+    public function syncInventory(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::MATERIAL_UPDATE, $projectId);
+
         $this->quotaService->syncAllInventory($projectId);
         $this->quotaService->syncAllQuotas($projectId);
 

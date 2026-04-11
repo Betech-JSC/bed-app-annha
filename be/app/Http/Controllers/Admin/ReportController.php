@@ -22,8 +22,8 @@ class ReportController extends Controller
         $overview = [
             'users' => [
                 'total' => User::count(),
-                'senders' => User::where('role', 'sender')->count(),
-                'customers' => User::where('role', 'customer')->count(),
+                'senders' => User::whereHas('roles', function($q) { $q->where('name', 'sender'); })->count(),
+                'customers' => User::whereHas('roles', function($q) { $q->where('name', 'customer'); })->count(),
                 'new_today' => User::whereDate('created_at', today())->count(),
                 'new_this_month' => User::whereMonth('created_at', now()->month)->count(),
             ],

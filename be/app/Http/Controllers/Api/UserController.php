@@ -54,7 +54,6 @@ class UserController extends Controller
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'avatar' => $user->avatar,
-                'role' => $user->role,
                 'department' => $user->department ?? null,
                 'position' => $user->position ?? null,
                 'created_at' => $user->created_at,
@@ -78,7 +77,7 @@ class UserController extends Controller
                 Rule::unique('users')->ignore($user->id),
             ],
             'phone' => 'sometimes|string|max:20',
-            'password' => 'sometimes|string|min:6|confirmed',
+            'password' => 'sometimes|string|confirmed',
             'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,webp|max:5120', // max 5MB
         ]);
 
@@ -125,7 +124,7 @@ class UserController extends Controller
 
         $request->validate([
             'current_password' => ['required'],
-            'new_password' => ['required', 'string', 'min:8', 'confirmed'],
+            'new_password' => ['required', 'string', 'confirmed'],
         ]);
 
         if (!Hash::check($request->current_password, $user->password)) {

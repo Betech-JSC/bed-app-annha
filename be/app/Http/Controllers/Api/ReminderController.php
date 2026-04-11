@@ -24,7 +24,7 @@ class ReminderController extends Controller
         $query = Reminder::with(['remindable', 'user', 'creator']);
 
         // Nếu không phải admin/owner, chỉ xem của mình
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission('reminders.view')) {
+        if (!$user->owner && !$user->isAdmin() && !$user->hasPermission('reminders.view')) {
             $query->where('user_id', $user->id);
         } elseif ($request->query('user_id')) {
             $query->where('user_id', $request->query('user_id'));
@@ -215,7 +215,7 @@ class ReminderController extends Controller
     {
         $user = auth()->user();
         
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission('reminders.send')) {
+        if (!$user->owner && !$user->isAdmin() && !$user->hasPermission('reminders.send')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền gửi nhắc nhở.'

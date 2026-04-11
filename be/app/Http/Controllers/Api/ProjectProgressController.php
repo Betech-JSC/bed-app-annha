@@ -7,14 +7,19 @@ use App\Models\Project;
 use App\Models\ProjectProgress;
 use App\Models\ProjectTask;
 use App\Services\TaskProgressService;
+use App\Constants\Permissions;
+use Illuminate\Http\Request;
 
 class ProjectProgressController extends Controller
 {
+    use ApiAuthorization;
     /**
      * Xem tiến độ dự án
      */
     public function show(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::PROGRESS_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
         $progress = $project->progress;
 
@@ -79,6 +84,8 @@ class ProjectProgressController extends Controller
      */
     public function overview(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::PROGRESS_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
 
         // Get all tasks with relationships

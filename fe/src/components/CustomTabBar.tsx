@@ -22,6 +22,18 @@ interface TabItem {
 
 const tabs: TabItem[] = [
   {
+    name: "Tổng quan",
+    route: "/monitoring/dashboard",
+    icon: "pie-chart-outline",
+    iconFocused: "pie-chart",
+    permissionList: [
+      Permissions.DASHBOARD_VIEW,
+      Permissions.PROJECT_MONITORING_VIEW,
+      Permissions.COST_APPROVE_MANAGEMENT,
+      Permissions.REVENUE_DASHBOARD,
+    ],
+  },
+  {
     name: "Dự Án",
     route: "/(tabs)/projects",
     icon: "folder-outline",
@@ -68,7 +80,7 @@ const tabs: TabItem[] = [
     route: "/(tabs)/settings",
     icon: "settings-outline",
     iconFocused: "settings",
-    permission: Permissions.SETTINGS_VIEW,
+    permission: null, // Mọi người đều thấy để có thể Đăng xuất
   },
 ];
 
@@ -105,6 +117,13 @@ export default function CustomTabBar() {
   });
 
   const isActive = (route: string) => {
+    if (route === "/monitoring/dashboard") {
+      return (
+        pathname?.startsWith("/monitoring/dashboard") || 
+        pathname?.startsWith("/company-financial") ||
+        pathname?.startsWith("/accounting/supplier-payables")
+      );
+    }
     if (route === "/(tabs)/projects") {
       return pathname?.startsWith("/projects") || pathname === "/(tabs)/projects";
     }
@@ -113,9 +132,6 @@ export default function CustomTabBar() {
     }
     if (route === "/approvals") {
       return pathname?.startsWith("/approvals");
-    }
-    if (route === "/(tabs)/reports") {
-      return pathname?.includes("/reports");
     }
     if (route === "/(tabs)/settings") {
       return pathname?.startsWith("/settings") || pathname === "/(tabs)/settings";

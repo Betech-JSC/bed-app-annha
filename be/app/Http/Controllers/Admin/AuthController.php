@@ -42,9 +42,7 @@ class AuthController extends Controller
 
         // Check if user has CRM access (has any role or is admin)
         $hasAccess = $user->roles()->exists()
-            || $user->hasPermission('settings.manage')
-            || $user->role === 'admin'
-            || $user->role === 'super_admin';
+            || $user->isAdmin();
 
         if (!$hasAccess) {
             throw ValidationException::withMessages([

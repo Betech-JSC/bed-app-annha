@@ -12,15 +12,28 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { monitoringApi, MonitoringAlert } from "@/api/monitoringApi";
-import { ScreenHeader } from "@/components";
+import { companyFinancialReportApi, CompanyFinancialSummary } from '@/api/companyFinancialReportApi';
+import { ScreenHeader, PermissionGuard } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Permissions } from "@/constants/Permissions";
+import { LineChart, BarChart } from 'react-native-chart-kit';
+import { Dimensions } from 'react-native';
+
+const screenWidth = Dimensions.get('window').width;
 
 export default function MonitoringDashboardScreen() {
   const router = useRouter();
   const tabBarHeight = useTabBarHeight();
+  const { hasPermission } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dashboardData, setDashboardData] = useState<any>(null);
+  const [financialSummary, setFinancialSummary] = useState<CompanyFinancialSummary | null>(null);
+  const [financialTrends, setFinancialTrends] = useState<any[]>([]);
+  const [unauthorized, setUnauthorized] = useState(false);
+
+  const canViewFinance = hasPermission(Permissions.OPERATIONS_DASHBOARD_VIEW);
 
   useEffect(() => {
     loadData();
@@ -29,12 +42,30 @@ export default function MonitoringDashboardScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await monitoringApi.getDashboard();
-      if (response.success) {
-        setDashboardData(response.data);
+      
+      const promises: Promise<any>[] = [monitoringApi.getDashboard()];
+      
+      if (canViewFinance) {
+        promises.push(companyFinancialReportApi.getSummary());
+        promises.push(companyFinancialReportApi.getTrend(6));
+      }
+
+      const results = await Promise.all(promises);
+      
+      if (results[0].success) {
+        setDashboardData(results[0].data);
+      }
+
+      if (canViewFinance && results[1]?.success && results[2]?.success) {
+        setFinancialSummary(results[1].data);
+        setFinancialTrends(results[2].data);
       }
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải dữ liệu dashboard");
+      if (error.response?.status === 403) {
+        setUnauthorized(true);
+      } else {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải dữ liệu dashboard");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -95,7 +126,7 @@ export default function MonitoringDashboardScreen() {
     }
   };
 
-  if (loading && !dashboardData) {
+  if (loading && !dashboardData && !unauthorized) {
     return (
       <View style={styles.container}>
         <ScreenHeader title="Giám sát Dự án" showBackButton />
@@ -106,34 +137,113 @@ export default function MonitoringDashboardScreen() {
     );
   }
 
+  if (unauthorized) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Tổng quan Dashboard" />
+        <View style={styles.emptyContainer}>
+          <Ionicons name="lock-closed-outline" size={64} color="#D1D5DB" />
+          <Text style={styles.emptyText}>Hạn chế truy cập</Text>
+          <Text style={styles.emptySubtext}>Bạn không có quyền xem dữ liệu tổng quan này. Vui lòng liên hệ quản trị viên.</Text>
+          <TouchableOpacity 
+            style={{ marginTop: 24, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#3B82F6', borderRadius: 8 }}
+            onPress={() => router.back()}
+          >
+            <Text style={{ color: 'white', fontWeight: 'bold' }}>Quay lại</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Giám sát Dự án" showBackButton />
+      <ScreenHeader title="Tổng quan Dashboard" />
       <ScrollView
         style={[styles.scrollView, { marginBottom: tabBarHeight }]}
+        contentContainerStyle={{ paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Summary Cards */}
-        <View style={styles.summaryContainer}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{dashboardData?.total_projects || 0}</Text>
-            <Text style={styles.summaryLabel}>Tổng dự án</Text>
+        {/* Section 1: Financial Overview (Only for enabled users) */}
+        {canViewFinance && financialSummary && (
+          <View style={styles.financialSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Tình hình Tài chính</Text>
+              <TouchableOpacity onPress={() => router.push('/company-financial')}>
+                <Text style={styles.seeMoreText}>Chi tiết</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.summaryGrid}>
+              <View style={[styles.summaryCard, { borderLeftColor: '#8B5CF6', borderLeftWidth: 4 }]}>
+                <Ionicons name="business-outline" size={20} color="#8B5CF6" />
+                <Text style={styles.summaryLabel}>Vốn Công Ty</Text>
+                <Text style={styles.summaryValue}>
+                  {formatCompact((financialSummary.summary as any).total_capital || 0)}
+                </Text>
+              </View>
+
+              <View style={[styles.summaryCard, styles.revenueCard]}>
+                <Ionicons name="trending-up" size={20} color="#10B981" />
+                <Text style={styles.summaryLabel}>Doanh Thu</Text>
+                <Text style={styles.summaryValue}>
+                  {formatCompact(financialSummary.summary.total_revenue)}
+                </Text>
+              </View>
+
+              <View style={[styles.summaryCard, styles.profitCard]}>
+                <Ionicons name="cash-outline" size={20} color="#3B82F6" />
+                <Text style={styles.summaryLabel}>Lợi Nhuận</Text>
+                <Text style={styles.summaryValue}>
+                  {formatCompact(financialSummary.summary.net_profit)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Financial Trends Chart */}
+            {financialTrends.length > 0 && (
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>Lợi nhuận 6 tháng</Text>
+                <LineChart
+                  data={{
+                    labels: financialTrends.map(t => t.month_name.split(' ')[0]),
+                    datasets: [{ data: financialTrends.map(t => t.net_profit) }]
+                  }}
+                  width={screenWidth - 48}
+                  height={180}
+                  chartConfig={chartConfig}
+                  bezier
+                  style={styles.chart}
+                />
+              </View>
+            )}
           </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{dashboardData?.active_projects || 0}</Text>
-            <Text style={styles.summaryLabel}>Đang thực hiện</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={[styles.summaryValue, { color: "#EF4444" }]}>
-              {dashboardData?.at_risk_projects || 0}
-            </Text>
-            <Text style={styles.summaryLabel}>Có rủi ro</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={[styles.summaryValue, { color: "#F59E0B" }]}>
-              {dashboardData?.total_alerts || 0}
-            </Text>
-            <Text style={styles.summaryLabel}>Cảnh báo</Text>
+        )}
+
+        {/* Section 2: Project Monitoring Summary */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Giám sát Dự án</Text>
+          <View style={styles.summaryContainer}>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryValue}>{dashboardData?.total_projects || 0}</Text>
+              <Text style={styles.summaryLabel}>Tổng dự án</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryValue}>{dashboardData?.active_projects || 0}</Text>
+              <Text style={styles.summaryLabel}>Đang thực hiện</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={[styles.summaryValue, { color: "#EF4444" }]}>
+                {dashboardData?.at_risk_projects || 0}
+              </Text>
+              <Text style={styles.summaryLabel}>Có rủi ro</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={[styles.summaryValue, { color: "#F59E0B" }]}>
+                {dashboardData?.total_alerts || 0}
+              </Text>
+              <Text style={styles.summaryLabel}>Cảnh báo</Text>
+            </View>
           </View>
         </View>
 
@@ -323,6 +433,25 @@ export default function MonitoringDashboardScreen() {
   );
 }
 
+// Helper functions for formatting
+const formatCompact = (amount: number) => {
+  if (amount >= 1000000000) return `${(amount / 1000000000).toFixed(1)}B`;
+  if (amount >= 1000000) return `${(amount / 1000000).toFixed(1)}M`;
+  if (amount >= 1000) return `${(amount / 1000).toFixed(1)}K`;
+  return amount.toString();
+};
+
+const chartConfig = {
+  backgroundColor: '#FFFFFF',
+  backgroundGradientFrom: '#FFFFFF',
+  backgroundGradientTo: '#FFFFFF',
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+  style: { borderRadius: 16 },
+  propsForDots: { r: '4', strokeWidth: '2', stroke: '#3B82F6' },
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -336,36 +465,95 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  financialSection: {
+    padding: 16,
+    paddingBottom: 0,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  seeMoreText: {
+    fontSize: 14,
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
   summaryContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    padding: 16,
-    gap: 12,
+    gap: 10,
   },
   summaryCard: {
     flex: 1,
-    minWidth: "45%",
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  revenueCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  profitCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  chartCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
+  chartTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  chart: {
+    borderRadius: 16,
+    marginLeft: -16,
+  },
   summaryValue: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: "700",
     color: "#1F2937",
-    marginBottom: 4,
+    marginTop: 4,
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: 10,
     color: "#6B7280",
     textAlign: "center",
+    marginTop: 4,
   },
+  section: {
+    padding: 16,
+    paddingTop: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 12,
+  },
+  // ... rest of the styles carried over from project monitoring
   alertSummaryContainer: {
     padding: 16,
     paddingTop: 0,
@@ -383,16 +571,6 @@ const styles = StyleSheet.create({
   alertSummaryText: {
     fontSize: 12,
     fontWeight: "600",
-  },
-  section: {
-    padding: 16,
-    paddingTop: 0,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginBottom: 12,
   },
   alertCard: {
     backgroundColor: "#FFFFFF",
@@ -506,7 +684,7 @@ const styles = StyleSheet.create({
   },
   progressSection: {
     padding: 16,
-    paddingTop: 0,
+    paddingTop: 16,
   },
   progressCard: {
     backgroundColor: "#FFFFFF",

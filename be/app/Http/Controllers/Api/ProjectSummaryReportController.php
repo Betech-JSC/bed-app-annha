@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Services\ProjectSummaryReportService;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 
 class ProjectSummaryReportController extends Controller
 {
+    use ApiAuthorization;
     protected $reportService;
 
     public function __construct(ProjectSummaryReportService $reportService)
@@ -21,6 +23,8 @@ class ProjectSummaryReportController extends Controller
      */
     public function getSummaryReport(string $projectId)
     {
+        $this->apiRequire(auth()->user(), Permissions::PROJECT_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
 
         $report = $this->reportService->getProjectSummaryReport($project);
@@ -36,6 +40,8 @@ class ProjectSummaryReportController extends Controller
      */
     public function getCostDetails(string $projectId, string $type)
     {
+        $this->apiRequire(auth()->user(), Permissions::COST_VIEW, $projectId);
+
         $project = Project::findOrFail($projectId);
 
         // Validate type

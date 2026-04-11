@@ -15,8 +15,6 @@ export interface ApprovalItem {
     description?: string;
     project_id?: number;
     project_name?: string;
-    management_approved_by?: string;
-    management_approved_at?: string;
     subcontractor_name?: string;
     supplier_name?: string;
     priority?: string;
@@ -29,6 +27,17 @@ export interface ApprovalItem {
     required_role_short: string;
     required_role_icon: string;
     required_role_color: string;
+    attachments?: {
+        id: number;
+        name: string;
+        url: string;
+        size: string;
+    }[];
+    attachments_count?: number;
+    rejected_reason?: string;
+    management_approved_by?: string;
+    management_approved_at?: string;
+    role_group?: string; // management, accountant, etc.
 }
 
 export interface ApprovalSummary {
@@ -66,8 +75,8 @@ export const approvalCenterApi = {
     },
 
     // Quick approve
-    quickApprove: async (type: string, id: number): Promise<{ success: boolean; message: string }> => {
-        const response = await api.post('/approval-center/quick-approve', { type, id });
+    quickApprove: async (type: string, id: number, notes?: string): Promise<{ success: boolean; message: string }> => {
+        const response = await api.post('/approval-center/quick-approve', { type, id, notes });
         return response.data;
     },
 

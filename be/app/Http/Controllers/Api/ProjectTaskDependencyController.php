@@ -6,18 +6,22 @@ use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectTask;
 use App\Models\ProjectTaskDependency;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class ProjectTaskDependencyController extends Controller
 {
+    use ApiAuthorization;
     /**
      * Tạo dependency mới
      */
     public function store(Request $request, string $projectId, string $taskId)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire($request->user(), Permissions::PROJECT_TASK_UPDATE, $project);
+
         $task = ProjectTask::where('project_id', $projectId)->findOrFail($taskId);
 
         $validated = $request->validate([
@@ -96,6 +100,8 @@ class ProjectTaskDependencyController extends Controller
     public function destroy(string $projectId, string $taskId, string $id)
     {
         $project = Project::findOrFail($projectId);
+        $this->apiRequire(auth()->user(), Permissions::PROJECT_TASK_UPDATE, $project);
+
         $task = ProjectTask::where('project_id', $projectId)->findOrFail($taskId);
         
         $dependency = ProjectTaskDependency::where('task_id', $task->id)

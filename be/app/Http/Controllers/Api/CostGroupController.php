@@ -19,7 +19,7 @@ class CostGroupController extends Controller
         $user = auth()->user();
 
         // Check permission: allow users with costs.view, costs.create, material.create (cho form vật liệu), or settings.manage
-        if (!$user->owner && $user->role !== 'admin' && 
+        if (!$user->owner && !$user->isAdmin() && 
             !$user->hasPermission('costs.view') && 
             !$user->hasPermission('costs.create') && 
             !$user->hasPermission(Permissions::MATERIAL_CREATE) &&
@@ -75,7 +75,7 @@ class CostGroupController extends Controller
         $user = auth()->user();
 
         // Check permission (owner, admin hoặc có quyền settings.manage)
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission('settings.manage')) {
+        if (!$user->owner && !$user->isAdmin() && !$user->hasPermission('settings.manage')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền thực hiện thao tác này.'
@@ -125,7 +125,7 @@ class CostGroupController extends Controller
         $user = auth()->user();
 
         // Check permission: allow users with costs.view, costs.create, material.create, or settings.manage
-        if (!$user->owner && $user->role !== 'admin' && 
+        if (!$user->owner && !$user->isAdmin() && 
             !$user->hasPermission('costs.view') && 
             !$user->hasPermission('costs.create') && 
             !$user->hasPermission(Permissions::MATERIAL_CREATE) &&
@@ -159,7 +159,7 @@ class CostGroupController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission('settings.manage')) {
+        if (!$user->owner && !$user->isAdmin() && !$user->hasPermission('settings.manage')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền thực hiện thao tác này.'
@@ -216,7 +216,7 @@ class CostGroupController extends Controller
         $user = auth()->user();
 
         // Check permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission('settings.manage')) {
+        if (!$user->owner && !$user->isAdmin() && !$user->hasPermission('settings.manage')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Không có quyền thực hiện thao tác này.'

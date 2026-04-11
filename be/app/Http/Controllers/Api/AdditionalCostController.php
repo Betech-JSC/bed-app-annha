@@ -65,7 +65,7 @@ class AdditionalCostController extends Controller
         }
 
         // Check RBAC permission
-        if (!$user->owner && $user->role !== 'admin' && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_CREATE)) {
+        if (!$user->owner && !$user->isAdmin() && !$user->hasPermission(\App\Constants\Permissions::ADDITIONAL_COST_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền tạo chi phí phát sinh. Cần quyền: ' . \App\Constants\Permissions::ADDITIONAL_COST_CREATE

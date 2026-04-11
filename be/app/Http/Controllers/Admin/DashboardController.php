@@ -19,8 +19,8 @@ class DashboardController extends Controller
         // Thống kê users
         $usersStats = [
             'total' => User::count(),
-            'senders' => User::where('role', 'sender')->count(),
-            'customers' => User::where('role', 'customer')->count(),
+            'senders' => User::whereHas('roles', function($q) { $q->where('name', 'sender'); })->count(),
+            'customers' => User::whereHas('roles', function($q) { $q->where('name', 'customer'); })->count(),
             'banned' => User::onlyTrashed()->count(),
         ];
 

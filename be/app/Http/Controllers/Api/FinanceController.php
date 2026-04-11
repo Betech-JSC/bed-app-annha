@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\CashFlow;
 use App\Models\WarrantyRetention;
 use App\Services\FinanceService;
+use App\Constants\Permissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class FinanceController extends Controller
 {
+    use ApiAuthorization;
+
     public function __construct(private FinanceService $finance) {}
 
     /**
@@ -18,6 +21,8 @@ class FinanceController extends Controller
      */
     public function cashFlow(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $data = $this->finance->getCashFlow(
             $projectId,
             $request->query('from'),
@@ -32,6 +37,8 @@ class FinanceController extends Controller
      */
     public function storeCashFlow(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_MANAGE, $projectId);
+
         $validated = $request->validate([
             'type'           => 'required|in:inflow,outflow',
             'category'       => 'required|string',
@@ -55,8 +62,10 @@ class FinanceController extends Controller
     /**
      * GET /api/projects/{projectId}/profit-loss
      */
-    public function profitLoss(int $projectId): JsonResponse
+    public function profitLoss(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $data = $this->finance->getProfitLoss($projectId);
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -64,8 +73,10 @@ class FinanceController extends Controller
     /**
      * GET /api/projects/{projectId}/budget-vs-actual
      */
-    public function budgetVsActual(int $projectId): JsonResponse
+    public function budgetVsActual(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $data = $this->finance->getBudgetVsActual($projectId);
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -73,8 +84,10 @@ class FinanceController extends Controller
     /**
      * GET /api/projects/{projectId}/subcontractor-debt
      */
-    public function subcontractorDebt(int $projectId): JsonResponse
+    public function subcontractorDebt(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $data = $this->finance->getSubcontractorDebt($projectId);
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -82,8 +95,10 @@ class FinanceController extends Controller
     /**
      * GET /api/projects/{projectId}/tax-summary
      */
-    public function taxSummary(int $projectId): JsonResponse
+    public function taxSummary(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $data = $this->finance->getTaxSummary($projectId);
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -91,8 +106,10 @@ class FinanceController extends Controller
     /**
      * GET /api/projects/{projectId}/warranty-retentions
      */
-    public function warrantyRetentions(int $projectId): JsonResponse
+    public function warrantyRetentions(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
+
         $data = $this->finance->getWarrantyRetentions($projectId);
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -102,6 +119,8 @@ class FinanceController extends Controller
      */
     public function storeWarrantyRetention(Request $request, int $projectId): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_MANAGE, $projectId);
+
         $validated = $request->validate([
             'subcontractor_id'     => 'nullable|exists:subcontractors,id',
             'retention_amount'     => 'required|numeric|min:0',
@@ -125,6 +144,8 @@ class FinanceController extends Controller
      */
     public function releaseWarranty(Request $request, int $projectId, int $id): JsonResponse
     {
+        $this->apiRequire($request->user(), Permissions::FINANCE_MANAGE, $projectId);
+
         $retention = WarrantyRetention::where('project_id', $projectId)->findOrFail($id);
 
         $validated = $request->validate([

@@ -7,6 +7,7 @@ use App\Models\WbsTemplate;
 use App\Models\WbsTemplateItem;
 use App\Models\ProjectTask;
 use App\Models\ProjectPhase;
+use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 
 class WbsTemplateController extends Controller
 {
+    use ApiAuthorization;
     /**
      * Danh sách WBS templates
      */
@@ -59,6 +61,8 @@ class WbsTemplateController extends Controller
      */
     public function store(Request $request)
     {
+        $this->apiRequire($request->user(), Permissions::SETTINGS_MANAGE);
+
         $validator = Validator::make($request->all(), [
             'name'         => 'required|string|max:255',
             'project_type' => 'required|in:residential,industrial,infrastructure,interior',
@@ -100,6 +104,8 @@ class WbsTemplateController extends Controller
      */
     public function importToProject(Request $request, $projectId)
     {
+        $this->apiRequire($request->user(), Permissions::PROJECT_TASK_CREATE, $projectId);
+
         $validator = Validator::make($request->all(), [
             'template_id' => 'required|exists:wbs_templates,id',
             'start_date'  => 'required|date',

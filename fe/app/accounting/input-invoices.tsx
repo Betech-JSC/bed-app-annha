@@ -16,7 +16,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { inputInvoiceApi, InputInvoice, CreateInputInvoiceData } from "@/api/inputInvoiceApi";
 import { projectApi } from "@/api/projectApi";
 import { Ionicons } from "@expo/vector-icons";
-import { ScreenHeader, DatePickerInput, CurrencyInput } from "@/components";
+import { ScreenHeader, DatePickerInput, CurrencyInput, PermissionDenied } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileUploader";
 import { PermissionGuard } from "@/components/PermissionGuard";
@@ -66,6 +66,8 @@ export default function InputInvoicesScreen() {
     notes: "",
   });
   const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState('');
 
   // Reload data when screen comes into focus
   useFocusEffect(
@@ -130,10 +132,16 @@ export default function InputInvoicesScreen() {
 
       // Calculate summary based on loaded invoices
       calculateSummary(invoicesList);
+      setPermissionDenied(false);
     } catch (error: any) {
       console.error("Error loading invoices:", error);
       console.error("Error details:", error.response?.data || error.message);
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách hóa đơn");
+      if (error.response?.status === 403) {
+          setPermissionDenied(true);
+          setPermissionMessage(error.response?.data?.message || 'Bạn không có quyền xem hóa đơn đầu vào.');
+      } else {
+          Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách hóa đơn");
+      }
       setInvoices([]);
       calculateSummary([]);
     } finally {
@@ -438,14 +446,11 @@ export default function InputInvoicesScreen() {
   }
 
   // Check permission first - if no permission, show message
-  if (!hasPermission(Permissions.INPUT_INVOICE_VIEW)) {
+  if (permissionDenied || !hasPermission(Permissions.INPUT_INVOICE_VIEW)) {
     return (
       <View style={styles.container}>
         <ScreenHeader title="Hóa Đơn Đầu Vào" showBackButton />
-        <View style={styles.centerContainer}>
-          <Ionicons name="lock-closed" size={64} color="#D1D5DB" />
-          <Text style={styles.emptyText}>Bạn không có quyền xem hóa đơn đầu vào</Text>
-        </View>
+        <PermissionDenied message={permissionMessage || "Bạn không có quyền xem hóa đơn đầu vào"} />
       </View>
     );
   }
@@ -664,7 +669,6 @@ export default function InputInvoicesScreen() {
                   setFormData({ ...formData, amount_before_vat: amount });
                 }}
                 placeholder="0"
-                required
               />
 
               {/* VAT Percentage */}
