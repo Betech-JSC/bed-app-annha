@@ -134,6 +134,8 @@ class CrmAcceptanceTemplateController extends Controller
             'criteria.*.description' => 'nullable|string',
             'criteria.*.is_critical' => 'nullable|boolean',
             'criteria.*.order' => 'nullable|integer|min:0',
+            'files' => 'nullable|array',
+            'files.*' => 'file|max:30720', // Tối đa 30MB
         ]);
 
         try {
@@ -157,6 +159,11 @@ class CrmAcceptanceTemplateController extends Controller
                         'order' => $criterion['order'] ?? $index,
                     ]);
                 }
+            }
+
+            // Handle file uploads during creation
+            if ($request->hasFile('files')) {
+                $this->handleFileUploads($template, $request->file('files'));
             }
 
             DB::commit();
@@ -189,6 +196,12 @@ class CrmAcceptanceTemplateController extends Controller
             'criteria.*.description' => 'nullable|string',
             'criteria.*.is_critical' => 'nullable|boolean',
             'criteria.*.order' => 'nullable|integer|min:0',
+            'existing_image_ids' => 'nullable|array',
+            'existing_image_ids.*' => 'integer',
+            'existing_document_ids' => 'nullable|array',
+            'existing_document_ids.*' => 'integer',
+            'files' => 'nullable|array',
+            'files.*' => 'file|max:30720',
         ]);
 
         try {
@@ -233,6 +246,23 @@ class CrmAcceptanceTemplateController extends Controller
                 }
                 // Delete removed criteria
                 $template->criteria()->whereNotIn('id', $keepIds)->delete();
+            }
+
+            // Handle file deletions/sync
+            if ($request->has('existing_image_ids')) {
+                AcceptanceTemplateImage::where('acceptance_template_id', $template->id)
+                    ->whereNotIn('attachment_id', $request->existing_image_ids)
+                    ->delete();
+            }
+            if ($request->has('existing_document_ids')) {
+                AcceptanceTemplateDocument::where('acceptance_template_id', $template->id)
+                    ->whereNotIn('attachment_id', $request->existing_document_ids)
+                    ->delete();
+            }
+
+            // Handle new file uploads
+            if ($request->hasFile('files')) {
+                $this->handleFileUploads($template, $request->file('files'));
             }
 
             DB::commit();
@@ -302,9 +332,13 @@ class CrmAcceptanceTemplateController extends Controller
         try {
             DB::beginTransaction();
 
-            $currentMaxOrder = AcceptanceTemplateDocument::where('acceptance_template_id', $template->id)->max('order') ?? 0;
+            $currentMaxDocOrder = AcceptanceTemplateDocument::where('acceptance_template_id', $template->id)->max('order') ?? 0;
+            $currentMaxImgOrder = AcceptanceTemplateImage::where('acceptance_template_id', $template->id)->max('order') ?? 0;
 
             foreach ($request->file('files') as $index => $file) {
+                $mime = $file->getClientMimeType();
+                $isImage = str_starts_with($mime, 'image/');
+                
                 $path = $file->store("acceptance-templates/{$template->id}", 'public');
 
                 $attachment = Attachment::create([
@@ -312,19 +346,27 @@ class CrmAcceptanceTemplateController extends Controller
                     'file_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
                     'file_url' => \Illuminate\Support\Facades\Storage::url($path),
-                    'mime_type' => $file->getClientMimeType(),
+                    'mime_type' => $mime,
                     'file_size' => $file->getSize(),
-                    'type' => 'acceptance_template_document',
+                    'type' => $isImage ? 'acceptance_template_image' : 'acceptance_template_document',
                     'attachable_type' => AcceptanceTemplate::class,
                     'attachable_id' => $template->id,
                     'uploaded_by' => auth('admin')->id(),
                 ]);
 
-                AcceptanceTemplateDocument::create([
-                    'acceptance_template_id' => $template->id,
-                    'attachment_id' => $attachment->id,
-                    'order' => $currentMaxOrder + $index + 1,
-                ]);
+                if ($isImage) {
+                    AcceptanceTemplateImage::create([
+                        'acceptance_template_id' => $template->id,
+                        'attachment_id' => $attachment->id,
+                        'order' => $currentMaxImgOrder + $index + 1,
+                    ]);
+                } else {
+                    AcceptanceTemplateDocument::create([
+                        'acceptance_template_id' => $template->id,
+                        'attachment_id' => $attachment->id,
+                        'order' => $currentMaxDocOrder + $index + 1,
+                    ]);
+                }
             }
 
             DB::commit();
@@ -340,6 +382,49 @@ class CrmAcceptanceTemplateController extends Controller
                 'success' => false,
                 'message' => 'Có lỗi xảy ra khi upload tài liệu.',
             ], 500);
+        }
+    }
+
+    /**
+     * Private helper to process file uploads and classify them
+     */
+    private function handleFileUploads($template, $files)
+    {
+        $currentMaxDocOrder = AcceptanceTemplateDocument::where('acceptance_template_id', $template->id)->max('order') ?? 0;
+        $currentMaxImgOrder = AcceptanceTemplateImage::where('acceptance_template_id', $template->id)->max('order') ?? 0;
+
+        foreach ($files as $index => $file) {
+            $mime = $file->getClientMimeType();
+            $isImage = str_starts_with($mime, 'image/');
+            
+            $path = $file->store("acceptance-templates/{$template->id}", 'public');
+
+            $attachment = Attachment::create([
+                'original_name' => $file->getClientOriginalName(),
+                'file_name' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'file_url' => \Illuminate\Support\Facades\Storage::url($path),
+                'mime_type' => $mime,
+                'file_size' => $file->getSize(),
+                'type' => $isImage ? 'acceptance_template_image' : 'acceptance_template_document',
+                'attachable_type' => AcceptanceTemplate::class,
+                'attachable_id' => $template->id,
+                'uploaded_by' => auth('admin')->id(),
+            ]);
+
+            if ($isImage) {
+                AcceptanceTemplateImage::create([
+                    'acceptance_template_id' => $template->id,
+                    'attachment_id' => $attachment->id,
+                    'order' => $currentMaxImgOrder + $index + 1,
+                ]);
+            } else {
+                AcceptanceTemplateDocument::create([
+                    'acceptance_template_id' => $template->id,
+                    'attachment_id' => $attachment->id,
+                    'order' => $currentMaxDocOrder + $index + 1,
+                ]);
+            }
         }
     }
 }

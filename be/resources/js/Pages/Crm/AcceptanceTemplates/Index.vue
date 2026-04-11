@@ -214,6 +214,99 @@
         <template #icon><PlusOutlined /></template>
         Thêm tiêu chí
       </a-button>
+
+      <!-- PREMIMUM: File Upload Section in Modal -->
+      <div class="modal-upload-container mt-6">
+        <div class="modal-upload-header">
+          <div class="flex items-center gap-2">
+            <div class="modal-upload-icon-box">
+              <CloudUploadOutlined />
+            </div>
+            <div>
+              <div class="text-sm font-bold text-gray-800">Tài liệu đính kèm</div>
+              <div class="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Định dạng hỗ trợ: JPG, PNG, PDF, Excel</div>
+            </div>
+          </div>
+          <a-tag v-if="modalUploadFiles.length" color="blue" class="rounded-lg m-0 border-none bg-blue-50 text-blue-500 font-bold px-3">
+            {{ modalUploadFiles.length }} tệp
+          </a-tag>
+        </div>
+
+        <div class="modal-upload-body">
+          <!-- Gallery: Combined Existing + New Files -->
+          <transition-group 
+            v-if="form.existing_images.length || form.existing_documents.length || modalUploadFiles.length" 
+            name="list" 
+            tag="div" 
+            class="grid grid-cols-5 gap-3 mb-4"
+          >
+            <!-- Existing Images -->
+            <div v-for="(img, idx) in form.existing_images" :key="'ex-img-' + img.id" class="modal-preview-card lg:col-span-1 col-span-1">
+              <div class="modal-preview-card__inner">
+                <img :src="img.file_url" class="w-full h-full object-cover" />
+                <div class="modal-preview-overlay" @click="removeExistingImage(idx)">
+                  <div class="delete-btn-circle"><CloseOutlined /></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Existing Documents -->
+            <div v-for="(doc, idx) in form.existing_documents" :key="'ex-doc-' + doc.id" class="modal-preview-card">
+              <div class="modal-preview-card__inner">
+                <div class="flex flex-col items-center justify-center h-full p-2">
+                  <div class="file-icon-wrapper is-generic"><FileTextOutlined /></div>
+                  <span class="text-[9px] text-gray-400 truncate w-full text-center mt-1 px-1">{{ doc.file_name }}</span>
+                </div>
+                <div class="modal-preview-overlay" @click="removeExistingDocument(idx)">
+                  <div class="delete-btn-circle"><CloseOutlined /></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- New Files (to be uploaded) -->
+            <div v-for="(file, idx) in modalUploadFiles" :key="'new-' + idx" class="modal-preview-card">
+              <div class="modal-preview-card__inner border-dashed border-blue-200">
+                <img v-if="isImageFile(file)" :src="getFilePreview(file)" class="w-full h-full object-cover opacity-70" />
+                <div v-else class="flex flex-col items-center justify-center h-full p-2">
+                  <div class="file-icon-wrapper" :class="getFileTypeClass(file)">
+                    <FilePdfOutlined v-if="file.type === 'application/pdf'" />
+                    <FileExcelOutlined v-else-if="file.type.includes('excel') || file.type.includes('spreadsheet')" />
+                    <FileWordOutlined v-else-if="file.type.includes('word') || file.type.includes('officedocument')" />
+                    <FileTextOutlined v-else />
+                  </div>
+                  <span class="text-[9px] text-gray-400 truncate w-full text-center mt-1 px-1">{{ file.name }}</span>
+                </div>
+                <div class="modal-preview-overlay" @click="removeModalFile(idx)">
+                  <div class="delete-btn-circle"><CloseOutlined /></div>
+                </div>
+                <div class="absolute bottom-1 right-1"><a-tag color="blue" class="m-0 text-[8px] px-1 py-0 leading-none">Mới</a-tag></div>
+              </div>
+            </div>
+          </transition-group>
+
+          <!-- Dropzone Area -->
+          <div 
+            class="modal-dropzone"
+            @click="modalUploadInput.click()"
+          >
+            <input 
+              type="file" 
+              multiple 
+              ref="modalUploadInput" 
+              style="display: none" 
+              @change="onModalFilesSelect" 
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+            />
+            <div class="modal-dropzone__content">
+              <div class="plus-circle">
+                <PlusOutlined />
+              </div>
+              <div class="text-xs font-bold text-gray-600">Thêm tệp ngay</div>
+              <p class="text-[10px] text-gray-400 mt-0.5">Kéo thả hoặc nhấn để chọn</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -277,8 +370,8 @@
             Hình ảnh minh họa ({{ detailData.images.length }})
           </div>
           <div class="grid grid-cols-3 gap-2">
-            <div v-for="img in detailData.images" :key="img.id" class="aspect-square rounded-xl overflow-hidden bg-gray-100">
-              <img :src="img.file_url" :alt="img.file_name" class="w-full h-full object-cover" />
+            <div v-for="img in detailData.images" :key="img.id" class="aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-100">
+              <a-image :src="img.file_url" class="w-full h-full object-cover" />
             </div>
           </div>
         </div>
@@ -296,33 +389,18 @@
               target="_blank"
               class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-blue-50 transition-colors"
             >
-              <FileTextOutlined class="text-blue-500" />
+              <div class="drawer-doc-icon" :class="getDocTypeClass(doc.file_name)">
+                <FilePdfOutlined v-if="doc.file_name.toLowerCase().endsWith('.pdf')" />
+                <FileExcelOutlined v-else-if="doc.file_name.toLowerCase().endsWith('.xls') || doc.file_name.toLowerCase().endsWith('.xlsx')" />
+                <FileWordOutlined v-else-if="doc.file_name.toLowerCase().endsWith('.doc') || doc.file_name.toLowerCase().endsWith('.docx')" />
+                <FileTextOutlined v-else />
+              </div>
               <span class="text-sm text-gray-700 font-medium">{{ doc.file_name }}</span>
             </a>
           </div>
         </div>
 
-        <!-- Upload Documents -->
-        <div class="border-t border-dashed pt-4 mt-2">
-          <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2 flex items-center gap-1">
-            <UploadOutlined /> Upload tài liệu
-          </div>
-          <input
-            type="file"
-            multiple
-            ref="docUploadInput"
-            @change="onDocFilesSelect"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-            class="block w-full text-xs py-2 px-3 border border-dashed border-gray-300 rounded-xl hover:border-blue-400 transition cursor-pointer"
-          />
-          <div v-if="docUploadFiles.length" class="mt-2 space-y-1">
-            <div class="text-[10px] text-green-600 font-medium">{{ docUploadFiles.length }} tệp đã chọn</div>
-            <a-button type="primary" size="small" class="rounded-lg" :loading="docUploading" @click="uploadDocuments">
-              <template #icon><UploadOutlined /></template>
-              Upload tài liệu
-            </a-button>
-          </div>
-        </div>
+
       </div>
 
       <div class="mt-8 flex gap-3">
@@ -358,6 +436,11 @@ import {
   CloseCircleOutlined,
   OrderedListOutlined,
   UploadOutlined,
+  FilePdfOutlined,
+  FileExcelOutlined,
+  FileWordOutlined,
+  CloseOutlined,
+  CloudUploadOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -389,13 +472,34 @@ const defaultForm = () => ({
   is_active: true,
   order: 0,
   criteria: [],
+  existing_images: [],
+  existing_documents: [],
 })
 
 const form = ref(defaultForm())
+const modalUploadFiles = ref([])
+const modalUploadInput = ref(null)
+
+const onModalFilesSelect = (e) => {
+  const selected = Array.from(e.target.files || [])
+  modalUploadFiles.value = [...modalUploadFiles.value, ...selected]
+}
+
+const removeModalFile = (idx) => {
+  modalUploadFiles.value.splice(idx, 1)
+}
+const removeExistingImage = (idx) => {
+  form.value.existing_images.splice(idx, 1)
+}
+const removeExistingDocument = (idx) => {
+  form.value.existing_documents.splice(idx, 1)
+}
+
 
 const openCreate = () => {
   editingId.value = null
   form.value = defaultForm()
+  modalUploadFiles.value = []
   modalVisible.value = true
 }
 
@@ -419,7 +523,10 @@ const openEdit = (tpl) => {
             is_critical: c.is_critical,
             order: c.order,
           })),
+          existing_images: res.data.images || [],
+          existing_documents: res.data.documents || [],
         }
+        modalUploadFiles.value = []
         modalVisible.value = true
       }
     })
@@ -484,10 +591,17 @@ const handleSubmit = () => {
   const payload = {
     ...form.value,
     criteria: form.value.criteria.filter(c => c.name.trim()),
+    existing_image_ids: form.value.existing_images.map(img => img.id),
+    existing_document_ids: form.value.existing_documents.map(doc => doc.id),
   }
 
   if (editingId.value) {
-    router.put(`/acceptance-templates/${editingId.value}`, payload, {
+    // For files in PUT request, we use POST with _method: 'PUT'
+    router.post(`/acceptance-templates/${editingId.value}`, {
+      ...payload,
+      _method: 'PUT',
+      files: modalUploadFiles.value
+    }, {
       preserveScroll: true,
       onSuccess: () => {
         message.success('Đã cập nhật bộ tài liệu')
@@ -500,7 +614,10 @@ const handleSubmit = () => {
       },
     })
   } else {
-    router.post('/acceptance-templates', payload, {
+    router.post('/acceptance-templates', {
+      ...payload,
+      files: modalUploadFiles.value
+    }, {
       preserveScroll: true,
       onSuccess: () => {
         message.success('Đã tạo bộ tài liệu mới')
@@ -540,48 +657,31 @@ const confirmDelete = (tpl) => {
   })
 }
 
-// ─── Document Upload ───
-const docUploadFiles = ref([])
-const docUploading = ref(false)
-const docUploadInput = ref(null)
+// ─── Modal Files ───
+const isImageFile = (file) => file.type.startsWith('image/')
 
-const onDocFilesSelect = (e) => {
-  docUploadFiles.value = [...(e.target.files || [])]
+const getFileTypeClass = (file) => {
+  if (file.type === 'application/pdf') return 'is-pdf'
+  if (file.type.includes('excel') || file.type.includes('spreadsheet')) return 'is-excel'
+  if (file.type.includes('word') || file.type.includes('officedocument')) return 'is-word'
+  return 'is-generic'
 }
 
-const uploadDocuments = async () => {
-  if (!detailData.value || !docUploadFiles.value.length) return
-  docUploading.value = true
+const getDocTypeClass = (fileName) => {
+  const ext = fileName.toLowerCase().split('.').pop()
+  if (ext === 'pdf') return 'is-pdf'
+  if (['xls', 'xlsx'].includes(ext)) return 'is-excel'
+  if (['doc', 'docx'].includes(ext)) return 'is-word'
+  return 'is-generic'
+}
 
-  const fd = new FormData()
-  docUploadFiles.value.forEach(f => fd.append('files[]', f))
-
-  try {
-    const res = await fetch(`/acceptance-templates/${detailData.value.id}/upload-documents`, {
-      method: 'POST',
-      headers: {
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-      },
-      body: fd,
-    })
-    const json = await res.json()
-    if (json.success) {
-      message.success(`Đã upload ${docUploadFiles.value.length} tệp tài liệu`)
-      // Refresh detail data
-      openDetail(detailData.value)
-      // Refresh page data
-      router.reload({ preserveScroll: true })
-    } else {
-      message.error(json.message || 'Lỗi upload')
-    }
-  } catch (err) {
-    message.error('Lỗi upload tài liệu')
-  } finally {
-    docUploading.value = false
-    docUploadFiles.value = []
-    if (docUploadInput.value) docUploadInput.value.value = ''
+const getFilePreview = (file) => {
+  if (isImageFile(file)) {
+    return URL.createObjectURL(file)
   }
+  return ''
 }
+
 </script>
 
 <style scoped>
@@ -778,4 +878,169 @@ const uploadDocuments = async () => {
   .at-stats { grid-template-columns: repeat(2, 1fr); padding: 0 16px; }
   .at-grid { grid-template-columns: 1fr; padding: 0 16px 32px; }
 }
+
+/* ─── Premium Upload Container ─── */
+.modal-upload-container {
+  background: #F9FBFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.modal-upload-header {
+  padding: 16px 20px;
+  background: white;
+  border-bottom: 1px solid #F1F5F9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-upload-icon-box {
+  width: 36px;
+  height: 36px;
+  background: #EFF6FF;
+  color: #3B82F6;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.modal-upload-body {
+  padding: 20px;
+}
+
+/* Preview Card */
+.modal-preview-card {
+  position: relative;
+  aspect-ratio: 1;
+}
+
+.modal-preview-card__inner {
+  width: 100%;
+  height: 100%;
+  background: white;
+  border-radius: 14px;
+  border: 1px solid #E2E8F0;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+.modal-preview-card:hover .modal-preview-card__inner {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 20px -8px rgba(0,0,0,0.1);
+  border-color: #3B82F6;
+}
+
+.file-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.file-icon-wrapper.is-pdf { background: #FEF2F2; color: #EF4444; }
+.file-icon-wrapper.is-excel { background: #F0FDF4; color: #10B981; }
+.file-icon-wrapper.is-generic { background: #F8FAFC; color: #94A3B8; }
+
+.modal-preview-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.modal-preview-card:hover .modal-preview-overlay { opacity: 1; }
+
+.delete-btn-circle {
+  width: 28px;
+  height: 28px;
+  background: white;
+  color: #EF4444;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transform: scale(0.8);
+  transition: all 0.2s ease;
+}
+.modal-preview-card:hover .delete-btn-circle { transform: scale(1); }
+
+/* Dropzone */
+.modal-dropzone {
+  border: 2px dashed #CBD5E1;
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s ease;
+  background: white;
+  cursor: pointer;
+}
+
+.modal-dropzone:hover {
+  border-color: #3B82F6;
+  background: #F0F7FF;
+  transform: translateY(-2px);
+}
+
+.modal-dropzone__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.plus-circle {
+  width: 38px;
+  height: 38px;
+  background: #F1F5F9;
+  color: #64748B;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  transition: all 0.3s ease;
+}
+.modal-dropzone:hover .plus-circle {
+  background: #3B82F6;
+  color: white;
+  transform: rotate(90deg);
+}
+
+.file-icon-wrapper.is-pdf { color: #EF4444; background: #FEF2F2; }
+.file-icon-wrapper.is-excel { color: #10B981; background: #ECFDF5; }
+.file-icon-wrapper.is-word { color: #3B82F6; background: #EFF6FF; }
+.file-icon-wrapper.is-generic { color: #6B7280; background: #F9FAFB; }
+
+.drawer-doc-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.drawer-doc-icon.is-pdf { color: #EF4444; background: #FEF2F2; }
+.drawer-doc-icon.is-excel { color: #10B981; background: #ECFDF5; }
+.drawer-doc-icon.is-word { color: #3B82F6; background: #EFF6FF; }
+.drawer-doc-icon.is-generic { color: #6B7280; background: #F9FAFB; }
+
+/* Animations */
+.list-enter-active, .list-leave-active { transition: all 0.3s ease; }
+.list-enter-from, .list-leave-to { opacity: 0; transform: scale(0.5); }
 </style>
