@@ -71,6 +71,19 @@ class PermissionSeeder extends Seeder
     private function vietnameseLabels(): array
     {
         return [
+            // ===== TỔNG QUAN =====
+            'crm.dashboard.view' => 'Xem màn hình Tổng quan CRM',
+
+            // ===== CHI PHÍ CÔNG TY =====
+            'company_cost.view' => 'Xem chi phí công ty',
+            'company_cost.create' => 'Tạo chi phí công ty',
+            'company_cost.update' => 'Sửa chi phí công ty',
+            'company_cost.delete' => 'Xóa chi phí công ty',
+            'company_cost.submit' => 'Gửi duyệt chi phí công ty',
+            'company_cost.approve.management' => 'BĐH duyệt chi phí công ty',
+            'company_cost.approve.accountant' => 'Kế toán duyệt chi phí công ty',
+            'company_cost.reject' => 'Từ chối chi phí công ty',
+
             // ===== DỰ ÁN =====
             'project.view'    => 'Xem danh sách & chi tiết dự án',
             'project.create'  => 'Tạo dự án mới',

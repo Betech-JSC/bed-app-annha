@@ -201,6 +201,9 @@ class CrmRolesController extends Controller
     private function translateGroup(string $key): string
     {
         return [
+            // Dashboard
+            'crm.dashboard' => 'Màn hình Tổng quan',
+
             // Core — Dự án
             'project' => 'Quản lý dự án',
             'progress' => 'Tiến độ thi công',
@@ -285,6 +288,7 @@ class CrmRolesController extends Controller
             'settings' => 'Cài đặt hệ thống',
 
             'general' => 'Chung',
+            'company_cost' => 'Chi phí vận hành công ty',
         ][$key] ?? ucfirst(str_replace('_', ' ', $key));
     }
 
@@ -300,6 +304,9 @@ class CrmRolesController extends Controller
                 'icon' => 'crown',
                 'color' => '#D4AF37',
                 'permission_names' => [
+                    'crm.dashboard.view',
+                    // Chi phí công ty
+                    'company_cost.view', 'company_cost.create', 'company_cost.update', 'company_cost.delete', 'company_cost.submit', 'company_cost.approve.management', 'company_cost.approve.accountant', 'company_cost.reject',
                     // Dự án
                     'project.view', 'project.create', 'project.update', 'project.delete', 'project.manage',
                     'project.comment.view', 'project.comment.create',
@@ -414,6 +421,9 @@ class CrmRolesController extends Controller
                 'icon' => 'dollar',
                 'color' => '#27AE60',
                 'permission_names' => [
+                    'crm.dashboard.view',
+                    // Chi phí công ty
+                    'company_cost.view', 'company_cost.create', 'company_cost.update', 'company_cost.delete', 'company_cost.submit', 'company_cost.approve.accountant', 'company_cost.reject',
                     'project.view',
                     // Chi phí
                     'cost.view', 'cost.create', 'cost.update', 'cost.approve.accountant',

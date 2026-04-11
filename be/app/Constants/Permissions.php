@@ -17,6 +17,11 @@ namespace App\Constants;
 class Permissions
 {
     // ===================================================================
+    // DASHBOARD MODULE
+    // ===================================================================
+    public const CRM_DASHBOARD_VIEW = 'crm.dashboard.view';
+
+    // ===================================================================
     // PROJECT MODULE
     // ===================================================================
     public const PROJECT_VIEW = 'project.view';
@@ -86,6 +91,18 @@ class Permissions
     public const ADDITIONAL_COST_REJECT = 'additional_cost.reject';
     public const ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER = 'additional_cost.mark_paid_by_customer';
     public const ADDITIONAL_COST_CONFIRM = 'additional_cost.confirm';
+
+    // ===================================================================
+    // COMPANY COST MODULE
+    // ===================================================================
+    public const COMPANY_COST_VIEW = 'company_cost.view';
+    public const COMPANY_COST_CREATE = 'company_cost.create';
+    public const COMPANY_COST_UPDATE = 'company_cost.update';
+    public const COMPANY_COST_DELETE = 'company_cost.delete';
+    public const COMPANY_COST_SUBMIT = 'company_cost.submit';
+    public const COMPANY_COST_APPROVE_MANAGEMENT = 'company_cost.approve.management';
+    public const COMPANY_COST_APPROVE_ACCOUNTANT = 'company_cost.approve.accountant';
+    public const COMPANY_COST_REJECT = 'company_cost.reject';
 
     // ===================================================================
     // MATERIAL MODULE
@@ -408,6 +425,7 @@ class Permissions
     public static function all(): array
     {
         return [
+            self::CRM_DASHBOARD_VIEW,
             // Project
             self::PROJECT_VIEW,
             self::PROJECT_CREATE,
@@ -449,6 +467,16 @@ class Permissions
             self::COST_APPROVE_MANAGEMENT,
             self::COST_APPROVE_ACCOUNTANT,
             self::COST_REJECT,
+
+            // Company Cost
+            self::COMPANY_COST_VIEW,
+            self::COMPANY_COST_CREATE,
+            self::COMPANY_COST_UPDATE,
+            self::COMPANY_COST_DELETE,
+            self::COMPANY_COST_SUBMIT,
+            self::COMPANY_COST_APPROVE_MANAGEMENT,
+            self::COMPANY_COST_APPROVE_ACCOUNTANT,
+            self::COMPANY_COST_REJECT,
 
             // Additional Cost
             self::ADDITIONAL_COST_VIEW,
@@ -701,6 +729,9 @@ class Permissions
     public static function groupedByModule(): array
     {
         return [
+            'dashboard' => [
+                self::CRM_DASHBOARD_VIEW,
+            ],
             'project' => [
                 self::PROJECT_VIEW,
                 self::PROJECT_CREATE,
@@ -736,6 +767,16 @@ class Permissions
                 self::COST_APPROVE_MANAGEMENT,
                 self::COST_APPROVE_ACCOUNTANT,
                 self::COST_REJECT,
+            ],
+            'company_cost' => [
+                self::COMPANY_COST_VIEW,
+                self::COMPANY_COST_CREATE,
+                self::COMPANY_COST_UPDATE,
+                self::COMPANY_COST_DELETE,
+                self::COMPANY_COST_SUBMIT,
+                self::COMPANY_COST_APPROVE_MANAGEMENT,
+                self::COMPANY_COST_APPROVE_ACCOUNTANT,
+                self::COMPANY_COST_REJECT,
             ],
             'additional_cost' => [
                 self::ADDITIONAL_COST_VIEW,

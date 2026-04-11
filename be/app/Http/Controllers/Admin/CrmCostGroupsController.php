@@ -3,15 +3,22 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\CostGroup;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class CrmCostGroupsController extends Controller
 {
+    use CrmAuthorization;
+
     public function index(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_COST_VIEW);
+
         $query = CostGroup::with('creator')->withCount('costs');
 
         if ($search = $request->query('search')) {
@@ -46,6 +53,8 @@ class CrmCostGroupsController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_COST_CREATE);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50|unique:cost_groups,code',
@@ -66,6 +75,8 @@ class CrmCostGroupsController extends Controller
 
     public function update(Request $request, $id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_COST_UPDATE);
         $costGroup = CostGroup::findOrFail($id);
 
         $validated = $request->validate([
@@ -83,6 +94,8 @@ class CrmCostGroupsController extends Controller
 
     public function destroy($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_COST_DELETE);
         $costGroup = CostGroup::findOrFail($id);
 
         // Prevent deletion if costs are using this group
@@ -96,6 +109,8 @@ class CrmCostGroupsController extends Controller
 
     public function toggleActive($id)
     {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_COST_UPDATE);
         $costGroup = CostGroup::findOrFail($id);
         $costGroup->update(['is_active' => !$costGroup->is_active]);
 

@@ -11,6 +11,23 @@ class PermissionVietnameseSeeder extends Seeder
     {
         $map = [
             // ===================================================================
+            // TỔNG QUAN
+            // ===================================================================
+            'crm.dashboard.view' => 'Xem màn hình Tổng quan CRM',
+
+            // ===================================================================
+            // CHI PHÍ CÔNG TY
+            // ===================================================================
+            'company_cost.view'               => 'Xem chi phí vận hành công ty',
+            'company_cost.create'             => 'Tạo khoản chi phí công ty',
+            'company_cost.update'             => 'Cập nhật khoản chi phí công ty',
+            'company_cost.delete'             => 'Xóa khoản chi phí công ty',
+            'company_cost.submit'             => 'Gửi yêu cầu chi phí công ty',
+            'company_cost.approve.management' => 'Ban điều hành duyệt chi phí công ty',
+            'company_cost.approve.accountant' => 'Kế toán duyệt chi phí công ty',
+            'company_cost.reject'             => 'Từ chối khoản chi phí công ty',
+
+            // ===================================================================
             // DỰ ÁN
             // ===================================================================
             'project.view'    => 'Xem danh sách & chi tiết dự án',
@@ -389,17 +406,6 @@ class PermissionVietnameseSeeder extends Seeder
             'reminder.update' => 'Sửa nhắc nhở',
             'reminder.delete' => 'Xóa nhắc nhở',
 
-            // ===================================================================
-            // CHI PHÍ CÔNG TY (không thuộc dự án)
-            // ===================================================================
-            'company_cost.view'               => 'Xem chi phí vận hành công ty',
-            'company_cost.create'             => 'Tạo khoản chi phí công ty',
-            'company_cost.update'             => 'Sửa chi phí công ty',
-            'company_cost.delete'             => 'Xóa chi phí công ty',
-            'company_cost.submit'             => 'Gửi chi phí công ty chờ duyệt',
-            'company_cost.approve.management' => 'Ban quản lý duyệt chi phí công ty',
-            'company_cost.approve.accountant' => 'Kế toán xác nhận chi phí công ty',
-            'company_cost.reject'             => 'Từ chối chi phí công ty',
 
             // ===================================================================
             // HỢP ĐỒNG THẦU PHỤ (Settings)

@@ -278,7 +278,7 @@ const menuItems = computed(() => {
       key: 'dashboard',
       icon: () => h(DashboardOutlined),
       label: 'Tổng quan',
-      // Always visible
+      perm: 'crm.dashboard.view',
     },
     {
       key: 'approvals',
@@ -323,8 +323,8 @@ const menuItems = computed(() => {
         { key: 'operations-dashboard', label: 'Tổng quan dòng tiền', perm: 'operations.dashboard.view' },
         { key: 'shareholders', label: 'Nguồn vốn / Cổ đông', perm: 'shareholder.view' },
         { key: 'equipment', label: 'Kho tài sản & Thiết bị', perm: 'company_asset.view' },
-        { key: 'company-costs', label: 'Chi phí công ty', perm: 'cost.view' },
-        { key: 'cost-groups', label: 'Nhóm chi phí', perm: 'cost.view' },
+        { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_cost.view' },
+        { key: 'cost-groups', label: 'Nhóm chi phí', perm: 'company_cost.view' },
       ],
     },
     {

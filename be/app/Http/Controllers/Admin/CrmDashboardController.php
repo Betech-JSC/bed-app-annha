@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Constants\Permissions;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\Cost;
@@ -18,6 +19,8 @@ class CrmDashboardController extends Controller
 {
     public function index()
     {
+        crmRequire(Permissions::CRM_DASHBOARD_VIEW);
+
         $now = Carbon::now();
         $startOfMonth = $now->copy()->startOfMonth();
         $startOfYear = $now->copy()->startOfYear();
