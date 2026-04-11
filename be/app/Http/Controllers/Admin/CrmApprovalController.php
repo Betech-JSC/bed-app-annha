@@ -21,6 +21,7 @@ use App\Models\ProjectBudget;
 use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Models\User;
+use App\Services\ApprovalQueryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -31,366 +32,79 @@ use Inertia\Inertia;
 class CrmApprovalController extends Controller
 {
     use CrmAuthorization;
+
+    protected $approvalQueryService;
+
+    public function __construct(ApprovalQueryService $approvalQueryService)
+    {
+        $this->approvalQueryService = $approvalQueryService;
+    }
+
     /**
      * Display the Approval Center page — grouped by approval level.
      */
     public function index(Request $request)
     {
         $user = Auth::guard('admin')->user();
-        $allProjectIds = $user->isSuperAdmin() ? [] : $user->projects()->pluck('projects.id')->toArray();
+        $data = $this->approvalQueryService->getApprovalData($user);
 
-        // ─── Management Level (BĐH) — Show All (Draft, Pending, Management, Rejected) ───
-        $managementItems = Cost::whereIn('status', ['draft', 'pending', 'pending_management_approval', 'rejected'])
-            ->whereNull('material_bill_id')
-            ->whereNull('subcontractor_payment_id')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $managementItemsFormatted = $managementItems->map(fn(Cost $cost) => $this->formatItem($cost));
+        // Map data using existing formatters
+        $managementItemsFormatted = $data['costs_management']->map(fn(Cost $cost) => $this->formatItem($cost));
+        $accountantItemsFormatted = $data['costs_accountant']->map(fn(Cost $cost) => $this->formatItem($cost));
 
-        // ─── Accountant Level (KT) — Only show accountant-relevant statuses (no rejected — that's in management tab) ───
-        $accountantItems = Cost::whereIn('status', ['pending_accountant_approval', 'approved'])
-            ->whereNull('material_bill_id')
-            ->whereNull('subcontractor_payment_id')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $accountantItemsFormatted = $accountantItems->map(fn(Cost $cost) => $this->formatItem($cost));
+        $acceptanceSupervisorItemsFormatted = $data['acceptance_supervisor']->map(
+            fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ GS duyệt', 'supervisor')
+        );
+        $acceptancePMItemsFormatted = $data['acceptance_pm']->map(
+            fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ QLDA duyệt', 'project_manager')
+        );
+        $customerAcceptanceItemsFormatted = $data['acceptance_customer']->map(
+            fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ KH duyệt', 'customer')
+        );
 
-        // ─── Nghiệm thu chờ GS duyệt ───
-        $acceptanceSupervisorItems = AcceptanceStage::where('status', 'pending')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $acceptanceSupervisorItemsFormatted = $acceptanceSupervisorItems->map(fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ GS duyệt', 'supervisor'));
+        $changeRequestItemsFormatted = $data['change_requests']->map(fn(ChangeRequest $cr) => $this->formatChangeRequestItem($cr));
+        $additionalCostItemsFormatted = $data['additional_costs']->map(fn(AdditionalCost $ac) => $this->formatAdditionalCostItem($ac));
 
-        // ─── Nghiệm thu chờ QLDA duyệt ───
-        $acceptancePMItems = AcceptanceStage::where('status', 'supervisor_approved')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'supervisorApprover:id,name', 'task:id,name', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->get();
-        $acceptancePMItemsFormatted = $acceptancePMItems->map(fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ QLDA duyệt', 'project_manager'));
+        $subPaymentManagementFormatted = $data['sub_payments_management']->map(fn(SubcontractorPayment $p) => $this->formatSubPaymentItem($p));
+        $subPaymentAccountantFormatted = $data['sub_payments_accountant']->map(fn(SubcontractorPayment $p) => $this->formatSubPaymentItem($p));
 
-        // ─── Customer Acceptance (Khách hàng duyệt nghiệm thu) ───
-        $customerAcceptanceItems = AcceptanceStage::where('status', 'project_manager_approved')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'projectManagerApprover:id,name', 'task:id,name', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->get();
-        $customerAcceptanceItemsFormatted = $customerAcceptanceItems->map(fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ KH duyệt', 'customer'));
+        $contractItemsFormatted = $data['contracts']->map(fn(Contract $c) => $this->formatContractItem($c));
+        $pendingPaymentItemsFormatted = $data['payments_pending']->map(fn(ProjectPayment $p) => $this->formatPaymentItem($p));
+        $paidPaymentItemsFormatted = $data['payments_paid']->map(fn(ProjectPayment $p) => $this->formatPaymentItem($p));
 
-        // ─── Change Requests ───
-        $changeRequestItems = ChangeRequest::whereIn('status', ['submitted', 'under_review', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'requester:id,name,email', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $changeRequestItemsFormatted = $changeRequestItems->map(fn(ChangeRequest $cr) => $this->formatChangeRequestItem($cr));
+        $materialBillManagementItemsFormatted = $data['material_bills_management']->map(fn($b) => $this->formatMaterialBillItem($b));
+        $materialBillAccountantItemsFormatted = $data['material_bills_accountant']->map(fn($b) => $this->formatMaterialBillItem($b));
 
-        // ─── Additional Costs ───
-        $additionalCostItems = AdditionalCost::whereIn('status', ['pending', 'pending_approval', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'proposer:id,name,email', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $additionalCostItemsFormatted = $additionalCostItems->map(fn(AdditionalCost $ac) => $this->formatAdditionalCostItem($ac));
+        $subAcceptanceItemsFormatted = $data['sub_acceptances']->map(fn(SubcontractorAcceptance $sa) => $this->formatSubAcceptanceItem($sa));
+        $supplierAcceptanceItemsFormatted = $data['supplier_acceptances']->map(fn(SupplierAcceptance $sa) => $this->formatSupplierAcceptanceItem($sa));
 
-        // ─── Subcontractor Payments chờ duyệt ───
-        $subPaymentManagement = SubcontractorPayment::whereIn('status', ['pending_management_approval', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $subPaymentManagementFormatted = $subPaymentManagement->map(fn(SubcontractorPayment $p) => $this->formatSubPaymentItem($p));
+        $constructionLogItemsFormatted = $data['construction_logs']->map(fn(ConstructionLog $log) => $this->formatConstructionLogItem($log));
+        $scheduleAdjustmentItemsFormatted = $data['schedule_adjustments']->map(fn(ScheduleAdjustment $adj) => $this->formatScheduleAdjustmentItem($adj));
+        $defectItemsFormatted = $data['defects']->map(fn(Defect $d) => $this->formatDefectItem($d));
+        $budgetItemsFormatted = $data['budgets']->map(fn(ProjectBudget $b) => $this->formatBudget($b));
 
-        $subPaymentAccountant = SubcontractorPayment::where('status', 'pending_accountant_confirmation')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'approver:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $subPaymentAccountantFormatted = $subPaymentAccountant->map(fn(SubcontractorPayment $p) => $this->formatSubPaymentItem($p));
+        $equipmentRentalManagementFormatted = $data['equipment_rentals_management']->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
+        $equipmentRentalAccountantFormatted = $data['equipment_rentals_accountant']->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
+        $equipmentRentalReturnFormatted = $data['equipment_rentals_return']->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
 
-        // ─── Hợp đồng chờ Khách hàng duyệt ───
-        $contractItems = Contract::where('status', 'pending_customer_approval')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->get();
-        $contractItemsFormatted = $contractItems->map(fn(Contract $c) => $this->formatContractItem($c));
+        $assetUsageManagementFormatted = $data['asset_usages_management']->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
+        $assetUsageAccountantFormatted = $data['asset_usages_accountant']->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
+        $assetUsageReturnFormatted = $data['asset_usages_return']->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
 
-        // ─── Thanh toán dự án chờ Khách hàng duyệt ───
-        $pendingPaymentItems = ProjectPayment::where('status', 'customer_pending_approval')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'contract:id,contract_value', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->get();
-        $pendingPaymentItemsFormatted = $pendingPaymentItems->map(fn(ProjectPayment $p) => $this->formatPaymentItem($p));
-
-        // ─── Thanh toán dự án khách đã trả (Chờ KT xác nhận) ───
-        $paidPaymentItems = ProjectPayment::where('status', 'customer_paid')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'contract:id,contract_value', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->get();
-        $paidPaymentItemsFormatted = $paidPaymentItems->map(fn(ProjectPayment $p) => $this->formatPaymentItem($p));
-
-        // ─── Phiếu vật tư chờ duyệt ───
-        $materialBillManagementItemsFormatted = collect();
-        $materialBillAccountantItemsFormatted = collect();
-        $materialBillClass = 'App\\Models\\MaterialBill';
-        if (class_exists($materialBillClass)) {
-            $materialBillManagementItemsFormatted = $materialBillClass::whereIn('status', ['draft', 'pending', 'pending_management', 'rejected'])
-                ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-                ->with(['creator:id,name,email', 'project:id,name,code', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(fn($b) => $this->formatMaterialBillItem($b));
-
-            $materialBillAccountantItemsFormatted = $materialBillClass::where('status', 'pending_accountant')
-                ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-                ->with(['creator:id,name,email', 'project:id,name,code', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(fn($b) => $this->formatMaterialBillItem($b));
-        }
-
-        // ─── Nghiệm thu NTP chờ duyệt ───
-        $subAcceptanceItems = SubcontractorAcceptance::where('status', 'pending')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $subAcceptanceItemsFormatted = $subAcceptanceItems->map(fn(SubcontractorAcceptance $sa) => $this->formatSubAcceptanceItem($sa));
-
-        // ─── Nghiệm thu NCC chờ duyệt ───
-        $supplierAcceptanceItems = SupplierAcceptance::where('status', 'pending')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['supplier:id,name', 'project:id,name,code', 'creator:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $supplierAcceptanceItemsFormatted = $supplierAcceptanceItems->map(fn(SupplierAcceptance $sa) => $this->formatSupplierAcceptanceItem($sa));
-
-        // ─── Nhật ký công trường ───
-        $constructionLogItems = ConstructionLog::whereIn('approval_status', ['pending', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
-            ->orderBy('log_date', 'desc')
-            ->get();
-        $constructionLogItemsFormatted = $constructionLogItems->map(fn(ConstructionLog $log) => $this->formatConstructionLogItem($log));
-
-        // ─── Điều chỉnh tiến độ chờ duyệt ───
-        $scheduleAdjustmentItems = ScheduleAdjustment::where('status', 'pending')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $scheduleAdjustmentItemsFormatted = $scheduleAdjustmentItems->map(fn(ScheduleAdjustment $adj) => $this->formatScheduleAdjustmentItem($adj));
-
-        // ─── Lỗi nghiệm thu chờ xác nhận (fixed → chờ GS/QLDA verify) ───
-        $defectItems = Defect::where('status', 'fixed')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'reporter:id,name', 'fixer:id,name', 'task:id,name', 'acceptanceStage:id,name', 'attachments'])
-            ->orderBy('fixed_at', 'desc')
-            ->get();
-        $defectItemsFormatted = $defectItems->map(fn(Defect $d) => $this->formatDefectItem($d));
-
-        // ─── Project Budgets (Ngân sách chưa duyệt) ───
-        $budgetItems = ProjectBudget::whereIn('status', ['draft', 'pending_approval'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $budgetItemsFormatted = $budgetItems->map(fn(ProjectBudget $b) => $this->formatBudget($b));
-
-        // ─── Thuê thiết bị (Equipment rentals) ───
-        $equipmentRentalManagement = EquipmentRental::whereIn('status', ['pending_management', 'rejected'])
-            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
-                if (!$user->isSuperAdmin()) {
-                    $q->whereIn('id', $allProjectIds);
-                }
-            })
-            ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $equipmentRentalManagementFormatted = $equipmentRentalManagement->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
-
-        $equipmentRentalAccountant = EquipmentRental::where('status', 'pending_accountant')
-            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
-                if (!$user->isSuperAdmin()) {
-                    $q->whereIn('id', $allProjectIds);
-                }
-            })
-            ->with(['project:id,name,code', 'creator:id,name,email', 'approver:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $equipmentRentalAccountantFormatted = $equipmentRentalAccountant->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
-
-        $equipmentRentalReturn = EquipmentRental::where('status', 'pending_return')
-            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
-                if (!$user->isSuperAdmin()) {
-                    $q->whereIn('id', $allProjectIds);
-                }
-            })
-            ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $equipmentRentalReturnFormatted = $equipmentRentalReturn->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
-
-        // ─── Sử dụng thiết bị (Asset usages) ───
-        $assetUsageManagement = AssetUsage::whereIn('status', ['pending_management', 'rejected'])
-            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
-                if (!$user->isSuperAdmin()) {
-                    $q->whereIn('id', $allProjectIds);
-                }
-            })
-            ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $assetUsageManagementFormatted = $assetUsageManagement->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
-
-        $assetUsageAccountant = AssetUsage::where('status', 'pending_accountant')
-            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
-                if (!$user->isSuperAdmin()) {
-                    $q->whereIn('id', $allProjectIds);
-                }
-            })
-            ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'approver:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $assetUsageAccountantFormatted = $assetUsageAccountant->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
-
-        $assetUsageReturn = AssetUsage::where('status', 'pending_return')
-            ->whereHas('project', function ($q) use ($user, $allProjectIds) {
-                if (!$user->isSuperAdmin()) {
-                    $q->whereIn('id', $allProjectIds);
-                }
-            })
-            ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        $assetUsageReturnFormatted = $assetUsageReturn->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
-
-        // ─── Recently processed feed ───
-        $recentCosts = Cost::whereIn('status', ['approved', 'rejected'])
-            ->whereNull('material_bill_id')
-            ->whereNull('subcontractor_payment_id')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->limit(15)
-            ->get();
-
-        $recentCR = ChangeRequest::whereIn('status', ['approved', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'requester:id,name,email', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->limit(5)
-            ->get();
-
-        $recentAC = AdditionalCost::whereIn('status', ['approved', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'proposer:id,name,email', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->limit(5)
-            ->get();
-
-        $recentSubPayments = SubcontractorPayment::whereIn('status', ['paid', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->limit(5)
-            ->get();
-
-        $recentAcceptances = AcceptanceStage::whereIn('status', ['customer_approved', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code,project_manager_id', 'project.projectManager:id,name', 'task:id,name', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->limit(5)
-            ->get();
-
-        $recentBudgets = ProjectBudget::whereIn('status', ['approved', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->limit(5)
-            ->get();
-
-        $recentRentals = EquipmentRental::whereIn('status', ['in_use', 'returned', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->limit(10)
-            ->get();
-
-        $recentUsages = AssetUsage::whereIn('status', ['in_use', 'returned', 'rejected'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
-            ->orderBy('updated_at', 'desc')
-            ->limit(10)
-            ->get();
-
+        // Format recent activity items
+        $recent = $data['recent'];
         $recentItems = collect([])
-            ->concat($recentCosts->map(fn(Cost $item) => $this->formatItem($item)))
-            ->concat($recentCR->map(fn(ChangeRequest $item) => $this->formatChangeRequestItem($item)))
-            ->concat($recentAC->map(fn(AdditionalCost $item) => $this->formatAdditionalCostItem($item)))
-            ->concat($recentSubPayments->map(fn(SubcontractorPayment $item) => $this->formatSubPaymentItem($item)))
-            ->concat($recentAcceptances->map(fn(AcceptanceStage $item) => $this->formatAcceptanceItem($item, 'Nghiệm thu', 'customer')))
-            ->concat($recentBudgets->map(fn(ProjectBudget $item) => $this->formatBudget($item)))
-            ->concat($recentRentals->map(fn(EquipmentRental $item) => $this->formatEquipmentRentalItem($item)))
-            ->concat($recentUsages->map(fn(AssetUsage $item) => $this->formatAssetUsageItem($item)))
-            ->sortByDesc('created_at')
+            ->concat($recent['costs']->map(fn(Cost $item) => $this->formatItem($item)))
+            ->concat($recent['change_requests']->map(fn(ChangeRequest $item) => $this->formatChangeRequestItem($item)))
+            ->concat($recent['additional_costs']->map(fn(AdditionalCost $item) => $this->formatAdditionalCostItem($item)))
+            ->concat($recent['sub_payments']->map(fn(SubcontractorPayment $item) => $this->formatSubPaymentItem($item)))
+            ->concat($recent['acceptances']->map(fn(AcceptanceStage $item) => $this->formatAcceptanceItem($item, 'Nghiệm thu', 'customer')))
+            ->concat($recent['budgets']->map(fn(ProjectBudget $item) => $this->formatBudget($item)))
+            ->concat($recent['equipment_rentals']->map(fn(EquipmentRental $item) => $this->formatEquipmentRentalItem($item)))
+            ->concat($recent['asset_usages']->map(fn(AssetUsage $item) => $this->formatAssetUsageItem($item)))
+            ->sortByDesc(fn($item) => $item['created_at']) // Use simple sort since they are formatted
             ->take(30)
             ->values();
-
-        // ─── Actually Pending Stats (Exclude Draft/Rejected for KPIs) ───
-        $realPendingManagement = Cost::whereIn('status', ['pending', 'pending_management_approval'])
-            ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->count();
-        $realPendingAccountant = Cost::whereIn('status', ['pending_accountant_approval'])
-            ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->count();
-        $realPendingAcceptance = AcceptanceStage::whereIn('status', ['pending', 'supervisor_approved', 'project_manager_approved'])
-            ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-            ->count();
-        
-        // Security Check: If user is a customer, only count items they are supposed to see
-        $isCustomer = Auth::user()->role === 'customer';
-        
-        $stats = [
-            'pending_management' => $isCustomer ? 0 : $realPendingManagement,
-            'pending_accountant' => $isCustomer ? 0 : $realPendingAccountant,
-            'pending_acceptance' => $realPendingAcceptance,
-            'pending_others' => $isCustomer ? 0 : (
-                $changeRequestItems->count() + 
-                $additionalCostItems->count() + 
-                $subPaymentManagement->count() + 
-                $materialBillManagementItemsFormatted->count() +
-                $equipmentRentalManagement->count() +
-                $assetUsageManagement->count()
-            ),
-            'approved_today' => Cost::where('status', 'approved')->whereDate('updated_at', today())
-                ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-                ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-                ->count(),
-            'rejected_today' => Cost::where('status', 'rejected')->whereDate('updated_at', today())
-                ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-                ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-                ->count(),
-            'total_pending_amount' => $isCustomer 
-                ? ProjectPayment::where('status', 'customer_pending_approval')
-                    ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-                    ->sum('amount')
-                : Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])
-                    ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-                    ->when(!$user->isSuperAdmin(), fn($q) => $q->whereIn('project_id', $allProjectIds))
-                    ->sum('amount'),
-        ];
 
         return Inertia::render('Crm/Approvals/Index', [
             'managementItems' => $managementItemsFormatted->values(),
@@ -420,7 +134,7 @@ class CrmApprovalController extends Controller
             'assetUsageAccountantItems' => $assetUsageAccountantFormatted->values(),
             'assetUsageReturnItems' => $assetUsageReturnFormatted->values(),
             'recentItems' => $recentItems,
-            'stats' => $stats,
+            'stats' => $data['stats'],
         ]);
     }
 
