@@ -360,6 +360,7 @@ class CrmRolesController extends Controller
                 'icon' => 'project',
                 'color' => '#1B4F72',
                 'permission_names' => [
+                    'dashboard.view',
                     // Dự án
                     'project.view', 'project.create', 'project.update', 'project.manage',
                     'project.comment.view', 'project.comment.create', 'project.comment.update', 'project.comment.delete',
@@ -457,6 +458,7 @@ class CrmRolesController extends Controller
                 'icon' => 'eye',
                 'color' => '#E67E22',
                 'permission_names' => [
+                    'dashboard.view',
                     'project.view',
                     'project.comment.view', 'project.comment.create',
                     'progress.view', 'progress.update',
@@ -494,6 +496,7 @@ class CrmRolesController extends Controller
                 'icon' => 'tool',
                 'color' => '#2E86C1',
                 'permission_names' => [
+                    'dashboard.view',
                     'project.view',
                     'project.comment.view', 'project.comment.create',
                     'progress.view',
