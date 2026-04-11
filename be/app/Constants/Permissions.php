@@ -19,7 +19,7 @@ class Permissions
     // ===================================================================
     // DASHBOARD MODULE
     // ===================================================================
-    public const CRM_DASHBOARD_VIEW = 'crm.dashboard.view';
+    public const DASHBOARD_VIEW = 'dashboard.view';
 
     // ===================================================================
     // PROJECT MODULE
@@ -425,7 +425,7 @@ class Permissions
     public static function all(): array
     {
         return [
-            self::CRM_DASHBOARD_VIEW,
+            self::DASHBOARD_VIEW,
             // Project
             self::PROJECT_VIEW,
             self::PROJECT_CREATE,
@@ -730,7 +730,7 @@ class Permissions
     {
         return [
             'dashboard' => [
-                self::CRM_DASHBOARD_VIEW,
+                self::DASHBOARD_VIEW,
             ],
             'project' => [
                 self::PROJECT_VIEW,

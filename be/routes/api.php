@@ -176,7 +176,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ===================================================================
 
     // Monitoring Dashboard (tổng quan tất cả projects)
-    Route::get('monitoring/dashboard', [ProjectMonitoringController::class, 'dashboard']);
+    Route::get('monitoring/dashboard', [ProjectMonitoringController::class, 'dashboard'])->middleware('permission:dashboard.view');
 
     // Company Costs (Chi phí công ty - không gắn với dự án cụ thể)
     Route::prefix('company-costs')->group(function () {

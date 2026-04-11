@@ -303,7 +303,7 @@ class CrmRolesController extends Controller
                 'icon' => 'crown',
                 'color' => '#D4AF37',
                 'permission_names' => [
-                    'crm.dashboard.view',
+                    'dashboard.view',
                     // Chi phí công ty
                     'company_cost.view', 'company_cost.create', 'company_cost.update', 'company_cost.delete', 'company_cost.submit', 'company_cost.approve.management', 'company_cost.approve.accountant', 'company_cost.reject',
                     // Dự án
@@ -420,7 +420,7 @@ class CrmRolesController extends Controller
                 'icon' => 'dollar',
                 'color' => '#27AE60',
                 'permission_names' => [
-                    'crm.dashboard.view',
+                    'dashboard.view',
                     // Chi phí công ty
                     'company_cost.view', 'company_cost.create', 'company_cost.update', 'company_cost.delete', 'company_cost.submit', 'company_cost.approve.accountant', 'company_cost.reject',
                     'project.view',

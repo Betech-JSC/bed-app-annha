@@ -72,7 +72,7 @@ class PermissionSeeder extends Seeder
     {
         return [
             // ===== TỔNG QUAN =====
-            'crm.dashboard.view' => 'Xem màn hình Tổng quan CRM',
+            'dashboard.view' => 'Xem màn hình Tổng quan CRM',
 
             // ===== CHI PHÍ CÔNG TY =====
             'company_cost.view' => 'Xem chi phí công ty',

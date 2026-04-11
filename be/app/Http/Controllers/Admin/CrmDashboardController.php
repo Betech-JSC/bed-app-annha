@@ -22,7 +22,7 @@ class CrmDashboardController extends Controller
 
     public function index()
     {
-        $this->crmRequire(Auth::guard('admin')->user(), Permissions::CRM_DASHBOARD_VIEW);
+        $this->crmRequire(Auth::guard('admin')->user(), Permissions::DASHBOARD_VIEW);
 
         $now = Carbon::now();
         $startOfMonth = $now->copy()->startOfMonth();

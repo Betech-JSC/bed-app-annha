@@ -278,7 +278,7 @@ const menuItems = computed(() => {
       key: 'dashboard',
       icon: () => h(DashboardOutlined),
       label: 'Tổng quan',
-      perm: 'crm.dashboard.view',
+      perm: 'dashboard.view',
     },
     {
       key: 'approvals',

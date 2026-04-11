@@ -13,7 +13,7 @@ class PermissionVietnameseSeeder extends Seeder
             // ===================================================================
             // TỔNG QUAN
             // ===================================================================
-            'crm.dashboard.view' => 'Xem màn hình Tổng quan CRM',
+            'dashboard.view' => 'Xem màn hình Tổng quan CRM',
 
             // ===================================================================
             // CHI PHÍ CÔNG TY
