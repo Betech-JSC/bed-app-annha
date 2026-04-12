@@ -656,19 +656,20 @@ const getDetailUrl = (record) => {
   const pid = record.project_id
   const typeUrlMap = {
     project_cost: pid ? `/projects/${pid}?tab=costs` : null,
+    company_cost: null, // company costs have no project tab
     acceptance: pid ? `/projects/${pid}?tab=acceptance` : null,
-    change_request: pid ? `/projects/${pid}?tab=change-requests` : null,
-    additional_cost: pid ? `/projects/${pid}?tab=costs` : null,
+    change_request: pid ? `/projects/${pid}?tab=change_requests` : null,
+    additional_cost: pid ? `/projects/${pid}?tab=additional_costs` : null,
     sub_payment: pid ? `/projects/${pid}?tab=subcontractors` : null,
-    contract: pid ? `/projects/${pid}?tab=contracts` : null,
+    contract: pid ? `/projects/${pid}?tab=contract` : null,
     project_payment: pid ? `/projects/${pid}?tab=payments` : null,
     material_bill: pid ? `/projects/${pid}?tab=materials` : null,
     sub_acceptance: pid ? `/projects/${pid}?tab=subcontractors` : null,
-    supplier_acceptance: pid ? `/projects/${pid}?tab=suppliers` : null,
+    supplier_acceptance: pid ? `/projects/${pid}?tab=subcontractors` : null,
     construction_log: pid ? `/projects/${pid}?tab=logs` : null,
     schedule_adjustment: pid ? `/projects/${pid}?tab=gantt` : null,
     defect: pid ? `/projects/${pid}?tab=defects` : null,
-    budget: pid ? `/projects/${pid}?tab=budget` : null,
+    budget: pid ? `/projects/${pid}?tab=budgets` : null,
     equipment_rental: pid ? `/projects/${pid}?tab=equipment` : null,
     asset_usage: pid ? `/projects/${pid}?tab=equipment` : null,
   }

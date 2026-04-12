@@ -5219,8 +5219,40 @@ const daysRemaining = computed(() => {
 })
 
 // ============ STATE ============
-const activeTab = ref('gantt')
-const activeTabGroup = ref('schedule')
+// Read initial tab from URL query string (?tab=costs, ?tab=materials, etc.)
+const getInitialTab = () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const tabParam = urlParams.get('tab')
+  // Map of valid tab keys (must match tabGroupTabs keys)
+  const validTabs = [
+    'overview', 'gantt', 'progress',
+    'contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices',
+    'subcontractors', 'materials', 'equipment',
+    'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks',
+    'personnel', 'attendance', 'labor',
+    'warranty', 'maintenances',
+    'documents',
+  ]
+  return (tabParam && validTabs.includes(tabParam)) ? tabParam : 'gantt'
+}
+
+const getGroupForTab = (tab) => {
+  const groupMap = {
+    overview: 'overview',
+    gantt: 'schedule', progress: 'schedule',
+    contract: 'finance', costs: 'finance', payments: 'finance', additional_costs: 'finance', budgets: 'finance', finance: 'finance', invoices: 'finance',
+    subcontractors: 'expense', materials: 'expense', equipment: 'expense',
+    logs: 'monitor', acceptance: 'monitor', defects: 'monitor', change_requests: 'monitor', comments: 'monitor', risks: 'monitor',
+    personnel: 'hr', attendance: 'hr', labor: 'hr',
+    warranty: 'warranty', maintenances: 'warranty',
+    documents: 'other',
+  }
+  return groupMap[tab] || 'schedule'
+}
+
+const initialTab = getInitialTab()
+const activeTab = ref(initialTab)
+const activeTabGroup = ref(getGroupForTab(initialTab))
 const costStatusFilter = ref('all')
 const costGroupFilter = ref(null)
 const commentText = ref('')
@@ -5447,17 +5479,7 @@ const tabGroups = computed(() => [
 
 // Map activeTab to correct group (for when tab clicked directly)
 watch(activeTab, (tab) => {
-  const groupMap = {
-    overview: 'overview',
-    gantt: 'schedule', progress: 'schedule',
-    contract: 'finance', costs: 'finance', payments: 'finance', additional_costs: 'finance', budgets: 'finance', finance: 'finance', invoices: 'finance',
-    subcontractors: 'expense', materials: 'expense', equipment: 'expense',
-    logs: 'monitor', acceptance: 'monitor', defects: 'monitor', change_requests: 'monitor', comments: 'monitor', risks: 'monitor',
-    personnel: 'hr', attendance: 'hr', labor: 'hr',
-    warranty: 'warranty', maintenances: 'warranty',
-    documents: 'other',
-  }
-  activeTabGroup.value = groupMap[tab] || 'overview'
+  activeTabGroup.value = getGroupForTab(tab)
 })
 
 const filteredCosts = computed(() => {
