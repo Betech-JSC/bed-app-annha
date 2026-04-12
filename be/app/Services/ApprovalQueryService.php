@@ -268,7 +268,7 @@ class ApprovalQueryService
         // PROJECT BUDGETS (Ngân sách dự án)
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'budget'])) {
-            $data['budgets'] = ProjectBudget::whereIn('status', ['draft', 'pending_approval'])
+            $data['budgets'] = ProjectBudget::whereIn('status', ['pending_approval'])
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')

@@ -352,6 +352,18 @@
         </div>
       </div>
       <a-divider />
+      <!-- View Detail Button -->
+      <a-button
+        v-if="getDetailUrl(detailItem)"
+        block
+        size="large"
+        class="rounded-xl mb-3"
+        style="background: #F0F5FF; border-color: #ADC6FF; color: #1B4F72; font-weight: 600;"
+        @click="navigateToDetail(detailItem)"
+      >
+        <template #icon><EyeOutlined /></template>
+        Vào xem chi tiết
+      </a-button>
       <div class="flex gap-3">
         <a-button type="primary" block size="large" class="rounded-xl ac-btn-approve" @click="handleApproveByType(detailItem); detailItem = null;">
           <template #icon><CheckOutlined /></template>
@@ -429,6 +441,7 @@ import {
   ArrowRightOutlined,
   AppstoreOutlined,
   FilterOutlined,
+  EyeOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -636,6 +649,39 @@ const formatCompact = (amount) => {
 const refreshPage = () => router.reload()
 
 const openDetailDrawer = (record) => { detailItem.value = record }
+
+// ─── Detail page URL mapping ───
+const getDetailUrl = (record) => {
+  if (!record) return null
+  const pid = record.project_id
+  const typeUrlMap = {
+    project_cost: pid ? `/projects/${pid}?tab=costs` : null,
+    acceptance: pid ? `/projects/${pid}?tab=acceptance` : null,
+    change_request: pid ? `/projects/${pid}?tab=change-requests` : null,
+    additional_cost: pid ? `/projects/${pid}?tab=costs` : null,
+    sub_payment: pid ? `/projects/${pid}?tab=subcontractors` : null,
+    contract: pid ? `/projects/${pid}?tab=contracts` : null,
+    project_payment: pid ? `/projects/${pid}?tab=payments` : null,
+    material_bill: pid ? `/projects/${pid}?tab=materials` : null,
+    sub_acceptance: pid ? `/projects/${pid}?tab=subcontractors` : null,
+    supplier_acceptance: pid ? `/projects/${pid}?tab=suppliers` : null,
+    construction_log: pid ? `/projects/${pid}?tab=logs` : null,
+    schedule_adjustment: pid ? `/projects/${pid}?tab=gantt` : null,
+    defect: pid ? `/projects/${pid}?tab=defects` : null,
+    budget: pid ? `/projects/${pid}?tab=budget` : null,
+    equipment_rental: pid ? `/projects/${pid}?tab=equipment` : null,
+    asset_usage: pid ? `/projects/${pid}?tab=equipment` : null,
+  }
+  return typeUrlMap[record.type] || null
+}
+
+const navigateToDetail = (record) => {
+  const url = getDetailUrl(record)
+  if (url) {
+    detailItem.value = null
+    router.visit(url)
+  }
+}
 
 // ─── Unified approve by type ───
 const approveUrlMap = {

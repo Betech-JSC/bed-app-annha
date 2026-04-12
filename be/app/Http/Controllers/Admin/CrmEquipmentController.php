@@ -78,9 +78,13 @@ class CrmEquipmentController extends Controller
                 $path = $file->store('equipment-attachments', 'public');
                 $equipment->attachments()->create([
                     'file_path'     => $path,
+                    'file_name'     => $file->getClientOriginalName(),
                     'original_name' => $file->getClientOriginalName(),
+                    'file_url'      => '/storage/' . $path,
                     'mime_type'     => $file->getClientMimeType(),
                     'file_size'     => $file->getSize(),
+                    'type'          => $file->getClientOriginalExtension(),
+                    'uploaded_by'   => $user->id ?? null,
                 ]);
             }
         }

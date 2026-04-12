@@ -4392,6 +4392,15 @@ class CrmProjectsController extends Controller
             // Handle file uploads - OPTIONAL for material bills
             $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", false);
 
+            // Handle attachment_ids from UniversalFileUploader/API
+            if ($request->has('attachment_ids')) {
+                $attachmentIds = is_array($request->attachment_ids) ? $request->attachment_ids : explode(',', $request->attachment_ids);
+                \App\Models\Attachment::whereIn('id', $attachmentIds)->update([
+                    'attachable_id' => $bill->id,
+                    'attachable_type' => get_class($bill),
+                ]);
+            }
+
             // Create linked Cost record immediately (draft) so it shows in Chi phí tab
             $supplierName = '';
             if ($validated['supplier_id'] ?? null) {
