@@ -788,15 +788,6 @@
               <!-- Status & Actions -->
               <div class="flex gap-1 items-center flex-shrink-0">
                 <a-tag :color="acceptStatusColors[stage.status] || 'default'" class="rounded-full text-xs">{{ acceptStatusLabels[stage.status] || stage.status }}</a-tag>
-                <a-tooltip v-if="stage.status === 'pending' && can('acceptance.approve.level_1')" title="Duyệt (Giám sát)">
-                  <a-button type="text" size="small" @click="approveAccept(stage, 1)"><CheckCircleOutlined class="text-blue-500" /></a-button>
-                </a-tooltip>
-                <a-tooltip v-if="stage.status === 'supervisor_approved' && can('acceptance.approve.level_2')" title="Duyệt (QLDA)">
-                  <a-button type="text" size="small" @click="approveAccept(stage, 2)"><CheckCircleOutlined class="text-green-500" /></a-button>
-                </a-tooltip>
-                <a-tooltip v-if="stage.status === 'project_manager_approved' && can('acceptance.approve.level_3')" title="Duyệt (KH)">
-                  <a-button type="text" size="small" @click="approveAccept(stage, 3)"><CheckCircleOutlined class="text-emerald-600" /></a-button>
-                </a-tooltip>
                 <a-tooltip title="Sửa" v-if="can('acceptance.update') && stage.status !== 'owner_approved'">
                   <a-button type="text" size="small" @click="openEditAcceptModal(stage)"><EditOutlined /></a-button>
                 </a-tooltip>
@@ -824,19 +815,80 @@
               </div>
             </div>
 
+            <!-- Workflow Info (Ai đã duyệt & Bước tiếp theo) -->
+            <div class="px-4 py-3 bg-gray-50/50 border-y border-gray-100/50 mt-3 space-y-2">
+              <!-- Approvers Info -->
+              <div v-if="stage.approval_status_info?.length" class="flex flex-wrap gap-2">
+                <div v-for="(info, idx) in stage.approval_status_info" :key="idx" 
+                     class="flex items-center gap-1.5 px-2 py-1 bg-white border border-gray-100 rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <span class="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{{ info.role }}:</span>
+                  <span class="text-xs font-semibold text-gray-700">{{ info.user }}</span>
+                  <span class="text-[10px] text-gray-400">({{ dayjs(info.at).format('DD/MM/YY HH:mm') }})</span>
+                </div>
+              </div>
+
+              <!-- Next Action -->
+              <div v-if="stage.next_action?.label" class="flex items-center gap-2">
+                <span class="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1.5 animate-pulse-slow">
+                  <div class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                  TIẾP THEO: {{ stage.next_action.label }}
+                </span>
+                <span v-if="stage.next_action.action" class="text-[11px] text-gray-400 italic">
+                  ({{ stage.next_action.action }})
+                </span>
+              </div>
+            </div>
+
             <!-- Description -->
             <div v-if="stage.description" class="px-4 pt-2 text-sm text-gray-500">{{ stage.description }}</div>
 
-            <!-- Attachments Gallery (Giống APP: Image Gallery) -->
+            <!-- Attachments Gallery Categorized -->
             <div v-if="stage.attachments?.length" class="px-4 pt-3">
-              <div class="flex items-center gap-1 text-xs font-semibold text-gray-600 mb-2">
-                <FileOutlined class="text-[10px]" /> Hình ảnh / Tài liệu nghiệm thu ({{ stage.attachments.length }})
+               <!-- BEFORE IMAGES -->
+               <div v-if="stage.attachments.filter(a => a.type === 'before').length" class="mb-3">
+                <div class="flex items-center gap-1 text-[10px] font-bold text-orange-600 uppercase mb-1.5 tracking-wider letter-spacing-1">
+                  <CameraOutlined class="text-[10px]" /> Hình ảnh TRƯỚC nghiệm thu
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                  <a v-for="att in stage.attachments.filter(a => a.type === 'before')" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
+                     class="group relative inline-flex items-center justify-center w-12 h-12 rounded-lg border border-orange-100 overflow-hidden bg-orange-50 hover:border-orange-300 transition shadow-sm">
+                    <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" />
+                    <FileImageOutlined v-else class="text-orange-300 text-lg" />
+                    <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                      <EyeOutlined class="text-[10px] text-white" />
+                    </div>
+                  </a>
+                </div>
               </div>
-              <div class="flex gap-2 flex-wrap">
-                <a v-for="att in stage.attachments" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
-                   class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition border border-blue-100 cursor-pointer">
-                  <EyeOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
-                </a>
+
+               <!-- AFTER IMAGES -->
+               <div v-if="stage.attachments.filter(a => a.type === 'after').length" class="mb-3">
+                <div class="flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase mb-1.5 tracking-wider letter-spacing-1">
+                  <CameraOutlined class="text-[10px]" /> Hình ảnh SAU nghiệm thu
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                  <a v-for="att in stage.attachments.filter(a => a.type === 'after')" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
+                     class="group relative inline-flex items-center justify-center w-12 h-12 rounded-lg border border-emerald-100 overflow-hidden bg-emerald-50 hover:border-emerald-300 transition shadow-sm">
+                    <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" />
+                    <FileImageOutlined v-else class="text-emerald-300 text-lg" />
+                    <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                      <EyeOutlined class="text-[10px] text-white" />
+                    </div>
+                  </a>
+                </div>
+              </div>
+
+              <!-- OTHER ATTACHMENTS (DOCS) -->
+              <div v-if="stage.attachments.filter(a => a.type !== 'before' && a.type !== 'after').length" class="mb-1">
+                <div class="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-wider">
+                  <FileTextOutlined class="text-[10px]" /> Tài liệu khác
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                  <a v-for="att in stage.attachments.filter(a => a.type !== 'before' && a.type !== 'after')" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
+                     class="inline-flex items-center gap-1.5 text-[11px] bg-white text-gray-600 px-2.5 py-1.5 rounded-lg border shadow-sm hover:border-blue-400 hover:text-blue-500 transition cursor-pointer">
+                    <PaperClipOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -879,6 +931,13 @@
               </template>
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="defectStatusColors[record.status]" class="rounded-full">{{ defectStatusLabels[record.status] || record.status }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'next_action'">
+                <div v-if="record.next_action?.label" class="flex flex-col gap-0.5">
+                  <span class="text-[11px] font-bold text-blue-600 leading-none">{{ record.next_action.label }}</span>
+                  <span v-if="record.next_action.action" class="text-[9px] text-gray-400 italic leading-none">{{ record.next_action.action }}</span>
+                </div>
+                <span v-else class="text-gray-300">—</span>
               </template>
             </template>
           </a-table>
@@ -1026,75 +1085,56 @@
               <template #icon><PlusOutlined /></template>Tạo ngân sách
             </a-button>
           </div>
+          
           <!-- Budget Cards -->
-          <div v-if="project.budgets?.length" class="space-y-4">
-            <div v-for="budget in project.budgets" :key="budget.id" class="border border-gray-200 rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
-              <!-- Budget Header -->
-              <div class="p-4 bg-gray-50 cursor-pointer flex items-center justify-between" @click="toggleBudgetExpand(budget.id)">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm" :class="budget.status === 'approved' ? 'bg-green-500' : 'bg-gray-400'">NS</div>
-                  <div>
-                    <div class="font-semibold text-gray-800">{{ budget.name }}</div>
-                    <div class="text-xs text-gray-400 flex gap-3">
-                      <span>{{ fmtDate(budget.budget_date) }}</span>
-                      <span v-if="budget.version">{{ budget.version }}</span>
-                      <span>{{ budget.creator?.name || '—' }}</span>
-                    </div>
-                  </div>
-                </div>
+          <div v-if="project.budgets?.length" class="space-y-3">
+            <div v-for="budget in project.budgets" :key="budget.id" 
+              class="group relative bg-white border border-gray-100 rounded-2xl p-4 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-500/10 transition-all cursor-pointer overflow-hidden"
+              @click="openBudgetDetail(budget)"
+            >
+              <!-- Glass decoration -->
+              <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-blue-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              
+              <div class="flex items-center justify-between relative z-10">
                 <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-lg shadow-sm" 
+                    :class="budget.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-400'">
+                    {{ budget.status === 'active' ? '✨' : '📄' }}
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-2 mb-0.5">
+                      <span class="font-bold text-gray-800 text-base">{{ budget.name }}</span>
+                      <a-tag v-if="budget.status === 'active'" color="success" class="rounded-full px-2 text-[10px] border-none uppercase font-bold">ACTIVE</a-tag>
+                    </div>
+                    <div class="text-[11px] text-gray-400 font-medium flex gap-3">
+                      <span><CalendarOutlined /> {{ fmtDate(budget.budget_date) }}</span>
+                      <span><HistoryOutlined /> {{ budget.version || 'v1.0' }}</span>
+                      <span class="text-blue-500 bg-blue-50 px-1.5 rounded">{{ budget.items?.length || 0 }} hạng mục</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-8 text-sm">
                   <div class="text-right">
-                    <div class="text-lg font-bold text-blue-600">{{ fmt(budget.total_budget) }}</div>
-                    <div class="text-xs text-gray-400">{{ budget.items?.length || 0 }} hạng mục</div>
+                    <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Tổng dự toán</div>
+                    <div class="text-xl font-black text-blue-600">{{ fmt(budget.total_budget) }}</div>
                   </div>
-                  <a-tag :color="budgetStatusColors[budget.status]" class="rounded-full text-xs">{{ budgetStatusLabels[budget.status] || budget.status }}</a-tag>
-                  <div class="flex gap-1">
-                    <a-tooltip v-if="can('budgets.update') && !['active','archived'].includes(budget.status)" title="Sửa">
-                      <a-button type="text" size="small" @click.stop="openBudgetModal(budget)"><EditOutlined class="text-blue-500" /></a-button>
-                    </a-tooltip>
-                    <a-tooltip v-if="can('budgets.update') && budget.status === 'draft'" title="Duyệt">
-                      <a-button type="text" size="small" @click.stop="approveBudget(budget)"><CheckCircleOutlined class="text-green-500" /></a-button>
-                    </a-tooltip>
-                    <a-popconfirm v-if="can('budgets.delete') && !['active','archived'].includes(budget.status)" title="Xóa?" @confirm="deleteBudget(budget)">
-                      <a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button>
-                    </a-popconfirm>
-                  </div>
-                  <DownOutlined :class="{ 'rotate-180': expandedBudgets.includes(budget.id) }" class="text-gray-400 transition-transform duration-200" />
-                </div>
-              </div>
-              <!-- Budget Items (Expandable) -->
-              <div v-if="expandedBudgets.includes(budget.id)" class="border-t">
-                <div v-if="budget.items?.length" class="divide-y">
-                  <div v-for="item in budget.items" :key="item.id" class="px-4 py-3 flex items-center justify-between hover:bg-blue-50/40 transition">
-                    <div class="flex-1">
-                      <div class="font-medium text-gray-700 text-sm">{{ item.name }}</div>
-                      <div v-if="item.description" class="text-xs text-gray-400 mt-0.5">{{ item.description }}</div>
-                    </div>
-                    <div class="flex items-center gap-6 text-sm">
-                      <div class="text-right">
-                        <div class="text-xs text-gray-400">Dự toán</div>
-                        <div class="font-semibold text-blue-600">{{ fmt(item.estimated_amount) }}</div>
-                      </div>
-                      <div class="text-right">
-                        <div class="text-xs text-gray-400">Thực chi</div>
-                        <div class="font-semibold" :class="(item.actual_amount || 0) > item.estimated_amount ? 'text-red-500' : 'text-green-600'">{{ fmt(item.actual_amount || 0) }}</div>
-                      </div>
-                      <div class="text-right">
-                        <div class="text-xs text-gray-400">Còn lại</div>
-                        <div class="font-semibold" :class="(item.remaining_amount || item.estimated_amount) < 0 ? 'text-red-500' : 'text-gray-600'">{{ fmt(item.remaining_amount ?? item.estimated_amount) }}</div>
-                      </div>
-                      <div class="w-24">
-                        <a-progress :percent="Math.min(100, Math.round(((item.actual_amount || 0) / (item.estimated_amount || 1)) * 100))" :stroke-color="((item.actual_amount || 0) / (item.estimated_amount || 1)) > 1 ? '#ef4444' : ((item.actual_amount || 0) / (item.estimated_amount || 1)) > 0.8 ? '#f59e0b' : '#10b981'" size="small" />
-                      </div>
+                  
+                  <div class="flex flex-col items-end gap-1.5 min-w-[120px]">
+                    <a-tag :color="budgetStatusColors[budget.status]" class="rounded-full text-[10px] font-bold uppercase m-0 px-3 border-none shadow-sm">
+                      {{ budgetStatusLabels[budget.status] || budget.status }}
+                    </a-tag>
+                    <div class="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
+                      <div class="h-full rounded-full transition-all duration-500" 
+                        :class="(budget.actual_cost > budget.total_budget) ? 'bg-red-500' : 'bg-emerald-500'"
+                        :style="`width: ${Math.min(100, Math.round(((budget.actual_cost || 0) / (budget.total_budget || 1)) * 100))}%`"
+                      ></div>
                     </div>
                   </div>
-                </div>
-                <div v-else class="p-4 text-center text-xs text-gray-400">Chưa có hạng mục phân bổ</div>
-                <!-- Budget Summary Bar -->
-                <div class="p-3 bg-gray-50 border-t flex items-center justify-between text-xs">
-                  <span class="text-gray-400">Tổng thực chi: <span class="font-bold" :class="budget.actual_cost > budget.total_budget ? 'text-red-500' : 'text-gray-700'">{{ fmt(budget.actual_cost || 0) }}</span> / {{ fmt(budget.total_budget) }}</span>
-                  <a-tag v-if="budget.actual_cost > budget.total_budget" color="red" class="rounded-full">⚠ VƯỢT NGÂN SÁCH</a-tag>
-                  <a-tag v-else color="green" class="rounded-full">✓ TRONG NGÂN SÁCH</a-tag>
+
+                  <div class="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-300 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">
+                    <RightOutlined />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1578,7 +1618,7 @@
               <a-button size="small" :type="laborView === 'dashboard' ? 'primary' : 'default'" @click="loadLaborDashboard(); laborView = 'dashboard'">Dashboard</a-button>
               <a-button size="small" :type="laborView === 'records' ? 'primary' : 'default'" @click="loadLaborRecords(); laborView = 'records'">Dữ liệu</a-button>
             </div>
-            <a-button type="primary" size="small" @click="showLaborModal = true">
+            <a-button v-if="can('labor_productivity.create')" type="primary" size="small" @click="showLaborModal = true">
               <template #icon><PlusOutlined /></template>Ghi nhận
             </a-button>
           </div>
@@ -1612,13 +1652,13 @@
                   <span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-blue-400 to-blue-600"></span>
                   Hiệu suất tổng thể
                 </h4>
-                <span class="text-lg font-bold" :class="(laborDashboard.summary?.avg_efficiency || 0) >= 90 ? 'text-green-600' : (laborDashboard.summary?.avg_efficiency || 0) >= 70 ? 'text-amber-600' : 'text-red-600'">
+                <span class="text-lg font-bold" :class="((laborDashboard.summary?.avg_efficiency || 0) >= 90) ? 'text-green-600' : ((laborDashboard.summary?.avg_efficiency || 0) >= 70) ? 'text-amber-600' : 'text-red-600'">
                   {{ laborDashboard.summary?.avg_efficiency?.toFixed(1) || 0 }}%
                 </span>
               </div>
               <div class="h-4 bg-gray-100 rounded-full overflow-hidden">
                 <div class="h-full rounded-full transition-all duration-700"
-                  :class="(laborDashboard.summary?.avg_efficiency || 0) >= 90 ? 'bg-gradient-to-r from-green-400 to-green-500' : (laborDashboard.summary?.avg_efficiency || 0) >= 70 ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-gradient-to-r from-red-400 to-red-500'"
+                  :class="((laborDashboard.summary?.avg_efficiency || 0) >= 90) ? 'bg-gradient-to-r from-green-400 to-green-500' : ((laborDashboard.summary?.avg_efficiency || 0) >= 70) ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-gradient-to-r from-red-400 to-red-500'"
                   :style="{ width: Math.min(laborDashboard.summary?.avg_efficiency || 0, 100) + '%' }">
                 </div>
               </div>
@@ -1645,7 +1685,7 @@
                     <div class="text-sm font-semibold text-gray-700 truncate">{{ u.user_name }}</div>
                     <div class="text-[10px] text-gray-400">{{ u.records_count }} lượt • {{ u.total_actual?.toLocaleString() }} đơn vị</div>
                   </div>
-                  <div class="text-sm font-bold" :class="u.avg_efficiency >= 90 ? 'text-green-600' : u.avg_efficiency >= 70 ? 'text-amber-600' : 'text-red-500'">
+                  <div class="text-sm font-bold" :class="(u.avg_efficiency >= 90) ? 'text-green-600' : (u.avg_efficiency >= 70) ? 'text-amber-600' : 'text-red-500'">
                     {{ u.avg_efficiency }}%
                   </div>
                 </div>
@@ -1696,7 +1736,7 @@
                 </template>
                 <template v-else-if="column.key === 'workers'">{{ record.workers_count }} người • {{ record.hours_spent }}h</template>
                 <template v-else-if="column.key === 'actions'">
-                  <a-popconfirm title="Xóa bản ghi?" @confirm="deleteLaborRecord(record.id)">
+                  <a-popconfirm v-if="can('labor_productivity.delete')" title="Xóa bản ghi?" @confirm="deleteLaborRecord(record.id)">
                     <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
                   </a-popconfirm>
                 </template>
@@ -1742,11 +1782,11 @@
             </div>
           </div>
 
-          <div class="flex justify-end mb-3">
-            <a-button v-if="can('material.create') || can('material.update')" type="primary" size="small" @click="openBillModal()">
-              <template #icon><PlusOutlined /></template>Tạo phiếu nhập
-            </a-button>
-          </div>
+            <div v-if="can('material.create')" class="flex justify-end mb-3">
+              <a-button type="primary" size="small" @click="openBillModal()">
+                <template #icon><PlusOutlined /></template>Tạo phiếu nhập
+              </a-button>
+            </div>
 
           <!-- Bill Table -->
           <a-table :columns="billCols" :data-source="materialBills || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
@@ -1852,8 +1892,8 @@
                 <div class="text-lg font-bold text-green-600">{{ (assetUsages || []).filter(u => u.status === 'returned').length }}</div>
               </div>
             </div>
-            <div class="flex justify-end mb-3">
-              <a-button v-if="can('equipment.create')" type="primary" size="small" @click="openUsageModal()">
+            <div v-if="can('equipment.create')" class="flex justify-end mb-3">
+              <a-button type="primary" size="small" @click="openUsageModal()">
                 <template #icon><PlusOutlined /></template>Mượn thiết bị
               </a-button>
             </div>
@@ -2226,7 +2266,7 @@
           <a-select-option v-for="bi in budgetItemOptions" :key="bi.id" :value="bi.id" :label="bi.label">
             <div class="flex justify-between items-center">
               <span>{{ bi.label }}</span>
-              <span class="text-xs" :class="bi.remaining < 0 ? 'text-red-500' : 'text-green-500'">{{ bi.remaining < 0 ? 'Vượt ' + fmt(Math.abs(bi.remaining)) : 'Còn ' + fmt(bi.remaining) }}</span>
+              <span class="text-xs" :class="(bi.remaining < 0) ? 'text-red-500' : 'text-green-500'">{{ (bi.remaining < 0) ? 'Vượt ' + fmt(Math.abs(bi.remaining)) : 'Còn ' + fmt(bi.remaining) }}</span>
             </div>
           </a-select-option>
         </a-select>
@@ -2883,7 +2923,7 @@
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
         <div class="flex justify-between items-center mb-4">
            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileProtectOutlined /> Chứng từ đính kèm ({{ costDetailRecord.attachments?.length || 0 }})</div>
-           <a-button type="link" size="small" @click="openAttachModal('cost', costDetailRecord)" class="p-0">Thêm tệp</a-button>
+           <a-button v-if="can('cost.update')" type="link" size="small" @click="openAttachModal('cost', costDetailRecord)" class="p-0">Thêm tệp</a-button>
         </div>
         <div v-if="costDetailRecord.attachments?.length" class="flex flex-wrap gap-2">
            <div v-for="att in costDetailRecord.attachments" :key="att.id" 
@@ -2907,10 +2947,10 @@
            <a-popconfirm v-if="can('cost.delete') && costDetailRecord.status === 'draft'" title="Xóa phiếu chi này?" @confirm="deleteCost(costDetailRecord)">
              <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
            </a-popconfirm>
-           <a-button v-if="costDetailRecord.status === 'draft'" size="small" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="can('cost.update') && costDetailRecord.status === 'draft'" size="small" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
-          <template v-if="costDetailRecord.status === 'draft'">
+          <template v-if="costDetailRecord.status === 'draft' && can('cost.submit')">
             <a-button type="primary" :loading="actionLoading[`submit-cost-${costDetailRecord.id}`]" @click="handleSubmitCost(costDetailRecord)">Gửi duyệt</a-button>
           </template>
           <template v-if="costDetailRecord.status === 'pending_management_approval' && can('cost.approve.management')">
@@ -3045,6 +3085,152 @@
       </div>
     </div>
   </a-drawer>
+
+  <!-- ==================== BUDGET DETAIL DRAWER ==================== -->
+  <a-drawer v-model:open="showBudgetDetailDrawer" title="Chi tiết Ngân sách dự án" :width="640" @close="budgetDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="budgetDetail" class="space-y-6 pb-24">
+      <!-- Premium Header Card -->
+      <div class="p-5 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl text-white shadow-xl shadow-blue-100 flex items-center justify-between overflow-hidden relative">
+        <div class="absolute -right-4 -top-8 opacity-10 text-8xl rotate-12">💰</div>
+        <div class="relative z-10">
+          <div class="text-[10px] text-blue-100 uppercase font-bold tracking-wider mb-0.5">Mã ngân sách: {{ budgetDetail.version || `#${budgetDetail.id}` }}</div>
+          <div class="text-xl font-bold flex items-center gap-2">
+            {{ budgetDetail.name }}
+            <a-tag v-if="budgetDetail.status === 'active'" color="success" class="rounded-full border-none px-2 text-[10px] uppercase font-bold bg-white/20 text-white">ĐANG SỬ DỤNG</a-tag>
+          </div>
+          <div class="text-[11px] text-blue-100 mt-1 flex gap-3 opacity-90">
+            <span><CalendarOutlined /> {{ fmtDate(budgetDetail.budget_date) }}</span>
+            <span><UserOutlined /> {{ budgetDetail.creator?.name || '—' }}</span>
+          </div>
+        </div>
+        <div class="text-right relative z-10">
+          <div class="text-xs text-blue-100 mb-0.5 opacity-80">Tổng dự toán</div>
+          <div class="text-3xl font-black text-white leading-none">{{ fmt(budgetDetail.total_budget) }}</div>
+        </div>
+      </div>
+
+      <!-- Status & Progress -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-center">
+          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-2">Trạng thái hiện tại</div>
+          <div class="flex items-center gap-2">
+            <a-tag :color="budgetStatusColors[budgetDetail.status]" class="rounded-full px-4 py-1 text-xs font-semibold">
+              {{ budgetStatusLabels[budgetDetail.status] || budgetDetail.status }}
+            </a-tag>
+          </div>
+        </div>
+        <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-2">Tỷ lệ thực chi</div>
+          <div class="flex items-center gap-3">
+            <span class="text-xl font-bold" :class="(budgetDetail.actual_cost > budgetDetail.total_budget) ? 'text-red-500' : 'text-emerald-600'">
+              {{ Math.round(((budgetDetail.actual_cost || 0) / (budgetDetail.total_budget || 1)) * 100) }}%
+            </span>
+            <a-progress :percent="Math.min(100, Math.round(((budgetDetail.actual_cost || 0) / (budgetDetail.total_budget || 1)) * 100))" 
+              :show-info="false" 
+              :stroke-color="(budgetDetail.actual_cost > budgetDetail.total_budget) ? '#ef4444' : '#10b981'" 
+              class="flex-1 m-0"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Rejected Reason (if any) -->
+      <div v-if="budgetDetail.status === 'rejected' && budgetDetail.rejected_reason" class="p-5 bg-red-50 rounded-2xl border border-red-100 animate-pulse-slow">
+        <div class="text-[10px] text-red-400 uppercase font-bold tracking-wider mb-1">Lý do từ chối</div>
+        <div class="text-sm text-red-700 font-medium italic">"{{ budgetDetail.rejected_reason }}"</div>
+      </div>
+
+      <!-- Budget Items Table -->
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="px-5 py-4 bg-gray-50/50 border-b flex justify-between items-center">
+          <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Hạng mục ngân sách ({{ budgetDetail.items?.length || 0 }})</div>
+          <div class="text-xs text-gray-400 italic">Tổng thực chi: {{ fmt(budgetDetail.actual_cost || 0) }}</div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-[11px] text-gray-400 uppercase border-b border-gray-50">
+                <th class="px-5 py-3 font-bold">Hạng mục</th>
+                <th class="px-5 py-3 font-bold text-right">Dự toán</th>
+                <th class="px-5 py-3 font-bold text-right">Thực chi</th>
+                <th class="px-5 py-3 font-bold text-right">Còn lại</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <tr v-for="item in (budgetDetail.items || [])" :key="item.id" class="hover:bg-blue-50/50 transition-colors">
+                <td class="px-5 py-4">
+                  <div class="font-bold text-gray-800">{{ item.name }}</div>
+                  <div v-if="item.description" class="text-[10px] text-gray-400 mt-0.5">{{ item.description }}</div>
+                </td>
+                <td class="px-5 py-4 text-right">
+                  <div class="font-semibold text-blue-600">{{ fmt(item.estimated_amount) }}</div>
+                </td>
+                <td class="px-5 py-4 text-right">
+                  <div class="font-bold" :class="(item.actual_amount > item.estimated_amount) ? 'text-red-500' : 'text-emerald-500'">{{ fmt(item.actual_amount || 0) }}</div>
+                  <div class="text-[9px] text-gray-400">{{ Math.round(((item.actual_amount || 0) / (item.estimated_amount || 1)) * 100) }}%</div>
+                </td>
+                <td class="px-5 py-4 text-right font-medium" :class="(item.remaining_amount < 0) ? 'text-red-600' : 'text-gray-600'">
+                  {{ fmt(item.remaining_amount ?? item.estimated_amount) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-if="!budgetDetail.items?.length" class="p-8 text-center text-gray-300">Chưa có hạng mục ngân sách</div>
+      </div>
+
+      <!-- Action Footer (Sticky) -->
+      <div class="fixed bottom-0 right-0 w-[640px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10">
+        <div class="flex gap-2">
+          <!-- Xóa: Chỉ khi Nháp hoặc Bị từ chối -->
+          <a-tooltip v-if="['draft', 'rejected'].includes(budgetDetail.status) && can('budgets.delete')" title="Gỡ bỏ ngân sách này khỏi hệ thống" placement="bottom">
+            <a-popconfirm title="Xóa ngân sách này?" @confirm="deleteBudget(budgetDetail)">
+              <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
+            </a-popconfirm>
+          </a-tooltip>
+
+          <!-- Sửa: Khi Nháp, Từ chối, hoặc Đã duyệt (nhưng chưa Active) -->
+          <a-tooltip v-if="['draft', 'rejected', 'approved', 'pending_approval'].includes(budgetDetail.status) && can('budgets.update')" title="Thay đổi thông tin phiên bản hoặc hạng mục" placement="bottom">
+            <a-button size="small" @click="openBudgetModal(budgetDetail)"><EditOutlined /> Sửa</a-button>
+          </a-tooltip>
+        </div>
+
+        <div class="flex gap-2">
+          <!-- Gửi duyệt: Chỉ khi Nháp hoặc Bị từ chối -->
+          <template v-if="['draft', 'rejected'].includes(budgetDetail.status)">
+            <a-tooltip title="Trình BĐH xem xét và phê duyệt" placement="bottom">
+              <a-button type="primary" @click="submitBudgetForApproval(budgetDetail)"><SendOutlined /> Gửi duyệt</a-button>
+            </a-tooltip>
+          </template>
+
+          <!-- Duyệt: Chỉ khi đang Chờ duyệt -->
+          <template v-if="budgetDetail.status === 'pending_approval' && can('budgets.approve')">
+            <a-tooltip title="Không duyệt ngân sách này" placement="bottom">
+              <a-button danger ghost @click="openRejectBudgetModal"><CloseCircleOutlined /> Từ chối</a-button>
+            </a-tooltip>
+            <a-tooltip title="Xác nhận ngân sách hợp lệ" placement="bottom">
+              <a-button type="primary" class="bg-emerald-500 border-none" @click="approveBudget(budgetDetail)"><CheckCircleOutlined /> Duyệt</a-button>
+            </a-tooltip>
+          </template>
+
+          <!-- Áp dụng (Active): Chỉ khi đã Đã duyệt -->
+          <template v-if="budgetDetail.status === 'approved' && can('budgets.approve')">
+            <a-tooltip title="Kích hoạt làm định mức chính thức cho dự án" placement="bottom">
+              <a-button type="primary" class="bg-indigo-600 border-none" @click="activateBudget(budgetDetail)"><PlayCircleOutlined /> Áp dụng (Active)</a-button>
+            </a-tooltip>
+          </template>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- REJECT BUDGET MODAL -->
+  <a-modal v-model:open="showRejectBudgetModal" title="Từ chối Ngân sách" @ok="confirmRejectBudget" ok-text="Từ chối" cancel-text="Hủy" centered :ok-button-props="{ danger: true }" class="crm-modal">
+    <div class="p-4">
+      <div class="text-xs text-gray-400 mb-2">Vui lòng nhập lý do từ chối để người lập điều chỉnh phù hợp:</div>
+      <a-textarea v-model:value="rejectBudgetReason" placeholder="Nhập lý do tại đây..." :rows="4" />
+    </div>
+  </a-modal>
 
   <!-- EQUIPMENT DETAIL DRAWER -->
   <a-drawer v-model:open="showEquipmentDetailDrawer" title="Chi tiết Thiết bị" :width="560" @close="equipmentDetail = null" destroy-on-close class="crm-drawer">
@@ -3867,7 +4053,7 @@
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
         <div class="flex justify-between items-center mb-4">
            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ thanh toán ({{ paymentDetailRecord.attachments?.length || 0 }})</div>
-           <a-button type="link" size="small" @click="openAttachModal('payment', paymentDetailRecord)" class="p-0">Thêm tệp</a-button>
+           <a-button v-if="can('payment.update')" type="link" size="small" @click="openAttachModal('payment', paymentDetailRecord)" class="p-0">Thêm tệp</a-button>
         </div>
         <div v-if="paymentDetailRecord.attachments?.length" class="flex flex-wrap gap-2">
            <div v-for="att in paymentDetailRecord.attachments" :key="att.id" 
@@ -3891,14 +4077,14 @@
            <a-popconfirm v-if="can('payment.delete') && !['confirmed','paid'].includes(paymentDetailRecord.status)" title="Xóa đợt thanh toán này?" @confirm="deletePayment(paymentDetailRecord)">
              <a-button danger type="text"><DeleteOutlined /> Xóa đợt</a-button>
            </a-popconfirm>
-           <a-button size="small" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Thay đổi NS</a-button>
+           <a-button v-if="can('payment.update')" size="small" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Thay đổi NS</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="paymentDetailRecord.status === 'customer_paid' && can('payment.confirm')">
              <a-button type="primary" class="bg-green-600 border-green-600" @click="confirmPaymentAction(paymentDetailRecord)">KT Xác nhận</a-button>
              <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
           </template>
-          <template v-else-if="['pending','overdue'].includes(paymentDetailRecord.status)">
+          <template v-else-if="['pending','overdue'].includes(paymentDetailRecord.status) && can('payment.mark_paid_by_customer')">
             <a-button type="primary" @click="openPaymentProofModal(paymentDetailRecord)">Báo cáo KH đã TT</a-button>
           </template>
         </div>
@@ -3910,7 +4096,7 @@
      <div v-if="subDetail" class="bg-white rounded-xl p-4 mb-4 border border-gray-100">
         <div class="flex items-center justify-between mb-3">
           <div class="text-sm font-bold text-gray-700">💳 Lịch sử thanh toán ({{ subDetail.payments?.length || 0 }})</div>
-          <a-button type="primary" size="small" @click="openSubPaymentDrawer(subDetail)"><PlusOutlined /> Tạo phiếu TT</a-button>
+          <a-button v-if="can('subcontractor_payment.create')" type="primary" size="small" @click="openSubPaymentDrawer(subDetail)"><PlusOutlined /> Tạo phiếu TT</a-button>
         </div>
         <div v-if="subDetail.payments?.length" class="space-y-3">
           <div v-for="p in subDetail.payments" :key="p.id" class="flex items-center justify-between py-2 border-b border-gray-50 last:border-b-0">
@@ -3929,19 +4115,19 @@
               <a-tag :color="subPayStatusColors[p.status]" class="text-[10px] rounded-full">{{ subPayStatusLabels[p.status] || p.status }}</a-tag>
             </div>
             <div class="flex gap-1 ml-2" @click.stop>
-              <a-popconfirm v-if="p.status === 'draft'" title="Gửi duyệt phiếu này?" @confirm="submitSubPayment(subDetail, p)">
+              <a-popconfirm v-if="p.status === 'draft' && can('subcontractor_payment.create')" title="Gửi duyệt phiếu này?" @confirm="submitSubPayment(subDetail, p)">
                 <a-button type="text" size="small" class="text-blue-500"><SendOutlined /></a-button>
               </a-popconfirm>
-              <a-popconfirm v-if="p.status === 'pending_management_approval'" title="BĐH duyệt phiếu này?" @confirm="approveSubPayment(subDetail, p)" ok-text="Duyệt">
+              <a-popconfirm v-if="p.status === 'pending_management_approval' && can('subcontractor_payment.approve')" title="BĐH duyệt phiếu này?" @confirm="approveSubPayment(subDetail, p)" ok-text="Duyệt">
                 <a-button type="text" size="small" class="text-green-500"><CheckCircleOutlined /></a-button>
               </a-popconfirm>
-              <a-popconfirm v-if="p.status === 'pending_accountant_confirmation'" title="KT xác nhận đã thanh toán?" @confirm="confirmSubPayment(subDetail, p)" ok-text="Xác nhận">
+              <a-popconfirm v-if="p.status === 'pending_accountant_confirmation' && can('subcontractor_payment.mark_paid')" title="KT xác nhận đã thanh toán?" @confirm="confirmSubPayment(subDetail, p)" ok-text="Xác nhận">
                 <a-button type="text" size="small" class="text-green-600"><CheckSquareOutlined /></a-button>
               </a-popconfirm>
-              <a-popconfirm v-if="['pending_management_approval','pending_accountant_confirmation'].includes(p.status)" title="Từ chối phiếu này?" @confirm="rejectSubPayment(subDetail, p)" ok-text="Từ chối" :ok-button-props="{ danger: true }">
+              <a-popconfirm v-if="['pending_management_approval','pending_accountant_confirmation'].includes(p.status) && (can('subcontractor_payment.approve') || can('subcontractor_payment.mark_paid'))" title="Từ chối phiếu này?" @confirm="rejectSubPayment(subDetail, p)" ok-text="Từ chối" :ok-button-props="{ danger: true }">
                 <a-button type="text" size="small" danger><CloseCircleOutlined /></a-button>
               </a-popconfirm>
-              <a-popconfirm v-if="p.status !== 'paid'" title="Xóa phiếu TT này?" @confirm="deleteSubPayment(subDetail, p)">
+              <a-popconfirm v-if="p.status !== 'paid' && can('subcontractor_payment.delete')" title="Xóa phiếu TT này?" @confirm="deleteSubPayment(subDetail, p)">
                 <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
               </a-popconfirm>
             </div>
@@ -4289,7 +4475,22 @@
         <div class="text-xs text-gray-500 space-y-1">
           <div v-if="acceptDetailStage.task">📐 Hạng mục: <span class="font-semibold">{{ acceptDetailStage.task.name }}</span></div>
           <div v-if="acceptDetailStage.created_at">📅 Ngày tạo: {{ fmtDateTime(acceptDetailStage.created_at) }}</div>
-          <div><a-tag :color="acceptStatusColors[acceptDetailStage.status] || 'default'" class="rounded-full text-xs">{{ acceptStatusLabels[acceptDetailStage.status] || acceptDetailStage.status }}</a-tag></div>
+          <div class="flex items-center gap-2">
+            <a-tag :color="acceptStatusColors[acceptDetailStage.status] || 'default'" class="rounded-full text-xs">{{ acceptStatusLabels[acceptDetailStage.status] || acceptDetailStage.status }}</a-tag>
+            
+            <span v-if="acceptDetailStage.next_action?.label" class="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1">
+              TIẾP THEO: {{ acceptDetailStage.next_action.label }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Approvers History in Detail -->
+        <div v-if="acceptDetailStage.approval_status_info?.length" class="mt-3 flex flex-wrap gap-1.5">
+          <div v-for="(info, idx) in acceptDetailStage.approval_status_info" :key="idx" 
+               class="px-2 py-1 bg-white/60 border border-white/80 rounded-lg text-[10px] shadow-sm">
+            <span class="font-bold text-gray-400 uppercase tracking-tighter">{{ info.role }}:</span>
+            <span class="font-semibold text-gray-700 ml-1">{{ info.user }}</span>
+          </div>
         </div>
       </div>
 
@@ -4316,12 +4517,100 @@
         </div>
       </div>
 
-      <!-- 2. Lỗi ghi nhận -->
+      <!-- BEFORE / AFTER IMAGES (Giống Mobile) -->
+      <div class="mb-5">
+        <div class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1"><CameraOutlined /> Hình ảnh nghiệm thu thực tế</div>
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Before column -->
+          <div class="p-3 rounded-xl bg-orange-50 border border-orange-100">
+            <div class="text-[10px] font-bold text-orange-600 uppercase mb-2">📸 Hình ảnh TRƯỚC</div>
+            <div class="space-y-2">
+              <div v-for="att in acceptDetailStage.attachments?.filter(a => a.type === 'before')" :key="att.id" class="relative group aspect-square rounded-lg overflow-hidden border border-orange-200 bg-white">
+                <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full flex items-center justify-center"><FileOutlined class="text-orange-200 text-xl" /></div>
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center" @click="openFilePreview(att)">
+                  <EyeOutlined class="text-white text-lg" />
+                </div>
+              </div>
+              <label :for="'upload-before-'+acceptDetailStage.id" class="block w-full py-2 border-2 border-dashed border-orange-200 rounded-lg text-center cursor-pointer hover:bg-orange-100 hover:border-orange-300 transition">
+                <PlusOutlined class="text-orange-400" />
+                <div class="text-[10px] text-orange-400 mt-1 font-semibold">Tải ảnh Trước</div>
+              </label>
+              <input :id="'upload-before-'+acceptDetailStage.id" type="file" multiple accept="image/*" class="hidden" @change="e => uploadAcceptStageFiles(e, 'before')" />
+            </div>
+          </div>
+          <!-- After column -->
+          <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+            <div class="text-[10px] font-bold text-emerald-600 uppercase mb-2">📸 Hình ảnh SAU</div>
+            <div class="space-y-2">
+              <div v-for="att in acceptDetailStage.attachments?.filter(a => a.type === 'after')" :key="att.id" class="relative group aspect-square rounded-lg overflow-hidden border border-emerald-200 bg-white">
+                <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full flex items-center justify-center"><FileOutlined class="text-emerald-200 text-xl" /></div>
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center" @click="openFilePreview(att)">
+                  <EyeOutlined class="text-white text-lg" />
+                </div>
+              </div>
+              <label :for="'upload-after-'+acceptDetailStage.id" class="block w-full py-2 border-2 border-dashed border-emerald-200 rounded-lg text-center cursor-pointer hover:bg-emerald-100 hover:border-emerald-300 transition">
+                <PlusOutlined class="text-emerald-400" />
+                <div class="text-[10px] text-emerald-400 mt-1 font-semibold">Tải ảnh Sau</div>
+              </label>
+              <input :id="'upload-after-'+acceptDetailStage.id" type="file" multiple accept="image/*" class="hidden" @change="e => uploadAcceptStageFiles(e, 'after')" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. CHECKLIST HẠNG MỤC (Giống Mobile) -->
+      <div class="mb-5 border-t pt-5">
+        <div class="text-sm font-bold text-gray-700 mb-3 flex items-center justify-between">
+          <div class="flex items-center gap-1"><CheckSquareOutlined /> Checklist hạng mục</div>
+          <a-button v-if="acceptDetailStage.items?.length && can('acceptance.approve')" size="small" ghost type="primary" class="rounded-lg text-[10px]" @click="approveAllItems">Duyệt tất cả</a-button>
+        </div>
+
+        <div v-if="!acceptDetailStage.items?.length" class="p-6 bg-gray-50 border border-dashed rounded-xl text-center text-xs text-gray-400">
+          Giai đoạn này chưa có hạng mục kiểm tra
+        </div>
+        
+        <div v-else class="space-y-3">
+          <div v-for="item in acceptDetailStage.items" :key="item.id" class="p-3 bg-white border border-gray-100 rounded-xl shadow-sm hover:border-blue-200 transition group/item">
+            <div class="flex justify-between items-start gap-2">
+              <div class="flex-1">
+                <div class="text-sm font-bold text-gray-800 leading-tight group-hover/item:text-blue-600 transition-colors uppercase">{{ item.name }}</div>
+                <div v-if="item.task" class="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                   <span class="text-blue-400 h-3 w-3 flex items-center justify-center">📐</span> CV: {{ item.task.name }} ({{ item.task.progress_percentage }}%)
+                </div>
+                <div v-if="item.notes" class="mt-2 text-[11px] text-gray-500 bg-gray-50 p-2 rounded-lg italic border-l-2 border-gray-200">
+                  "{{ item.notes }}"
+                </div>
+              </div>
+              <div class="flex flex-col items-end gap-2">
+                 <a-tag :color="acceptItemStatusColor(item.status)" class="rounded-full text-[9px] m-0">{{ acceptItemStatusLabel(item.status) }}</a-tag>
+                 
+                 <div class="flex gap-1 shadow-sm rounded-lg overflow-hidden">
+                    <a-button v-if="item.status === 'pending' && (can('acceptance.approve.level_1') || can('acceptance.approve.level_2'))" type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center text-white bg-green-500 rounded-none hover:bg-green-600 transition-colors" @click="approveItem(item)">
+                      <CheckOutlined style="font-size: 10px" />
+                    </a-button>
+                    <a-button v-if="item.status === 'pending' && (can('acceptance.approve.level_1') || can('acceptance.approve.level_2'))" type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center text-white bg-red-500 rounded-none hover:bg-red-600 transition-colors" @click="rejectItem(item)">
+                      <CloseOutlined style="font-size: 10px" />
+                    </a-button>
+                 </div>
+              </div>
+            </div>
+            
+            <div v-if="item.attachments?.length" class="mt-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+               <div v-for="att in item.attachments" :key="att.id" class="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0 cursor-pointer shadow-sm hover:border-blue-300 transition" @click="openFilePreview(att)">
+                  <img :src="att.file_url" class="w-full h-full object-cover" />
+               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="mb-5">
         <div class="flex items-center justify-between mb-2">
           <div>
             <div class="text-sm font-bold text-gray-700 flex items-center gap-1">⚠️ Lỗi ghi nhận</div>
-            <div v-if="acceptDetailDefects.length" class="text-xs text-gray-400 mt-0.5">
+            <div v-if="acceptDetailDefects?.length" class="text-xs text-gray-400 mt-0.5">
               <span v-if="acceptDetailDefects.filter(d => d.status === 'verified').length" class="text-emerald-600">✓ {{ acceptDetailDefects.filter(d => d.status === 'verified').length }} đã xử lý</span>
               <span v-if="acceptDetailDefects.filter(d => d.status !== 'verified').length" class="text-red-500 ml-1">⚠ {{ acceptDetailDefects.filter(d => d.status !== 'verified').length }} chưa xử lý</span>
             </div>
@@ -4399,10 +4688,31 @@
         </div>
       </div>
 
+      <!-- Stage Actions (Sync with List) -->
+      <div v-if="acceptDetailStage.status !== 'owner_approved'" class="p-4 bg-gray-50 rounded-2xl mb-4 border border-gray-100">
+        <div class="text-[10px] font-bold text-gray-400 uppercase mb-3 text-center tracking-widest">THAO TÁC GIAI ĐOẠN</div>
+        <div class="grid grid-cols-2 gap-3">
+          <!-- Approval Buttons based on roles -->
+          <a-button v-if="acceptDetailStage.status === 'pending' && can('acceptance.approve.level_1')" type="primary" size="large" class="rounded-xl flex-1 ac-bg-blue" @click="approveAccept(acceptDetailStage, 1)">
+            <CheckCircleOutlined /> Duyệt (GS)
+          </a-button>
+          <a-button v-if="acceptDetailStage.status === 'supervisor_approved' && can('acceptance.approve.level_2')" type="primary" size="large" class="rounded-xl flex-1 ac-bg-blue" @click="approveAccept(acceptDetailStage, 2)">
+            <CheckCircleOutlined /> Duyệt (QLDA)
+          </a-button>
+          <a-button v-if="acceptDetailStage.status === 'project_manager_approved' && can('acceptance.approve.level_3')" type="primary" size="large" class="rounded-xl flex-1 ac-bg-emerald" @click="approveAccept(acceptDetailStage, 3)">
+            <CheckCircleOutlined /> Duyệt (KH)
+          </a-button>
+          
+          <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved'].includes(acceptDetailStage.status) && (can('acceptance.approve.level_1') || can('acceptance.approve.level_2'))" danger ghost size="large" class="rounded-xl flex-1" @click="rejectAcceptDrawer">
+            <CloseCircleOutlined /> Từ chối
+          </a-button>
+        </div>
+      </div>
+
       <!-- Save Button -->
-      <div v-if="can('acceptance.update')" class="pt-4 border-t">
-        <a-button type="primary" block size="large" @click="saveAcceptDetail" :loading="savingAcceptDetail">
-          <CheckCircleOutlined /> Lưu nghiệm thu
+      <div v-if="can('acceptance.update') && acceptDetailStage.status !== 'owner_approved'" class="pt-4 border-t">
+        <a-button type="primary" block size="large" @click="saveAcceptDetail" :loading="savingAcceptDetail" class="rounded-xl h-12 font-bold shadow-lg shadow-blue-100">
+          <SaveOutlined /> Cập nhật thông tin
         </a-button>
       </div>
     </template>
@@ -4563,14 +4873,65 @@
         <div class="text-xs text-gray-300">Chọn vật liệu ở trên và nhấn nút +</div>
       </div>
 
-      <!-- Section 4: File Attachments -->
-      <div class="border-t border-dashed pt-4">
+      <!-- Section 4: Existing Attachments (When editing) -->
+      <div v-if="isEditBill && attachTargetForBill?.attachments?.length" class="border-t border-dashed pt-4 mb-4">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <PaperClipOutlined /> Tệp chứng từ hiện có ({{ attachTargetForBill.attachments.length }})
+        </div>
+        <div class="space-y-1">
+          <div v-for="att in attachTargetForBill.attachments" :key="att.id" class="flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-100">
+            <div class="flex items-center gap-2 min-w-0">
+              <FileOutlined class="text-gray-400 text-xs" />
+              <a href="#" @click.prevent="openFilePreview(att)" class="text-[10px] text-gray-700 hover:text-blue-600 truncate max-w-[200px]">{{ att.original_name }}</a>
+              <span class="text-[9px] text-gray-400">({{ formatFileSize(att.file_size) }})</span>
+            </div>
+            <a-popconfirm title="Xóa tệp này?" @confirm="deleteExistingAttachment(att.id)">
+              <a-button type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center">
+                <DeleteOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
+              </a-button>
+            </a-popconfirm>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 5: File Attachments (Add new) -->
+      <div class="border-t border-dashed pt-4 mb-4">
         <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
           <FileOutlined /> Chứng từ đính kèm (Ảnh chụp phiếu/hóa đơn)
         </div>
-        <input type="file" multiple @change="e => billFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-        <div v-if="billFiles.length" class="text-[10px] text-green-600 mt-1">{{ billFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
-        <div v-else class="text-[10px] text-gray-400 mt-1 italic">Không bắt buộc đính kèm file</div>
+        
+        <div class="flex flex-col gap-2">
+          <!-- Selection Button -->
+          <div class="relative group">
+            <input 
+              type="file" 
+              multiple 
+              @change="e => billFiles = [...(e.target.files || [])]" 
+              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+            />
+            <div class="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-gray-200 rounded-xl group-hover:border-blue-400 group-hover:bg-blue-50 transition-all">
+              <UploadOutlined class="text-gray-400 group-hover:text-blue-500" />
+              <span class="text-xs font-medium text-gray-500 group-hover:text-blue-600">
+                {{ billFiles.length ? 'Thay đổi tệp đã chọn' : 'Nhấn để chọn tệp chứng từ' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- File List -->
+          <div v-if="billFiles.length" class="space-y-1 mt-1">
+            <div v-for="(file, idx) in billFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/50 rounded-lg border border-blue-100/50">
+              <div class="flex items-center gap-2 min-w-0">
+                <PaperClipOutlined class="text-blue-400 text-xs" />
+                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[200px]">{{ file.name }}</span>
+                <span class="text-[9px] text-gray-400">({{ formatFileSize(file.size) }})</span>
+              </div>
+              <a-button type="text" size="small" @click="billFiles.splice(idx, 1)" class="h-6 w-6 p-0 flex items-center justify-center">
+                <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
+              </a-button>
+            </div>
+          </div>
+          <div v-else class="text-[10px] text-gray-400 mt-1 italic pl-1">Không bắt buộc đính kèm file</div>
+        </div>
       </div>
 
       <!-- Submit -->
@@ -4580,13 +4941,62 @@
     </div>
   </a-modal>
 
-  <!-- Reject Bill Modal -->
   <a-modal v-model:open="showRejectBillModal" title="Từ chối phiếu vật liệu" @ok="confirmRejectBill" ok-text="Từ chối" cancel-text="Hủy" centered :ok-button-props="{ danger: true }" class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Lý do từ chối" required>
         <a-textarea v-model:value="rejectBillReason" :rows="3" placeholder="Nhập lý do từ chối..." />
       </a-form-item>
     </a-form>
+  </a-modal>
+
+  <!-- ACCOUNTANT CONFIRM PAYMENT MODAL (Unified for Material & Sub) -->
+  <a-modal v-model:open="showConfirmPaymentModal" :title="confirmPaymentType === 'material' ? 'Kế toán xác nhận - Phiếu Vật tư' : 'Kế toán xác nhận - Thanh toán thầu phụ'" @ok="confirmApprovePayment" ok-text="Xác nhận chi" cancel-text="Hủy" centered class="crm-modal">
+    <div class="p-4 space-y-4">
+      <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
+        <div class="text-[11px] text-blue-700 leading-tight">
+          Xác nhận khoản chi này thuộc hạng mục ngân sách nào để hệ thống tự động trừ định mức của dự án.
+        </div>
+      </div>
+
+      <div v-if="confirmPaymentTarget" class="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
+         <div class="flex justify-between">
+            <span class="text-gray-400">Số phiếu:</span>
+            <span class="font-bold text-gray-700">{{ confirmPaymentTarget.bill_number || confirmPaymentTarget.payment_number }}</span>
+         </div>
+         <div class="flex justify-between mt-1">
+            <span class="text-gray-400">Số tiền:</span>
+            <span class="font-bold text-red-600">{{ fmt(confirmPaymentTarget.total_amount || confirmPaymentTarget.amount) }}</span>
+         </div>
+         <div v-if="confirmPaymentSub" class="flex justify-between mt-1">
+            <span class="text-gray-400">Nhà thầu:</span>
+            <span class="font-medium">{{ confirmPaymentSub.name }}</span>
+         </div>
+      </div>
+
+      <div>
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Chọn hạng mục Ngân sách</div>
+        <a-select v-model:value="confirmPaymentBudgetItem" class="w-full" placeholder="Chọn hạng mục dự toán..." show-search :filter-option="(input, option) => (option.label || '').toLowerCase().indexOf(input.toLowerCase()) >= 0">
+          <a-select-opt-group v-for="budget in (project.budgets || []).filter(b => b.status === 'active')" :key="budget.id">
+            <template #label><span class="text-indigo-600 font-bold uppercase text-[10px]">{{ budget.name }} - ĐANG SỬ DỤNG</span></template>
+            <a-select-option v-for="item in budget.items" :key="item.id" :value="item.id" :label="item.name">
+              <div class="flex justify-between items-center w-full">
+                <span>{{ item.name }}</span>
+                <span class="text-[10px] text-gray-400">Còn lại: {{ fmt(item.remaining_amount || 0) }}</span>
+              </div>
+            </a-select-option>
+          </a-select-opt-group>
+          <a-select-opt-group label="Các ngân sách khác (Bản nháp/Chờ duyệt)">
+             <template v-for="budget in (project.budgets || []).filter(b => b.status !== 'active')" :key="budget.id">
+                <a-select-option v-for="item in budget.items" :key="item.id" :value="item.id" :label="item.name">
+                  <span class="text-gray-400">[{{ budget.name }}]</span> {{ item.name }}
+                </a-select-option>
+             </template>
+          </a-select-opt-group>
+        </a-select>
+        <div v-if="!confirmPaymentBudgetItem" class="mt-1 text-[10px] text-amber-500 italic">* Khuyên dùng: Hãy chọn hạng mục để theo dõi thực chi chính xác.</div>
+      </div>
+    </div>
   </a-modal>
 
 
@@ -5128,7 +5538,7 @@ import utc from 'dayjs/plugin/utc'
 dayjs.extend(utc)
 import {
   ArrowLeftOutlined, EditOutlined, PlusOutlined, DeleteOutlined,
-  SendOutlined, CheckCircleOutlined, CloseCircleOutlined,
+  SendOutlined, CheckCircleOutlined, CloseCircleOutlined, PlayCircleOutlined,
   CheckOutlined, CloseOutlined, DollarOutlined,
   UploadOutlined, DownloadOutlined, FileOutlined,
   UserOutlined, CalendarOutlined, EyeOutlined, CheckSquareOutlined,
@@ -5167,7 +5577,7 @@ const props = defineProps({
 
 // ============ RBAC ============
 const can = (perm) => {
-  if (!props.permissions) return true // fallback for admin
+  if (!props.permissions || !Array.isArray(props.permissions)) return true // fallback for admin or invalid state
   return props.permissions.includes(perm) || props.permissions.includes('*')
 }
 
@@ -5717,7 +6127,16 @@ const riskStatusColors = { identified: 'orange', analyzed: 'blue', mitigated: 'c
 const riskCategoryLabels = { schedule: 'Tiến độ', cost: 'Chi phí', quality: 'Chất lượng', scope: 'Phạm vi', resource: 'Nguồn lực', technical: 'Kỹ thuật', external: 'Bên ngoài', other: 'Khác' }
 const riskLevelLabels = { very_low: 'Rất thấp', low: 'Thấp', medium: 'TB', high: 'Cao', very_high: 'Rất cao' }
 const riskLevelColors = { very_low: 'default', low: 'green', medium: 'blue', high: 'orange', very_high: 'red' }
-const acceptStatusLabels = { pending: 'Chờ duyệt', supervisor_approved: 'GS duyệt', project_manager_approved: 'QLDA duyệt', customer_approved: 'KH duyệt', owner_approved: 'CĐT duyệt' }
+const acceptStatusLabels = {
+  pending: 'Chờ duyệt',
+  supervisor_approved: 'GS đã duyệt',
+  project_manager_approved: 'QLDA đã duyệt',
+  customer_approved: 'KH đã duyệt',
+  owner_approved: 'CĐT đã duyệt',
+  design_approved: 'TK đã duyệt',
+  internal_approved: 'Nội bộ đã duyệt',
+  rejected: 'Từ chối',
+}
 
 // ============ TABLE COLUMNS ============
 const costCols = [
@@ -5795,8 +6214,9 @@ const groupedLogs = computed(() => {
 
 const defectCols = [
   { title: 'Mô tả', dataIndex: 'description', ellipsis: true },
-  { title: 'Mức độ', key: 'severity', width: 120 },
-  { title: 'Trạng thái', key: 'status', width: 120 },
+  { title: 'Mức độ', key: 'severity', width: 100 },
+  { title: 'Trạng thái', key: 'status', width: 110 },
+  { title: 'Tiếp theo', key: 'next_action', width: 160 },
 ]
 
 const crCols = [
@@ -5976,6 +6396,14 @@ const budgetItemOptions = computed(() => {
 
 // Budget expand state
 const expandedBudgets = ref([])
+// Budget details drawer
+const showBudgetDetailDrawer = ref(false)
+const budgetDetail = ref(null)
+const openBudgetDetail = (budget) => { 
+  budgetDetail.value = budget
+  showBudgetDetailDrawer.value = true 
+}
+
 const toggleBudgetExpand = (id) => {
   const idx = expandedBudgets.value.indexOf(id)
   if (idx >= 0) expandedBudgets.value.splice(idx, 1)
@@ -6621,15 +7049,7 @@ const saveSubPayment = () => {
 const submitSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/submit`, {}, loadingOptions(`submit-subpay-${p.id}`, { preserveScroll: true }))
 const approveSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/approve`, {}, loadingOptions(`approve-subpay-${p.id}`, { preserveScroll: true }))
 const rejectSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/reject`, {}, loadingOptions(`reject-subpay-${p.id}`, { preserveScroll: true }))
-const confirmSubPayment = (sub, p) => {
-  if (!p.attachments?.length && !(p.attachments_count > 0)) {
-    return Modal.warning({
-      title: 'Thiếu chứng từ',
-      content: 'Kế toán chỉ có thể xác nhận khi đã có tệp chứng từ đính kèm để đối chiếu.'
-    })
-  }
-  router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/confirm`, {}, loadingOptions(`confirm-subpay-${p.id}`, { preserveScroll: true }))
-}
+// confirmSubPayment is moved up to use unified modal logic
 const deleteSubPayment = (sub, p) => router.delete(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}`, loadingOptions(`delete-subpay-${p.id}`, { preserveScroll: true }))
 
 // ============ ADDITIONAL COST CRUD ============
@@ -6696,8 +7116,38 @@ const saveBudget = () => {
     router.post(`/projects/${props.project.id}/budgets`, budgetForm.value, savingOptions({ onSuccess: () => showBudgetModal.value = false }))
   }
 }
-const approveBudget = (b) => router.put(`/projects/${props.project.id}/budgets/${b.id}`, { status: 'approved' }, loadingOptions(`approve-budget-${b.id}`))
+const submitBudgetForApproval = (b) => {
+  router.post(`/projects/${props.project.id}/budgets/${b.id}/submit`, {}, loadingOptions(`submit-budget-${b.id}`))
+}
+
+const approveBudget = (b) => {
+  router.post(`/projects/${props.project.id}/budgets/${b.id}/approve`, {}, loadingOptions(`approve-budget-${b.id}`))
+}
+
+const activateBudget = (b) => {
+  router.post(`/projects/${props.project.id}/budgets/${b.id}/activate`, {}, loadingOptions(`activate-budget-${b.id}`))
+}
 const deleteBudget = (b) => router.delete(`/projects/${props.project.id}/budgets/${b.id}`, loadingOptions(`delete-budget-${b.id}`))
+
+const showRejectBudgetModal = ref(false)
+const rejectBudgetReason = ref('')
+const openRejectBudgetModal = () => {
+  rejectBudgetReason.value = ''
+  showRejectBudgetModal.value = true
+}
+const confirmRejectBudget = () => {
+  if (!rejectBudgetReason.value.trim()) return message.warning('Vui lòng nhập lý do')
+  router.post(`/projects/${props.project.id}/budgets/${budgetDetail.value.id}/reject`, {
+    rejected_reason: rejectBudgetReason.value
+  }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showRejectBudgetModal.value = false
+      showBudgetDetailDrawer.value = false
+      message.success('Đã từ chối ngân sách')
+    }
+  })
+}
 
 // ============ INVOICE CRUD ============
 const showInvoiceModal = ref(false)
@@ -6747,8 +7197,94 @@ const saveAccept = () => {
     },
   }))
 }
-const approveAccept = (stage, level) => router.post(`/projects/${props.project.id}/acceptance/${stage.id}/approve`, { level }, loadingOptions(`approve-accept-${stage.id}-${level}`))
-const deleteAccept = (stage) => router.delete(`/projects/${props.project.id}/acceptance/${stage.id}`, loadingOptions(`delete-accept-${stage.id}`))
+const approveAccept = (stage, level) => router.post(`/projects/${props.project.id}/acceptance/${stage.id}/approve`, { level }, loadingOptions(`approve-accept-${stage.id}-${level}`, { 
+  preserveScroll: true,
+  onSuccess: () => message.success('Đã duyệt giai đoạn nghiệm thu.')
+}))
+const deleteAccept = (stage) => {
+  Modal.confirm({
+    title: 'Xóa giai đoạn nghiệm thu?',
+    content: `Danh sách hạng mục kiểm tra của "${stage.name}" sẽ bị xóa. Thao tác không thể hoàn tác.`,
+    okText: 'Xóa',
+    okType: 'danger',
+    onOk: () => {
+      router.delete(`/projects/${props.project.id}/acceptance/${stage.id}`, {
+        onSuccess: () => message.success('Đã xóa giai đoạn nghiệm thu')
+      })
+    }
+  })
+}
+
+// Item actions inside drawer
+const approveItem = (item) => {
+  const stageId = acceptDetailStage.value.id
+  let url = `/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-supervisor`
+  
+  // Decide which level to approve based on status and permissions
+  if (item.workflow_status === 'supervisor_approved' || can('acceptance.approve.level_2')) {
+    url = `/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-pm`
+  }
+  
+  router.post(url, {}, {
+    preserveState: true,
+    preserveScroll: true,
+    onSuccess: () => message.success('Đã duyệt hạng mục')
+  })
+}
+
+const rejectItem = (item) => {
+  const stageId = acceptDetailStage.value.id
+  Modal.confirm({
+    title: 'Từ chối hạng mục?',
+    content: `Hạng mục "${item.name}" sẽ được đánh dấu là không đạt.`,
+    okText: 'Từ chối',
+    okType: 'danger',
+    onOk: () => {
+      // NOTE: backend controller expects 'rejection_reason'
+      router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/reject`, {
+        rejection_reason: 'Không đạt yêu cầu kỹ thuật'
+      }, {
+        preserveState: true,
+        preserveScroll: true,
+        onSuccess: () => message.success('Đã từ chối hạng mục')
+      })
+    }
+  })
+}
+
+const approveAllItems = () => {
+  if (!acceptDetailStage.value) return
+  const stageId = acceptDetailStage.value.id
+  Modal.confirm({
+    title: 'Duyệt tất cả hạng mục?',
+    content: `Duyệt nhanh toàn bộ hạng mục trong giai đoạn "${acceptDetailStage.value.name}"?`,
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/acceptance/${stageId}/approve-all`, {}, {
+        preserveState: true,
+        preserveScroll: true,
+        onSuccess: () => message.success('Đã duyệt tất cả hạng mục')
+      })
+    }
+  })
+}
+
+const rejectAcceptDrawer = () => {
+  if (!acceptDetailStage.value) return
+  Modal.confirm({
+    title: 'Từ chối giai đoạn nghiệm thu?',
+    content: 'Vui lòng xác nhận từ chối giai đoạn này.',
+    okText: 'Từ chối',
+    okType: 'danger',
+    onOk: () => {
+      router.post(`/approvals/acceptance-supervisor/${acceptDetailStage.value.id}/reject`, { reason: 'Từ chối từ chi tiết dự án' }, {
+        onSuccess: () => {
+          message.warning('Đã từ chối giai đoạn')
+          showAcceptDetailDrawer.value = false
+        }
+      })
+    }
+  })
+}
 
 // Edit acceptance
 const showEditAcceptModal = ref(false)
@@ -6894,18 +7430,22 @@ const saveAcceptDetail = () => {
   })
 }
 
-// Upload files to acceptance stage
-const uploadAcceptStageFiles = (event) => {
+// Upload files to acceptance stage (With Before/After types)
+const uploadAcceptStageFiles = (event, type = null) => {
   const files = event.target.files
   if (!files?.length || !acceptDetailStage.value) return
   const formData = new FormData()
   for (let i = 0; i < files.length; i++) {
     formData.append('files[]', files[i])
   }
+  if (type) formData.append('type', type)
+
   router.post(`/projects/${props.project.id}/acceptance/${acceptDetailStage.value.id}/attach-files`, formData, {
     forceFormData: true,
     preserveScroll: true,
-    onSuccess: () => { showAcceptDetailDrawer.value = false },
+    onSuccess: () => {
+      message.success(`Đã đính kèm hình ảnh ${type === 'before' ? 'Trước' : type === 'after' ? 'Sau' : ''} nghiệm thu.`)
+    }
   })
   event.target.value = ''
 }
@@ -7350,11 +7890,25 @@ const billItemForm = ref({ material_id: null, quantity: 1, unit_price: 0, total_
 
 const isEditBill = ref(false)
 const editingBillId = ref(null)
+const attachTargetForBill = ref(null)
+
+const deleteExistingAttachment = (attachmentId) => {
+  router.delete(`/files/${attachmentId}`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      // Update local state if needed, though Inertia refresh should handle it
+      if (attachTargetForBill.value?.attachments) {
+        attachTargetForBill.value.attachments = attachTargetForBill.value.attachments.filter(a => a.id !== attachmentId)
+      }
+    }
+  })
+}
 
 const openBillModal = (record = null) => {
   if (record) {
     isEditBill.value = true
     editingBillId.value = record.id
+    attachTargetForBill.value = record
     billForm.value = {
       bill_date: record.bill_date,
       supplier_id: record.supplier_id,
@@ -7371,9 +7925,11 @@ const openBillModal = (record = null) => {
   } else {
     isEditBill.value = false
     editingBillId.value = null
+    attachTargetForBill.value = null
     billForm.value = { bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [] }
   }
   billItemForm.value = { material_id: null, quantity: 1, unit_price: 0, total_price: 0 }
+  billFiles.value = []
   showBillModal.value = true
 }
 
@@ -7452,6 +8008,12 @@ const approveBillManagement = (bill) => {
   router.post(`/projects/${props.project.id}/material-bills/${bill.id}/approve-management`, {}, { preserveScroll: true })
 }
 
+const showConfirmPaymentModal = ref(false)
+const confirmPaymentType = ref('') // 'material' or 'sub'
+const confirmPaymentTarget = ref(null)
+const confirmPaymentSub = ref(null) // Only for sub
+const confirmPaymentBudgetItem = ref(null)
+
 const approveBillAccountant = (bill) => {
   if (!bill.attachments?.length && !(bill.attachments_count > 0)) {
     return Modal.warning({
@@ -7459,7 +8021,48 @@ const approveBillAccountant = (bill) => {
       content: 'Kế toán chỉ có thể xác nhận khi đã có tệp chứng từ đính kèm để đối chiếu.'
     })
   }
-  router.post(`/projects/${props.project.id}/material-bills/${bill.id}/approve-accountant`, {}, { preserveScroll: true })
+  confirmPaymentType.value = 'material'
+  confirmPaymentTarget.value = bill
+  confirmPaymentBudgetItem.value = bill.budget_item_id || null
+  showConfirmPaymentModal.value = true
+}
+
+const confirmSubPayment = (sub, p) => {
+  if (!p.attachments?.length && !(p.attachments_count > 0)) {
+    return Modal.warning({
+      title: 'Thiếu chứng từ',
+      content: 'Kế toán chỉ có thể xác nhận khi đã có tệp chứng từ đính kèm để đối chiếu.'
+    })
+  }
+  confirmPaymentType.value = 'sub'
+  confirmPaymentTarget.value = p
+  confirmPaymentSub.value = sub
+  confirmPaymentBudgetItem.value = p.budget_item_id || null
+  showConfirmPaymentModal.value = true
+}
+
+const confirmApprovePayment = () => {
+  if (confirmPaymentType.value === 'material') {
+    router.post(`/projects/${props.project.id}/material-bills/${confirmPaymentTarget.value.id}/approve-accountant`, {
+      budget_item_id: confirmPaymentBudgetItem.value
+    }, {
+      onSuccess: () => {
+        showConfirmPaymentModal.value = false
+        materialDetail.value = null
+        showMaterialDetailDrawer.value = false
+        message.success('Đã xác nhận thanh toán và ghi nhận ngân sách')
+      }
+    })
+  } else if (confirmPaymentType.value === 'sub') {
+    router.post(`/projects/${props.project.id}/subcontractors/${confirmPaymentSub.value.id}/payments/${confirmPaymentTarget.value.id}/confirm`, {
+      budget_item_id: confirmPaymentBudgetItem.value
+    }, {
+      onSuccess: () => {
+        showConfirmPaymentModal.value = false
+        message.success('Đã xác nhận thanh toán thầu phụ')
+      }
+    })
+  }
 }
 
 const deleteBill = (bill) => {

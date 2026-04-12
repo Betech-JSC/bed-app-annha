@@ -32,6 +32,7 @@ use App\Models\MaterialQuota;
 use App\Constants\Permissions;
 use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -229,7 +230,7 @@ class CrmProjectsController extends Controller
 
         // Get project material bills (bill-based tracking) — matching mobile APP
         $materialBills = MaterialBill::where('project_id', $project->id)
-            ->with(['items.material', 'supplier', 'creator:id,name', 'managementApprover:id,name', 'accountantApprover:id,name'])
+            ->with(['items.material', 'supplier', 'creator:id,name', 'managementApprover:id,name', 'accountantApprover:id,name', 'attachments'])
             ->orderByDesc('bill_date')
             ->orderByDesc('created_at')
             ->get();
@@ -1048,7 +1049,7 @@ class CrmProjectsController extends Controller
                 'file_url' => '/storage/' . $path,
                 'file_size' => $file->getSize(),
                 'mime_type' => $file->getClientMimeType(),
-                'type' => $file->getClientOriginalExtension(),
+                'type' => $request->input('type') ?? $file->getClientOriginalExtension(),
                 'attachable_type' => get_class($entity),
                 'attachable_id' => $entity->id,
                 'uploaded_by' => $user->id ?? null,
@@ -2434,7 +2435,7 @@ class CrmProjectsController extends Controller
         }
     }
 
-    public function confirmSubPayment(string $projectId, string $subId, string $paymentId)
+    public function confirmSubPayment(Request $request, string $projectId, string $subId, string $paymentId)
     {
         $project = Project::findOrFail($projectId);
         $admin = auth('admin')->user();
@@ -2447,6 +2448,11 @@ class CrmProjectsController extends Controller
 
         DB::beginTransaction();
         try {
+            // Update budget item if provided
+            if ($request->has('budget_item_id')) {
+                $payment->budget_item_id = $request->budget_item_id;
+            }
+
             // Set payer info directly (Admin model != User model)
             $payment->paid_by = $admin->id;
             $payment->paid_at = now();
@@ -2460,7 +2466,10 @@ class CrmProjectsController extends Controller
             // Điều này đảm bảo dữ liệu luôn nhất quán giữa trạng thái Thanh toán và Chi phí dự án
             
             DB::commit();
-            return back()->with('success', 'Đã xác nhận thanh toán.');
+            
+            $payment->notifyEvent('paid', $admin);
+
+            return back()->with('success', 'Đã xác nhận thanh toán thầu phụ.');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Lỗi xác nhận: ' . $e->getMessage());
@@ -2708,6 +2717,76 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Lỗi cập nhật: ' . $e->getMessage());
         }
     }
+    public function submitBudget(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::BUDGET_UPDATE, $project);
+
+        $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
+        
+        if (!in_array($budget->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ có thể gửi duyệt ngân sách ở trạng thái Nháp hoặc Bị từ chối.');
+        }
+
+        $budget->update(['status' => 'pending_approval']);
+
+        return back()->with('success', "Đã gửi duyệt ngân sách \"{$budget->name}\"");
+    }
+
+    public function approveBudgetManual(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::BUDGET_APPROVE, $project);
+
+        $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
+        $budget->approve($user);
+
+        return back()->with('success', "Đã duyệt ngân sách \"{$budget->name}\"");
+    }
+
+    public function rejectBudget(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::BUDGET_APPROVE, $project);
+
+        $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
+        
+        $request->validate(['rejected_reason' => 'required|string|max:500']);
+        
+        $budget->update([
+            'status' => 'rejected',
+            'rejected_reason' => $request->rejected_reason
+        ]);
+
+        return back()->with('success', "Đã từ chối ngân sách \"{$budget->name}\"");
+    }
+
+    public function activateBudget(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::BUDGET_APPROVE, $project);
+
+        $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
+        
+        if ($budget->status !== 'approved') {
+            return back()->with('error', 'Chỉ có thể áp dụng ngân sách đã được duyệt.');
+        }
+
+        // Lưu trữ các ngân sách đang active khác nếu cần? 
+        // Thường chỉ 1 ngân sách active tại 1 thời điểm.
+        ProjectBudget::where('project_id', $project->id)
+            ->where('status', 'active')
+            ->update(['status' => 'archived']);
+
+        $budget->update(['status' => 'active']);
+
+        return back()->with('success', "Đã áp dụng ngân sách \"{$budget->name}\" thành công.");
+    }
+
 
     public function destroyBudget(string $projectId, string $id)
     {
@@ -4264,6 +4343,66 @@ class CrmProjectsController extends Controller
         return back()->with('success', "Đã đính kèm {$count} file vào hạng mục nghiệm thu.");
     }
 
+    /**
+     * Batch approve all items in a stage
+     */
+    public function approveAllAcceptanceItems(string $projectId, string $stageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+        $items = AcceptanceItem::where('acceptance_stage_id', $stage->id)
+            ->whereIn('workflow_status', ['submitted', 'supervisor_approved', 'pm_approved', 'project_manager_approved'])
+            ->get();
+
+        if ($items->isEmpty()) {
+            return back()->with('info', 'Không có hạng mục nào đang chờ duyệt.');
+        }
+
+        $successCount = 0;
+        foreach ($items as $item) {
+            // Level 1 approval?
+            if ($item->workflow_status === 'submitted' && $user->can(Permissions::ACCEPTANCE_APPROVE_LEVEL_1)) {
+                $item->update([
+                    'workflow_status' => 'supervisor_approved',
+                    'supervisor_approved_by' => $user->id,
+                    'supervisor_approved_at' => now(),
+                ]);
+                $successCount++;
+            }
+            // Level 2 approval?
+            else if ($item->workflow_status === 'supervisor_approved' && $user->can(Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
+                $item->update([
+                    'workflow_status' => 'project_manager_approved',
+                    'project_manager_approved_by' => $user->id,
+                    'project_manager_approved_at' => now(),
+                ]);
+                $successCount++;
+            }
+            // Level 3 (Final) approval?
+            else if (in_array($item->workflow_status, ['pm_approved', 'project_manager_approved']) && $user->can(Permissions::ACCEPTANCE_APPROVE_LEVEL_3)) {
+                $item->update([
+                    'workflow_status' => 'customer_approved',
+                    'customer_approved_by' => $user->id,
+                    'customer_approved_at' => now(),
+                    'acceptance_status' => 'approved',
+                    'approved_by' => $user->id,
+                    'approved_at' => now(),
+                ]);
+                $item->updateProjectProgress();
+                $successCount++;
+            }
+        }
+
+        if ($successCount > 0) {
+            $stage->checkCompletion();
+            return back()->with('success', "Đã duyệt nhanh {$successCount} hạng mục.");
+        }
+
+        return back()->with('error', 'Bạn không có quyền duyệt các hạng mục này hoặc trạng thái không hợp lệ.');
+    }
+
     // ===================================================================
     // SUB-ITEM CRUD — Subcontractor Items (matching APP SubcontractorItemController)
     // ===================================================================
@@ -4482,6 +4621,9 @@ class CrmProjectsController extends Controller
                 $bill->update(['total_amount' => $totalAmount]);
             }
 
+            // Handle file uploads during update
+            $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", false);
+
             DB::commit();
             return back()->with('success', 'Đã cập nhật phiếu vật tư.');
         } catch (\Exception $e) {
@@ -4548,7 +4690,7 @@ class CrmProjectsController extends Controller
         return back()->with('success', 'Đã duyệt phiếu vật tư (BĐH).');
     }
 
-    public function approveMaterialBillAccountant(string $projectId, string $billId)
+    public function approveMaterialBillAccountant(Request $request, string $projectId, string $billId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
@@ -4564,11 +4706,23 @@ class CrmProjectsController extends Controller
         try {
             DB::beginTransaction();
 
-            // 1. Update bill status
+            // 1. Update budget item if provided
+            if ($request->has('budget_item_id')) {
+                $bill->budget_item_id = $request->budget_item_id;
+                
+                // If budget_item_id is provided, also sync the cost_group_id from that item if possible
+                $budgetItem = BudgetItem::find($request->budget_item_id);
+                if ($budgetItem && $budgetItem->cost_group_id) {
+                    $bill->cost_group_id = $budgetItem->cost_group_id;
+                }
+                
+                $bill->save();
+            }
+
+            // 2. Update bill status
             $bill->approveByAccountant((object) ['id' => $user->id ?? null]);
 
-            // 2. Tự động đồng bộ sang Cost và kích hoạt side effects (Kho, Công nợ) 
-            // đã được xử lý thông qua Model hook saved trong Cost và sync logic
+            // 3. Tự động đồng bộ sang Cost và kích hoạt side effects
             $bill->triggerApprovalSideEffects();
 
             DB::commit();

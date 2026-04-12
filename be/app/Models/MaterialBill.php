@@ -27,6 +27,7 @@ class MaterialBill extends Model
         'bill_number',
         'bill_date',
         'cost_group_id',
+        'budget_item_id',
         'total_amount',
         'notes',
         'status',
@@ -59,6 +60,11 @@ class MaterialBill extends Model
     public function costGroup(): BelongsTo
     {
         return $this->belongsTo(CostGroup::class);
+    }
+
+    public function budgetItem(): BelongsTo
+    {
+        return $this->belongsTo(BudgetItem::class, 'budget_item_id');
     }
 
     public function creator(): BelongsTo
@@ -110,12 +116,25 @@ class MaterialBill extends Model
         ]);
     }
 
-    public function reject($reason, $user)
+    public function approve($user)
+    {
+        if ($this->status === 'pending_management') {
+            $this->approveByManagement($user);
+            return true;
+        } elseif ($this->status === 'pending_accountant') {
+            $this->approveByAccountant($user);
+            return true;
+        }
+        return false;
+    }
+
+    public function reject($user, $reason = null)
     {
         $this->update([
             'status' => 'rejected',
             'rejected_reason' => $reason,
         ]);
+        return true;
     }
 
     /**
@@ -216,6 +235,10 @@ class MaterialBill extends Model
 
         if ($this->bill_date && (!$cost->cost_date || \Illuminate\Support\Carbon::parse($cost->cost_date)->toDateString() !== \Illuminate\Support\Carbon::parse($this->bill_date)->toDateString())) {
             $updates['cost_date'] = $this->bill_date;
+        }
+
+        if ($cost->budget_item_id !== $this->budget_item_id) {
+            $updates['budget_item_id'] = $this->budget_item_id;
         }
         
         if ($cost->supplier_id !== $this->supplier_id) {

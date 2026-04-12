@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Cost;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -49,12 +51,108 @@ class EquipmentRental extends Model
         'rejected'           => 'Từ chối',
     ];
 
+    // ─── Methods ───
+    public function approveByManagement(?User $user = null): bool
+    {
+        if ($this->status !== 'pending_management') return false;
+        $this->status = 'pending_accountant';
+        if ($user) {
+            $this->approved_by = $user->id;
+            $this->approved_at = now();
+        }
+        return $this->save();
+    }
+
+    public function confirmByAccountant(?User $user = null): bool
+    {
+        if ($this->status !== 'pending_accountant') return false;
+        $this->status = 'in_use';
+        if ($user) {
+            $this->confirmed_by = $user->id;
+            $this->confirmed_at = now();
+        }
+        return $this->save();
+    }
+
+    public function confirmReturn(?User $user = null): bool
+    {
+        if ($this->status !== 'pending_return') return false;
+        $this->status = 'returned';
+        if ($user) {
+            $this->confirmed_by = $user->id; // Using same field for return confirm
+            $this->confirmed_at = now();
+        }
+        return $this->save();
+    }
+
+    public function reject(?User $user = null, ?string $reason = null): bool
+    {
+        if (!in_array($this->status, ['pending_management', 'pending_accountant', 'pending_return'])) return false;
+        $this->status = 'rejected';
+        $this->rejection_reason = $reason;
+        if ($user) {
+            $this->approved_by = $user->id; // Unified logic
+        }
+        return $this->save();
+    }
+
+    /**
+     * Synchronize rental data to Cost table
+     */
+    public function syncToCostTable(): void
+    {
+        if ($this->status === 'rejected') {
+            Cost::where('equipment_rental_id', $this->id)->delete();
+            return;
+        }
+
+        // Only sync if in a state that represents an active or confirmed rental
+        if (!in_array($this->status, ['in_use', 'returned', 'completed'])) {
+            $costStatus = 'draft';
+        } else {
+            $costStatus = 'approved';
+        }
+
+        $costGroupId = \App\Models\CostGroup::where('code', 'equipment_rental')
+            ->orWhere('name', 'LIKE', '%Thuê thiết bị%')
+            ->value('id') ?: 6;
+
+        Cost::updateOrCreate(
+            ['equipment_rental_id' => $this->id],
+            [
+                'project_id'               => $this->project_id,
+                'equipment_id'             => $this->equipment_id,
+                'name'                     => "Thuê thiết bị: " . ($this->equipment_name ?: ($this->equipment->name ?? 'N/A')),
+                'amount'                   => $this->total_cost,
+                'cost_date'                => $this->rental_start_date ?: now(),
+                'category'                 => 'other',
+                'cost_group_id'            => $costGroupId,
+                'supplier_id'              => $this->supplier_id,
+                'description'              => $this->notes ?: "Đồng bộ từ phiếu thuê thiết bị #" . ($this->uuid),
+                'status'                   => $costStatus,
+                'created_by'               => $this->created_by,
+                'management_approved_by'   => $this->approved_by,
+                'management_approved_at'   => $this->approved_at,
+                'accountant_approved_by'   => $this->confirmed_by,
+                'accountant_approved_at'   => $this->confirmed_at,
+            ]
+        );
+    }
+
     // ─── Boot ───
     protected static function boot()
     {
         parent::boot();
         static::creating(function ($model) {
             $model->uuid = $model->uuid ?: Str::uuid();
+        });
+
+        static::saved(function ($model) {
+            $model->syncToCostTable();
+        });
+
+        static::deleted(function ($model) {
+            Cost::where('equipment_rental_id', $model->id)->delete();
         });
     }
 }

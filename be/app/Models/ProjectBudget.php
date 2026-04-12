@@ -39,6 +39,63 @@ class ProjectBudget extends Model
         'approved_at' => 'datetime',
     ];
 
+    protected $appends = [
+        'next_action',
+        'approval_status_info',
+    ];
+
+    // ==================================================================
+    // ACCESSORS
+    // ==================================================================
+
+    public function getNextActionAttribute(): array
+    {
+        return match ($this->status) {
+            'draft'            => ['role' => 'QLDA / Ban nội bộ', 'label' => 'Chờ gửi duyệt'],
+            'pending_approval' => ['role' => 'Ban Điều Hành', 'label' => 'Chờ phê duyệt'],
+            'rejected'         => ['role' => 'QLDA / Ban nội bộ', 'label' => 'Chỉnh sửa lại'],
+            'approved'         => ['role' => 'Kế toán', 'label' => 'Đã áp dụng'],
+            default            => ['role' => 'N/A', 'label' => 'N/A']
+        };
+    }
+
+    public function getApprovalStatusInfoAttribute(): array
+    {
+        $history = [];
+
+        // 1. Initial creation
+        $history[] = [
+            'status' => 'submitted',
+            'label' => 'Đã gửi duyệt',
+            'user' => $this->creator->name ?? 'N/A',
+            'time' => $this->created_at->format('H:i d/m/Y'),
+        ];
+
+        // 2. Approval or Rejection
+        if ($this->status === 'approved' && $this->approved_at) {
+            $history[] = [
+                'status' => 'approved',
+                'label' => 'Ban Điều Hành đã duyệt',
+                'user' => $this->approver->name ?? 'Lãnh đạo',
+                'time' => $this->approved_at->format('H:i d/m/Y'),
+            ];
+        } elseif ($this->status === 'rejected' && $this->approved_at) {
+            $history[] = [
+                'status' => 'rejected',
+                'label' => 'Bị từ chối',
+                'user' => $this->approver->name ?? 'Lãnh đạo',
+                'time' => $this->approved_at->format('H:i d/m/Y'),
+                'note' => $this->notes
+            ];
+        }
+
+        return [
+            'current' => $this->status,
+            'history' => $history,
+            'next' => $this->next_action
+        ];
+    }
+
     // ==================================================================
     // QUAN HỆ
     // ==================================================================
@@ -66,6 +123,31 @@ class ProjectBudget extends Model
     public function attachments(): \Illuminate\Database\Eloquent\Relations\MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable');
+    }
+
+    // ==================================================================
+    // METHODS
+    // ==================================================================
+
+    public function approve(?User $user = null): bool
+    {
+        $this->status = 'approved';
+        if ($user) {
+            $this->approved_by = $user->id;
+            $this->approved_at = now();
+        }
+        return $this->save();
+    }
+
+    public function reject(?User $user = null, ?string $reason = null): bool
+    {
+        $this->status = 'rejected';
+        if ($user) {
+            $this->approved_by = $user->id;
+            $this->approved_at = now();
+        }
+        $this->notes = ($this->notes ? $this->notes . "\n" : '') . "Lý do từ chối: " . $reason;
+        return $this->save();
     }
 
     // ==================================================================

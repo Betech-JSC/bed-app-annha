@@ -59,6 +59,8 @@ class AcceptanceStage extends Model
         'is_completed',
         'completion_percentage',
         'acceptability_status', // BUSINESS RULE: Calculated from defects
+        'next_action',
+        'approval_status_info',
     ];
 
     // ==================================================================
@@ -210,6 +212,69 @@ class AcceptanceStage extends Model
         return $allCompleted ? 'acceptable' : 'not_acceptable';
     }
 
+    public function getNextActionAttribute(): array
+    {
+        switch ($this->status) {
+            case 'pending':
+                return [
+                    'label' => 'Chờ Giám sát duyệt',
+                    'role' => 'supervisor',
+                    'action' => 'Duyệt (Giám sát)',
+                ];
+            case 'supervisor_approved':
+                return [
+                    'label' => 'Chờ QLDA duyệt',
+                    'role' => 'pm',
+                    'action' => 'Duyệt (QLDA)',
+                ];
+            case 'project_manager_approved':
+                return [
+                    'label' => 'Chờ Khách hàng duyệt',
+                    'role' => 'customer',
+                    'action' => 'Duyệt (Khách hàng)',
+                ];
+            case 'customer_approved':
+                return [
+                    'label' => 'Đã nghiệm thu xong',
+                    'role' => null,
+                    'action' => null,
+                ];
+            case 'rejected':
+                return [
+                    'label' => 'Bị từ chối - Chờ xử lý lỗi',
+                    'role' => 'team',
+                    'action' => 'Sửa lỗi và gửi lại',
+                ];
+            default:
+                return [
+                    'label' => 'Đang xử lý',
+                    'role' => null,
+                    'action' => null,
+                ];
+        }
+    }
+
+    public function getApprovalStatusInfoAttribute(): array
+    {
+        $info = [];
+        if ($this->internal_approved_by) {
+            $info[] = ['role' => 'Nội bộ', 'user' => $this->internalApprover->name ?? 'N/A', 'at' => $this->internal_approved_at];
+        }
+        if ($this->supervisor_approved_by) {
+            $info[] = ['role' => 'Giám sát', 'user' => $this->supervisorApprover->name ?? 'N/A', 'at' => $this->supervisor_approved_at];
+        }
+        if ($this->project_manager_approved_by) {
+            $info[] = ['role' => 'QLDA', 'user' => $this->projectManagerApprover->name ?? 'N/A', 'at' => $this->project_manager_approved_at];
+        }
+        if ($this->customer_approved_by) {
+            $info[] = ['role' => 'Khách hàng', 'user' => $this->customerApprover->name ?? 'N/A', 'at' => $this->customer_approved_at];
+        }
+        if ($this->rejected_by) {
+            $info[] = ['role' => 'Từ chối bởi', 'user' => $this->rejector->name ?? 'N/A', 'at' => $this->rejected_at, 'reason' => $this->rejection_reason];
+        }
+        return $info;
+    }
+
     // ==================================================================
     // METHODS
     // ==================================================================
@@ -242,6 +307,46 @@ class AcceptanceStage extends Model
         }
         $this->supervisor_approved_at = now();
         return $this->save();
+    }
+
+    /**
+     * Unified approval method for ApprovalCenter compatibility
+     */
+    public function approve($user)
+    {
+        if ($this->status === 'pending_supervisor') {
+            return $this->approveSupervisor($user);
+        } elseif ($this->status === 'pending_pm' || $this->status === 'supervisor_approved') {
+            return $this->approveProjectManager($user);
+        } elseif (in_array($this->status, ['pending_customer', 'pending_approval', 'project_manager_approved'])) {
+            return $this->approveCustomer($user);
+        }
+        return false;
+    }
+
+    public function reject($user, ?string $reason = null): bool
+    {
+        // Only allow rejection from non-final states
+        $rejectableStatuses = ['pending', 'internal_approved', 'supervisor_approved', 'project_manager_approved'];
+        if (!in_array($this->status, $rejectableStatuses)) {
+            return false;
+        }
+
+        $this->status = 'rejected';
+        $this->rejection_reason = $reason;
+        if ($user) {
+            $this->rejected_by = $user->id;
+        }
+        $this->rejected_at = now();
+        
+        $saved = $this->save();
+        
+        if ($saved) {
+            $this->autoCreateDefectIfNotAcceptable($user, $reason);
+            $this->updateProjectProgress();
+        }
+        
+        return $saved;
     }
 
     /**
@@ -324,28 +429,6 @@ class AcceptanceStage extends Model
         return $saved;
     }
 
-    public function reject(string $reason, $user = null): bool
-    {
-        // Only allow rejection from non-final states
-        $rejectableStatuses = ['pending', 'internal_approved', 'supervisor_approved', 'project_manager_approved'];
-        if (!in_array($this->status, $rejectableStatuses)) {
-            return false;
-        }
-        $this->status = 'rejected';
-        $this->rejection_reason = $reason;
-        if ($user) {
-            $this->rejected_by = $user->id;
-        }
-        $this->rejected_at = now();
-        $saved = $this->save();
-
-        // BUSINESS RULE: Khi từ chối nghiệm thu → tự động tạo lỗi ghi nhận
-        if ($saved) {
-            $this->autoCreateDefectIfNotAcceptable($user, $reason);
-        }
-
-        return $saved;
-    }
 
     /**
      * Kiểm tra và cập nhật trạng thái hoàn thành của tiến độ
@@ -524,6 +607,11 @@ class AcceptanceStage extends Model
                 if (!$hasUnverifiedDefects) {
                     $stage->autoCreateDefectIfNotAcceptable();
                 }
+            }
+
+            // Cập nhật tiến độ dự án khi trạng thái thay đổi sang approved
+            if ($stage->wasChanged('status') && $stage->status === 'customer_approved') {
+                $stage->updateProjectProgress();
             }
         });
     }

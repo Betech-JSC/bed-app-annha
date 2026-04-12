@@ -49,6 +49,51 @@ class AssetUsage extends Model
         'pending_receive'    => 'Chờ xác nhận nhận',
     ];
 
+    // ─── Methods ───
+    public function approveByManagement(?User $user = null): bool
+    {
+        if ($this->status !== 'pending_management') return false;
+        $this->status = 'pending_accountant';
+        if ($user) {
+            $this->approved_by = $user->id;
+            $this->approved_at = now();
+        }
+        return $this->save();
+    }
+
+    public function confirmByAccountant(?User $user = null): bool
+    {
+        if ($this->status !== 'pending_accountant') return false;
+        $this->status = 'in_use';
+        if ($user) {
+            $this->confirmed_by = $user->id;
+            $this->confirmed_at = now();
+        }
+        return $this->save();
+    }
+
+    public function confirmReturn(?User $user = null): bool
+    {
+        if ($this->status !== 'pending_return') return false;
+        $this->status = 'returned';
+        if ($user) {
+            $this->confirmed_by = $user->id;
+            $this->confirmed_at = now();
+        }
+        return $this->save();
+    }
+
+    public function reject(?User $user = null, ?string $reason = null): bool
+    {
+        if (!in_array($this->status, ['pending_management', 'pending_accountant', 'pending_return'])) return false;
+        $this->status = 'rejected';
+        $this->rejection_reason = $reason;
+        if ($user) {
+            $this->approved_by = $user->id;
+        }
+        return $this->save();
+    }
+
     protected static function boot()
     {
         parent::boot();

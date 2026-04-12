@@ -118,7 +118,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
 
         // Customer Acceptance
         Route::post('/acceptance/{id}/approve', [CrmApprovalController::class, 'approveCustomerAcceptance'])->name('acceptance.approve');
-        Route::post('/acceptance/{id}/reject', [CrmApprovalController::class, 'rejectCustomerAcceptance'])->name('acceptance.reject');
+        Route::post('/acceptance/{id}/reject', [CrmApprovalController::class, 'rejectAcceptance'])->name('acceptance.reject');
 
         // Supervisor Acceptance (GS duyệt nghiệm thu)
         Route::post('/acceptance-supervisor/{id}/approve', [CrmApprovalController::class, 'approveSupervisorAcceptance'])->name('acceptance-supervisor.approve');
@@ -335,6 +335,10 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Budgets
         Route::post('/{project}/budgets', [CrmProjectsController::class, 'storeBudget'])->name('budgets.store');
         Route::put('/{project}/budgets/{budget}', [CrmProjectsController::class, 'updateBudget'])->name('budgets.update');
+        Route::post('/{project}/budgets/{budget}/submit', [CrmProjectsController::class, 'submitBudget'])->name('budgets.submit');
+        Route::post('/{project}/budgets/{budget}/approve', [CrmProjectsController::class, 'approveBudgetManual'])->name('budgets.approve_manual');
+        Route::post('/{project}/budgets/{budget}/reject', [CrmProjectsController::class, 'rejectBudget'])->name('budgets.reject');
+        Route::post('/{project}/budgets/{budget}/activate', [CrmProjectsController::class, 'activateBudget'])->name('budgets.activate');
         Route::delete('/{project}/budgets/{budget}', [CrmProjectsController::class, 'destroyBudget'])->name('budgets.destroy');
 
         // Invoices
@@ -360,6 +364,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/acceptance/{stage}/items/{item}/approve-customer', [CrmProjectsController::class, 'approveAcceptanceItemCustomer'])->name('acceptance.items.approve.customer');
         Route::post('/{project}/acceptance/{stage}/items/{item}/reject', [CrmProjectsController::class, 'rejectAcceptanceItem'])->name('acceptance.items.reject');
         Route::post('/{project}/acceptance/{stage}/items/{item}/attach-files', [CrmProjectsController::class, 'attachFilesToAcceptanceItem'])->name('acceptance.items.attach-files');
+        Route::post('/{project}/acceptance/{stage}/approve-all', [CrmProjectsController::class, 'approveAllAcceptanceItems'])->name('acceptance.approve-all');
 
         // Documents
         Route::post('/{project}/documents', [CrmProjectsController::class, 'storeDocument'])->name('documents.store');

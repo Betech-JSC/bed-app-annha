@@ -114,23 +114,31 @@ class BudgetSyncService
      */
     public function syncBudgetItem(BudgetItem $item, Project $project): void
     {
+        // 1. Precise match by budget_item_id
+        $actualAmountExplicit = Cost::where('project_id', $project->id)
+            ->where('budget_item_id', $item->id)
+            ->where('status', 'approved')
+            ->sum('amount');
+
+        // 2. Fallback match by cost_group_id (if cost doesn't have an explicit budget_item_id)
+        // Note: This matches the previous logic but tries to avoid double counting if an explicit ID exists
+        $actualAmountFallback = 0;
         if ($item->cost_group_id) {
-            // Tính tổng actual amount từ các costs đã approved có cùng cost_group_id
-            $actualAmount = Cost::where('project_id', $project->id)
+            // Find all costs for this project and cost group that are NOT explicitly assigned to ANY budget item
+            // or are explicitly assigned to THIS item (already covered above)
+             $actualAmountFallback = Cost::where('project_id', $project->id)
                 ->where('cost_group_id', $item->cost_group_id)
+                ->whereNull('budget_item_id')
                 ->where('status', 'approved')
                 ->sum('amount');
-            
-            $item->actual_amount = number_format((float) $actualAmount, 2, '.', '');
-            $estimatedAmount = (float) ($item->estimated_amount ?? 0);
-            $item->remaining_amount = number_format($estimatedAmount - (float) $actualAmount, 2, '.', '');
-            $item->save();
-        } else {
-            // Nếu không có cost_group_id, có thể là chi phí khác
-            $item->actual_amount = '0.00';
-            $item->remaining_amount = number_format((float) ($item->estimated_amount ?? 0), 2, '.', '');
-            $item->save();
         }
+        
+        $actualAmount = (float)$actualAmountExplicit + (float)$actualAmountFallback;
+        
+        $item->actual_amount = number_format($actualAmount, 2, '.', '');
+        $estimatedAmount = (float) ($item->estimated_amount ?? 0);
+        $item->remaining_amount = number_format($estimatedAmount - $actualAmount, 2, '.', '');
+        $item->save();
     }
 
     /**

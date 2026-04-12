@@ -43,6 +43,8 @@ class Defect extends Model
     protected $appends = [
         'is_open',
         'is_fixed',
+        'next_action',
+        'workflow_status_info',
     ];
 
     // ==================================================================
@@ -121,6 +123,55 @@ class Defect extends Model
     public function getIsFixedAttribute(): bool
     {
         return $this->status === 'fixed' || $this->status === 'verified';
+    }
+
+    public function getNextActionAttribute(): array
+    {
+        switch ($this->status) {
+            case 'open':
+            case 'in_progress':
+                return [
+                    'label' => 'Chờ khắc phục',
+                    'role' => 'team',
+                    'action' => 'Đánh dấu đã sửa',
+                ];
+            case 'fixed':
+                return [
+                    'label' => 'Chờ xác nhận (Verify)',
+                    'role' => 'supervisor',
+                    'action' => 'Xác nhận (Verify)',
+                ];
+            case 'verified':
+                return [
+                    'label' => 'Đã hoàn thành',
+                    'role' => null,
+                    'action' => null,
+                ];
+            default:
+                return [
+                    'label' => 'Đang xử lý',
+                    'role' => null,
+                    'action' => null,
+                ];
+        }
+    }
+
+    public function getWorkflowStatusInfoAttribute(): array
+    {
+        $info = [];
+        if ($this->reported_by) {
+            $info[] = ['stage' => 'Báo cáo', 'user' => $this->reporter->name ?? 'N/A', 'at' => $this->reported_at];
+        }
+        if ($this->fixed_by) {
+            $info[] = ['stage' => 'Khắc phục', 'user' => $this->fixer->name ?? 'N/A', 'at' => $this->fixed_at];
+        }
+        if ($this->verified_by) {
+            $info[] = ['stage' => 'Xác nhận', 'user' => $this->verifier->name ?? 'N/A', 'at' => $this->verified_at];
+        }
+        if ($this->rejection_reason) {
+            $info[] = ['stage' => 'Từ chối xác nhận', 'user' => 'Hệ thống/Giám sát', 'at' => $this->updated_at, 'reason' => $this->rejection_reason];
+        }
+        return $info;
     }
 
     // ==================================================================

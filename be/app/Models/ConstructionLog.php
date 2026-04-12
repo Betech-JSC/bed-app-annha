@@ -64,6 +64,31 @@ class ConstructionLog extends Model
     }
 
     // ==================================================================
+    // METHODS
+    // ==================================================================
+
+    public function approve(?User $user = null): bool
+    {
+        $this->approval_status = 'approved';
+        if ($user) {
+            $this->approved_by = $user->id;
+        }
+        $this->approved_at = now();
+        return $this->save();
+    }
+
+    public function reject(?User $user = null, ?string $reason = null): bool
+    {
+        $this->approval_status = 'rejected';
+        if ($user) {
+            $this->approved_by = $user->id; // Using approved_by for rejector as well in this model schema
+        }
+        $this->approved_at = now();
+        $this->rejection_reason = $reason;
+        return $this->save();
+    }
+
+    // ==================================================================
     // SCOPE
     // ==================================================================
 

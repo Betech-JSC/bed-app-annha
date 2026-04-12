@@ -20,6 +20,7 @@ use App\Models\Defect;
 use App\Models\ProjectBudget;
 use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
+use App\Models\MaterialBill;
 use App\Models\User;
 use App\Services\ApprovalQueryService;
 use App\Services\ApprovalActionService;
@@ -176,11 +177,39 @@ class CrmApprovalController extends Controller
             'can_customer' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $this->crmCan($user, Permissions::PAYMENT_APPROVE),
         ];
 
+        // Collect budget items for projects that have costs pending accountant approval
+        $budgetItemsByProject = [];
+        $accountantProjectIds = $accountantItemsFormatted->pluck('project_id')->filter()->unique()->values();
+        if ($accountantProjectIds->isNotEmpty()) {
+            $budgets = ProjectBudget::whereIn('project_id', $accountantProjectIds)
+                ->where('status', 'approved')
+                ->with(['items.costGroup'])
+                ->get();
+            foreach ($budgets as $budget) {
+                $projectId = $budget->project_id;
+                if (!isset($budgetItemsByProject[$projectId])) {
+                    $budgetItemsByProject[$projectId] = [];
+                }
+                foreach ($budget->items as $item) {
+                    $budgetItemsByProject[$projectId][] = [
+                        'id' => $item->id,
+                        'name' => $item->name,
+                        'budget_name' => $budget->name,
+                        'cost_group' => $item->costGroup?->name,
+                        'estimated_amount' => (float) $item->estimated_amount,
+                        'actual_amount' => (float) $item->actual_amount,
+                        'remaining_amount' => (float) ($item->estimated_amount - $item->actual_amount),
+                    ];
+                }
+            }
+        }
+
         return Inertia::render('Crm/Approvals/Index', [
             'roleGroups' => $roleGroups,
             'recentItems' => $recentItems,
             'stats' => $data['stats'],
             'userPermissions' => $userPermissions,
+            'budgetItemsByProject' => $budgetItemsByProject,
         ]);
     }
 
@@ -207,6 +236,17 @@ class CrmApprovalController extends Controller
         $cost = Cost::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $cost->project);
+
+        // Kế toán phải chọn ngân sách cho chi phí dự án
+        if ($cost->project_id) {
+            $request->validate([
+                'budget_item_id' => 'required|exists:budget_items,id',
+            ], [
+                'budget_item_id.required' => 'Vui lòng chọn hạng mục ngân sách cho khoản chi này.',
+                'budget_item_id.exists' => 'Hạng mục ngân sách không hợp lệ.',
+            ]);
+            $cost->update(['budget_item_id' => $request->budget_item_id]);
+        }
 
         $result = $this->approvalActionService->approve($user, 'accountant', $id);
 
@@ -273,23 +313,7 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $stage->project);
 
-        if ($stage->status !== 'project_manager_approved') {
-            return back()->with('error', 'Giai đoạn nghiệm thu không ở trạng thái chờ KH duyệt');
-        }
-
-        try {
-            DB::beginTransaction();
-            $result = $stage->approveCustomer($user);
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể duyệt nghiệm thu (KH)');
-            }
-            DB::commit();
-            return back()->with('success', "Khách hàng đã duyệt nghiệm thu \"{$stage->name}\"");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi duyệt nghiệm thu (KH)');
-        }
+        return $this->delegateApprove($user, 'acceptance', $id);
     }
 
     public function rejectAcceptance(Request $request, $id)
@@ -299,15 +323,7 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $stage->project);
 
-        try {
-            DB::beginTransaction();
-            $stage->reject($request->reason, $user);
-            DB::commit();
-            return back()->with('success', "Đã từ chối nghiệm thu \"{$stage->name}\"");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi từ chối nghiệm thu');
-        }
+        return $this->delegateReject($user, 'acceptance', $id, $request->reason);
     }
 
     // =========================================================================
@@ -352,19 +368,7 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $payment->project);
 
-        try {
-            DB::beginTransaction();
-            $result = $payment->approve($user);
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể duyệt thanh toán NTP');
-            }
-            DB::commit();
-            return back()->with('success', 'Đã duyệt thanh toán NTP');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi duyệt thanh toán NTP');
-        }
+        return $this->delegateApprove($user, 'sub_payment', $id);
     }
 
     public function confirmSubPayment(Request $request, $id)
@@ -373,24 +377,17 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID, $payment->project);
 
-        // Financial Gatekeeper: Ensure attachments exist for financial flow
+        // Financial Gatekeeper: Ensure attachments exist
         if ($payment->attachments()->count() === 0) {
             return back()->with('error', 'Yêu cầu thanh toán NTP này bắt buộc phải có file chứng từ đi kèm (UNC/Hóa đơn) mới có thể xác nhận.');
         }
 
-        try {
-            DB::beginTransaction();
-            $result = $payment->markAsPaid($user);
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể xác nhận thanh toán NTP');
-            }
-            DB::commit();
-            return back()->with('success', 'Đã xác nhận thanh toán NTP');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi xác nhận thanh toán NTP');
+        // Link to budget if provided (pre-processing before service call)
+        if ($request->has('budget_item_id')) {
+            $payment->update(['budget_item_id' => $request->budget_item_id]);
         }
+
+        return $this->delegateApprove($user, 'sub_payment_confirm', $id);
     }
 
     public function rejectSubPayment(Request $request, $id)
@@ -400,15 +397,7 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $payment->project);
 
-        try {
-            DB::beginTransaction();
-            $payment->reject($user, $request->reason);
-            DB::commit();
-            return back()->with('success', 'Đã từ chối thanh toán NTP');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi hệ thống khi từ chối thanh toán NTP');
-        }
+        return $this->delegateReject($user, 'sub_payment', $id, $request->reason);
     }
 
     // =========================================================================
@@ -417,70 +406,26 @@ class CrmApprovalController extends Controller
 
     public function approveMaterialBill(Request $request, $id)
     {
-        $materialBillClass = 'App\\Models\\MaterialBill';
-        if (!class_exists($materialBillClass)) {
-            return back()->with('error', 'Module Phiếu vật tư chưa được cài đặt');
-        }
-
-        $bill = $materialBillClass::findOrFail($id);
+        $bill = MaterialBill::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::MATERIAL_APPROVE, $bill->project);
 
-        try {
-            DB::beginTransaction();
-
-            if (in_array($bill->status, ['draft', 'pending', 'pending_management', 'rejected'])) {
-                $result = $bill->approveByManagement($user);
-            } elseif ($bill->status === 'pending_accountant') {
-                $result = $bill->approveByAccountant($user);
-            } else {
-                DB::rollBack();
-                return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ duyệt');
-            }
-
-            if (!$result) {
-                DB::rollBack();
-                return back()->with('error', 'Không thể duyệt phiếu vật tư');
-            }
-
-            DB::commit();
-            Log::info('CRM: Đã duyệt phiếu vật tư', ['bill_id' => $id, 'user_id' => $user->id]);
-            return back()->with('success', "Đã duyệt phiếu vật tư \"{$bill->bill_number}\"");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('CRM: Error approving material bill', ['bill_id' => $id, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Lỗi hệ thống khi duyệt phiếu vật tư');
+        // Normalize edge-case statuses before service call
+        if (in_array($bill->status, ['draft', 'pending', 'rejected'])) {
+            $bill->update(['status' => 'pending_management']);
         }
+
+        return $this->delegateApprove($user, 'material_bill', $id);
     }
 
     public function rejectMaterialBill(Request $request, $id)
     {
         $request->validate(['reason' => 'required|string|max:500']);
-        $materialBillClass = 'App\\Models\\MaterialBill';
-        if (!class_exists($materialBillClass)) {
-            return back()->with('error', 'Module Phiếu vật tư chưa được cài đặt');
-        }
-
-        $bill = $materialBillClass::findOrFail($id);
+        $bill = MaterialBill::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::MATERIAL_APPROVE, $bill->project);
 
-        if (!in_array($bill->status, ['pending_management', 'pending_accountant'])) {
-            return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ duyệt');
-        }
-
-        try {
-            DB::beginTransaction();
-            $bill->reject($request->reason, $user);
-            DB::commit();
-            
-            Log::info('CRM: Đã từ chối phiếu vật tư', ['bill_id' => $id, 'user_id' => $user->id]);
-            return back()->with('success', "Đã từ chối phiếu vật tư \"{$bill->bill_number}\"");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('CRM: Error rejecting material bill', ['bill_id' => $id, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Lỗi hệ thống khi từ chối phiếu vật tư');
-        }
+        return $this->delegateReject($user, 'material_bill', $id, $request->reason);
     }
 
     // =========================================================================
@@ -489,25 +434,21 @@ class CrmApprovalController extends Controller
 
     public function approveContract(Request $request, $id)
     {
-        $user = Auth::guard('admin')->user();
         $contract = Contract::findOrFail($id);
+        $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::CONTRACT_VIEW, $contract->project);
-        try {
-            $contract->approve();
-            return back()->with('success', 'Đã duyệt hợp đồng');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Lỗi khi duyệt hợp đồng');
-        }
+
+        return $this->delegateApprove($user, 'contract', $id);
     }
 
     public function rejectContract(Request $request, $id)
     {
         $request->validate(['reason' => 'required|string']);
-        $user = Auth::guard('admin')->user();
         $contract = Contract::findOrFail($id);
+        $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::CONTRACT_VIEW, $contract->project);
-        $contract->reject($request->reason);
-        return back()->with('success', 'Đã từ chối hợp đồng');
+
+        return $this->delegateReject($user, 'contract', $id, $request->reason);
     }
 
     public function approvePayment(Request $request, $id)
@@ -515,8 +456,8 @@ class CrmApprovalController extends Controller
         $payment = ProjectPayment::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::PAYMENT_APPROVE, $payment->project);
-        $payment->approveByCustomer($user);
-        return back()->with('success', 'Đã duyệt thanh toán dự án');
+
+        return $this->delegateApprove($user, 'project_payment', $id);
     }
 
     public function confirmProjectPayment(Request $request, $id)
@@ -524,16 +465,8 @@ class CrmApprovalController extends Controller
         $payment = ProjectPayment::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $payment->project);
-        
-        try {
-            DB::beginTransaction();
-            $payment->markAsPaid($user);
-            DB::commit();
-            return back()->with('success', 'Đã xác nhận thanh toán (Kế toán)');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi khi xác nhận thanh toán: ' . $e->getMessage());
-        }
+
+        return $this->delegateApprove($user, 'project_payment_confirm', $id);
     }
 
     public function rejectPayment(Request $request, $id)
@@ -542,11 +475,8 @@ class CrmApprovalController extends Controller
         $payment = ProjectPayment::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::PAYMENT_APPROVE, $payment->project);
-        $payment->update([
-            'status' => 'pending',
-            'notes' => ($payment->notes ? $payment->notes . "\n" : '') . "Từ chối: " . $request->reason
-        ]);
-        return back()->with('success', 'Đã từ chối thanh toán dự án');
+
+        return $this->delegateReject($user, 'project_payment', $id, $request->reason);
     }
 
     public function approveBudget(Request $request, $id)
@@ -554,17 +484,17 @@ class CrmApprovalController extends Controller
         $budget = ProjectBudget::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::BUDGET_APPROVE, $budget->project);
-        $budget->update(['status' => 'approved', 'approved_by' => $user->id, 'approved_at' => now()]);
-        return back()->with('success', 'Đã duyệt ngân sách');
+
+        return $this->delegateApprove($user, 'budget', $id);
     }
 
     public function rejectBudget(Request $request, $id)
     {
-        $user = Auth::guard('admin')->user();
         $budget = ProjectBudget::findOrFail($id);
+        $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::BUDGET_APPROVE, $budget->project);
-        $budget->update(['status' => 'draft']);
-        return back()->with('success', 'Đã từ chối ngân sách');
+
+        return $this->delegateReject($user, 'budget', $id, $request->input('reason', 'Không đồng ý'));
     }
 
     public function approveConstructionLog(Request $request, $id)
@@ -572,8 +502,8 @@ class CrmApprovalController extends Controller
         $log = ConstructionLog::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::LOG_APPROVE, $log->project);
-        $log->update(['approval_status' => 'approved', 'approved_by' => $user->id, 'approved_at' => now()]);
-        return back()->with('success', 'Đã duyệt nhật ký');
+
+        return $this->delegateApprove($user, 'construction_log', $id);
     }
 
     public function rejectConstructionLog(Request $request, $id)
@@ -582,8 +512,8 @@ class CrmApprovalController extends Controller
         $log = ConstructionLog::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::LOG_APPROVE, $log->project);
-        $log->update(['approval_status' => 'rejected', 'rejected_by' => $user->id, 'rejected_at' => now(), 'rejection_reason' => $request->reason]);
-        return back()->with('success', 'Đã từ chối nhật ký');
+
+        return $this->delegateReject($user, 'construction_log', $id, $request->reason);
     }
 
     public function verifyDefectFromApproval(Request $request, $id)
@@ -591,8 +521,8 @@ class CrmApprovalController extends Controller
         $defect = Defect::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::DEFECT_VERIFY, $defect->project);
-        $defect->markAsVerified($user);
-        return back()->with('success', 'Đã xác nhận lỗi đã sửa');
+
+        return $this->delegateApprove($user, 'defect_verify', $id);
     }
 
     public function rejectDefectFromApproval(Request $request, $id)
@@ -601,8 +531,8 @@ class CrmApprovalController extends Controller
         $defect = Defect::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::DEFECT_VERIFY, $defect->project);
-        $defect->update(['status' => 'open', 'rejection_reason' => $request->reason]);
-        return back()->with('success', 'Đã từ chối xác nhận lỗi');
+
+        return $this->delegateReject($user, 'defect_verify', $id, $request->reason);
     }
 
     public function approveScheduleAdjustment(Request $request, $id)
@@ -610,8 +540,8 @@ class CrmApprovalController extends Controller
         $adj = ScheduleAdjustment::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::GANTT_UPDATE, $adj->project);
-        $adj->approve($user);
-        return back()->with('success', 'Đã duyệt điều chỉnh tiến độ');
+
+        return $this->delegateApprove($user, 'schedule_adjustment', $id, ['notes' => $request->input('notes')]);
     }
 
     public function rejectScheduleAdjustment(Request $request, $id)
@@ -620,8 +550,32 @@ class CrmApprovalController extends Controller
         $adj = ScheduleAdjustment::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::GANTT_UPDATE, $adj->project);
-        $adj->reject($user, $request->reason);
-        return back()->with('success', 'Đã từ chối điều chỉnh tiến độ');
+
+        return $this->delegateReject($user, 'schedule_adjustment', $id, $request->reason);
+    }
+
+    // =========================================================================
+    // SHARED DELEGATE HELPERS — Single source of truth via ApprovalActionService
+    // =========================================================================
+
+    private function delegateApprove($user, string $type, $id, array $params = [])
+    {
+        $result = $this->approvalActionService->approve($user, $type, $id, $params);
+
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
+        }
+        return back()->with('error', $result['message']);
+    }
+
+    private function delegateReject($user, string $type, $id, string $reason)
+    {
+        $result = $this->approvalActionService->reject($user, $type, $id, $reason);
+
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
+        }
+        return back()->with('error', $result['message']);
     }
 
     // =========================================================================
@@ -674,6 +628,7 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'type' => $a->type,
             ]),
             'attachments_count' => $stage->attachments->count(),
         ];
@@ -970,6 +925,8 @@ class CrmApprovalController extends Controller
             'created_by' => $budget->creator->name ?? 'N/A',
             'created_at' => optional($budget->created_at)->format('d/m/Y H:i') ?? '',
             'project_id' => $budget->project_id,
+            'next_action' => $budget->next_action,
+            'approval_status_info' => $budget->approval_status_info,
             'attachments' => $budget->attachments->map(fn($a) => [
                 'id' => $a->id,
                 'name' => $a->file_name,
@@ -1035,11 +992,20 @@ class CrmApprovalController extends Controller
         return match ($status) {
             'draft' => 'Nháp',
             'pending' => 'Chờ duyệt',
+            'supervisor_approved' => 'GS đã duyệt',
+            'project_manager_approved' => 'QLDA đã duyệt',
+            'customer_approved' => 'KH đã duyệt',
+            'owner_approved' => 'CĐT đã duyệt',
+            'design_approved' => 'TK đã duyệt',
+            'internal_approved' => 'Nôi bộ đã duyệt',
             'pending_management_approval' => 'Chờ BĐH duyệt',
             'pending_accountant_approval' => 'Chờ KT xác nhận',
             'pending_accountant_confirmation' => 'Chờ KT xác nhận',
             'pending_customer_approval' => 'Chờ KH duyệt',
+            'pending_approval' => 'Chờ duyệt',
             'approved' => 'Đã duyệt',
+            'active' => 'Đang áp dụng',
+            'archived' => 'Đã lưu trữ',
             'paid' => 'Đã thanh toán',
             'rejected' => 'Từ chối',
             'fixed' => 'Đã sửa — Chờ xác nhận',

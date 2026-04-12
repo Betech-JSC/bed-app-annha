@@ -130,9 +130,17 @@
       <template #bodyCell="{ column, record }">
         <!-- Status Tag (New in Table) -->
         <template v-if="column.key === 'status'">
-          <a-tag :color="historyStatusColor(record.status)" class="rounded-md text-[10px] uppercase font-bold">
-            {{ statusViMap[record.status] || record.status }}
-          </a-tag>
+          <div class="flex flex-col gap-1">
+            <a-tag :color="historyStatusColor(record.status)" class="rounded-md text-[10px] uppercase font-bold w-fit">
+              {{ statusViMap[record.status] || record.status }}
+            </a-tag>
+            <div v-if="record.next_action" class="flex items-center gap-1.5 mt-0.5">
+              <span class="w-1 h-1 rounded-full bg-blue-400"></span>
+              <span class="text-[10px] text-blue-500 font-medium whitespace-nowrap italic">
+                Tiếp theo: {{ record.next_action.role }}
+              </span>
+            </div>
+          </div>
         </template>
         <!-- Loại -->
         <template v-if="column.key === 'type'">
@@ -167,6 +175,24 @@
         <!-- Thao tác -->
         <template v-if="column.key === 'actions'">
           <a-space :size="6">
+            <a-tooltip v-if="getDetailUrl(record)" title="Vào xem chi tiết">
+              <a-button
+                size="small"
+                class="ac-btn-detail"
+                @click="navigateToDetail(record)"
+              >
+                <template #icon><ArrowRightOutlined /></template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="Xem nhanh">
+              <a-button
+                size="small"
+                class="ac-btn-eye"
+                @click="openDetailDrawer(record)"
+              >
+                <template #icon><EyeOutlined /></template>
+              </a-button>
+            </a-tooltip>
             <a-button
               type="primary"
               size="small"
@@ -278,6 +304,40 @@
         <div class="detail-label">Dự án / Phân nhóm</div>
         <div class="text-sm text-gray-700">{{ detailItem.subtitle }}</div>
       </div>
+
+      <!-- Approval Workflow Visualization -->
+      <div v-if="detailItem.approval_status_info" class="detail-section p-4 bg-gray-50 rounded-2xl border border-gray-100 mb-6 mt-4">
+        <div class="detail-label uppercase tracking-widest !text-[10px] text-gray-400 mb-4">Luồng phê duyệt</div>
+        <div class="space-y-4">
+          <div v-for="(step, idx) in detailItem.approval_status_info.history" :key="idx" class="flex gap-3 relative">
+            <div v-if="idx < detailItem.approval_status_info.history.length - 1 || detailItem.approval_status_info.next" 
+                 class="absolute left-[11px] top-6 bottom-[-16px] w-[2px] bg-emerald-100"></div>
+            <div class="z-10 w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm"
+                 :class="step.status === 'rejected' ? 'bg-red-500' : 'bg-emerald-500'">
+              <CheckOutlined v-if="step.status !== 'rejected'" class="text-[10px] text-white" />
+              <CloseOutlined v-else class="text-[10px] text-white" />
+            </div>
+            <div class="flex-1 pb-2">
+              <div class="text-xs font-bold" :class="step.status === 'rejected' ? 'text-red-600' : 'text-emerald-700'">{{ step.label }}</div>
+              <div class="text-[11px] text-gray-600 mt-0.5">{{ step.user }} • {{ step.time }}</div>
+              <div v-if="step.note" class="mt-2 p-2 bg-white rounded-lg border border-red-50 text-[11px] text-red-500 italic">
+                Lý do: {{ step.note }}
+              </div>
+            </div>
+          </div>
+          <!-- Next Step -->
+          <div v-if="detailItem.approval_status_info.next" class="flex gap-3 relative">
+            <div class="z-10 w-6 h-6 rounded-full bg-white border-2 border-dashed border-blue-400 flex items-center justify-center shrink-0">
+              <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
+            </div>
+            <div class="flex-1">
+              <div class="text-xs font-bold text-blue-600">{{ detailItem.approval_status_info.next.label }}</div>
+              <div class="text-[11px] text-gray-500 mt-0.5">Vai trò: <span class="bg-blue-50 px-1.5 py-0.5 rounded text-blue-600 font-medium">{{ detailItem.approval_status_info.next.role }}</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="detail-section" v-if="detailItem.amount">
         <div class="detail-label">Số tiền</div>
         <div class="text-xl font-bold text-emerald-600">{{ formatCurrency(detailItem.amount) }}</div>
@@ -410,6 +470,69 @@
       </a-form-item>
     </div>
   </a-modal>
+
+  <!-- ─── Budget Selection Modal (KT duyệt chi phí) ─── -->
+  <a-modal
+    v-model:open="budgetModalVisible"
+    title="Chọn hạng mục ngân sách"
+    :width="560"
+    @ok="confirmBudgetApproval"
+    :confirm-loading="budgetApprovalLoading"
+    ok-text="Xác nhận duyệt"
+    cancel-text="Hủy"
+    :ok-button-props="{ disabled: !selectedBudgetItemId, style: { background: '#10B981', borderColor: '#10B981' } }"
+    centered
+    destroy-on-close
+    class="crm-modal"
+  >
+    <div class="mt-4">
+      <!-- Cost info summary -->
+      <div v-if="budgetApprovalTarget" class="p-3 mb-4 bg-blue-50 rounded-xl border border-blue-100">
+        <div class="text-sm font-bold text-gray-800">{{ budgetApprovalTarget.title }}</div>
+        <div class="text-xs text-gray-500 mt-1">{{ budgetApprovalTarget.subtitle }}</div>
+        <div v-if="budgetApprovalTarget.amount" class="text-sm font-bold text-emerald-600 mt-1">{{ formatCurrency(budgetApprovalTarget.amount) }}</div>
+      </div>
+
+      <!-- Budget item selection -->
+      <div class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
+        <WalletOutlined /> Chọn hạng mục ngân sách <span class="text-red-500">*</span>
+      </div>
+      <a-select
+        v-model:value="selectedBudgetItemId"
+        placeholder="Chọn hạng mục ngân sách cho khoản chi này..."
+        size="large"
+        class="w-full"
+        show-search
+        option-filter-prop="label"
+        :options="budgetItemsForTarget.map(item => ({
+          value: item.id,
+          label: `${item.name} — ${item.budget_name}`,
+        }))"
+      />
+      <!-- Selected budget item details -->
+      <div v-if="selectedBudgetItemId" class="mt-3 p-3 bg-gray-50 rounded-lg border text-xs space-y-1">
+        <template v-for="item in budgetItemsForTarget" :key="item.id">
+          <template v-if="item.id === selectedBudgetItemId">
+            <div class="font-semibold text-gray-700">{{ item.name }}</div>
+            <div class="text-gray-500">Ngân sách: {{ item.budget_name }}</div>
+            <div v-if="item.cost_group" class="text-gray-500">Nhóm chi phí: {{ item.cost_group }}</div>
+            <div class="flex gap-4 mt-1">
+              <span>Dự toán: <b class="text-blue-600">{{ formatCurrency(item.estimated_amount) }}</b></span>
+              <span>Đã chi: <b class="text-orange-600">{{ formatCurrency(item.actual_amount) }}</b></span>
+              <span>Còn lại: <b :class="item.remaining_amount >= 0 ? 'text-emerald-600' : 'text-red-600'">{{ formatCurrency(item.remaining_amount) }}</b></span>
+            </div>
+          </template>
+        </template>
+      </div>
+
+      <!-- Warning if no budgets available -->
+      <a-empty v-if="!budgetItemsForTarget.length" :image="null" class="mt-3">
+        <template #description>
+          <span class="text-gray-400 text-xs">Dự án chưa có ngân sách được duyệt.<br/>Vui lòng tạo và duyệt ngân sách trước.</span>
+        </template>
+      </a-empty>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
@@ -442,6 +565,7 @@ import {
   AppstoreOutlined,
   FilterOutlined,
   EyeOutlined,
+  WalletOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -453,6 +577,7 @@ const props = defineProps({
   stats: { type: Object, default: () => ({}) },
   auth: { type: Object, required: true },
   userPermissions: { type: Object, default: () => ({}) },
+  budgetItemsByProject: { type: Object, default: () => ({}) },
 })
 
 const currentUserRole = computed(() => props.auth.user.role)
@@ -497,6 +622,17 @@ const rejectReason = ref('')
 const rejectLoading = ref(false)
 const showHistory = ref(false)
 const detailItem = ref(null)
+
+// Budget selection for accountant approval
+const budgetModalVisible = ref(false)
+const budgetApprovalTarget = ref(null)
+const selectedBudgetItemId = ref(null)
+const budgetApprovalLoading = ref(false)
+
+const budgetItemsForTarget = computed(() => {
+  if (!budgetApprovalTarget.value?.project_id) return []
+  return props.budgetItemsByProject[budgetApprovalTarget.value.project_id] || []
+})
 
 const typeColors = {
   project_cost: 'blue',
@@ -625,7 +761,7 @@ const tableColumns = [
   { title: 'Số tiền', key: 'amount', width: 120, align: 'right' },
   { title: 'Người tạo', key: 'created_by', width: 160 },
   { title: 'Ngày tạo', key: 'created_at', width: 120 },
-  { title: 'Thao tác', key: 'actions', width: 160, align: 'center', fixed: 'right' },
+  { title: 'Thao tác', key: 'actions', width: 200, align: 'center', fixed: 'right' },
 ]
 
 const historyColumns = [
@@ -667,13 +803,16 @@ const getDetailUrl = (record) => {
     sub_acceptance: pid ? `/projects/${pid}?tab=subcontractors` : null,
     supplier_acceptance: pid ? `/projects/${pid}?tab=subcontractors` : null,
     construction_log: pid ? `/projects/${pid}?tab=logs` : null,
-    schedule_adjustment: pid ? `/projects/${pid}?tab=gantt` : null,
+    schedule_adjustment: pid ? `/projects/${pid}?tab=logs` : null, // Logs often contain schedule adjustments
     defect: pid ? `/projects/${pid}?tab=defects` : null,
+    defect_verify: pid ? `/projects/${pid}?tab=defects` : null,
     budget: pid ? `/projects/${pid}?tab=budgets` : null,
     equipment_rental: pid ? `/projects/${pid}?tab=equipment` : null,
+    equipment_rental_return: pid ? `/projects/${pid}?tab=equipment` : null,
     asset_usage: pid ? `/projects/${pid}?tab=equipment` : null,
+    asset_usage_return: pid ? `/projects/${pid}?tab=equipment` : null,
   }
-  return typeUrlMap[record.type] || null
+  return typeUrlMap[record.type] || typeUrlMap[record._approveType] || null
 }
 
 const navigateToDetail = (record) => {
@@ -758,6 +897,14 @@ const handleApproveByType = (record) => {
     return
   }
 
+  // KT phải chọn ngân sách khi duyệt chi phí dự án
+  if (type === 'accountant' && record.project_id) {
+    budgetApprovalTarget.value = record
+    selectedBudgetItemId.value = null
+    budgetModalVisible.value = true
+    return
+  }
+
   Modal.confirm({
     title: label,
     content: `Duyệt "${record.title}"?${record.amount ? `\n\nSố tiền: ${formatCurrency(record.amount)}` : ''}`,
@@ -768,8 +915,29 @@ const handleApproveByType = (record) => {
       router.post(urlFn(record), {}, {
         preserveScroll: true,
         onSuccess: () => message.success(`Đã duyệt "${record.title}"`),
-        onError: () => message.error('Không thể duyệt yêu cầu này'),
+        onError: (errors) => message.error(Object.values(errors).flat()[0] || 'Không thể duyệt yêu cầu này'),
       })
+    },
+  })
+}
+
+const confirmBudgetApproval = () => {
+  if (!selectedBudgetItemId.value || !budgetApprovalTarget.value) return
+  budgetApprovalLoading.value = true
+  const record = budgetApprovalTarget.value
+  const urlFn = approveUrlMap['accountant']
+  router.post(urlFn(record), { budget_item_id: selectedBudgetItemId.value }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      message.success(`Đã xác nhận chi phí "${record.title}"`)
+      budgetModalVisible.value = false
+      budgetApprovalTarget.value = null
+      selectedBudgetItemId.value = null
+      budgetApprovalLoading.value = false
+    },
+    onError: (errors) => {
+      message.error(Object.values(errors).flat()[0] || 'Không thể duyệt yêu cầu này')
+      budgetApprovalLoading.value = false
     },
   })
 }
@@ -1064,6 +1232,17 @@ const handleReject = () => {
 }
 .ac-btn-reject {
   border-radius: 8px;
+}
+.ac-btn-detail {
+  border-radius: 8px !important;
+  border-color: #93C5FD !important;
+  color: #1B4F72 !important;
+  background: #EFF6FF !important;
+}
+.ac-btn-detail:hover {
+  background: #DBEAFE !important;
+  border-color: #60A5FA !important;
+  color: #1E40AF !important;
 }
 
 /* ─── History Activity Feed ─── */

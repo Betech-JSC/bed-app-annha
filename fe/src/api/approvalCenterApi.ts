@@ -62,6 +62,17 @@ export interface ApprovalCenterData {
     };
     grand_total: number;
     user_roles: string[];
+    budget_items_by_project?: Record<number, BudgetItemOption[]>;
+}
+
+export interface BudgetItemOption {
+    id: number;
+    name: string;
+    budget_name: string;
+    cost_group?: string;
+    estimated_amount: number;
+    actual_amount: number;
+    remaining_amount: number;
 }
 
 
@@ -75,8 +86,11 @@ export const approvalCenterApi = {
     },
 
     // Quick approve
-    quickApprove: async (type: string, id: number, notes?: string): Promise<{ success: boolean; message: string }> => {
-        const response = await api.post('/approval-center/quick-approve', { type, id, notes });
+    quickApprove: async (type: string, id: number, notes?: string, budgetItemId?: number): Promise<{ success: boolean; message: string }> => {
+        const response = await api.post('/approval-center/quick-approve', { 
+            type, id, notes,
+            ...(budgetItemId ? { budget_item_id: budgetItemId } : {})
+        });
         return response.data;
     },
 

@@ -55,7 +55,7 @@ class ApprovalActionService
                     $cost = Cost::findOrFail($id);
                     // Accountant specific check (must have attachments)
                     if ($cost->attachments()->count() === 0) {
-                        return ['success' => false, 'message' => 'Yêu cầu thanh toán bắt buộc phải có file chứng từ đính kèm.'];
+                        return ['success' => false, 'message' => 'Yêu cầu thanh toán bắt buộc phải có tệp chứng từ đính kèm. Kế toán cần kiểm tra chứng từ trước khi xác nhận.'];
                     }
                     $result = $cost->approveByAccountant($user);
                     $message = "Đã xác nhận chi phí \"{$cost->name}\" (Kế toán)";
@@ -64,25 +64,25 @@ class ApprovalActionService
                 case 'acceptance':
                 case 'acceptance_customer':
                     $stage = AcceptanceStage::findOrFail($id);
-                    $result = $stage->approveByCustomer($user);
-                    $message = "Khách hàng đã duyệt nghiệm thu";
+                    $result = $stage->approveCustomer($user);
+                    $message = "Khách hàng đã duyệt nghiệm thu \"{$stage->name}\"";
                     break;
 
                 case 'acceptance_pm':
                     $stage = AcceptanceStage::findOrFail($id);
-                    $result = $stage->approveByPM($user);
-                    $message = "QLDA đã duyệt nghiệm thu";
+                    $result = $stage->approveProjectManager($user);
+                    $message = "QLDA đã duyệt nghiệm thu \"{$stage->name}\"";
                     break;
 
                 case 'acceptance_supervisor':
                     $stage = AcceptanceStage::findOrFail($id);
-                    $result = $stage->approveBySupervisor($user);
-                    $message = "Giám sát đã duyệt nghiệm thu";
+                    $result = $stage->approveSupervisor($user);
+                    $message = "Giám sát đã duyệt nghiệm thu \"{$stage->name}\"";
                     break;
 
                 case 'change_request':
                     $cr = ChangeRequest::findOrFail($id);
-                    $result = $cr->approve($user);
+                    $result = $cr->approve($user, $params['notes'] ?? null);
                     $message = "Đã duyệt yêu cầu thay đổi";
                     break;
 
@@ -94,13 +94,13 @@ class ApprovalActionService
 
                 case 'sub_payment':
                     $p = SubcontractorPayment::findOrFail($id);
-                    $result = $p->approveByManagement($user);
+                    $result = $p->approve($user);
                     $message = "BĐH đã duyệt thanh toán NTP";
                     break;
 
                 case 'sub_payment_confirm':
                     $p = SubcontractorPayment::findOrFail($id);
-                    $result = $p->confirmByAccountant($user);
+                    $result = $p->markAsPaid($user);
                     $message = "KT đã xác nhận thanh toán NTP";
                     break;
 
@@ -118,7 +118,7 @@ class ApprovalActionService
 
                 case 'project_payment_confirm':
                     $p = ProjectPayment::findOrFail($id);
-                    $result = $p->confirmByAccountant($user);
+                    $result = $p->markAsPaid($user);
                     $message = "KT đã xác nhận thanh toán";
                     break;
 
@@ -130,13 +130,13 @@ class ApprovalActionService
 
                 case 'sub_acceptance':
                     $sa = SubcontractorAcceptance::findOrFail($id);
-                    $result = $sa->approve($user);
+                    $result = $sa->approve($user, $params['notes'] ?? null);
                     $message = "Đã duyệt nghiệm thu NTP";
                     break;
 
                 case 'supplier_acceptance':
                     $sa = SupplierAcceptance::findOrFail($id);
-                    $result = $sa->approve($user);
+                    $result = $sa->approve($user, $params['notes'] ?? null);
                     $message = "Đã duyệt nghiệm thu NCC";
                     break;
 
@@ -148,13 +148,13 @@ class ApprovalActionService
 
                 case 'schedule_adjustment':
                     $adj = ScheduleAdjustment::findOrFail($id);
-                    $result = $adj->approve($user);
+                    $result = $adj->approve($user, $params['notes'] ?? null);
                     $message = "Đã duyệt điều chỉnh tiến độ";
                     break;
 
                 case 'defect_verify':
                     $d = Defect::findOrFail($id);
-                    $result = $d->verify($user);
+                    $result = $d->markAsVerified($user);
                     $message = "Đã xác nhận sửa lỗi";
                     break;
 
@@ -167,31 +167,37 @@ class ApprovalActionService
                 case 'equipment_rental_management':
                     $r = EquipmentRental::findOrFail($id);
                     $result = $r->approveByManagement($user);
+                    $message = "BĐH duyệt thuê thiết bị";
                     break;
 
                 case 'equipment_rental_accountant':
                     $r = EquipmentRental::findOrFail($id);
                     $result = $r->confirmByAccountant($user);
+                    $message = "KT xác nhận thuê thiết bị";
                     break;
 
                 case 'equipment_rental_return':
                     $r = EquipmentRental::findOrFail($id);
                     $result = $r->confirmReturn($user);
+                    $message = "Xác nhận trả thiết bị";
                     break;
 
                 case 'asset_usage_management':
                     $u = AssetUsage::findOrFail($id);
                     $result = $u->approveByManagement($user);
+                    $message = "BĐH duyệt sử dụng thiết bị";
                     break;
 
                 case 'asset_usage_accountant':
                     $u = AssetUsage::findOrFail($id);
                     $result = $u->confirmByAccountant($user);
+                    $message = "KT xác nhận sử dụng thiết bị";
                     break;
 
                 case 'asset_usage_return':
                     $u = AssetUsage::findOrFail($id);
                     $result = $u->confirmReturn($user);
+                    $message = "Xác nhận trả thiết bị kho";
                     break;
 
                 default:
@@ -229,14 +235,12 @@ class ApprovalActionService
                 case 'accountant':
                 case 'project_cost':
                 case 'company_cost':
-                    $model = Cost::findOrFail($id);
-                    break;
+                    $model = Cost::findOrFail($id); break;
                 case 'acceptance':
                 case 'acceptance_customer':
                 case 'acceptance_pm':
                 case 'acceptance_supervisor':
-                    $model = AcceptanceStage::findOrFail($id);
-                    break;
+                    $model = AcceptanceStage::findOrFail($id); break;
                 case 'change_request': $model = ChangeRequest::findOrFail($id); break;
                 case 'additional_cost': $model = AdditionalCost::findOrFail($id); break;
                 case 'sub_payment':
@@ -255,25 +259,38 @@ class ApprovalActionService
                 case 'budget': $model = ProjectBudget::findOrFail($id); break;
                 case 'equipment_rental_management':
                 case 'equipment_rental_accountant':
+                case 'equipment_rental_return':
                     $model = EquipmentRental::findOrFail($id); break;
                 case 'asset_usage_management':
                 case 'asset_usage_accountant':
+                case 'asset_usage_return':
                     $model = AssetUsage::findOrFail($id); break;
                 default:
                     throw new Exception("Loại cần từ chối không hợp lệ: {$type}");
             }
 
-            // Perform rejection (assuming standard reject method exists or manual update)
+            // Perform rejection — handle different model signatures
             if (method_exists($model, 'reject')) {
-                $result = $model->reject($user, $reason);
+                // Models with signature: reject(string $reason, ?User $user)
+                if ($model instanceof Cost 
+                    || $model instanceof AdditionalCost 
+                    || $model instanceof Contract
+                    || $model instanceof AcceptanceItem
+                ) {
+                    $result = $model->reject($reason, $user);
+                } else {
+                    // Models with signature: reject(?User $user, ?string $reason)
+                    // AcceptanceStage, SubcontractorPayment, ChangeRequest, MaterialBill,
+                    // EquipmentRental, AssetUsage, ConstructionLog, ScheduleAdjustment,
+                    // ProjectBudget, SubcontractorAcceptance, SupplierAcceptance, Defect
+                    $result = $model->reject($user, $reason);
+                }
             } else {
-                // Fallback for models that might not have a formal reject() method yet
-                $model->update([
-                    'status' => 'rejected',
-                    'rejected_reason' => $reason,
-                    'rejected_by' => $user->id,
-                    'rejected_at' => now(),
-                ]);
+                // Fallback for models without reject()
+                $model->status = 'rejected';
+                $rejectionField = in_array('rejection_reason', $model->getFillable()) ? 'rejection_reason' : 'rejected_reason';
+                $model->$rejectionField = $reason;
+                $model->save();
                 $result = true;
             }
 

@@ -100,7 +100,7 @@ class SupplierAcceptance extends Model
         return $this->save();
     }
 
-    public function reject(string $reason, ?User $user = null): bool
+    public function reject(?User $user = null, ?string $reason = null): bool
     {
         $this->status = 'rejected';
         $this->rejection_reason = $reason;

@@ -18,6 +18,7 @@ use App\Models\Defect;
 use App\Models\ProjectBudget;
 use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
+use App\Models\MaterialBill;
 use App\Models\User;
 use App\Constants\Permissions;
 use Illuminate\Support\Collection;
@@ -66,13 +67,13 @@ class ApprovalQueryService
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'project_cost', 'company_cost'])) {
             $data['costs_management'] = $this->getCosts(
-                ['draft', 'pending', 'pending_management_approval', 'rejected'],
+                ['pending', 'pending_management_approval'],
                 $canSeeAllProjects, $projectIds,
                 ['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'attachments']
             );
 
             $data['costs_accountant'] = $this->getCosts(
-                ['pending_accountant_approval', 'approved'],
+                ['pending_accountant_approval'],
                 $canSeeAllProjects, $projectIds,
                 ['creator:id,name,email', 'costGroup:id,name', 'project:id,name,code', 'managementApprover:id,name', 'attachments']
             );
@@ -123,7 +124,7 @@ class ApprovalQueryService
         // CHANGE REQUESTS (Yêu cầu thay đổi)
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'change_request'])) {
-            $data['change_requests'] = ChangeRequest::whereIn('status', ['submitted', 'under_review', 'rejected'])
+            $data['change_requests'] = ChangeRequest::whereIn('status', ['submitted', 'under_review'])
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'requester:id,name,email', 'attachments'])
                 ->orderBy('created_at', 'desc')
@@ -134,7 +135,7 @@ class ApprovalQueryService
         // ADDITIONAL COSTS (Chi phí phát sinh)
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'additional_cost'])) {
-            $data['additional_costs'] = AdditionalCost::whereIn('status', ['pending', 'pending_approval', 'rejected'])
+            $data['additional_costs'] = AdditionalCost::whereIn('status', ['pending', 'pending_approval'])
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'proposer:id,name,email', 'attachments'])
                 ->orderBy('created_at', 'desc')
@@ -145,7 +146,7 @@ class ApprovalQueryService
         // SUBCONTRACTOR PAYMENTS (Thanh toán NTP)
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'sub_payment'])) {
-            $data['sub_payments_management'] = SubcontractorPayment::whereIn('status', ['pending_management_approval', 'rejected'])
+            $data['sub_payments_management'] = SubcontractorPayment::where('status', 'pending_management_approval')
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'attachments'])
                 ->orderBy('created_at', 'desc')
@@ -192,7 +193,7 @@ class ApprovalQueryService
         if ($this->shouldInclude($type, ['all', 'material_bill'])) {
             $materialBillClass = 'App\\Models\\MaterialBill';
             if (class_exists($materialBillClass)) {
-                $data['material_bills_management'] = $materialBillClass::whereIn('status', ['draft', 'pending', 'pending_management', 'rejected'])
+                $data['material_bills_management'] = $materialBillClass::whereIn('status', ['pending', 'pending_management'])
                     ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                     ->with(['creator:id,name,email', 'project:id,name,code', 'attachments'])
                     ->orderBy('created_at', 'desc')
@@ -235,7 +236,7 @@ class ApprovalQueryService
         // CONSTRUCTION LOGS (Nhật ký công trường)
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'construction_log'])) {
-            $data['construction_logs'] = ConstructionLog::whereIn('approval_status', ['pending', 'rejected'])
+            $data['construction_logs'] = ConstructionLog::where('approval_status', 'pending')
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
                 ->orderBy('log_date', 'desc')
@@ -279,7 +280,7 @@ class ApprovalQueryService
         // EQUIPMENT RENTALS (Thuê thiết bị)
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'equipment_rental'])) {
-            $data['equipment_rentals_management'] = EquipmentRental::whereIn('status', ['pending_management', 'rejected'])
+            $data['equipment_rentals_management'] = EquipmentRental::where('status', 'pending_management')
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
                 ->orderBy('created_at', 'desc')
@@ -302,7 +303,7 @@ class ApprovalQueryService
         // ASSET USAGES (Sử dụng thiết bị)
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'asset_usage'])) {
-            $data['asset_usages_management'] = AssetUsage::whereIn('status', ['pending_management', 'rejected'])
+            $data['asset_usages_management'] = AssetUsage::where('status', 'pending_management')
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
@@ -469,9 +470,13 @@ class ApprovalQueryService
             $pendingOthers += ($data['change_requests'] ?? collect())->count();
             $pendingOthers += ($data['additional_costs'] ?? collect())->count();
             $pendingOthers += ($data['sub_payments_management'] ?? collect())->count();
+            $pendingOthers += ($data['sub_payments_accountant'] ?? collect())->count();
             $pendingOthers += ($data['material_bills_management'] ?? collect())->count();
+            $pendingOthers += ($data['material_bills_accountant'] ?? collect())->count();
             $pendingOthers += ($data['equipment_rentals_management'] ?? collect())->count();
+            $pendingOthers += ($data['equipment_rentals_accountant'] ?? collect())->count();
             $pendingOthers += ($data['asset_usages_management'] ?? collect())->count();
+            $pendingOthers += ($data['asset_usages_accountant'] ?? collect())->count();
         }
 
         $approvedToday = Cost::where('status', 'approved')->whereDate('updated_at', today())
@@ -488,10 +493,18 @@ class ApprovalQueryService
             ? ProjectPayment::where('status', 'customer_pending_approval')
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->sum('amount')
-            : Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])
-                ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->sum('amount');
+            : (
+                Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])
+                    ->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')
+                    ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
+                    ->sum('amount') +
+                SubcontractorPayment::whereIn('status', ['pending_management_approval', 'pending_accountant_confirmation'])
+                    ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
+                    ->sum('amount') +
+                MaterialBill::whereIn('status', ['pending_management', 'pending_accountant'])
+                    ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
+                    ->sum('total_amount')
+            );
 
         return [
             'pending_management' => $isCustomer ? 0 : $realPendingManagement,

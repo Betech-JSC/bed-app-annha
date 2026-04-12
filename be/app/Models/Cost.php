@@ -31,6 +31,7 @@ class Cost extends Model
         'material_id',
         'material_bill_id',
         'equipment_id', // Liên kết mua thiết bị
+        'equipment_rental_id',
         'equipment_allocation_id',
         'quantity',
         'unit',
@@ -141,6 +142,11 @@ class Cost extends Model
     public function equipmentAllocation(): BelongsTo
     {
         return $this->belongsTo(EquipmentAllocation::class, 'equipment_allocation_id');
+    }
+
+    public function equipmentRental(): BelongsTo
+    {
+        return $this->belongsTo(EquipmentRental::class, 'equipment_rental_id');
     }
 
     public function task(): BelongsTo
@@ -254,23 +260,31 @@ class Cost extends Model
         }
         $saved = $this->save();
         
-        // Cập nhật trạng thái và tiến độ của nhà thầu phụ nếu có
-        if ($saved && $this->subcontractor_id) {
+        // Side effects are now triggered in the saved hook via triggerApprovalSideEffects
+        
+        return $saved;
+    }
+
+    /**
+     * Trigger side effects when cost is approved
+     */
+    public function triggerApprovalSideEffects(): void
+    {
+        // 1. Cập nhật trạng thái và tiến độ của nhà thầu phụ nếu có
+        if ($this->subcontractor_id) {
             $this->updateSubcontractorStatus();
         }
 
-        // Tự động tạo MaterialTransaction nếu Cost có material_id
-        if ($saved && $this->material_id) {
+        // 2. Tự động tạo MaterialTransaction nếu Cost có material_id
+        if ($this->material_id) {
             $inventoryService = app(\App\Services\MaterialInventoryService::class);
             $inventoryService->createTransactionFromCost($this);
         }
 
-        // Cập nhật actual_amount trong BudgetItem khi chi phí được xác nhận
-        if ($saved) {
+        // 3. Cập nhật actual_amount trong BudgetItem
+        if ($this->project_id) {
             $this->updateBudgetItems();
         }
-        
-        return $saved;
     }
 
     /**
@@ -443,15 +457,22 @@ class Cost extends Model
         });
 
         static::saved(function ($cost) {
-        // Đồng bộ trạng thái về Phiếu vật tư nếu có liên kết
-        if ($cost->material_bill_id) {
-            $cost->syncToMaterialBill();
-        }
+            // Cập nhật budget và side effects khi trạng thái thay đổi sang approved
+            if ($cost->wasChanged('status') && $cost->status === 'approved') {
+                $cost->triggerApprovalSideEffects();
+            } elseif ($cost->project_id && $cost->wasChanged('amount')) {
+                $cost->updateBudgetItems();
+            }
 
-        // Đồng bộ trạng thái về Phiếu thanh toán thầu phụ nếu có liên kết
-        if ($cost->subcontractor_payment_id) {
-            $cost->syncToSubcontractorPayment();
-        }
+            // Đồng bộ trạng thái về Phiếu vật tư nếu có liên kết
+            if ($cost->material_bill_id) {
+                $cost->syncToMaterialBill();
+            }
+
+            // Đồng bộ trạng thái về Phiếu thanh toán thầu phụ nếu có liên kết
+            if ($cost->subcontractor_payment_id) {
+                $cost->syncToSubcontractorPayment();
+            }
         });
     }
 

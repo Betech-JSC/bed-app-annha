@@ -130,7 +130,7 @@ class AuthorizationService
             return array_values(array_unique(array_merge($globalPermissions, $projectPermissions)));
         } else {
             // User chưa được assign → trả về global permissions
-            return $globalPermissions;
+            return array_values($globalPermissions);
         }
     }
 

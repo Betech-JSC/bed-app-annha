@@ -131,6 +131,42 @@ class ApprovalCenterController extends Controller
         $result['grand_total'] = $result['stats']['pending_total'];
         $result['user_roles'] = $user->roles->pluck('name')->toArray();
 
+        // 6. Budget Items — for accountant to link costs to project budgets
+        $budgetItemsByProject = [];
+        if ($canApproveAccountant) {
+            $accountantProjectIds = collect($result['items'])
+                ->filter(fn($i) => in_array($i['approval_level'] ?? '', ['accountant']) && !empty($i['project_id']))
+                ->pluck('project_id')
+                ->unique()
+                ->values();
+
+            if ($accountantProjectIds->isNotEmpty()) {
+                $budgets = ProjectBudget::whereIn('project_id', $accountantProjectIds)
+                    ->where('status', 'approved')
+                    ->with(['items.costGroup'])
+                    ->get();
+
+                foreach ($budgets as $budget) {
+                    $pid = $budget->project_id;
+                    if (!isset($budgetItemsByProject[$pid])) {
+                        $budgetItemsByProject[$pid] = [];
+                    }
+                    foreach ($budget->items as $item) {
+                        $budgetItemsByProject[$pid][] = [
+                            'id' => $item->id,
+                            'name' => $item->name,
+                            'budget_name' => $budget->name,
+                            'cost_group' => $item->costGroup?->name,
+                            'estimated_amount' => (float) $item->estimated_amount,
+                            'actual_amount' => (float) $item->actual_amount,
+                            'remaining_amount' => (float) ($item->estimated_amount - $item->actual_amount),
+                        ];
+                    }
+                }
+            }
+        }
+        $result['budget_items_by_project'] = $budgetItemsByProject;
+
         return response()->json([
             'success' => true,
             'data' => $result,
@@ -548,6 +584,7 @@ class ApprovalCenterController extends Controller
             'type' => 'required|string',
             'id' => 'required|integer',
             'notes' => 'nullable|string|max:500',
+            'budget_item_id' => 'nullable|integer|exists:budget_items,id',
         ]);
 
         $user = Auth::user();
@@ -561,11 +598,31 @@ class ApprovalCenterController extends Controller
             return $permCheck;
         }
 
+        // ─── Budget Linking: Save budget_item_id before approval ───
+        if ($request->filled('budget_item_id')) {
+            if ($type === 'project_cost' || $type === 'company_cost') {
+                $cost = \App\Models\Cost::findOrFail($id);
+                if ($cost->status === 'pending_accountant_approval') {
+                    $cost->update(['budget_item_id' => $request->budget_item_id]);
+                }
+            } elseif ($type === 'sub_payment') {
+                $p = \App\Models\SubcontractorPayment::findOrFail($id);
+                if ($p->status === 'pending_accountant_confirmation') {
+                    $p->update(['budget_item_id' => $request->budget_item_id]);
+                }
+            } elseif ($type === 'material_bill') {
+                $b = \App\Models\MaterialBill::findOrFail($id);
+                if ($b->status === 'pending_accountant') {
+                    $b->update(['budget_item_id' => $request->budget_item_id]);
+                }
+            }
+        }
+
         // ─── Service Type Mapping ───
         // Map APP-specific types to Service-compatible types based on current status
         $serviceType = $type;
         if ($type === 'project_cost' || $type === 'company_cost') {
-            $cost = \App\Models\Cost::findOrFail($id);
+            $cost = $cost ?? \App\Models\Cost::findOrFail($id);
             $serviceType = ($cost->status === 'pending_accountant_approval') ? 'accountant' : 'management';
         } elseif ($type === 'equipment_rental') {
             $rental = \App\Models\EquipmentRental::findOrFail($id);
@@ -578,7 +635,7 @@ class ApprovalCenterController extends Controller
             elseif ($usage->status === 'pending_accountant') $serviceType = 'asset_usage_accountant';
             elseif ($usage->status === 'pending_return') $serviceType = 'asset_usage_return';
         } elseif ($type === 'sub_payment') {
-            $p = \App\Models\SubcontractorPayment::findOrFail($id);
+            $p = $p ?? \App\Models\SubcontractorPayment::findOrFail($id);
             $serviceType = ($p->status === 'pending_accountant_confirmation') ? 'sub_payment_confirm' : 'sub_payment';
         } elseif ($type === 'payment') {
             $p = \App\Models\ProjectPayment::findOrFail($id);

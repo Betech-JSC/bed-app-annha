@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { approvalCenterApi, ApprovalItem, ApprovalCenterData } from '@/api/approvalCenterApi';
+import { approvalCenterApi, ApprovalItem, ApprovalCenterData, BudgetItemOption } from '@/api/approvalCenterApi';
 import { ScreenHeader, PermissionDenied } from '@/components';
 import { useTabBarHeight } from '@/hooks/useTabBarHeight';
 import * as WebBrowser from 'expo-web-browser';
@@ -103,6 +103,10 @@ export default function ApprovalCenterScreen() {
     // Permission States
     const [permissionDenied, setPermissionDenied] = useState(false);
     const [permissionMessage, setPermissionMessage] = useState('');
+    
+    // Budget Selection States (for Accountant)
+    const [selectedBudgetItemId, setSelectedBudgetItemId] = useState<number | null>(null);
+    const [budgetPickerVisible, setBudgetPickerVisible] = useState(false);
 
     useEffect(() => {
         loadApprovals();
@@ -150,6 +154,21 @@ export default function ApprovalCenterScreen() {
             }
         }
 
+        // Business Rule: Accountant must select budget for project financial items
+        const isAccountantFinancial = selectedRole === 'accountant' 
+            && ['project_cost', 'sub_payment', 'material_bill'].includes(item.type)
+            && item.project_id;
+        const budgetOptions = item.project_id ? (data?.budget_items_by_project?.[item.project_id] || []) : [];
+        
+        if (isAccountantFinancial && budgetOptions.length > 0 && !selectedBudgetItemId) {
+            Alert.alert(
+                'Chọn ngân sách',
+                'Kế toán bắt buộc phải chọn hạng mục ngân sách cho khoản chi này trước khi xác nhận.',
+                [{ text: 'Đã hiểu' }]
+            );
+            return;
+        }
+
         Alert.alert(
             'Xác nhận duyệt',
             `Bạn có chắc chắn muốn duyệt yêu cầu "${item.title}"?`,
@@ -160,9 +179,13 @@ export default function ApprovalCenterScreen() {
                     onPress: async () => {
                         try {
                             setActionLoading(item.id);
-                            const res = await approvalCenterApi.quickApprove(item.type, item.id, notes);
+                            const res = await approvalCenterApi.quickApprove(
+                                item.type, item.id, notes,
+                                isAccountantFinancial ? (selectedBudgetItemId ?? undefined) : undefined
+                            );
                             if (res.success) {
                                 setDetailItem(null);
+                                setSelectedBudgetItemId(null);
                                 loadApprovals(); // Refresh full data to sync stats
                             } else {
                                 Alert.alert('Thông báo', res.message || 'Không thể duyệt yêu cầu này');
@@ -372,7 +395,7 @@ export default function ApprovalCenterScreen() {
         return (
             <TouchableOpacity 
                 style={styles.itemCard}
-                onPress={() => setDetailItem(item)}
+                onPress={() => { setDetailItem(item); setSelectedBudgetItemId(null); }}
                 activeOpacity={0.8}
             >
                 <View style={styles.itemMain}>
@@ -556,6 +579,52 @@ export default function ApprovalCenterScreen() {
                                             </View>
                                         )}
                                     </View>
+
+                                    {/* Budget Picker — Accountant only, financial items with project */}
+                                    {selectedRole === 'accountant' 
+                                        && ['project_cost', 'sub_payment', 'material_bill'].includes(detailItem.type)
+                                        && detailItem.project_id
+                                        && (data?.budget_items_by_project?.[detailItem.project_id]?.length ?? 0) > 0 && (
+                                        <View style={styles.budgetSection}>
+                                            <Text style={styles.detailLabel}>Hạng mục ngân sách *</Text>
+                                            <Text style={styles.budgetHint}>Chọn hạng mục ngân sách cho khoản chi này</Text>
+                                            <ScrollView style={styles.budgetList} nestedScrollEnabled>
+                                                {data!.budget_items_by_project![detailItem.project_id!]!.map((bi: BudgetItemOption) => (
+                                                    <TouchableOpacity
+                                                        key={bi.id}
+                                                        style={[
+                                                            styles.budgetOption,
+                                                            selectedBudgetItemId === bi.id && styles.budgetOptionActive
+                                                        ]}
+                                                        onPress={() => setSelectedBudgetItemId(bi.id)}
+                                                    >
+                                                        <View style={styles.budgetOptionHeader}>
+                                                            <Ionicons 
+                                                                name={selectedBudgetItemId === bi.id ? 'radio-button-on' : 'radio-button-off'}
+                                                                size={20}
+                                                                color={selectedBudgetItemId === bi.id ? '#10B981' : '#CBD5E1'}
+                                                            />
+                                                            <View style={{ flex: 1 }}>
+                                                                <Text style={styles.budgetOptionName}>{bi.name}</Text>
+                                                                <Text style={styles.budgetOptionMeta}>
+                                                                    {bi.budget_name}{bi.cost_group ? ` · ${bi.cost_group}` : ''}
+                                                                </Text>
+                                                            </View>
+                                                        </View>
+                                                        <View style={styles.budgetAmountRow}>
+                                                            <Text style={styles.budgetAmountLabel}>Còn lại:</Text>
+                                                            <Text style={[
+                                                                styles.budgetAmountValue,
+                                                                { color: bi.remaining_amount > 0 ? '#059669' : '#EF4444' }
+                                                            ]}>
+                                                                {formatCurrency(bi.remaining_amount)}
+                                                            </Text>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    )}
                                 </View>
                             )}
                         </ScrollView>
@@ -743,4 +812,20 @@ const styles = StyleSheet.create({
     mBtnCanText: { color: '#94A3B8', fontWeight: '700' },
     mBtnSub: { flex: 2, backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
     mBtnSubText: { color: '#FFF', fontWeight: '800' },
+
+    // Budget Picker
+    budgetSection: { marginBottom: 24, backgroundColor: '#F0FDF4', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#DCFCE7' },
+    budgetHint: { fontSize: 12, color: '#64748B', marginBottom: 12 },
+    budgetList: { maxHeight: 220 },
+    budgetOption: { 
+        backgroundColor: '#FFF', padding: 14, borderRadius: 14, marginBottom: 8, 
+        borderWidth: 1.5, borderColor: '#E2E8F0' 
+    },
+    budgetOptionActive: { borderColor: '#10B981', backgroundColor: '#ECFDF5' },
+    budgetOptionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 },
+    budgetOptionName: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
+    budgetOptionMeta: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
+    budgetAmountRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 4 },
+    budgetAmountLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
+    budgetAmountValue: { fontSize: 13, fontWeight: '800' },
 });

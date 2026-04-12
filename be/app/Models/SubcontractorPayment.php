@@ -16,6 +16,7 @@ class SubcontractorPayment extends Model
     protected $fillable = [
         'uuid',
         'subcontractor_id',
+        'budget_item_id',
         'project_id',
         'payment_number',
         'payment_stage',
@@ -57,6 +58,11 @@ class SubcontractorPayment extends Model
     public function subcontractor(): BelongsTo
     {
         return $this->belongsTo(Subcontractor::class);
+    }
+
+    public function budgetItem(): BelongsTo
+    {
+        return $this->belongsTo(BudgetItem::class, 'budget_item_id');
     }
 
     public function project(): BelongsTo
@@ -244,6 +250,7 @@ class SubcontractorPayment extends Model
                 'cost_group_id'            => $costGroupId,
                 'description'              => $this->description ?: "Đồng bộ từ phiếu chi thầu phụ " . $this->payment_number,
                 'status'                   => $costStatus,
+                'budget_item_id'           => $this->budget_item_id,
                 'created_by'               => $this->created_by,
                 'management_approved_by'   => $this->approved_by,
                 'management_approved_at'   => $this->approved_at,
