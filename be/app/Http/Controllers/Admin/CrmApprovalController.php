@@ -21,6 +21,8 @@ use App\Models\ProjectBudget;
 use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Models\MaterialBill;
+use App\Models\Attendance;
+use App\Services\AttendanceService;
 use App\Models\User;
 use App\Services\ApprovalQueryService;
 use App\Services\ApprovalActionService;
@@ -37,13 +39,16 @@ class CrmApprovalController extends Controller
 
     protected $approvalQueryService;
     protected $approvalActionService;
+    protected $attendanceService;
 
     public function __construct(
         ApprovalQueryService $approvalQueryService,
-        ApprovalActionService $approvalActionService
+        ApprovalActionService $approvalActionService,
+        AttendanceService $attendanceService
     ) {
         $this->approvalQueryService = $approvalQueryService;
         $this->approvalActionService = $approvalActionService;
+        $this->attendanceService = $attendanceService;
     }
 
     /**
@@ -96,6 +101,8 @@ class CrmApprovalController extends Controller
         $assetUsageManagementFormatted = $data['asset_usages_management']->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
         $assetUsageAccountantFormatted = $data['asset_usages_accountant']->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
         $assetUsageReturnFormatted = $data['asset_usages_return']->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
+
+        $attendanceItemsFormatted = ($data['attendances_pending'] ?? collect([]))->map(fn(Attendance $a) => $this->formatAttendanceItem($a));
 
         // Format recent activity items
         $recent = $data['recent'];
@@ -166,6 +173,10 @@ class CrmApprovalController extends Controller
                     ->concat($pendingPaymentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'project_payment'])))
                     ->values()
                 : collect([]),
+
+            'hr' => $this->crmCan($user, Permissions::ATTENDANCE_APPROVE)
+                ? $attendanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'attendance']))->values()
+                : collect([]),
         ];
 
         // Add a "permissions" map to help UI decide initial tab
@@ -175,6 +186,7 @@ class CrmApprovalController extends Controller
             'can_pm' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2),
             'can_supervisor' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1),
             'can_customer' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $this->crmCan($user, Permissions::PAYMENT_APPROVE),
+            'can_hr' => $this->crmCan($user, Permissions::ATTENDANCE_APPROVE),
         ];
 
         // Collect budget items for projects that have costs pending accountant approval
@@ -182,7 +194,7 @@ class CrmApprovalController extends Controller
         $accountantProjectIds = $accountantItemsFormatted->pluck('project_id')->filter()->unique()->values();
         if ($accountantProjectIds->isNotEmpty()) {
             $budgets = ProjectBudget::whereIn('project_id', $accountantProjectIds)
-                ->where('status', 'approved')
+                ->whereIn('status', ['approved', 'active'])
                 ->with(['items.costGroup'])
                 ->get();
             foreach ($budgets as $budget) {
@@ -597,6 +609,8 @@ class CrmApprovalController extends Controller
             'created_at' => optional($cost->created_at)->format('d/m/Y H:i') ?? '',
             'description' => $cost->description,
             'project_id' => $cost->project_id,
+            'category' => $cost->category,
+            'attendance_id' => $cost->attendance_id,
             'attachments' => $cost->attachments->map(fn($a) => [
                 'id' => $a->id,
                 'name' => $a->file_name,
@@ -985,6 +999,58 @@ class CrmApprovalController extends Controller
             ]),
             'attachments_count' => $usage->attachments->count(),
         ];
+    }
+
+    private function formatAttendanceItem(Attendance $att): array
+    {
+        $statusLabels = [
+            'present' => 'Có mặt', 'absent' => 'Vắng mặt', 'leave' => 'Nghỉ phép',
+            'late' => 'Đi muộn', 'early_leave' => 'Về sớm', 'holiday' => 'Nghỉ lễ',
+        ];
+        $hours = $att->hours_worked ? number_format((float)$att->hours_worked, 1) . 'h' : '';
+        $ot = $att->overtime_hours && $att->overtime_hours > 0 ? " + OT {$att->overtime_hours}h" : '';
+        return [
+            'id'              => $att->id,
+            'type'            => 'attendance',
+            'type_label'      => 'Chấm công',
+            'title'           => ($att->user->name ?? "NV #{$att->user_id}") . ' — ' . optional($att->work_date)->format('d/m/Y'),
+            'subtitle'        => ($att->project->code ?? 'N/A') . ' - ' . ($att->project->name ?? 'Không có dự án'),
+            'amount'          => 0,
+            'status'          => $att->workflow_status,
+            'status_label'    => 'Chờ duyệt',
+            'created_by'      => $att->user->name ?? 'N/A',
+            'created_by_email'=> $att->user->email ?? '',
+            'created_at'      => optional($att->work_date)->format('d/m/Y') ?? '',
+            'description'     => ($statusLabels[$att->status] ?? $att->status) . ($hours ? " · $hours" : '') . $ot,
+            'project_id'      => $att->project_id,
+            'attachments'     => [],
+            'attachments_count' => 0,
+        ];
+    }
+
+    // =========================================================================
+    // ATTENDANCE APPROVAL (from Approval Center)
+    // =========================================================================
+
+    public function approveAttendance(Request $request, $id)
+    {
+        $attendance = Attendance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ATTENDANCE_APPROVE);
+
+        $this->attendanceService->approve($attendance, $user);
+        return back()->with('success', 'Đã duyệt chấm công thành công.');
+    }
+
+    public function rejectAttendance(Request $request, $id)
+    {
+        $attendance = Attendance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ATTENDANCE_APPROVE);
+
+        $reason = $request->validate(['reason' => 'required|string|max:500'])['reason'];
+        $this->attendanceService->reject($attendance, $user, $reason);
+        return back()->with('success', 'Đã từ chối phiếu chấm công.');
     }
 
     private function getStatusLabel(string $status): string

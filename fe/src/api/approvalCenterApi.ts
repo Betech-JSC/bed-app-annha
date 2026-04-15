@@ -3,7 +3,7 @@ import api from './api';
 // Types
 export interface ApprovalItem {
     id: number;
-    type: 'company_cost' | 'project_cost' | 'material_bill' | 'acceptance' | 'acceptance_supervisor' | 'acceptance_pm' | 'change_request' | 'additional_cost' | 'sub_payment' | 'contract' | 'payment' | 'sub_acceptance' | 'supplier_acceptance' | 'acceptance_item' | 'construction_log' | 'schedule_adjustment' | 'defect' | 'budget' | 'equipment_rental' | 'asset_usage';
+    type: 'company_cost' | 'project_cost' | 'material_bill' | 'acceptance' | 'acceptance_supervisor' | 'acceptance_pm' | 'change_request' | 'additional_cost' | 'sub_payment' | 'contract' | 'payment' | 'sub_acceptance' | 'supplier_acceptance' | 'acceptance_item' | 'construction_log' | 'schedule_adjustment' | 'defect' | 'budget' | 'equipment_rental' | 'asset_usage' | 'attendance';
     title: string;
     subtitle: string;
     amount: number;

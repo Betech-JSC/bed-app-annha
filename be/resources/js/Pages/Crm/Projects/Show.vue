@@ -480,6 +480,7 @@
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-center">
               <a-select v-model:value="costGroupFilter" size="small" class="w-full" allow-clear placeholder="Lọc theo nhóm">
                 <a-select-option value="all">Tất cả nhóm</a-select-option>
+                <a-select-option value="_labor">Nhân công (Chấm công)</a-select-option>
                 <a-select-option value="_vatlieu">Vật liệu xây dựng</a-select-option>
                 <a-select-option value="_thietbi">Thiết bị</a-select-option>
                 <a-select-option value="_ntp">Nhà thầu phụ</a-select-option>
@@ -504,7 +505,13 @@
           </div>
           <a-table :columns="costCols" :data-source="filteredCosts" :pagination="{ pageSize: 10, showTotal: (t) => `${t} phiếu` }" row-key="id" size="small" class="crm-table hover-row" :custom-row="(record) => ({ onClick: () => openCostDetail(record), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'amount'"><span class="font-semibold text-red-500">{{ fmt(record.amount) }}</span></template>
+              <template v-if="column.key === 'name'">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <span class="truncate">{{ record.name }}</span>
+                  <a-tag v-if="record.attendance_id" color="teal" class="rounded-full text-[10px] shrink-0" style="font-size:10px;padding:0 5px;line-height:18px;">Nhân công</a-tag>
+                </div>
+              </template>
+              <template v-else-if="column.key === 'amount'"><span class="font-semibold text-red-500">{{ fmt(record.amount) }}</span></template>
               <template v-else-if="column.key === 'status'">
                 <a-tag :color="costStatusColors[record.status]" class="rounded-full text-xs">{{ costStatusLabels[record.status] || record.status }}</a-tag>
               </template>
@@ -1493,10 +1500,10 @@
             </div>
             <div class="flex gap-2">
               <a-date-picker v-model:value="attendanceDate" picker="month" size="small" format="MM/YYYY" @change="loadAttendanceData()" />
-              <a-button size="small" @click="showGenerateLaborCostModal = true" :loading="generatingLaborCosts">
+              <a-button v-if="can('attendance.manage')" size="small" @click="showGenerateLaborCostModal = true" :loading="generatingLaborCosts">
                 <template #icon><CalculatorOutlined /></template>Tổng hợp lương
               </a-button>
-              <a-button type="primary" size="small" @click="showAttendanceModal = true">
+              <a-button v-if="can('attendance.manage')" type="primary" size="small" @click="showAttendanceModal = true">
                 <template #icon><PlusOutlined /></template>Chấm công thủ công
               </a-button>
             </div>
@@ -1528,7 +1535,7 @@
 
           <!-- List View -->
           <div v-if="attendanceView === 'list'">
-            <a-table :columns="attendanceCols" :data-source="attendanceList" :pagination="{ pageSize: 15, showTotal: (t) => `${t} bản ghi` }" row-key="id" size="small" class="crm-table">
+            <a-table :columns="attendanceCols" :data-source="attendanceList" :pagination="{ pageSize: 15, showTotal: (t) => `${t} bản ghi` }" row-key="id" size="small" :custom-row="(record) => ({ onClick: () => openAttendanceDetail(record), class: 'cursor-pointer hover-row' })" class="crm-table">
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'user'">
                   <div class="flex items-center gap-2">
@@ -1541,27 +1548,24 @@
                   <span :class="record.status === 'late' ? 'text-amber-600 font-medium' : 'text-green-600'">{{ record.check_in?.substring(0,5) || '—' }}</span>
                 </template>
                 <template v-else-if="column.key === 'check_out'">
-                  <span class="text-red-500">{{ record.check_out?.substring(0,5) || '—' }}</span>
+                  <span class="text-gray-600">{{ record.check_out?.substring(0,5) || '—' }}</span>
                 </template>
                 <template v-else-if="column.key === 'hours'">
-                  <span class="font-semibold">{{ record.hours_worked || 0 }}h</span>
+                  <span class="font-semibold" :class="(record.hours_worked || 0) < 0 ? 'text-red-500' : ''">{{ record.hours_worked }}h</span>
                 </template>
                 <template v-else-if="column.key === 'overtime'">
                   <span v-if="record.overtime_hours > 0" class="text-amber-600 font-bold">{{ record.overtime_hours }}h</span>
                   <span v-else class="text-gray-300">—</span>
                 </template>
                 <template v-else-if="column.key === 'status'">
-                  <a-tag :color="attendanceStatusColors[record.status]" class="rounded-full text-[10px]">{{ attendanceStatusLabels[record.status] || record.status }}</a-tag>
+                  <a-tag :color="record.status === 'present' ? 'green' : (record.status === 'late' ? 'orange' : 'red')" class="rounded-full text-[10px] px-2" size="small">
+                    {{ attendanceStatusLabels[record.status] || record.status }}
+                  </a-tag>
                 </template>
-                <template v-else-if="column.key === 'actions'">
-                  <div class="flex gap-1">
-                    <a-tooltip v-if="!record.approved_at" title="Duyệt">
-                      <a-popconfirm title="Duyệt chấm công?" @confirm="approveAttendance(record.id)">
-                        <a-button type="text" size="small"><CheckOutlined class="text-green-500" /></a-button>
-                      </a-popconfirm>
-                    </a-tooltip>
-                    <span v-else class="text-xs text-green-500">✓</span>
-                  </div>
+                <template v-else-if="column.key === 'workflow'">
+                  <a-tag :color="workflowAttColors[record.workflow_status] || 'default'" class="rounded-full text-[10px] px-2" size="small">
+                    {{ workflowAttLabels[record.workflow_status] || record.workflow_status }}
+                  </a-tag>
                 </template>
               </template>
             </a-table>
@@ -3878,6 +3882,110 @@
   </a-drawer>
 
   <!-- LOG DETAIL DRAWER -->
+  <a-drawer v-model:open="showAttendanceDetailDrawer" title="Chi tiết Chấm công" :width="560" @close="selectedAttendance = null" destroy-on-close class="crm-drawer">
+    <div v-if="selectedAttendance" class="space-y-6">
+      <div class="flex items-center gap-4 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+        <a-avatar :size="54" class="bg-blue-600 text-white text-xl shadow-sm">{{ selectedAttendance.user?.name?.[0] }}</a-avatar>
+        <div class="flex-1">
+          <div class="text-lg font-bold text-gray-800">{{ selectedAttendance.user?.name || '—' }}</div>
+          <div class="text-gray-500 text-sm flex items-center gap-1"><MailOutlined class="text-xs" /> {{ selectedAttendance.user?.email || '—' }}</div>
+          <div class="mt-1"><a-tag :color="attendanceStatusColors[selectedAttendance.status]" class="rounded-full">{{ attendanceStatusLabels[selectedAttendance.status] }}</a-tag></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+          <div class="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1">Ngày làm việc</div>
+          <div class="text-base font-bold text-gray-700">{{ fmtDate(selectedAttendance.work_date) }}</div>
+        </div>
+        <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+          <div class="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1">Trạng thái duyệt</div>
+          <div class="text-base font-bold">
+             <a-tag :color="workflowAttColors[selectedAttendance.workflow_status || 'draft']" class="rounded-full m-0">
+               {{ workflowAttLabels[selectedAttendance.workflow_status || 'draft'] }}
+             </a-tag>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+        <div class="flex justify-between items-center border-b border-gray-50 pb-3">
+          <div class="text-gray-400 text-sm uppercase tracking-wide font-bold">Thời gian làm việc</div>
+        </div>
+        <div class="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div class="text-[10px] text-gray-400 mb-1">Vào ca</div>
+            <div class="text-lg font-bold text-green-600">{{ selectedAttendance.check_in?.substring(0,5) || '—' }}</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-gray-400 mb-1">Ra ca</div>
+            <div class="text-lg font-bold text-red-500">{{ selectedAttendance.check_out?.substring(0,5) || '—' }}</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-gray-400 mb-1">Tổng giờ</div>
+            <div class="text-lg font-bold text-blue-600">{{ selectedAttendance.hours_worked || 0 }}h</div>
+          </div>
+        </div>
+        <div v-if="selectedAttendance.overtime_hours > 0" class="bg-amber-50 p-3 rounded-xl border border-amber-100 flex justify-between items-center">
+          <span class="text-amber-800 text-xs font-bold">Giờ tăng ca (OT)</span>
+          <span class="text-amber-600 font-bold text-base">{{ selectedAttendance.overtime_hours }}h</span>
+        </div>
+      </div>
+
+      <div v-if="selectedAttendance.labor_cost" class="bg-teal-50 p-5 rounded-2xl border border-teal-100 space-y-3">
+        <div class="flex justify-between items-center">
+          <div class="text-teal-800 text-sm font-bold flex items-center gap-1"><DollarCircleOutlined /> Chi phí nhân công</div>
+          <a-tag :color="selectedAttendance.labor_cost.status === 'approved' ? 'green' : 'orange'" class="rounded-full text-[10px] m-0">
+            {{ costStatusLabels[selectedAttendance.labor_cost.status] || selectedAttendance.labor_cost.status }}
+          </a-tag>
+        </div>
+        <div class="text-2xl font-black text-teal-700">{{ fmt(selectedAttendance.labor_cost.amount) }}</div>
+        <div class="text-[10px] text-teal-600 italic">Chi phí này được tạo tự động dựa trên cấu hình lương tại thời điểm chấm công.</div>
+      </div>
+
+      <div v-if="selectedAttendance.note || selectedAttendance.rejected_reason" class="space-y-4">
+        <div v-if="selectedAttendance.note" class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+          <div class="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-2">Ghi chú</div>
+          <div class="text-sm text-gray-600 italic">{{ selectedAttendance.note }}</div>
+        </div>
+        <div v-if="selectedAttendance.workflow_status === 'rejected'" class="bg-red-50 p-4 rounded-2xl border border-red-100">
+          <div class="text-[10px] text-red-400 uppercase tracking-wider font-bold mb-2">Lý do từ chối</div>
+          <div class="text-sm text-red-600 font-medium">{{ selectedAttendance.rejected_reason || 'Không rõ lý do' }}</div>
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div v-if="(selectedAttendance.workflow_status !== 'approved' || !selectedAttendance.labor_cost) && can('attendance.approve')" 
+           class="pt-6 mt-6 border-t border-gray-100 flex gap-3">
+        <a-tooltip title="Chỉ Admin, Kế toán hoặc Quản lý dự án mới có quyền phê duyệt" placement="top">
+          <a-popconfirm 
+            :title="selectedAttendance.workflow_status === 'approved' ? 'Bổ sung chi phí nhân công cho bản ghi này?' : 'Xác nhận phê duyệt bản ghi chấm công này?'" 
+            ok-text="Xác nhận" 
+            cancel-text="Hủy" 
+            @confirm="approveAttendance(selectedAttendance.id); showAttendanceDetailDrawer = false"
+          >
+            <a-button type="primary" size="large" class="flex-1 rounded-2xl shadow-lg shadow-blue-100 font-bold hover:scale-[1.02] transition-all">
+              <template #icon><CheckCircleOutlined /></template>
+              {{ selectedAttendance.workflow_status === 'approved' ? 'Bổ sung chi phí' : 'Phê duyệt' }}
+            </a-button>
+          </a-popconfirm>
+        </a-tooltip>
+        
+        <a-tooltip title="Chỉ Admin hoặc Quản lý dự án mới có quyền từ chối" placement="top">
+          <a-button 
+            v-if="selectedAttendance.workflow_status !== 'approved'" 
+            danger 
+            size="large" 
+            class="flex-1 rounded-2xl font-bold hover:scale-[1.02] transition-all" 
+            @click="openRejectAtt(selectedAttendance.id); showAttendanceDetailDrawer = false"
+          >
+            Tiếp nhận / Từ chối
+          </a-button>
+        </a-tooltip>
+      </div>
+    </div>
+  </a-drawer>
+
   <a-drawer v-model:open="showLogDetailDrawer" title="Chi tiết Nhật ký thi công" :width="560" @close="logDetailRecord = null" destroy-on-close class="crm-drawer">
     <div v-if="logDetailRecord" class="space-y-5 pb-24">
       <!-- Header Card -->
@@ -5195,6 +5303,23 @@
     </a-form>
   </a-modal>
 
+  <!-- ============ REJECT ATTENDANCE MODAL ============ -->
+  <a-modal
+    v-model:open="showRejectAttModal"
+    title="Từ chối chấm công"
+    ok-text="Từ chối"
+    ok-type="danger"
+    cancel-text="Hủy"
+    :width="420"
+    centered
+    @ok="rejectAttendance"
+  >
+    <div class="mt-4 space-y-3">
+      <p class="text-sm text-gray-500">Nhập lý do từ chối để nhân viên biết cần chỉnh sửa lại.</p>
+      <a-textarea v-model:value="rejectAttReason" :rows="3" placeholder="Lý do từ chối..." />
+    </div>
+  </a-modal>
+
   <!-- ============ GENERATE LABOR COST MODAL ============ -->
   <a-modal
     v-model:open="showGenerateLaborCostModal"
@@ -6024,14 +6149,16 @@ const filteredCosts = computed(() => {
   // Group filter
   const gf = costGroupFilter.value
   if (gf && gf !== 'all') {
-    if (gf === '_vatlieu') {
+    if (gf === '_labor') {
+      c = c.filter(item => item.attendance_id != null || item.category === 'labor')
+    } else if (gf === '_vatlieu') {
       c = c.filter(item => item.category === 'construction_materials')
     } else if (gf === '_thietbi') {
       c = c.filter(item => item.category === 'equipment')
     } else if (gf === '_ntp') {
       c = c.filter(item => item.subcontractor_id != null)
     } else if (gf === '_other') {
-      c = c.filter(item => !['construction_materials', 'equipment'].includes(item.category) && !item.subcontractor_id)
+      c = c.filter(item => !['construction_materials', 'equipment', 'labor'].includes(item.category) && !item.subcontractor_id && !item.attendance_id)
     } else {
       // Filter by cost_group_id
       c = c.filter(item => item.cost_group_id === gf)
@@ -6236,8 +6363,8 @@ const loadFinanceData = async () => {
 // Status maps
 const statusLabels = { planning: 'Lập kế hoạch', in_progress: 'Đang thi công', completed: 'Hoàn thành', cancelled: 'Đã hủy' }
 const statusColors = { planning: 'blue', in_progress: 'processing', completed: 'green', cancelled: 'default' }
-const costStatusLabels = { draft: 'Nháp', submitted: 'Đã gửi', pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận', approved_management: 'BĐH đã duyệt', approved_accountant: 'KT đã xác nhận', rejected: 'Từ chối' }
-const costStatusColors = { draft: 'default', submitted: 'processing', pending_management_approval: 'orange', pending_accountant_approval: 'blue', approved_management: 'cyan', approved_accountant: 'green', rejected: 'red' }
+const costStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận', approved: 'Đã duyệt', rejected: 'Từ chối', cancelled: 'Đã hủy' }
+const costStatusColors = { draft: 'default', pending: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', approved: 'green', rejected: 'red', cancelled: 'default' }
 const severityColors = { low: 'green', medium: 'orange', major: 'red', critical: 'volcano', high: 'red' }
 const severityLabels = { low: 'Thấp', medium: 'Trung bình', major: 'Nghiêm trọng', critical: 'Rất nghiêm trọng', high: 'Cao' }
 const subProgressLabels = { not_started: 'Chưa bắt đầu', in_progress: 'Đang thi công', completed: 'Hoàn thành', delayed: 'Chậm tiến độ' }
@@ -6278,7 +6405,7 @@ const acceptStatusLabels = {
 
 // ============ TABLE COLUMNS ============
 const costCols = [
-  { title: 'Tên', dataIndex: 'name', ellipsis: true },
+  { title: 'Tên', key: 'name', ellipsis: true },
   { title: 'Nhóm', dataIndex: ['cost_group', 'name'], width: 130 },
   { title: 'Trạng thái', key: 'status', width: 130 },
   { title: 'Số tiền', key: 'amount', align: 'right', width: 130 },
@@ -7789,6 +7916,8 @@ const attendanceByUser = ref([])
 const shiftsList = ref([])
 const showAttendanceModal = ref(false)
 const showShiftModal = ref(false)
+const showAttendanceDetailDrawer = ref(false)
+const selectedAttendance = ref(null)
 
 const attendanceStatusColors = { present: 'green', absent: 'red', late: 'orange', half_day: 'blue', leave: 'purple', holiday: 'pink' }
 const attendanceStatusLabels = { present: 'Có mặt', absent: 'Vắng', late: 'Trễ', half_day: 'Nửa ngày', leave: 'Nghỉ phép', holiday: 'Nghỉ lễ' }
@@ -7799,10 +7928,34 @@ const attendanceCols = [
   { title: 'Vào', key: 'check_in', width: 70, align: 'center' },
   { title: 'Ra', key: 'check_out', width: 70, align: 'center' },
   { title: 'Giờ làm', key: 'hours', width: 90, align: 'center' },
-  { title: 'Tăng ca', key: 'overtime', width: 90, align: 'center' },
-  { title: 'Trạng thái', key: 'status', width: 100, align: 'center' },
-  { title: '', key: 'actions', width: 60, align: 'center' },
+  { title: 'Tăng ca', key: 'overtime', width: 80, align: 'center' },
+  { title: 'Trạng thái', key: 'status', width: 95, align: 'center' },
+  { title: 'Duyệt', key: 'workflow', width: 95, align: 'center' },
 ]
+
+const workflowAttColors = { draft: 'default', submitted: 'orange', approved: 'green', rejected: 'red' }
+const workflowAttLabels = { draft: 'Nháp', submitted: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối' }
+
+// Reject attendance in project tab
+const showRejectAttModal = ref(false)
+const rejectAttId = ref(null)
+const rejectAttReason = ref('')
+
+const openRejectAtt = (id) => {
+  rejectAttId.value = id
+  rejectAttReason.value = ''
+  showRejectAttModal.value = true
+}
+
+const rejectAttendance = async () => {
+  if (!rejectAttReason.value.trim()) { message.warning('Vui lòng nhập lý do từ chối'); return }
+  try {
+    await axios.post(`/projects/${props.project.id}/attendance/${rejectAttId.value}/reject`, { reason: rejectAttReason.value })
+    message.success('Đã từ chối bản ghi chấm công')
+    showRejectAttModal.value = false
+    loadAttendanceData()
+  } catch (e) { message.error('Lỗi từ chối chấm công') }
+}
 
 const loadAttendanceData = async () => {
   try {
@@ -7835,9 +7988,14 @@ const loadAttendanceStats = async () => {
 const approveAttendance = async (id) => {
   try {
     await axios.post(`/projects/${props.project.id}/attendance/${id}/approve`)
-    message.success('Đã duyệt chấm công')
+    message.success('Đã phê duyệt bản ghi chấm công')
     loadAttendanceData()
   } catch (e) { message.error('Lỗi duyệt chấm công') }
+}
+
+const openAttendanceDetail = (record) => {
+  selectedAttendance.value = record
+  showAttendanceDetailDrawer.value = true
 }
 
 const loadShifts = async () => {

@@ -158,6 +158,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/check-out', [AttendanceController::class, 'checkOut']);
         Route::post('/', [AttendanceController::class, 'store']);
         Route::post('/{id}/approve', [AttendanceController::class, 'approve']);
+        Route::post('/{id}/submit', [AttendanceController::class, 'submit']);
+        Route::post('/{id}/reject', [AttendanceController::class, 'reject']);
         Route::get('/statistics', [AttendanceController::class, 'statistics']);
         Route::post('/generate-labor-costs', [AttendanceController::class, 'generateLaborCosts']);
     });

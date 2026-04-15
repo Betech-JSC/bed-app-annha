@@ -12,7 +12,7 @@ class ProjectPersonnelService
     /**
      * Assign personnel to a project
      */
-    public function assign(Project $project, int $userId, int $roleId, ?array $permissions = null, $assigner = null): ProjectPersonnel
+    public function assign(Project $project, int $userId, ?int $roleId, ?array $permissions = null, $assigner = null): ProjectPersonnel
     {
         return DB::transaction(function () use ($project, $userId, $roleId, $permissions, $assigner) {
             $personnel = ProjectPersonnel::updateOrCreate(

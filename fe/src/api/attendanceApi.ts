@@ -12,6 +12,10 @@ export const attendanceApi = {
     api.post('/attendance', data),
   approve: (id: number) =>
     api.post(`/attendance/${id}/approve`),
+  submit: (id: number) =>
+    api.post(`/attendance/${id}/submit`),
+  reject: (id: number, reason: string) =>
+    api.post(`/attendance/${id}/reject`, { reason }),
   getStatistics: (params: { year: number; month: number; project_id?: number }) =>
     api.get('/attendance/statistics', { params }),
 

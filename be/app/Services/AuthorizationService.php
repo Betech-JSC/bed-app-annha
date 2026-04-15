@@ -93,6 +93,22 @@ class AuthorizationService
     public function getProjectPermissions($user, $project): array
     {
         if (!$user) return [];
+
+        // 1. Super Admin / Management bypass
+        $isGlobalAdmin = false;
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $isGlobalAdmin = true;
+        } elseif ($user instanceof \App\Models\User) {
+            $isGlobalAdmin = $user->owner;
+        }
+
+        if ($isGlobalAdmin 
+            || $user->hasPermission(Permissions::PROJECT_MANAGE)
+            || $user->hasPermission(Permissions::SETTINGS_MANAGE)) {
+            // Trả về wildcard để Frontend biết là có toàn quyền
+            return ['*'];
+        }
+
         // Resolve project ID
         $projectId = $project instanceof Project ? $project->id : $project;
 

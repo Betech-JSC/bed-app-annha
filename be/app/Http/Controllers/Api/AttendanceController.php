@@ -33,19 +33,26 @@ class AttendanceController extends Controller
         $user = auth()->user();
         $projectId = $request->project_id;
         
+        // Phân quyền: Luôn cho phép xem nếu là xem của chính mình
+        $isSelf = $request->user_id && $request->user_id == $user->id;
+
         if ($projectId) {
             $project = Project::findOrFail($projectId);
-            if (!$this->authService->can($user, Permissions::ATTENDANCE_VIEW, $project)) {
+            if (!$isSelf && !$this->authService->can($user, Permissions::ATTENDANCE_VIEW, $project)) {
                 return response()->json(['success' => false, 'message' => 'Không có quyền xem chấm công dự án này.'], 403);
             }
-        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_VIEW)) {
+        } elseif (!$isSelf && !$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_VIEW)) {
              return response()->json(['success' => false, 'message' => 'Không có quyền xem chấm công hệ thống.'], 403);
         }
 
-        $query = Attendance::with(['user:id,name,email', 'project:id,name', 'approver:id,name']);
+        $query = Attendance::with(['user:id,name,email', 'project:id,name', 'approver:id,name', 'laborCost']);
 
-        if ($request->project_id) $query->forProject($request->project_id);
+        if ($projectId) {
+            $query->forProject($projectId);
+        }
+        
         if ($request->user_id) $query->forUser($request->user_id);
+        
         if ($request->month && $request->year) {
             $query->forMonth($request->year, $request->month);
         } elseif ($request->date) {
@@ -53,8 +60,18 @@ class AttendanceController extends Controller
         }
         if ($request->status) $query->where('status', $request->status);
 
-        $data = $query->orderByDesc('work_date')->paginate($request->per_page ?? 30);
-        return response()->json($data);
+        $paginate = $query->orderByDesc('work_date')->orderByDesc('id')->paginate($request->per_page ?? 30);
+        
+        // Self-healing: Fix negative hours on the fly for visibility
+        foreach ($paginate->items() as $att) {
+            if ($att->hours_worked < 0 || $att->overtime_hours < 0) {
+                $att->hours_worked = abs($att->hours_worked);
+                $att->overtime_hours = abs($att->overtime_hours);
+                $att->save();
+            }
+        }
+
+        return response()->json($paginate);
     }
 
     /** Check-in */
@@ -154,6 +171,45 @@ class AttendanceController extends Controller
         }
     }
 
+    /** NV gửi chấm công để duyệt */
+    public function submit(Request $request, $id): JsonResponse
+    {
+        $attendance = Attendance::findOrFail($id);
+        $user = $request->user();
+
+        try {
+            $attendance = $this->attendanceService->submit($attendance, $user);
+            return response()->json(['message' => 'Đã gửi chấm công chờ duyệt', 'data' => $attendance]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
+    /** Manager từ chối chấm công */
+    public function reject(Request $request, $id): JsonResponse
+    {
+        $attendance = Attendance::findOrFail($id);
+        $user = $request->user();
+
+        if ($attendance->project_id) {
+            $project = Project::findOrFail($attendance->project_id);
+            if (!$this->authService->can($user, Permissions::ATTENDANCE_APPROVE, $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền từ chối chấm công dự án này.'], 403);
+            }
+        } elseif (!$user->owner && !$user->isAdmin() && !$user->hasPermission(Permissions::ATTENDANCE_APPROVE)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền từ chối chấm công hệ thống.'], 403);
+        }
+
+        $request->validate(['reason' => 'required|string|max:500']);
+
+        try {
+            $attendance = $this->attendanceService->reject($attendance, $user, $request->reason);
+            return response()->json(['message' => 'Đã từ chối chấm công', 'data' => $attendance]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
     /** Duyệt chấm công */
     public function approve(Request $request, $id): JsonResponse
     {
@@ -169,9 +225,12 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Không có quyền duyệt chấm công hệ thống.'], 403);
         }
 
-        $this->attendanceService->approve($attendance, $user);
-
-        return response()->json(['message' => 'Đã duyệt chấm công', 'data' => $attendance]);
+        try {
+            $this->attendanceService->approve($attendance, $user);
+            return response()->json(['message' => 'Đã duyệt chấm công', 'data' => $attendance->fresh()]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
     }
 
     /** Tổng hợp chi phí nhân công từ chấm công (batch) */
@@ -232,7 +291,8 @@ class AttendanceController extends Controller
         $data = $this->attendanceService->getMonthlyStatistics(
             (int) $request->year,
             (int) $request->month,
-            $request->project_id ? (int) $request->project_id : null
+            $request->project_id ? (int) $request->project_id : null,
+            $request->user_id ? (int) $request->user_id : null
         );
 
         return response()->json($data);

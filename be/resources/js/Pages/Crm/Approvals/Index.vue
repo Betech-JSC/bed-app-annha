@@ -80,13 +80,14 @@
         <!-- Category Filter -->
         <div class="filter-group">
           <span class="filter-label"><AppstoreOutlined /> Nhóm phiếu:</span>
-          <a-segmented 
-            v-model:value="activeCategory" 
+          <a-segmented
+            v-model:value="activeCategory"
             :options="[
               { label: 'Tất cả', value: 'all' },
               { label: 'Tài chính', value: 'finance' },
               { label: 'Nghiệm thu', value: 'acceptance' },
-              { label: 'Vận hành', value: 'technical' }
+              { label: 'Vận hành', value: 'technical' },
+              { label: 'Nhân sự', value: 'hr' }
             ]"
           />
         </div>
@@ -573,6 +574,7 @@ import {
   FilterOutlined,
   EyeOutlined,
   WalletOutlined,
+  UserOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -596,6 +598,7 @@ const rolePermissionMap = {
   project_manager: 'can_pm',
   supervisor: 'can_supervisor',
   customer: 'can_customer',
+  hr: 'can_hr',
 }
 
 // ─── Role-based items mapping (Simplified from Backend) ───
@@ -605,6 +608,7 @@ const roleItemsMap = computed(() => ({
   customer: props.roleGroups.customer || [],
   project_manager: props.roleGroups.project_manager || [],
   supervisor: props.roleGroups.supervisor || [],
+  hr: props.roleGroups.hr || [],
 }))
 
 // ─── Initial Tab Selection (Smart Logic) ───
@@ -660,13 +664,14 @@ const typeColors = {
   budget: 'blue',
   equipment_rental: 'cyan',
   asset_usage: 'blue',
+  attendance: 'teal',
 }
 
 const statusViMap = {
   draft: 'Nháp', 
   pending: 'Chờ duyệt', 
   pending_approval: 'Chờ duyệt',
-  submitted: 'Đã gửi', 
+  submitted: 'Chờ duyệt',
   under_review: 'Đang xem xét',
   pending_management_approval: 'Chờ BĐH duyệt', 
   pending_accountant_approval: 'Chờ KT xác nhận',
@@ -716,6 +721,7 @@ const activeItems = computed(() => {
       if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget', 'equipment_rental'].includes(i.type)
       if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance'].includes(i.type)
       if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'construction_log', 'schedule_adjustment', 'defect', 'asset_usage'].includes(i.type)
+      if (activeCategory.value === 'hr') return ['attendance'].includes(i.type)
       return true
     })
   }
@@ -752,6 +758,7 @@ const roleTabs = computed(() => {
     { key: 'project_manager', label: 'QLDA (PM)', icon: ToolOutlined, count: roleItemsMap.value.project_manager.length },
     { key: 'supervisor', label: 'Giám Sát', icon: SafetyCertificateOutlined, count: roleItemsMap.value.supervisor.length },
     { key: 'customer', label: 'Khách Hàng', icon: TeamOutlined, count: roleItemsMap.value.customer.length },
+    { key: 'hr', label: 'Nhân Sự', icon: UserOutlined, count: roleItemsMap.value.hr.length },
   ]
   
   // Only show tabs where the user has explicit permission
@@ -827,6 +834,7 @@ const getDetailUrl = (record) => {
     equipment_rental_return: pid ? `/projects/${pid}?tab=equipment` : null,
     asset_usage: pid ? `/projects/${pid}?tab=equipment` : null,
     asset_usage_return: pid ? `/projects/${pid}?tab=equipment` : null,
+    attendance: pid ? `/projects/${pid}?tab=attendance` : `/hr/attendance`,
   }
   return typeUrlMap[record.type] || typeUrlMap[record._approveType] || null
 }
@@ -866,6 +874,7 @@ const approveUrlMap = {
   asset_usage_management: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/approve-management`,
   asset_usage_accountant: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/confirm-accountant`,
   asset_usage_return: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/confirm-return`,
+  attendance: (r) => `/approvals/attendance/${r.id}/approve`,
 }
 
 const approveLabels = {
@@ -894,6 +903,7 @@ const approveLabels = {
   asset_usage_management: 'BĐH duyệt sử dụng thiết bị',
   asset_usage_accountant: 'KT xác nhận sử dụng thiết bị',
   asset_usage_return: 'Xác nhận trả thiết bị kho',
+  attendance: 'Duyệt chấm công',
 }
 
 const handleApproveByType = (record) => {
@@ -902,8 +912,8 @@ const handleApproveByType = (record) => {
   const urlFn = approveUrlMap[type]
   if (!urlFn) return
 
-  // Enforce mandatory attachments for Accountant level on financial items
-  if (activeRole.value === 'accountant' && (record.attachments_count === 0 || !record.attachments_count)) {
+  // Enforce mandatory attachments for Accountant level on financial items (skip for HR items and labor costs from attendance)
+  if (type !== 'attendance' && record.category !== 'labor' && activeRole.value === 'accountant' && (record.attachments_count === 0 || !record.attachments_count)) {
     Modal.warning({
       title: 'Thiếu chứng từ đính kèm',
       content: 'Cảnh báo: Yêu cầu tài chính này chưa có tệp chứng từ đính kèm. Kế toán bắt buộc phải kiểm tra chứng từ trước khi xác nhận để đảm bảo tính chính xác của dòng tiền.',
@@ -983,6 +993,7 @@ const rejectUrlMap = {
   equipment_rental_accountant: (r) => `/projects/${r.project_id}/equipment-rentals/${r.id}/reject`,
   asset_usage_management: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/reject`,
   asset_usage_accountant: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/reject`,
+  attendance: (r) => `/approvals/attendance/${r.id}/reject`,
 }
 
 const openRejectModal = (record) => {

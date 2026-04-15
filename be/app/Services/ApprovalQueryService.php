@@ -19,6 +19,7 @@ use App\Models\ProjectBudget;
 use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Models\MaterialBill;
+use App\Models\Attendance;
 use App\Models\User;
 use App\Constants\Permissions;
 use Illuminate\Support\Collection;
@@ -65,9 +66,9 @@ class ApprovalQueryService
         $result['summary'] = $this->buildMobileSummaryFromProcessedItems($user, $allItems);
 
         // 5. Filter for the requested type
-        if ($type === 'all' || in_array($type, ['management', 'accountant', 'project_manager', 'supervisor', 'customer'])) {
-            $result['items'] = ($type === 'all') 
-                ? $allItems 
+        if ($type === 'all' || in_array($type, ['management', 'accountant', 'project_manager', 'supervisor', 'customer', 'hr'])) {
+            $result['items'] = ($type === 'all')
+                ? $allItems
                 : array_values(array_filter($allItems, fn($i) => ($i['role_group'] ?? '') === $type));
         } else {
             // Specific type filter (e.g. project_cost)
@@ -447,6 +448,17 @@ class ApprovalQueryService
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
                 ->orderBy('created_at', 'desc')
+                ->get();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // ATTENDANCES (Chấm công chờ duyệt)
+        // ═══════════════════════════════════════════════════════════════
+        if ($this->shouldInclude($type, ['all', 'attendance'])) {
+            $data['attendances_pending'] = Attendance::where('workflow_status', 'submitted')
+                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
+                ->with(['user:id,name,email', 'project:id,name,code'])
+                ->orderByDesc('work_date')
                 ->get();
         }
 
@@ -886,12 +898,41 @@ class ApprovalQueryService
                         'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
                         'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
                         'created_by' => 'Hệ thống', 'created_at' => $p->updated_at->toISOString(),
-                        'project_id' => $p->project_id, 'can_approve' => $user->hasPermission(Permissions::PAYMENT_APPROVE) || $user->isSuperAdmin(), 
+                        'project_id' => $p->project_id, 'can_approve' => $user->hasPermission(Permissions::PAYMENT_APPROVE) || $user->isSuperAdmin(),
                         'approval_level' => 'customer', 'role_group' => 'customer',
                         'attachments' => $this->formatAttachments($p),
                         'attachments_count' => $p->attachments->count(),
                     ];
                 }
+            }
+        }
+
+        // 6. HR BUCKET — Attendance pending approval
+        $showHr = $user->hasPermission(Permissions::ATTENDANCE_APPROVE) || $user->isSuperAdmin();
+        if ($showHr && ($type === 'all' || $type === 'hr' || $type === 'attendance')) {
+            foreach ($data['attendances_pending'] ?? [] as $att) {
+                $hours = $att->hours_worked ? number_format($att->hours_worked, 1) . 'h' : null;
+                $ot = $att->overtime_hours > 0 ? ' (OT ' . $att->overtime_hours . 'h)' : '';
+                $statusLabels = ['present' => 'Có mặt', 'absent' => 'Vắng', 'late' => 'Trễ', 'half_day' => 'Nửa ngày', 'leave' => 'Nghỉ phép', 'holiday' => 'Nghỉ lễ'];
+                $items[] = [
+                    'id'               => $att->id,
+                    'type'             => 'attendance',
+                    'title'            => ($att->user->name ?? "NV #{$att->user_id}") . ' — ' . optional($att->work_date)->format('d/m/Y'),
+                    'subtitle'         => ($att->project->code ?? 'N/A') . ' - ' . ($att->project->name ?? 'Không có dự án'),
+                    'amount'           => 0,
+                    'status'           => $att->workflow_status,
+                    'status_label'     => 'Chờ duyệt',
+                    'description'      => ($statusLabels[$att->status] ?? $att->status) . ($hours ? " · {$hours}" : '') . $ot,
+                    'created_by'       => $att->user->name ?? 'N/A',
+                    'created_at'       => optional($att->work_date)->toISOString() ?? now()->toISOString(),
+                    'project_id'       => $att->project_id,
+                    'project_name'     => $att->project->name ?? null,
+                    'can_approve'      => true,
+                    'approval_level'   => 'hr',
+                    'role_group'       => 'hr',
+                    'attachments'      => [],
+                    'attachments_count'=> 0,
+                ];
             }
         }
 
@@ -936,7 +977,7 @@ class ApprovalQueryService
      */
     private function buildMobileSummaryFromProcessedItems($user, array $allItems)
     {
-        $counts = ['management' => 0, 'accountant' => 0, 'project_manager' => 0, 'supervisor' => 0, 'customer' => 0];
+        $counts = ['management' => 0, 'accountant' => 0, 'project_manager' => 0, 'supervisor' => 0, 'customer' => 0, 'hr' => 0];
         
         foreach ($allItems as $it) {
             if (isset($it['role_group']) && isset($counts[$it['role_group']])) {
@@ -951,6 +992,7 @@ class ApprovalQueryService
             ['type' => 'project_manager', 'label' => 'Quản lý dự án', 'icon' => 'construct-outline', 'color' => '#3B82F6'],
             ['type' => 'supervisor', 'label' => 'Giám sát', 'icon' => 'search-outline', 'color' => '#8B5CF6'],
             ['type' => 'customer', 'label' => 'Khách hàng', 'icon' => 'person-outline', 'color' => '#EF4444'],
+            ['type' => 'hr', 'label' => 'Nhân sự', 'icon' => 'people-outline', 'color' => '#06B6D4'],
         ];
 
         $visibility = [
@@ -959,6 +1001,7 @@ class ApprovalQueryService
             'project_manager' => $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2) || $user->hasPermission(Permissions::CHANGE_REQUEST_APPROVE) || $user->hasPermission(Permissions::BUDGET_APPROVE) || $user->isSuperAdmin(),
             'supervisor' => $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1) || $user->hasPermission(Permissions::LOG_APPROVE) || $user->isSuperAdmin(),
             'customer' => $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_2) || $user->hasPermission(Permissions::PAYMENT_APPROVE) || $user->isSuperAdmin(),
+            'hr' => $user->hasPermission(Permissions::ATTENDANCE_APPROVE) || $user->isSuperAdmin(),
         ];
 
         foreach ($groups as $g) {

@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, RefreshControl, Modal, TextInput,
 } from "react-native";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { attendanceApi } from "@/api/attendanceApi";
+import { userApi } from "@/api/userApi";
+import { projectApi } from "@/api/projectApi";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,6 +23,8 @@ interface AttendanceRecord {
   hours_worked: number;
   overtime_hours: number;
   status: string;
+  workflow_status: 'draft' | 'submitted' | 'approved' | 'rejected' | null;
+  rejected_reason?: string | null;
   note?: string;
 }
 
@@ -28,12 +32,18 @@ type ViewMode = "today" | "history" | "statistics";
 
 export default function AttendanceScreen() {
   const router = useRouter();
+  const { project_id: paramProjectId } = useLocalSearchParams<{ project_id: string }>();
   const tabBarHeight = useTabBarHeight();
   const [viewMode, setViewMode] = useState<ViewMode>("today");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Current user id (to match own attendance record)
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [projectName, setProjectName] = useState<string | null>(null);
 
   // Today's record
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
@@ -44,28 +54,69 @@ export default function AttendanceScreen() {
   // Statistics
   const [stats, setStats] = useState<any>(null);
 
-  const today = new Date().toISOString().split("T")[0];
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
+  const today = useMemo(() => now.toISOString().split("T")[0], [now]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
-      const [todayRes, historyRes] = await Promise.all([
+      if (!silent) setLoading(true);
+
+      // Antigravity: Ensure currentUserId is available for filtering
+      let uid = currentUserId;
+      if (!uid) {
+        const profileRes = await userApi.getProfile().catch(() => null);
+        uid = profileRes?.data?.id ?? null;
+        if (uid) setCurrentUserId(uid);
+      }
+
+      // Antigravity: Fetch today's records globally and history for the project
+      const [todayRes, historyRes, statsRes] = await Promise.all([
         attendanceApi.getAll({ date: today }).catch(() => null),
-        attendanceApi.getAll({ per_page: 30 }).catch(() => null),
+        attendanceApi.getAll({ per_page: 30, project_id: paramProjectId }).catch(() => null),
+        attendanceApi.getStatistics({
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+          user_id: uid,
+          project_id: paramProjectId,
+        }).catch(() => null),
       ]);
 
-      if (todayRes?.data?.data) {
-        const myRecord = todayRes.data.data.find((r: any) => true); // lấy record đầu tiên
-        setTodayRecord(myRecord || null);
-      }
-      if (historyRes?.data?.data) setHistory(historyRes.data.data);
+      let foundActive: any = null;
+      let myHistory: any[] = [];
 
-      // Stats cho tháng hiện tại
-      const statsRes = await attendanceApi.getStatistics({
-        year: now.getFullYear(),
-        month: now.getMonth() + 1,
-      }).catch(() => null);
+      if (historyRes?.data?.data) {
+        myHistory = uid
+          ? historyRes.data.data.filter((r: any) => Number(r.user_id) === Number(uid))
+          : historyRes.data.data;
+        setHistory(myHistory);
+        
+        // Find active session from history first as it's proven to contain data in UI
+        foundActive = myHistory.find((r: any) => !r.check_out);
+      }
+
+      if (todayRes?.data?.data) {
+        const userRecordsToday = uid 
+          ? todayRes.data.data.filter((r: any) => Number(r.user_id) === Number(uid)) 
+          : [];
+        
+        if (!foundActive) {
+          foundActive = userRecordsToday.find((r: any) => !r.check_out);
+        }
+
+        if (foundActive) {
+          setTodayRecord(foundActive);
+        } else {
+          // If no global active, show the latest record for THIS project today
+          const projectRecordsToday = userRecordsToday.filter((r: any) => 
+            !paramProjectId || Number(r.project_id) === Number(paramProjectId)
+          );
+          setTodayRecord(projectRecordsToday[0] || null);
+        }
+      } else if (foundActive) {
+        // Fallback: If todayRes failed but we found an active record in history
+        setTodayRecord(foundActive);
+      }
+      
       if (statsRes?.data) setStats(statsRes.data);
     } catch (e) {
       console.error("Load attendance error:", e);
@@ -73,7 +124,22 @@ export default function AttendanceScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [currentUserId, paramProjectId, today, now]);
+
+  // Initial Profile & Project Load
+  useEffect(() => {
+    const init = async () => {
+      if (!currentUserId) {
+        const profileRes = await userApi.getProfile().catch(() => null);
+        if (profileRes?.data?.id) setCurrentUserId(profileRes.data.id);
+      }
+      if (paramProjectId && !projectName) {
+        const res = await projectApi.getProject(paramProjectId).catch(() => null);
+        if (res?.success) setProjectName(res.data.name);
+      }
+    };
+    init();
+  }, [paramProjectId]); // Only run on mount or project change
 
   useEffect(() => { loadData(); }, [loadData]);
   useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
@@ -90,6 +156,7 @@ export default function AttendanceScreen() {
 
       const res = await attendanceApi.checkIn({
         ...location,
+        project_id: paramProjectId,
       });
       Alert.alert("✅ Thành công", res.data.message || "Check-in thành công!");
       loadData();
@@ -121,6 +188,35 @@ export default function AttendanceScreen() {
     ]);
   };
 
+  const handleSubmit = async () => {
+    if (!todayRecord) return;
+    Alert.alert("Gửi duyệt", "Gửi chấm công hôm nay để manager duyệt?", [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Gửi duyệt",
+        onPress: async () => {
+          try {
+            setSubmitting(true);
+            const res = await attendanceApi.submit(todayRecord.id);
+            Alert.alert("✅ Thành công", res.data.message || "Đã gửi chấm công chờ duyệt!");
+            loadData();
+          } catch (e: any) {
+            Alert.alert("Lỗi", e.response?.data?.message || "Không thể gửi duyệt");
+          } finally {
+            setSubmitting(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const workflowConfig: Record<string, { color: string; bg: string; label: string }> = {
+    draft:     { color: "#6B7280", bg: "#F3F4F6", label: "Nháp" },
+    submitted: { color: "#D97706", bg: "#FEF3C7", label: "Chờ duyệt" },
+    approved:  { color: "#16A34A", bg: "#DCFCE7", label: "Đã duyệt" },
+    rejected:  { color: "#DC2626", bg: "#FEE2E2", label: "Từ chối" },
+  };
+
   const fmtTime = (t?: string | null) => t ? t.substring(0, 5) : "—";
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -144,7 +240,7 @@ export default function AttendanceScreen() {
 
   return (
     <View style={s.container}>
-      <ScreenHeader title="Chấm công" showBackButton />
+      <ScreenHeader title={projectName ? `Chấm công: ${projectName}` : "Chấm công"} showBackButton />
 
       {/* Tab Bar */}
       <View style={s.tabBar}>
@@ -213,6 +309,26 @@ export default function AttendanceScreen() {
                       <Text style={s.timeItemValue}>{todayRecord.overtime_hours || 0}h</Text>
                     </View>
                   </View>
+
+                  {/* Workflow badge */}
+                  {(() => {
+                    const wf = todayRecord.workflow_status || 'draft';
+                    const cfg = workflowConfig[wf];
+                    return (
+                      <View style={[s.workflowBadge, { backgroundColor: cfg.bg, borderColor: cfg.color }]}>
+                        <Ionicons
+                          name={wf === 'approved' ? "shield-checkmark-outline" : wf === 'rejected' ? "close-circle-outline" : wf === 'submitted' ? "hourglass-outline" : "create-outline"}
+                          size={14} color={cfg.color}
+                        />
+                        <Text style={[s.workflowText, { color: cfg.color }]}>{cfg.label}</Text>
+                        {wf === 'rejected' && todayRecord.rejected_reason ? (
+                          <Text style={[s.workflowText, { color: cfg.color, fontWeight: '400', marginLeft: 4 }]}>
+                            — {todayRecord.rejected_reason}
+                          </Text>
+                        ) : null}
+                      </View>
+                    );
+                  })()}
                 </>
               ) : (
                 <View style={s.noRecord}>
@@ -222,9 +338,26 @@ export default function AttendanceScreen() {
               )}
             </View>
 
+            {/* Anti-Gravity: Today's Timeline */}
+            {history.filter(r => r.work_date === today).length > 1 && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={s.sectionTitle}>Các ca làm việc hôm nay</Text>
+                {history.filter(r => r.work_date === today).map((r, idx) => (
+                  <View key={r.id} style={[s.historyCard, { marginBottom: 8, padding: 10, opacity: r.id === todayRecord?.id ? 1 : 0.7 }]}>
+                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontWeight: '700', color: '#374151' }}>Ca {history.filter(rec => rec.work_date === today).length - idx}</Text>
+                        <Text style={{ fontSize: 12, color: '#6B7280' }}>{fmtTime(r.check_in)} - {fmtTime(r.check_out)}</Text>
+                        <Text style={{ fontWeight: '600', color: '#3B82F6' }}>{r.hours_worked}h</Text>
+                     </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {/* Action Buttons */}
             <View style={s.actionRow}>
-              {(!todayRecord || !todayRecord.check_in) ? (
+              {(!todayRecord || (todayRecord.check_in && todayRecord.check_out)) ? (
+                // Anti-Gravity: No session today OR all sessions are closed -> Show Check-in
                 <TouchableOpacity
                   style={[s.actionBtn, { backgroundColor: "#16A34A" }]}
                   onPress={handleCheckIn}
@@ -235,11 +368,12 @@ export default function AttendanceScreen() {
                   ) : (
                     <>
                       <Ionicons name="finger-print-outline" size={28} color="#FFF" />
-                      <Text style={s.actionBtnText}>CHECK-IN</Text>
+                      <Text style={s.actionBtnText}>BẮT ĐẦU CA MỚI</Text>
                     </>
                   )}
                 </TouchableOpacity>
-              ) : !todayRecord.check_out ? (
+              ) : (
+                // Currently checked-in -> Show Check-out
                 <TouchableOpacity
                   style={[s.actionBtn, { backgroundColor: "#EF4444" }]}
                   onPress={handleCheckOut}
@@ -250,15 +384,28 @@ export default function AttendanceScreen() {
                   ) : (
                     <>
                       <Ionicons name="exit-outline" size={28} color="#FFF" />
-                      <Text style={s.actionBtnText}>CHECK-OUT</Text>
+                      <Text style={s.actionBtnText}>KẾT THÚC CA</Text>
                     </>
                   )}
                 </TouchableOpacity>
-              ) : (
-                <View style={[s.actionBtn, { backgroundColor: "#E5E7EB" }]}>
-                  <Ionicons name="checkmark-done-circle" size={28} color="#16A34A" />
-                  <Text style={[s.actionBtnText, { color: "#16A34A" }]}>ĐÃ HOÀN TẤT</Text>
-                </View>
+              )}
+
+              {/* Gửi duyệt: chỉ hiện nếu bản ghi gần nhất là nháp hoặc bị từ chối */}
+              {todayRecord && (todayRecord.workflow_status === 'draft' || todayRecord.workflow_status === 'rejected' || !todayRecord.workflow_status) && todayRecord.check_out && (
+                <TouchableOpacity
+                  style={[s.actionBtn, { backgroundColor: "#3B82F6", marginTop: 12 }]}
+                  onPress={handleSubmit}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="paper-plane-outline" size={24} color="#FFF" />
+                      <Text style={s.actionBtnText}>GỬI DUYỆT CÔNG</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               )}
             </View>
           </View>
@@ -306,6 +453,20 @@ export default function AttendanceScreen() {
                     {rec.project && (
                       <Text style={s.historyProject}>📍 {rec.project.name}</Text>
                     )}
+                    {(() => {
+                      const wf = rec.workflow_status || 'draft';
+                      const wfc = workflowConfig[wf];
+                      return (
+                        <View style={[s.workflowBadge, { backgroundColor: wfc.bg, borderColor: wfc.color, marginTop: 6 }]}>
+                          <Text style={[s.workflowText, { color: wfc.color }]}>{wfc.label}</Text>
+                          {wf === 'rejected' && rec.rejected_reason ? (
+                            <Text style={[s.workflowText, { color: wfc.color, fontWeight: '400', marginLeft: 4 }]} numberOfLines={1}>
+                              — {rec.rejected_reason}
+                            </Text>
+                          ) : null}
+                        </View>
+                      );
+                    })()}
                   </View>
                 );
               })
@@ -450,6 +611,9 @@ const s = StyleSheet.create({
   userDays: { fontSize: 11, color: "#9CA3AF" },
   userStatMeta: { flexDirection: "row", gap: 8 },
   userStatBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  // Workflow badge
+  workflowBadge: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, alignSelf: "flex-start", marginTop: 10 },
+  workflowText: { fontSize: 11, fontWeight: "600" },
   // Empty
   emptyBox: { alignItems: "center", paddingVertical: 40 },
   emptyText: { fontSize: 14, color: "#9CA3AF", marginTop: 8 },

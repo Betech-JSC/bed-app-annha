@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use App\Models\EmployeeSalaryConfig;
+use App\Models\Project;
 use Carbon\Carbon;
 
 class CrmHrController extends Controller
@@ -25,7 +26,7 @@ class CrmHrController extends Controller
     {
         $admin = Auth::guard('admin')->user();
         $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
-        $query = User::with(['roles', 'department', 'salaryConfigs' => function($q) {
+        $query = User::employees()->with(['roles', 'department', 'salaryConfigs' => function($q) {
             $q->current();
         }]);
 
@@ -44,9 +45,9 @@ class CrmHrController extends Controller
         $employees = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
 
         $stats = [
-            'total' => User::count(),
-            'active' => User::whereNull('deleted_at')->count(),
-            'banned' => User::onlyTrashed()->count(),
+            'total' => User::employees()->count(),
+            'active' => User::employees()->whereNull('deleted_at')->count(),
+            'banned' => User::employees()->onlyTrashed()->count(),
         ];
 
         $departments = Department::select('id', 'name')->orderBy('name')->get();
@@ -84,6 +85,7 @@ class CrmHrController extends Controller
             'phone' => $validated['phone'] ?? null,
             'password' => Hash::make($validated['password']),
             'department_id' => $validated['department_id'] ?? null,
+            'user_type' => 'employee',
         ]);
 
         if (!empty($validated['role_ids'])) {
@@ -275,16 +277,147 @@ class CrmHrController extends Controller
             'effective_from' => 'required|date',
         ]);
 
-        EmployeeSalaryConfig::create([
-            'user_id' => $id,
-            'salary_type' => $validated['salary_type'],
-            'hourly_rate' => $validated['hourly_rate'],
-            'daily_rate' => $validated['daily_rate'],
-            'monthly_salary' => $validated['monthly_salary'],
-            'overtime_rate' => $validated['overtime_rate'],
-            'effective_from' => $validated['effective_from'],
+        EmployeeSalaryConfig::updateOrCreate(
+            ['user_id' => $id, 'effective_from' => $validated['effective_from']],
+            [
+                'salary_type'    => $validated['salary_type'],
+                'hourly_rate'    => $validated['hourly_rate'] ?? null,
+                'daily_rate'     => $validated['daily_rate'] ?? null,
+                'monthly_salary' => $validated['monthly_salary'] ?? null,
+                'overtime_rate'  => $validated['overtime_rate'] ?? null,
+            ]
+        );
+
+        return back()->with('success', 'Đã cập nhật cấu hình lương thành công.');
+    }
+
+    // =========================================================================
+    // CHẤM CÔNG — Standalone HR Attendance Management
+    // =========================================================================
+
+    public function attendance(Request $request)
+    {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::ATTENDANCE_VIEW);
+
+        $year  = (int) ($request->year  ?? now()->year);
+        $month = (int) ($request->month ?? now()->month);
+        $projectId = $request->project_id;
+
+        $query = \App\Models\Attendance::with(['user:id,name,email', 'project:id,name,code', 'approver:id,name'])
+            ->whereHas('user', fn($q) => $q->employees())
+            ->whereYear('work_date', $year)
+            ->whereMonth('work_date', $month);
+
+        if ($projectId) $query->where('project_id', $projectId);
+        if ($request->user_id) $query->where('user_id', $request->user_id);
+        if ($request->status) $query->where('status', $request->status);
+        if ($request->workflow_status) $query->where('workflow_status', $request->workflow_status);
+
+        $records = $query->orderByDesc('work_date')->paginate(50)->withQueryString();
+
+        // Monthly stats
+        $statsQuery = \App\Models\Attendance::whereHas('user', fn($q) => $q->employees())
+            ->whereYear('work_date', $year)
+            ->whereMonth('work_date', $month);
+        if ($projectId) $statsQuery->where('project_id', $projectId);
+
+        $allRecords = $statsQuery->get();
+        $stats = [
+            'total_records'  => $allRecords->count(),
+            'total_present'  => $allRecords->whereIn('status', ['present', 'late'])->count(),
+            'total_late'     => $allRecords->where('status', 'late')->count(),
+            'total_absent'   => $allRecords->where('status', 'absent')->count(),
+            'total_hours'    => round($allRecords->sum('hours_worked'), 1),
+            'total_overtime' => round($allRecords->sum('overtime_hours'), 1),
+            'pending_approval' => $allRecords->where('workflow_status', 'submitted')->count(),
+        ];
+
+        $projects  = \App\Models\Project::select('id', 'name', 'code')->orderBy('name')->get();
+        $employees = User::employees()->select('id', 'name', 'email')->orderBy('name')->get();
+
+        return Inertia::render('Crm/Hr/Attendance/Index', [
+            'records'   => $records,
+            'stats'     => $stats,
+            'projects'  => $projects,
+            'employees' => $employees,
+            'filters'   => $request->only(['year', 'month', 'project_id', 'user_id', 'status', 'workflow_status']),
+            'currentYear'  => $year,
+            'currentMonth' => $month,
+        ]);
+    }
+
+    public function storeAttendanceHr(Request $request)
+    {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::ATTENDANCE_MANAGE);
+
+        $validated = $request->validate([
+            'user_id'    => 'required|exists:users,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'work_date'  => 'required|date',
+            'check_in'   => 'nullable|date_format:H:i',
+            'check_out'  => 'nullable|date_format:H:i',
+            'status'     => 'required|in:present,absent,late,half_day,leave,holiday',
+            'note'       => 'nullable|string|max:500',
         ]);
 
-        return back()->with('success', 'Đã cập nhật cấu hình lương mới thành công.');
+        // Ensure target user is employee
+        $targetUser = User::findOrFail($validated['user_id']);
+        if ($targetUser->isCustomer()) {
+            return back()->with('error', 'Không thể chấm công cho Khách hàng.');
+        }
+
+        $attendanceService = app(\App\Services\AttendanceService::class);
+        $attendanceService->upsert($validated, $admin);
+
+        return back()->with('success', 'Đã lưu chấm công.');
+    }
+
+    public function approveAttendanceHr(Request $request, $id)
+    {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::ATTENDANCE_APPROVE);
+
+        $attendance = \App\Models\Attendance::findOrFail($id);
+        app(\App\Services\AttendanceService::class)->approve($attendance, $admin);
+
+        return back()->with('success', 'Đã duyệt chấm công và tạo chi phí nhân công.');
+    }
+
+    public function rejectAttendanceHr(Request $request, $id)
+    {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::ATTENDANCE_APPROVE);
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $attendance = \App\Models\Attendance::findOrFail($id);
+        app(\App\Services\AttendanceService::class)->reject($attendance, $admin, $validated['reason']);
+
+        return back()->with('success', 'Đã từ chối chấm công.');
+    }
+
+    public function generateLaborCostsHr(Request $request)
+    {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::ATTENDANCE_MANAGE);
+
+        $validated = $request->validate([
+            'project_id' => 'required|exists:projects,id',
+            'year'       => 'required|integer|min:2020|max:2030',
+            'month'      => 'required|integer|min:1|max:12',
+        ]);
+
+        $result = app(\App\Services\AttendanceService::class)->generateBatchLaborCosts(
+            (int) $validated['project_id'],
+            (int) $validated['year'],
+            (int) $validated['month'],
+            $admin
+        );
+
+        return back()->with('success', "Đã tạo {$result['created']} chi phí nhân công, tổng " . number_format($result['total_amount'], 0, ',', '.') . 'đ');
     }
 }

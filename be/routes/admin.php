@@ -177,6 +177,10 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Project Budget (Ngân sách dự án)
         Route::post('/budget/{id}/approve', [CrmApprovalController::class, 'approveBudget'])->name('budget.approve');
         Route::post('/budget/{id}/reject', [CrmApprovalController::class, 'rejectBudget'])->name('budget.reject');
+
+        // Attendance (Chấm công — HR)
+        Route::post('/attendance/{id}/approve', [CrmApprovalController::class, 'approveAttendance'])->name('attendance.approve');
+        Route::post('/attendance/{id}/reject', [CrmApprovalController::class, 'rejectAttendance'])->name('attendance.reject');
     });
 
 
@@ -428,6 +432,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::get('/{project}/attendance/statistics', [CrmProjectsController::class, 'attendanceStatistics'])->name('attendance.statistics');
         Route::get('/{project}/attendance', [CrmProjectsController::class, 'getAttendance'])->name('attendance.index');
         Route::post('/{project}/attendance/{id}/approve', [CrmProjectsController::class, 'approveAttendance'])->name('attendance.approve');
+        Route::post('/{project}/attendance/{id}/reject', [CrmProjectsController::class, 'rejectAttendance'])->name('attendance.reject');
         Route::post('/{project}/attendance', [CrmProjectsController::class, 'storeAttendance'])->name('attendance.store');
 
         // Shifts (CRM proxy)
@@ -491,6 +496,13 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
 
         // Org Chart
         Route::get('/org-chart', [CrmHrController::class, 'orgChart'])->name('org-chart');
+
+        // Chấm công (Attendance)
+        Route::get('/attendance', [CrmHrController::class, 'attendance'])->name('attendance');
+        Route::post('/attendance', [CrmHrController::class, 'storeAttendanceHr'])->name('attendance.store');
+        Route::post('/attendance/{id}/approve', [CrmHrController::class, 'approveAttendanceHr'])->name('attendance.approve');
+        Route::post('/attendance/{id}/reject', [CrmHrController::class, 'rejectAttendanceHr'])->name('attendance.reject');
+        Route::post('/attendance/generate-labor-costs', [CrmHrController::class, 'generateLaborCostsHr'])->name('attendance.generate-costs');
 
         // KPI
         Route::get('/kpi', [CrmKpiController::class, 'index'])->name('kpi');

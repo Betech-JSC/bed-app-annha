@@ -322,9 +322,9 @@ export default function ProjectDetailScreen() {
     },
     
     {
-      title: "⏰ Chấm Công",
+      title: "⏰ Chấm công",
       icon: "finger-print-outline",
-      route: `/hr/attendance`,
+      route: `/hr/attendance?project_id=${id}`,
       color: "#0EA5E9",
       permission: Permissions.PERSONNEL_VIEW,
     },

@@ -132,6 +132,7 @@ class KpiController extends Controller
         $validated = $request->validate($rules);
 
         // If user is owner but not manager, they can ONLY update current_value (progress)
+        if (!$canManage && $isOwner) {
             // Only update current_value
             if (isset($validated['current_value'])) {
                 $this->reportingService->updateKpiProgress($kpi, $validated['current_value']);

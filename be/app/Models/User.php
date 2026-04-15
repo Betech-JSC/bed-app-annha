@@ -31,6 +31,7 @@ class User extends Authenticatable
         'first_name',
         'last_name',
         'department_id',
+        'user_type',
         'provider',
         'provider_id',
         'kyc_status',
@@ -66,6 +67,14 @@ class User extends Authenticatable
             'kyc_verified_at' => 'datetime',
         ];
     }
+
+    // ───── User Type Scopes ─────
+    public function scopeEmployees($q) { return $q->where('user_type', 'employee'); }
+    public function scopeCustomers($q) { return $q->where('user_type', 'customer'); }
+
+    // ───── User Type Helpers ─────
+    public function isEmployee(): bool { return $this->user_type === 'employee' || !$this->user_type; }
+    public function isCustomer(): bool { return $this->user_type === 'customer'; }
 
     public function resolveRouteBinding($value, $field = null)
     {

@@ -19,6 +19,7 @@ use App\Models\Defect;
 use App\Models\ProjectBudget;
 use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
+use App\Models\Attendance;
 use App\Constants\Permissions;
 use App\Services\ApprovalQueryService;
 use App\Services\ApprovalActionService;
@@ -152,6 +153,10 @@ class ApprovalCenterController extends Controller
             };
         }
 
+        if ($type === 'attendance') {
+            return 'attendance';
+        }
+
         if ($type === 'sub_payment') {
             $p = SubcontractorPayment::findOrFail($id);
             return ($p->status === 'pending_accountant_confirmation') ? 'sub_payment_confirm' : 'sub_payment';
@@ -242,6 +247,7 @@ class ApprovalCenterController extends Controller
             'defect' => Permissions::DEFECT_VERIFY,
             'contract' => Permissions::CONTRACT_APPROVE_LEVEL_2,
             'payment' => Permissions::PAYMENT_APPROVE,
+            'attendance' => Permissions::ATTENDANCE_APPROVE,
             default => null,
         };
 

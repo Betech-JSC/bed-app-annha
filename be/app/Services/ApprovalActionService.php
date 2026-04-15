@@ -19,6 +19,7 @@ use App\Models\ProjectBudget;
 use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Models\MaterialBill;
+use App\Models\Attendance;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -36,6 +37,7 @@ class ApprovalActionService
     protected $equipmentService;
     protected $logService;
     protected $budgetService;
+    protected $attendanceService;
 
     public function __construct(
         MaterialBillService $materialBillService,
@@ -43,7 +45,8 @@ class ApprovalActionService
         FinancialService $financialService,
         EquipmentService $equipmentService,
         ConstructionLogService $logService,
-        ProjectBudgetService $budgetService
+        ProjectBudgetService $budgetService,
+        AttendanceService $attendanceService
     ) {
         $this->materialBillService = $materialBillService;
         $this->acceptanceService = $acceptanceService;
@@ -51,6 +54,7 @@ class ApprovalActionService
         $this->equipmentService = $equipmentService;
         $this->logService = $logService;
         $this->budgetService = $budgetService;
+        $this->attendanceService = $attendanceService;
     }
     /**
      * Unified Approval Method
@@ -260,6 +264,12 @@ class ApprovalActionService
                     $message = "KT xác nhận thanh toán mua thiết bị";
                     break;
 
+                case 'attendance':
+                    $att = Attendance::findOrFail($id);
+                    $result = $this->attendanceService->approve($att, $user);
+                    $message = "Đã duyệt chấm công của " . ($att->user->name ?? "nhân viên") . " ngày " . optional($att->work_date)->format('d/m/Y');
+                    break;
+
                 default:
                     throw new Exception("Loại phê duyệt không hợp lệ: {$type}");
             }
@@ -333,6 +343,11 @@ class ApprovalActionService
                 case 'equipment_purchase_management':
                 case 'equipment_purchase_accountant':
                     $model = \App\Models\EquipmentPurchase::findOrFail($id); break;
+                case 'attendance':
+                    $att = Attendance::findOrFail($id);
+                    $this->attendanceService->reject($att, $user, $reason);
+                    DB::commit();
+                    return ['success' => true, 'message' => 'Đã từ chối chấm công của ' . ($att->user->name ?? 'nhân viên')];
                 default:
                     throw new Exception("Loại cần từ chối không hợp lệ: {$type}");
             }

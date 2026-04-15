@@ -1,23 +1,21 @@
 <template>
-  <div>
-    <Head :title="'Cấu hình lương - ' + employee.name" />
-    
-    <div class="mb-6 flex items-center justify-between">
-      <div>
-        <a-breadcrumbs class="mb-2">
-          <a-breadcrumb-item><Link href="/hr/employees">Nhân viên</Link></a-breadcrumb-item>
-          <a-breadcrumb-item>Cấu hình lương</a-breadcrumb-item>
-        </a-breadcrumbs>
-        <h2 class="text-2xl font-bold text-gray-800">Cấu hình lương: {{ employee.name }}</h2>
-      </div>
-      <a-button @click="$inertia.visit('/hr/employees')">Quay lại</a-button>
-    </div>
+  <Head :title="'Cấu hình lương - ' + employee.name" />
 
+  <PageHeader
+    :title="'Cấu hình lương: ' + employee.name"
+    subtitle="Thiết lập mức lương theo giờ / ngày / tháng và theo dõi lịch sử điều chỉnh"
+  >
+    <template #actions>
+      <a-button @click="$inertia.visit('/hr/employees')">← Quay lại danh sách</a-button>
+    </template>
+  </PageHeader>
+
+  <div class="crm-content-card p-6">
     <a-row :gutter="24">
       <!-- Cập nhật cấu hình mới -->
       <a-col :xs="24" :lg="10">
         <a-card title="Thiết lập lương mới" :bordered="false" class="shadow-sm rounded-xl mb-6">
-          <a-form layout="vertical" @finish="handleSubmit">
+          <a-form layout="vertical">
             <a-form-item label="Hình thức trả lương" required>
               <a-select v-model:value="form.salary_type" placeholder="Chọn hình thức">
                 <a-select-option value="hourly">Theo giờ (Hourly)</a-select-option>
@@ -73,7 +71,14 @@
               <a-date-picker v-model:value="form.effective_from" value-format="YYYY-MM-DD" class="w-full" />
             </a-form-item>
 
-            <a-button type="primary" html-type="submit" :loading="form.processing" block size="large">
+            <a-alert
+              v-if="form.errors && Object.keys(form.errors).length"
+              type="error"
+              :message="Object.values(form.errors).flat().join(' · ')"
+              class="mb-3"
+              show-icon
+            />
+            <a-button type="primary" :loading="form.processing" block size="large" @click="handleSubmit">
               Lưu cấu hình mới
             </a-button>
           </a-form>
@@ -126,13 +131,13 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { Head, Link, useForm } from '@inertiajs/vue3'
+import { Head, useForm } from '@inertiajs/vue3'
 import { message } from 'ant-design-vue'
-import AdminLayoutAntd from '@/Shared/AdminLayoutAntd.vue'
+import CrmLayout from '@/Layouts/CrmLayout.vue'
+import PageHeader from '@/Components/Crm/PageHeader.vue'
 import dayjs from 'dayjs'
 
-defineOptions({ layout: AdminLayoutAntd })
+defineOptions({ layout: CrmLayout })
 
 const props = defineProps({
   employee: Object,
@@ -158,9 +163,31 @@ const columns = [
 ]
 
 const handleSubmit = () => {
+  // Quick client-side check
+  if (!form.effective_from) {
+    message.error('Vui lòng chọn ngày bắt đầu áp dụng')
+    return
+  }
+  if (form.salary_type === 'hourly' && !form.hourly_rate) {
+    message.error('Vui lòng nhập đơn giá giờ')
+    return
+  }
+  if (form.salary_type === 'daily' && !form.daily_rate) {
+    message.error('Vui lòng nhập đơn giá ngày')
+    return
+  }
+  if (form.salary_type === 'monthly' && !form.monthly_salary) {
+    message.error('Vui lòng nhập mức lương tháng')
+    return
+  }
+
   form.post(`/hr/employees/${props.employee.id}/salary`, {
     onSuccess: () => {
-      message.success('Đã cập nhật cấu hình lương mới')
+      message.success('Đã cập nhật cấu hình lương thành công')
+    },
+    onError: (errors) => {
+      const first = Object.values(errors).flat()[0]
+      message.error(first || 'Không thể lưu cấu hình lương')
     },
   })
 }

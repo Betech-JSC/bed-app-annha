@@ -142,7 +142,7 @@ class CrmProjectsController extends Controller
             'projects' => $projects,
             'stats' => $stats,
             'filters' => $request->only(['search', 'status']),
-            'users' => User::select('id', 'name', 'email', 'phone')->orderBy('name')->get(),
+            'users' => User::employees()->select('id', 'name', 'email', 'phone')->orderBy('name')->get(),
         ]);
     }
 
@@ -182,7 +182,7 @@ class CrmProjectsController extends Controller
             : $this->authService->getProjectPermissions($admin, $project);
 
         // 4. Shared Global Lists (Optimized without cache)
-        $users = User::select('id', 'name', 'email', 'image as avatar')->orderBy('name')->get();
+        $users = User::employees()->select('id', 'name', 'email', 'image as avatar')->orderBy('name')->get();
         $costGroups = class_exists(\App\Models\CostGroup::class) ? \App\Models\CostGroup::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']) : [];
         $personnelRoles = class_exists(\App\Models\PersonnelRole::class) ? \App\Models\PersonnelRole::orderBy('name')->get(['id', 'name']) : [];
         $materials = class_exists(\App\Models\Material::class) ? \App\Models\Material::select('id', 'name', 'code', 'unit', 'unit_price')->orderBy('name')->get() : [];
@@ -210,7 +210,7 @@ class CrmProjectsController extends Controller
                     ->with('attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type')
                     ->orderByDesc('payment_number')->get(),
                 'costs' => $project->costs()
-                    ->select('id', 'project_id', 'name', 'amount', 'status', 'cost_date', 'created_by', 'management_approved_by', 'accountant_approved_by', 'cost_group_id', 'subcontractor_id', 'supplier_id', 'budget_item_id', 'created_at')
+                    ->select('id', 'project_id', 'name', 'amount', 'status', 'category', 'attendance_id', 'cost_date', 'created_by', 'management_approved_by', 'accountant_approved_by', 'cost_group_id', 'subcontractor_id', 'supplier_id', 'budget_item_id', 'created_at')
                     ->with(['creator:id,name', 'costGroup:id,name,code', 'subcontractor:id,name', 'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type', 'managementApprover:id,name', 'accountantApprover:id,name'])
                     ->orderByDesc('cost_date')->orderByDesc('created_at')->get(),
                 'invoices' => $project->invoices()->select('id', 'project_id', 'invoice_number', 'subtotal', 'total_amount', 'invoice_date', 'description')->get(),
@@ -985,16 +985,20 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PERSONNEL_ASSIGN, $project);
 
         $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'role_id' => 'required|exists:personnel_roles,id',
-            'permissions' => 'nullable|array',
+            'user_id'            => 'required|exists:users,id',
+            'personnel_role_id'  => 'nullable|exists:personnel_roles,id',
+            'role_id'            => 'nullable|exists:personnel_roles,id',
+            'permissions'        => 'nullable|array',
         ]);
+
+        // Accept either field name from the frontend
+        $roleId = $validated['personnel_role_id'] ?? $validated['role_id'] ?? null;
 
         try {
             $this->personnelService->assign(
                 $project,
                 $validated['user_id'],
-                $validated['role_id'],
+                $roleId,
                 $validated['permissions'] ?? null,
                 $user
             );
@@ -3668,7 +3672,11 @@ class CrmProjectsController extends Controller
 
     public function getAttendance(Request $request, string $projectId)
     {
-        $query = \App\Models\Attendance::with(['user:id,name,email', 'project:id,name', 'approver:id,name'])
+        $admin = auth('admin')->user();
+        $project = Project::findOrFail($projectId);
+        $this->crmRequire($admin, Permissions::ATTENDANCE_VIEW, $project);
+
+        $query = \App\Models\Attendance::with(['user:id,name,email', 'project:id,name', 'approver:id,name', 'laborCost'])
             ->forProject($projectId);
 
         if ($request->user_id) $query->forUser($request->user_id);
@@ -3679,12 +3687,33 @@ class CrmProjectsController extends Controller
         }
         if ($request->status) $query->where('status', $request->status);
 
-        return response()->json($query->orderByDesc('work_date')->paginate($request->per_page ?? 30));
+        $records = $query->orderByDesc('work_date')->orderByDesc('id')->paginate($request->per_page ?? 30);
+
+        // Anti-Gravity: Self-healing logic for legacy negative hours
+        foreach ($records->items() as $item) {
+            $changed = false;
+            if ($item->hours_worked < 0) {
+                $item->hours_worked = abs($item->hours_worked);
+                $changed = true;
+            }
+            if ($item->overtime_hours < 0) {
+                $item->overtime_hours = abs($item->overtime_hours);
+                $changed = true;
+            }
+            if ($changed) {
+                $item->save();
+            }
+        }
+
+        return response()->json($records);
     }
 
     public function storeAttendance(Request $request, string $projectId)
     {
         $admin = auth('admin')->user();
+        $project = Project::findOrFail($projectId);
+        $this->crmRequire($admin, Permissions::ATTENDANCE_MANAGE, $project);
+
         try {
             $data = array_merge($request->all(), ['project_id' => $projectId]);
             $attendance = $this->attendanceService->upsert($data, $admin);
@@ -3701,10 +3730,27 @@ class CrmProjectsController extends Controller
     public function approveAttendance(Request $request, string $projectId, string $id)
     {
         $admin = auth('admin')->user();
+        $project = Project::findOrFail($projectId);
+        $this->crmRequire($admin, Permissions::ATTENDANCE_APPROVE, $project);
+
         $attendance = \App\Models\Attendance::findOrFail($id);
         $this->attendanceService->approve($attendance, $admin);
 
-        return response()->json(['message' => 'Đã duyệt chấm công', 'data' => $attendance]);
+        return response()->json(['message' => 'Đã duyệt chấm công', 'data' => $attendance->fresh()]);
+    }
+
+    public function rejectAttendance(Request $request, string $projectId, string $id)
+    {
+        $admin = auth('admin')->user();
+        $project = Project::findOrFail($projectId);
+        $this->crmRequire($admin, Permissions::ATTENDANCE_APPROVE, $project);
+
+        $request->validate(['reason' => 'required|string|max:500']);
+
+        $attendance = \App\Models\Attendance::findOrFail($id);
+        $this->attendanceService->reject($attendance, $admin, $request->reason);
+
+        return response()->json(['message' => 'Đã từ chối chấm công', 'data' => $attendance->fresh()]);
     }
 
     public function attendanceStatistics(Request $request, string $projectId)
@@ -3712,7 +3758,8 @@ class CrmProjectsController extends Controller
         $data = $this->attendanceService->getMonthlyStatistics(
             (int) $request->year,
             (int) $request->month,
-            (int) $projectId
+            (int) $projectId,
+            $request->user_id ? (int) $request->user_id : null
         );
         return response()->json($data);
     }

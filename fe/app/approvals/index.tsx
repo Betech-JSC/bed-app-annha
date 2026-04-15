@@ -36,6 +36,7 @@ const ROLE_TABS = [
     { key: 'project_manager', label: 'QLDA (PM)', icon: 'construct-outline', color: '#3B82F6', bgColor: '#EFF6FF' },
     { key: 'supervisor', label: 'Giám Sát', icon: 'search-outline', color: '#8B5CF6', bgColor: '#F5F3FF' },
     { key: 'customer', label: 'Khách Hàng', icon: 'people-outline', color: '#EF4444', bgColor: '#FEF2F2' },
+    { key: 'hr', label: 'Nhân Sự', icon: 'id-card-outline', color: '#06B6D4', bgColor: '#ECFEFF' },
 ];
 
 const CATEGORIES = [
@@ -43,6 +44,7 @@ const CATEGORIES = [
     { label: 'Tài chính', value: 'finance', icon: 'cash-outline' },
     { label: 'Nghiệm thu', value: 'acceptance', icon: 'checkmark-circle-outline' },
     { label: 'Vận hành', value: 'technical', icon: 'settings-outline' },
+    { label: 'Nhân sự', value: 'hr', icon: 'people-circle-outline' },
 ];
 
 const STATUS_FILTERS = [
@@ -58,6 +60,7 @@ const ROLE_MAPPING: Record<string, string> = {
     project_manager: 'project_manager',
     supervisor: 'supervisor',
     customer: 'customer',
+    hr: 'hr',
 };
 
 // Colors for item types (Synced with Web CRM)
@@ -79,6 +82,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }
     defect: { icon: 'alert-circle-outline', color: '#F43F5E', label: 'Lỗi' },
     equipment_rental: { icon: 'construct-outline', color: '#06B6D4', label: 'Thuê TB' },
     asset_usage: { icon: 'trail-sign-outline', color: '#3B82F6', label: 'Sử dụng kho' },
+    attendance: { icon: 'finger-print-outline', color: '#06B6D4', label: 'Chấm công' },
 };
 
 export default function ApprovalCenterScreen() {
@@ -140,8 +144,8 @@ export default function ApprovalCenterScreen() {
     };
 
     const handleApprove = async (item: ApprovalItem, notes?: string) => {
-        // Business Rule: Mandatory attachments for Accountant
-        if (selectedRole === 'accountant' && (item.attachments_count === 0 || !item.attachments_count)) {
+        // Business Rule: Mandatory attachments for Accountant (skip attendance/labor costs)
+        if (selectedRole === 'accountant' && item.type !== 'attendance' && (item.attachments_count === 0 || !item.attachments_count)) {
             // Check if it's a financial item
             const financialTypes = ['project_cost', 'company_cost', 'sub_payment', 'material_bill', 'budget'];
             if (financialTypes.includes(item.type)) {
@@ -244,6 +248,7 @@ export default function ApprovalCenterScreen() {
                 if (selectedCategory === 'finance') return ['project_cost', 'company_cost', 'sub_payment', 'payment', 'material_bill', 'budget', 'equipment_rental'].includes(i.type);
                 if (selectedCategory === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'acceptance_item'].includes(i.type);
                 if (selectedCategory === 'technical') return ['change_request', 'additional_cost', 'construction_log', 'schedule_adjustment', 'defect', 'asset_usage'].includes(i.type);
+                if (selectedCategory === 'hr') return i.type === 'attendance';
                 return true;
             });
         }

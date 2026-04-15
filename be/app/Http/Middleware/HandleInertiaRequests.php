@@ -123,6 +123,10 @@ class HandleInertiaRequests extends Middleware
                     if ($user->hasPermission(Permissions::PROJECT_MANAGE)) {
                         if (class_exists('App\Models\ProjectBudget')) $count += \App\Models\ProjectBudget::where('status', 'pending')->count();
                     }
+
+                    if ($user->hasPermission(Permissions::ATTENDANCE_APPROVE)) {
+                        if (class_exists('App\Models\Attendance')) $count += \App\Models\Attendance::where('workflow_status', 'submitted')->count();
+                    }
                     
                     // Equipment modules
                     if ($user->hasPermission(Permissions::EQUIPMENT_APPROVE)) {
