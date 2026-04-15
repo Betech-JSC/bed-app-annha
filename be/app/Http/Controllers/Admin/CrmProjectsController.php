@@ -207,11 +207,11 @@ class CrmProjectsController extends Controller
             'financeData' => Inertia::lazy(fn() => [
                 'payments' => $project->payments()
                     ->select('id', 'project_id', 'payment_number', 'amount', 'status', 'due_date', 'contract_id', 'notes', 'created_at')
-                    ->with('attachments:id,attachable_id,attachable_type,file_name,original_name,file_size')
+                    ->with('attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type')
                     ->orderByDesc('payment_number')->get(),
                 'costs' => $project->costs()
                     ->select('id', 'project_id', 'name', 'amount', 'status', 'cost_date', 'created_by', 'management_approved_by', 'accountant_approved_by', 'cost_group_id', 'subcontractor_id', 'supplier_id', 'budget_item_id', 'created_at')
-                    ->with(['creator:id,name', 'costGroup:id,name,code', 'subcontractor:id,name', 'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size', 'managementApprover:id,name', 'accountantApprover:id,name'])
+                    ->with(['creator:id,name', 'costGroup:id,name,code', 'subcontractor:id,name', 'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type', 'managementApprover:id,name', 'accountantApprover:id,name'])
                     ->orderByDesc('cost_date')->orderByDesc('created_at')->get(),
                 'invoices' => $project->invoices()->select('id', 'project_id', 'invoice_number', 'subtotal', 'total_amount', 'invoice_date', 'description')->get(),
                 'budgets' => $project->budgets()->select('id', 'project_id', 'name', 'status', 'total_budget', 'actual_cost', 'budget_date', 'version', 'created_by', 'approved_at', 'created_at')->with(['items', 'creator:id,name'])->get(),
