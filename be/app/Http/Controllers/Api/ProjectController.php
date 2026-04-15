@@ -113,14 +113,47 @@ class ProjectController extends Controller
             'phone',
         ]);
 
-        // Nếu không có customers theo điều kiện trên, lấy tất cả users không phải nhân sự
+        // Nếu không có customers theo điều kiện trên, lấy tất cả users (trừ nhân sự nội bộ)
         if ($customers->isEmpty()) {
-            $customers = User::customers()->orderBy('name')->get([
+            $fallbackQuery = User::whereNull('deleted_at')
+                ->whereDoesntHave('employeeProfile'); // Không phải nhân sự nội bộ
+
+            // Apply search nếu có
+            if ($search) {
+                $fallbackQuery->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
+            }
+
+            $customers = $fallbackQuery->orderBy('name')->get([
                 'id',
                 'name',
                 'email',
                 'phone',
             ]);
+
+            // Nếu vẫn không có, lấy tất cả users (trừ admin) - fallback cuối cùng
+            if ($customers->isEmpty()) {
+                $finalQuery = User::whereNull('deleted_at');
+
+                // Apply search nếu có
+                if ($search) {
+                    $finalQuery->where(function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%");
+                    });
+                }
+
+                $customers = $finalQuery->orderBy('name')->get([
+                    'id',
+                    'name',
+                    'email',
+                    'phone',
+                ]);
+            }
         }
 
         return response()->json([
@@ -138,8 +171,8 @@ class ProjectController extends Controller
     {
         $query = User::whereNull('deleted_at');
 
-        // Ưu tiên: users có cấu hình lương
-        $managerQuery = User::payrollEmployees();
+        // Ưu tiên: users có role quản lý, hoặc users nội bộ
+        $managerQuery = clone $query;
         $managerQuery->where(function ($q) {
             $q->whereHas('roles', function ($roleQuery) {
                 $roleQuery->where(function ($rq) {
@@ -150,7 +183,7 @@ class ProjectController extends Controller
                         ->orWhere('name', 'like', '%Management%');
                 });
             })
-            ->orWhere('id', '>', 0); // Include all payroll employees as potential items
+            ->orWhereHas('employeeProfile');
         });
 
         $managers = $managerQuery->get();
@@ -189,7 +222,7 @@ class ProjectController extends Controller
      */
     public function getAllUsers(Request $request)
     {
-        $query = User::payrollEmployees();
+        $query = User::whereNull('deleted_at');
 
         // Search
         if ($search = $request->query('search')) {

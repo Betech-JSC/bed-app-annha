@@ -69,36 +69,12 @@ class User extends Authenticatable
     }
 
     // ───── User Type Scopes ─────
-    public function scopeEmployees($q)
-    {
-        return $q->has('employeeProfile');
-    }
-
-    public function scopePayrollEmployees($q)
-    {
-        return $q->has('salaryConfigs');
-    }
-
-    public function scopeCustomers($q)
-    {
-        return $q->doesntHave('employeeProfile');
-    }
+    public function scopeEmployees($q) { return $q->where('user_type', 'employee'); }
+    public function scopeCustomers($q) { return $q->where('user_type', 'customer'); }
 
     // ───── User Type Helpers ─────
-    public function isEmployee(): bool
-    {
-        return $this->employeeProfile()->exists();
-    }
-
-    public function hasSalaryConfig(): bool
-    {
-        return $this->salaryConfigs()->exists();
-    }
-
-    public function isCustomer(): bool
-    {
-        return !$this->isEmployee();
-    }
+    public function isEmployee(): bool { return $this->user_type === 'employee' || !$this->user_type; }
+    public function isCustomer(): bool { return $this->user_type === 'customer'; }
 
     public function resolveRouteBinding($value, $field = null)
     {

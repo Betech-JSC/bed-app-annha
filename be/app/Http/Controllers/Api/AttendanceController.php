@@ -86,10 +86,6 @@ class AttendanceController extends Controller
 
         $user = $request->user();
 
-        if (!$user->hasSalaryConfig()) {
-            return response()->json(['success' => false, 'message' => 'Tài khoản của bạn chưa có cấu hình lương, không thể thực hiện chấm công.'], 403);
-        }
-
         if ($request->project_id) {
             $project = Project::findOrFail($request->project_id);
             if (!$this->authService->can($user, Permissions::ATTENDANCE_CHECK_IN, $project)) {

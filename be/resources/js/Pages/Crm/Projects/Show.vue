@@ -1111,7 +1111,7 @@
                   <div>
                     <div class="flex items-center gap-2 mb-0.5">
                       <span class="font-bold text-gray-800 text-base">{{ budget.name }}</span>
-                      <a-tag v-if="budget.status === 'active'" color="success" class="rounded-full px-2 text-[10px] border-none uppercase font-bold">ĐANG HOẠT ĐỘNG</a-tag>
+                      <a-tag v-if="budget.status === 'active'" color="success" class="rounded-full px-2 text-[10px] border-none uppercase font-bold">ACTIVE</a-tag>
                     </div>
                     <div class="text-[11px] text-gray-400 font-medium flex gap-3">
                       <span><CalendarOutlined /> {{ fmtDate(budget.budget_date) }}</span>
@@ -3103,7 +3103,7 @@
           <div class="text-[10px] text-blue-100 uppercase font-bold tracking-wider mb-0.5">Mã ngân sách: {{ budgetDetail.version || `#${budgetDetail.id}` }}</div>
           <div class="text-xl font-bold flex items-center gap-2">
             {{ budgetDetail.name }}
-            <a-tag v-if="budgetDetail.status === 'active'" color="success" class="rounded-full border-none px-2 text-[10px] uppercase font-bold bg-white/20 text-white">ĐANG HOẠT ĐỘNG</a-tag>
+            <a-tag v-if="budgetDetail.status === 'active'" color="success" class="rounded-full border-none px-2 text-[10px] uppercase font-bold bg-white/20 text-white">ĐANG SỬ DỤNG</a-tag>
           </div>
           <div class="text-[11px] text-blue-100 mt-1 flex gap-3 opacity-90">
             <span><CalendarOutlined /> {{ fmtDate(budgetDetail.budget_date) }}</span>
@@ -6385,8 +6385,8 @@ const crStatusColors = { draft: 'default', pending: 'orange', approved: 'green',
 const crTypeLabels = { scope: 'Phạm vi', schedule: 'Tiến độ', cost: 'Chi phí', quality: 'Chất lượng', resource: 'Nguồn lực', other: 'Khác' }
 const priorityLabels = { low: 'Thấp', medium: 'Trung bình', high: 'Cao', urgent: 'Khẩn cấp' }
 const priorityColors = { low: 'default', medium: 'blue', high: 'orange', urgent: 'red' }
-const budgetStatusLabels = { draft: 'Nháp', active: 'Đang hoạt động', approved: 'Đã duyệt', archived: 'Lưu trữ' }
-const budgetStatusColors = { draft: 'default', active: 'green', approved: 'green', archived: 'blue' }
+const budgetStatusLabels = { draft: 'Nháp', approved: 'Đã duyệt', archived: 'Lưu trữ' }
+const budgetStatusColors = { draft: 'default', approved: 'green', archived: 'blue' }
 const riskStatusLabels = { identified: 'Đã nhận diện', analyzed: 'Đã phân tích', mitigated: 'Đã giảm thiểu', monitored: 'Đang giám sát', closed: 'Đã đóng' }
 const riskStatusColors = { identified: 'orange', analyzed: 'blue', mitigated: 'cyan', monitored: 'processing', closed: 'green' }
 const riskCategoryLabels = { schedule: 'Tiến độ', cost: 'Chi phí', quality: 'Chất lượng', scope: 'Phạm vi', resource: 'Nguồn lực', technical: 'Kỹ thuật', external: 'Bên ngoài', other: 'Khác' }
