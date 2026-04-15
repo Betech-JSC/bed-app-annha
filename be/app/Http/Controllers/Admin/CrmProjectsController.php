@@ -166,13 +166,25 @@ class CrmProjectsController extends Controller
 
         // 2. Fast Counts for Tab Badges (Very efficient)
         $counts = [
-            'tasks' => \App\Models\ProjectTask::where('project_id', $project->id)->whereNull('deleted_at')->count(),
-            'finance' => \App\Models\Cost::where('project_id', $project->id)->count() + \App\Models\ProjectPayment::where('project_id', $project->id)->count(),
-            'expense' => \App\Models\Subcontractor::where('project_id', $project->id)->count(),
-            'monitor' => \App\Models\Defect::where('project_id', $project->id)->where('status', '!=', 'closed')->count(),
-            'hr' => \App\Models\ProjectPersonnel::where('project_id', $project->id)->count(),
-            'warranty' => \App\Models\ProjectWarranty::where('project_id', $project->id)->count() + \App\Models\ProjectMaintenance::where('project_id', $project->id)->count(),
-            'other' => \App\Models\Attachment::where('attachable_id', $project->id)->where('attachable_type', Project::class)->count(),
+            'tasks' => \App\Models\ProjectTask::where('project_id', $id)->whereNull('deleted_at')->count(),
+            'costs' => \App\Models\Cost::where('project_id', $id)->count(),
+            'payments' => \App\Models\ProjectPayment::where('project_id', $id)->count(),
+            'personnel' => \App\Models\ProjectPersonnel::where('project_id', $id)->count(),
+            'subcontractors' => \App\Models\Subcontractor::where('project_id', $id)->count(),
+            'construction_logs' => \App\Models\ConstructionLog::where('project_id', $id)->count(),
+            'acceptance_stages' => \App\Models\AcceptanceStage::where('project_id', $id)->count(),
+            'defects' => \App\Models\Defect::where('project_id', $id)->count(),
+            'change_requests' => \App\Models\ChangeRequest::where('project_id', $id)->count(),
+            'additional_costs' => \App\Models\AdditionalCost::where('project_id', $id)->count(),
+            'budgets' => \App\Models\ProjectBudget::where('project_id', $id)->count(),
+            'warranties' => \App\Models\ProjectWarranty::where('project_id', $id)->count(),
+            'maintenances' => \App\Models\ProjectMaintenance::where('project_id', $id)->count(),
+            'invoices' => \App\Models\Invoice::where('project_id', $id)->count(),
+            'risks' => \App\Models\ProjectRisk::where('project_id', $id)->count(),
+            'material_bills' => \App\Models\MaterialBill::where('project_id', $id)->count(),
+            'attachments' => \App\Models\Attachment::where('attachable_id', $id)->where('attachable_type', Project::class)->count(),
+            'equipment' => \App\Models\EquipmentRental::where('project_id', $id)->count() + \App\Models\AssetUsage::where('project_id', $id)->count(),
+            'comments' => \App\Models\ProjectComment::where('project_id', $id)->count(),
         ];
 
         // 3. User & Permissions (Required immediately)

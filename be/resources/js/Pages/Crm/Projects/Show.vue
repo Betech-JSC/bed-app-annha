@@ -270,7 +270,7 @@
 
       <!-- ============ PROGRESS / TASKS TAB ============ -->
       <a-tab-pane key="progress" v-if="isTabVisible('progress')">
-        <template #tab><a-tooltip title="Quản lý công việc, phân công và theo dõi tiến độ thi công theo WBS" placement="bottom">Tiến độ</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý công việc, phân công và theo dõi tiến độ thi công theo WBS" placement="bottom">Tiến độ ({{ counts.tasks || 0 }})</a-tooltip></template>
         <div class="p-4">
           <!-- Stats Cards -->
           <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
@@ -465,7 +465,7 @@
 
       <!-- ============ COSTS TAB (Renamed to Phiếu chi) ============ -->
       <a-tab-pane key="costs" v-if="isTabVisible('costs')">
-        <template #tab><a-tooltip title="Quản lý phiếu chi: tạo, gửi duyệt BĐH → KT xác nhận, đính kèm chứng từ" placement="bottom">Phiếu chi ({{ project.costs?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý phiếu chi: tạo, gửi duyệt BĐH → KT xác nhận, đính kèm chứng từ" placement="bottom">Phiếu chi ({{ counts.costs || 0 }})</a-tooltip></template>
         <div class="p-4">
           <!-- Premium Header for Phiếu chi -->
           <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
@@ -544,7 +544,7 @@
 
       <!-- ============ PAYMENTS TAB ============ -->
       <a-tab-pane key="payments" v-if="isTabVisible('payments')">
-        <template #tab><a-tooltip title="Quản lý đợt thanh toán: KH đánh dấu đã thanh toán → KT xác nhận/từ chối" placement="bottom">Thanh toán ({{ project.payments?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý đợt thanh toán: KH đánh dấu đã thanh toán → KT xác nhận/từ chối" placement="bottom">Thanh toán ({{ counts.payments || 0 }})</a-tooltip></template>
         <div class="p-4">
           <!-- Premium Header for Payments -->
           <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
@@ -589,7 +589,7 @@
 
       <!-- ============ PERSONNEL TAB ============ -->
       <a-tab-pane key="personnel" v-if="isTabVisible('personnel')">
-        <template #tab><a-tooltip title="Phân công nhân sự tham gia dự án theo vai trò" placement="bottom">Nhân sự ({{ project.personnel?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Phân công nhân sự tham gia dự án theo vai trò" placement="bottom">Nhân sự ({{ counts.personnel || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('personnel.assign')" type="primary" size="small" @click="openPersonnelModal()">
@@ -617,7 +617,7 @@
 
       <!-- ============ SUBCONTRACTORS TAB ============ -->
       <a-tab-pane key="subcontractors" v-if="isTabVisible('subcontractors')">
-        <template #tab><a-tooltip title="Quản lý nhà thầu phụ: báo giá, tiến độ, thanh toán và đối soát" placement="bottom">Nhà thầu phụ ({{ project.subcontractors?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý nhà thầu phụ: báo giá, tiến độ, thanh toán và đối soát" placement="bottom">Nhà thầu phụ ({{ counts.subcontractors || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('subcontractor.create')" type="primary" size="small" @click="openSubModal(null)">
@@ -656,7 +656,7 @@
 
       <!-- ============ LOGS TAB ============ -->
       <a-tab-pane key="logs" v-if="isTabVisible('logs')">
-        <template #tab><a-tooltip title="Nhật ký thi công: ghi chép hàng ngày về thời tiết, nhân công, tiến độ" placement="bottom">Nhật ký ({{ project.construction_logs?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Nhật ký thi công: ghi chép hàng ngày về thời tiết, nhân công, tiến độ" placement="bottom">Nhật ký ({{ counts.construction_logs || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('log.create')" type="primary" size="small" @click="openLogModal()">
@@ -753,7 +753,7 @@
 
       <!-- ============ ACCEPTANCE TAB ============ -->
       <a-tab-pane key="acceptance" v-if="isTabVisible('acceptance')">
-        <template #tab><a-tooltip title="Quản lý nghiệm thu: tạo giai đoạn, duyệt 3 cấp, bộ tài liệu, lỗi ghi nhận" placement="bottom">Nghiệm thu ({{ project.acceptance_stages?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý nghiệm thu: tạo giai đoạn, duyệt 3 cấp, bộ tài liệu, lỗi ghi nhận" placement="bottom">Nghiệm thu ({{ counts.acceptance_stages || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3 gap-2">
             <a-button v-if="can('acceptance.create')" type="primary" size="small" @click="openAcceptModal()">
@@ -924,7 +924,7 @@
 
       <!-- ============ DEFECTS TAB ============ -->
       <a-tab-pane key="defects" v-if="isTabVisible('defects')">
-        <template #tab><a-tooltip title="Báo cáo và theo dõi lỗi thi công: mức độ, trạng thái xử lý" placement="bottom">Lỗi ({{ project.defects?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Báo cáo và theo dõi lỗi thi công: mức độ, trạng thái xử lý" placement="bottom">Lỗi ({{ counts.defects || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('defect.create')" type="primary" size="small" @click="openDefectModal(null)">
@@ -953,7 +953,7 @@
 
       <!-- ============ CHANGE REQUESTS TAB ============ -->
       <a-tab-pane key="change_requests" v-if="isTabVisible('change_requests')">
-        <template #tab><a-tooltip title="Yêu cầu thay đổi: phạm vi, chi phí, tiến độ — phân tích ảnh hưởng và phê duyệt" placement="bottom">Thay đổi ({{ project.change_requests?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Yêu cầu thay đổi: phạm vi, chi phí, tiến độ — phân tích ảnh hưởng và phê duyệt" placement="bottom">Thay đổi ({{ counts.change_requests || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('change_request.create')" type="primary" size="small" @click="openChangeRequestModal()">
@@ -986,7 +986,7 @@
 
       <!-- ============ COMMENTS TAB ============ -->
       <a-tab-pane key="comments" v-if="isTabVisible('comments')">
-        <template #tab><a-tooltip title="Trao đổi nội bộ giữa các thành viên dự án" placement="bottom">Bình luận ({{ commentCount }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Trao đổi nội bộ giữa các thành viên dự án" placement="bottom">Bình luận ({{ counts.comments || 0 }})</a-tooltip></template>
         <div class="p-4">
           <!-- Root comment input -->
           <div v-if="can('project.comment.create')" class="flex gap-2 mb-5">
@@ -1052,7 +1052,7 @@
 
       <!-- ============ ADDITIONAL COSTS TAB ============ -->
       <a-tab-pane key="additional_costs" v-if="isTabVisible('additional_costs')">
-        <template #tab><a-tooltip title="Chi phí phát sinh ngoài báo giá: đề xuất → duyệt → ghi nhận" placement="bottom">CP Phát sinh ({{ project.additional_costs?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Chi phí phát sinh ngoài báo giá: đề xuất → duyệt → ghi nhận" placement="bottom">CP Phát sinh ({{ counts.additional_costs || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
@@ -1085,7 +1085,7 @@
 
       <!-- ============ BUDGETS TAB ============ -->
       <a-tab-pane key="budgets" v-if="isTabVisible('budgets')">
-        <template #tab><a-tooltip title="Quản lý ngân sách dự án: phân bổ theo hạng mục, theo dõi thực chi" placement="bottom">Ngân sách ({{ project.budgets?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý ngân sách dự án: phân bổ theo hạng mục, theo dõi thực chi" placement="bottom">Ngân sách ({{ counts.budgets || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('budgets.create')" type="primary" size="small" @click="openBudgetModal()">
@@ -1334,7 +1334,7 @@
 1277: 
       <!-- ============ WARRANTY TAB ============ -->
       <a-tab-pane key="warranty" v-if="isTabVisible('warranty')">
-        <template #tab><a-tooltip title="Quản lý bảo hành: phiếu bàn giao, thời gian bảo hành, luồng duyệt khách hàng" placement="bottom">Phiếu Bảo hành ({{ project.warranties?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý bảo hành: phiếu bàn giao, thời gian bảo hành, luồng duyệt khách hàng" placement="bottom">Phiếu Bảo hành ({{ counts.warranties || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('warranty.create')" type="primary" size="small" @click="openWarrantyModal()">
@@ -1373,7 +1373,7 @@
 
       <!-- ============ MAINTENANCES TAB ============ -->
       <a-tab-pane key="maintenances" v-if="isTabVisible('maintenances')">
-        <template #tab><a-tooltip title="Lịch sử bảo trì định kỳ (6 tháng/lần) — Luồng duyệt: Nháp → Chờ KH duyệt → Đã duyệt" placement="bottom">Bảo trì ({{ project.maintenances?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Lịch sử bảo trì định kỳ (6 tháng/lần) — Luồng duyệt: Nháp → Chờ KH duyệt → Đã duyệt" placement="bottom">Bảo trì ({{ counts.maintenances || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-between items-center mb-3">
              <div class="text-xs text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100 flex items-center gap-1">
@@ -1440,7 +1440,7 @@
 
       <!-- ============ INVOICES TAB ============ -->
       <a-tab-pane key="invoices" v-if="isTabVisible('invoices')">
-        <template #tab><a-tooltip title="Quản lý hóa đơn xuất cho khách hàng: tạo, gửi, theo dõi thanh toán" placement="bottom">Hóa đơn ({{ project.invoices?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý hóa đơn xuất cho khách hàng: tạo, gửi, theo dõi thanh toán" placement="bottom">Hóa đơn ({{ counts.invoices || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('invoice.create')" type="primary" size="small" @click="openInvoiceModal(null)">
@@ -1460,7 +1460,7 @@
 
       <!-- ============ RISKS TAB ============ -->
       <a-tab-pane key="risks" v-if="isTabVisible('risks')">
-        <template #tab><a-tooltip title="Đánh giá và quản lý rủi ro: xác suất, ảnh hưởng, kế hoạch giảm thiểu" placement="bottom">Rủi ro ({{ project.risks?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Đánh giá và quản lý rủi ro: xác suất, ảnh hưởng, kế hoạch giảm thiểu" placement="bottom">Rủi ro ({{ counts.risks || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('project.risk.create')" type="primary" size="small" @click="openRiskModal()">
@@ -1755,7 +1755,7 @@
 
       <!-- ============ MATERIALS TAB — Bill-based tracking (Giống APP) ============ -->
       <a-tab-pane key="materials" v-if="isTabVisible('materials')">
-        <template #tab><a-tooltip title="Quản lý chi phí vật liệu theo bill nhập: theo dõi từng phiếu, duyệt thanh toán" placement="bottom">Vật liệu ({{ materialBills?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý chi phí vật liệu theo bill nhập: theo dõi từng phiếu, duyệt thanh toán" placement="bottom">Vật liệu ({{ counts.material_bills || 0 }})</a-tooltip></template>
         <div class="p-4">
           <!-- Summary Cards -->
           <div class="grid grid-cols-4 gap-3 mb-4">
@@ -1824,7 +1824,7 @@
 
       <!-- ============ EQUIPMENT TAB — 2 Sub-tabs (Thuê / Sử dụng) ============ -->
       <a-tab-pane key="equipment" v-if="isTabVisible('equipment')">
-        <template #tab><a-tooltip title="Thuê, sử dụng thiết bị dự án — phiếu duyệt 3 cấp" placement="bottom">Thiết bị ({{ totalEquipmentCount }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Thuê, sử dụng thiết bị dự án — phiếu duyệt 3 cấp" placement="bottom">Thiết bị ({{ counts.equipment || 0 }})</a-tooltip></template>
         <div class="p-4">
           <!-- Sub-tab switcher -->
           <div class="flex items-center gap-2 mb-4">
@@ -1931,7 +1931,7 @@
 
       <!-- ============ DOCUMENTS TAB ============ -->
       <a-tab-pane key="documents" v-if="isTabVisible('documents')">
-        <template #tab><a-tooltip title="Kho tài liệu dự án: bản vẽ, hợp đồng, biên bản, hình ảnh" placement="bottom">Tài liệu ({{ project.attachments?.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Kho tài liệu dự án: bản vẽ, hợp đồng, biên bản, hình ảnh" placement="bottom">Tài liệu ({{ counts.attachments || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('project.document.upload')" type="primary" size="small" @click="showDocUploadModal = true">
