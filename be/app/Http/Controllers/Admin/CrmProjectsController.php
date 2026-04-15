@@ -142,7 +142,7 @@ class CrmProjectsController extends Controller
             'projects' => $projects,
             'stats' => $stats,
             'filters' => $request->only(['search', 'status']),
-            'users' => User::employees()->select('id', 'name', 'email', 'phone')->orderBy('name')->get(),
+            'users' => User::payrollEmployees()->select('id', 'name', 'email', 'phone')->orderBy('name')->get(),
         ]);
     }
 
@@ -182,7 +182,7 @@ class CrmProjectsController extends Controller
             : $this->authService->getProjectPermissions($admin, $project);
 
         // 4. Shared Global Lists (Optimized without cache)
-        $users = User::employees()->select('id', 'name', 'email', 'image as avatar')->orderBy('name')->get();
+        $users = User::payrollEmployees()->select('id', 'name', 'email', 'image as avatar')->orderBy('name')->get();
         $costGroups = class_exists(\App\Models\CostGroup::class) ? \App\Models\CostGroup::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']) : [];
         $personnelRoles = class_exists(\App\Models\PersonnelRole::class) ? \App\Models\PersonnelRole::orderBy('name')->get(['id', 'name']) : [];
         $materials = class_exists(\App\Models\Material::class) ? \App\Models\Material::select('id', 'name', 'code', 'unit', 'unit_price')->orderBy('name')->get() : [];

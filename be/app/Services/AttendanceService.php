@@ -133,6 +133,11 @@ class AttendanceService
      */
     public function upsert(array $data, ?User $actor = null): Attendance
     {
+        $targetUser = User::findOrFail($data['user_id']);
+        if (!$targetUser->hasSalaryConfig()) {
+            throw new \Exception("Người dùng '{$targetUser->name}' chưa có cấu hình lương. Vui lòng thiết lập cấu hình lương trước khi thực hiện chấm công.");
+        }
+
         return DB::transaction(function () use ($data, $actor) {
             // Time parsing logic
             if (isset($data['check_in']) && isset($data['check_out'])) {
