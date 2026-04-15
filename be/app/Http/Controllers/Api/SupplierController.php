@@ -10,6 +10,13 @@ use Illuminate\Support\Facades\DB;
 
 class SupplierController extends Controller
 {
+    protected $supplierService;
+
+    public function __construct(\App\Services\SupplierService $supplierService)
+    {
+        $this->supplierService = $supplierService;
+    }
+
     /**
      * Danh sách nhà cung cấp
      */
@@ -24,25 +31,7 @@ class SupplierController extends Controller
             ], 403);
         }
 
-        $query = Supplier::query();
-
-        if ($request->query('active_only') === 'true') {
-            $query->where('status', 'active');
-        }
-
-        if ($search = $request->query('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('code', 'like', "%{$search}%")
-                    ->orWhere('tax_code', 'like', "%{$search}%");
-            });
-        }
-
-        if ($category = $request->query('category')) {
-            $query->where('category', $category);
-        }
-
-        $suppliers = $query->orderBy('name')->paginate(20);
+        $suppliers = $this->supplierService->getSuppliers($request->all());
 
         return response()->json([
             'success' => true,
@@ -64,7 +53,7 @@ class SupplierController extends Controller
             ], 403);
         }
 
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50|unique:suppliers,code',
             'category' => 'nullable|string|max:255',
@@ -80,21 +69,20 @@ class SupplierController extends Controller
             'status' => 'in:active,inactive,blacklisted',
         ]);
 
-        if ($validator->fails()) {
+        try {
+            $supplier = $this->supplierService->upsert($validated, null, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã tạo nhà cung cấp thành công.',
+                'data' => $supplier
+            ], 201);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
+                'message' => $e->getMessage()
+            ], 400);
         }
-
-        $supplier = Supplier::create($validator->validated());
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã tạo nhà cung cấp thành công.',
-            'data' => $supplier
-        ], 201);
     }
 
     /**
@@ -135,7 +123,7 @@ class SupplierController extends Controller
 
         $supplier = Supplier::findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'code' => 'sometimes|nullable|string|max:50|unique:suppliers,code,' . $id,
             'category' => 'nullable|string|max:255',
@@ -151,21 +139,20 @@ class SupplierController extends Controller
             'status' => 'in:active,inactive,blacklisted',
         ]);
 
-        if ($validator->fails()) {
+        try {
+            $supplier = $this->supplierService->upsert($validated, $supplier, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã cập nhật nhà cung cấp thành công.',
+                'data' => $supplier
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
+                'message' => $e->getMessage()
+            ], 400);
         }
-
-        $supplier->update($validator->validated());
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã cập nhật nhà cung cấp thành công.',
-            'data' => $supplier
-        ]);
     }
 
     /**
@@ -184,7 +171,6 @@ class SupplierController extends Controller
 
         $supplier = Supplier::findOrFail($id);
 
-        // Kiểm tra có hợp đồng không
         if ($supplier->contracts()->count() > 0) {
             return response()->json([
                 'success' => false,
@@ -216,26 +202,18 @@ class SupplierController extends Controller
 
         $supplier = Supplier::findOrFail($id);
 
-        // 1. Tính tổng giá trị hợp đồng
+        // Logic moves to service ideally, but for now we keep the calculation here if it's strictly presentation
+        // Calculating metrics based on relationships
         $totalContractValue = $supplier->contracts()
             ->where('status', 'active')
             ->sum('contract_value');
 
-        // 2. Tính tổng đã nghiệm thu (từ SupplierAcceptance)
         $totalAccepted = $supplier->acceptances()
             ->where('status', 'approved')
             ->sum('accepted_amount');
 
-        // Tổng cộng giá trị công việc đã xác nhận (Chỉ lấy Nghiệm thu)
-        $totalWorkPerformed = (float)$totalAccepted;
-
-        // 3. Tổng đã thanh toán (theo dõi trong model Supplier)
         $totalPaid = (float)$supplier->total_paid;
-
-        // Công nợ hiện tại = Những gì đã làm nhưng chưa trả tiền
-        $totalDebt = max(0, $totalWorkPerformed - $totalPaid);
-
-        // Công nợ còn lại trên HỢP ĐỒNG (Những gì đã cam kết nhưng chưa trả tiền)
+        $totalDebt = max(0, (float)$totalAccepted - $totalPaid);
         $remainingContractCommitment = max(0, (float)$totalContractValue - $totalPaid);
 
         return response()->json([
@@ -247,12 +225,12 @@ class SupplierController extends Controller
                 ],
                 'statistics' => [
                     'total_contract_value' => (float) $totalContractValue,
-                    'total_accepted' => (float) $totalWorkPerformed,
+                    'total_accepted' => (float) $totalAccepted,
                     'total_paid' => (float) $totalPaid,
                     'total_debt' => (float) $totalDebt,
                     'remaining_debt' => (float) $remainingContractCommitment,
-                    'payment_percentage' => $totalWorkPerformed > 0 
-                        ? round(($totalPaid / $totalWorkPerformed) * 100, 2) 
+                    'payment_percentage' => $totalAccepted > 0 
+                        ? round(($totalPaid / $totalAccepted) * 100, 2) 
                         : 0,
                 ],
             ],

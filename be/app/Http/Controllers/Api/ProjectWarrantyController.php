@@ -15,10 +15,17 @@ use Carbon\Carbon;
 class ProjectWarrantyController extends Controller
 {
     protected $authService;
+    protected $warrantyService;
+    protected $attachmentService;
 
-    public function __construct(AuthorizationService $authService)
-    {
+    public function __construct(
+        AuthorizationService $authService,
+        \App\Services\ProjectWarrantyService $warrantyService,
+        \App\Services\AttachmentService $attachmentService
+    ) {
         $this->authService = $authService;
+        $this->warrantyService = $warrantyService;
+        $this->attachmentService = $attachmentService;
     }
 
     /**
@@ -57,7 +64,6 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_CREATE, $project);
 
         $validated = $request->validate([
@@ -71,25 +77,13 @@ class ProjectWarrantyController extends Controller
             'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
-        DB::beginTransaction();
         try {
-            $warranty = ProjectWarranty::create([
-                'project_id' => $project->id,
-                'status' => $validated['status'] ?? ProjectWarranty::STATUS_DRAFT,
-                'created_by' => $user->id,
-                'handover_date' => $validated['handover_date'],
-                'warranty_content' => $validated['warranty_content'],
-                'warranty_start_date' => $validated['warranty_start_date'],
-                'warranty_end_date' => $validated['warranty_end_date'],
-                'notes' => $validated['notes'] ?? null,
-            ]);
+            DB::beginTransaction();
+            $data = array_merge($validated, ['project_id' => $project->id]);
+            $warranty = $this->warrantyService->upsertWarranty($data, null, $user);
 
             if (!empty($validated['attachment_ids'])) {
-                \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
-                    ->update([
-                        'attachable_id' => $warranty->id,
-                        'attachable_type' => ProjectWarranty::class
-                    ]);
+                $this->attachmentService->linkExistingAttachments($validated['attachment_ids'], $warranty);
             }
 
             DB::commit();
@@ -100,10 +94,7 @@ class ProjectWarrantyController extends Controller
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
         }
     }
 
@@ -114,11 +105,9 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_UPDATE, $project);
 
         $warranty = ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
-
         $validated = $request->validate([
             'handover_date' => 'required|date',
             'warranty_content' => 'required|string',
@@ -129,27 +118,26 @@ class ProjectWarrantyController extends Controller
             'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
-        $warranty->update(\Illuminate\Support\Arr::except($validated, ['attachment_ids']));
+        try {
+            DB::beginTransaction();
+            $data = array_merge($validated, ['project_id' => $project->id]);
+            $this->warrantyService->upsertWarranty($data, $warranty, $user);
 
-        if (isset($validated['attachment_ids'])) {
-            // Reset existing
-            $warranty->attachments()->update(['attachable_id' => null, 'attachable_type' => null]);
-            
-            // Set new
-            if (!empty($validated['attachment_ids'])) {
-                \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
-                    ->update([
-                        'attachable_id' => $warranty->id,
-                        'attachable_type' => ProjectWarranty::class
-                    ]);
+            if (isset($validated['attachment_ids'])) {
+                $this->attachmentService->clearAttachments($warranty);
+                $this->attachmentService->linkExistingAttachments($validated['attachment_ids'], $warranty);
             }
-        }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã cập nhật phiếu bảo hành thành công.',
-            'data' => $warranty
-        ]);
+            DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã cập nhật phiếu bảo hành thành công.',
+                'data' => $warranty->fresh('attachments')
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -159,51 +147,32 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_UPDATE, $project);
 
         $warranty = ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
         
-        if ($warranty->status !== ProjectWarranty::STATUS_DRAFT) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể gửi duyệt phiếu ở trạng thái nháp.'
-            ], 400);
+        try {
+            $this->warrantyService->updateStatus($warranty, ProjectWarranty::STATUS_PENDING_CUSTOMER, $user);
+            return response()->json(['success' => true, 'message' => 'Đã gửi phiếu bảo hành cho khách hàng duyệt.', 'data' => $warranty]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
         }
-
-        $warranty->update([
-            'status' => ProjectWarranty::STATUS_PENDING_CUSTOMER,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi phiếu bảo hành cho khách hàng duyệt.',
-            'data' => $warranty
-        ]);
     }
 
-    /**
-     * Duyệt phiếu bảo hành
-     */
     public function approveWarranty(Request $request, $projectId, $uuid)
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_APPROVE, $project);
 
         $warranty = ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
         
-        $warranty->update([
-            'status' => ProjectWarranty::STATUS_APPROVED,
-            'approved_by' => $user->id,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt phiếu bảo hành thành công.',
-            'data' => $warranty
-        ]);
+        try {
+            $this->warrantyService->updateStatus($warranty, ProjectWarranty::STATUS_APPROVED, $user);
+            return response()->json(['success' => true, 'message' => 'Đã duyệt phiếu bảo hành thành công.', 'data' => $warranty]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
     }
 
     /**
@@ -213,20 +182,16 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_APPROVE, $project);
 
         $warranty = ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
         
-        $warranty->update([
-            'status' => ProjectWarranty::STATUS_REJECTED,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã từ chối phiếu bảo hành.',
-            'data' => $warranty
-        ]);
+        try {
+            $this->warrantyService->reject($warranty, $user, $request->input('reason'));
+            return response()->json(['success' => true, 'message' => 'Đã từ chối phiếu bảo hành.', 'data' => $warranty]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
     }
 
     /**
@@ -236,7 +201,6 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_CREATE, $project);
 
         $validated = $request->validate([
@@ -246,25 +210,13 @@ class ProjectWarrantyController extends Controller
             'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
-        DB::beginTransaction();
         try {
-            $nextDate = Carbon::parse($validated['maintenance_date'])->addMonths(6);
-
-            $maintenance = ProjectMaintenance::create([
-                'project_id' => $project->id,
-                'maintenance_date' => $validated['maintenance_date'],
-                'next_maintenance_date' => $nextDate,
-                'status' => $request->status ?? ProjectMaintenance::STATUS_DRAFT,
-                'notes' => $validated['notes'] ?? null,
-                'created_by' => $user->id,
-            ]);
+            DB::beginTransaction();
+            $data = array_merge($validated, ['project_id' => $project->id]);
+            $maintenance = $this->warrantyService->upsertMaintenance($data, null, $user);
 
             if (!empty($validated['attachment_ids'])) {
-                \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
-                    ->update([
-                        'attachable_id' => $maintenance->id,
-                        'attachable_type' => ProjectMaintenance::class
-                    ]);
+                $this->attachmentService->linkExistingAttachments($validated['attachment_ids'], $maintenance);
             }
 
             DB::commit();
@@ -275,10 +227,7 @@ class ProjectWarrantyController extends Controller
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
         }
     }
 
@@ -289,27 +238,16 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_UPDATE, $project);
 
         $maintenance = ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
         
-        if ($maintenance->status !== ProjectMaintenance::STATUS_DRAFT) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể gửi duyệt phiếu ở trạng thái nháp.'
-            ], 400);
+        try {
+            $this->warrantyService->updateStatus($maintenance, ProjectMaintenance::STATUS_PENDING_CUSTOMER, $user);
+            return response()->json(['success' => true, 'message' => 'Đã gửi phiếu bảo trì cho khách hàng duyệt.', 'data' => $maintenance]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
         }
-
-        $maintenance->update([
-            'status' => ProjectMaintenance::STATUS_PENDING_CUSTOMER,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi phiếu bảo trì cho khách hàng duyệt.',
-            'data' => $maintenance
-        ]);
     }
 
     /**
@@ -319,21 +257,16 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_APPROVE, $project);
 
         $maintenance = ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
         
-        $maintenance->update([
-            'status' => ProjectMaintenance::STATUS_APPROVED,
-            'approved_by' => $user->id,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt phiếu bảo trì thành công.',
-            'data' => $maintenance
-        ]);
+        try {
+            $this->warrantyService->updateStatus($maintenance, ProjectMaintenance::STATUS_APPROVED, $user);
+            return response()->json(['success' => true, 'message' => 'Đã duyệt phiếu bảo trì thành công.', 'data' => $maintenance]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
     }
 
     /**
@@ -343,20 +276,16 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_APPROVE, $project);
 
         $maintenance = ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
         
-        $maintenance->update([
-            'status' => ProjectMaintenance::STATUS_REJECTED,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã từ chối phiếu bảo trì.',
-            'data' => $maintenance
-        ]);
+        try {
+            $this->warrantyService->reject($maintenance, $user, $request->input('reason'));
+            return response()->json(['success' => true, 'message' => 'Đã từ chối phiếu bảo trì.', 'data' => $maintenance]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
     }
 
     /**
@@ -366,42 +295,25 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_UPDATE, $project);
 
         $maintenance = ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
         
-        if ($maintenance->status !== ProjectMaintenance::STATUS_DRAFT) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể chỉnh sửa phiếu ở trạng thái nháp.'
-            ], 400);
-        }
-
         $validated = $request->validate([
-            'maintenance_date' => 'required|date',
+            'maintenance_date' => 'sometimes|required|date',
             'notes' => 'nullable|string',
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
-        DB::beginTransaction();
         try {
-            $nextDate = Carbon::parse($validated['maintenance_date'])->addMonths(6);
-            
-            $maintenance->update([
-                'maintenance_date' => $validated['maintenance_date'],
-                'next_maintenance_date' => $nextDate,
-                'notes' => $validated['notes'] ?? $maintenance->notes,
-            ]);
+            DB::beginTransaction();
+            $data = array_merge($validated, ['project_id' => $project->id]);
+            $this->warrantyService->upsertMaintenance($data, $maintenance, $user);
 
             if (isset($validated['attachment_ids'])) {
-                // Link new attachments
-                \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
-                    ->update([
-                        'attachable_id' => $maintenance->id,
-                        'attachable_type' => ProjectMaintenance::class
-                    ]);
+                $this->attachmentService->clearAttachments($maintenance);
+                $this->attachmentService->linkExistingAttachments($validated['attachment_ids'], $maintenance);
             }
 
             DB::commit();
@@ -412,10 +324,7 @@ class ProjectWarrantyController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
         }
     }
 
@@ -426,16 +335,12 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_DELETE, $project);
 
         $warranty = ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
         $warranty->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã xóa phiếu bảo hành thành công.'
-        ]);
+        return response()->json(['success' => true, 'message' => 'Đã xóa phiếu bảo hành thành công.']);
     }
 
     /**
@@ -445,15 +350,11 @@ class ProjectWarrantyController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
-        
         $this->authService->require($user, Permissions::WARRANTY_DELETE, $project);
 
         $maintenance = ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
         $maintenance->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã xóa phiếu bảo trì thành công.'
-        ]);
+        return response()->json(['success' => true, 'message' => 'Đã xóa phiếu bảo trì thành công.']);
     }
 }

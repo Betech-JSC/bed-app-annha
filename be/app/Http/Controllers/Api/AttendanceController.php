@@ -16,10 +16,14 @@ use Carbon\Carbon;
 class AttendanceController extends Controller
 {
     protected $authService;
+    protected $attendanceService;
 
-    public function __construct(AuthorizationService $authService)
-    {
+    public function __construct(
+        AuthorizationService $authService,
+        \App\Services\AttendanceService $attendanceService
+    ) {
         $this->authService = $authService;
+        $this->attendanceService = $attendanceService;
     }
     // ===== CHẤM CÔNG =====
 
@@ -72,62 +76,32 @@ class AttendanceController extends Controller
             }
         }
 
-        $today = Carbon::today()->toDateString();
+        try {
+            $attendance = $this->attendanceService->checkIn($user, $request->all());
 
-        $existing = Attendance::where('user_id', $user->id)->where('work_date', $today)->first();
-        if ($existing && $existing->check_in) {
-            return response()->json(['message' => 'Bạn đã check-in hôm nay rồi'], 422);
+            return response()->json([
+                'message' => 'Check-in thành công',
+                'data' => $attendance->load('user:id,name'),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        $attendance = Attendance::updateOrCreate(
-            ['user_id' => $user->id, 'work_date' => $today],
-            [
-                'project_id' => $request->project_id,
-                'check_in' => Carbon::now()->format('H:i:s'),
-                'status' => Carbon::now()->hour >= 8 && Carbon::now()->minute > 15 ? 'late' : 'present',
-                'check_in_method' => $request->input('method') ?? 'manual',
-                'latitude' => $request->latitude,
-                'longitude' => $request->longitude,
-                'note' => $request->note,
-            ]
-        );
-
-        return response()->json([
-            'message' => 'Check-in thành công',
-            'data' => $attendance->load('user:id,name'),
-        ]);
     }
 
     /** Check-out */
     public function checkOut(Request $request): JsonResponse
     {
         $user = $request->user();
-        $today = Carbon::today()->toDateString();
+        try {
+            $attendance = $this->attendanceService->checkOut($user);
 
-        $attendance = Attendance::where('user_id', $user->id)->where('work_date', $today)->first();
-        if (!$attendance || !$attendance->check_in) {
-            return response()->json(['message' => 'Bạn chưa check-in hôm nay'], 422);
+            return response()->json([
+                'message' => 'Check-out thành công',
+                'data' => $attendance->fresh()->load('user:id,name'),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-        if ($attendance->check_out) {
-            return response()->json(['message' => 'Bạn đã check-out rồi'], 422);
-        }
-
-        $checkOut = Carbon::now()->format('H:i:s');
-        $attendance->update(['check_out' => $checkOut]);
-
-        // Recalculate after update
-        $hoursWorked = $attendance->calculateHours();
-        $overtimeHours = max(0, $hoursWorked - 8);
-
-        $attendance->update([
-            'hours_worked' => $hoursWorked,
-            'overtime_hours' => $overtimeHours,
-        ]);
-
-        return response()->json([
-            'message' => 'Check-out thành công',
-            'data' => $attendance->fresh()->load('user:id,name'),
-        ]);
     }
 
     /** Tạo/Chỉnh sửa chấm công thủ công (admin) */
@@ -156,32 +130,16 @@ class AttendanceController extends Controller
                 return response()->json(['success' => false, 'message' => 'Không có quyền quản lý chấm công hệ thống.'], 403);
             }
 
-            $data = $request->only(['user_id', 'project_id', 'work_date', 'check_in', 'check_out', 'status', 'note', 'check_in_method', 'overtime_hours']);
-
-            if ($request->filled(['check_in', 'check_out'])) {
-                try {
-                    $start = Carbon::parse($request->check_in);
-                    $end = Carbon::parse($request->check_out);
-                    $data['hours_worked'] = round($end->diffInMinutes($start) / 60, 2);
-
-                    // If overtime_hours was sent from frontend (manual), use it; otherwise calculate
-                    if (!$request->has('overtime_hours') || $request->overtime_hours == 0) {
-                        $data['overtime_hours'] = max(0, $data['hours_worked'] - 8);
-                    }
-                } catch (\Exception $e) {
-                    \Log::error('Time parsing failed: ' . $e->getMessage());
-                }
-            }
-
-            $attendance = Attendance::updateOrCreate(
-                ['user_id' => $data['user_id'], 'work_date' => $data['work_date']],
-                $data
-            );
+        try {
+            $attendance = $this->attendanceService->upsert($request->all(), $user);
 
             return response()->json([
                 'message' => 'Lưu chấm công thành công',
                 'data' => $attendance->load(['user:id,name', 'project:id,name']),
             ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 500);
+        }
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Log::error('Attendance Validation Error:', $e->errors());
             return response()->json([
@@ -211,12 +169,45 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Không có quyền duyệt chấm công hệ thống.'], 403);
         }
 
-        $attendance->update([
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
+        $this->attendanceService->approve($attendance, $user);
 
         return response()->json(['message' => 'Đã duyệt chấm công', 'data' => $attendance]);
+    }
+
+    /** Tổng hợp chi phí nhân công từ chấm công (batch) */
+    public function generateLaborCosts(Request $request): JsonResponse
+    {
+        $request->validate([
+            'project_id' => 'required|exists:projects,id',
+            'year'       => 'required|integer|min:2020|max:2030',
+            'month'      => 'required|integer|min:1|max:12',
+        ]);
+
+        $user = $request->user();
+        $project = Project::findOrFail($request->project_id);
+
+        // Check permission — require ATTENDANCE_MANAGE or owner
+        if (!$this->authService->can($user, Permissions::ATTENDANCE_MANAGE, $project)
+            && !$user->owner && !$user->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền tổng hợp lương.'], 403);
+        }
+
+        try {
+            $result = $this->attendanceService->generateBatchLaborCosts(
+                (int) $request->project_id,
+                (int) $request->year,
+                (int) $request->month,
+                $user
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Đã tạo {$result['created']} chi phí nhân công, tổng " . number_format($result['total_amount'], 0, ',', '.') . 'đ',
+                'data'    => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Lỗi: ' . $e->getMessage()], 500);
+        }
     }
 
     /** Thống kê chấm công theo tháng */
@@ -238,35 +229,13 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Không có quyền xem thống kê chấm công hệ thống.'], 403);
         }
 
-        $query = Attendance::forMonth($request->year, $request->month);
-        if ($request->project_id) $query->forProject($request->project_id);
+        $data = $this->attendanceService->getMonthlyStatistics(
+            (int) $request->year,
+            (int) $request->month,
+            $request->project_id ? (int) $request->project_id : null
+        );
 
-        $records = $query->get();
-        $userStats = $records->groupBy('user_id')->map(function ($userRecords) {
-            return [
-                'user' => $userRecords->first()->user,
-                'total_days' => $userRecords->count(),
-                'present' => $userRecords->where('status', 'present')->count(),
-                'late' => $userRecords->where('status', 'late')->count(),
-                'absent' => $userRecords->where('status', 'absent')->count(),
-                'leave' => $userRecords->where('status', 'leave')->count(),
-                'half_day' => $userRecords->where('status', 'half_day')->count(),
-                'total_hours' => $userRecords->sum('hours_worked'),
-                'total_overtime' => $userRecords->sum('overtime_hours'),
-            ];
-        })->values();
-
-        return response()->json([
-            'summary' => [
-                'total_records' => $records->count(),
-                'total_present' => $records->where('status', 'present')->count(),
-                'total_late' => $records->where('status', 'late')->count(),
-                'total_absent' => $records->where('status', 'absent')->count(),
-                'total_hours' => $records->sum('hours_worked'),
-                'total_overtime' => $records->sum('overtime_hours'),
-            ],
-            'by_user' => $userStats,
-        ]);
+        return response()->json($data);
     }
 
     // ===== PHÂN CA =====
@@ -282,10 +251,8 @@ class AttendanceController extends Controller
             }
         }
 
-        $query = WorkShift::query();
-        if ($request->project_id) $query->where('project_id', $request->project_id);
-        if ($request->active_only) $query->where('is_active', true);
-        return response()->json($query->orderBy('start_time')->get());
+        $shifts = $this->attendanceService->getShifts($request->only(['project_id', 'active_only']));
+        return response()->json($shifts);
     }
 
     /** Tạo ca */
@@ -311,7 +278,7 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Không có quyền quản lý ca hệ thống.'], 403);
         }
 
-        $shift = WorkShift::create($request->all());
+        $shift = $this->attendanceService->createShift($request->all());
         return response()->json(['message' => 'Tạo ca thành công', 'data' => $shift], 201);
     }
 
@@ -330,7 +297,7 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Không có quyền cập nhật ca hệ thống.'], 403);
         }
 
-        $shift->update($request->all());
+        $this->attendanceService->updateShift($shift, $request->all());
         return response()->json(['message' => 'Cập nhật ca thành công', 'data' => $shift]);
     }
 
@@ -349,7 +316,7 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Không có quyền xóa ca hệ thống.'], 403);
         }
 
-        $shift->delete();
+        $this->attendanceService->deleteShift($shift);
         return response()->json(['message' => 'Đã xóa ca']);
     }
 
@@ -358,14 +325,9 @@ class AttendanceController extends Controller
     /** Danh sách phân ca */
     public function shiftAssignments(Request $request): JsonResponse
     {
-        $query = ShiftAssignment::with(['workShift', 'user:id,name', 'project:id,name', 'assigner:id,name']);
+        $assignments = $this->attendanceService->getShiftAssignments($request->only(['project_id', 'date', 'week_of', 'user_id']));
 
-        if ($request->project_id) $query->forProject($request->project_id);
-        if ($request->date) $query->forDate($request->date);
-        if ($request->week_of) $query->forWeek($request->week_of);
-        if ($request->user_id) $query->where('user_id', $request->user_id);
-
-        return response()->json($query->orderBy('assigned_date')->get());
+        return response()->json($assignments);
     }
 
     /** Phân ca hàng loạt */
@@ -390,18 +352,7 @@ class AttendanceController extends Controller
             'project_id' => 'nullable|exists:projects,id',
         ]);
 
-        $created = [];
-        foreach ($request->user_ids as $userId) {
-            foreach ($request->dates as $date) {
-                $created[] = ShiftAssignment::updateOrCreate(
-                    ['user_id' => $userId, 'assigned_date' => $date, 'work_shift_id' => $request->work_shift_id],
-                    [
-                        'project_id' => $request->project_id,
-                        'assigned_by' => $request->user()->id,
-                    ]
-                );
-            }
-        }
+        $created = $this->attendanceService->assignShifts($request->all(), $user);
 
         return response()->json([
             'message' => 'Phân ca thành công cho ' . count($created) . ' lượt',
@@ -424,7 +375,7 @@ class AttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'Không có quyền xóa phân ca hệ thống.'], 403);
         }
 
-        $assignment->delete();
+        $this->attendanceService->removeAssignment($assignment);
         return response()->json(['message' => 'Đã xóa phân ca']);
     }
 }

@@ -15,10 +15,12 @@ use App\Services\AuthorizationService;
 class CostController extends Controller
 {
     protected $authService;
+    protected $financialService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(AuthorizationService $authService, \App\Services\FinancialService $financialService)
     {
         $this->authService = $authService;
+        $this->financialService = $financialService;
     }
     /**
      * Danh sách chi phí
@@ -106,94 +108,19 @@ class CostController extends Controller
             'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
 
-        // Nếu có cost_group_id, kiểm tra cost_group có active không
-        if (!empty($validated['cost_group_id'])) {
-            $costGroup = \App\Models\CostGroup::find($validated['cost_group_id']);
-            if (!$costGroup || !$costGroup->is_active) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Nhóm chi phí không tồn tại hoặc đã bị vô hiệu hóa.'
-                ], 422);
-            }
-
-            // Kiểm tra nếu cost group liên quan đến nhà thầu phụ thì bắt buộc phải chọn subcontractor
-            $isSubcontractorCostGroup = $costGroup->code === 'subcontractor'
-                || stripos($costGroup->name, 'nhà thầu phụ') !== false
-                || stripos($costGroup->name, 'thầu phụ') !== false;
-
-            if ($isSubcontractorCostGroup && empty($validated['subcontractor_id'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Vui lòng chọn nhà thầu phụ liên quan cho loại chi phí này.'
-                ], 422);
-            }
-        }
-
-        // Kiểm tra subcontractor thuộc về project này
-        if (!empty($validated['subcontractor_id'])) {
-            $subcontractor = \App\Models\Subcontractor::where('project_id', $project->id)
-                ->find($validated['subcontractor_id']);
-            if (!$subcontractor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Nhà thầu phụ không thuộc về dự án này.'
-                ], 422);
-            }
-        }
-
         try {
-            DB::beginTransaction();
-
-            $attachmentIds = $validated['attachment_ids'] ?? [];
-            unset($validated['attachment_ids']);
-
-            // Tự động xác định cost_group_id và category dựa trên nguồn phát sinh
-            $autoDetectService = app(\App\Services\CostGroupAutoDetectService::class);
-
-            $costData = [
-                'project_id' => $project->id,
-                'created_by' => $user->id,
-                ...$validated,
-                'status' => 'draft', // Mặc định là draft
-            ];
-
-            // Tự động xác định cost_group_id nếu chưa có
-            if (empty($costData['cost_group_id'])) {
-                $costData['cost_group_id'] = $autoDetectService->detectCostGroup($costData);
-            }
-
-            // Tự động xác định category
-            $costData['category'] = $autoDetectService->detectCategory($costData);
-
-            $cost = Cost::create($costData);
-
-            // Đính kèm files nếu có
-            if (!empty($attachmentIds)) {
-                foreach ($attachmentIds as $attachmentId) {
-                    $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
-                        $attachment->update([
-                            'attachable_type' => Cost::class,
-                            'attachable_id' => $cost->id,
-                        ]);
-                    }
-                }
-            }
-
-            DB::commit();
+            $cost = $this->financialService->upsertCost($validated, null, $user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Chi phí đã được tạo.',
-                'data' => $cost->load(['creator', 'attachments', 'subcontractor', 'costGroup']),
+                'data' => $cost,
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 422);
         }
     }
 
@@ -258,49 +185,25 @@ class CostController extends Controller
             'quantity' => 'nullable|numeric|min:0.01|required_with:material_id',
             'unit' => 'nullable|string|max:20|required_with:material_id',
             'subcontractor_id' => 'nullable|exists:subcontractors,id',
-
-            'payroll_id' => 'nullable|exists:payrolls,id',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
             'equipment_allocation_id' => 'nullable|exists:equipment_allocations,id',
         ]);
 
-        // Tự động xác định cost_group_id và category nếu chưa có
-        $autoDetectService = app(\App\Services\CostGroupAutoDetectService::class);
+        try {
+            $cost = $this->financialService->upsertCost($validated, $cost, $user);
 
-        // Merge với dữ liệu hiện tại của cost để có đầy đủ thông tin
-        $costData = array_merge([
-            'material_id' => $cost->material_id,
-            'subcontractor_id' => $cost->subcontractor_id,
-
-            'payroll_id' => $cost->payroll_id,
-            'equipment_allocation_id' => $cost->equipment_allocation_id,
-        ], $validated);
-
-        if (empty($validated['cost_group_id'])) {
-            $validated['cost_group_id'] = $autoDetectService->detectCostGroup($costData);
+            return response()->json([
+                'success' => true,
+                'message' => 'Chi phí đã được cập nhật.',
+                'data' => $cost,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 422);
         }
-
-        if (empty($validated['category'])) {
-            $validated['category'] = $autoDetectService->detectCategory($costData);
-        }
-
-        // Kiểm tra cost_group có active không (nếu được cập nhật)
-        if (isset($validated['cost_group_id']) && $validated['cost_group_id']) {
-            $costGroup = \App\Models\CostGroup::find($validated['cost_group_id']);
-            if (!$costGroup || !$costGroup->is_active) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Nhóm chi phí không tồn tại hoặc đã bị vô hiệu hóa.'
-                ], 422);
-            }
-        }
-
-        $cost->update($validated);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Chi phí đã được cập nhật.',
-            'data' => $cost->fresh(),
-        ]);
     }
 
     /**
@@ -320,23 +223,20 @@ class CostController extends Controller
             ], 403);
         }
 
-        if ($cost->status !== 'draft') {
+        try {
+            $this->financialService->submitCost($cost, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Chi phí đã được gửi để Ban điều hành duyệt.',
+                'data' => $cost->fresh(),
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể submit chi phí ở trạng thái nháp.',
+                'message' => 'Lỗi: ' . $e->getMessage(),
             ], 400);
         }
-
-        $cost->submitForManagementApproval();
-
-        // Notify management and PM
-        $cost->notifyEvent('submitted', $user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Chi phí đã được gửi để Ban điều hành duyệt.',
-            'data' => $cost->fresh(),
-        ]);
     }
 
     /**
@@ -356,23 +256,20 @@ class CostController extends Controller
             ], 403);
         }
 
-        if ($cost->status !== 'pending_management_approval') {
+        try {
+            $this->financialService->approveCostByManagement($cost, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Chi phí đã được Ban điều hành duyệt.',
+                'data' => $cost->fresh(),
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chi phí không ở trạng thái chờ Ban điều hành duyệt.',
+                'message' => 'Lỗi: ' . $e->getMessage(),
             ], 400);
         }
-
-        $cost->approveByManagement($user);
-
-        // Notify creator, PM and accountant
-        $cost->notifyEvent('approved_management', $user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Chi phí đã được Ban điều hành duyệt.',
-            'data' => $cost->fresh(),
-        ]);
     }
 
     /**
@@ -392,41 +289,13 @@ class CostController extends Controller
             ], 403);
         }
 
-        if ($cost->status !== 'pending_accountant_approval') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chi phí không ở trạng thái chờ Kế toán xác nhận.',
-            ], 400);
-        }
-
-        // Validate attachment_ids if provided
         $validated = $request->validate([
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
 
         try {
-            DB::beginTransaction();
-
-            // Đính kèm files nếu có
-            if (!empty($validated['attachment_ids'])) {
-                foreach ($validated['attachment_ids'] as $attachmentId) {
-                    $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
-                        $attachment->update([
-                            'attachable_type' => Cost::class,
-                            'attachable_id' => $cost->id,
-                        ]);
-                    }
-                }
-            }
-
-            $cost->approveByAccountant($user);
-
-            // Notify creator and PM
-            $cost->notifyEvent('approved_accountant', $user);
-
-            DB::commit();
+            $this->financialService->approveCostByAccountant($cost, $validated, $user);
 
             return response()->json([
                 'success' => true,
@@ -434,12 +303,10 @@ class CostController extends Controller
                 'data' => $cost->fresh(['attachments']),
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 400);
         }
     }
 
@@ -464,23 +331,20 @@ class CostController extends Controller
             'rejected_reason' => 'required|string|max:500',
         ]);
 
-        if (!in_array($cost->status, ['pending_management_approval', 'pending_accountant_approval'])) {
+        try {
+            $this->financialService->rejectCost($cost, $validated['rejected_reason'], $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Chi phí đã bị từ chối.',
+                'data' => $cost->fresh(),
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể từ chối chi phí đang chờ duyệt.',
+                'message' => 'Lỗi: ' . $e->getMessage(),
             ], 400);
         }
-
-        $cost->reject($validated['rejected_reason'], $user);
-
-        // Notify creator and PM
-        $cost->notifyEvent('rejected', $user, ['reason' => $validated['rejected_reason']]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Chi phí đã bị từ chối.',
-            'data' => $cost->fresh(),
-        ]);
     }
 
     /**

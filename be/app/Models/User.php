@@ -142,6 +142,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Salary configurations of the user
+     */
+    public function salaryConfigs(): HasMany
+    {
+        return $this->hasMany(EmployeeSalaryConfig::class);
+    }
+
+    /**
      * Employee profile của user
      */
     public function employeeProfile()
@@ -200,6 +208,10 @@ class User extends Authenticatable
      */
     public function hasPermission(string $permission): bool
     {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
         $permissions = $this->getPermissionsArray();
         return in_array($permission, $permissions);
     }

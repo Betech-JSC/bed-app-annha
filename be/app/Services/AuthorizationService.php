@@ -41,10 +41,10 @@ class AuthorizationService
         // For Admin model: check super_admin property
         // For User model: check isSuperAdmin() method or owner flag
         $isGlobalAdmin = false;
-        if ($user instanceof \App\Models\Admin) {
-            $isGlobalAdmin = $user->super_admin;
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $isGlobalAdmin = true;
         } elseif ($user instanceof \App\Models\User) {
-            $isGlobalAdmin = $user->owner || $user->isSuperAdmin();
+            $isGlobalAdmin = $user->owner;
         }
 
         // Generic bypass for specific management permissions
@@ -161,11 +161,7 @@ class AuthorizationService
     {
         if (!$user) return false;
         
-        if ($user instanceof \App\Models\Admin) {
-            return $user->super_admin;
-        }
-        
-        return $user instanceof \App\Models\User && $user->isSuperAdmin();
+        return method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
     }
 
     /**

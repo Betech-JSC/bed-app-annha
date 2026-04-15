@@ -11,14 +11,17 @@ use App\Models\Project;
 use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\EquipmentService;
 
 class EquipmentRentalController extends Controller
 {
     protected $authService;
+    protected $equipmentService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(AuthorizationService $authService, \App\Services\EquipmentService $equipmentService)
     {
         $this->authService = $authService;
+        $this->equipmentService = $equipmentService;
     }
     /**
      * Danh sách phiếu thuê thiết bị theo dự án
@@ -102,64 +105,9 @@ class EquipmentRentalController extends Controller
             'attachment_ids.*'      => 'exists:attachments,id',
         ]);
 
-        $totalCost = $validated['quantity'] * $validated['unit_price'];
-
         try {
-            DB::beginTransaction();
-
-            $rental = EquipmentRental::create([
-                'project_id'            => $projectId,
-                'equipment_name'        => $validated['equipment_name'],
-                'equipment_id'          => $validated['equipment_id'] ?? null,
-                'quantity'              => $validated['quantity'],
-                'unit_price'            => $validated['unit_price'],
-                'supplier_id'           => $validated['supplier_id'] ?? null,
-                'rental_start_date'     => $validated['rental_start_date'],
-                'rental_end_date'       => $validated['rental_end_date'],
-                'total_cost'            => $totalCost,
-                'notes'                 => $validated['notes'] ?? null,
-                'status'                => 'draft',
-                'created_by'            => $user->id,
-            ]);
-
-            // Gắn attachments
-            if (!empty($validated['attachment_ids'])) {
-                \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
-                    ->update([
-                        'attachable_type' => EquipmentRental::class,
-                        'attachable_id'   => $rental->id,
-                    ]);
-            }
-
-            // Create project cost (draft) for tracking
-            $costGroup = CostGroup::where('code', 'equipment')
-                ->orWhere('name', 'like', '%thiết bị%')
-                ->where('is_active', true)
-                ->first();
-
-            $supplierName = '';
-            if ($rental->supplier_id) {
-                $supplier = \App\Models\Supplier::find($rental->supplier_id);
-                $supplierName = $supplier->name ?? '';
-            }
-
-            $cost = Cost::create([
-                'project_id' => $projectId,
-                'cost_group_id' => $costGroup ? $costGroup->id : null,
-                'category' => 'equipment',
-                'supplier_id' => $rental->supplier_id,
-                'name' => "Thuê thiết bị: " . $rental->equipment_name . ($supplierName ? " - {$supplierName}" : ""),
-                'amount' => $rental->total_cost,
-                'description' => "Từ phiếu thuê thiết bị #{$rental->id}. " . ($rental->notes ?? ""),
-                'cost_date' => $rental->rental_start_date,
-                'status' => 'draft',
-                'created_by' => $user->id,
-            ]);
-
-            // Link cost to rental
-            $rental->update(['cost_id' => $cost->id]);
-
-            DB::commit();
+            $validated['project_id'] = $projectId;
+            $rental = $this->equipmentService->upsertRental($validated, null, $user);
 
             return response()->json([
                 'success' => true,
@@ -167,7 +115,6 @@ class EquipmentRentalController extends Controller
                 'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'attachments']),
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi: ' . $e->getMessage(),
@@ -192,13 +139,6 @@ class EquipmentRentalController extends Controller
 
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
-        if (!in_array($rental->status, ['draft', 'rejected'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể chỉnh sửa phiếu ở trạng thái Nháp hoặc Từ chối.',
-            ], 422);
-        }
-
         $validated = $request->validate([
             'equipment_name'        => 'sometimes|string|max:255',
             'equipment_id'          => 'nullable|exists:equipment,id',
@@ -212,31 +152,20 @@ class EquipmentRentalController extends Controller
             'attachment_ids.*'      => 'exists:attachments,id',
         ]);
 
-        if (isset($validated['quantity']) || isset($validated['unit_price'])) {
-            $qty = $validated['quantity'] ?? $rental->quantity;
-            $price = $validated['unit_price'] ?? $rental->unit_price;
-            $validated['total_cost'] = $qty * $price;
+        try {
+            $this->equipmentService->upsertRental($validated, $rental, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã cập nhật phiếu thuê.',
+                'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'attachments']),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 422);
         }
-
-        $rental->update($validated);
-
-        // Cập nhật Cost liên quan
-        if ($rental->cost_id && (isset($validated['total_cost']) || isset($validated['notes']) || isset($validated['equipment_name']))) {
-            $cost = Cost::find($rental->cost_id);
-            if ($cost) {
-                $cost->update([
-                    'amount'      => $rental->total_cost,
-                    'description' => "Từ phiếu thuê thiết bị #{$rental->id}. " . ($rental->notes ?? ""),
-                    'name'        => "Thuê thiết bị: " . $rental->equipment_name,
-                ]);
-            }
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã cập nhật phiếu thuê.',
-            'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'attachments']),
-        ]);
     }
 
     /**
@@ -292,23 +221,20 @@ class EquipmentRentalController extends Controller
 
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
-        if (!in_array($rental->status, ['draft', 'rejected'])) {
+        try {
+            $this->equipmentService->submitRental($rental);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã gửi phiếu thuê để BĐH duyệt.',
+                'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'attachments']),
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể gửi duyệt phiếu ở trạng thái Nháp hoặc Từ chối.',
+                'message' => $e->getMessage(),
             ], 422);
         }
-
-        $rental->update([
-            'status'           => 'pending_management',
-            'rejection_reason' => null,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi phiếu thuê để BĐH duyệt.',
-            'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'attachments']),
-        ]);
     }
 
     /**
@@ -328,24 +254,18 @@ class EquipmentRentalController extends Controller
 
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
-        if ($rental->status !== 'pending_management') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Phiếu không ở trạng thái chờ BĐH duyệt.',
-            ], 422);
+        if ($this->equipmentService->approveRentalByManagement($rental, $user)) {
+             return response()->json([
+                 'success' => true,
+                 'message' => 'BĐH đã duyệt. Chuyển sang Kế toán.',
+                 'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'attachments']),
+             ]);
         }
 
-        $rental->update([
-            'status'      => 'pending_accountant',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-
         return response()->json([
-            'success' => true,
-            'message' => 'BĐH đã duyệt. Chuyển sang Kế toán.',
-            'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'attachments']),
-        ]);
+            'success' => false,
+            'message' => 'Thao tác không thành công hoặc sai trạng thái.',
+        ], 422);
     }
 
     /**
@@ -364,28 +284,20 @@ class EquipmentRentalController extends Controller
         }
 
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
-
-        if ($rental->status !== 'pending_management') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Phiếu không ở trạng thái chờ BĐH duyệt.',
-            ], 422);
-        }
-
         $request->validate(['reason' => 'required|string']);
 
-        $rental->update([
-            'status'           => 'rejected',
-            'rejection_reason' => $request->reason,
-            'approved_by'      => $user->id,
-            'approved_at'      => now(),
-        ]);
+        if ($this->equipmentService->rejectRental($rental, $request->reason, $user)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã từ chối phiếu thuê.',
+                'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'attachments']),
+            ]);
+        }
 
         return response()->json([
-            'success' => true,
-            'message' => 'Đã từ chối phiếu thuê.',
-            'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'attachments']),
-        ]);
+            'success' => false,
+            'message' => 'Thao tác không thành công hoặc sai trạng thái.',
+        ], 422);
     }
 
     /**
@@ -405,24 +317,18 @@ class EquipmentRentalController extends Controller
 
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
-        if ($rental->status !== 'pending_accountant') {
+        if ($this->equipmentService->confirmRentalByAccountant($rental, $user)) {
             return response()->json([
-                'success' => false,
-                'message' => 'Phiếu không ở trạng thái chờ Kế toán.',
-            ], 422);
+                'success' => true,
+                'message' => 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.',
+                'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments']),
+            ]);
         }
 
-        $rental->update([
-            'status'       => 'in_use',
-            'confirmed_by' => $user->id,
-            'confirmed_at' => now(),
-        ]);
-
         return response()->json([
-            'success' => true,
-            'message' => 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.',
-            'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments']),
-        ]);
+            'success' => false,
+            'message' => 'Thao tác không thành công hoặc sai trạng thái.',
+        ], 422);
     }
 
     /**
@@ -430,32 +336,22 @@ class EquipmentRentalController extends Controller
      */
     public function requestReturn(string $projectId, string $id)
     {
-        $project = Project::findOrFail($projectId);
-        $user = auth()->user();
-
-        if (!$this->authService->can($user, Permissions::EQUIPMENT_UPDATE, $project)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn không có quyền yêu cầu trả thiết bị này.'
-            ], 403);
-        }
-
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
-        if ($rental->status !== 'in_use') {
+        try {
+            $this->equipmentService->requestReturnRental($rental);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã gửi yêu cầu trả thiết bị thuê.',
+                'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name']),
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Phiếu thuê không ở trạng thái đang sử dụng.',
+                'message' => $e->getMessage(),
             ], 422);
         }
-
-        $rental->update(['status' => 'pending_return']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi yêu cầu trả thiết bị thuê.',
-            'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name']),
-        ]);
     }
 
     /**
@@ -463,28 +359,20 @@ class EquipmentRentalController extends Controller
      */
     public function confirmReturn(string $projectId, string $id)
     {
-        $project = Project::findOrFail($projectId);
         $user = auth()->user();
-
-        if (!$this->authService->can($user, Permissions::COST_APPROVE_ACCOUNTANT, $project)) {
-            return response()->json(['success' => false, 'message' => 'Bạn không có quyền xác nhận trả.'], 403);
-        }
-
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
-        if ($rental->status !== 'pending_return') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Phiếu thuê không ở trạng thái chờ xác nhận trả.',
-            ], 422);
+        if ($this->equipmentService->confirmReturnRental($rental, $user)) {
+             return response()->json([
+                 'success' => true,
+                 'message' => 'Đã xác nhận trả thiết bị thuê.',
+                 'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name']),
+             ]);
         }
 
-        $rental->update(['status' => 'returned']);
-
         return response()->json([
-            'success' => true,
-            'message' => 'Đã xác nhận trả thiết bị thuê.',
-            'data'    => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name']),
-        ]);
+            'success' => false,
+            'message' => 'Thao tác không thành công hoặc sai trạng thái.',
+        ], 422);
     }
 }

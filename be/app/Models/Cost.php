@@ -33,6 +33,7 @@ class Cost extends Model
         'equipment_id', // Liên kết mua thiết bị
         'equipment_rental_id',
         'equipment_allocation_id',
+        'attendance_id',
         'quantity',
         'unit',
         'name',
@@ -142,6 +143,11 @@ class Cost extends Model
     public function equipmentAllocation(): BelongsTo
     {
         return $this->belongsTo(EquipmentAllocation::class, 'equipment_allocation_id');
+    }
+
+    public function attendance(): BelongsTo
+    {
+        return $this->belongsTo(Attendance::class, 'attendance_id');
     }
 
     public function equipmentRental(): BelongsTo

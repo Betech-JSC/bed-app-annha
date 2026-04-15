@@ -12,6 +12,13 @@ use Illuminate\Support\Facades\DB;
 class ChangeRequestController extends Controller
 {
     use ApiAuthorization;
+
+    protected $changeRequestService;
+
+    public function __construct(\App\Services\ChangeRequestService $changeRequestService)
+    {
+        $this->changeRequestService = $changeRequestService;
+    }
     /**
      * Danh sách change requests của project
      */
@@ -72,25 +79,16 @@ class ChangeRequestController extends Controller
         ]);
 
         try {
-            $changeRequest = ChangeRequest::create([
-                'project_id' => $project->id,
-                'title' => $validated['title'],
-                'description' => $validated['description'],
-                'change_type' => $validated['change_type'],
-                'priority' => $validated['priority'],
-                'status' => 'draft',
-                'reason' => $validated['reason'] ?? null,
-                'impact_analysis' => $validated['impact_analysis'] ?? null,
-                'estimated_cost_impact' => $validated['estimated_cost_impact'] ?? null,
-                'estimated_schedule_impact_days' => $validated['estimated_schedule_impact_days'] ?? null,
-                'implementation_plan' => $validated['implementation_plan'] ?? null,
-                'requested_by' => $user->id,
-            ]);
+            $changeRequest = $this->changeRequestService->upsert(
+                array_merge($validated, ['project_id' => $project->id]),
+                null,
+                $user
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Đã tạo yêu cầu thay đổi',
-                'data' => $changeRequest->load(['requester'])
+                'data' => $changeRequest
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -128,14 +126,6 @@ class ChangeRequestController extends Controller
         $user = auth()->user();
         $this->apiRequire($user, Permissions::CHANGE_REQUEST_UPDATE, $project);
 
-        // Chỉ cho phép cập nhật khi ở trạng thái draft
-        if ($changeRequest->status !== 'draft') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể cập nhật yêu cầu thay đổi ở trạng thái draft'
-            ], 400);
-        }
-
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|required|string|max:5000',
@@ -149,7 +139,7 @@ class ChangeRequestController extends Controller
         ]);
 
         try {
-            $changeRequest->update($validated);
+            $this->changeRequestService->upsert($validated, $changeRequest, $user);
 
             return response()->json([
                 'success' => true,
@@ -207,16 +197,8 @@ class ChangeRequestController extends Controller
         $user = auth()->user();
         $this->apiRequire($user, Permissions::CHANGE_REQUEST_CREATE, $project);
 
-        // Chỉ người tạo mới có thể gửi
-        if ($changeRequest->requested_by !== $user->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ người tạo mới có thể gửi yêu cầu thay đổi'
-            ], 403);
-        }
-
         try {
-            $changeRequest->submit();
+            $this->changeRequestService->submit($changeRequest, $user);
 
             return response()->json([
                 'success' => true,
@@ -246,7 +228,7 @@ class ChangeRequestController extends Controller
         ]);
 
         try {
-            $changeRequest->approve($user, $validated['notes'] ?? null);
+            $this->changeRequestService->approve($changeRequest, $user, $validated['notes'] ?? null);
 
             return response()->json([
                 'success' => true,
@@ -261,9 +243,6 @@ class ChangeRequestController extends Controller
         }
     }
 
-    /**
-     * Từ chối change request
-     */
     public function reject(string $projectId, string $id, Request $request)
     {
         $project = Project::findOrFail($projectId);
@@ -276,7 +255,7 @@ class ChangeRequestController extends Controller
         ]);
 
         try {
-            $changeRequest->reject($user, $validated['reason']);
+            $this->changeRequestService->reject($changeRequest, $user, $validated['reason']);
 
             return response()->json([
                 'success' => true,
@@ -291,9 +270,6 @@ class ChangeRequestController extends Controller
         }
     }
 
-    /**
-     * Đánh dấu đã triển khai
-     */
     public function markAsImplemented(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
@@ -302,7 +278,7 @@ class ChangeRequestController extends Controller
         $changeRequest = $project->changeRequests()->findOrFail($id);
 
         try {
-            $changeRequest->markAsImplemented();
+            $this->changeRequestService->markAsImplemented($changeRequest);
 
             return response()->json([
                 'success' => true,

@@ -13,10 +13,14 @@ use Illuminate\Support\Facades\DB;
 class ProjectPersonnelController extends Controller
 {
     protected $authService;
+    protected $personnelService;
 
-    public function __construct(AuthorizationService $authService)
-    {
+    public function __construct(
+        AuthorizationService $authService,
+        \App\Services\ProjectPersonnelService $personnelService
+    ) {
         $this->authService = $authService;
+        $this->personnelService = $personnelService;
     }
 
     /**
@@ -35,9 +39,7 @@ class ProjectPersonnelController extends Controller
             ], 403);
         }
 
-        $personnel = $project->personnel()
-            ->with(['user', 'assigner', 'personnelRole'])
-            ->get();
+        $personnel = $this->personnelService->getPersonnelByProject($project);
 
         return response()->json([
             'success' => true,
@@ -68,39 +70,23 @@ class ProjectPersonnelController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            // Check if already assigned
-            $exists = ProjectPersonnel::where('project_id', $project->id)
-                ->where('user_id', $validated['user_id'])
-                ->exists();
-
-            if ($exists) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Người dùng đã được gán vào dự án này.'
-                ], 400);
-            }
-
-            $personnel = ProjectPersonnel::create([
-                'project_id' => $project->id,
-                'assigned_by' => $user->id,
-                ...$validated,
-            ]);
-
-            DB::commit();
+            $personnel = $this->personnelService->assign(
+                $project,
+                $validated['user_id'],
+                $validated['role_id'],
+                $validated['permissions'] ?? null,
+                $user
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Nhân sự đã được thêm vào dự án.',
-                'data' => $personnel->load(['user', 'assigner', 'personnelRole'])
+                'data' => $personnel
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -122,11 +108,18 @@ class ProjectPersonnelController extends Controller
             ], 403);
         }
 
-        $personnel->delete();
+        try {
+            $this->personnelService->removeById($personnel->id);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Nhân sự đã được xóa khỏi dự án.'
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Nhân sự đã được xóa khỏi dự án.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

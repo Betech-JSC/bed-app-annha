@@ -10,6 +10,13 @@ use Illuminate\Validation\Rule;
 
 class AdminUserController extends Controller
 {
+    protected $statsService;
+
+    public function __construct(\App\Services\UserStatisticsService $statsService)
+    {
+        $this->statsService = $statsService;
+    }
+
     /**
      * Tạo người dùng mới
      */
@@ -293,101 +300,12 @@ class AdminUserController extends Controller
      */
     public function dashboard(Request $request)
     {
-        $months = $request->get('months', 6); // Số tháng để hiển thị, mặc định 6 tháng
-        $endDate = now();
-        $startDate = now()->subMonths($months - 1)->startOfMonth();
-
-        // 1. Biểu đồ số giờ làm việc theo tháng (Removed TimeTracking)
-        $monthlyHours = [];
-        $currentDate = $startDate->copy();
-        while ($currentDate <= $endDate) {
-            $monthlyHours[] = [
-                'month' => $currentDate->format('M/Y'),
-                'hours' => 0,
-            ];
-
-            $currentDate->addMonth();
-        }
-
-        // 2. Biểu đồ phân bố nhân viên theo vai trò
-        $roleDistribution = [];
-        $roles = \App\Models\Role::withCount('users')->get();
-        foreach ($roles as $role) {
-            if ($role->users_count > 0) {
-                $roleDistribution[] = [
-                    'role' => $role->name,
-                    'count' => $role->users_count,
-                ];
-            }
-        }
-
-        // 3. Biểu đồ lương theo tháng
-        $monthlyPayroll = [];
-        $currentDate = $startDate->copy();
-        while ($currentDate <= $endDate) {
-            $monthKey = $currentDate->format('Y-m');
-            // Payroll stats removed - HR module deleted
-            $totalSalary = 0;
-
-            $monthlyPayroll[] = [
-                'month' => $currentDate->format('M/Y'),
-                'amount' => round($totalSalary, 0),
-            ];
-
-            $currentDate->addMonth();
-        }
-
-        // 4. Biểu đồ thưởng theo tháng
-        $monthlyBonuses = [];
-        $currentDate = $startDate->copy();
-        while ($currentDate <= $endDate) {
-            // Bonuses removed - HR module deleted
-            $totalBonus = 0;
-
-            $monthlyBonuses[] = [
-                'month' => $currentDate->format('M/Y'),
-                'amount' => round($totalBonus, 0),
-            ];
-
-            $currentDate->addMonth();
-        }
-
-        // 5. Biểu đồ trạng thái chấm công (Removed TimeTracking)
-        $timeTrackingStatus = [
-            [
-                'status' => 'Đã duyệt',
-                'count' => 0,
-            ],
-            [
-                'status' => 'Chờ duyệt',
-                'count' => 0,
-            ],
-            [
-                'status' => 'Từ chối',
-                'count' => 0,
-            ],
-        ];
-
-        // Stats tổng quan
-        $stats = [
-            'pending_time_tracking' => 0,
-            'pending_payroll' => 0, // Payroll removed - HR module deleted
-            'pending_bonuses' => 0, // Bonuses removed - HR module deleted
-            'total_employees' => User::whereNull('deleted_at')->count(),
-        ];
+        $months = $request->get('months', 6);
+        $data = $this->statsService->getHrDashboardData($months);
 
         return response()->json([
             'success' => true,
-            'data' => [
-                'stats' => $stats,
-                'charts' => [
-                    'monthly_hours' => $monthlyHours,
-                    'role_distribution' => $roleDistribution,
-                    'monthly_payroll' => $monthlyPayroll,
-                    'monthly_bonuses' => $monthlyBonuses,
-                    'time_tracking_status' => $timeTrackingStatus,
-                ],
-            ],
+            'data' => $data,
         ]);
     }
 
@@ -397,40 +315,14 @@ class AdminUserController extends Controller
     public function employeeStats(Request $request, $id)
     {
         $user = User::findOrFail($id);
+        $month = (int) $request->get('month', date('m'));
+        $year = (int) $request->get('year', date('Y'));
 
-        $month = $request->get('month', date('m'));
-        $year = $request->get('year', date('Y'));
-
-        // Get time tracking stats (Removed)
-        $totalHours = 0;
-        $totalDays = 0;
-
-        // Payroll stats removed - HR module deleted
-        $totalSalary = 0;
-
-        // Bonuses removed - HR module deleted
-        $totalBonuses = 0;
+        $data = $this->statsService->getEmployeeStats($user, $month, $year);
 
         return response()->json([
             'success' => true,
-            'data' => [
-                'employee' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                ],
-                'time_tracking' => [
-                    'total_hours' => $totalHours,
-                    'total_days' => $totalDays,
-                ],
-                'payroll' => [
-                    'total_salary' => $totalSalary,
-                ],
-                'bonuses' => [
-                    'total' => $totalBonuses,
-                    'count' => 0,
-                ],
-            ],
+            'data' => $data,
         ]);
     }
 

@@ -162,6 +162,12 @@ class AcceptanceStage extends Model
     {
         // BUSINESS RULE: Block approval if any defect is not verified
         // This includes: open, in_progress, and fixed (waiting for verification)
+        
+        // Use collection if loaded to avoid N+1 query
+        if ($this->relationLoaded('defects')) {
+            return $this->defects->where('status', '!=', 'verified')->isNotEmpty();
+        }
+        
         return $this->defects()->where('status', '!=', 'verified')->exists();
     }
 

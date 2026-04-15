@@ -12,7 +12,15 @@ use Illuminate\Support\Facades\DB;
 
 class SubcontractorItemController extends Controller
 {
-    use ApiAuthorization;
+    protected $subcontractorService;
+    protected $authService;
+
+    public function __construct(\App\Services\SubcontractorService $subcontractorService, \App\Services\AuthorizationService $authService)
+    {
+        $this->subcontractorService = $subcontractorService;
+        $this->authService = $authService;
+    }
+
     /**
      * Danh sách hạng mục của nhà thầu phụ
      */
@@ -24,7 +32,7 @@ class SubcontractorItemController extends Controller
         $subcontractor = Subcontractor::where('project_id', $project->id)
             ->findOrFail($subcontractorId);
 
-        $items = $subcontractor->items()->orderBy('order')->get();
+        $items = $this->subcontractorService->getItems($subcontractor);
 
         return response()->json([
             'success' => true,
@@ -53,19 +61,7 @@ class SubcontractorItemController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            if (!isset($validated['order'])) {
-                $maxOrder = $subcontractor->items()->max('order') ?? -1;
-                $validated['order'] = $maxOrder + 1;
-            }
-
-            $item = SubcontractorItem::create([
-                'subcontractor_id' => $subcontractor->id,
-                ...$validated,
-            ]);
-
-            DB::commit();
+            $item = $this->subcontractorService->upsertItem($validated, $subcontractor);
 
             return response()->json([
                 'success' => true,
@@ -73,11 +69,9 @@ class SubcontractorItemController extends Controller
                 'data' => $item
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -104,13 +98,20 @@ class SubcontractorItemController extends Controller
             'order' => 'sometimes|integer|min:0',
         ]);
 
-        $item->update($validated);
+        try {
+            $item = $this->subcontractorService->upsertItem($validated, $subcontractor, $item);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Hạng mục đã được cập nhật.',
-            'data' => $item->fresh()
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Hạng mục đã được cập nhật.',
+                'data' => $item
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -152,26 +153,16 @@ class SubcontractorItemController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            foreach ($validated['items'] as $itemData) {
-                SubcontractorItem::where('id', $itemData['id'])
-                    ->where('subcontractor_id', $subcontractor->id)
-                    ->update(['order' => $itemData['order']]);
-            }
-
-            DB::commit();
+            $this->subcontractorService->reorderItems($subcontractor, $validated['items']);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Thứ tự hạng mục đã được cập nhật.',
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 500);
         }
     }

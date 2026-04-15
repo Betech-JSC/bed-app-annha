@@ -11,12 +11,15 @@ use Carbon\Carbon;
 
 class ProjectEvmController extends Controller
 {
-    use ApiAuthorization;
-    protected $evmService;
+    protected $authService;
+    protected $analysisService;
 
-    public function __construct(EvmCalculationService $evmService)
-    {
-        $this->evmService = $evmService;
+    public function __construct(
+        AuthorizationService $authService,
+        \App\Services\ProjectAnalysisService $analysisService
+    ) {
+        $this->authService = $authService;
+        $this->analysisService = $analysisService;
     }
 
     /**
@@ -24,15 +27,16 @@ class ProjectEvmController extends Controller
      */
     public function calculate(string $projectId, Request $request)
     {
-        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
-
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
         
+        $this->authService->require($user, Permissions::FINANCE_VIEW, $project);
+
         $asOfDate = $request->query('as_of_date') 
             ? Carbon::parse($request->query('as_of_date'))
             : now();
 
-        $metric = $this->evmService->calculateEvm($project, $asOfDate);
+        $metric = $this->analysisService->calculateEvm($project, $asOfDate);
 
         return response()->json([
             'success' => true,
@@ -46,14 +50,16 @@ class ProjectEvmController extends Controller
      */
     public function latest(string $projectId)
     {
-        $this->apiRequire(auth()->user(), Permissions::FINANCE_VIEW, $projectId);
-
         $project = Project::findOrFail($projectId);
-        $metric = $this->evmService->getLatestMetrics($project);
+        $user = auth()->user();
+        
+        $this->authService->require($user, Permissions::FINANCE_VIEW, $project);
+
+        $metric = $this->analysisService->getLatestEvm($project);
 
         if (!$metric) {
             // Tự động tính toán nếu chưa có
-            $metric = $this->evmService->calculateEvm($project);
+            $metric = $this->analysisService->calculateEvm($project);
         }
 
         return response()->json([
@@ -67,10 +73,11 @@ class ProjectEvmController extends Controller
      */
     public function history(string $projectId, Request $request)
     {
-        $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
-
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
         
+        $this->authService->require($user, Permissions::FINANCE_VIEW, $project);
+
         $startDate = $request->query('start_date') 
             ? Carbon::parse($request->query('start_date'))
             : null;
@@ -78,7 +85,7 @@ class ProjectEvmController extends Controller
             ? Carbon::parse($request->query('end_date'))
             : null;
 
-        $history = $this->evmService->getMetricsHistory($project, $startDate, $endDate);
+        $history = $this->analysisService->getEvmHistory($project, $startDate, $endDate);
 
         return response()->json([
             'success' => true,
@@ -91,10 +98,12 @@ class ProjectEvmController extends Controller
      */
     public function analyze(string $projectId)
     {
-        $this->apiRequire(auth()->user(), Permissions::FINANCE_VIEW, $projectId);
-
         $project = Project::findOrFail($projectId);
-        $analysis = $this->evmService->analyzePerformance($project);
+        $user = auth()->user();
+        
+        $this->authService->require($user, Permissions::FINANCE_VIEW, $project);
+
+        $analysis = $this->analysisService->getProjectAnalysis($project);
 
         return response()->json([
             'success' => true,

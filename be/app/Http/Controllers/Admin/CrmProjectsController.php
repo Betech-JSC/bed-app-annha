@@ -29,11 +29,18 @@ use App\Models\SubcontractorItem;
 use App\Models\MaterialBill;
 use App\Models\MaterialBillItem;
 use App\Models\MaterialQuota;
+use App\Models\ProjectWarranty;
+use App\Models\ProjectMaintenance;
 use App\Constants\Permissions;
 use App\Services\AuthorizationService;
+use App\Services\MaterialBillService;
+use App\Services\AcceptanceService;
+use App\Services\FinancialService;
+use App\Services\EquipmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
@@ -42,10 +49,65 @@ class CrmProjectsController extends Controller
     use CrmAuthorization;
 
     protected $authService;
+    protected $materialBillService;
+    protected $acceptanceService;
+    protected $financialService;
+    protected $equipmentService;
+    protected $logService;
+    protected $budgetService;
+    protected $attendanceService;
+    protected $productivityService;
+    protected $attachmentService;
+    protected $warrantyService;
+    protected $defectService;
+    protected $changeRequestService;
+    protected $riskService;
+    protected $personnelService;
+    protected $taskService;
+    protected $reportingService;
+    protected $contractService;
+    protected $subcontractorService;
 
-    public function __construct(AuthorizationService $authService)
-    {
+    public function __construct(
+        AuthorizationService $authService,
+        MaterialBillService $materialBillService,
+        AcceptanceService $acceptanceService,
+        FinancialService $financialService,
+        EquipmentService $equipmentService,
+        \App\Services\ConstructionLogService $logService,
+        \App\Services\ProjectBudgetService $budgetService,
+        \App\Services\AttendanceService $attendanceService,
+        \App\Services\LaborProductivityService $productivityService,
+        \App\Services\AttachmentService $attachmentService,
+        \App\Services\ProjectWarrantyService $warrantyService,
+        \App\Services\DefectService $defectService,
+        \App\Services\ChangeRequestService $changeRequestService,
+        \App\Services\ProjectRiskService $riskService,
+        \App\Services\ProjectPersonnelService $personnelService,
+        \App\Services\ProjectTaskService $taskService,
+        \App\Services\ProjectReportingService $reportingService,
+        \App\Services\ContractService $contractService,
+        \App\Services\SubcontractorService $subcontractorService
+    ) {
         $this->authService = $authService;
+        $this->materialBillService = $materialBillService;
+        $this->acceptanceService = $acceptanceService;
+        $this->financialService = $financialService;
+        $this->equipmentService = $equipmentService;
+        $this->logService = $logService;
+        $this->budgetService = $budgetService;
+        $this->attendanceService = $attendanceService;
+        $this->productivityService = $productivityService;
+        $this->attachmentService = $attachmentService;
+        $this->warrantyService = $warrantyService;
+        $this->defectService = $defectService;
+        $this->changeRequestService = $changeRequestService;
+        $this->riskService = $riskService;
+        $this->personnelService = $personnelService;
+        $this->taskService = $taskService;
+        $this->reportingService = $reportingService;
+        $this->contractService = $contractService;
+        $this->subcontractorService = $subcontractorService;
     }
 
     /**
@@ -74,12 +136,7 @@ class CrmProjectsController extends Controller
 
         $projects = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
 
-        $stats = [
-            'total' => Project::count(),
-            'planning' => Project::where('status', 'planning')->count(),
-            'in_progress' => Project::where('status', 'in_progress')->count(),
-            'completed' => Project::where('status', 'completed')->count(),
-        ];
+        $stats = $this->reportingService->getGlobalProjectStats();
 
         return Inertia::render('Crm/Projects/Index', [
             'projects' => $projects,
@@ -90,228 +147,110 @@ class CrmProjectsController extends Controller
     }
 
     /**
-     * Chi tiết dự án — with RBAC permissions
+     * Chi tiết dự án — Optimized for performance
+     */
+    /**
+     * Chi tiết dự án — Optimized SOA Architecture
      */
     public function show(string $id)
     {
+        // 1. Fetch project with ONLY essential relationships for initial render
         $project = Project::with([
-            'customer',
-            'projectManager',
-            'payments.attachments',
-            'payments.confirmer',
-            'payments.customerApprover',
-            'additionalCosts.proposer',
-            'additionalCosts.approver',
-            'additionalCosts.attachments',
-            'costs' => function ($q) {
-                $q->with([
-                    'creator',
-                    'costGroup',
-                    'subcontractor',
-                    'attachments',
-                    'budgetItem',
-                    'managementApprover',
-                    'accountantApprover'
-                ])->orderByDesc('created_at');
-            },
-            'personnel.user',
-            'personnel.personnelRole',
-            'subcontractors.payments' => function ($q) {
-                $q->with(['attachments', 'creator', 'approver', 'payer', 'rejector']);
-            },
-            'subcontractors.items',
-            'subcontractors.attachments',
-            'subcontractors.approver',
-            'constructionLogs' => function ($q) {
-                $q->with(['creator', 'task', 'attachments'])
-                    ->orderByDesc('log_date')
-                    ->orderByDesc('created_at');
-            },
-            'acceptanceStages' => function ($q) {
-                $q->with([
-                    'items' => function ($iq) {
-                        $iq->with(['attachments', 'task:id,name,progress_percentage,parent_id'])->orderBy('order');
-                    },
-                    'task:id,name,parent_id',
-                    'acceptanceTemplate',
-                    'defects' => function ($dq) {
-                        $dq->whereIn('status', ['open', 'in_progress', 'resolved', 'verified'])->with('attachments');
-                    },
-                    'attachments',
-                ])->orderBy('order');
-            },
-            'defects.attachments',
-            'phases',
+            'customer:id,name,email,image as avatar,phone',
+            'projectManager:id,name,image as avatar',
+            'supervisor:id,name,image as avatar',
             'progress',
-            'changeRequests.requester',
-            'changeRequests.approver',
-            'changeRequests.attachments',
-            'invoices.attachments',
-            'budgets.items',
-            'budgets.creator',
-            'comments' => function ($q) {
-                $q->whereNull('parent_id')->with(['user', 'replies.user'])->orderByDesc('created_at');
-            },
-            'risks.owner',
-            'contract.attachments',
-            'warranties.attachments',
-            'warranties.creator',
-            'warranties.approver',
-            'maintenances.attachments',
-            'maintenances.creator',
-            'maintenances.approver',
-            'attachments' => function ($q) {
-                $q->latest();
-            },
+            'phases:id,project_id,name,order',
+            'contract.attachments'
         ])->findOrFail($id);
 
-        // Get users for assignment dropdowns
-        $users = User::select('id', 'name', 'email', 'phone')->orderBy('name')->get();
+        // 2. Fast Counts for Tab Badges (Very efficient)
+        $counts = [
+            'tasks' => \App\Models\ProjectTask::where('project_id', $project->id)->whereNull('deleted_at')->count(),
+            'finance' => \App\Models\Cost::where('project_id', $project->id)->count() + \App\Models\ProjectPayment::where('project_id', $project->id)->count(),
+            'expense' => \App\Models\Subcontractor::where('project_id', $project->id)->count(),
+            'monitor' => \App\Models\Defect::where('project_id', $project->id)->where('status', '!=', 'closed')->count(),
+            'hr' => \App\Models\ProjectPersonnel::where('project_id', $project->id)->count(),
+            'warranty' => \App\Models\ProjectWarranty::where('project_id', $project->id)->count() + \App\Models\ProjectMaintenance::where('project_id', $project->id)->count(),
+            'other' => \App\Models\Attachment::where('attachable_id', $project->id)->where('attachable_type', Project::class)->count(),
+        ];
 
-        // RBAC — Get current user's permissions for this project
-        $user = auth('admin')->user();
-        // Admin model gets full access; User model uses AuthorizationService
-        $permissions = ($user instanceof \App\Models\Admin)
-            ? ['*']
-            : $this->authService->getProjectPermissions($user, $project);
+        // 3. User & Permissions (Required immediately)
+        $admin = auth('admin')->user();
+        $permissions = ($admin && method_exists($admin, 'isSuperAdmin') && $admin->isSuperAdmin())
+            ? array_values(Permissions::all())
+            : $this->authService->getProjectPermissions($admin, $project);
 
-        // Get cost groups for cost form
-        $costGroups = [];
-        if (class_exists(\App\Models\CostGroup::class)) {
-            $costGroups = \App\Models\CostGroup::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
-        }
-
-        // Get personnel roles
-        $personnelRoles = [];
-        if (class_exists(\App\Models\PersonnelRole::class)) {
-            $personnelRoles = \App\Models\PersonnelRole::orderBy('name')->get(['id', 'name']);
-        }
-
-        // Get materials for cost assignment
-        $materials = [];
-        if (class_exists(\App\Models\Material::class)) {
-            $materials = \App\Models\Material::select('id', 'name', 'code', 'unit', 'unit_price')->orderBy('name')->get();
-        }
-
-        // Get global subcontractors for selection
-        $globalSubcontractors = [];
-        if (class_exists(\App\Models\GlobalSubcontractor::class)) {
-            $globalSubcontractors = \App\Models\GlobalSubcontractor::orderBy('name')->get(['id', 'name', 'category', 'bank_name', 'bank_account_number', 'bank_account_name']);
-        }
-
-        // Get leaf tasks (no children) for construction log form — sorted by date
-        $projectTasks = \App\Models\ProjectTask::where('project_id', $project->id)
-            ->whereNull('deleted_at')
-            ->whereDoesntHave('children', fn($q) => $q->whereNull('deleted_at'))
-            ->select('id', 'name', 'parent_id', 'start_date')
-            ->orderByDesc('start_date')
-            ->orderBy('name')
-            ->get();
-
-        // Get ALL tasks with hierarchy for progress tab (like mobile overview)
-        $allTasks = \App\Models\ProjectTask::where('project_id', $project->id)
-            ->whereNull('deleted_at')
-            ->with(['assignedUser:id,name', 'acceptanceItem', 'acceptanceStages', 'children' => function ($q) {
-                $q->whereNull('deleted_at')->with(['assignedUser:id,name', 'acceptanceItem', 'acceptanceStages'])->orderBy('order');
-            }])
-            ->orderBy('order')
-            ->get();
-
-        // Get acceptance templates for acceptance stage form
-        $acceptanceTemplates = AcceptanceTemplate::select('id', 'name')->orderBy('name')->get();
-
-        // Get parent tasks (A-level, i.e. tasks that have children) for acceptance stage binding
-        $parentTasks = \App\Models\ProjectTask::where('project_id', $project->id)
-            ->whereNull('deleted_at')
-            ->whereHas('children', fn($q) => $q->whereNull('deleted_at'))
-            ->select('id', 'name')
-            ->orderBy('order')
-            ->get();
-
-        // Get project material bills (bill-based tracking) — matching mobile APP
-        $materialBills = MaterialBill::where('project_id', $project->id)
-            ->with(['items.material', 'supplier', 'creator:id,name', 'managementApprover:id,name', 'accountantApprover:id,name', 'attachments'])
-            ->orderByDesc('bill_date')
-            ->orderByDesc('created_at')
-            ->get();
-
-        // Get suppliers for bill creation form
-        $suppliers = \App\Models\Supplier::select('id', 'name', 'phone', 'email')
-            ->orderBy('name')->get();
-
-        // Get project equipment (with allocations) — matching mobile APP
-        $projectEquipment = [];
-        if (class_exists(\App\Models\EquipmentAllocation::class)) {
-            $projectEquipment = \App\Models\Equipment::whereHas('allocations', function ($q) use ($project) {
-                $q->where('project_id', $project->id);
-            })->with(['allocations' => function ($q) use ($project) {
-                $q->where('project_id', $project->id)->latest();
-            }, 'allocations.allocatedTo:id,name', 'allocations.manager:id,name'])
-            ->get();
-        }
-
-        // Get all equipment for allocation form (no status filter — allow any for tracking)
-        $allEquipment = [];
-        if (class_exists(\App\Models\Equipment::class)) {
-            $allEquipment = \App\Models\Equipment::select('id', 'name', 'code', 'type', 'status', 'category')
-                ->orderBy('name')->get();
-        }
-
-        // Get equipment rentals (Thuê thiết bị — matching APP)
-        $equipmentRentals = [];
-        if (class_exists(\App\Models\EquipmentRental::class)) {
-            $equipmentRentals = \App\Models\EquipmentRental::where('project_id', $project->id)
-                ->with(['equipment:id,name,code', 'supplier:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments'])
-                ->orderByDesc('created_at')
-                ->get();
-        }
-
-        // Get equipment purchases (Mua thiết bị — matching APP)
-        $equipmentPurchases = [];
-        if (class_exists(\App\Models\EquipmentPurchase::class)) {
-            $equipmentPurchases = \App\Models\EquipmentPurchase::where('project_id', $project->id)
-                ->with(['items', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments'])
-                ->orderByDesc('created_at')
-                ->get();
-        }
-
-        // Get asset usages (Sử dụng tài sản từ kho — matching APP)
-        $assetUsages = [];
-        if (class_exists(\App\Models\AssetUsage::class)) {
-            $assetUsages = \App\Models\AssetUsage::where('project_id', $project->id)
-                ->with(['asset:id,name,code,category,status', 'receiver:id,name', 'creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments'])
-                ->orderByDesc('created_at')
-                ->get();
-        }
-
-        // Get company assets for usage form
-        $companyAssets = [];
-        if (class_exists(\App\Models\CompanyAsset::class)) {
-            $companyAssets = \App\Models\CompanyAsset::where('quantity', '>', 0)
-                ->select('id', 'name', 'code', 'category', 'quantity', 'unit')
-                ->orderBy('name')->get();
-        }
-
+        // 4. Shared Global Lists (Optimized without cache)
+        $users = User::select('id', 'name', 'email', 'image as avatar')->orderBy('name')->get();
+        $costGroups = class_exists(\App\Models\CostGroup::class) ? \App\Models\CostGroup::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']) : [];
+        $personnelRoles = class_exists(\App\Models\PersonnelRole::class) ? \App\Models\PersonnelRole::orderBy('name')->get(['id', 'name']) : [];
+        $materials = class_exists(\App\Models\Material::class) ? \App\Models\Material::select('id', 'name', 'code', 'unit', 'unit_price')->orderBy('name')->get() : [];
+        $suppliers = \App\Models\Supplier::select('id', 'name', 'phone', 'email')->orderBy('name')->get();
+        $acceptanceTemplates = \App\Models\AcceptanceTemplate::select('id', 'name')->orderBy('name')->get();
+        $globalSubcontractors = class_exists(\App\Models\GlobalSubcontractor::class) ? \App\Models\GlobalSubcontractor::select('id', 'name', 'category')->orderBy('name')->get() : [];
+        
         return Inertia::render('Crm/Projects/Show', [
-            'project' => $project,
-            'users' => $users,
+            'project'     => $project,
+            'contract'    => $project->contract,
             'permissions' => $permissions,
-            'costGroups' => $costGroups,
+            'users'       => $users,
+            'counts'      => $counts,
+            'costGroups'  => $costGroups,
             'personnelRoles' => $personnelRoles,
-            'materials' => $materials,
-            'globalSubcontractors' => $globalSubcontractors,
-            'projectTasks' => $projectTasks,
-            'allTasks' => $allTasks,
+            'materials'   => $materials,
+            'suppliers'   => $suppliers,
             'acceptanceTemplates' => $acceptanceTemplates,
-            'parentTasks' => $parentTasks,
-            'materialBills' => $materialBills,
-            'suppliers' => $suppliers,
-            'projectEquipment' => $projectEquipment,
-            'allEquipment' => $allEquipment,
-            'equipmentRentals' => $equipmentRentals,
-            'equipmentPurchases' => $equipmentPurchases,
-            'assetUsages' => $assetUsages,
-            'companyAssets' => $companyAssets,
+            'globalSubcontractors' => $globalSubcontractors,
+
+            // 5. LAZY PROPERTIES — Only loaded when requested via partial reload
+            'financeData' => Inertia::lazy(fn() => [
+                'payments' => $project->payments()
+                    ->select('id', 'project_id', 'payment_number', 'amount', 'status', 'due_date', 'contract_id', 'notes', 'created_at')
+                    ->with('attachments:id,attachable_id,attachable_type,file_name,original_name,file_size')
+                    ->orderByDesc('payment_number')->get(),
+                'costs' => $project->costs()
+                    ->select('id', 'project_id', 'name', 'amount', 'status', 'cost_date', 'created_by', 'management_approved_by', 'accountant_approved_by', 'cost_group_id', 'subcontractor_id', 'supplier_id', 'budget_item_id', 'created_at')
+                    ->with(['creator:id,name', 'costGroup:id,name,code', 'subcontractor:id,name', 'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size', 'managementApprover:id,name', 'accountantApprover:id,name'])
+                    ->orderByDesc('cost_date')->orderByDesc('created_at')->get(),
+                'invoices' => $project->invoices()->select('id', 'project_id', 'invoice_number', 'subtotal', 'total_amount', 'invoice_date', 'description')->get(),
+                'budgets' => $project->budgets()->select('id', 'project_id', 'name', 'status', 'total_budget', 'actual_cost', 'budget_date', 'version', 'created_by', 'approved_at', 'created_at')->with(['items', 'creator:id,name'])->get(),
+            ]),
+
+            'scheduleData' => Inertia::lazy(fn() => [
+                'allTasks' => \App\Models\ProjectTask::where('project_id', $project->id)->whereNull('deleted_at')->orderBy('order')
+                    ->with(['assignedUser:id,name', 'acceptanceStages:id,task_id,status', 'acceptanceItem:id,task_id,workflow_status'])->get(),
+                'materialBills' => MaterialBill::where('project_id', $project->id)->with(['items.material', 'supplier', 'creator', 'attachments'])->get(),
+            ]),
+
+            'monitorData' => Inertia::lazy(fn() => [
+                'logs' => $project->constructionLogs()->with(['creator', 'task', 'attachments'])->orderByDesc('log_date')->get(),
+                'acceptanceStages' => $project->acceptanceStages()->with(['items.task', 'task', 'acceptanceTemplate', 'defects.attachments', 'attachments'])->get(),
+                'defects' => $project->defects()->with('attachments')->get(),
+                'additional_costs' => $project->additionalCosts()->with(['proposer', 'attachments'])->latest()->get(),
+                'change_requests' => $project->changeRequests()->with(['requester', 'attachments'])->latest()->get(),
+            ]),
+
+            'teamData' => Inertia::lazy(fn() => [
+                'personnel' => $project->personnel()->with(['user', 'personnelRole'])->get(),
+                'subcontractors' => $project->subcontractors()->with(['attachments', 'payments'])->get(),
+            ]),
+
+            'equipmentData' => Inertia::lazy(fn() => [
+                'rentals' => class_exists(\App\Models\EquipmentRental::class) ? \App\Models\EquipmentRental::where('project_id', $project->id)->with(['equipment', 'supplier', 'creator', 'attachments'])->latest()->get() : [],
+                'purchases' => class_exists(\App\Models\EquipmentPurchase::class) ? \App\Models\EquipmentPurchase::where('project_id', $project->id)->with(['items', 'creator', 'attachments'])->latest()->get() : [],
+                'usages' => class_exists(\App\Models\AssetUsage::class) ? \App\Models\AssetUsage::where('project_id', $project->id)->with(['asset', 'receiver', 'creator', 'attachments'])->latest()->get() : [],
+                'allEquipment' => class_exists(\App\Models\Equipment::class) ? \App\Models\Equipment::select('id', 'name', 'code', 'type', 'status')->orderBy('name')->get() : [],
+                'companyAssets' => class_exists(\App\Models\CompanyAsset::class) ? \App\Models\CompanyAsset::where('quantity', '>', 0)->select('id', 'name', 'code', 'category', 'unit')->orderBy('name')->get() : [],
+            ]),
+            
+            'otherData' => Inertia::lazy(fn() => [
+                'comments' => $project->comments()->whereNull('parent_id')->with(['user', 'replies.user'])->latest()->get(),
+                'risks' => $project->risks()->with('owner')->get(),
+                'warranties' => $project->warranties()->with(['attachments', 'creator'])->get(),
+                'maintenances' => $project->maintenances()->with(['attachments', 'creator'])->get(),
+                'attachments' => $project->attachments()->latest()->get(),
+            ]),
         ]);
     }
 
@@ -455,7 +394,7 @@ class CrmProjectsController extends Controller
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
 
         // Draft-only guard (matching APP — allow Admin override)
-        if (!($user instanceof \App\Models\Admin) && $cost->status !== 'draft') {
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && $cost->status !== 'draft') {
             return back()->with('error', 'Chỉ có thể cập nhật phiếu chi ở trạng thái nháp.');
         }
 
@@ -496,8 +435,8 @@ class CrmProjectsController extends Controller
 
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
 
-        // Draft-only guard (matching APP — allow Admin override)
-        if (!($user instanceof \App\Models\Admin) && $cost->status !== 'draft') {
+        // Draft-only guard (matching APP — allow SuperAdmin override)
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && $cost->status !== 'draft') {
             return back()->with('error', 'Chỉ có thể xóa phiếu chi ở trạng thái nháp.');
         }
 
@@ -516,31 +455,17 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Chỉ có thể gửi duyệt phiếu chi ở trạng thái nháp.');
         }
 
-        DB::beginTransaction();
         try {
-            // Nếu có file upload kèm theo, lưu file trước
+            // Handle file uploads first if any (Web specific)
             if ($request->hasFile('files')) {
-                $request->validate([
-                    'files.*' => 'required|file|max:20480',
-                ]);
                 $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$cost->id}");
             }
 
-            // BẮT BUỘC: Phải có ít nhất 1 file chứng từ mới được gửi duyệt
-            $cost->load('attachments');
-            if ($cost->attachments->isEmpty()) {
-                DB::rollBack();
-                return back()->with('error', 'Bắt buộc phải upload chứng từ trước khi gửi duyệt phiếu chi.');
-            }
-
-            $cost->submitForManagementApproval();
-            DB::commit();
+            $this->financialService->submitCost($cost, $user);
+            return back()->with('success', 'Đã gửi phiếu chi để duyệt.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi gửi duyệt: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        return back()->with('success', 'Đã gửi phiếu chi để duyệt.');
     }
 
     public function approveCostManagement(string $projectId, string $costId)
@@ -550,20 +475,12 @@ class CrmProjectsController extends Controller
         $this->crmRequire($admin, Permissions::COST_APPROVE_MANAGEMENT, $project);
 
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
-        if ($cost->status !== 'pending_management_approval') {
-            return back()->with('error', 'Phiếu chi không ở trạng thái chờ BĐH duyệt.');
+        try {
+            $this->financialService->approveCostByManagement($cost, $admin);
+            return back()->with('success', 'Đã duyệt phiếu chi (Ban điều hành).');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        // FIX BUG 1+2: Admin model can't be FK to users table.
-        // Use forceFill to set status + timestamps directly, avoiding FK violation.
-        $cost->forceFill([
-            'status' => 'pending_accountant_approval',
-            'management_approved_at' => now(),
-        ])->save();
-
-        $cost->notifyEvent('approved_management', $admin);
-
-        return back()->with('success', 'Đã duyệt phiếu chi (Ban điều hành).');
     }
 
     public function approveCostAccountant(Request $request, string $projectId, string $costId)
@@ -573,46 +490,12 @@ class CrmProjectsController extends Controller
         $this->crmRequire($admin, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
-        if ($cost->status !== 'pending_accountant_approval') {
-            return back()->with('error', 'Phiếu chi không ở trạng thái chờ KT xác nhận.');
-        }
-
-        // KT chỉ cần xác nhận — file chứng từ đã được upload từ lúc gửi duyệt
-        // Verify chứng từ tồn tại
-        $cost->load('attachments');
-        if ($cost->attachments->isEmpty()) {
-            return back()->with('error', 'Phiếu chi chưa có chứng từ đính kèm. Không thể xác nhận.');
-        }
-
         try {
-            DB::beginTransaction();
-
-            // FIX BUG 1+2: Set status + timestamp via forceFill (Admin FK constraint)
-            $cost->forceFill([
-                'status' => 'approved',
-                'accountant_approved_at' => now(),
-            ])->save();
-
-            // CRITICAL: Trigger side effects that model method normally does
-            // 1. Update subcontractor total_paid + payment_status
-            if ($cost->subcontractor_id) {
-                $this->syncSubcontractorPaymentFromCost($cost);
-            }
-            // NOTE: Material inventory transaction removed — cost tracking is done via Cost model directly
-            // 3. Sync budget items
-            if ($cost->project_id && class_exists(\App\Services\BudgetSyncService::class)) {
-                app(\App\Services\BudgetSyncService::class)->syncProjectBudgets($project);
-            }
-
-            DB::commit();
+            $this->financialService->approveCostByAccountant($cost, [], $admin);
+            return back()->with('success', 'Đã xác nhận phiếu chi (Kế toán).');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi xác nhận: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        $cost->notifyEvent('approved_accountant', $admin);
-
-        return back()->with('success', 'Đã xác nhận phiếu chi (Kế toán).');
     }
 
     public function rejectCost(Request $request, string $projectId, string $costId)
@@ -622,18 +505,14 @@ class CrmProjectsController extends Controller
         $this->crmRequire($admin, Permissions::COST_REJECT, $project);
 
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
-        if (!in_array($cost->status, ['pending_management_approval', 'pending_accountant_approval'])) {
-            return back()->with('error', 'Phiếu chi không ở trạng thái chờ duyệt.');
-        }
         $validated = $request->validate(['rejected_reason' => 'required|string|max:500']);
 
-        // FIX BUG 1+2: Use model method which handles side effects (rollback subcontractor, material, budget)
-        // Pass null for user (Admin FK constraint) — model handles gracefully
-        $cost->reject($validated['rejected_reason'], null);
-
-        $cost->notifyEvent('rejected', $admin, ['reason' => $validated['rejected_reason']]);
-
-        return back()->with('success', 'Đã từ chối phiếu chi.');
+        try {
+            $this->financialService->rejectCost($cost, $validated['rejected_reason'], $admin);
+            return back()->with('success', 'Đã từ chối phiếu chi.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     // ===================================================================
@@ -647,7 +526,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_CREATE, $project);
 
         $validated = $request->validate([
-            'payment_number' => 'nullable|max:50', // Allow string or integer
+            'payment_number' => 'nullable|max:50',
             'contract_id' => 'nullable|exists:contracts,id',
             'notes' => 'nullable|string|max:2000',
             'amount' => 'required|numeric|min:0',
@@ -655,33 +534,28 @@ class CrmProjectsController extends Controller
             'status' => 'nullable|string',
         ]);
 
-        // Auto-generate payment_number if not provided (must be integer for DB)
+        // Auto-generate payment_number if not provided
         if (empty($validated['payment_number'])) {
             $count = ProjectPayment::where('project_id', $project->id)->count();
             $validated['payment_number'] = $count + 1;
         }
 
-        DB::beginTransaction();
         try {
-            $payment = ProjectPayment::create([
+            // CRM: Default to customer_paid status when manually created by Admin
+            $paymentData = array_merge($validated, [
                 'project_id' => $project->id,
-                ...$validated,
-                // CRM: Tạo xong đẩy thẳng sang KT xác nhận (skip bước KH đánh dấu)
-                'status' => 'customer_paid',
+                'status' => $validated['status'] ?? 'customer_paid',
                 'paid_date' => now()->toDateString(),
-                'customer_approved_by' => $user->id,
-                'customer_approved_at' => now(),
-                'payment_proof_uploaded_at' => now(),
             ]);
 
-            // Handle file uploads - MANDATORY
+            $payment = $this->financialService->upsertProjectPayment($paymentData, null, $user);
+
+            // Handle file uploads
             $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", true);
 
-            DB::commit();
             return back()->with('success', 'Đã thêm đợt thanh toán và gửi cho Kế toán xác nhận.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi khi thêm thanh toán: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -692,11 +566,13 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_DELETE, $project);
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
-        if (in_array($payment->status, ['confirmed', 'paid'])) {
-            return back()->with('error', 'Không thể xóa thanh toán đã xác nhận.');
+        
+        try {
+            $this->financialService->deleteProjectPayment($payment);
+            return back()->with('success', 'Đã xóa thanh toán.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-        $payment->delete();
-        return back()->with('success', 'Đã xóa thanh toán.');
     }
 
     /**
@@ -709,28 +585,21 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_UPDATE, $project);
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
-        if (in_array($payment->status, ['confirmed', 'paid'])) {
-            return back()->with('error', 'Không thể sửa thanh toán đã xác nhận.');
-        }
-
         $validated = $request->validate([
             'amount' => 'sometimes|numeric|min:0',
             'notes' => 'nullable|string|max:2000',
             'due_date' => 'sometimes|date',
         ]);
 
-        DB::beginTransaction();
         try {
-            $payment->update($validated);
+            $this->financialService->upsertProjectPayment($validated, $payment, $user);
 
             // Handle file uploads during update
             $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", false);
 
-            DB::commit();
             return back()->with('success', 'Đã cập nhật thanh toán.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi khi cập nhật thanh toán: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -807,24 +676,17 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $project);
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
-        if ($payment->status !== 'customer_paid') {
-            return back()->with('error', 'Chỉ xác nhận được khi KH đã đánh dấu thanh toán.');
-        }
-
         $validated = $request->validate([
             'paid_date' => 'nullable|date',
         ]);
 
         try {
-            DB::beginTransaction();
-            $payment->markAsPaid($user);
+            $this->financialService->confirmProjectPayment($payment, $user);
             if (!empty($validated['paid_date'])) {
                 $payment->update(['paid_date' => $validated['paid_date']]);
             }
-            DB::commit();
             return back()->with('success', 'Đã xác nhận thanh toán (Kế toán).');
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -924,16 +786,14 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
-        if ($payment->status !== 'customer_pending_approval') {
-            return back()->with('error', 'Thanh toán không ở trạng thái chờ KH duyệt.');
+        
+        try {
+            $this->financialService->approveProjectPaymentByCustomer($payment, null);
+            $payment->notifyEvent('customer_approved', $user);
+            return back()->with('success', 'Đã duyệt thanh toán (Khách hàng).');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        // Use model method (null for Admin FK constraint)
-        $payment->approveByCustomer(null);
-
-        $payment->notifyEvent('customer_approved', $user);
-
-        return back()->with('success', 'Đã duyệt thanh toán (Khách hàng).');
     }
 
     /**
@@ -979,42 +839,15 @@ class CrmProjectsController extends Controller
 
         $log = ConstructionLog::where('project_id', $project->id)->findOrFail($logId);
 
-        if ($log->status === 'approved') {
-            return back()->with('error', 'Nhật ký đã được duyệt.');
+        try {
+            $this->logService->approve($log, ['status' => 'approved'], $user);
+            
+            $this->notifyFromCrm($project, 'log_approved', "Nhật ký thi công ngày {$log->log_date} đã được duyệt.");
+            
+            return back()->with('success', 'Đã duyệt nhật ký thi công.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        $log->update([
-            'status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-
-        // Update task progress if log has task_id and completion_percentage
-        if ($log->task_id && $log->completion_percentage) {
-            $task = \App\Models\ProjectTask::find($log->task_id);
-            if ($task && $log->completion_percentage > ($task->progress_percentage ?? 0)) {
-                // BUSINESS RULE: Auto-calculate status based on progress
-                $service = app(\App\Services\TaskProgressService::class);
-                $autoStatus = $service->calculateStatus($task, (float) $log->completion_percentage);
-
-                $task->forceFill([
-                    'progress_percentage' => $log->completion_percentage,
-                    'status' => $autoStatus,
-                ])->saveQuietly();
-
-                // Trigger hierarchical progress recalculation
-                if ($task->parent_id) {
-                    $parent = \App\Models\ProjectTask::find($task->parent_id);
-                    if ($parent) {
-                        $service->updateTaskFromLogs($parent, true);
-                    }
-                }
-            }
-        }
-
-        $this->notifyFromCrm($project, 'log_approved', "Nhật ký thi công ngày {$log->log_date} đã được duyệt.");
-
-        return back()->with('success', 'Đã duyệt nhật ký thi công.');
     }
 
     // ===================================================================
@@ -1153,23 +986,22 @@ class CrmProjectsController extends Controller
 
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'personnel_role_id' => 'nullable|exists:personnel_roles,id',
+            'role_id' => 'required|exists:personnel_roles,id',
             'permissions' => 'nullable|array',
         ]);
 
-        // Check if already assigned
-        if (ProjectPersonnel::where('project_id', $project->id)->where('user_id', $validated['user_id'])->exists()) {
-            return back()->with('error', 'Nhân sự đã được phân công.');
+        try {
+            $this->personnelService->assign(
+                $project,
+                $validated['user_id'],
+                $validated['role_id'],
+                $validated['permissions'] ?? null,
+                $user
+            );
+            return back()->with('success', 'Đã phân công nhân sự.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        ProjectPersonnel::create([
-            'project_id' => $project->id,
-            'user_id' => $validated['user_id'],
-            'role_id' => $validated['personnel_role_id'] ?? null,
-            'assigned_by' => $user->id,
-        ]);
-
-        return back()->with('success', 'Đã phân công nhân sự.');
     }
 
     public function destroyPersonnel(string $projectId, string $personnelId)
@@ -1178,7 +1010,7 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::PERSONNEL_REMOVE, $project);
 
-        ProjectPersonnel::where('project_id', $project->id)->findOrFail($personnelId)->delete();
+        $this->personnelService->removeById((int)$personnelId);
         return back()->with('success', 'Đã gỡ nhân sự.');
     }
 
@@ -1201,54 +1033,14 @@ class CrmProjectsController extends Controller
             'notes' => 'nullable|string|max:2000',
         ]);
 
-        // Business rule: Only leaf tasks (no children) can receive log entries
-        if (!empty($validated['task_id'])) {
-            $task = \App\Models\ProjectTask::where('project_id', $project->id)
-                ->find($validated['task_id']);
-            if (!$task) {
-                return back()->with('error', 'Công việc không thuộc dự án này.');
-            }
-            $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
-                ->whereNull('deleted_at')->exists();
-            if ($hasChildren) {
-                return back()->with('error', 'Chỉ có thể ghi nhật ký cho công việc con (không có công việc con).');
-            }
-        }
-
-        // Business rule: completion_percentage can only increase
-        if (!empty($validated['task_id']) && isset($validated['completion_percentage'])) {
-            $lastLog = ConstructionLog::where('task_id', $validated['task_id'])
-                ->whereNotNull('completion_percentage')
-                ->orderBy('log_date', 'desc')
-                ->orderBy('created_at', 'desc')
-                ->first();
-
-            if ($lastLog && $validated['completion_percentage'] < $lastLog->completion_percentage) {
-                return back()->with('error', "Phần trăm hoàn thành chỉ có thể tăng. Tối thiểu: {$lastLog->completion_percentage}%");
-            }
-        }
-
-        DB::beginTransaction();
         try {
-            $log = ConstructionLog::create([
-                'project_id' => $project->id,
-                'created_by' => $user->id,
-                ...$validated,
-            ]);
+            DB::beginTransaction();
+            $log = $this->logService->upsert(array_merge($validated, ['project_id' => $project->id]), null, $user);
 
-            // Handle file uploads during log creation
-            $this->attachFilesToEntity($request, $log, "logs/{$project->id}", false);
+            // Handle multi-file upload for CRM
+            $this->attachmentService->handleCrmUpload($request, $log, "projects/{$project->id}/logs", false);
 
             DB::commit();
-
-            // Recalculate progress logic
-            if (class_exists(\App\Services\TaskProgressService::class) && $log->task_id) {
-                $task = \App\Models\ProjectTask::find($log->task_id);
-                if ($task) {
-                    app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task, true);
-                }
-            }
-
             return back()->with('success', 'Đã thêm nhật ký thi công.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1275,62 +1067,14 @@ class CrmProjectsController extends Controller
             'notes' => 'nullable|string|max:2000',
         ]);
 
-        // Business rule: Only leaf tasks
-        if (!empty($validated['task_id'])) {
-            $task = \App\Models\ProjectTask::where('project_id', $project->id)
-                ->find($validated['task_id']);
-            if (!$task) {
-                return back()->with('error', 'Công việc không thuộc dự án này.');
-            }
-            $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
-                ->whereNull('deleted_at')->exists();
-            if ($hasChildren) {
-                return back()->with('error', 'Chỉ có thể ghi nhật ký cho công việc con.');
-            }
-        }
-
-        // Business rule: completion_percentage can only increase
-        if (isset($validated['completion_percentage'])) {
-            $taskId = $validated['task_id'] ?? $log->task_id;
-            if ($taskId) {
-                $lastLog = ConstructionLog::where('task_id', $taskId)
-                    ->where('id', '!=', $log->id)
-                    ->whereNotNull('completion_percentage')
-                    ->orderBy('log_date', 'desc')
-                    ->orderBy('created_at', 'desc')
-                    ->first();
-
-                $minPct = $lastLog ? $lastLog->completion_percentage : 0;
-                if ($validated['completion_percentage'] < $minPct) {
-                    return back()->with('error', "Phần trăm hoàn thành chỉ có thể tăng. Tối thiểu: {$minPct}%");
-                }
-            }
-        }
-
-        $oldTaskId = $log->task_id;
-
-        DB::beginTransaction();
         try {
-            $log->update($validated);
+            DB::beginTransaction();
+            $this->logService->upsert(array_merge($validated, ['project_id' => $project->id]), $log, $user);
 
-            // Handle file uploads during update
-            $this->attachFilesToEntity($request, $log, "logs/{$project->id}", false);
+            // Handle multi-file upload for CRM
+            $this->attachmentService->handleCrmUpload($request, $log, "projects/{$project->id}/logs", false);
 
             DB::commit();
-            
-            // Recalculate progress logic (manually triggered if needed, though model usually handles)
-            if (class_exists(\App\Services\TaskProgressService::class)) {
-                $service = app(\App\Services\TaskProgressService::class);
-                if ($log->task_id) {
-                    $logTask = \App\Models\ProjectTask::find($log->task_id);
-                    if ($logTask) $service->updateTaskFromLogs($logTask);
-                }
-                if ($oldTaskId && $oldTaskId != $log->task_id) {
-                    $oldTask = \App\Models\ProjectTask::find($oldTaskId);
-                    if ($oldTask) $service->updateTaskFromLogs($oldTask);
-                }
-            }
-
             return back()->with('success', 'Đã cập nhật nhật ký thi công.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1346,26 +1090,12 @@ class CrmProjectsController extends Controller
 
         $log = ConstructionLog::where('project_id', $project->id)->findOrFail($logId);
 
-        // Delete attachments
-        foreach ($log->attachments as $att) {
-            if ($att->file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($att->file_path)) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($att->file_path);
-            }
-            $att->delete();
+        try {
+            $this->logService->delete($log);
+            return back()->with('success', 'Đã xóa nhật ký.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        $taskId = $log->task_id;
-        $log->delete();
-
-        // BUSINESS RULE: Recalculate task progress after log deletion
-        if ($taskId) {
-            $task = \App\Models\ProjectTask::find($taskId);
-            if ($task) {
-                app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task, true);
-            }
-        }
-
-        return back()->with('success', 'Đã xóa nhật ký.');
     }
 
     // ===================================================================
@@ -1422,27 +1152,19 @@ class CrmProjectsController extends Controller
             'defect_type' => 'nullable|in:standard_violation,acceptance,other',
         ]);
 
-        DB::beginTransaction();
         try {
-            $defect = Defect::create([
-                'project_id' => $project->id,
-                'reported_by' => $user->id,
-                'description' => $validated['description'],
-                'severity' => $validated['severity'],
-                'status' => $validated['status'] ?? 'open',
-                'task_id' => $validated['task_id'] ?? null,
-                'acceptance_stage_id' => $validated['acceptance_stage_id'] ?? null,
-                'defect_type' => $validated['defect_type'] ?? null,
-            ]);
+            DB::beginTransaction();
+            $data = array_merge($validated, ['project_id' => $project->id]);
+            $defect = $this->defectService->upsertDefect($data, null, $user);
 
-            // Handle file uploads during creation
-            $this->attachFilesToEntity($request, $defect, "defects/{$project->id}", false);
+            // Handle multi-file upload for CRM
+            $this->attachmentService->handleCrmUpload($request, $defect, "defects/{$project->id}", false);
 
             DB::commit();
-            return back()->with('success', 'Đã ghi nhận lỗi/sai sót.');
+            return back()->with('success', 'Đã ghi nhận lỗi công trình.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi khi ghi nhận lỗi: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -1460,61 +1182,19 @@ class CrmProjectsController extends Controller
             'rejection_reason' => 'nullable|string|max:1000',
         ]);
 
-        $oldStatus = $defect->status;
-
-        DB::beginTransaction();
         try {
-            // BUSINESS RULE: Use model methods for status transitions (matching APP)
-            if (isset($validated['status']) && $validated['status'] !== $oldStatus) {
-                switch ($validated['status']) {
-                    case 'in_progress':
-                        if ($request->has('rejection_reason') && $validated['rejection_reason']) {
-                            $defect->markAsRejected(null, $validated['rejection_reason']);
-                        } else {
-                            $defect->markAsInProgress(null);
-                        }
-                        break;
-                    case 'fixed':
-                        $defect->markAsFixed(null);
-                        break;
-                    case 'verified':
-                        if ($defect->status !== 'fixed') {
-                            return back()->with('error', 'Chỉ có thể xác nhận lỗi đã được sửa (trạng thái fixed).');
-                        }
-                        $defect->markAsVerified(null);
-                        // markAsVerified triggers checkAndUpdateTaskProgress + autoResubmitAcceptanceStage
-                        break;
-                    default:
-                        $defect->update(['status' => $validated['status']]);
-                }
-
-                // BUSINESS RULE: Create history record (matching APP)
-                \App\Models\DefectHistory::create([
-                    'defect_id' => $defect->id,
-                    'action' => 'status_changed',
-                    'old_status' => $oldStatus,
-                    'new_status' => $validated['status'],
-                    'user_id' => $user->id,
-                ]);
-
-                unset($validated['status']);
+            DB::beginTransaction();
+            if (isset($validated['status'])) {
+                $this->defectService->transitionStatus($defect, $validated['status'], $user, $validated);
             }
-
-            // Update other fields (description, severity)
-            unset($validated['rejection_reason']);
-            $remaining = array_filter($validated, fn($v) => $v !== null);
-            if (!empty($remaining)) {
-                $defect->update($remaining);
-            }
-
-            // Handle file uploads during update
-            $this->attachFilesToEntity($request, $defect, "defects/{$project->id}", false);
+            $this->defectService->upsertDefect(array_merge($validated, ['project_id' => $project->id]), $defect, $user);
+            $this->attachmentService->handleCrmUpload($request, $defect, "defects/{$project->id}", false);
 
             DB::commit();
-            return back()->with('success', 'Đã cập nhật thông tin lỗi.');
+            return back()->with('success', 'Đã cập nhật lỗi.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi khi cập nhật lỗi: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -1534,9 +1214,6 @@ class CrmProjectsController extends Controller
     //       ↑ rejectFix ←─────────────┘
     // ===================================================================
 
-    /**
-     * Nhận xử lý lỗi (open → in_progress)
-     */
     public function markDefectInProgress(Request $request, string $projectId, string $defectId)
     {
         $project = Project::findOrFail($projectId);
@@ -1544,38 +1221,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
 
         $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
-        if (!in_array($defect->status, ['open'])) {
-            return back()->with('error', 'Lỗi không ở trạng thái có thể nhận xử lý.');
-        }
-
-        $validated = $request->validate([
-            'expected_completion_date' => 'nullable|date',
-        ]);
-
-        $oldStatus = $defect->status;
-        $defect->markAsInProgress(null);
-
-        if (!empty($validated['expected_completion_date'])) {
-            $defect->update(['expected_completion_date' => $validated['expected_completion_date']]);
-        }
-
-        \App\Models\DefectHistory::create([
-            'defect_id' => $defect->id,
-            'action' => 'status_changed',
-            'old_status' => $oldStatus,
-            'new_status' => 'in_progress',
-            'user_id' => $user->id,
-        ]);
-
-        $defect->notifyEvent('in_progress', $user);
+        $this->defectService->transitionStatus($defect, 'in_progress', $user, $request->all());
 
         return back()->with('success', 'Đã nhận xử lý lỗi.');
     }
 
-    /**
-     * Đánh dấu đã sửa lỗi (in_progress → fixed)
-     * BUSINESS RULE: Matching APP — requires after images
-     */
     public function markDefectFixed(Request $request, string $projectId, string $defectId)
     {
         $project = Project::findOrFail($projectId);
@@ -1583,30 +1233,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
 
         $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
-        if ($defect->status !== 'in_progress') {
-            return back()->with('error', 'Lỗi phải đang ở trạng thái "Đang xử lý" mới có thể đánh dấu đã sửa.');
-        }
-
-        $oldStatus = $defect->status;
-        $defect->markAsFixed(null); // null user (Admin FK constraint)
-
-        \App\Models\DefectHistory::create([
-            'defect_id' => $defect->id,
-            'action' => 'status_changed',
-            'old_status' => $oldStatus,
-            'new_status' => 'fixed',
-            'user_id' => $user->id,
-        ]);
-
-        $defect->notifyEvent('fixed', $user);
-
+        $this->defectService->transitionStatus($defect, 'fixed', $user);
+        
         return back()->with('success', 'Đã đánh dấu lỗi đã sửa — chờ xác nhận.');
     }
 
-    /**
-     * Xác nhận lỗi đã xử lý xong (fixed → verified)
-     * BUSINESS RULE: Triggers checkAndUpdateTaskProgress + autoResubmitAcceptanceStage
-     */
     public function verifyDefect(Request $request, string $projectId, string $defectId)
     {
         $project = Project::findOrFail($projectId);
@@ -1614,36 +1245,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
 
         $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
-        if ($defect->status !== 'fixed') {
-            return back()->with('error', 'Chỉ có thể xác nhận lỗi đã được sửa (trạng thái "Đã sửa").');
-        }
-
-        $oldStatus = $defect->status;
-        // markAsVerified triggers:
-        // 1. checkAndUpdateTaskProgress (complete task if all defects verified)
-        // 2. autoResubmitAcceptanceStage (reset rejected items to draft)
-        $result = $defect->markAsVerified(null);
-
-        if (!$result) {
-            return back()->with('error', 'Không thể xác nhận lỗi.');
-        }
-
-        \App\Models\DefectHistory::create([
-            'defect_id' => $defect->id,
-            'action' => 'status_changed',
-            'old_status' => $oldStatus,
-            'new_status' => 'verified',
-            'user_id' => $user->id,
-        ]);
-
-        $defect->notifyEvent('verified', $user);
+        $this->defectService->transitionStatus($defect, 'verified', $user);
 
         return back()->with('success', 'Đã xác nhận lỗi đã sửa xong.');
     }
 
-    /**
-     * Từ chối sửa lỗi (fixed → in_progress, yêu cầu sửa lại)
-     */
     public function rejectDefectFix(Request $request, string $projectId, string $defectId)
     {
         $project = Project::findOrFail($projectId);
@@ -1651,27 +1257,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
 
         $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
-        if ($defect->status !== 'fixed') {
-            return back()->with('error', 'Chỉ có thể từ chối lỗi đang ở trạng thái "Đã sửa".');
-        }
-
-        $validated = $request->validate([
-            'rejection_reason' => 'required|string|max:1000',
-        ]);
-
-        $oldStatus = $defect->status;
-        $defect->markAsRejected(null, $validated['rejection_reason']);
-
-        \App\Models\DefectHistory::create([
-            'defect_id' => $defect->id,
-            'action' => 'status_changed',
-            'old_status' => $oldStatus,
-            'new_status' => 'in_progress',
-            'user_id' => $user->id,
-            'comment' => 'Từ chối: ' . $validated['rejection_reason'],
-        ]);
-
-        $defect->notifyEvent('rejected', $user, ['reason' => $validated['rejection_reason']]);
+        $this->defectService->transitionStatus($defect, 'in_progress', $user, ['rejection_reason' => $request->input('rejection_reason') ?: $request->input('reason')]);
 
         return back()->with('success', 'Đã từ chối sửa lỗi — yêu cầu sửa lại.');
     }
@@ -1698,12 +1284,7 @@ class CrmProjectsController extends Controller
             'implementation_plan' => 'nullable|string|max:5000',
         ]);
 
-        ChangeRequest::create([
-            'project_id' => $project->id,
-            'requested_by' => $user->id,
-            'status' => 'draft',
-            ...$validated,
-        ]);
+        $this->changeRequestService->upsert(array_merge($validated, ['project_id' => $project->id]), null, $user);
 
         return back()->with('success', 'Đã tạo yêu cầu thay đổi.');
     }
@@ -1715,10 +1296,6 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::CHANGE_REQUEST_UPDATE, $project);
 
         $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
-
-        if (!in_array($cr->status, ['draft', 'pending'])) {
-            return back()->with('error', 'Chỉ có thể sửa yêu cầu thay đổi ở trạng thái nháp hoặc chờ duyệt.');
-        }
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -1732,7 +1309,8 @@ class CrmProjectsController extends Controller
             'implementation_plan' => 'nullable|string|max:5000',
         ]);
 
-        $cr->update($validated);
+        $this->changeRequestService->upsert($validated, $cr, $user);
+
         return back()->with('success', 'Đã cập nhật yêu cầu thay đổi.');
     }
 
@@ -1742,12 +1320,12 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
 
-        if ($cr->status !== 'draft') {
-            return back()->with('error', 'Chỉ có thể gửi yêu cầu ở trạng thái nháp.');
+        try {
+            $this->changeRequestService->submit($cr, $user);
+            return back()->with('success', 'Đã gửi yêu cầu thay đổi để duyệt.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $cr->submit();
-        return back()->with('success', 'Đã gửi yêu cầu thay đổi để duyệt.');
     }
 
     public function approveChangeRequest(Request $request, string $projectId, string $id)
@@ -1757,8 +1335,13 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $project);
 
         $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
-        $cr->approve($user, $request->input('notes'));
-        return back()->with('success', 'Đã duyệt yêu cầu thay đổi.');
+        
+        try {
+            $this->changeRequestService->approve($cr, $user, $request->input('notes'));
+            return back()->with('success', 'Đã duyệt yêu cầu thay đổi.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     public function rejectChangeRequest(Request $request, string $projectId, string $id)
@@ -1767,16 +1350,26 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
 
         $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
-        $cr->reject($user, $request->input('reason', 'Không đồng ý'));
-        return back()->with('success', 'Đã từ chối yêu cầu thay đổi.');
+        
+        try {
+            $this->changeRequestService->reject($cr, $user, $request->input('reason', 'Không đồng ý'));
+            return back()->with('success', 'Đã từ chối yêu cầu thay đổi.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     public function implementChangeRequest(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
         $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
-        $cr->markAsImplemented();
-        return back()->with('success', 'Đã đánh dấu đã triển khai.');
+        
+        try {
+            $this->changeRequestService->markAsImplemented($cr);
+            return back()->with('success', 'Đã đánh dấu đã triển khai.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     public function destroyChangeRequest(string $projectId, string $id)
@@ -1816,14 +1409,7 @@ class CrmProjectsController extends Controller
             'target_resolution_date' => 'nullable|date',
         ]);
 
-        ProjectRisk::create([
-            'project_id' => $project->id,
-            'identified_by' => $user->id,
-            'identified_date' => now(),
-            'status' => 'identified',
-            'risk_type' => $validated['risk_type'] ?? 'threat',
-            ...$validated,
-        ]);
+        $this->riskService->upsert(array_merge($validated, ['project_id' => $project->id]), null, $user);
 
         return back()->with('success', 'Đã thêm rủi ro.');
     }
@@ -1850,11 +1436,7 @@ class CrmProjectsController extends Controller
             'target_resolution_date' => 'nullable|date',
         ]);
 
-        $risk->update(array_merge($validated, ['updated_by' => $user->id]));
-
-        if (isset($validated['status']) && $validated['status'] === 'closed' && !$risk->resolved_date) {
-            $risk->markAsResolved();
-        }
+        $this->riskService->upsert($validated, $risk, $user);
 
         return back()->with('success', 'Đã cập nhật rủi ro.');
     }
@@ -1862,10 +1444,9 @@ class CrmProjectsController extends Controller
     public function resolveRisk(string $projectId, string $riskId)
     {
         $project = Project::findOrFail($projectId);
-        $user = auth('admin')->user();
-
         $risk = ProjectRisk::where('project_id', $project->id)->findOrFail($riskId);
-        $risk->markAsResolved();
+        
+        $this->riskService->resolve($risk);
 
         return back()->with('success', 'Đã đánh dấu rủi ro đã xử lý.');
     }
@@ -1898,83 +1479,20 @@ class CrmProjectsController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'duration' => 'nullable|numeric|min:0',
-            'progress_percentage' => 'nullable|numeric|min:0|max:100',
-            'status' => 'nullable|in:pending,not_started,in_progress,completed,on_hold,cancelled',
             'priority' => 'nullable|in:low,medium,high,urgent',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
 
-        // Validate parent belongs to project
-        if (!empty($validated['parent_id'])) {
-            $parent = $project->tasks()->find($validated['parent_id']);
-            if (!$parent) {
-                return back()->with('error', 'Công việc cha không thuộc dự án này.');
-            }
+        try {
+            $this->taskService->upsert(
+                array_merge($validated, ['project_id' => $project->id]),
+                null,
+                $user
+            );
+            return back()->with('success', 'Đã thêm công việc.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi khi thêm công việc: ' . $e->getMessage());
         }
-
-        // Auto-calculate order
-        $maxOrder = $project->tasks()
-            ->where('parent_id', $validated['parent_id'] ?? null)
-            ->max('order') ?? -1;
-
-        // Use provided duration or auto-calculate
-        $duration = $validated['duration'] ?? null;
-        if (!$duration && !empty($validated['start_date']) && !empty($validated['end_date'])) {
-            $duration = \Carbon\Carbon::parse($validated['start_date'])
-                ->diffInDays(\Carbon\Carbon::parse($validated['end_date'])) + 1;
-        }
-
-        $progressInput = (float) ($validated['progress_percentage'] ?? 0);
-
-        // Auto-calculate status from progress (matching APP logic)
-        $service = app(\App\Services\TaskProgressService::class);
-
-        $task = \App\Models\ProjectTask::create([
-            'project_id' => $project->id,
-            'name' => $validated['name'],
-            'description' => $validated['description'] ?? null,
-            'parent_id' => $validated['parent_id'] ?? null,
-            'phase_id' => $validated['phase_id'] ?? null,
-            'start_date' => $validated['start_date'] ?? null,
-            'end_date' => $validated['end_date'] ?? null,
-            'duration' => $duration,
-            'priority' => $validated['priority'] ?? 'medium',
-            'assigned_to' => $validated['assigned_to'] ?? null,
-            'order' => $maxOrder + 1,
-            'status' => 'not_started', // Will be recalculated below
-            'progress_percentage' => $progressInput,
-            'created_by' => $user->id,
-        ]);
-
-        // BUSINESS RULE: Auto-calculate status based on progress and dates
-        $autoStatus = $service->calculateStatus($task, $progressInput);
-        if ($autoStatus !== $task->status) {
-            $task->forceFill(['status' => $autoStatus])->saveQuietly();
-        }
-
-        // Auto-create acceptance stage when root task reaches 100%
-        if ($progressInput >= 100 && !$task->parent_id) {
-            $maxOrd = \App\Models\AcceptanceStage::where('project_id', $project->id)->max('order') ?? 0;
-            \App\Models\AcceptanceStage::create([
-                'project_id' => $project->id,
-                'task_id' => $task->id,
-                'name' => $task->name . ' - Nghiệm thu',
-                'description' => '[Giai đoạn nghiệm thu được tự động tạo khi công việc đạt 100%]',
-                'order' => $maxOrd + 1,
-                'is_custom' => false,
-                'status' => 'pending',
-            ]);
-        }
-
-        // Update parent progress if this task has a parent
-        if ($task->parent_id) {
-            $parent = \App\Models\ProjectTask::find($task->parent_id);
-            if ($parent) {
-                $service->updateTaskFromLogs($parent, true);
-            }
-        }
-
-        return back()->with('success', 'Đã thêm công việc.');
     }
 
     public function updateTask(Request $request, string $projectId, string $taskId)
@@ -1993,97 +1511,16 @@ class CrmProjectsController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'duration' => 'nullable|numeric|min:0',
-            'progress_percentage' => 'nullable|numeric|min:0|max:100',
-            'status' => 'nullable|in:pending,not_started,in_progress,completed,on_hold,cancelled',
             'priority' => 'nullable|in:low,medium,high,urgent',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
 
-        // Prevent circular reference
-        if (!empty($validated['parent_id'])) {
-            if ($validated['parent_id'] == $task->id) {
-                return back()->with('error', 'Công việc không thể là cha của chính nó.');
-            }
+        try {
+            $this->taskService->upsert($validated, $task, $user);
+            return back()->with('success', 'Đã cập nhật công việc.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi khi cập nhật công việc: ' . $e->getMessage());
         }
-
-        // Use provided duration or auto-calculate
-        $duration = $validated['duration'] ?? $task->duration;
-        if (!isset($validated['duration']) && !empty($validated['start_date']) && !empty($validated['end_date'])) {
-            $duration = \Carbon\Carbon::parse($validated['start_date'])
-                ->diffInDays(\Carbon\Carbon::parse($validated['end_date'])) + 1;
-        }
-
-        // Extract progress/status from validated — will be handled by service
-        $progressInput = $validated['progress_percentage'] ?? null;
-        $statusInput = $validated['status'] ?? null;
-        unset($validated['progress_percentage'], $validated['status']);
-
-        $task->update([
-            ...$validated,
-            'duration' => $duration,
-            'updated_by' => $user->id,
-        ]);
-
-        // BUSINESS RULE: Auto-calculate status and create acceptance stage
-        // This matches the mobile APP behavior
-        $service = app(\App\Services\TaskProgressService::class);
-
-        if ($progressInput !== null) {
-            // CRM admin manually set progress → apply it and auto-calculate status
-            $autoStatus = $service->calculateStatus($task, (float) $progressInput);
-
-            // If has children, check if parent can be completed
-            $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
-                ->whereNull('deleted_at')->exists();
-            if ($autoStatus === 'completed' && $hasChildren && !$service->canParentBeCompleted($task)) {
-                $autoStatus = 'in_progress';
-            }
-
-            // BUSINESS RULE: When progress >= 100%, always use auto-calculated status
-            // to ensure task is marked 'completed'. Otherwise, respect user's status choice.
-            $finalStatus = ((float) $progressInput >= 100)
-                ? $autoStatus
-                : ($statusInput ?: $autoStatus);
-
-            $task->forceFill([
-                'progress_percentage' => $progressInput,
-                'status' => $finalStatus,
-            ])->saveQuietly();
-
-            // Auto-create acceptance stage when parent task reaches 100%
-            if ($progressInput >= 100 && !$task->parent_id) {
-                $existingStage = \App\Models\AcceptanceStage::where('task_id', $task->id)
-                    ->where('project_id', $task->project_id)->first();
-                if (!$existingStage) {
-                    $maxOrder = \App\Models\AcceptanceStage::where('project_id', $task->project_id)->max('order') ?? 0;
-                    \App\Models\AcceptanceStage::create([
-                        'project_id' => $task->project_id,
-                        'task_id' => $task->id,
-                        'name' => $task->name . ' - Nghiệm thu',
-                        'description' => '[Giai đoạn nghiệm thu được tự động tạo khi công việc đạt 100%]',
-                        'order' => $maxOrder + 1,
-                        'is_custom' => false,
-                        'status' => 'pending',
-                    ]);
-                }
-            }
-
-            // Update parent task if exists
-            if ($task->parent_id) {
-                $parent = \App\Models\ProjectTask::find($task->parent_id);
-                if ($parent) {
-                    $service->updateTaskFromLogs($parent, true);
-                }
-            }
-        } elseif ($statusInput !== null) {
-            // Status-only update (no progress change)
-            $task->forceFill(['status' => $statusInput])->saveQuietly();
-        } else {
-            // No progress/status input — recalculate from logs (dates may have changed)
-            $service->updateTaskFromLogs($task, true);
-        }
-
-        return back()->with('success', 'Đã cập nhật công việc.');
     }
 
     public function destroyTask(string $projectId, string $taskId)
@@ -2092,18 +1529,14 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::PROJECT_TASK_DELETE, $project);
 
-        $task = \App\Models\ProjectTask::where('project_id', $project->id)->findOrFail($taskId);
+        $task = ProjectTask::where('project_id', $project->id)->findOrFail($taskId);
 
-        // Check if task has children
-        $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
-            ->whereNull('deleted_at')
-            ->exists();
-        if ($hasChildren) {
-            return back()->with('error', 'Không thể xóa công việc có công việc con. Hãy xóa các công việc con trước.');
+        try {
+            $this->taskService->delete($task);
+            return back()->with('success', 'Đã xóa công việc.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi khi xóa công việc: ' . $e->getMessage());
         }
-
-        $task->delete();
-        return back()->with('success', 'Đã xóa công việc.');
     }
 
     // ===================================================================
@@ -2116,31 +1549,25 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::CONTRACT_CREATE, $project);
 
-        if ($project->contract) {
-            return back()->with('error', 'Dự án đã có hợp đồng.');
-        }
-
         $validated = $request->validate([
             'contract_value' => 'required|numeric|min:0',
             'signed_date' => 'nullable|date',
             'status' => 'nullable|string',
         ]);
 
-        DB::beginTransaction();
         try {
-            $contract = Contract::create([
-                'project_id' => $project->id,
-                ...$validated,
-            ]);
+            $contract = $this->contractService->upsert(
+                array_merge($validated, ['project_id' => $project->id]),
+                null,
+                $user
+            );
 
             // Handle file uploads
             $this->attachFilesToEntity($request, $contract, "contracts/{$project->id}", true);
 
-            DB::commit();
             return back()->with('success', 'Đã tạo hợp đồng.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi khi tạo hợp đồng: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -2156,18 +1583,16 @@ class CrmProjectsController extends Controller
             'signed_date' => 'nullable|date',
             'status' => 'nullable|string',
         ]);
-        DB::beginTransaction();
+
         try {
-            $contract->update($validated);
+            $this->contractService->upsert($validated, $contract, $user);
 
             // Handle file uploads during update
             $this->attachFilesToEntity($request, $contract, "contracts/{$project->id}", false);
 
-            DB::commit();
             return back()->with('success', 'Đã cập nhật hợp đồng.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi khi cập nhật hợp đồng: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -2206,8 +1631,6 @@ class CrmProjectsController extends Controller
             'progress_start_date' => 'nullable|date',
             'progress_end_date' => 'nullable|date|after_or_equal:progress_start_date',
             'progress_status' => ['nullable', 'in:not_started,in_progress,completed,delayed'],
-            'create_cost' => 'nullable|boolean',
-            'cost_group_id' => 'nullable|exists:cost_groups,id',
         ]);
 
         // Pull from global subcontractor if selected
@@ -2217,51 +1640,21 @@ class CrmProjectsController extends Controller
             $validated['bank_name'] = $validated['bank_name'] ?? $gs->bank_name;
             $validated['bank_account_number'] = $validated['bank_account_number'] ?? $gs->bank_account_number;
             $validated['bank_account_name'] = $validated['bank_account_name'] ?? $gs->bank_account_name;
-        } else {
-            // Auto-create GlobalSubcontractor for future reuse
-            $gs = GlobalSubcontractor::firstOrCreate(
-                ['name' => $validated['name']],
-                [
-                    'category' => $validated['category'] ?? null,
-                    'bank_name' => $validated['bank_name'] ?? null,
-                    'bank_account_number' => $validated['bank_account_number'] ?? null,
-                    'bank_account_name' => $validated['bank_account_name'] ?? null,
-                ]
-            );
-            $validated['global_subcontractor_id'] = $gs->id;
         }
 
-        DB::beginTransaction();
         try {
-            $subcontractor = Subcontractor::create([
-                'project_id' => $project->id,
-                'global_subcontractor_id' => $validated['global_subcontractor_id'] ?? null,
-                'created_by' => $user->id,
-                'payment_status' => 'pending',
-                'progress_status' => $validated['progress_status'] ?? 'not_started',
-                'advance_payment' => 0,
-                'name' => $validated['name'],
-                'category' => $validated['category'] ?? null,
-                'bank_name' => $validated['bank_name'] ?? null,
-                'bank_account_number' => $validated['bank_account_number'] ?? null,
-                'bank_account_name' => $validated['bank_account_name'] ?? null,
-                'total_quote' => $validated['total_quote'],
-                'progress_start_date' => $validated['progress_start_date'] ?? null,
-                'progress_end_date' => $validated['progress_end_date'] ?? null,
-            ]);
-
-            // Tự động tạo Cost record đã bị gỡ bỏ để tránh tính trùng chi phí (Double Counting)
-            // Hợp đồng thầu phụ chỉ được theo dõi qua bảng subcontractors
-            // Chi phí thực tế chỉ tính từ các đợt thanh toán (SubcontractorPayment)
+            $subcontractor = $this->subcontractorService->upsert(
+                array_merge($validated, ['project_id' => $project->id]),
+                null,
+                $user
+            );
 
             // Handle file uploads
             $this->attachFilesToEntity($request, $subcontractor, "subcontractors/{$project->id}/{$subcontractor->id}", false);
 
-            DB::commit();
             return back()->with('success', 'Đã thêm nhà thầu phụ.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi thêm NTP: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -2284,27 +1677,32 @@ class CrmProjectsController extends Controller
             'progress_status' => ['sometimes', 'in:not_started,in_progress,completed,delayed'],
         ]);
 
-        $sub->update([...$validated, 'updated_by' => $user->id]);
+        try {
+            $this->subcontractorService->upsert($validated, $sub, $user);
 
-        // Handle file uploads on update
-        $this->attachFilesToEntity($request, $sub, "subcontractors/{$project->id}/{$sub->id}", false);
+            // Handle file uploads on update
+            $this->attachFilesToEntity($request, $sub, "subcontractors/{$project->id}/{$sub->id}", false);
 
-        return back()->with('success', 'Đã cập nhật nhà thầu phụ.');
+            return back()->with('success', 'Đã cập nhật nhà thầu phụ.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     public function approveSubcontractor(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
         $admin = auth('admin')->user();
+        $this->crmRequire($admin, Permissions::SUBCONTRACTOR_APPROVE, $project);
 
         $sub = Subcontractor::where('project_id', $project->id)->findOrFail($id);
-        if (method_exists($sub, 'approve')) {
-            $sub->approve(null); // null to avoid FK violation with admin table
-        } else {
-            $sub->update(['approved_at' => now()]);
+        
+        try {
+            $this->subcontractorService->approve($sub, null); // Pass null as User to match current admin logic
+            return back()->with('success', 'Đã duyệt nhà thầu phụ.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        return back()->with('success', 'Đã duyệt nhà thầu phụ.');
     }
 
     public function destroySubcontractor(string $projectId, string $id)
@@ -2313,9 +1711,14 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::SUBCONTRACTOR_DELETE, $project);
 
-        Cost::where('subcontractor_id', $id)->update(['subcontractor_id' => null]);
-        Subcontractor::where('project_id', $project->id)->findOrFail($id)->delete();
-        return back()->with('success', 'Đã xóa nhà thầu phụ.');
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($id);
+
+        try {
+            $this->subcontractorService->delete($sub);
+            return back()->with('success', 'Đã xóa nhà thầu phụ.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     // ===================================================================
@@ -2339,33 +1742,24 @@ class CrmProjectsController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        // Check if amount exceeds remaining (account for pending/approved-but-not-paid payments)
-        $pendingPaymentsTotal = $sub->payments()
-            ->whereNotIn('status', ['rejected', 'cancelled', 'paid'])
-            ->sum('amount');
-        $remaining = $sub->total_quote - $sub->total_paid - $pendingPaymentsTotal;
-        if ($validated['amount'] > $remaining) {
-            return back()->with('error', 'Số tiền thanh toán vượt quá số tiền còn lại (' . number_format(max(0, $remaining)) . '). Đã có ' . number_format($pendingPaymentsTotal) . ' đang chờ duyệt.');
-        }
-
-        DB::beginTransaction();
         try {
-            $payment = SubcontractorPayment::create([
-                'subcontractor_id' => $sub->id,
-                'project_id' => $project->id,
-                ...$validated,
-                'status' => 'pending_management_approval',
-                'created_by' => $user->id,
-            ]);
+            $payment = $this->financialService->upsertSubPayment(
+                array_merge($validated, [
+                    'project_id' => $project->id,
+                    'subcontractor_id' => $sub->id,
+                ]),
+                null,
+                $user
+            );
 
-            // Handle file uploads - MANDATORY
-            $this->attachFilesToEntity($request, $payment, "sub-payments/{$project->id}/{$payment->id}", true);
+            // Web specific: handle file uploads from request if any
+            if ($request->hasFile('files')) {
+                $this->attachFilesToEntity($request, $payment, "sub-payments/{$project->id}/{$payment->id}");
+            }
 
-            DB::commit();
             return back()->with('success', 'Đã tạo phiếu thanh toán NTP.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi tạo phiếu TT: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -2374,12 +1768,12 @@ class CrmProjectsController extends Controller
         $project = Project::findOrFail($projectId);
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
-        if ($payment->status !== 'draft') {
-            return back()->with('error', 'Chỉ gửi duyệt phiếu ở trạng thái nháp.');
+        try {
+            $this->financialService->submitSubPayment($payment, auth('admin')->user());
+            return back()->with('success', 'Đã gửi phiếu chi để duyệt.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        $payment->submitForApproval();
-        return back()->with('success', 'Đã gửi phiếu chi để duyệt.');
     }
 
     public function approveSubPayment(string $projectId, string $subId, string $paymentId)
@@ -2389,23 +1783,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($admin, Permissions::COST_APPROVE_MANAGEMENT, $project);
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
-        if ($payment->status !== 'pending_management_approval') {
-            return back()->with('error', 'Phiếu TT không ở trạng thái chờ duyệt.');
-        }
-
-        DB::beginTransaction();
         try {
-            // Record approver info directly (Admin model != User model, so we set fields manually)
-            $payment->approved_by = $admin->id;
-            $payment->approved_at = now();
-            $payment->status = 'pending_accountant_confirmation';
-            $payment->save();
-
-            DB::commit();
+            $this->financialService->approveSubPayment($payment, $admin);
             return back()->with('success', 'Đã duyệt phiếu thanh toán NTP.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi duyệt phiếu: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -2415,23 +1797,11 @@ class CrmProjectsController extends Controller
         $admin = auth('admin')->user();
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
-        if (!in_array($payment->status, ['pending_management_approval', 'pending_accountant_confirmation'])) {
-            return back()->with('error', 'Không thể từ chối phiếu ở trạng thái này.');
-        }
-
-        DB::beginTransaction();
         try {
-            $payment->rejected_by = $admin->id;
-            $payment->rejected_at = now();
-            $payment->rejection_reason = $request->input('rejection_reason');
-            $payment->status = 'rejected';
-            $payment->save();
-
-            DB::commit();
+            $this->financialService->rejectSubPayment($payment, $request->input('rejection_reason'), $admin);
             return back()->with('success', 'Đã từ chối phiếu thanh toán.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi từ chối phiếu: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -2442,37 +1812,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($admin, Permissions::COST_APPROVE_ACCOUNTANT, $project);
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
-        if ($payment->status !== 'pending_accountant_confirmation') {
-            return back()->with('error', 'Phiếu TT chưa được duyệt bởi BĐH.');
-        }
-
-        DB::beginTransaction();
         try {
-            // Update budget item if provided
-            if ($request->has('budget_item_id')) {
-                $payment->budget_item_id = $request->budget_item_id;
-            }
-
-            // Set payer info directly (Admin model != User model)
-            $payment->paid_by = $admin->id;
-            $payment->paid_at = now();
-            $payment->status = 'paid';
-            $payment->save();
-
-            // Recalculate subcontractor financials from payments table (single source of truth)
-            $payment->subcontractor->recalculateFinancials();
-
-            // Ghi chú: Việc đồng bộ sang bảng Cost hiện đã được xử lý tự động qua model hook 'saved'
-            // Điều này đảm bảo dữ liệu luôn nhất quán giữa trạng thái Thanh toán và Chi phí dự án
-            
-            DB::commit();
-            
-            $payment->notifyEvent('paid', $admin);
-
+            $this->financialService->processSubPayment($payment, $request->all(), $admin);
             return back()->with('success', 'Đã xác nhận thanh toán thầu phụ.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi xác nhận: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -2612,7 +1956,6 @@ class CrmProjectsController extends Controller
             'name' => 'required|string|max:255',
             'budget_date' => 'required|date',
             'version' => 'nullable|string|max:20',
-            'status' => 'nullable|in:draft,approved,revised',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.name' => 'required|string|max:255',
@@ -2620,39 +1963,16 @@ class CrmProjectsController extends Controller
             'items.*.cost_group_id' => 'nullable|exists:cost_groups,id',
         ]);
 
-        DB::beginTransaction();
-        $totalBudget = collect($validated['items'])->sum('estimated_amount');
+        try {
+            $this->budgetService->upsert([
+                'project_id' => $project->id,
+                ...$validated,
+            ], null, $user);
 
-        $budget = new ProjectBudget();
-        $budget->forceFill([
-            'project_id' => $project->id,
-            'name' => $validated['name'],
-            'version' => $validated['version'] ?? '1.0',
-            'total_budget' => $totalBudget,
-            'estimated_cost' => $totalBudget,
-            'remaining_budget' => $totalBudget,
-            'budget_date' => $validated['budget_date'],
-            'notes' => $validated['notes'] ?? null,
-            'status' => $validated['status'] ?? 'draft',
-            'created_by' => $user->id,
-        ]);
-        $budget->save();
-
-        foreach ($validated['items'] as $i => $item) {
-            BudgetItem::create([
-                'budget_id' => $budget->id,
-                'cost_group_id' => $item['cost_group_id'] ?? null,
-                'name' => $item['name'],
-                'estimated_amount' => $item['estimated_amount'],
-                'remaining_amount' => $item['estimated_amount'],
-                'quantity' => 1,
-                'unit_price' => $item['estimated_amount'],
-                'order' => $i,
-            ]);
+            return back()->with('success', 'Đã tạo ngân sách.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-        DB::commit();
-
-        return back()->with('success', 'Đã tạo ngân sách.');
     }
 
     public function updateBudget(Request $request, string $projectId, string $id)
@@ -2662,61 +1982,30 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::BUDGET_UPDATE, $project);
 
         $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
-        // Only block active/archived — approved budgets are still editable (not yet applied to lifecycle)
-        if (in_array($budget->status, ['active', 'archived'])) {
-            return back()->with('error', 'Không thể cập nhật ngân sách đã kích hoạt/lưu trữ.');
-        }
 
         $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'budget_date' => 'sometimes|date',
-            'version' => 'nullable|string|max:50',
+            'name' => 'required|string|max:255',
+            'budget_date' => 'required|date',
+            'version' => 'nullable|string|max:20',
             'notes' => 'nullable|string',
-            'status' => 'sometimes|in:draft,approved,active,revised,archived',
-            'items' => 'sometimes|array',
-            'items.*.name' => 'required_with:items|string|max:255',
-            'items.*.estimated_amount' => 'required_with:items|numeric|min:0',
-            'items.*.description' => 'nullable|string|max:500',
+            'items' => 'required|array|min:1',
+            'items.*.name' => 'required|string|max:255',
+            'items.*.estimated_amount' => 'required|numeric|min:0',
+            'items.*.cost_group_id' => 'nullable|exists:cost_groups,id',
         ]);
 
-        if (($validated['status'] ?? null) === 'approved' && !$budget->approved_by) {
-            $validated['approved_by'] = $user->id;
-            $validated['approved_at'] = now();
-        }
-
-        DB::beginTransaction();
         try {
-            // Update budget fields (exclude items from direct update)
-            $budgetFields = collect($validated)->except('items')->toArray();
+            $this->budgetService->upsert([
+                'project_id' => $project->id,
+                ...$validated,
+            ], $budget, $user);
 
-            // Recalculate total if items provided
-            if (isset($validated['items'])) {
-                $budgetFields['total_budget'] = collect($validated['items'])->sum('estimated_amount');
-            }
-
-            $budget->update($budgetFields);
-
-            // Sync items if provided
-            if (isset($validated['items'])) {
-                // Remove old items
-                $budget->items()->delete();
-                // Create new items
-                foreach ($validated['items'] as $itemData) {
-                    $budget->items()->create([
-                        'name' => $itemData['name'],
-                        'estimated_amount' => $itemData['estimated_amount'],
-                        'description' => $itemData['description'] ?? null,
-                    ]);
-                }
-            }
-
-            DB::commit();
             return back()->with('success', 'Đã cập nhật ngân sách.');
         } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi cập nhật: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
+
     public function submitBudget(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
@@ -2737,13 +2026,17 @@ class CrmProjectsController extends Controller
     public function approveBudgetManual(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
-        $user = Auth::guard('admin')->user();
+        $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::BUDGET_APPROVE, $project);
 
         $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
-        $budget->approve($user);
 
-        return back()->with('success', "Đã duyệt ngân sách \"{$budget->name}\"");
+        try {
+            $this->budgetService->approve($budget, $user);
+            return back()->with('success', 'Đã duyệt ngân sách.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     public function rejectBudget(Request $request, string $projectId, string $id)
@@ -2912,20 +2205,17 @@ class CrmProjectsController extends Controller
             'order' => 'nullable|integer|min:0',
         ]);
 
-        $maxOrder = $project->acceptanceStages()->max('order') ?? 0;
-
         DB::beginTransaction();
         try {
-            $stage = AcceptanceStage::create([
+            // Auto order logic handled in service or manually
+            if (!isset($validated['order'])) {
+                $maxOrder = $project->acceptanceStages()->max('order') ?? 0;
+                $validated['order'] = $maxOrder + 1;
+            }
+
+            $stage = $this->acceptanceService->upsertStage(array_merge($validated, [
                 'project_id' => $project->id,
-                'name' => $validated['name'],
-                'description' => $validated['description'] ?? null,
-                'task_id' => $validated['task_id'] ?? null,
-                'acceptance_template_id' => $validated['acceptance_template_id'] ?? null,
-                'order' => $validated['order'] ?? ($maxOrder + 1),
-                'is_custom' => true,
-                'status' => 'pending',
-            ]);
+            ]), null, $user);
 
             // Handle file uploads
             $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stage->id}", false);
@@ -2957,7 +2247,7 @@ class CrmProjectsController extends Controller
 
         DB::beginTransaction();
         try {
-            $stage->update($validated);
+            $this->acceptanceService->upsertStage($validated, $stage, $user);
 
             // Handle file uploads during update
             $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stage->id}", false);
@@ -2981,38 +2271,17 @@ class CrmProjectsController extends Controller
 
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
 
-        // FIX BUG 6: Check if all items in the stage are completed before allowing stage approval
-        $items = \App\Models\AcceptanceItem::where('acceptance_stage_id', $stage->id)->get();
-        if ($items->isNotEmpty()) {
-            $incompleteItems = $items->filter(fn($item) => !in_array($item->workflow_status, ['customer_approved']));
-            if ($incompleteItems->isNotEmpty() && $validated['level'] === '3') {
-                $names = $incompleteItems->pluck('name')->join(', ');
-                return back()->with('error', "Không thể duyệt KH. Còn hạng mục chưa hoàn thành: {$names}");
-            }
-        }
+        try {
+            // Permission check handled within approveStage using this->hasPermission
+            // but we can also crmRequire here for explicit Web-side security
+            $permConstant = "ACCEPTANCE_APPROVE_LEVEL_" . $validated['level'];
+            $this->crmRequire($admin, constant(Permissions::class . "::" . $permConstant), $project);
 
-        // Don't pass Admin to model methods — FK columns reference users table
-        $result = false;
-        switch ($validated['level']) {
-            case '1':
-                $this->crmRequire($admin, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project);
-                $result = $stage->approveSupervisor();
-                break;
-            case '2':
-                $this->crmRequire($admin, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project);
-                $result = $stage->approveProjectManager();
-                break;
-            case '3':
-                $this->crmRequire($admin, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $project);
-                $result = $stage->approveCustomer();
-                break;
+            $this->acceptanceService->approveStage($stage, $admin, (int)$validated['level']);
+            return back()->with('success', 'Đã duyệt nghiệm thu cấp ' . $validated['level'] . '.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        if (!$result) {
-            return back()->with('error', 'Không thể duyệt nghiệm thu ở trạng thái hiện tại.');
-        }
-
-        return back()->with('success', 'Đã duyệt nghiệm thu cấp ' . $validated['level'] . '.');
     }
 
     public function destroyAcceptance(string $projectId, string $id)
@@ -3021,12 +2290,13 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::ACCEPTANCE_DELETE, $project);
 
-        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
-        if ($stage->status === 'owner_approved') {
-            return back()->with('error', 'Không thể xóa giai đoạn đã duyệt hoàn toàn.');
+        try {
+            $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
+            $this->acceptanceService->deleteStage($stage);
+            return back()->with('success', 'Đã xóa giai đoạn nghiệm thu.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-        $stage->delete();
-        return back()->with('success', 'Đã xóa giai đoạn nghiệm thu.');
     }
 
     // ============ DOCUMENT CRUD ============
@@ -3189,48 +2459,13 @@ class CrmProjectsController extends Controller
             'rental_fee' => 'nullable|numeric|min:0',
         ]);
 
-        $equipment = \App\Models\Equipment::findOrFail($validated['equipment_id']);
-
-        $allocation = \DB::transaction(function () use ($project, $validated, $equipment, $user) {
-            $allocation = \App\Models\EquipmentAllocation::create([
-                'uuid' => \Illuminate\Support\Str::uuid()->toString(),
-                'equipment_id' => $equipment->id,
-                'project_id' => $project->id,
-                'allocation_type' => $validated['allocation_type'],
-                'quantity' => $validated['quantity'],
-                'start_date' => $validated['start_date'],
-                'end_date' => $validated['end_date'] ?? null,
-                'notes' => $validated['notes'] ?? null,
-                'manager_id' => $validated['manager_id'] ?? null,
-                'handover_date' => $validated['handover_date'] ?? $validated['start_date'],
-                'return_date' => $validated['return_date'] ?? null,
-                'rental_fee' => $validated['rental_fee'] ?? null,
-                'status' => 'active',
-                'created_by' => $user->id ?? null,
-            ]);
-
-            // Update equipment status
-            $equipment->update(['status' => 'in_use']);
-
-            // If rental, auto-create a cost entry
-            if ($validated['allocation_type'] === 'rent' && ($validated['rental_fee'] ?? 0) > 0) {
-                $cost = \App\Models\Cost::create([
-                    'project_id' => $project->id,
-                    'name' => 'Thuê thiết bị: ' . $equipment->name,
-                    'amount' => $validated['rental_fee'],
-                    'cost_date' => $validated['start_date'],
-                    'category' => 'equipment',
-                    'status' => 'draft',
-                    'created_by' => $user->id ?? null,
-                ]);
-                $allocation->update(['cost_id' => $cost->id]);
-            }
-
-            return $allocation;
-        });
-
-        $typeLabel = $validated['allocation_type'] === 'rent' ? 'Thuê' : 'Có sẵn';
-        return back()->with('success', "Đã phân bổ thiết bị ({$typeLabel}): {$equipment->name}");
+        try {
+            $validated['project_id'] = $project->id;
+            $this->equipmentService->upsertAllocation($validated, null, $user);
+            return back()->with('success', "Đã phân bổ thiết bị thành công.");
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     public function returnEquipment(Request $request, string $projectId, string $allocationId)
@@ -3270,10 +2505,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        if (!in_array($rental->status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ có thể sửa phiếu ở trạng thái Nháp hoặc Từ chối.');
-        }
-
+        
         $validated = $request->validate([
             'equipment_name'    => 'required|string|max:255',
             'equipment_id'      => 'nullable|exists:equipment,id',
@@ -3285,48 +2517,13 @@ class CrmProjectsController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $rental->update([
-                'equipment_name'    => $validated['equipment_name'],
-                'equipment_id'      => $validated['equipment_id'] ?? null,
-                'supplier_id'       => $validated['supplier_id'] ?? null,
-                'rental_start_date' => $validated['rental_start_date'],
-                'rental_end_date'   => $validated['rental_end_date'],
-                'total_cost'        => $validated['total_cost'],
-                'notes'             => $validated['notes'] ?? null,
-            ]);
-
-            // Update linked cost entry if exists
-            if ($rental->cost_id) {
-                $costGroup = \App\Models\CostGroup::where('code', 'equipment')
-                    ->orWhere('name', 'like', '%thiết bị%')
-                    ->where('is_active', true)
-                    ->first();
-
-                $supplierName = '';
-                if ($rental->supplier_id) {
-                    $supplier = \App\Models\Supplier::find($rental->supplier_id);
-                    $supplierName = $supplier->name ?? '';
-                }
-
-                Cost::where('id', $rental->cost_id)->update([
-                    'cost_group_id' => $costGroup ? $costGroup->id : null,
-                    'supplier_id'   => $rental->supplier_id,
-                    'name'          => "Thuê thiết bị: " . $rental->equipment_name . ($supplierName ? " - {$supplierName}" : ""),
-                    'amount'        => $rental->total_cost,
-                    'description'   => "Từ phiếu thuê thiết bị #{$rental->id}. " . ($rental->notes ?? ""),
-                    'cost_date'     => $rental->rental_start_date,
-                ]);
-            }
-
+            $this->equipmentService->upsertRental($validated, $rental, $user);
+            
             // Handle file uploads (append)
             $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
 
-            DB::commit();
             return back()->with('success', 'Đã cập nhật phiếu thuê thiết bị.');
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -3348,55 +2545,14 @@ class CrmProjectsController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $rental = \App\Models\EquipmentRental::create([
-                'project_id'        => $project->id,
-                'equipment_name'    => $validated['equipment_name'],
-                'equipment_id'      => $validated['equipment_id'] ?? null,
-                'supplier_id'       => $validated['supplier_id'] ?? null,
-                'rental_start_date' => $validated['rental_start_date'],
-                'rental_end_date'   => $validated['rental_end_date'],
-                'total_cost'        => $validated['total_cost'],
-                'notes'             => $validated['notes'] ?? null,
-                'status'            => 'draft',
-                'created_by'        => $user->id,
-            ]);
-
-            // Auto-create cost entry (draft)
-            $costGroup = \App\Models\CostGroup::where('code', 'equipment')
-                ->orWhere('name', 'like', '%thiết bị%')
-                ->where('is_active', true)
-                ->first();
-
-            $supplierName = '';
-            if ($rental->supplier_id) {
-                $supplier = \App\Models\Supplier::find($rental->supplier_id);
-                $supplierName = $supplier->name ?? '';
-            }
-
-            $cost = Cost::create([
-                'project_id'    => $project->id,
-                'cost_group_id' => $costGroup ? $costGroup->id : null,
-                'category'      => 'equipment',
-                'supplier_id'   => $rental->supplier_id,
-                'name'          => "Thuê thiết bị: " . $rental->equipment_name . ($supplierName ? " - {$supplierName}" : ""),
-                'amount'        => $rental->total_cost,
-                'description'   => "Từ phiếu thuê thiết bị #{$rental->id}. " . ($rental->notes ?? ""),
-                'cost_date'     => $rental->rental_start_date,
-                'status'        => 'draft',
-                'created_by'    => $user->id,
-            ]);
-
-            $rental->update(['cost_id' => $cost->id]);
+            $validated['project_id'] = $project->id;
+            $rental = $this->equipmentService->upsertRental($validated, null, $user);
 
             // Handle file uploads
             $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
 
-            DB::commit();
             return back()->with('success', 'Đã tạo phiếu thuê thiết bị.');
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -3408,12 +2564,13 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        if (!in_array($rental->status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ gửi duyệt phiếu ở trạng thái Nháp hoặc Từ chối.');
+        
+        try {
+            $this->equipmentService->submitRental($rental);
+            return back()->with('success', 'Đã gửi phiếu thuê để BĐH duyệt.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $rental->update(['status' => 'pending_management', 'rejection_reason' => null]);
-        return back()->with('success', 'Đã gửi phiếu thuê để BĐH duyệt.');
     }
 
     public function approveRentalManagement(string $projectId, string $rentalId)
@@ -3423,16 +2580,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        if ($rental->status !== 'pending_management') {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ BĐH duyệt.');
+        
+        if ($this->equipmentService->approveRentalByManagement($rental, $user)) {
+            return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
         }
-
-        $rental->update([
-            'status'      => 'pending_accountant',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-        return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
+        return back()->with('error', 'Thao tác không thành công.');
     }
 
     public function confirmRentalAccountant(string $projectId, string $rentalId)
@@ -3442,16 +2594,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        if ($rental->status !== 'pending_accountant') {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ Kế toán.');
+        
+        if ($this->equipmentService->confirmRentalByAccountant($rental, $user)) {
+            return back()->with('success', 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
         }
-
-        $rental->update([
-            'status'       => 'in_use',
-            'confirmed_by' => $user->id,
-            'confirmed_at' => now(),
-        ]);
-        return back()->with('success', 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
+        return back()->with('error', 'Thao tác không thành công.');
     }
 
     public function rejectEquipmentRental(Request $request, string $projectId, string $rentalId)
@@ -3461,19 +2608,12 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_REJECT, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        if (!in_array($rental->status, ['pending_management', 'pending_accountant'])) {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ duyệt.');
-        }
-
         $validated = $request->validate(['reason' => 'required|string|max:500']);
 
-        $rental->update([
-            'status'           => 'rejected',
-            'rejection_reason' => $validated['reason'],
-            'approved_by'      => $user->id,
-            'approved_at'      => now(),
-        ]);
-        return back()->with('success', 'Đã từ chối phiếu thuê.');
+        if ($this->equipmentService->rejectRental($rental, $validated['reason'], $user)) {
+            return back()->with('success', 'Đã từ chối phiếu thuê.');
+        }
+        return back()->with('error', 'Thao tác không thành công.');
     }
 
     // ─── Rental: Người lập đánh dấu đã trả (in_use → pending_return) ───
@@ -3482,12 +2622,12 @@ class CrmProjectsController extends Controller
         $project = Project::findOrFail($projectId);
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
 
-        if ($rental->status !== 'in_use') {
-            return back()->with('error', 'Phiếu thuê không ở trạng thái đang sử dụng.');
+        try {
+            $this->equipmentService->requestReturnRental($rental);
+             return back()->with('success', 'Đã gửi yêu cầu trả thiết bị thuê.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $rental->update(['status' => 'pending_return']);
-        return back()->with('success', 'Đã gửi yêu cầu trả thiết bị thuê.');
     }
 
     // ─── Rental: KT xác nhận trả (pending_return → returned) ───
@@ -3499,14 +2639,10 @@ class CrmProjectsController extends Controller
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
 
-        if ($rental->status !== 'pending_return') {
-            return back()->with('error', 'Phiếu thuê không ở trạng thái chờ xác nhận trả.');
+        if ($this->equipmentService->confirmReturnRental($rental, $user)) {
+            return back()->with('success', 'Đã xác nhận trả thiết bị thuê.');
         }
-
-        $rental->update([
-            'status' => 'returned',
-        ]);
-        return back()->with('success', 'Đã xác nhận trả thiết bị thuê.');
+        return back()->with('error', 'Thao tác không thành công.');
     }
 
     public function destroyEquipmentRental(string $projectId, string $rentalId)
@@ -3516,8 +2652,8 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        if ($rental->status !== 'draft' && !($user instanceof \App\Models\Admin)) {
-            return back()->with('error', 'Chỉ có thể xóa phiếu ở trạng thái Nháp.');
+        if ($rental->status !== 'draft' && !($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())) {
+            return back()->with('error', 'Chỉ có thể xóa thuê thiết bị ở trạng thái nháp.');
         }
 
         // Delete linked cost if exists
@@ -3540,10 +2676,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
 
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
-        if (!in_array($purchase->status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ có thể sửa phiếu ở trạng thái Nháp hoặc Từ chối.');
-        }
-
+        
         $validated = $request->validate([
             'notes'              => 'nullable|string',
             'items'              => 'required|array|min:1',
@@ -3554,45 +2687,13 @@ class CrmProjectsController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $purchase->update([
-                'notes' => $validated['notes'] ?? null,
-            ]);
-
-            // Re-create items
-            $purchase->items()->delete();
-            foreach ($validated['items'] as $itemData) {
-                $purchase->items()->create([
-                    'name'       => $itemData['name'],
-                    'code'       => $itemData['code'] ?? null,
-                    'quantity'   => $itemData['quantity'],
-                    'unit_price' => $itemData['unit_price'],
-                ]);
-            }
-
-            $purchase->recalculateTotal();
-
-            // Update linked cost entry if exists by name/category or use a systematic way
-            $itemNames = collect($validated['items'])->pluck('name')->implode(', ');
-            if (strlen($itemNames) > 100) $itemNames = substr($itemNames, 0, 97) . '...';
+            $this->equipmentService->upsertPurchase($validated, $purchase, $user);
             
-            Cost::where('project_id', $project->id)
-                ->where('category', 'equipment')
-                ->where('description', 'like', "Từ phiếu mua thiết bị #{$purchase->id}%")
-                ->update([
-                    'name'   => "Mua thiết bị: {$itemNames}",
-                    'amount' => $purchase->total_amount,
-                    'description' => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
-                ]);
-
             // Handle file uploads (append)
             $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$project->id}/{$purchase->id}", true);
 
-            DB::commit();
             return back()->with('success', 'Đã cập nhật phiếu mua thiết bị.');
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -3613,55 +2714,14 @@ class CrmProjectsController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $purchase = \App\Models\EquipmentPurchase::create([
-                'project_id'   => $project->id,
-                'notes'        => $validated['notes'] ?? null,
-                'status'       => 'draft',
-                'total_amount' => 0,
-                'created_by'   => $user->id,
-            ]);
-
-            foreach ($validated['items'] as $itemData) {
-                $purchase->items()->create([
-                    'name'       => $itemData['name'],
-                    'code'       => $itemData['code'] ?? null,
-                    'quantity'   => $itemData['quantity'],
-                    'unit_price' => $itemData['unit_price'],
-                ]);
-            }
-
-            $purchase->recalculateTotal();
-
-            // Auto-create cost entry
-            $costGroup = \App\Models\CostGroup::where('code', 'equipment')
-                ->orWhere('name', 'like', '%thiết bị%')
-                ->where('is_active', true)
-                ->first();
-
-            $itemNames = collect($validated['items'])->pluck('name')->implode(', ');
-            if (strlen($itemNames) > 100) $itemNames = substr($itemNames, 0, 97) . '...';
-
-            Cost::create([
-                'project_id'    => $project->id,
-                'cost_group_id' => $costGroup ? $costGroup->id : null,
-                'category'      => 'equipment',
-                'name'          => "Mua thiết bị: {$itemNames}",
-                'amount'        => $purchase->total_amount,
-                'description'   => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
-                'cost_date'     => now()->toDateString(),
-                'status'        => 'draft',
-                'created_by'    => $user->id,
-            ]);
+            $validated['project_id'] = $project->id;
+            $purchase = $this->equipmentService->upsertPurchase($validated, null, $user);
 
             // Handle file uploads
             $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$project->id}/{$purchase->id}", true);
 
-            DB::commit();
             return back()->with('success', 'Đã tạo phiếu mua thiết bị.');
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -3673,12 +2733,13 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
 
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
-        if (!in_array($purchase->status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ gửi duyệt phiếu ở trạng thái Nháp hoặc Từ chối.');
+        
+        try {
+            $this->equipmentService->submitPurchase($purchase);
+            return back()->with('success', 'Đã gửi phiếu mua để BĐH duyệt.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $purchase->update(['status' => 'pending_management', 'rejection_reason' => null]);
-        return back()->with('success', 'Đã gửi phiếu mua để BĐH duyệt.');
     }
 
     public function approvePurchaseManagement(string $projectId, string $purchaseId)
@@ -3688,16 +2749,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
 
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
-        if ($purchase->status !== 'pending_management') {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ BĐH duyệt.');
+        
+        if ($this->equipmentService->approvePurchaseByManagement($purchase, $user)) {
+            return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
         }
-
-        $purchase->update([
-            'status'      => 'pending_accountant',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-        return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
+        return back()->with('error', 'Thao tác không thành công.');
     }
 
     public function confirmPurchaseAccountant(string $projectId, string $purchaseId)
@@ -3709,39 +2765,34 @@ class CrmProjectsController extends Controller
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)
             ->with('items')
             ->findOrFail($purchaseId);
-        if ($purchase->status !== 'pending_accountant') {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ Kế toán.');
-        }
-
+        
         try {
-            DB::beginTransaction();
+            $this->equipmentService->confirmPurchaseByAccountant($purchase, $user);
 
-            $purchase->update([
-                'status'       => 'completed',
-                'confirmed_by' => $user->id,
-                'confirmed_at' => now(),
+            // Create global project cost for reporting
+            $costGroup = \App\Models\CostGroup::where('code', 'equipment')
+                ->orWhere('name', 'like', '%thiết bị%')
+                ->where('is_active', true)
+                ->first();
+
+            Cost::create([
+                'project_id'             => $project->id,
+                'cost_group_id'          => $costGroup ? $costGroup->id : null,
+                'category'               => 'equipment',
+                'name'                   => "Mua thiết bị cho DA: {$project->name}",
+                'amount'                 => $purchase->total_amount,
+                'description'            => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
+                'cost_date'              => now(),
+                'status'                 => 'approved',
+                'created_by'             => $purchase->created_by,
+                'management_approved_by' => $purchase->approved_by,
+                'management_approved_at' => $purchase->approved_at,
+                'accountant_approved_by' => $user->id,
+                'accountant_approved_at' => now(),
             ]);
 
-            // Auto-create equipment records in inventory
-            foreach ($purchase->items as $item) {
-                \App\Models\Equipment::create([
-                    'name'            => $item->name,
-                    'code'            => $item->code ?? ('EP-' . strtoupper(\Illuminate\Support\Str::random(6))),
-                    'category'        => 'purchased',
-                    'quantity'        => $item->quantity,
-                    'purchase_price'  => $item->unit_price * $item->quantity,
-                    'current_value'   => $item->unit_price * $item->quantity,
-                    'status'          => 'available',
-                    'notes'           => "Nhập từ phiếu mua #{$purchase->id} - DA: {$project->name}",
-                    'project_id'      => $project->id,
-                    'purchase_date'   => now()->toDateString(),
-                ]);
-            }
-
-            DB::commit();
             return back()->with('success', 'Kế toán xác nhận. Thiết bị đã nhập kho.');
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -3753,19 +2804,12 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_REJECT, $project);
 
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
-        if (!in_array($purchase->status, ['pending_management', 'pending_accountant'])) {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ duyệt.');
-        }
-
         $validated = $request->validate(['reason' => 'required|string|max:500']);
 
-        $purchase->update([
-            'status'           => 'rejected',
-            'rejection_reason' => $validated['reason'],
-            'approved_by'      => $user->id,
-            'approved_at'      => now(),
-        ]);
-        return back()->with('success', 'Đã từ chối phiếu mua.');
+        if ($this->equipmentService->rejectPurchase($purchase, $validated['reason'], $user)) {
+            return back()->with('success', 'Đã từ chối phiếu mua.');
+        }
+        return back()->with('error', 'Thao tác không thành công.');
     }
 
     public function destroyEquipmentPurchase(string $projectId, string $purchaseId)
@@ -3775,8 +2819,8 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $project);
 
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
-        if ($purchase->status !== 'draft' && !($user instanceof \App\Models\Admin)) {
-            return back()->with('error', 'Chỉ có thể xóa phiếu ở trạng thái Nháp.');
+        if ($purchase->status !== 'draft' && !($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())) {
+            return back()->with('error', 'Chỉ có thể xóa phiếu mua vật tư ở trạng thái nháp.');
         }
 
         $purchase->items()->delete();
@@ -3795,10 +2839,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
-        if ($usage->status !== 'pending_receive') {
-            return back()->with('error', 'Chỉ có thể sửa phiếu mượn khi người nhận chưa xác nhận.');
-        }
-
+        
         $validated = $request->validate([
             'equipment_id' => 'required|exists:equipment,id',
             'quantity'     => 'required|integer|min:1',
@@ -3807,23 +2848,16 @@ class CrmProjectsController extends Controller
             'notes'        => 'nullable|string',
         ]);
 
-        $asset = \App\Models\Equipment::findOrFail($validated['equipment_id']);
-        if ($asset->status === 'retired') {
-            return back()->with('error', 'Thiết bị không còn trong kho.');
+        try {
+            $this->equipmentService->upsertUsage($validated, $usage, $user);
+            
+            // Handle file uploads (append)
+            $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
+
+            return back()->with('success', 'Đã cập nhật phiếu mượn thiết bị.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        $usage->update([
-            'equipment_id'  => $validated['equipment_id'],
-            'quantity'      => $validated['quantity'],
-            'receiver_id'   => $validated['receiver_id'],
-            'received_date' => $validated['received_date'],
-            'notes'         => $validated['notes'] ?? null,
-        ]);
-
-        // Handle file uploads (append)
-        $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
-
-        return back()->with('success', 'Đã cập nhật phiếu mượn thiết bị.');
     }
 
     public function storeAssetUsage(Request $request, string $projectId)
@@ -3840,26 +2874,17 @@ class CrmProjectsController extends Controller
             'notes'        => 'nullable|string',
         ]);
 
-        $asset = \App\Models\Equipment::findOrFail($validated['equipment_id']);
-        if ($asset->status === 'retired') {
-            return back()->with('error', 'Thiết bị không còn trong kho.');
+        try {
+            $validated['project_id'] = $project->id;
+            $usage = $this->equipmentService->upsertUsage($validated, null, $user);
+
+            // Handle file uploads
+            $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
+
+            return back()->with('success', 'Đã tạo phiếu sử dụng thiết bị.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        $usage = \App\Models\AssetUsage::create([
-            'project_id'    => $project->id,
-            'equipment_id'  => $validated['equipment_id'],
-            'quantity'      => $validated['quantity'],
-            'receiver_id'   => $validated['receiver_id'],
-            'received_date' => $validated['received_date'],
-            'notes'         => $validated['notes'] ?? null,
-            'status'        => 'draft',
-            'created_by'    => $user->id,
-        ]);
-
-        // Handle file uploads
-        $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
-
-        return back()->with('success', 'Đã tạo phiếu sử dụng thiết bị.');
     }
 
     // ─── Asset Usage: Gửi duyệt (draft/rejected → pending_management) ───
@@ -3871,16 +2896,12 @@ class CrmProjectsController extends Controller
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
 
-        if (!in_array($usage->status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ gửi duyệt được phiếu ở trạng thái Nháp hoặc Từ chối.');
+        try {
+            $this->equipmentService->submitUsage($usage);
+            return back()->with('success', 'Đã gửi phiếu để BĐH duyệt.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $usage->update([
-            'status'           => 'pending_management',
-            'rejection_reason' => null,
-        ]);
-
-        return back()->with('success', 'Đã gửi phiếu để BĐH duyệt.');
     }
 
     // ─── Asset Usage: BĐH duyệt (pending_management → pending_accountant) ───
@@ -3892,17 +2913,10 @@ class CrmProjectsController extends Controller
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
 
-        if ($usage->status !== 'pending_management') {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ BĐH duyệt.');
+        if ($this->equipmentService->approveUsageByManagement($usage, $user)) {
+            return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán xác nhận.');
         }
-
-        $usage->update([
-            'status'      => 'pending_accountant',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-
-        return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán xác nhận.');
+        return back()->with('error', 'Thao tác không thành công.');
     }
 
     // ─── Asset Usage: KT xác nhận (pending_accountant → in_use) ───
@@ -3914,34 +2928,10 @@ class CrmProjectsController extends Controller
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
 
-        if ($usage->status !== 'pending_accountant') {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ Kế toán.');
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $usage->update([
-                'status'        => 'in_use',
-                'confirmed_by'  => $user->id,
-                'confirmed_at'  => now(),
-                'received_date' => now()->toDateString(),
-            ]);
-
-            // Cập nhật trạng thái thiết bị
-            $asset = $usage->asset;
-            if ($asset) {
-                $asset->update([
-                    'status' => 'in_use',
-                ]);
-            }
-
-            DB::commit();
+        if ($this->equipmentService->confirmUsageByAccountant($usage, $user)) {
             return back()->with('success', 'KT đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
+        return back()->with('error', 'Thao tác không thành công.');
     }
 
     // ─── Asset Usage: Từ chối ───
@@ -3951,19 +2941,12 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+        $validated = $request->validate(['rejection_reason' => 'required|string']);
 
-        if (!in_array($usage->status, ['pending_management', 'pending_accountant'])) {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ duyệt.');
+        if ($this->equipmentService->rejectUsage($usage, $validated['rejection_reason'], $user)) {
+            return back()->with('success', 'Đã từ chối phiếu sử dụng thiết bị.');
         }
-
-        $request->validate(['rejection_reason' => 'required|string']);
-
-        $usage->update([
-            'status'           => 'rejected',
-            'rejection_reason' => $request->rejection_reason,
-        ]);
-
-        return back()->with('success', 'Đã từ chối phiếu sử dụng thiết bị.');
+        return back()->with('error', 'Thao tác không thành công.');
     }
 
     // ─── Asset Usage: Yêu cầu trả (in_use → pending_return) ───
@@ -3972,12 +2955,12 @@ class CrmProjectsController extends Controller
         $project = Project::findOrFail($projectId);
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
 
-        if ($usage->status !== 'in_use') {
-            return back()->with('error', 'Phiếu không ở trạng thái đang sử dụng.');
+        try {
+            $this->equipmentService->requestReturnUsage($usage);
+            return back()->with('success', 'Đã gửi yêu cầu trả thiết bị.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $usage->update(['status' => 'pending_return']);
-        return back()->with('success', 'Đã gửi yêu cầu trả thiết bị.');
     }
 
     // ─── Asset Usage: Xác nhận trả (pending_return → returned) — KT only ───
@@ -4048,15 +3031,15 @@ class CrmProjectsController extends Controller
             'order' => 'nullable|integer|min:0',
         ]);
 
-        AcceptanceItem::create([
-            'acceptance_stage_id' => $stage->id,
-            'acceptance_status' => 'not_started',
-            'workflow_status' => 'draft',
-            'created_by' => $user->id,
-            ...$validated,
-        ]);
+        try {
+            $this->acceptanceService->upsertItem(array_merge($validated, [
+                'acceptance_stage_id' => $stage->id,
+            ]), null, $user);
 
-        return back()->with('success', 'Đã thêm hạng mục nghiệm thu.');
+            return back()->with('success', 'Đã thêm hạng mục nghiệm thu.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     public function updateAcceptanceItem(Request $request, string $projectId, string $stageId, string $itemId)
@@ -4078,8 +3061,12 @@ class CrmProjectsController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        $item->update(array_merge($validated, ['updated_by' => $user->id]));
-        return back()->with('success', 'Đã cập nhật hạng mục nghiệm thu.');
+        try {
+            $this->acceptanceService->upsertItem($validated, $item, $user);
+            return back()->with('success', 'Đã cập nhật hạng mục nghiệm thu.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     public function destroyAcceptanceItem(string $projectId, string $stageId, string $itemId)
@@ -4091,12 +3078,12 @@ class CrmProjectsController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
 
-        if (!in_array($item->workflow_status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ xóa được hạng mục ở trạng thái nháp hoặc bị từ chối.');
+        try {
+            $this->acceptanceService->deleteItem($item);
+            return back()->with('success', 'Đã xóa hạng mục nghiệm thu.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $item->delete();
-        return back()->with('success', 'Đã xóa hạng mục nghiệm thu.');
     }
 
     /**
@@ -4111,28 +3098,12 @@ class CrmProjectsController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
 
-        if (!in_array($item->workflow_status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ gửi được hạng mục ở trạng thái nháp hoặc bị từ chối.');
+        try {
+            $this->acceptanceService->submitItem($item, $user);
+            return back()->with('success', 'Đã gửi hạng mục để duyệt.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $oldStatus = $item->workflow_status;
-        $updateData = [
-            'workflow_status' => 'submitted',
-            'submitted_by' => $user->id,
-            'submitted_at' => now(),
-        ];
-        // BUSINESS RULE: Clear rejection on resubmit (matching APP)
-        if ($oldStatus === 'rejected') {
-            $updateData['rejection_reason'] = null;
-            $updateData['rejected_by'] = null;
-            $updateData['rejected_at'] = null;
-        }
-        $item->update($updateData);
-
-        // Send notification to supervisor
-        $stage->notifyEvent('submitted', auth('admin')->user());
-
-        return back()->with('success', 'Đã gửi hạng mục để duyệt.');
     }
 
     /**
@@ -4147,34 +3118,12 @@ class CrmProjectsController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
 
-        if ($item->workflow_status !== 'submitted') {
-            return back()->with('error', 'Hạng mục không ở trạng thái chờ giám sát duyệt.');
+        try {
+            $this->acceptanceService->approveItem($item, $user, 1);
+            return back()->with('success', 'Đã duyệt (Giám sát).');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        // BUSINESS RULE: Block if open defects exist (matching APP)
-        // Check by BOTH task_id (task-linked defects) AND acceptance_stage_id (auto-created from rejection)
-        $openDefectsQuery = Defect::where('project_id', $project->id)
-            ->whereIn('status', ['open', 'in_progress'])
-            ->where(function ($q) use ($item, $stage) {
-                if ($item->task_id) {
-                    $q->where('task_id', $item->task_id);
-                }
-                $q->orWhere('acceptance_stage_id', $stage->id);
-            });
-        $openDefects = $openDefectsQuery->count();
-        if ($openDefects > 0) {
-            return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
-        }
-
-        $item->update([
-            'workflow_status' => 'supervisor_approved',
-            'supervisor_approved_by' => $user->id,
-            'supervisor_approved_at' => now(),
-        ]);
-
-        $stage->notifyEvent('supervisor_approved', $user);
-
-        return back()->with('success', 'Đã duyệt (Giám sát).');
     }
 
     /**
@@ -4189,47 +3138,12 @@ class CrmProjectsController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
 
-        if ($item->workflow_status !== 'supervisor_approved') {
-            return back()->with('error', 'Hạng mục cần được giám sát duyệt trước.');
+        try {
+            $this->acceptanceService->approveItem($item, $user, 2);
+            return back()->with('success', 'Đã duyệt (PM).');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        // BUSINESS RULE: Block if open defects exist (matching APP)
-        // Check by BOTH task_id AND acceptance_stage_id
-        $openDefectsQuery = Defect::where('project_id', $project->id)
-            ->whereIn('status', ['open', 'in_progress'])
-            ->where(function ($q) use ($item, $stage) {
-                if ($item->task_id) {
-                    $q->where('task_id', $item->task_id);
-                }
-                $q->orWhere('acceptance_stage_id', $stage->id);
-            });
-        $openDefects = $openDefectsQuery->count();
-        if ($openDefects > 0) {
-            return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
-        }
-
-        // BUSINESS RULE: Check task progress 100% (matching APP)
-        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
-            ->whereNotNull('task_id')->with('task')->get();
-        $incompleteTasks = [];
-        foreach ($stageItems as $si) {
-            if ($si->task && $si->task->progress_percentage < 100) {
-                $incompleteTasks[] = $si->task->name ?? "Hạng mục #{$si->id}";
-            }
-        }
-        if (count($incompleteTasks) > 0) {
-            return back()->with('error', 'Không thể duyệt. Chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks));
-        }
-
-        $item->update([
-            'workflow_status' => 'project_manager_approved', // FIXED: was 'pm_approved', must match APP
-            'project_manager_approved_by' => $user->id,
-            'project_manager_approved_at' => now(),
-        ]);
-
-        $stage->notifyEvent('pm_approved', $user);
-
-        return back()->with('success', 'Đã duyệt (PM).');
     }
 
     /**
@@ -4244,56 +3158,12 @@ class CrmProjectsController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
 
-        if (!in_array($item->workflow_status, ['pm_approved', 'project_manager_approved'])) {
-            return back()->with('error', 'Hạng mục cần được PM duyệt trước.');
+        try {
+            $this->acceptanceService->approveItem($item, $user, 3);
+            return back()->with('success', 'Đã nghiệm thu (Khách hàng).');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        // BUSINESS RULE: Block if open defects exist (matching APP)
-        // Check by BOTH task_id AND acceptance_stage_id
-        $openDefectsQuery = Defect::where('project_id', $project->id)
-            ->whereIn('status', ['open', 'in_progress'])
-            ->where(function ($q) use ($item, $stage) {
-                if ($item->task_id) {
-                    $q->where('task_id', $item->task_id);
-                }
-                $q->orWhere('acceptance_stage_id', $stage->id);
-            });
-        $openDefects = $openDefectsQuery->count();
-        if ($openDefects > 0) {
-            return back()->with('error', "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
-        }
-
-        // BUSINESS RULE: Check task progress 100% (matching APP)
-        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
-            ->whereNotNull('task_id')->with('task')->get();
-        $incompleteTasks = [];
-        foreach ($stageItems as $si) {
-            if ($si->task && $si->task->progress_percentage < 100) {
-                $incompleteTasks[] = $si->task->name ?? "Hạng mục #{$si->id}";
-            }
-        }
-        if (count($incompleteTasks) > 0) {
-            return back()->with('error', 'Không thể duyệt. Chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks));
-        }
-
-        $item->update([
-            'workflow_status' => 'customer_approved',
-            'customer_approved_by' => $user->id,
-            'customer_approved_at' => now(),
-            'acceptance_status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-
-        // BUSINESS RULE: Update project progress (matching APP)
-        $item->updateProjectProgress();
-
-        // BUSINESS RULE: Check stage completion (matching APP)
-        $stage->checkCompletion();
-
-        $stage->notifyEvent('customer_approved', $user);
-
-        return back()->with('success', 'Đã nghiệm thu (Khách hàng).');
     }
 
     /**
@@ -4307,27 +3177,16 @@ class CrmProjectsController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
 
-        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved', 'pm_approved', 'project_manager_approved'])) {
-            return back()->with('error', 'Hạng mục không ở trạng thái chờ duyệt.');
-        }
-
         $validated = $request->validate([
             'rejection_reason' => 'required|string|max:1000',
         ]);
 
-        $item->update([
-            'workflow_status' => 'rejected',
-            'rejected_by' => $user->id,
-            'rejected_at' => now(),
-            'rejection_reason' => $validated['rejection_reason'],
-        ]);
-
-        // BUSINESS RULE: Auto-create defect on reject (matching APP)
-        $item->autoCreateDefectOnReject(null, $validated['rejection_reason']);
-
-        $stage->notifyEvent('rejected', $user, ['reason' => $validated['rejection_reason']]);
-
-        return back()->with('success', 'Đã từ chối hạng mục nghiệm thu. Lỗi ghi nhận đã được tự động tạo.');
+        try {
+            $this->acceptanceService->rejectItem($item, $user, $validated['rejection_reason']);
+            return back()->with('success', 'Đã từ chối hạng mục nghiệm thu. Lỗi ghi nhận đã được tự động tạo.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     /**
@@ -4352,55 +3211,16 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
-        $items = AcceptanceItem::where('acceptance_stage_id', $stage->id)
-            ->whereIn('workflow_status', ['submitted', 'supervisor_approved', 'pm_approved', 'project_manager_approved'])
-            ->get();
-
-        if ($items->isEmpty()) {
-            return back()->with('info', 'Không có hạng mục nào đang chờ duyệt.');
-        }
-
-        $successCount = 0;
-        foreach ($items as $item) {
-            // Level 1 approval?
-            if ($item->workflow_status === 'submitted' && $user->can(Permissions::ACCEPTANCE_APPROVE_LEVEL_1)) {
-                $item->update([
-                    'workflow_status' => 'supervisor_approved',
-                    'supervisor_approved_by' => $user->id,
-                    'supervisor_approved_at' => now(),
-                ]);
-                $successCount++;
+        
+        try {
+            $count = $this->acceptanceService->approveAllInStage($stage, $user);
+            if ($count > 0) {
+                return back()->with('success', "Đã duyệt nhanh {$count} hạng mục.");
             }
-            // Level 2 approval?
-            else if ($item->workflow_status === 'supervisor_approved' && $user->can(Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
-                $item->update([
-                    'workflow_status' => 'project_manager_approved',
-                    'project_manager_approved_by' => $user->id,
-                    'project_manager_approved_at' => now(),
-                ]);
-                $successCount++;
-            }
-            // Level 3 (Final) approval?
-            else if (in_array($item->workflow_status, ['pm_approved', 'project_manager_approved']) && $user->can(Permissions::ACCEPTANCE_APPROVE_LEVEL_3)) {
-                $item->update([
-                    'workflow_status' => 'customer_approved',
-                    'customer_approved_by' => $user->id,
-                    'customer_approved_at' => now(),
-                    'acceptance_status' => 'approved',
-                    'approved_by' => $user->id,
-                    'approved_at' => now(),
-                ]);
-                $item->updateProjectProgress();
-                $successCount++;
-            }
+            return back()->with('info', 'Không có hạng mục nào được duyệt.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        if ($successCount > 0) {
-            $stage->checkCompletion();
-            return back()->with('success', "Đã duyệt nhanh {$successCount} hạng mục.");
-        }
-
-        return back()->with('error', 'Bạn không có quyền duyệt các hạng mục này hoặc trạng thái không hợp lệ.');
     }
 
     // ===================================================================
@@ -4481,88 +3301,16 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::MATERIAL_CREATE, $project);
 
-        $validated = $request->validate([
-            'supplier_id' => 'nullable|exists:suppliers,id',
-            'bill_date' => 'required|date',
-            'cost_group_id' => 'nullable|exists:cost_groups,id',
-            'notes' => 'nullable|string',
-            'items' => 'required|array|min:1',
-            'items.*.material_id' => 'required|exists:materials,id',
-            'items.*.quantity' => 'required|numeric|min:0.01',
-            'items.*.unit_price' => 'required|numeric|min:0',
-            'items.*.notes' => 'nullable|string',
-        ]);
-
         try {
-            DB::beginTransaction();
+            $data = $request->all();
+            $data['project_id'] = $projectId;
 
-            // Auto-generate bill number
-            $lastBill = MaterialBill::where('project_id', $project->id)->count();
-            $billNumber = 'PVT-' . str_pad($lastBill + 1, 3, '0', STR_PAD_LEFT);
+            $this->materialBillService->upsert($data, null, $user);
 
-            $totalAmount = 0;
-            foreach ($validated['items'] as $itemData) {
-                $totalAmount += $itemData['quantity'] * $itemData['unit_price'];
-            }
-
-            $bill = MaterialBill::create([
-                'project_id' => $project->id,
-                'supplier_id' => $validated['supplier_id'] ?? null,
-                'bill_number' => $billNumber,
-                'bill_date' => $validated['bill_date'],
-                'cost_group_id' => $validated['cost_group_id'] ?? null,
-                'total_amount' => $totalAmount,
-                'notes' => $validated['notes'] ?? null,
-                'status' => 'draft',
-                'created_by' => $user->id,
-            ]);
-
-            foreach ($validated['items'] as $itemData) {
-                MaterialBillItem::create([
-                    'material_bill_id' => $bill->id,
-                    'material_id' => $itemData['material_id'],
-                    'quantity' => $itemData['quantity'],
-                    'unit_price' => $itemData['unit_price'],
-                    'total_price' => $itemData['quantity'] * $itemData['unit_price'],
-                    'notes' => $itemData['notes'] ?? null,
-                ]);
-            }
-
-            // Handle file uploads - OPTIONAL for material bills
-            $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", false);
-
-            // Handle attachment_ids from UniversalFileUploader/API
-            if ($request->has('attachment_ids')) {
-                $attachmentIds = is_array($request->attachment_ids) ? $request->attachment_ids : explode(',', $request->attachment_ids);
-                \App\Models\Attachment::whereIn('id', $attachmentIds)->update([
-                    'attachable_id' => $bill->id,
-                    'attachable_type' => get_class($bill),
-                ]);
-            }
-
-            // Create linked Cost record immediately (draft) so it shows in Chi phí tab
-            $supplierName = '';
-            if ($validated['supplier_id'] ?? null) {
-                $supplierName = \App\Models\Supplier::find($validated['supplier_id'])->name ?? '';
-            }
-            \App\Models\Cost::create([
-                'project_id' => $project->id,
-                'cost_group_id' => $validated['cost_group_id'] ?? null,
-                'supplier_id' => $validated['supplier_id'] ?? null,
-                'category' => 'construction_materials',
-                'material_bill_id' => $bill->id,
-                'name' => "Phiếu vật liệu #{$billNumber}" . ($supplierName ? " - {$supplierName}" : ''),
-                'amount' => $totalAmount,
-                'description' => $validated['notes'] ?? "Từ phiếu vật tư {$billNumber}",
-                'cost_date' => $validated['bill_date'],
-                'status' => 'draft',
-                'created_by' => $user->id,
-            ]);
-
-            DB::commit();
-            return back()->with('success', "Đã tạo phiếu vật tư {$billNumber}.");
+            return back()->with('success', "Đã tạo phiếu vật tư.");
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -4575,59 +3323,16 @@ class CrmProjectsController extends Controller
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if (!in_array($bill->status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ sửa được phiếu ở trạng thái nháp hoặc từ chối.');
-        }
-
-        $validated = $request->validate([
-            'supplier_id' => 'nullable|exists:suppliers,id',
-            'bill_date' => 'sometimes|date',
-            'cost_group_id' => 'nullable|exists:cost_groups,id',
-            'notes' => 'nullable|string',
-            'items' => 'sometimes|array|min:1',
-            'items.*.material_id' => 'required|exists:materials,id',
-            'items.*.quantity' => 'required|numeric|min:0.01',
-            'items.*.unit_price' => 'required|numeric|min:0',
-            'items.*.notes' => 'nullable|string',
-        ]);
-
         try {
-            DB::beginTransaction();
+            $this->materialBillService->upsert($request->all(), $bill, $user);
 
-            $bill->update([
-                'supplier_id' => $validated['supplier_id'] ?? $bill->supplier_id,
-                'bill_date' => $validated['bill_date'] ?? $bill->bill_date,
-                'cost_group_id' => $validated['cost_group_id'] ?? $bill->cost_group_id,
-                'notes' => $validated['notes'] ?? $bill->notes,
-                'status' => 'draft', // Reset to draft on update
-            ]);
-
-            if (isset($validated['items'])) {
-                $bill->items()->delete();
-
-                $totalAmount = 0;
-                foreach ($validated['items'] as $itemData) {
-                    $total = $itemData['quantity'] * $itemData['unit_price'];
-                    $totalAmount += $total;
-                    MaterialBillItem::create([
-                        'material_bill_id' => $bill->id,
-                        'material_id' => $itemData['material_id'],
-                        'quantity' => $itemData['quantity'],
-                        'unit_price' => $itemData['unit_price'],
-                        'total_price' => $total,
-                        'notes' => $itemData['notes'] ?? null,
-                    ]);
-                }
-                $bill->update(['total_amount' => $totalAmount]);
-            }
-
-            // Handle file uploads during update
+            // Handle file uploads during update (Web only)
             $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", false);
 
-            DB::commit();
             return back()->with('success', 'Đã cập nhật phiếu vật tư.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -4640,14 +3345,12 @@ class CrmProjectsController extends Controller
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if (!in_array($bill->status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ xóa được phiếu ở trạng thái nháp hoặc từ chối.');
+        try {
+            $this->materialBillService->delete($bill);
+            return back()->with('success', 'Đã xóa phiếu vật tư.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $bill->items()->delete();
-        $bill->delete();
-
-        return back()->with('success', 'Đã xóa phiếu vật tư.');
     }
 
     public function submitMaterialBill(string $projectId, string $billId)
@@ -4658,15 +3361,12 @@ class CrmProjectsController extends Controller
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if (!in_array($bill->status, ['draft', 'rejected'])) {
-            return back()->with('error', 'Chỉ gửi được phiếu ở trạng thái nháp hoặc từ chối.');
+        try {
+            $this->materialBillService->submit($bill, $user);
+            return back()->with('success', 'Đã gửi phiếu vật tư để duyệt.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $bill->submitForManagementApproval();
-
-        $bill->notifyEvent('submitted', auth('admin')->user());
-
-        return back()->with('success', 'Đã gửi phiếu vật tư để duyệt.');
     }
 
     public function approveMaterialBillManagement(string $projectId, string $billId)
@@ -4677,17 +3377,12 @@ class CrmProjectsController extends Controller
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if ($bill->status !== 'pending_management') {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ BĐH duyệt.');
+        try {
+            $this->materialBillService->approve($bill, $user);
+            return back()->with('success', 'Đã duyệt phiếu vật tư (BĐH).');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        // Use model method
-        $bill->approveByManagement((object) ['id' => $user->id ?? null]);
-        $bill->update(['management_approved_at' => now()]);
-
-        $bill->notifyEvent('approved_management', $user);
-
-        return back()->with('success', 'Đã duyệt phiếu vật tư (BĐH).');
     }
 
     public function approveMaterialBillAccountant(Request $request, string $projectId, string $billId)
@@ -4696,42 +3391,12 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
-        $bill = MaterialBill::with(['items.material', 'supplier'])
-            ->where('project_id', $project->id)->findOrFail($billId);
-
-        if ($bill->status !== 'pending_accountant') {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ KT xác nhận.');
-        }
+        $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
         try {
-            DB::beginTransaction();
-
-            // 1. Update budget item if provided
-            if ($request->has('budget_item_id')) {
-                $bill->budget_item_id = $request->budget_item_id;
-                
-                // If budget_item_id is provided, also sync the cost_group_id from that item if possible
-                $budgetItem = BudgetItem::find($request->budget_item_id);
-                if ($budgetItem && $budgetItem->cost_group_id) {
-                    $bill->cost_group_id = $budgetItem->cost_group_id;
-                }
-                
-                $bill->save();
-            }
-
-            // 2. Update bill status
-            $bill->approveByAccountant((object) ['id' => $user->id ?? null]);
-
-            // 3. Tự động đồng bộ sang Cost và kích hoạt side effects
-            $bill->triggerApprovalSideEffects();
-
-            DB::commit();
-
-            $bill->notifyEvent('approved_accountant', $user);
-
+            $this->materialBillService->approve($bill, $user, $request->only('budget_item_id'));
             return back()->with('success', 'Đã xác nhận phiếu vật tư. Dữ liệu đã đẩy qua Chi phí dự án.');
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -4857,19 +3522,23 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_REJECT, $project);
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if (!in_array($bill->status, ['pending_management', 'pending_accountant'])) {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ duyệt.');
+        $request->validate([
+            'reason' => 'nullable|string|max:500',
+            'rejected_reason' => 'nullable|string|max:500'
+        ]);
+
+        $reason = $request->reason ?? $request->rejected_reason;
+
+        try {
+            $this->materialBillService->reject($bill, $user, $reason);
+            return back()->with('success', 'Đã từ chối phiếu vật tư.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $validated = $request->validate(['rejected_reason' => 'required|string|max:500']);
-        $bill->reject($validated['rejected_reason'], null);
-
-        $bill->notifyEvent('rejected', $user, ['reason' => $validated['rejected_reason']]);
-
-        return back()->with('success', 'Đã từ chối phiếu vật tư.');
     }
 
     // ===================================================================
@@ -4999,83 +3668,94 @@ class CrmProjectsController extends Controller
 
     public function getAttendance(Request $request, string $projectId)
     {
-        $request->merge(['project_id' => $projectId]);
-        return app(\App\Http\Controllers\Api\AttendanceController::class)->index($request);
+        $query = \App\Models\Attendance::with(['user:id,name,email', 'project:id,name', 'approver:id,name'])
+            ->forProject($projectId);
+
+        if ($request->user_id) $query->forUser($request->user_id);
+        if ($request->month && $request->year) {
+            $query->forMonth($request->year, $request->month);
+        } elseif ($request->date) {
+            $query->forDate($request->date);
+        }
+        if ($request->status) $query->where('status', $request->status);
+
+        return response()->json($query->orderByDesc('work_date')->paginate($request->per_page ?? 30));
     }
 
     public function storeAttendance(Request $request, string $projectId)
     {
-        $request->merge(['project_id' => $projectId]);
-        return app(\App\Http\Controllers\Api\AttendanceController::class)->store($request);
+        $admin = auth('admin')->user();
+        try {
+            $data = array_merge($request->all(), ['project_id' => $projectId]);
+            $attendance = $this->attendanceService->upsert($data, $admin);
+
+            return response()->json([
+                'message' => 'Lưu chấm công thành công',
+                'data' => $attendance->load(['user:id,name', 'project:id,name']),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 500);
+        }
     }
 
     public function approveAttendance(Request $request, string $projectId, string $id)
     {
-        // Fake $request->user() for the API controller by merging admin user
         $admin = auth('admin')->user();
-        $request->merge(['_admin_approver_id' => $admin->id]);
-
         $attendance = \App\Models\Attendance::findOrFail($id);
-        $attendance->update([
-            'approved_by' => $admin->id,
-            'approved_at' => now(),
-        ]);
+        $this->attendanceService->approve($attendance, $admin);
+
         return response()->json(['message' => 'Đã duyệt chấm công', 'data' => $attendance]);
     }
 
     public function attendanceStatistics(Request $request, string $projectId)
     {
-        $request->merge(['project_id' => $projectId]);
-        return app(\App\Http\Controllers\Api\AttendanceController::class)->statistics($request);
+        $data = $this->attendanceService->getMonthlyStatistics(
+            (int) $request->year,
+            (int) $request->month,
+            (int) $projectId
+        );
+        return response()->json($data);
     }
 
     public function getShifts(Request $request, string $projectId)
     {
-        $request->merge(['project_id' => $projectId]);
-        return app(\App\Http\Controllers\Api\AttendanceController::class)->shifts($request);
+        $query = \App\Models\WorkShift::where('project_id', $projectId);
+        if ($request->active_only) $query->where('is_active', true);
+        return response()->json($query->orderBy('start_time')->get());
     }
 
     public function storeShift(Request $request, string $projectId)
     {
-        $request->merge(['project_id' => $projectId]);
-        return app(\App\Http\Controllers\Api\AttendanceController::class)->createShift($request);
+        $data = array_merge($request->all(), ['project_id' => $projectId]);
+        $shift = $this->attendanceService->createShift($data);
+        return response()->json(['message' => 'Tạo ca thành công', 'data' => $shift], 201);
     }
 
     public function getLaborProductivity(Request $request, string $projectId)
     {
-        return app(\App\Http\Controllers\Api\LaborProductivityController::class)->index($request, $projectId);
+        $query = \App\Models\LaborProductivity::with(['user:id,name', 'task:id,name', 'creator:id,name'])
+            ->forProject($projectId);
+
+        if ($request->user_id) $query->forUser($request->user_id);
+        if ($request->task_id) $query->where('task_id', $request->task_id);
+        if ($request->from) $query->where('record_date', '>=', $request->from);
+        if ($request->to) $query->where('record_date', '<=', $request->to);
+
+        return response()->json($query->orderByDesc('record_date')->paginate($request->per_page ?? 20));
     }
 
     public function storeLaborProductivity(Request $request, string $projectId)
     {
-        // LaborProductivityController::store uses $request->user()->id for created_by
-        // Under auth:admin, $request->user() is null. We need to handle this.
         $admin = auth('admin')->user();
-
-        $request->validate([
-            'user_id' => 'nullable|exists:users,id',
-            'task_id' => 'nullable|exists:project_tasks,id',
-            'record_date' => 'required|date',
-            'work_item' => 'required|string|max:255',
-            'unit' => 'required|string|max:20',
-            'planned_quantity' => 'required|numeric|min:0',
-            'actual_quantity' => 'required|numeric|min:0',
-            'workers_count' => 'required|integer|min:1',
-            'hours_spent' => 'required|numeric|min:0.5|max:24',
-            'note' => 'nullable|string|max:500',
-        ]);
-
-        $record = \App\Models\LaborProductivity::create(array_merge(
-            $request->all(),
-            [
-                'project_id' => $projectId,
-                'created_by' => $admin->id,
-            ]
-        ));
+        $record = $this->productivityService->upsert(
+            array_merge($request->all(), ['project_id' => $projectId]),
+            null,
+            $admin
+        );
 
         return response()->json([
             'message' => 'Ghi nhận năng suất thành công',
-            'data' => $record->load(['user:id,name', 'task:id,name']),
+            'data' => $record,
         ], 201);
     }
 
@@ -5087,7 +3767,38 @@ class CrmProjectsController extends Controller
 
     public function laborProductivityDashboard(Request $request, string $projectId)
     {
-        return app(\App\Http\Controllers\Api\LaborProductivityController::class)->dashboard($request, $projectId);
+        $data = $this->productivityService->getDashboardData((int)$projectId, $request->all());
+        return response()->json($data);
+    }
+
+    /**
+     * Tổng hợp chi phí nhân công từ chấm công theo tháng
+     */
+    public function generateLaborCosts(Request $request, string $projectId)
+    {
+        $admin = auth('admin')->user();
+        $project = Project::findOrFail($projectId);
+
+        $validated = $request->validate([
+            'year'  => 'required|integer|min:2020|max:2030',
+            'month' => 'required|integer|min:1|max:12',
+        ]);
+
+        try {
+            $result = $this->attendanceService->generateBatchLaborCosts(
+                (int) $project->id,
+                (int) $validated['year'],
+                (int) $validated['month'],
+                $admin
+            );
+
+            return response()->json([
+                'message' => "Đã tạo {$result['created']} chi phí nhân công, tổng " . number_format($result['total_amount'], 0, ',', '.') . 'đ',
+                'data'    => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 500);
+        }
     }
 
     // ===================================================================
@@ -5111,21 +3822,17 @@ class CrmProjectsController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        DB::beginTransaction();
         try {
-            $warranty = \App\Models\ProjectWarranty::create(array_merge($validated, [
-                'project_id' => $project->id,
-                'status' => \App\Models\ProjectWarranty::STATUS_DRAFT,
-                'created_by' => $user->id,
-            ]));
-
-            $this->attachFilesToEntity($request, $warranty, "warranties/{$project->id}");
+            DB::beginTransaction();
+            $data = array_merge($validated, ['project_id' => $project->id]);
+            $warranty = $this->warrantyService->upsertWarranty($data, null, $user);
+            $this->attachmentService->handleCrmUpload($request, $warranty, "projects/{$project->id}/warranties", false);
 
             DB::commit();
-            return back()->with('success', 'Đã tạo phiếu bảo hành.');
+            return back()->with('success', 'Đã lưu thông tin bảo hành.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi khi tạo phiếu bảo hành: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -5149,16 +3856,17 @@ class CrmProjectsController extends Controller
             'status' => 'nullable|string',
         ]);
 
-        DB::beginTransaction();
         try {
-            $warranty->update($validated);
-            $this->attachFilesToEntity($request, $warranty, "warranties/{$project->id}");
+            DB::beginTransaction();
+            $data = array_merge($validated, ['project_id' => $project->id]);
+            $this->warrantyService->upsertWarranty($data, $warranty, $user);
+            $this->attachmentService->handleCrmUpload($request, $warranty, "projects/{$project->id}/warranties", false);
 
             DB::commit();
             return back()->with('success', 'Đã cập nhật phiếu bảo hành.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi khi cập nhật phiếu bảo hành: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -5169,15 +3877,10 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
-        // Permission check: normally this would be a customer, but in CRM admin can act on behalf if they have permission
         $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $project);
 
         $warranty = \App\Models\ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
-        
-        $warranty->update([
-            'status' => \App\Models\ProjectWarranty::STATUS_APPROVED,
-            'approved_by' => $user->id,
-        ]);
+        $this->warrantyService->updateStatus($warranty, \App\Models\ProjectWarranty::STATUS_APPROVED, $user);
 
         return back()->with('success', 'Đã duyệt phiếu bảo hành.');
     }
@@ -5226,33 +3929,20 @@ class CrmProjectsController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        DB::beginTransaction();
         try {
-            // Calculate next maintenance date (6 months later)
-            $nextDate = \Carbon\Carbon::parse($validated['maintenance_date'])->addMonths(6);
-
-            $maintenance = \App\Models\ProjectMaintenance::create([
-                'project_id' => $project->id,
-                'maintenance_date' => $validated['maintenance_date'],
-                'next_maintenance_date' => $nextDate,
-                'status' => \App\Models\ProjectMaintenance::STATUS_DRAFT,
-                'notes' => $validated['notes'] ?? null,
-                'created_by' => $user->id,
-            ]);
-
-            $this->attachFilesToEntity($request, $maintenance, "maintenances/{$project->id}");
+            DB::beginTransaction();
+            $data = array_merge($validated, ['project_id' => $project->id]);
+            $maintenance = $this->warrantyService->upsertMaintenance($data, null, $user);
+            $this->attachmentService->handleCrmUpload($request, $maintenance, "projects/{$project->id}/maintenance", false);
 
             DB::commit();
-            return back()->with('success', 'Đã tạo phiếu bảo trì. Lần bảo trì tiếp theo dự kiến: ' . $nextDate->format('d/m/Y'));
+            return back()->with('success', 'Đã tạo phiếu bảo trì.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi khi tạo phiếu bảo trì: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Update project maintenance
-     */
     public function updateProjectMaintenance(Request $request, string $projectId, string $uuid)
     {
         $project = Project::findOrFail($projectId);
@@ -5270,18 +3960,11 @@ class CrmProjectsController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        DB::beginTransaction();
         try {
-            $nextDate = \Carbon\Carbon::parse($validated['maintenance_date'])->addMonths(6);
-
-            $maintenance->update([
-                'maintenance_date' => $validated['maintenance_date'],
-                'next_maintenance_date' => $nextDate,
-                'notes' => $validated['notes'] ?? $maintenance->notes,
-                'status' => \App\Models\ProjectMaintenance::STATUS_DRAFT,
-            ]);
-
-            $this->attachFilesToEntity($request, $maintenance, "maintenances/{$project->id}");
+            DB::beginTransaction();
+            $data = array_merge($validated, ['project_id' => $project->id]);
+            $this->warrantyService->upsertMaintenance($data, $maintenance, $user);
+            $this->attachmentService->handleCrmUpload($request, $maintenance, "projects/{$project->id}/maintenance", false);
 
             DB::commit();
             return back()->with('success', 'Đã cập nhật phiếu bảo trì.');
@@ -5323,15 +4006,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $project);
 
         $maintenance = \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
-
-        if ($maintenance->status !== \App\Models\ProjectMaintenance::STATUS_PENDING_CUSTOMER) {
-            return back()->with('error', 'Phiếu không ở trạng thái chờ KH duyệt.');
-        }
-
-        $maintenance->update([
-            'status' => \App\Models\ProjectMaintenance::STATUS_APPROVED,
-            'approved_by' => $user->id,
-        ]);
+        $this->warrantyService->updateStatus($maintenance, \App\Models\ProjectMaintenance::STATUS_APPROVED, $user);
 
         return back()->with('success', 'Đã duyệt phiếu bảo trì.');
     }

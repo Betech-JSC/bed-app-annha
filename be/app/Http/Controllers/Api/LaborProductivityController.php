@@ -11,6 +11,13 @@ use Illuminate\Http\JsonResponse;
 class LaborProductivityController extends Controller
 {
     use ApiAuthorization;
+
+    protected $productivityService;
+
+    public function __construct(\App\Services\LaborProductivityService $productivityService)
+    {
+        $this->productivityService = $productivityService;
+    }
     /** Danh sách năng suất lao động theo dự án */
     public function index(Request $request, $projectId): JsonResponse
     {
@@ -46,13 +53,11 @@ class LaborProductivityController extends Controller
             'note' => 'nullable|string|max:500',
         ]);
 
-        $record = LaborProductivity::create(array_merge(
-            $request->all(),
-            [
-                'project_id' => $projectId,
-                'created_by' => $request->user()->id,
-            ]
-        ));
+        $record = $this->productivityService->upsert(
+            array_merge($request->all(), ['project_id' => $projectId]),
+            null,
+            $request->user()
+        );
 
         return response()->json([
             'message' => 'Ghi nhận năng suất thành công',
@@ -66,7 +71,7 @@ class LaborProductivityController extends Controller
         $this->apiRequire($request->user(), Permissions::LABOR_PRODUCTIVITY_UPDATE, $projectId);
 
         $record = LaborProductivity::where('project_id', $projectId)->findOrFail($id);
-        $record->update($request->all());
+        $record = $this->productivityService->upsert($request->all(), $record, $request->user());
 
         return response()->json([
             'message' => 'Cập nhật thành công',
@@ -88,66 +93,7 @@ class LaborProductivityController extends Controller
     {
         $this->apiRequire($request->user(), Permissions::LABOR_PRODUCTIVITY_VIEW, $projectId);
 
-        $query = LaborProductivity::forProject($projectId);
-
-        if ($request->from) $query->where('record_date', '>=', $request->from);
-        if ($request->to) $query->where('record_date', '<=', $request->to);
-
-        $records = $query->get();
-
-        // Tổng quan
-        $summary = [
-            'total_records' => $records->count(),
-            'total_workers' => $records->unique('user_id')->count(),
-            'avg_efficiency' => round($records->avg('efficiency_percent') ?? 0, 1),
-            'avg_productivity_rate' => round($records->avg('productivity_rate') ?? 0, 2),
-            'total_planned' => $records->sum('planned_quantity'),
-            'total_actual' => $records->sum('actual_quantity'),
-            'total_hours' => $records->sum(fn($r) => $r->workers_count * $r->hours_spent),
-        ];
-
-        // Theo nhân viên
-        $byUser = $records->groupBy('user_id')->map(function ($userRecords) {
-            $user = $userRecords->first()->user;
-            return [
-                'user_id' => $user?->id,
-                'user_name' => $user?->name ?? '—',
-                'records_count' => $userRecords->count(),
-                'avg_efficiency' => round($userRecords->avg('efficiency_percent'), 1),
-                'avg_productivity' => round($userRecords->avg('productivity_rate'), 2),
-                'total_actual' => $userRecords->sum('actual_quantity'),
-                'total_hours' => $userRecords->sum(fn($r) => $r->workers_count * $r->hours_spent),
-            ];
-        })->sortByDesc('avg_efficiency')->values();
-
-        // Theo work_item
-        $byItem = $records->groupBy('work_item')->map(function ($itemRecords, $item) {
-            return [
-                'work_item' => $item,
-                'unit' => $itemRecords->first()->unit,
-                'records_count' => $itemRecords->count(),
-                'avg_efficiency' => round($itemRecords->avg('efficiency_percent'), 1),
-                'total_planned' => $itemRecords->sum('planned_quantity'),
-                'total_actual' => $itemRecords->sum('actual_quantity'),
-            ];
-        })->values();
-
-        // Xu hướng theo ngày
-        $trend = $records->groupBy(fn($r) => $r->record_date->format('Y-m-d'))
-            ->map(function ($dayRecords, $date) {
-                return [
-                    'date' => $date,
-                    'avg_efficiency' => round($dayRecords->avg('efficiency_percent'), 1),
-                    'records_count' => $dayRecords->count(),
-                    'total_actual' => $dayRecords->sum('actual_quantity'),
-                ];
-            })->sortKeys()->values();
-
-        return response()->json([
-            'summary' => $summary,
-            'by_user' => $byUser,
-            'by_item' => $byItem,
-            'trend' => $trend,
-        ]);
+        $data = $this->productivityService->getDashboardData((int)$projectId, $request->all());
+        return response()->json($data);
     }
 }

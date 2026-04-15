@@ -16,9 +16,10 @@ class ProjectController extends Controller
 {
     protected $authService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(AuthorizationService $authService, \App\Services\ProjectService $projectService)
     {
         $this->authService = $authService;
+        $this->projectService = $projectService;
     }
     /**
      * Danh sách dự án
@@ -253,8 +254,7 @@ class ProjectController extends Controller
         $user = auth()->user();
 
         // Check permission (super admin bypass)
-        $isSuperAdmin = $user->isAdmin();
-        if (!$isSuperAdmin && !$user->hasPermission(\App\Constants\Permissions::PROJECT_CREATE)) {
+        if (!$user->isAdmin() && !$user->hasPermission(\App\Constants\Permissions::PROJECT_CREATE)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền tạo dự án mới.'
@@ -273,44 +273,14 @@ class ProjectController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $project = Project::create([
-                ...$validated,
-                'created_by' => $user->id,
-                'status' => $validated['status'] ?? 'planning',
-            ]);
-
-            // Create initial progress record
-            $project->progress()->create([
-                'overall_percentage' => 0,
-                'calculated_from' => 'manual',
-            ]);
-
-            // Auto-assign creator as project manager if not specified
-            if (!$project->project_manager_id) {
-                $project->update(['project_manager_id' => $user->id]);
-            }
-
-            // Add creator to personnel if not customer
-            if ($project->customer_id !== $user->id) {
-                $pmRole = \App\Models\PersonnelRole::where('code', 'project_manager')->first();
-                $project->personnel()->create([
-                    'user_id' => $user->id,
-                    'role_id' => $pmRole ? $pmRole->id : null,
-                    'assigned_by' => $user->id,
-                ]);
-            }
-
-            DB::commit();
+            $project = $this->projectService->createProject($validated, $user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Dự án đã được tạo thành công.',
-                'data' => $project->load(['customer', 'projectManager', 'progress'])
+                'data' => $project
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Có lỗi xảy ra khi tạo dự án.',

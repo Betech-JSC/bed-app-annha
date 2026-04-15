@@ -51,65 +51,7 @@ class RevenueController extends Controller
         $revenue = $this->financialCalculationService->calculateRevenue($project);
         $costs = $this->financialCalculationService->calculateTotalCosts($project);
         $profit = $this->financialCalculationService->calculateProfit($project);
-
-        // Validate calculation
-        $validationService = app(\App\Services\CalculationValidationService::class);
-        $costValidation = $validationService->validateCostCalculation($project);
-        $revenueValidation = $validationService->validateRevenueCalculation($project);
-        
-        if (!empty($costValidation['warnings']) || !empty($revenueValidation['warnings'])) {
-            Log::warning("Calculation warnings for project {$project->id}", [
-                'project_id' => $project->id,
-                'cost_warnings' => $costValidation['warnings'],
-                'revenue_warnings' => $revenueValidation['warnings'],
-            ]);
-        }
-
-        // Chi phí theo nhóm (CostGroup) từ Cost records - ĐỘNG từ hệ thống
-        $costsByGroup = Cost::where('project_id', $project->id)
-            ->where('status', 'approved')
-            ->with('costGroup')
-            ->select('cost_group_id', DB::raw('SUM(amount) as total'))
-            ->groupBy('cost_group_id')
-            ->get()
-            ->mapWithKeys(function ($item) {
-                $groupName = $item->costGroup 
-                    ? $item->costGroup->name 
-                    : 'Chưa phân loại';
-                $groupId = $item->cost_group_id ?? 'other';
-                return [$groupId => [
-                    'id' => $item->cost_group_id,
-                    'name' => $groupName,
-                    'amount' => (float) $item->total,
-                ]];
-            });
-
-        // Chi phí không có cost_group_id (fallback về category cũ)
-        $costsWithoutGroup = Cost::where('project_id', $project->id)
-            ->where('status', 'approved')
-            ->whereNull('cost_group_id')
-            ->select('category', DB::raw('SUM(amount) as total'))
-            ->groupBy('category')
-            ->get()
-            ->mapWithKeys(function ($item) {
-                $categoryLabel = match ($item->category) {
-                    'construction_materials' => 'Vật liệu xây dựng',
-                    'concrete' => 'Bê tông',
-                    'labor' => 'Nhân công',
-                    'equipment' => 'Thiết bị',
-                    'transportation' => 'Vận chuyển',
-                    'other' => 'Chi phí khác',
-                    default => 'Khác',
-                };
-                return ["category_{$item->category}" => [
-                    'id' => null,
-                    'name' => $categoryLabel,
-                    'amount' => (float) $item->total,
-                ]];
-            });
-
-        // Merge cả hai
-        $allCostsByGroup = $costsByGroup->merge($costsWithoutGroup);
+        $allCostsByGroup = $this->financialCalculationService->calculateCostsByGroup($project);
 
         return response()->json([
             'success' => true,
@@ -121,13 +63,13 @@ class RevenueController extends Controller
                 ],
                 'revenue' => [
                     'contract_value' => (float) $revenue['contract_value'],
-                    'additional_costs' => (float) $revenue['additional_costs'], // Giá trị phát sinh (Doanh thu)
+                    'additional_costs' => (float) $revenue['additional_costs'],
                     'paid_payments' => (float) $revenue['paid_payments'],
-                    'remaining_payment' => (float) ($revenue['total_revenue'] - $revenue['paid_payments']), // Số tiền còn lại
+                    'remaining_payment' => (float) ($revenue['total_revenue'] - $revenue['paid_payments']),
                     'total_revenue' => (float) $revenue['total_revenue'],
                 ],
                 'costs' => [
-                    'by_group' => $allCostsByGroup->values()->all(), // Chi phí theo nhóm động
+                    'by_group' => $allCostsByGroup,
                     'breakdown' => [
                         'subcontractor_costs' => (float) $costs['subcontractor_costs'],
                         'payroll_costs' => (float) $costs['payroll_costs'],
@@ -160,77 +102,23 @@ class RevenueController extends Controller
             ], 403);
         }
 
-        $query = Cost::where('project_id', $project->id)
-            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments']);
+        $status = $request->query('status', 'approved');
+        $allGroups = $this->financialCalculationService->calculateCostsByGroup($project, $status);
 
-        // Filter theo category hoặc cost_group_id
-        if ($category = $request->query('category')) {
-            if (str_starts_with($category, 'group_')) {
-                $query->where('cost_group_id', substr($category, 6));
-            } else {
-                $query->where('category', $category);
-            }
+        // Filter by category if requested
+        if ($categoryFilter = $request->query('category')) {
+            $allGroups = collect($allGroups)->filter(function($group) use ($categoryFilter) {
+                return $group['category'] === $categoryFilter;
+            })->values()->all();
         }
-
-        // Filter theo status
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        // Chỉ lấy approved nếu không có filter
-        if (!$request->has('status')) {
-            $query->where('status', 'approved');
-        }
-
-        $costs = $query->orderByDesc('cost_date')->get();
-
-        // Group by category
-        // Group by cost_group_id if available, otherwise category
-        $groupedRaw = $costs->groupBy(function ($cost) {
-            if ($cost->cost_group_id) {
-                return 'group_' . $cost->cost_group_id;
-            }
-            return $cost->category ?? 'other';
-        });
-
-        // Map to standard format
-        $grouped = $groupedRaw->map(function ($items, $key) {
-            $firstItem = $items->first();
-            
-            if (str_starts_with($key, 'group_')) {
-                // Cost Group
-                $categoryLabel = $firstItem->costGroup ? $firstItem->costGroup->name : 'Nhóm đã xóa';
-                $categoryCode = $key; // "group_123" parameter for filtering
-            } else {
-                // Legacy Category
-                $categoryLabel = $firstItem->category_label ?? match($firstItem->category) {
-                    'construction_materials' => 'Vật liệu xây dựng',
-                    'labor' => 'Nhân công',
-                    'equipment' => 'Thiết bị',
-                    'subcontractor' => 'Thầu phụ',
-                    'transportation' => 'Vận chuyển',
-                    'other' => 'Chi phí khác',
-                    default => 'Khác',
-                };
-                $categoryCode = $firstItem->category ?? 'other';
-            }
-
-            return [
-                'category' => $categoryCode,
-                'category_label' => $categoryLabel,
-                'total' => (float) $items->sum('amount'),
-                'count' => $items->count(),
-                'items' => $items,
-            ];
-        });
 
         return response()->json([
             'success' => true,
             'data' => [
-                'grouped' => $grouped->values(),
+                'grouped' => $allGroups,
                 'summary' => [
-                    'total_amount' => (float) $costs->sum('amount'),
-                    'total_count' => $costs->count(),
+                    'total_amount' => (float) collect($allGroups)->sum('total'),
+                    'total_count' => collect($allGroups)->sum('count'),
                 ],
             ],
         ]);
@@ -238,7 +126,6 @@ class RevenueController extends Controller
 
     /**
      * Dashboard KPI cho dự án
-     * Sử dụng FinancialCalculationService để đảm bảo tính nhất quán
      */
     public function dashboard(string $projectId, Request $request)
     {
@@ -254,115 +141,20 @@ class RevenueController extends Controller
             ], 403);
         }
 
-        $period = $request->query('period', 'all'); // all, month, quarter, year
-
-        // Tính toán theo period
+        $period = $request->query('period', 'all');
         $dateFilter = $this->getDateFilter($period);
         $startDate = $dateFilter ? $dateFilter[0] : null;
         $endDate = $dateFilter ? $dateFilter[1] : null;
 
-        // Sử dụng FinancialCalculationService với date filter
+        // KPI
         $revenueData = $this->financialCalculationService->calculateRevenue($project, $startDate, $endDate);
-        $costsData = $this->financialCalculationService->calculateTotalCosts($project, $startDate, $endDate);
         $profitData = $this->financialCalculationService->calculateProfit($project, $startDate, $endDate);
 
-        // Chart data - Chi phí theo tháng
-        $monthlyCosts = Cost::where('project_id', $project->id)
-            ->where('status', 'approved')
-            ->select(
-                DB::raw('YEAR(cost_date) as year'),
-                DB::raw('MONTH(cost_date) as month'),
-                DB::raw('SUM(amount) as total')
-            )
-            ->groupBy('year', 'month')
-            ->orderBy('year')
-            ->orderBy('month')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'period' => "{$item->year}-" . str_pad($item->month, 2, '0', STR_PAD_LEFT),
-                    'amount' => (float) $item->total,
-                ];
-            });
-
-        // Chart data - Doanh thu theo tháng (từ payments)
-        // Sử dụng paid_date nếu có, nếu không thì dùng due_date
-        $monthlyRevenue = DB::table('project_payments')
-            ->where('project_id', $project->id)
-            ->where('status', 'paid')
-            ->select(
-                DB::raw('YEAR(COALESCE(paid_date, due_date)) as year'),
-                DB::raw('MONTH(COALESCE(paid_date, due_date)) as month'),
-                DB::raw('SUM(amount) as total')
-            )
-            ->groupBy('year', 'month')
-            ->orderBy('year')
-            ->orderBy('month')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'period' => "{$item->year}-" . str_pad($item->month, 2, '0', STR_PAD_LEFT),
-                    'amount' => (float) $item->total,
-                ];
-            });
-
-        // Chart data - Lợi nhuận theo tháng
-        // Tạo map của tất cả các tháng có dữ liệu
-        $allPeriods = collect($monthlyCosts->pluck('period'))
-            ->merge($monthlyRevenue->pluck('period'))
-            ->unique()
-            ->sort()
-            ->values();
-
-        $monthlyProfit = [];
-        foreach ($allPeriods as $period) {
-            $periodParts = explode('-', $period);
-            $year = (int) $periodParts[0];
-            $month = (int) $periodParts[1];
-            
-            // Lấy doanh thu trong tháng
-            $revenueItem = $monthlyRevenue->firstWhere('period', $period);
-            $monthlyRevenueAmount = $revenueItem ? $revenueItem['amount'] : 0;
-            
-            // Nếu không có payment trong tháng, phân bổ đều (fallback)
-            if ($monthlyRevenueAmount == 0 && $revenueData['total_revenue'] > 0) {
-                // Tính số tháng từ start_date đến end_date của dự án
-                $projectStart = $project->start_date ? Carbon::parse($project->start_date) : now();
-                $projectEnd = $project->end_date ? Carbon::parse($project->end_date) : $projectStart->copy()->addMonths(12);
-                $totalMonths = max(1, $projectStart->diffInMonths($projectEnd) + 1);
-                $monthlyRevenueAmount = $revenueData['total_revenue'] / $totalMonths;
-            }
-            
-            // Lấy chi phí trong tháng
-            $costItem = $monthlyCosts->firstWhere('period', $period);
-            $monthlyCostAmount = $costItem ? $costItem['amount'] : 0;
-            
-            $monthlyProfit[] = [
-                'period' => $period,
-                'revenue' => $monthlyRevenueAmount,
-                'costs' => $monthlyCostAmount,
-                'profit' => $monthlyRevenueAmount - $monthlyCostAmount,
-            ];
-        }
-
-        // Chi phí theo nhóm cho Pie Chart
-        $costsByGroup = Cost::where('project_id', $project->id)
-            ->where('status', 'approved')
-            ->with('costGroup')
-            ->select('cost_group_id', DB::raw('SUM(amount) as total'))
-            ->groupBy('cost_group_id')
-            ->get()
-            ->map(function ($item) {
-                $groupName = $item->costGroup 
-                    ? $item->costGroup->name 
-                    : 'Chưa phân loại';
-                return [
-                    'id' => $item->cost_group_id,
-                    'name' => $groupName,
-                    'amount' => (float) $item->total,
-                ];
-            })
-            ->values();
+        // Financial Stats (Charts)
+        $financialStats = $this->financialCalculationService->getMonthlyFinancialStats($project);
+        
+        // Distribution
+        $costsByGroup = $this->financialCalculationService->calculateCostsByGroup($project);
 
         return response()->json([
             'success' => true,
@@ -374,9 +166,9 @@ class RevenueController extends Controller
                     'profit_margin' => (float) $profitData['profit_margin'],
                 ],
                 'charts' => [
-                    'monthly_costs' => $monthlyCosts->values(),
-                    'monthly_revenue' => $monthlyRevenue->values(),
-                    'monthly_profit' => $monthlyProfit,
+                    'monthly_costs' => $financialStats['monthly_costs'],
+                    'monthly_revenue' => $financialStats['monthly_revenue'],
+                    'monthly_profit' => $financialStats['monthly_profit'],
                     'costs_by_group' => $costsByGroup,
                 ],
             ],

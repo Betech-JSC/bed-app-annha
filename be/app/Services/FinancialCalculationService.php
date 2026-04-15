@@ -196,5 +196,131 @@ class FinancialCalculationService
             'warnings' => $warnings,
         ];
     }
+
+    /**
+     * Get costs aggregated by group (CostGroup) or legacy category
+     */
+    public function calculateCostsByGroup(Project $project, ?string $status = 'approved'): array
+    {
+        $query = $project->costs();
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $costs = $query->with('costGroup')->get();
+
+        // Group by cost_group_id if available, otherwise category
+        $grouped = $costs->groupBy(function ($cost) {
+            if ($cost->cost_group_id) {
+                return 'group_' . $cost->cost_group_id;
+            }
+            return $cost->category ?? 'other';
+        });
+
+        // Map to standard format
+        return $grouped->map(function ($items, $key) {
+            $firstItem = $items->first();
+            
+            if (str_starts_with($key, 'group_')) {
+                // Cost Group
+                $categoryLabel = $firstItem->costGroup ? $firstItem->costGroup->name : 'Nhóm đã xóa';
+                $categoryCode = $key;
+            } else {
+                // Legacy Category
+                $categoryLabel = match($firstItem->category) {
+                    'construction_materials' => 'Vật liệu xây dựng',
+                    'labor' => 'Nhân công',
+                    'equipment' => 'Thiết bị',
+                    'subcontractor' => 'Thầu phụ',
+                    'transportation' => 'Vận chuyển',
+                    'other' => 'Chi phí khác',
+                    default => 'Khác',
+                };
+                $categoryCode = $firstItem->category ?? 'other';
+            }
+
+            return [
+                'category' => $categoryCode,
+                'category_label' => $categoryLabel,
+                'total' => (float) $items->sum('amount'),
+                'count' => $items->count(),
+                'items' => $items,
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Get monthly financial statistics (Revenue vs Costs) for charts
+     */
+    public function getMonthlyFinancialStats(Project $project): array
+    {
+        // Monthly Costs
+        $monthlyCosts = \App\Models\Cost::where('project_id', $project->id)
+            ->where('status', 'approved')
+            ->select(
+                \Illuminate\Support\Facades\DB::raw('YEAR(cost_date) as year'),
+                \Illuminate\Support\Facades\DB::raw('MONTH(cost_date) as month'),
+                \Illuminate\Support\Facades\DB::raw('SUM(amount) as total')
+            )
+            ->groupBy('year', 'month')
+            ->orderBy('year')
+            ->orderBy('month')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'period' => "{$item->year}-" . str_pad($item->month, 2, '0', STR_PAD_LEFT),
+                    'amount' => (float) $item->total,
+                ];
+            });
+
+        // Monthly Revenue from payments
+        $monthlyRevenue = \Illuminate\Support\Facades\DB::table('project_payments')
+            ->where('project_id', $project->id)
+            ->where('status', 'paid')
+            ->select(
+                \Illuminate\Support\Facades\DB::raw('YEAR(COALESCE(paid_date, due_date)) as year'),
+                \Illuminate\Support\Facades\DB::raw('MONTH(COALESCE(paid_date, due_date)) as month'),
+                \Illuminate\Support\Facades\DB::raw('SUM(amount) as total')
+            )
+            ->groupBy('year', 'month')
+            ->orderBy('year')
+            ->orderBy('month')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'period' => "{$item->year}-" . str_pad($item->month, 2, '0', STR_PAD_LEFT),
+                    'amount' => (float) $item->total,
+                ];
+            });
+
+        // Merge periods
+        $allPeriods = collect($monthlyCosts->pluck('period'))
+            ->merge($monthlyRevenue->pluck('period'))
+            ->unique()
+            ->sort()
+            ->values();
+
+        $monthlyProfitData = [];
+        foreach ($allPeriods as $period) {
+            $revenueItem = $monthlyRevenue->firstWhere('period', $period);
+            $costItem = $monthlyCosts->firstWhere('period', $period);
+            
+            $rev = $revenueItem ? $revenueItem['amount'] : 0;
+            $cst = $costItem ? $costItem['amount'] : 0;
+            
+            $monthlyProfitData[] = [
+                'period' => $period,
+                'revenue' => (float) $rev,
+                'costs' => (float) $cst,
+                'profit' => (float) ($rev - $cst),
+            ];
+        }
+
+        return [
+            'monthly_costs' => $monthlyCosts->values()->all(),
+            'monthly_revenue' => $monthlyRevenue->values()->all(),
+            'monthly_profit' => $monthlyProfitData,
+        ];
+    }
 }
 

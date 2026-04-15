@@ -14,7 +14,7 @@ trait CrmAuthorization
     protected function crmRequire($user, string $permission, $project = null): void
     {
         // Only explicit super admins bypass security
-        if ($user instanceof \App\Models\Admin && $user->super_admin) return;
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) return;
 
         $authService = app(AuthorizationService::class);
         $authService->require($user, $permission, $project);
@@ -22,7 +22,7 @@ trait CrmAuthorization
 
     protected function crmCan($user, string $permission, $project = null): bool
     {
-        if ($user instanceof \App\Models\Admin && $user->super_admin) return true;
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) return true;
 
         $authService = app(AuthorizationService::class);
         return $authService->can($user, $permission, $project);

@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
+use App\Models\EmployeeSalaryConfig;
+use Carbon\Carbon;
 
 class CrmHrController extends Controller
 {
@@ -23,7 +25,9 @@ class CrmHrController extends Controller
     {
         $admin = Auth::guard('admin')->user();
         $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
-        $query = User::with(['roles', 'department']);
+        $query = User::with(['roles', 'department', 'salaryConfigs' => function($q) {
+            $q->current();
+        }]);
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -230,5 +234,57 @@ class CrmHrController extends Controller
         $this->crmRequire($admin, Permissions::PERSONNEL_REMOVE);
         Department::findOrFail($id)->delete();
         return back()->with('success', 'Đã xóa phòng ban.');
+    }
+
+    /**
+     * View Salary Config for an employee
+     */
+    public function salaryConfig($id)
+    {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
+        
+        $employee = User::findOrFail($id);
+        $config = EmployeeSalaryConfig::where('user_id', $id)
+            ->orderByDesc('effective_from')
+            ->get();
+            
+        $currentConfig = EmployeeSalaryConfig::forUser($id)->current()->first();
+
+        return Inertia::render('Crm/Hr/Employees/SalaryConfig', [
+            'employee' => $employee,
+            'configs' => $config,
+            'currentConfig' => $currentConfig,
+        ]);
+    }
+
+    /**
+     * Update Salary Config
+     */
+    public function updateSalaryConfig(Request $request, $id)
+    {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
+        
+        $validated = $request->validate([
+            'salary_type' => 'required|in:hourly,daily,monthly',
+            'hourly_rate' => 'nullable|numeric|min:0',
+            'daily_rate' => 'nullable|numeric|min:0',
+            'monthly_salary' => 'nullable|numeric|min:0',
+            'overtime_rate' => 'nullable|numeric|min:0',
+            'effective_from' => 'required|date',
+        ]);
+
+        EmployeeSalaryConfig::create([
+            'user_id' => $id,
+            'salary_type' => $validated['salary_type'],
+            'hourly_rate' => $validated['hourly_rate'],
+            'daily_rate' => $validated['daily_rate'],
+            'monthly_salary' => $validated['monthly_salary'],
+            'overtime_rate' => $validated['overtime_rate'],
+            'effective_from' => $validated['effective_from'],
+        ]);
+
+        return back()->with('success', 'Đã cập nhật cấu hình lương mới thành công.');
     }
 }

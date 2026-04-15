@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\Validator;
 class ProjectRiskController extends Controller
 {
     use ApiAuthorization;
+
+    protected $riskService;
+
+    public function __construct(\App\Services\ProjectRiskService $riskService)
+    {
+        $this->riskService = $riskService;
+    }
     /**
      * Danh sách rủi ro của project
      */
@@ -21,36 +28,7 @@ class ProjectRiskController extends Controller
         $project = Project::findOrFail($projectId);
         $this->apiRequire($request->user(), Permissions::PROJECT_RISK_VIEW, $project);
 
-        $query = $project->risks()
-            ->with([
-                'owner',
-                'identifier',
-                'updater',
-            ]);
-
-        // Filter by status
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        // Filter by category
-        if ($category = $request->query('category')) {
-            $query->where('category', $category);
-        }
-
-        // Filter by risk level
-        if ($riskLevel = $request->query('risk_level')) {
-            if ($riskLevel === 'high') {
-                $query->highRisk();
-            }
-        }
-
-        // Filter active only
-        if ($request->query('active_only') === 'true') {
-            $query->active();
-        }
-
-        $risks = $query->orderByDesc('created_at')->get();
+        $risks = $this->riskService->getRisks($project, $request->only(['status', 'category', 'risk_level', 'active_only']));
 
         return response()->json([
             'success' => true,
@@ -81,27 +59,16 @@ class ProjectRiskController extends Controller
         ]);
 
         try {
-            $risk = ProjectRisk::create([
-                'project_id' => $project->id,
-                'title' => $validated['title'],
-                'description' => $validated['description'] ?? null,
-                'category' => $validated['category'],
-                'probability' => $validated['probability'],
-                'impact' => $validated['impact'],
-                'risk_type' => $validated['risk_type'] ?? 'threat',
-                'status' => 'identified',
-                'mitigation_plan' => $validated['mitigation_plan'] ?? null,
-                'contingency_plan' => $validated['contingency_plan'] ?? null,
-                'owner_id' => $validated['owner_id'] ?? null,
-                'identified_date' => now(),
-                'target_resolution_date' => $validated['target_resolution_date'] ?? null,
-                'identified_by' => $user->id,
-            ]);
+            $risk = $this->riskService->upsert(
+                array_merge($validated, ['project_id' => $project->id]),
+                null,
+                $user
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Đã tạo rủi ro mới',
-                'data' => $risk->load(['owner', 'identifier'])
+                'data' => $risk
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -152,14 +119,7 @@ class ProjectRiskController extends Controller
         ]);
 
         try {
-            $risk->update(array_merge($validated, [
-                'updated_by' => $user->id,
-            ]));
-
-            // Nếu status là closed, đánh dấu resolved
-            if (isset($validated['status']) && $validated['status'] === 'closed' && !$risk->resolved_date) {
-                $risk->markAsResolved();
-            }
+            $this->riskService->upsert($validated, $risk, $user);
 
             return response()->json([
                 'success' => true,
@@ -210,7 +170,7 @@ class ProjectRiskController extends Controller
         $risk = $project->risks()->findOrFail($id);
 
         try {
-            $risk->markAsResolved();
+            $this->riskService->resolve($risk);
 
             return response()->json([
                 'success' => true,

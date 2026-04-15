@@ -15,11 +15,16 @@ use Illuminate\Support\Facades\DB;
 class ProjectPaymentController extends Controller
 {
     protected $authService;
+    protected $financialService;
     protected $notificationService;
 
-    public function __construct(AuthorizationService $authService, NotificationService $notificationService)
-    {
+    public function __construct(
+        AuthorizationService $authService, 
+        \App\Services\FinancialService $financialService,
+        NotificationService $notificationService
+    ) {
         $this->authService = $authService;
+        $this->financialService = $financialService;
         $this->notificationService = $notificationService;
     }
     /**
@@ -75,15 +80,11 @@ class ProjectPaymentController extends Controller
         ]);
     }
 
-    /**
-     * Tạo đợt thanh toán
-     */
     public function store(Request $request, string $projectId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        // Check permission với project context
         if (!$this->authService->can($user, Permissions::PAYMENT_CREATE, $project)) {
             return response()->json([
                 'success' => false,
@@ -92,41 +93,19 @@ class ProjectPaymentController extends Controller
         }
 
         $validated = $request->validate([
-            'payment_number' => 'nullable|max:50', // Allow string or integer
+            'payment_number' => 'nullable|max:50',
             'amount' => 'required|numeric|min:0',
             'notes' => 'nullable|string|max:2000',
             'due_date' => 'required|date',
             'contract_id' => 'nullable|exists:contracts,id',
         ]);
 
-        // Auto-generate payment_number if not provided (must be integer for DB)
-        if (empty($validated['payment_number'])) {
-            $count = ProjectPayment::where('project_id', $project->id)->count();
-            $validated['payment_number'] = $count + 1;
-        }
-
         try {
-            DB::beginTransaction();
-
-            // Check if payment number already exists
-            $exists = ProjectPayment::where('project_id', $project->id)
-                ->where('payment_number', $validated['payment_number'])
-                ->exists();
-
-            if ($exists) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Số đợt thanh toán đã tồn tại.'
-                ], 400);
-            }
-
-            $payment = ProjectPayment::create([
-                'project_id' => $project->id,
-                ...$validated,
-                'status' => 'pending',
-            ]);
-
-            DB::commit();
+            $payment = $this->financialService->upsertProjectPayment(
+                array_merge($validated, ['project_id' => $project->id]),
+                null,
+                $user
+            );
 
             return response()->json([
                 'success' => true,
@@ -134,26 +113,19 @@ class ProjectPaymentController extends Controller
                 'data' => $payment
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
             ], 500);
         }
     }
 
-    /**
-     * Cập nhật thanh toán
-     */
     public function update(Request $request, string $projectId, string $id)
     {
-        $payment = ProjectPayment::where('project_id', $projectId)
-            ->findOrFail($id);
+        $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        // Check permission với project context
         if (!$this->authService->can($user, Permissions::PAYMENT_UPDATE, $project)) {
             return response()->json([
                 'success' => false,
@@ -168,29 +140,26 @@ class ProjectPaymentController extends Controller
             'paid_date' => 'nullable|date',
         ]);
 
-        $payment->update($validated);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Thanh toán đã được cập nhật.',
-            'data' => $payment->fresh()
-        ]);
+        try {
+            $this->financialService->upsertProjectPayment($validated, $payment, $user);
+            return response()->json([
+                'success' => true,
+                'message' => 'Thanh toán đã được cập nhật.',
+                'data' => $payment->fresh()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
-    /**
-     * Xác nhận thanh toán (kế toán)
-     */
     public function confirm(Request $request, string $projectId, string $id)
     {
-        $payment = ProjectPayment::where('project_id', $projectId)
-            ->findOrFail($id);
-
-        $payment = ProjectPayment::where('project_id', $projectId)
-            ->findOrFail($id);
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        // Check permission với project context
         if (!$this->authService->can($user, Permissions::PAYMENT_CONFIRM, $project)) {
             return response()->json([
                 'success' => false,
@@ -198,28 +167,28 @@ class ProjectPaymentController extends Controller
             ], 403);
         }
 
-        if ($payment->status !== 'customer_paid') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể xác nhận thanh toán khi khách hàng đã thanh toán.'
-            ], 400);
-        }
-
+        $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
         $validated = $request->validate([
             'paid_date' => 'required|date',
         ]);
 
-        $payment->markAsPaid($user);
-        $payment->update(['paid_date' => $validated['paid_date']]);
+        try {
+            $this->financialService->confirmProjectPayment($payment, $user);
+            $payment->update(['paid_date' => $validated['paid_date']]);
 
-        // Thông báo cho khách hàng
-        $this->notificationService->notifyPaymentConfirmed($payment);
+            $this->notificationService->notifyPaymentConfirmed($payment);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Thanh toán đã được xác nhận.',
-            'data' => $payment->fresh(['confirmer', 'customerApprover', 'attachments'])
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Thanh toán đã được xác nhận.',
+                'data' => $payment->fresh(['confirmer', 'customerApprover', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -227,9 +196,7 @@ class ProjectPaymentController extends Controller
      */
     public function uploadPaymentProof(Request $request, string $projectId, string $id)
     {
-        $payment = ProjectPayment::where('project_id', $projectId)
-            ->findOrFail($id);
-
+        $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
         $user = auth()->user();
 
         $validated = $request->validate([
@@ -238,44 +205,7 @@ class ProjectPaymentController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            // Đính kèm files
-            $attached = [];
-            foreach ($validated['attachment_ids'] as $attachmentId) {
-                $attachment = \App\Models\Attachment::find($attachmentId);
-                if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
-                    $attachment->update([
-                        'attachable_type' => ProjectPayment::class,
-                        'attachable_id' => $payment->id,
-                    ]);
-                    $attached[] = $attachment;
-                }
-            }
-
-            // Đánh dấu đã upload hình xác nhận
-            if (count($attached) > 0) {
-                $payment->markPaymentProofUploaded();
-
-                // Gửi thông báo cho khách hàng
-                if ($payment->project->customer_id) {
-                    $this->notificationService->sendToUser(
-                        $payment->project->customer_id,
-                        Notification::TYPE_WORKFLOW,
-                        Notification::CATEGORY_WORKFLOW_APPROVAL,
-                        "Yêu cầu duyệt thanh toán",
-                        "Bạn có một yêu cầu duyệt hình ảnh thanh toán cho đợt #{$payment->payment_number} của dự án '{$payment->project->name}'.",
-                        [
-                            'project_id' => $payment->project->id,
-                            'payment_id' => $payment->id,
-                        ],
-                        Notification::PRIORITY_HIGH,
-                        "/projects/{$payment->project->id}/payments"
-                    );
-                }
-            }
-
-            DB::commit();
+            $attached = $this->financialService->attachPaymentProof($payment, $validated['attachment_ids'], $user);
 
             return response()->json([
                 'success' => true,
@@ -283,7 +213,6 @@ class ProjectPaymentController extends Controller
                 'data' => $payment->fresh(['attachments', 'customerApprover'])
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Có lỗi xảy ra khi upload hình xác nhận.',
@@ -297,26 +226,16 @@ class ProjectPaymentController extends Controller
      */
     public function markAsPaidByCustomer(Request $request, string $projectId, string $id)
     {
-        $payment = ProjectPayment::where('project_id', $projectId)
-            ->findOrFail($id);
-
+        $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
         $user = auth()->user();
-
         $project = Project::findOrFail($projectId);
 
-        // Check RBAC permission với project context
+        // Check RBAC permission
         if (!$this->authService->can($user, Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền đánh dấu đã thanh toán cho dự án này.'
             ], 403);
-        }
-
-        if ($payment->status !== 'pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể đánh dấu đã thanh toán khi thanh toán ở trạng thái chờ thanh toán.'
-            ], 400);
         }
 
         $validated = $request->validate([
@@ -327,45 +246,7 @@ class ProjectPaymentController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            // Đính kèm files nếu có
-            if (!empty($validated['attachment_ids'])) {
-                foreach ($validated['attachment_ids'] as $attachmentId) {
-                    $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
-                        $attachment->update([
-                            'attachable_type' => ProjectPayment::class,
-                            'attachable_id' => $payment->id,
-                        ]);
-                    }
-                }
-            }
-
-            // Đánh dấu đã thanh toán
-            $payment->markAsPaidByCustomer(
-                $user,
-                $validated['paid_date'] ?? null,
-                $validated['actual_amount'] ?? null
-            );
-
-            // Gửi thông báo cho kế toán
-            $this->notificationService->sendToPermissionUsers(
-                Permissions::PAYMENT_CONFIRM,
-                $project->id,
-                Notification::TYPE_WORKFLOW,
-                Notification::CATEGORY_WORKFLOW_APPROVAL,
-                "Khách hàng đã thanh toán",
-                "Khách hàng đã đánh dấu thanh toán và upload chứng từ cho đợt #{$payment->payment_number} của dự án '{$project->name}'.",
-                [
-                    'project_id' => $project->id,
-                    'payment_id' => $payment->id,
-                ],
-                Notification::PRIORITY_HIGH,
-                "/projects/{$project->id}/payments"
-            );
-
-            DB::commit();
+            $this->financialService->customerMarkAsPaid($payment, $validated, $user);
 
             return response()->json([
                 'success' => true,
@@ -373,7 +254,6 @@ class ProjectPaymentController extends Controller
                 'data' => $payment->fresh(['customerApprover', 'attachments'])
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Có lỗi xảy ra.',
@@ -382,20 +262,11 @@ class ProjectPaymentController extends Controller
         }
     }
 
-    /**
-     * Khách hàng duyệt thanh toán (backward compatible - giữ lại cho workflow cũ)
-     */
     public function approveByCustomer(Request $request, string $projectId, string $id)
     {
-        $payment = ProjectPayment::where('project_id', $projectId)
-            ->findOrFail($id);
-
-        $user = auth()->user();
-        $project = $payment->project;
-
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
 
-        // Check RBAC permission với project context
         if (!$this->authService->can($user, Permissions::PAYMENT_APPROVE, $project)) {
             return response()->json([
                 'success' => false,
@@ -403,50 +274,30 @@ class ProjectPaymentController extends Controller
             ], 403);
         }
 
-        if ($payment->status !== 'customer_pending_approval') {
+        $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
+
+        try {
+            $this->financialService->approveProjectPaymentByCustomer($payment, $user);
+            $this->notificationService->notifyPaymentConfirmed($payment); 
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt thanh toán. Đang chờ kế toán xác nhận.',
+                'data' => $payment->fresh(['customerApprover', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Thanh toán không ở trạng thái chờ duyệt.'
-            ], 400);
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 500);
         }
-
-        $payment->approveByCustomer($user);
-
-        // Gửi thông báo cho kế toán
-        $this->notificationService->sendToPermissionUsers(
-            Permissions::PAYMENT_CONFIRM,
-            $project->id,
-            Notification::TYPE_WORKFLOW,
-            Notification::CATEGORY_WORKFLOW_APPROVAL,
-            "Khách hàng đã duyệt thanh toán",
-            "Khách hàng đã duyệt đợt thanh toán #{$payment->payment_number} của dự án '{$project->name}'.",
-            [
-                'project_id' => $project->id,
-                'payment_id' => $payment->id,
-            ],
-            Notification::PRIORITY_MEDIUM,
-            "/projects/{$project->id}/payments"
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt thanh toán. Đang chờ kế toán xác nhận.',
-            'data' => $payment->fresh(['customerApprover', 'attachments'])
-        ]);
     }
 
-    /**
-     * Từ chối thanh toán (khách hàng)
-     */
     public function rejectByCustomer(Request $request, string $projectId, string $id)
     {
-        $payment = ProjectPayment::where('project_id', $projectId)
-            ->findOrFail($id);
-
-        $user = auth()->user();
         $project = Project::findOrFail($projectId);
+        $user = auth()->user();
 
-        // Check RBAC permission
         if (!$this->authService->can($user, Permissions::PAYMENT_APPROVE, $project)) {
             return response()->json([
                 'success' => false,
@@ -458,37 +309,28 @@ class ProjectPaymentController extends Controller
             'rejection_reason' => 'required|string|max:1000',
         ]);
 
-        if ($payment->status !== 'customer_pending_approval') {
+        $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
+
+        try {
+            $this->financialService->rejectProjectPayment($payment, $validated['rejection_reason'], null); 
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã từ chối thanh toán.',
+                'data' => $payment->fresh()
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Thanh toán không ở trạng thái chờ duyệt.'
-            ], 400);
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 500);
         }
-
-        // Chuyển về pending và xóa hình xác nhận (hoặc giữ lại để tham khảo)
-        $payment->status = 'pending';
-        $payment->notes = ($payment->notes ? $payment->notes . "\n\n" : '') . "Lý do từ chối: " . $validated['rejection_reason'];
-        $payment->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã từ chối thanh toán.',
-            'data' => $payment->fresh()
-        ]);
     }
 
-    /**
-     * Từ chối thanh toán (Kế toán/Admin)
-     */
     public function reject(Request $request, string $projectId, string $id)
     {
-        $payment = ProjectPayment::where('project_id', $projectId)
-            ->findOrFail($id);
-
         $project = Project::findOrFail($projectId);
         $user = auth()->user();
 
-        // Check permission với project context
         if (!$this->authService->can($user, Permissions::PAYMENT_CONFIRM, $project)) {
             return response()->json([
                 'success' => false,
@@ -500,28 +342,11 @@ class ProjectPaymentController extends Controller
             'reason' => 'required|string|max:1000',
         ]);
 
-        if ($payment->status !== 'customer_paid') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể từ chối thanh toán khi khách hàng đã đánh dấu thanh toán.'
-            ], 400);
-        }
+        $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
 
         try {
-            DB::beginTransaction();
-
-            $payment->update([
-                'status' => 'pending',
-                'notes' => ($payment->notes ? $payment->notes . "\n\n" : '') . "Kế toán từ chối - Lý do: " . $validated['reason'],
-            ]);
-
-            // Thông báo cho khách hàng
+            $this->financialService->rejectProjectPayment($payment, $validated['reason'], $user);
             $this->notificationService->notifyPaymentRejected($payment, $validated['reason']);
-
-            // Optional: Xóa các attachment là proof nếu muốn bắt khách upload lại
-            // $payment->attachments()->where('type', 'image')->delete();
-
-            DB::commit();
 
             return response()->json([
                 'success' => true,
@@ -529,11 +354,9 @@ class ProjectPaymentController extends Controller
                 'data' => $payment->fresh(['confirmer', 'customerApprover', 'attachments'])
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi từ chối thanh toán.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 500);
         }
     }

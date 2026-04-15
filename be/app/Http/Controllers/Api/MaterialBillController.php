@@ -10,6 +10,7 @@ use App\Models\Cost;
 use App\Models\MaterialTransaction;
 use App\Constants\Permissions;
 use App\Services\AuthorizationService;
+use App\Services\MaterialBillService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -18,10 +19,14 @@ use Illuminate\Support\Facades\Log;
 class MaterialBillController extends Controller
 {
     protected $authService;
+    protected $materialBillService;
 
-    public function __construct(AuthorizationService $authService)
-    {
+    public function __construct(
+        AuthorizationService $authService,
+        MaterialBillService $materialBillService
+    ) {
         $this->authService = $authService;
+        $this->materialBillService = $materialBillService;
     }
 
     public function index(string $projectId, Request $request)
@@ -74,101 +79,11 @@ class MaterialBillController extends Controller
             ], 403);
         }
 
-        $validator = Validator::make($request->all(), [
-            'supplier_id' => 'required|exists:suppliers,id',
-            'bill_number' => 'nullable|string|max:50',
-            'bill_date' => 'required|date',
-            'cost_group_id' => 'required|exists:cost_groups,id',
-            'notes' => 'nullable|string',
-            'items' => 'required|array|min:1',
-            'items.*.material_id' => 'required|exists:materials,id',
-            'items.*.quantity' => 'required|numeric|min:0.01',
-            'items.*.unit_price' => 'required|numeric|min:0',
-            'attachment_ids' => 'nullable|array',
-            'attachment_ids.*' => 'required|integer|exists:attachments,id',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
         try {
-            DB::beginTransaction();
+            $data = $request->all();
+            $data['project_id'] = $projectId;
 
-            $totalAmount = 0;
-            foreach ($request->items as $item) {
-                $totalAmount += $item['quantity'] * $item['unit_price'];
-            }
-
-            $bill = MaterialBill::create([
-                'project_id' => $projectId,
-                'supplier_id' => $request->supplier_id,
-                'bill_number' => $request->bill_number,
-                'bill_date' => $request->bill_date,
-                'cost_group_id' => $request->cost_group_id,
-                'total_amount' => $totalAmount,
-                'notes' => $request->notes,
-                'status' => 'draft',
-                'created_by' => $user->id,
-            ]);
-
-            foreach ($request->items as $item) {
-                MaterialBillItem::create([
-                    'material_bill_id' => $bill->id,
-                    'material_id' => $item['material_id'],
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'total_price' => $item['quantity'] * $item['unit_price'],
-                    'notes' => $item['notes'] ?? null,
-                ]);
-            }
-
-            // Determine title prefix and category based on cost group
-            $costGroup = \App\Models\CostGroup::where('id', $request->cost_group_id)->first();
-            $groupName = $costGroup ? $costGroup->name : 'Vật tư';
-            
-            $isEquipment = (stripos($groupName, 'thiết bị') !== false || stripos($groupName, 'máy móc') !== false || stripos($groupName, 'equipment') !== false);
-            $prefix = $isEquipment ? 'Phiếu thiết bị' : 'Phiếu vật tư';
-            $category = $isEquipment ? 'equipment' : 'construction_materials';
-
-            $supplierName = '';
-            if ($request->supplier_id) {
-                $supplier = \App\Models\Supplier::find($request->supplier_id);
-                $supplierName = $supplier->name ?? '';
-            }
-
-            Cost::create([
-                'project_id' => $projectId,
-                'cost_group_id' => $request->cost_group_id,
-                'supplier_id' => $request->supplier_id,
-                'category' => $category,
-                'material_bill_id' => $bill->id,
-                'name' => "{$prefix} #" . ($bill->bill_number ?? $bill->id) . ($supplierName ? " - {$supplierName}" : ''),
-                'amount' => $totalAmount,
-                'description' => $request->notes ?? "Từ phiếu phát sinh " . ($bill->bill_number ?? $bill->id),
-                'cost_date' => $request->bill_date,
-                'status' => 'draft',
-                'created_by' => $user->id,
-            ]);
-
-            // Link attachments to the bill if provided
-            if ($request->has('attachment_ids') && is_array($request->attachment_ids)) {
-                foreach ($request->attachment_ids as $attachmentId) {
-                    $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
-                        $attachment->update([
-                            'attachable_type' => MaterialBill::class,
-                            'attachable_id' => $bill->id,
-                        ]);
-                    }
-                }
-            }
-
-            DB::commit();
+            $bill = $this->materialBillService->upsert($data, null, $user);
 
             return response()->json([
                 'success' => true,
@@ -176,13 +91,17 @@ class MaterialBillController extends Controller
                 'data' => $bill->load('items.material')
             ], 201);
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Lỗi khi tạo hóa đơn vật liệu: " . $e->getMessage());
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi tạo hóa đơn.',
-                'error' => $e->getMessage()
+                'message' => 'Dữ liệu không hợp lệ.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error("Lỗi khi tạo hóa đơn vật liệu (API): " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
             ], 500);
         }
     }
@@ -222,60 +141,8 @@ class MaterialBillController extends Controller
             ], 403);
         }
 
-        if ($bill->status !== 'draft') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể cập nhật hóa đơn ở trạng thái nháp.'
-            ], 400);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'supplier_id' => 'sometimes|required|exists:suppliers,id',
-            'bill_number' => 'nullable|string|max:50',
-            'bill_date' => 'sometimes|required|date',
-            'cost_group_id' => 'sometimes|required|exists:cost_groups,id',
-            'notes' => 'nullable|string',
-            'items' => 'sometimes|required|array|min:1',
-            'items.*.material_id' => 'required|exists:materials,id',
-            'items.*.quantity' => 'required|numeric|min:0.01',
-            'items.*.unit_price' => 'required|numeric|min:0',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
         try {
-            DB::beginTransaction();
-
-            $updateData = $request->only(['supplier_id', 'bill_number', 'bill_date', 'cost_group_id', 'notes']);
-            
-            if ($request->has('items')) {
-                // Delete old items
-                $bill->items()->delete();
-                
-                $totalAmount = 0;
-                foreach ($request->items as $item) {
-                    $totalAmount += $item['quantity'] * $item['unit_price'];
-                    MaterialBillItem::create([
-                        'material_bill_id' => $bill->id,
-                        'material_id' => $item['material_id'],
-                        'quantity' => $item['quantity'],
-                        'unit_price' => $item['unit_price'],
-                        'total_price' => $item['quantity'] * $item['unit_price'],
-                        'notes' => $item['notes'] ?? null,
-                    ]);
-                }
-                $updateData['total_amount'] = $totalAmount;
-            }
-
-            $bill->update($updateData);
-
-            DB::commit();
+            $this->materialBillService->upsert($request->all(), $bill, $user);
 
             return response()->json([
                 'success' => true,
@@ -283,14 +150,18 @@ class MaterialBillController extends Controller
                 'data' => $bill->load('items.material')
             ]);
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Lỗi khi cập nhật hóa đơn vật liệu: " . $e->getMessage());
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi cập nhật hóa đơn.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Dữ liệu không hợp lệ.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error("Lỗi khi cập nhật hóa đơn vật liệu (API): " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
         }
     }
 
@@ -307,15 +178,18 @@ class MaterialBillController extends Controller
             ], 403);
         }
 
-        $bill->submitForManagementApproval();
-
-        // Gửi thông báo cho BĐH và PM
-        $bill->notifyEvent('submitted', $user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi hóa đơn cho Ban điều hành duyệt.'
-        ]);
+        try {
+            $this->materialBillService->submit($bill, $user);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã gửi hóa đơn cho Ban điều hành duyệt.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
     }
 
     public function approveManagement(string $projectId, string $id)
@@ -331,25 +205,21 @@ class MaterialBillController extends Controller
             ], 403);
         }
 
-        if ($bill->status !== 'pending_management') {
+        try {
+            $this->materialBillService->approve($bill, $user);
+            return response()->json([
+                'success' => true,
+                'message' => 'Ban điều hành đã duyệt hóa đơn. Chờ Kế toán xác nhận.'
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Trạng thái hóa đơn không hợp lệ.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        $bill->approveByManagement($user);
-
-        // Gửi thông báo cho Kế toán, PM và Người tạo
-        $bill->notifyEvent('approved_management', $user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Ban điều hành đã duyệt hóa đơn. Chờ Kế toán xác nhận.'
-        ]);
     }
 
-    public function approveAccountant(string $projectId, string $id)
+    public function approveAccountant(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
         $bill = MaterialBill::with(['items.material', 'supplier'])->where('project_id', $projectId)->findOrFail($id);
@@ -362,40 +232,17 @@ class MaterialBillController extends Controller
             ], 403);
         }
 
-        if ($bill->status !== 'pending_accountant') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Trạng thái hóa đơn không hợp lệ.'
-            ], 400);
-        }
-
         try {
-            DB::beginTransaction();
-
-            $bill->approveByAccountant($user);
-            // Side effects (Inventory, Debt) remain here or move to Model if appropriate.
-            // MaterialBill model already has triggerApprovalSideEffects called in approveByAccountant? 
-            // Wait, let's check approveByAccountant in MaterialBill.php.
-            $bill->triggerApprovalSideEffects();
-
-            DB::commit();
-
-            // Gửi thông báo cho PM và Người tạo
-            $bill->notifyEvent('approved_accountant', $user);
-
+            $this->materialBillService->approve($bill, $user, $request->only('budget_item_id'));
             return response()->json([
                 'success' => true,
                 'message' => 'Đã xác nhận thanh toán hóa đơn. Dữ liệu đã được đẩy qua Chi phí dự án và Kho vật liệu.'
             ]);
-
         } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Lỗi khi xác nhận hóa đơn vật liệu: " . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi xác nhận hóa đơn.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => $e->getMessage()
+            ], 400);
         }
     }
 
@@ -412,27 +259,22 @@ class MaterialBillController extends Controller
             ], 403);
         }
 
-        $validator = Validator::make($request->all(), [
+        $request->validate([
             'reason' => 'required|string|max:500'
         ]);
 
-        if ($validator->fails()) {
+        try {
+            $this->materialBillService->reject($bill, $user, $request->reason);
+            return response()->json([
+                'success' => true,
+                'message' => 'Hóa đơn đã bị từ chối.'
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Vui lòng nhập lý do từ chối.',
-                'errors' => $validator->errors()
-            ], 422);
+                'message' => $e->getMessage()
+            ], 400);
         }
-
-        $bill->reject($request->reason, $user);
-
-        // Gửi thông báo cho Người tạo và PM
-        $bill->notifyEvent('rejected', $user, ['reason' => $request->reason]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Hóa đơn đã bị từ chối.'
-        ]);
     }
 
     /**
@@ -474,18 +316,17 @@ class MaterialBillController extends Controller
             ], 403);
         }
 
-        if ($bill->status !== 'draft') {
+        try {
+            $this->materialBillService->delete($bill);
+            return response()->json([
+                'success' => true,
+                'message' => 'Hóa đơn đã được xóa.'
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể xóa hóa đơn ở trạng thái nháp.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        $bill->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Hóa đơn đã được xóa.'
-        ]);
     }
 }

@@ -26,13 +26,6 @@ class Role extends Model
         return $this->belongsToMany(Permission::class, 'permission_role');
     }
 
-    /**
-     * Admins có role này
-     */
-    public function admins(): BelongsToMany
-    {
-        return $this->belongsToMany(Admin::class, 'admin_role');
-    }
 
     /**
      * Users có role này

@@ -13,120 +13,124 @@
     </template>
   </PageHeader>
 
-  <!-- ─── Stats Overview ─── -->
-  <div class="ac-stats-grid">
-    <div class="ac-stat-card">
-      <div class="ac-stat-card__icon" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%)">
-        <ClockCircleOutlined />
+  <a-spin :spinning="isRefreshing" tip="Đang cập nhật dữ liệu...">
+    <!-- ─── Stats Overview ─── -->
+    <div class="ac-stats-grid">
+      <div class="ac-stat-card">
+        <div class="ac-stat-card__icon" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%)">
+          <ClockCircleOutlined />
+        </div>
+        <div class="ac-stat-card__content">
+          <div class="ac-stat-card__value">{{ totalPending }}</div>
+          <div class="ac-stat-card__label">Chờ duyệt</div>
+        </div>
       </div>
-      <div class="ac-stat-card__content">
-        <div class="ac-stat-card__value">{{ totalPending }}</div>
-        <div class="ac-stat-card__label">Chờ duyệt</div>
+      <div class="ac-stat-card">
+        <div class="ac-stat-card__icon" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%)">
+          <CheckCircleOutlined />
+        </div>
+        <div class="ac-stat-card__content">
+          <div class="ac-stat-card__value">{{ stats.approved_today || 0 }}</div>
+          <div class="ac-stat-card__label">Đã duyệt hôm nay</div>
+        </div>
       </div>
-    </div>
-    <div class="ac-stat-card">
-      <div class="ac-stat-card__icon" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%)">
-        <CheckCircleOutlined />
+      <div class="ac-stat-card">
+        <div class="ac-stat-card__icon" style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%)">
+          <CloseCircleOutlined />
+        </div>
+        <div class="ac-stat-card__content">
+          <div class="ac-stat-card__value">{{ stats.rejected_today || 0 }}</div>
+          <div class="ac-stat-card__label">Từ chối</div>
+        </div>
       </div>
-      <div class="ac-stat-card__content">
-        <div class="ac-stat-card__value">{{ stats.approved_today || 0 }}</div>
-        <div class="ac-stat-card__label">Đã duyệt hôm nay</div>
+      <div class="ac-stat-card">
+        <div class="ac-stat-card__icon" style="background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)">
+          <DollarOutlined />
+        </div>
+        <div class="ac-stat-card__content">
+          <div class="ac-stat-card__value ac-stat-card__value--amount">{{ formatCompact(stats.total_pending_amount) }}</div>
+          <div class="ac-stat-card__label">Tổng giá trị chờ duyệt</div>
+        </div>
       </div>
-    </div>
-    <div class="ac-stat-card">
-      <div class="ac-stat-card__icon" style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%)">
-        <CloseCircleOutlined />
-      </div>
-      <div class="ac-stat-card__content">
-        <div class="ac-stat-card__value">{{ stats.rejected_today || 0 }}</div>
-        <div class="ac-stat-card__label">Từ chối</div>
-      </div>
-    </div>
-    <div class="ac-stat-card">
-      <div class="ac-stat-card__icon" style="background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)">
-        <DollarOutlined />
-      </div>
-      <div class="ac-stat-card__content">
-        <div class="ac-stat-card__value ac-stat-card__value--amount">{{ formatCompact(stats.total_pending_amount) }}</div>
-        <div class="ac-stat-card__label">Tổng giá trị chờ duyệt</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ─── Unified Control Bar (UX Optimized) ─── -->
-  <div class="ac-controls shadow-sm">
-    <div class="ac-controls__main">
-      <!-- Role Selector -->
-      <a-radio-group v-model:value="activeRole" button-style="solid" size="large" class="role-selector">
-        <a-radio-button v-for="tab in roleTabs" :key="tab.key" :value="tab.key">
-          <div class="flex items-center gap-2">
-            <component :is="tab.icon" />
-            <span>{{ tab.label }}</span>
-            <span v-if="tab.count > 0" class="tab-badge">{{ tab.count }}</span>
-          </div>
-        </a-radio-button>
-      </a-radio-group>
-      
-      <div class="flex-grow"></div>
-
-      <!-- Sync Button -->
-      <a-button shape="circle" @click="refreshPage" class="flex items-center justify-center">
-        <template #icon><ReloadOutlined /></template>
-      </a-button>
     </div>
 
-    <div class="ac-controls__filters">
-      <!-- Category Filter -->
-      <div class="filter-group">
-        <span class="filter-label"><AppstoreOutlined /> Nhóm phiếu:</span>
-        <a-segmented 
-          v-model:value="activeCategory" 
-          :options="[
-            { label: 'Tất cả', value: 'all' },
-            { label: 'Tài chính', value: 'finance' },
-            { label: 'Nghiệm thu', value: 'acceptance' },
-            { label: 'Vận hành', value: 'technical' }
-          ]"
-        />
+    <!-- ─── Unified Control Bar (UX Optimized) ─── -->
+    <div class="ac-controls shadow-sm">
+      <div class="ac-controls__main">
+        <!-- Role Selector -->
+        <a-radio-group v-model:value="activeRole" button-style="solid" size="large" class="role-selector">
+          <a-radio-button v-for="tab in roleTabs" :key="tab.key" :value="tab.key">
+            <div class="flex items-center gap-2">
+              <component :is="tab.icon" />
+              <span>{{ tab.label }}</span>
+              <span v-if="tab.count > 0" class="tab-badge">{{ tab.count }}</span>
+            </div>
+          </a-radio-button>
+        </a-radio-group>
+        
+        <div class="flex-grow"></div>
+
+        <!-- Sync Button -->
+        <a-button shape="circle" @click="refreshPage" class="flex items-center justify-center" :loading="isRefreshing">
+          <template #icon><ReloadOutlined v-if="!isRefreshing" /></template>
+        </a-button>
       </div>
 
-      <!-- Status Filter -->
-      <div class="filter-group">
-        <span class="filter-label"><FilterOutlined /> Trạng thái:</span>
-        <a-segmented 
-          v-model:value="activeStatus" 
-          :options="[
-            { label: 'Đang chờ', value: 'pending' },
-            { label: 'Nháp', value: 'draft' },
-            { label: 'Từ chối', value: 'rejected' },
-            { label: 'Đã duyệt', value: 'approved' },
-            { label: 'Tất cả', value: 'all' }
-          ]"
-        />
+      <div class="ac-controls__filters">
+        <!-- Category Filter -->
+        <div class="filter-group">
+          <span class="filter-label"><AppstoreOutlined /> Nhóm phiếu:</span>
+          <a-segmented 
+            v-model:value="activeCategory" 
+            :options="[
+              { label: 'Tất cả', value: 'all' },
+              { label: 'Tài chính', value: 'finance' },
+              { label: 'Nghiệm thu', value: 'acceptance' },
+              { label: 'Vận hành', value: 'technical' }
+            ]"
+          />
+        </div>
+
+        <!-- Status Filter -->
+        <div class="filter-group">
+          <span class="filter-label"><FilterOutlined /> Trạng thái:</span>
+          <a-segmented 
+            v-model:value="activeStatus" 
+            :options="[
+              { label: 'Đang chờ', value: 'pending' },
+              { label: 'Nháp', value: 'draft' },
+              { label: 'Từ chối', value: 'rejected' },
+              { label: 'Đã duyệt', value: 'approved' },
+              { label: 'Tất cả', value: 'all' }
+            ]"
+          />
+        </div>
       </div>
     </div>
-  </div>
+  </a-spin>
 
   <!-- ─── Items Table (Enhanced) ─── -->
-  <div class="ac-table-card mt-6">
-    <div class="p-4 border-b flex justify-between items-center bg-gray-50/50">
-      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest">
-        DANH SÁCH YÊU CẦU ({{ activeItems.length }})
+  <a-spin :spinning="isRefreshing" tip="Đang tải danh sách...">
+    <div class="ac-table-card mt-6">
+      <div class="p-4 border-b flex justify-between items-center bg-gray-50/50">
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-widest">
+          DANH SÁCH YÊU CẦU ({{ activeItems.length }})
+        </div>
+        <div class="flex gap-2">
+          <a-tag v-if="activeStatus === 'pending'" color="orange" class="rounded-lg">Đang chờ xử lý</a-tag>
+          <a-tag v-else-if="activeStatus === 'rejected'" color="error" class="rounded-lg">Đã từ chối</a-tag>
+        </div>
       </div>
-      <div class="flex gap-2">
-        <a-tag v-if="activeStatus === 'pending'" color="orange" class="rounded-lg">Đang chờ xử lý</a-tag>
-        <a-tag v-else-if="activeStatus === 'rejected'" color="error" class="rounded-lg">Đã từ chối</a-tag>
-      </div>
-    </div>
-    <a-table
-      :columns="tableColumns"
-      :data-source="activeItems"
-      :pagination="{ pageSize: 15, showTotal: (t) => `${t} yêu cầu`, showSizeChanger: true }"
-      row-key="id"
-      size="middle"
-      class="ac-table"
-      :scroll="{ x: 1000 }"
-    >
+      <a-table
+        :columns="tableColumns"
+        :data-source="activeItems"
+        :pagination="{ pageSize: 15, showTotal: (t) => `${t} yêu cầu`, showSizeChanger: true }"
+        row-key="id"
+        size="middle"
+        class="ac-table"
+        :scroll="{ x: 1000 }"
+        :loading="isRefreshing"
+      >
       <template #bodyCell="{ column, record }">
         <!-- Status Tag (New in Table) -->
         <template v-if="column.key === 'status'">
@@ -215,77 +219,80 @@
       </template>
     </a-table>
   </div>
+</a-spin>
 
   <!-- ─── Recent Activity Feed (UX Uplifted) ─── -->
-  <div class="ac-history-card mt-6">
-    <div class="ac-history-card__header" @click="showHistory = !showHistory">
-      <div class="flex items-center gap-3">
-        <div class="history-pulse" v-if="recentItems.length > 0"></div>
-        <HistoryOutlined class="text-blue-500" />
-        <span class="font-bold text-gray-800 text-sm uppercase tracking-wide">Hoạt động xử lý gần đây</span>
-        <span class="history-count">{{ recentItems.length }}</span>
-      </div>
-      <div class="flex items-center gap-2 text-xs text-gray-400 font-medium">
-        {{ showHistory ? 'Thu gọn' : 'Xem chi tiết' }}
-        <UpOutlined v-if="showHistory" style="font-size: 10px;" />
-        <DownOutlined v-else style="font-size: 10px;" />
-      </div>
-    </div>
-
-    <transition name="slide-fade">
-      <div v-if="showHistory" class="ac-history-body">
-        <div v-if="recentItems.length === 0" class="p-12 text-center text-gray-400">
-          <HistoryOutlined style="font-size: 32px; opacity: 0.2; margin-bottom: 12px;" />
-          <p>Chưa có hoạt động xử lý nào gần đây</p>
+  <a-spin :spinning="isRefreshing">
+    <div class="ac-history-card mt-6">
+      <div class="ac-history-card__header" @click="showHistory = !showHistory">
+        <div class="flex items-center gap-3">
+          <div class="history-pulse" v-if="recentItems.length > 0"></div>
+          <HistoryOutlined class="text-blue-500" />
+          <span class="font-bold text-gray-800 text-sm uppercase tracking-wide">Hoạt động xử lý gần đây</span>
+          <span class="history-count">{{ recentItems.length }}</span>
         </div>
-        
-        <div v-else class="ac-timeline">
-          <div v-for="item in recentItems" :key="item.id" class="ac-timeline-item">
-            <!-- Timeline Line/Dot -->
-            <div class="ac-timeline-left">
-              <div class="ac-timeline-dot" :class="item.status">
-                <CheckOutlined v-if="['approved', 'confirmed', 'paid', 'verified'].includes(item.status)" />
-                <CloseOutlined v-else-if="['rejected', 'cancelled'].includes(item.status)" />
-                <InfoCircleOutlined v-else />
-              </div>
-              <div class="ac-timeline-line"></div>
-            </div>
+        <div class="flex items-center gap-2 text-xs text-gray-400 font-medium">
+          {{ showHistory ? 'Thu gọn' : 'Xem chi tiết' }}
+          <UpOutlined v-if="showHistory" style="font-size: 10px;" />
+          <DownOutlined v-else style="font-size: 10px;" />
+        </div>
+      </div>
 
-            <!-- Timeline Content -->
-            <div class="ac-timeline-content group" @click="openDetailDrawer(item)">
-              <div class="flex justify-between items-start mb-1">
-                <div class="flex flex-col">
-                  <div class="flex items-center gap-2">
-                    <span class="action-badge" :class="item.status">
-                      {{ statusViMap[item.status] || item.status }}
-                    </span>
-                    <span class="item-title-link">{{ item.title }}</span>
+      <transition name="slide-fade">
+        <div v-if="showHistory" class="ac-history-body">
+          <div v-if="recentItems.length === 0" class="p-12 text-center text-gray-400">
+            <HistoryOutlined style="font-size: 32px; opacity: 0.2; margin-bottom: 12px;" />
+            <p>Chưa có hoạt động xử lý nào gần đây</p>
+          </div>
+          
+          <div v-else class="ac-timeline">
+            <div v-for="item in recentItems" :key="item.id" class="ac-timeline-item">
+              <!-- Timeline Line/Dot -->
+              <div class="ac-timeline-left">
+                <div class="ac-timeline-dot" :class="item.status">
+                  <CheckOutlined v-if="['approved', 'confirmed', 'paid', 'verified'].includes(item.status)" />
+                  <CloseOutlined v-else-if="['rejected', 'cancelled'].includes(item.status)" />
+                  <InfoCircleOutlined v-else />
+                </div>
+                <div class="ac-timeline-line"></div>
+              </div>
+
+              <!-- Timeline Content -->
+              <div class="ac-timeline-content group" @click="openDetailDrawer(item)">
+                <div class="flex justify-between items-start mb-1">
+                  <div class="flex flex-col">
+                    <div class="flex items-center gap-2">
+                      <span class="action-badge" :class="item.status">
+                        {{ statusViMap[item.status] || item.status }}
+                      </span>
+                      <span class="item-title-link">{{ item.title }}</span>
+                    </div>
+                    <span class="item-subtitle">{{ item.subtitle }} • {{ item.type_label }}</span>
                   </div>
-                  <span class="item-subtitle">{{ item.subtitle }} • {{ item.type_label }}</span>
+                  <div class="text-right">
+                    <div v-if="item.amount" class="text-sm font-bold text-gray-700">{{ formatCurrency(item.amount) }}</div>
+                    <div class="text-[10px] text-gray-400">{{ item.created_at }}</div>
+                  </div>
                 </div>
-                <div class="text-right">
-                  <div v-if="item.amount" class="text-sm font-bold text-gray-700">{{ formatCurrency(item.amount) }}</div>
-                  <div class="text-[10px] text-gray-400">{{ item.created_at }}</div>
-                </div>
-              </div>
 
-              <!-- Rejection Reason Highlight (Direct Visibility) -->
-              <div v-if="item.rejected_reason" class="item-reason-alert">
-                <div class="reason-indicator"></div>
-                <span class="font-bold mr-1">Lý do:</span> {{ item.rejected_reason }}
+                <!-- Rejection Reason Highlight (Direct Visibility) -->
+                <div v-if="item.rejected_reason" class="item-reason-alert">
+                  <div class="reason-indicator"></div>
+                  <span class="font-bold mr-1">Lý do:</span> {{ item.rejected_reason }}
+                </div>
               </div>
             </div>
           </div>
+          
+          <div class="p-4 bg-gray-50/50 border-t text-center">
+            <a-button type="link" size="small" class="text-gray-400 font-medium hover:text-blue-500">
+              Xem toàn bộ nhật ký hệ thống <ArrowRightOutlined />
+            </a-button>
+          </div>
         </div>
-        
-        <div class="p-4 bg-gray-50/50 border-t text-center">
-          <a-button type="link" size="small" class="text-gray-400 font-medium hover:text-blue-500">
-            Xem toàn bộ nhật ký hệ thống <ArrowRightOutlined />
-          </a-button>
-        </div>
-      </div>
-    </transition>
-  </div>
+      </transition>
+    </div>
+  </a-spin>
 
   <!-- ─── Detail Drawer ─── -->
   <a-drawer
@@ -616,6 +623,7 @@ const getInitialRole = () => {
 const activeRole = ref(getInitialRole())
 const activeCategory = ref('all')
 const activeStatus = ref('all')
+const isRefreshing = ref(false)
 const rejectModalVisible = ref(false)
 const rejectTarget = ref(null)
 const rejectReason = ref('')
@@ -782,7 +790,15 @@ const formatCompact = (amount) => {
   return new Intl.NumberFormat('vi-VN').format(amount)
 }
 
-const refreshPage = () => router.reload()
+const refreshPage = () => {
+  isRefreshing.value = true
+  router.reload({
+    onFinish: () => {
+      isRefreshing.value = false
+      message.success('Đã cập nhật dữ liệu mới nhất')
+    }
+  })
+}
 
 const openDetailDrawer = (record) => { detailItem.value = record }
 

@@ -89,6 +89,18 @@
             {{ record.deleted_at ? 'Đã khóa' : 'Hoạt động' }}
           </a-tag>
         </template>
+        
+        <template v-else-if="column.key === 'salary'">
+          <div v-if="record.salary_configs?.length">
+             <div class="font-semibold text-blue-600">
+               {{ formatCurrency(getMainRate(record.salary_configs[0])) }}
+             </div>
+             <div class="text-[10px] text-gray-400">
+               {{ translateType(record.salary_configs[0].salary_type) }}
+             </div>
+          </div>
+          <span v-else class="text-gray-400 text-xs text-italic">Chưa cấu hình</span>
+        </template>
 
         <template v-else-if="column.key === 'actions'">
           <div class="flex items-center gap-1">
@@ -104,6 +116,12 @@
                 </a-button>
               </a-tooltip>
             </a-popconfirm>
+            <a-tooltip title="Cấu hình lương & Đơn giá">
+              <a-button type="link" size="small" @click="$inertia.visit(`/hr/employees/${record.id}/salary`)" class="flex items-center">
+                <template #icon><DollarOutlined /></template>
+                Lương
+              </a-button>
+            </a-tooltip>
           </div>
         </template>
       </template>
@@ -175,12 +193,12 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Head, useForm, router } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
 
@@ -219,6 +237,14 @@ const columns = [
   { title: 'Trạng thái', key: 'status', width: 120, align: 'center' },
   { title: '', key: 'actions', width: 100, align: 'center', fixed: 'right' },
 ]
+
+const mode = computed(() => new URLSearchParams(window.location.search).get('mode'))
+
+if (mode.value === 'salary') {
+  // Insert salary column before roles
+  const rolesIndex = columns.findIndex(c => c.key === 'roles')
+  columns.splice(rolesIndex, 0, { title: 'Lương/Đơn giá', key: 'salary', width: 160 })
+}
 
 const filters = ref({
   search: props.filters?.search || '',
@@ -308,6 +334,22 @@ const resetForm = () => {
 
 const deleteEmployee = (emp) => {
   router.delete(`/hr/employees/${emp.id}`)
+}
+
+const formatCurrency = (value) => {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value || 0)
+}
+
+const translateType = (type) => {
+  const map = { hourly: 'Theo giờ', daily: 'Theo ngày', monthly: 'Lương tháng' }
+  return map[type] || type
+}
+
+const getMainRate = (record) => {
+  if (record.salary_type === 'hourly') return record.hourly_rate
+  if (record.salary_type === 'daily') return record.daily_rate
+  if (record.salary_type === 'monthly') return record.monthly_salary
+  return 0
 }
 </script>
 

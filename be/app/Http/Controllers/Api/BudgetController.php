@@ -18,24 +18,24 @@ use Illuminate\Support\Facades\DB;
 
 class BudgetController extends Controller
 {
-    protected $projectService;
-    protected $financialCalculationService;
-    protected $budgetComparisonService;
-    protected $budgetSyncService;
     protected $authService;
+    protected $budgetService;
+    protected $analysisService;
 
     public function __construct(
         ProjectService $projectService,
         FinancialCalculationService $financialCalculationService,
-        BudgetComparisonService $budgetComparisonService,
         BudgetSyncService $budgetSyncService,
-        AuthorizationService $authService
+        AuthorizationService $authService,
+        \App\Services\ProjectBudgetService $budgetService,
+        \App\Services\ProjectAnalysisService $analysisService
     ) {
         $this->projectService = $projectService;
         $this->financialCalculationService = $financialCalculationService;
-        $this->budgetComparisonService = $budgetComparisonService;
         $this->budgetSyncService = $budgetSyncService;
         $this->authService = $authService;
+        $this->budgetService = $budgetService;
+        $this->analysisService = $analysisService;
     }
 
     public function index(string $projectId)
@@ -93,41 +93,10 @@ class BudgetController extends Controller
         }
 
         try {
-            DB::beginTransaction();
-
-            $totalBudget = collect($request->items)->sum('estimated_amount');
-
-            $budget = ProjectBudget::create([
+            $budget = $this->budgetService->upsert([
                 'project_id' => $project->id,
-                'name' => $request->name,
-                'version' => $request->version ?? '1.0',
-                'total_budget' => $totalBudget,
-                'estimated_cost' => $totalBudget,
-                'remaining_budget' => $totalBudget,
-                'budget_date' => $request->budget_date,
-                'notes' => $request->notes,
-                'status' => 'draft',
-                'created_by' => $user->id,
-            ]);
-
-            // Tạo budget items
-            foreach ($request->items as $index => $item) {
-                BudgetItem::create([
-                    'budget_id' => $budget->id,
-                    'cost_group_id' => $item['cost_group_id'] ?? null,
-                    'name' => $item['name'],
-                    'description' => $item['description'] ?? null,
-                    'estimated_amount' => $item['estimated_amount'],
-                    'remaining_amount' => $item['estimated_amount'],
-                    'quantity' => $item['quantity'] ?? 1,
-                    'unit_price' => $item['unit_price'] ?? $item['estimated_amount'],
-                    'order' => $index,
-                ]);
-            }
-
-            DB::commit();
-
-            $budget->load(['items.costGroup', 'creator']);
+                ...$request->all(),
+            ], null, $user);
 
             return response()->json([
                 'success' => true,
@@ -135,11 +104,9 @@ class BudgetController extends Controller
                 'data' => $budget
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -198,11 +165,10 @@ class BudgetController extends Controller
             ])
             ->findOrFail($id);
 
-        // Sử dụng BudgetComparisonService để so sánh
-        $comparison = $this->budgetComparisonService->compareBudget($budget);
-        $categoryComparison = $this->budgetComparisonService->compareByCategory($budget);
-
-        $groupComparison = $this->budgetComparisonService->compareByCostGroup($budget);
+        // Sử dụng ProjectAnalysisService để so sánh
+        $comparison = $this->analysisService->compareBudget($budget);
+        $categoryComparison = $this->analysisService->compareByCategory($budget);
+        $groupComparison = $this->analysisService->compareByCostGroup($budget);
 
         return response()->json([
             'success' => true,
@@ -260,49 +226,10 @@ class BudgetController extends Controller
         }
 
         try {
-            DB::beginTransaction();
-
-            $updateData = $request->only(['name', 'version', 'budget_date', 'notes', 'status']);
-
-            if ($request->status === 'approved' && !$budget->approved_by) {
-                $updateData['approved_by'] = $user->id;
-                $updateData['approved_at'] = now();
-            }
-
-            // Nếu cập nhật items
-            if ($request->has('items')) {
-                // Xóa các hạng mục cũ
-                $budget->items()->delete();
-                
-                $totalBudget = 0;
-                foreach ($request->items as $index => $item) {
-                    BudgetItem::create([
-                        'budget_id' => $budget->id,
-                        'cost_group_id' => $item['cost_group_id'] ?? null,
-                        'name' => $item['name'],
-                        'description' => $item['description'] ?? null,
-                        'estimated_amount' => $item['estimated_amount'],
-                        'remaining_amount' => $item['estimated_amount'], // Reset remaining if re-drafting
-                        'quantity' => $item['quantity'] ?? 1,
-                        'unit_price' => $item['unit_price'] ?? $item['estimated_amount'],
-                        'order' => $index,
-                    ]);
-                    $totalBudget += $item['estimated_amount'];
-                }
-                
-                $updateData['total_budget'] = $totalBudget;
-                $updateData['estimated_cost'] = $totalBudget;
-                $updateData['remaining_budget'] = $totalBudget;
-            }
-
-            $budget->update($updateData);
-
-            // Đồng bộ lại số liệu
-            $this->budgetSyncService->syncBudget($budget);
-
-            DB::commit();
-
-            $budget->load(['items.costGroup', 'creator', 'approver']);
+            $budget = $this->budgetService->upsert([
+                'project_id' => $project->id,
+                ...$request->all(),
+            ], $budget, $user);
 
             return response()->json([
                 'success' => true,
@@ -310,7 +237,6 @@ class BudgetController extends Controller
                 'data' => $budget
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
@@ -332,19 +258,19 @@ class BudgetController extends Controller
 
         $budget = ProjectBudget::where('project_id', $projectId)->findOrFail($id);
 
-        if ($budget->status === 'approved' || $budget->status === 'archived') {
+        try {
+            $this->budgetService->delete($budget);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã xóa ngân sách thành công.'
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không thể xóa ngân sách đã được duyệt hoặc đã lưu trữ.'
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 422);
         }
-
-        $budget->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã xóa ngân sách thành công.'
-        ]);
     }
 
     /**
@@ -364,27 +290,20 @@ class BudgetController extends Controller
 
         $budget = ProjectBudget::where('project_id', $projectId)->findOrFail($id);
 
-        if ($budget->status !== 'draft') {
+        try {
+            $this->budgetService->submit($budget);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã gửi duyệt ngân sách thành công.',
+                'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể gửi duyệt ngân sách ở trạng thái Nháp.'
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 422);
         }
-
-        if (!$budget->items || $budget->items->count() === 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ngân sách phải có ít nhất 1 hạng mục trước khi gửi duyệt.'
-            ], 422);
-        }
-
-        $budget->update(['status' => 'pending_approval']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi duyệt ngân sách thành công.',
-            'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
-        ]);
     }
 
     /**
@@ -404,24 +323,20 @@ class BudgetController extends Controller
 
         $budget = ProjectBudget::where('project_id', $projectId)->findOrFail($id);
 
-        if ($budget->status !== 'pending_approval') {
+        try {
+            $this->budgetService->approve($budget, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt ngân sách thành công.',
+                'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt ngân sách ở trạng thái Chờ duyệt.'
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 422);
         }
-
-        $budget->update([
-            'status' => 'approved',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt ngân sách thành công.',
-            'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
-        ]);
     }
 
     /**
@@ -441,31 +356,20 @@ class BudgetController extends Controller
 
         $budget = ProjectBudget::where('project_id', $projectId)->findOrFail($id);
 
-        if ($budget->status !== 'pending_approval') {
+        try {
+            $this->budgetService->reject($budget, $request->input('reason', ''), $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã từ chối ngân sách.',
+                'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể từ chối ngân sách ở trạng thái Chờ duyệt.'
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 422);
         }
-
-        $reason = $request->input('reason', '');
-        $notes = $budget->notes ?: '';
-        if ($reason) {
-            $notes = ($notes ? $notes . "\n" : '') . "[Từ chối] " . $reason . " - " . $user->name . " (" . now()->format('d/m/Y H:i') . ")";
-        }
-
-        $budget->update([
-            'status' => 'draft',
-            'notes' => $notes,
-            'approved_by' => null,
-            'approved_at' => null,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã từ chối ngân sách.',
-            'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
-        ]);
     }
 
     /**
@@ -485,23 +389,20 @@ class BudgetController extends Controller
 
         $budget = ProjectBudget::where('project_id', $projectId)->findOrFail($id);
 
-        if ($budget->status !== 'approved') {
+        try {
+            $this->budgetService->activate($budget);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã áp dụng ngân sách thành công.',
+                'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể áp dụng ngân sách đã được duyệt.'
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 422);
         }
-
-        // Đồng bộ lại số liệu trước khi activate
-        $this->budgetSyncService->syncBudget($budget);
-
-        $budget->update(['status' => 'active']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã áp dụng ngân sách thành công.',
-            'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
-        ]);
     }
 
     /**
@@ -521,20 +422,20 @@ class BudgetController extends Controller
 
         $budget = ProjectBudget::where('project_id', $projectId)->findOrFail($id);
 
-        if ($budget->status !== 'active') {
+        try {
+            $this->budgetService->archive($budget);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã lưu trữ ngân sách.',
+                'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể lưu trữ ngân sách đang áp dụng.'
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 422);
         }
-
-        $budget->update(['status' => 'archived']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã lưu trữ ngân sách.',
-            'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
-        ]);
     }
 
     /**

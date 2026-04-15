@@ -48,20 +48,22 @@ class ProjectProgressController extends Controller
         // Thông tin nghiệm thu
         $acceptanceStages = $project->acceptanceStages()
             ->with(['items' => function ($query) {
-                $query->orderBy('order');
+                $query->select(['id', 'acceptance_stage_id', 'task_id', 'name', 'acceptance_status', 'workflow_status', 'order'])
+                    ->orderBy('order');
             }])
             ->orderBy('order')
             ->get();
 
+        // Optimized acceptance statistics using database queries instead of PHP collections
         $acceptanceStats = [
-            'total_stages' => $acceptanceStages->count(),
-            'fully_approved_stages' => $acceptanceStages->where('status', 'owner_approved')->count(),
-            'total_items' => $acceptanceStages->sum(function ($stage) {
-                return $stage->items->count();
-            }),
-            'approved_items' => $acceptanceStages->sum(function ($stage) {
-                return $stage->items->where('acceptance_status', 'approved')->count();
-            }),
+            'total_stages' => $project->acceptanceStages()->count(),
+            'fully_approved_stages' => $project->acceptanceStages()->where('status', 'owner_approved')->count(),
+            'total_items' => \App\Models\AcceptanceItem::whereIn('acceptance_stage_id', 
+                $project->acceptanceStages()->pluck('id')
+            )->count(),
+            'approved_items' => \App\Models\AcceptanceItem::whereIn('acceptance_stage_id', 
+                $project->acceptanceStages()->pluck('id')
+            )->where('acceptance_status', 'approved')->count(),
         ];
 
         return response()->json([
@@ -88,44 +90,43 @@ class ProjectProgressController extends Controller
 
         $project = Project::findOrFail($projectId);
 
-        // Get all tasks with relationships
+        // Get only necessary columns for the tree structure to reduce memory and payload size
         $tasks = ProjectTask::where('project_id', $projectId)
-            ->whereNull('deleted_at')
+            ->select([
+                'id', 'uuid', 'project_id', 'parent_id', 'name', 
+                'start_date', 'end_date', 'duration', 
+                'progress_percentage', 'status', 'priority', 'assigned_to', 'order'
+            ])
             ->with([
-                'parent:id,name,parent_id',
-                'children:id,name,parent_id,progress_percentage,status,priority,start_date,end_date',
-                'phase:id,name',
                 'assignedUser:id,name',
             ])
             ->orderBy('order')
             ->get();
 
         // Build hierarchical structure
-        $rootTasks = $tasks->whereNull('parent_id');
+        // Group tasks by parent_id for O(1) lookups in the recursive tree building
+        $tasksGrouped = $tasks->groupBy('parent_id');
         
-        $buildTree = function ($parentId = null) use ($tasks, &$buildTree) {
-            return $tasks->where('parent_id', $parentId)->map(function ($task) use ($buildTree) {
+        $buildTree = function ($parentId = null) use ($tasksGrouped, &$buildTree) {
+            $currentTasks = $tasksGrouped->get($parentId, collect());
+            
+            return $currentTasks->map(function ($task) use ($buildTree, $tasksGrouped) {
                 return [
                     'id' => $task->id,
                     'uuid' => $task->uuid,
                     'name' => $task->name,
-                    'description' => $task->description,
                     'start_date' => $task->start_date?->toDateString(),
                     'end_date' => $task->end_date?->toDateString(),
                     'duration' => $task->duration,
                     'progress_percentage' => (float) ($task->progress_percentage ?? 0),
                     'status' => $task->status,
                     'priority' => $task->priority,
-                    'parent_task' => $task->parent ? [
-                        'id' => $task->parent->id,
-                        'name' => $task->parent->name,
-                    ] : null, // Parent task acts as "phase"
                     'assigned_user' => $task->assignedUser ? [
                         'id' => $task->assignedUser->id,
                         'name' => $task->assignedUser->name,
                     ] : null,
                     'parent_id' => $task->parent_id,
-                    'has_children' => $tasks->where('parent_id', $task->id)->count() > 0,
+                    'has_children' => $tasksGrouped->has($task->id),
                     'children' => $buildTree($task->id),
                 ];
             })->values();
@@ -133,16 +134,11 @@ class ProjectProgressController extends Controller
 
         $taskTree = $buildTree();
 
-        // Calculate overall progress from root tasks
+        // Calculate overall progress from root tasks (using the already fetched collection)
+        $rootTasks = $tasksGrouped->get(null, collect());
         $overallProgress = 0;
         if ($rootTasks->isNotEmpty()) {
-            $totalProgress = 0;
-            $count = 0;
-            foreach ($rootTasks as $task) {
-                $totalProgress += (float) ($task->progress_percentage ?? 0);
-                $count++;
-            }
-            $overallProgress = $count > 0 ? round($totalProgress / $count, 2) : 0;
+            $overallProgress = round($rootTasks->avg('progress_percentage') ?? 0, 2);
         }
 
         // Statistics

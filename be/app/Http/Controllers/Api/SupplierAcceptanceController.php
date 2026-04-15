@@ -11,6 +11,17 @@ use Illuminate\Support\Facades\Validator;
 
 class SupplierAcceptanceController extends Controller
 {
+    protected $supplierService;
+    protected $authService;
+
+    public function __construct(
+        \App\Services\SupplierService $supplierService,
+        \App\Services\AuthorizationService $authService
+    ) {
+        $this->supplierService = $supplierService;
+        $this->authService = $authService;
+    }
+
     /**
      * Danh sách nghiệm thu NCC
      */
@@ -25,21 +36,7 @@ class SupplierAcceptanceController extends Controller
             ], 403);
         }
 
-        $query = SupplierAcceptance::with(['supplier', 'project', 'contract', 'accepter']);
-
-        if ($projectId = $request->query('project_id')) {
-            $query->where('project_id', $projectId);
-        }
-
-        if ($supplierId = $request->query('supplier_id')) {
-            $query->where('supplier_id', $supplierId);
-        }
-
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        $acceptances = $query->orderByDesc('acceptance_date')->paginate(20);
+        $acceptances = $this->supplierService->getAcceptances($request->all());
 
         return response()->json([
             'success' => true,
@@ -61,7 +58,7 @@ class SupplierAcceptanceController extends Controller
             ], 403);
         }
 
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
             'project_id' => 'nullable|exists:projects,id',
             'supplier_contract_id' => 'nullable|exists:supplier_contracts,id',
@@ -76,27 +73,20 @@ class SupplierAcceptanceController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        if ($validator->fails()) {
+        try {
+            $acceptance = $this->supplierService->upsertAcceptance($validated, null, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã tạo nghiệm thu thành công.',
+                'data' => $acceptance
+            ], 201);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
+            ], 500);
         }
-
-        $data = $request->all();
-        $data['created_by'] = $user->id;
-        $data['status'] = 'pending';
-
-        $acceptance = SupplierAcceptance::create($data);
-
-        $acceptance->load(['supplier', 'project', 'contract']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã tạo nghiệm thu thành công.',
-            'data' => $acceptance
-        ], 201);
     }
 
     /**
@@ -113,13 +103,8 @@ class SupplierAcceptanceController extends Controller
             ], 403);
         }
 
-        $acceptance = SupplierAcceptance::with([
-            'supplier',
-            'project',
-            'contract',
-            'accepter',
-            'rejector',
-            'attachments'
+        $acceptance = \App\Models\SupplierAcceptance::with([
+            'supplier', 'project', 'contract', 'accepter', 'rejector', 'attachments'
         ])->findOrFail($id);
 
         return response()->json([
@@ -142,16 +127,9 @@ class SupplierAcceptanceController extends Controller
             ], 403);
         }
 
-        $acceptance = SupplierAcceptance::findOrFail($id);
+        $acceptance = \App\Models\SupplierAcceptance::findOrFail($id);
 
-        if (in_array($acceptance->status, ['approved', 'rejected'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể sửa nghiệm thu đã được duyệt/từ chối.'
-            ], 422);
-        }
-
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'acceptance_number' => 'sometimes|nullable|string|max:100|unique:supplier_acceptances,acceptance_number,' . $id,
             'acceptance_name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
@@ -163,21 +141,20 @@ class SupplierAcceptanceController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        if ($validator->fails()) {
+        try {
+            $acceptance = $this->supplierService->upsertAcceptance($validated, $acceptance, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã cập nhật nghiệm thu thành công.',
+                'data' => $acceptance
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
+            ], 400);
         }
-
-        $acceptance->update($request->all());
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã cập nhật nghiệm thu thành công.',
-            'data' => $acceptance->fresh(['supplier', 'project', 'contract'])
-        ]);
     }
 
     /**
@@ -194,7 +171,7 @@ class SupplierAcceptanceController extends Controller
             ], 403);
         }
 
-        $acceptance = SupplierAcceptance::findOrFail($id);
+        $acceptance = \App\Models\SupplierAcceptance::findOrFail($id);
 
         if ($acceptance->status === 'approved') {
             return response()->json([
@@ -225,27 +202,22 @@ class SupplierAcceptanceController extends Controller
             ], 403);
         }
 
-        $acceptance = SupplierAcceptance::findOrFail($id);
+        $acceptance = \App\Models\SupplierAcceptance::findOrFail($id);
 
-        if ($acceptance->status !== 'pending') {
+        try {
+            $this->supplierService->approveAcceptance($acceptance, $user, $request->input('notes'));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt nghiệm thu thành công.',
+                'data' => $acceptance->fresh(['accepter'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt nghiệm thu ở trạng thái pending.'
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 422);
         }
-
-        $notes = $request->input('notes');
-        $acceptance->approve($user, $notes);
-
-        // Cập nhật công nợ của supplier
-        $supplier = $acceptance->supplier;
-        $supplier->recordDebt($acceptance->accepted_amount);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt nghiệm thu thành công.',
-            'data' => $acceptance->fresh(['accepter'])
-        ]);
     }
 
     /**
@@ -262,33 +234,22 @@ class SupplierAcceptanceController extends Controller
             ], 403);
         }
 
-        $acceptance = SupplierAcceptance::findOrFail($id);
+        $acceptance = \App\Models\SupplierAcceptance::findOrFail($id);
+        $request->validate(['rejection_reason' => 'required|string']);
 
-        if ($acceptance->status !== 'pending') {
+        try {
+            $this->supplierService->rejectAcceptance($acceptance, $user, $request->rejection_reason);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã từ chối nghiệm thu.',
+                'data' => $acceptance->fresh(['rejector'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể từ chối nghiệm thu ở trạng thái pending.'
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 422);
         }
-
-        $validator = Validator::make($request->all(), [
-            'rejection_reason' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vui lòng nhập lý do từ chối.',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $acceptance->reject($request->rejection_reason, $user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã từ chối nghiệm thu.',
-            'data' => $acceptance->fresh(['rejector'])
-        ]);
     }
 }

@@ -8,8 +8,16 @@ use App\Models\Kpi;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+use App\Services\ProjectReportingService;
+
 class KpiController extends Controller
 {
+    protected $reportingService;
+
+    public function __construct(ProjectReportingService $reportingService)
+    {
+        $this->reportingService = $reportingService;
+    }
     public function index(Request $request, $projectId)
     {
         $user = $request->user();
@@ -124,23 +132,9 @@ class KpiController extends Controller
         $validated = $request->validate($rules);
 
         // If user is owner but not manager, they can ONLY update current_value (progress)
-        if ($isOwner && !$canManage) {
             // Only update current_value
             if (isset($validated['current_value'])) {
-                $kpi->current_value = $validated['current_value'];
-                
-                // Logic: If reaches 100%, maybe notify manager? 
-                // But status update to 'completed' (waiting verification) should be manual request?
-                // Or auto if current >= target?
-                if ($kpi->current_value >= $kpi->target_value) {
-                     // Auto mark as completed/waiting verification?
-                     // Requirement: "Nhân sự báo cáo hoàn thành 100% KPI"
-                     // Let's assume hitting target = report completion
-                     $kpi->status = 'completed'; 
-                } else {
-                    $kpi->status = 'pending';
-                }
-                $kpi->save();
+                $this->reportingService->updateKpiProgress($kpi, $validated['current_value']);
             }
         } else {
             // Manager can update everything

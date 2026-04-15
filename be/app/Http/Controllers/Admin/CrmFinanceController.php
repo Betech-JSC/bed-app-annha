@@ -19,6 +19,13 @@ use Inertia\Inertia;
 class CrmFinanceController extends Controller
 {
     use CrmAuthorization;
+
+    protected $financialService;
+
+    public function __construct(\App\Services\FinancialService $financialService)
+    {
+        $this->financialService = $financialService;
+    }
     public function index(Request $request)
     {
         $user = Auth::guard('admin')->user();
@@ -206,22 +213,14 @@ class CrmFinanceController extends Controller
             'expense_category' => 'nullable|in:capex,opex,payroll',
         ]);
 
-        $cost = Cost::create([
-            'project_id' => null,
-            'name' => $validated['name'],
-            'amount' => $validated['amount'],
-            'cost_group_id' => $validated['cost_group_id'],
-            'cost_date' => $validated['cost_date'],
-            'description' => $validated['description'] ?? null,
-            'quantity' => $validated['quantity'] ?? null,
-            'unit' => $validated['unit'] ?? null,
-            'supplier_id' => $validated['supplier_id'] ?? null,
-            'expense_category' => $validated['expense_category'] ?? null,
-            'status' => 'draft',
-            // Note: created_by FK constrains to users table — admin IDs don't exist there
-        ]);
+        try {
+            $validated['project_id'] = null; // Explicitly company cost
+            $this->financialService->upsertCost($validated, null, $user);
 
-        return redirect()->back()->with('success', 'Đã tạo chi phí công ty thành công.');
+            return redirect()->back()->with('success', 'Đã tạo chi phí công ty thành công.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -281,10 +280,11 @@ class CrmFinanceController extends Controller
         $this->crmRequire($user, Permissions::COMPANY_COST_SUBMIT);
         $cost = Cost::companyCosts()->findOrFail($id);
 
-        if (!$cost->submitForManagementApproval()) {
-            return redirect()->back()->with('error', 'Không thể gửi duyệt chi phí này.');
+        try {
+            $this->financialService->submitCost($cost, $user);
+            return redirect()->back()->with('success', 'Đã gửi chi phí để ban điều hành duyệt.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-
-        return redirect()->back()->with('success', 'Đã gửi chi phí để ban điều hành duyệt.');
     }
 }

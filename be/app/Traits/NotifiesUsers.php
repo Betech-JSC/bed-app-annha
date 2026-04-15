@@ -65,10 +65,8 @@ trait NotifiesUsers
     // ====================================================================
 
     /**
-     * Gửi thông báo cho một event cụ thể.
-     *
      * @param string            $event   Key trong notificationMap()
-     * @param Model|User|null   $actor   Người thực hiện hành động (User hoặc Admin model)
+     * @param Model|User|null   $actor   Người thực hiện hành động (User model)
      * @param array             $extra   Dữ liệu bổ sung: ['reason' => '...']
      */
     public function notifyEvent(string $event, $actor = null, array $extra = []): void
@@ -81,8 +79,8 @@ trait NotifiesUsers
                 return;
             }
 
-            $config   = $map[$event];
-            $project  = $this->getNotificationProject();
+            $config = $map[$event];
+            $project = $this->getNotificationProject();
 
             if (!$project) {
                 Log::warning("NotifiesUsers: No project for " . static::class . "#{$this->id}");
@@ -121,35 +119,35 @@ trait NotifiesUsers
 
             // --- Create notifications & push ---
             $data = array_merge([
-                'project_id'  => $project->id,
+                'project_id' => $project->id,
                 'entity_type' => static::class,
-                'entity_id'   => $this->id,
-                'event'       => $event,
-                'source'      => 'crm',
+                'entity_id' => $this->id,
+                'event' => $event,
+                'source' => 'crm',
             ], $extra);
 
             foreach ($userIds as $userId) {
                 try {
                     Notification::create([
-                        'user_id'         => $userId,
-                        'type'            => $type,
-                        'category'        => $category,
-                        'title'           => $title,
-                        'body'            => $body,
-                        'message'         => $body,
-                        'data'            => $data,
-                        'priority'        => $priority,
-                        'action_url'      => $actionUrl,
-                        'status'          => 'unread',
+                        'user_id' => $userId,
+                        'type' => $type,
+                        'category' => $category,
+                        'title' => $title,
+                        'body' => $body,
+                        'message' => $body,
+                        'data' => $data,
+                        'priority' => $priority,
+                        'action_url' => $actionUrl,
+                        'status' => 'unread',
                         'notifiable_type' => Project::class,
-                        'notifiable_id'   => $project->id,
+                        'notifiable_id' => $project->id,
                     ]);
 
                     // Push notification qua Expo
                     $this->sendPushToUser($userId, $title, $body, array_merge($data, [
                         'action_url' => $actionUrl,
-                        'type'       => $type,
-                        'category'   => $category,
+                        'type' => $type,
+                        'category' => $category,
                     ]));
                 } catch (\Exception $e) {
                     Log::warning("NotifiesUsers: Failed for user {$userId}: " . $e->getMessage());
@@ -158,14 +156,14 @@ trait NotifiesUsers
             }
 
             Log::info("NotifiesUsers: Sent '{$event}' to " . count($userIds) . " users", [
-                'model'   => static::class,
-                'id'      => $this->id,
+                'model' => static::class,
+                'id' => $this->id,
                 'project' => $project->id,
             ]);
         } catch (\Exception $e) {
             Log::error("NotifiesUsers: " . $e->getMessage(), [
                 'model' => static::class,
-                'id'    => $this->id ?? null,
+                'id' => $this->id ?? null,
                 'event' => $event,
             ]);
             // Không throw — thông báo là non-critical
@@ -185,11 +183,11 @@ trait NotifiesUsers
         $project = $this->getNotificationProject();
 
         $replacements = [
-            '{name}'    => $this->getNotificationLabel(),
-            '{actor}'   => $actor->name ?? 'Hệ thống',
+            '{name}' => $this->getNotificationLabel(),
+            '{actor}' => $actor->name ?? 'Hệ thống',
             '{project}' => $project->name ?? 'Dự án',
-            '{code}'    => $project->code ?? '',
-            '{reason}'  => $extra['reason'] ?? '',
+            '{code}' => $project->code ?? '',
+            '{reason}' => $extra['reason'] ?? '',
         ];
 
         return str_replace(array_keys($replacements), array_values($replacements), $template);
@@ -216,17 +214,17 @@ trait NotifiesUsers
 
         foreach ($targets as $target) {
             match ($target) {
-                'creator'    => $userIds[] = $this->created_by ?? null,
-                'pm'         => $userIds[] = $project->project_manager_id ?? null,
-                'customer'   => $userIds[] = $project->customer_id ?? null,
-                'reporter'   => $userIds[] = $this->reported_by ?? null,
-                'fixer'      => $userIds[] = $this->fixed_by ?? null,
-                'proposer'   => $userIds[] = $this->proposed_by ?? null,
+                'creator' => $userIds[] = $this->created_by ?? null,
+                'pm' => $userIds[] = $project->project_manager_id ?? null,
+                'customer' => $userIds[] = $project->customer_id ?? null,
+                'reporter' => $userIds[] = $this->reported_by ?? null,
+                'fixer' => $userIds[] = $this->fixed_by ?? null,
+                'proposer' => $userIds[] = $this->proposed_by ?? null,
                 'accountant' => $userIds = array_merge($userIds, $this->getUsersByPermission('cost.approve.accountant')),
                 'management' => $userIds = array_merge($userIds, $this->getUsersByPermission('cost.approve.management')),
                 'supervisor' => $userIds = array_merge($userIds, $this->getProjectRole($project, 'acceptance.approve.level_1')),
-                'team'       => $userIds = array_merge($userIds, $this->getProjectTeamIds($project)),
-                default      => null,
+                'team' => $userIds = array_merge($userIds, $this->getProjectTeamIds($project)),
+                default => null,
             };
         }
 
@@ -240,7 +238,7 @@ trait NotifiesUsers
     {
         return User::where(function ($q) use ($permission) {
             $q->whereHas('roles.permissions', fn($rq) => $rq->where('name', $permission))
-              ->orWhereHas('directPermissions', fn($dq) => $dq->where('name', $permission));
+                ->orWhereHas('directPermissions', fn($dq) => $dq->where('name', $permission));
         })->pluck('id')->toArray();
     }
 
@@ -252,7 +250,7 @@ trait NotifiesUsers
         $ids = ProjectPersonnel::where('project_id', $project->id)
             ->where(function ($q) use ($permission) {
                 $q->whereJsonContains('permissions', $permission)
-                  ->orWhereJsonContains('permissions', '*');
+                    ->orWhereJsonContains('permissions', '*');
             })
             ->pluck('user_id')
             ->toArray();

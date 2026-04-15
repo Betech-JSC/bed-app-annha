@@ -11,6 +11,15 @@ use Illuminate\Support\Facades\Validator;
 
 class SubcontractorAcceptanceController extends Controller
 {
+    protected $subcontractorService;
+    protected $authService;
+
+    public function __construct(\App\Services\SubcontractorService $subcontractorService, \App\Services\AuthorizationService $authService)
+    {
+        $this->subcontractorService = $subcontractorService;
+        $this->authService = $authService;
+    }
+
     /**
      * Danh sách nghiệm thu thầu phụ
      */
@@ -18,28 +27,17 @@ class SubcontractorAcceptanceController extends Controller
     {
         $user = auth()->user();
 
-        if (!$user->hasPermission('subcontractors.view')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền xem nghiệm thu thầu phụ.'
-            ], 403);
-        }
-
-        $query = SubcontractorAcceptance::with(['subcontractor', 'project', 'contract', 'accepter']);
-
+        // Check view permission if project_id is provided, otherwise generic check
         if ($projectId = $request->query('project_id')) {
-            $query->where('project_id', $projectId);
+            $project = Project::findOrFail($projectId);
+            if (!$this->authService->can($user, 'subcontractors.view', $project)) {
+                return response()->json(['success' => false, 'message' => 'Không có quyền xem nghiệm thu.'], 403);
+            }
+        } elseif (!$user->hasPermission('subcontractors.view')) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền xem nghiệm thu thầu phụ.'], 403);
         }
 
-        if ($subcontractorId = $request->query('subcontractor_id')) {
-            $query->where('subcontractor_id', $subcontractorId);
-        }
-
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        $acceptances = $query->orderByDesc('acceptance_date')->paginate(20);
+        $acceptances = $this->subcontractorService->getAcceptances($request->all());
 
         return response()->json([
             'success' => true,
@@ -53,15 +51,13 @@ class SubcontractorAcceptanceController extends Controller
     public function store(Request $request)
     {
         $user = auth()->user();
+        $project = Project::findOrFail($request->project_id);
 
-        if (!$user->hasPermission('subcontractors.create')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền tạo nghiệm thu.'
-            ], 403);
+        if (!$this->authService->can($user, 'subcontractors.create', $project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền tạo nghiệm thu.'], 403);
         }
 
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'subcontractor_id' => 'required|exists:subcontractors,id',
             'project_id' => 'required|exists:projects,id',
             'subcontractor_contract_id' => 'nullable|exists:subcontractor_contracts,id',
@@ -76,27 +72,17 @@ class SubcontractorAcceptanceController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        if ($validator->fails()) {
+        try {
+            $acceptance = $this->subcontractorService->upsertAcceptance($validated, null, $user);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
+                'success' => true,
+                'message' => 'Đã tạo nghiệm thu thành công.',
+                'data' => $acceptance
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
         }
-
-        $data = $request->all();
-        $data['created_by'] = $user->id;
-        $data['status'] = 'pending';
-
-        $acceptance = SubcontractorAcceptance::create($data);
-
-        $acceptance->load(['subcontractor', 'project', 'contract']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã tạo nghiệm thu thành công.',
-            'data' => $acceptance
-        ], 201);
     }
 
     /**
@@ -104,23 +90,13 @@ class SubcontractorAcceptanceController extends Controller
      */
     public function show(string $id)
     {
-        $user = auth()->user();
-
-        if (!$user->hasPermission('subcontractors.view')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền xem nghiệm thu.'
-            ], 403);
-        }
-
         $acceptance = SubcontractorAcceptance::with([
-            'subcontractor',
-            'project',
-            'contract',
-            'accepter',
-            'rejector',
-            'attachments'
+            'subcontractor', 'project', 'contract', 'accepter', 'rejector', 'attachments'
         ])->findOrFail($id);
+
+        if (!$this->authService->can(auth()->user(), 'subcontractors.view', $acceptance->project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền xem nghiệm thu.'], 403);
+        }
 
         return response()->json([
             'success' => true,
@@ -133,26 +109,13 @@ class SubcontractorAcceptanceController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $user = auth()->user();
-
-        if (!$user->hasPermission('subcontractors.update')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền cập nhật nghiệm thu.'
-            ], 403);
-        }
-
         $acceptance = SubcontractorAcceptance::findOrFail($id);
 
-        // Không cho phép sửa nghiệm thu đã approved/rejected
-        if (in_array($acceptance->status, ['approved', 'rejected'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể sửa nghiệm thu đã được duyệt/từ chối.'
-            ], 422);
+        if (!$this->authService->can(auth()->user(), 'subcontractors.update', $acceptance->project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền cập nhật nghiệm thu.'], 403);
         }
 
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'acceptance_number' => 'sometimes|nullable|string|max:100|unique:subcontractor_acceptances,acceptance_number,' . $id,
             'acceptance_name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
@@ -164,21 +127,17 @@ class SubcontractorAcceptanceController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        if ($validator->fails()) {
+        try {
+            $acceptance = $this->subcontractorService->upsertAcceptance($validated, $acceptance, auth()->user());
+
             return response()->json([
-                'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
+                'success' => true,
+                'message' => 'Đã cập nhật nghiệm thu thành công.',
+                'data' => $acceptance
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
         }
-
-        $acceptance->update($request->all());
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã cập nhật nghiệm thu thành công.',
-            'data' => $acceptance->fresh(['subcontractor', 'project', 'contract'])
-        ]);
     }
 
     /**
@@ -186,23 +145,14 @@ class SubcontractorAcceptanceController extends Controller
      */
     public function destroy(string $id)
     {
-        $user = auth()->user();
-
-        if (!$user->hasPermission('subcontractors.delete')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền xóa nghiệm thu.'
-            ], 403);
-        }
-
         $acceptance = SubcontractorAcceptance::findOrFail($id);
 
-        // Không cho phép xóa nghiệm thu đã approved
+        if (!$this->authService->can(auth()->user(), 'subcontractors.delete', $acceptance->project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền xóa nghiệm thu.'], 403);
+        }
+
         if ($acceptance->status === 'approved') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể xóa nghiệm thu đã được duyệt.'
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'Không thể xóa nghiệm thu đã được duyệt.'], 422);
         }
 
         $acceptance->delete();
@@ -218,32 +168,23 @@ class SubcontractorAcceptanceController extends Controller
      */
     public function approve(Request $request, string $id)
     {
-        $user = auth()->user();
-
-        if (!$user->hasPermission('subcontractors.approve')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền duyệt nghiệm thu.'
-            ], 403);
-        }
-
         $acceptance = SubcontractorAcceptance::findOrFail($id);
 
-        if ($acceptance->status !== 'pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể duyệt nghiệm thu ở trạng thái pending.'
-            ], 422);
+        if (!$this->authService->can(auth()->user(), 'subcontractors.approve', $acceptance->project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền duyệt nghiệm thu.'], 403);
         }
 
-        $notes = $request->input('notes');
-        $acceptance->approve($user, $notes);
+        try {
+            $this->subcontractorService->approveAcceptance($acceptance, auth()->user(), $request->input('notes'));
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt nghiệm thu thành công.',
-            'data' => $acceptance->fresh(['accepter'])
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt nghiệm thu thành công.',
+                'data' => $acceptance->fresh(['accepter'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
     }
 
     /**
@@ -251,42 +192,24 @@ class SubcontractorAcceptanceController extends Controller
      */
     public function reject(Request $request, string $id)
     {
-        $user = auth()->user();
-
-        if (!$user->hasPermission('subcontractors.approve')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có quyền từ chối nghiệm thu.'
-            ], 403);
-        }
-
         $acceptance = SubcontractorAcceptance::findOrFail($id);
 
-        if ($acceptance->status !== 'pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể từ chối nghiệm thu ở trạng thái pending.'
-            ], 422);
+        if (!$this->authService->can(auth()->user(), 'subcontractors.approve', $acceptance->project)) {
+            return response()->json(['success' => false, 'message' => 'Không có quyền từ chối nghiệm thu.'], 403);
         }
 
-        $validator = Validator::make($request->all(), [
-            'rejection_reason' => 'required|string',
-        ]);
+        $request->validate(['rejection_reason' => 'required|string']);
 
-        if ($validator->fails()) {
+        try {
+            $this->subcontractorService->rejectAcceptance($acceptance, auth()->user(), $request->rejection_reason);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Vui lòng nhập lý do từ chối.',
-                'errors' => $validator->errors()
-            ], 422);
+                'success' => true,
+                'message' => 'Đã từ chối nghiệm thu.',
+                'data' => $acceptance->fresh(['rejector'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
         }
-
-        $acceptance->reject($request->rejection_reason, $user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã từ chối nghiệm thu.',
-            'data' => $acceptance->fresh(['rejector'])
-        ]);
     }
 }

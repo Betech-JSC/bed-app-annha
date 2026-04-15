@@ -16,10 +16,14 @@ use App\Services\AuthorizationService;
 class ProjectTaskController extends Controller
 {
     protected $authService;
+    protected $taskService;
 
-    public function __construct(AuthorizationService $authService)
-    {
+    public function __construct(
+        AuthorizationService $authService,
+        \App\Services\ProjectTaskService $taskService
+    ) {
         $this->authService = $authService;
+        $this->taskService = $taskService;
     }
     /**
      * Danh sách tasks của dự án
@@ -37,52 +41,7 @@ class ProjectTaskController extends Controller
             ], 403);
         }
 
-        $query = $project->tasks()
-            ->with([
-                'parent',
-                'children',
-                'assignedUser',
-                'dependencies.dependsOnTask',
-                'creator',
-                'updater',
-                'acceptanceStages', // Load acceptance stages for task (parent tasks only)
-            ]);
-
-        // Filter by parent task (parent tasks act as "phases")
-        if ($parentId = $request->query('parent_id')) {
-            if ($parentId === 'null' || $parentId === '') {
-                $query->whereNull('parent_id');
-            } else {
-                $query->where('parent_id', $parentId);
-            }
-        }
-
-        // Filter by status
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        // Filter by assigned_to
-        if ($assignedTo = $request->query('assigned_to')) {
-            $query->where('assigned_to', $assignedTo);
-        }
-
-        // BUSINESS RULE: For Daily Log, only return leaf tasks (tasks without children)
-        // Parent tasks (A) progress is auto-calculated from children
-        if ($request->query('leaf_only') === 'true') {
-            $allTasks = $query->ordered()->get();
-            $taskIdsWithChildren = $allTasks->pluck('id')->toArray();
-            $tasksWithChildren = $allTasks->filter(function ($task) use ($allTasks) {
-                return $allTasks->where('parent_id', $task->id)->count() > 0;
-            })->pluck('id')->toArray();
-
-            // Filter to only tasks that don't have children
-            $tasks = $allTasks->filter(function ($task) use ($tasksWithChildren) {
-                return !in_array($task->id, $tasksWithChildren);
-            })->values();
-        } else {
-            $tasks = $query->ordered()->get();
-        }
+        $tasks = $this->taskService->getTasks($project, $request->only(['parent_id', 'status', 'assigned_to', 'leaf_only']));
 
         return response()->json([
             'success' => true,
@@ -142,49 +101,11 @@ class ProjectTaskController extends Controller
         // This validation happens after creation when children are added
 
         try {
-            DB::beginTransaction();
-
-            // Auto-calculate order if not provided
-            if (!isset($validated['order'])) {
-                $maxOrder = $project->tasks()
-                    ->where('parent_id', $validated['parent_id'] ?? null)
-                    ->max('order') ?? -1;
-                $validated['order'] = $maxOrder + 1;
-            }
-
-            // BUSINESS RULE: progress_percentage and status are system-calculated
-            // Initialize with 0 and 'not_started', will be calculated from logs
-            $task = ProjectTask::create([
-                'project_id' => $project->id,
-                ...$validated,
-                'status' => 'not_started', // Will be auto-calculated
-                'priority' => $validated['priority'] ?? 'medium',
-                'progress_percentage' => 0, // Will be calculated from logs
-                'created_by' => $user->id,
-            ]);
-
-            // Prevent circular parent reference
-            if ($task->parent_id) {
-                $parent = ProjectTask::find($task->parent_id);
-                if ($parent && $parent->parent_id === $task->id) {
-                    DB::rollBack();
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Không thể tạo quan hệ cha-con vòng tròn.',
-                    ], 422);
-                }
-            }
-
-            // Auto-calculate duration if dates are set
-            if ($task->start_date && $task->end_date && !$task->duration) {
-                $task->updateDuration();
-            }
-
-            // Calculate initial progress and status from logs (if any)
-            $service = app(TaskProgressService::class);
-            $service->updateTaskFromLogs($task, true);
-
-            DB::commit();
+            $task = $this->taskService->upsert(
+                array_merge($validated, ['project_id' => $project->id]),
+                null,
+                $user
+            );
 
             return response()->json([
                 'success' => true,
@@ -192,12 +113,10 @@ class ProjectTaskController extends Controller
                 'data' => $task->load(['parent', 'assignedUser', 'creator'])
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi tạo công việc.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Không thể tạo công việc: ' . $e->getMessage(),
+            ], 422);
         }
     }
 
@@ -287,7 +206,7 @@ class ProjectTaskController extends Controller
                 ], 422);
             }
             // Check if parent is a descendant of this task (would create cycle)
-            $descendantIds = $this->getDescendantIds($task);
+            $descendantIds = $this->taskService->getDescendantIds($task);
             if (in_array($validated['parent_id'], $descendantIds)) {
                 return response()->json([
                     'success' => false,
@@ -311,37 +230,27 @@ class ProjectTaskController extends Controller
             }
         }
 
-        $task->update([
-            ...$validated,
-            'updated_by' => $user->id,
-        ]);
+        try {
+            $this->taskService->upsert($validated, $task, $user);
 
-        // Auto-calculate duration if dates are set
-        if ($task->start_date && $task->end_date) {
-            $task->updateDuration();
+            return response()->json([
+                'success' => true,
+                'message' => 'Công việc đã được cập nhật.',
+                'data' => $task->fresh()->load([
+                    'parent',
+                    'assignedUser',
+                    'dependencies.dependsOnTask',
+                    'creator',
+                    'updater',
+                    'acceptanceStages',
+                ])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể cập nhật công việc: ' . $e->getMessage(),
+            ], 422);
         }
-
-        // Note: Acceptance stages phase_id sync is handled by ProjectTask model event
-        // No need to duplicate here to avoid double sync
-
-        // Recalculate progress and status when dates or parent changes
-        if ($task->wasChanged(['start_date', 'end_date', 'parent_id'])) {
-            $service = app(TaskProgressService::class);
-            $service->updateTaskFromLogs($task, true);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Công việc đã được cập nhật.',
-            'data' => $task->fresh()->load([
-                'parent',
-                'assignedUser',
-                'dependencies.dependsOnTask',
-                'creator',
-                'updater',
-                'acceptanceStages', // BUSINESS RULE: Load acceptance stages linked to this task
-            ])
-        ]);
     }
 
     /**
@@ -360,20 +269,18 @@ class ProjectTaskController extends Controller
             ], 403);
         }
 
-        // Check if task has dependencies
-        if ($task->dependencies()->count() > 0 || $task->dependents()->count() > 0) {
+        try {
+            $this->taskService->delete($task);
+            return response()->json([
+                'success' => true,
+                'message' => 'Công việc đã được xóa.',
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không thể xóa công việc vì có phụ thuộc với công việc khác.',
+                'message' => 'Không thể xóa công việc: ' . $e->getMessage(),
             ], 422);
         }
-
-        $task->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Công việc đã được xóa.',
-        ]);
     }
 
     /**
@@ -388,15 +295,7 @@ class ProjectTaskController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            foreach ($validated['tasks'] as $taskData) {
-                ProjectTask::where('id', $taskData['id'])
-                    ->where('project_id', $projectId)
-                    ->update(['order' => $taskData['order']]);
-            }
-
-            DB::commit();
+            $this->taskService->reorderTasks((int)$projectId, $validated['tasks']);
 
             return response()->json([
                 'success' => true,
@@ -444,8 +343,7 @@ class ProjectTaskController extends Controller
         $project = Project::findOrFail($projectId);
 
         try {
-            $service = app(TaskProgressService::class);
-            $service->recalculateAllTasks($projectId);
+            $this->taskService->recalculateProject((int)$projectId);
 
             return response()->json([
                 'success' => true,
@@ -454,25 +352,8 @@ class ProjectTaskController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi tính toán lại tiến độ.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
             ], 500);
         }
-    }
-
-    /**
-     * Get all descendant task IDs (for circular reference check)
-     */
-    private function getDescendantIds(ProjectTask $task): array
-    {
-        $descendantIds = [];
-        $children = ProjectTask::where('parent_id', $task->id)->get();
-
-        foreach ($children as $child) {
-            $descendantIds[] = $child->id;
-            $descendantIds = array_merge($descendantIds, $this->getDescendantIds($child));
-        }
-
-        return $descendantIds;
     }
 }

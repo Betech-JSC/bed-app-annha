@@ -68,7 +68,7 @@ class ProjectBudget extends Model
             'status' => 'submitted',
             'label' => 'Đã gửi duyệt',
             'user' => $this->creator->name ?? 'N/A',
-            'time' => $this->created_at->format('H:i d/m/Y'),
+            'time' => $this->created_at ? $this->created_at->format('H:i d/m/Y') : 'N/A',
         ];
 
         // 2. Approval or Rejection

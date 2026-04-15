@@ -147,6 +147,11 @@ class EquipmentRental extends Model
             $model->uuid = $model->uuid ?: Str::uuid();
         });
 
+        static::saving(function ($model) {
+            // Auto-calculate total cost
+            $model->total_cost = ($model->quantity ?: 0) * ($model->unit_price ?: 0);
+        });
+
         static::saved(function ($model) {
             $model->syncToCostTable();
         });

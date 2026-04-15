@@ -21,10 +21,12 @@ use App\Services\AuthorizationService;
 class ConstructionLogController extends Controller
 {
     protected $authService;
+    protected $logService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(AuthorizationService $authService, \App\Services\ConstructionLogService $logService)
     {
         $this->authService = $authService;
+        $this->logService = $logService;
     }
     /**
      * Danh sách nhật ký công trình
@@ -42,19 +44,7 @@ class ConstructionLogController extends Controller
             ], 403);
         }
 
-        $query = $project->constructionLogs()
-            ->with(['creator', 'attachments', 'task'])
-            ->orderByDesc('log_date');
-
-        // Filter by date range
-        if ($request->has('start_date')) {
-            $query->where('log_date', '>=', $request->start_date);
-        }
-        if ($request->has('end_date')) {
-            $query->where('log_date', '<=', $request->end_date);
-        }
-
-        $logs = $query->paginate(30);
+        $logs = $this->logService->getLogs($project, $request->only(['start_date', 'end_date']));
 
         return response()->json([
             'success' => true,
@@ -98,106 +88,22 @@ class ConstructionLogController extends Controller
             'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
-        // BUSINESS RULE: Only child tasks (leaf tasks without children) can receive progress input
-        // Parent tasks (A) progress is auto-calculated from children
-        if (isset($validated['task_id'])) {
-            $task = \App\Models\ProjectTask::where('project_id', $project->id)
-                ->find($validated['task_id']);
-            if (!$task) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Công việc không thuộc dự án này.',
-                ], 422);
-            }
-
-            // Check if task has children (is a parent task)
-            $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
-                ->whereNull('deleted_at')
-                ->exists();
-
-            if ($hasChildren) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Chỉ có thể ghi nhật ký cho công việc con (công việc không có công việc con). Tiến độ công việc cha được tự động tính từ các công việc con.',
-                ], 422);
-            }
-        }
-
-        // BUSINESS RULE: completion_percentage can only increase
-        // Get last recorded percentage for this task
-        if (isset($validated['task_id']) && isset($validated['completion_percentage'])) {
-            $lastLog = ConstructionLog::where('task_id', $validated['task_id'])
-                ->whereNotNull('completion_percentage')
-                ->orderBy('log_date', 'desc')
-                ->orderBy('created_at', 'desc')
-                ->first();
-
-            if ($lastLog && $validated['completion_percentage'] < $lastLog->completion_percentage) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Phần trăm hoàn thành chỉ có thể tăng. Giá trị tối thiểu: {$lastLog->completion_percentage}%",
-                ], 422);
-            }
-        }
-
         try {
-            DB::beginTransaction();
-
-            // Removed unique log_date check per project to allow multiple logs per day
-
-            $log = ConstructionLog::create([
+            $log = $this->logService->upsert([
                 'project_id' => $project->id,
-                'task_id' => $validated['task_id'] ?? null,
-                'created_by' => $user->id,
-                'log_date' => $validated['log_date'],
-                'weather' => $validated['weather'] ?? null,
-                'personnel_count' => $validated['personnel_count'] ?? null,
-                'completion_percentage' => $validated['completion_percentage'] ?? null,
-                'notes' => $validated['notes'] ?? null,
-                'shift' => $validated['shift'] ?? null,
-                'work_items' => $validated['work_items'] ?? null,
-                'issues' => $validated['issues'] ?? null,
-                'safety_notes' => $validated['safety_notes'] ?? null,
-                'delay_reason' => $validated['delay_reason'] ?? null,
-            ]);
-
-            // Attach files if provided
-            if (isset($validated['attachment_ids']) && is_array($validated['attachment_ids'])) {
-                foreach ($validated['attachment_ids'] as $attachmentId) {
-                    $attachment = Attachment::find($attachmentId);
-                    if ($attachment) {
-                        $attachment->update([
-                            'attachable_id' => $log->id,
-                            'attachable_type' => ConstructionLog::class,
-                        ]);
-                    }
-                }
-            }
-
-            // BUSINESS RULE: Progress percentage is ONLY calculated from Daily Logs
-            // Use TaskProgressService to recalculate task progress and status automatically
-            if (isset($validated['task_id']) && isset($validated['completion_percentage'])) {
-                $task = \App\Models\ProjectTask::find($validated['task_id']);
-                if ($task) {
-                    $service = app(TaskProgressService::class);
-                    $service->updateTaskFromLogs($task, true); // Update parent if exists
-                }
-            }
-
-            DB::commit();
+                ...$validated,
+            ], null, $user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Nhật ký công trình đã được tạo.',
-                'data' => $log->load(['creator', 'attachments', 'task'])
+                'data' => $log
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Không thể tạo nhật ký: ' . $e->getMessage(),
+            ], 422);
         }
     }
 
@@ -231,105 +137,21 @@ class ConstructionLogController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            // BUSINESS RULE: Only child tasks (leaf tasks without children) can receive progress input
-            if (isset($validated['task_id'])) {
-                $task = \App\Models\ProjectTask::where('project_id', $project->id)
-                    ->find($validated['task_id']);
-                if (!$task) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Công việc không thuộc dự án này.'
-                    ], 422);
-                }
-
-                // Check if task has children (is a parent task)
-                $hasChildren = \App\Models\ProjectTask::where('parent_id', $task->id)
-                    ->whereNull('deleted_at')
-                    ->exists();
-
-                if ($hasChildren) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Chỉ có thể ghi nhật ký cho công việc con (công việc không có công việc con). Tiến độ công việc cha được tự động tính từ các công việc con.',
-                    ], 422);
-                }
-            }
-
-            // BUSINESS RULE: completion_percentage can only increase
-            // Get last recorded percentage for this task (excluding current log)
-            if (isset($validated['completion_percentage'])) {
-                $taskId = $validated['task_id'] ?? $log->task_id;
-                if ($taskId) {
-                    $lastLog = ConstructionLog::where('task_id', $taskId)
-                        ->where('id', '!=', $log->id)
-                        ->whereNotNull('completion_percentage')
-                        ->orderBy('log_date', 'desc')
-                        ->orderBy('created_at', 'desc')
-                        ->first();
-
-                    // Use current log's percentage as minimum if no other logs exist
-                    $minPercentage = $lastLog
-                        ? $lastLog->completion_percentage
-                        : ($log->completion_percentage ?? 0);
-
-                    if ($validated['completion_percentage'] < $minPercentage) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Phần trăm hoàn thành chỉ có thể tăng. Giá trị tối thiểu: {$minPercentage}%",
-                        ], 422);
-                    }
-                }
-            }
-
-            $log->update($validated);
-
-            // Update attachments if provided
-            if (isset($validated['attachment_ids'])) {
-                // Detach existing attachments
-                $log->attachments()->update([
-                    'attachable_id' => null,
-                    'attachable_type' => null,
-                ]);
-
-                // Attach new files
-                foreach ($validated['attachment_ids'] as $attachmentId) {
-                    $attachment = Attachment::find($attachmentId);
-                    if ($attachment) {
-                        $attachment->update([
-                            'attachable_id' => $log->id,
-                            'attachable_type' => ConstructionLog::class,
-                        ]);
-                    }
-                }
-            }
-
-            // BUSINESS RULE: Progress percentage is ONLY calculated from Daily Logs
-            // Recalculate task progress when log is updated
-            $taskId = $validated['task_id'] ?? $log->task_id;
-            if ($taskId) {
-                $task = \App\Models\ProjectTask::find($taskId);
-                if ($task) {
-                    $service = app(TaskProgressService::class);
-                    $service->updateTaskFromLogs($task, true); // Update parent if exists
-                }
-            }
-
-            DB::commit();
+            $log = $this->logService->upsert([
+                'project_id' => $project->id,
+                ...$validated,
+            ], $log, $user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Nhật ký công trình đã được cập nhật.',
-                'data' => $log->load(['creator', 'attachments', 'task'])
+                'data' => $log
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Không thể cập nhật nhật ký: ' . $e->getMessage(),
+            ], 422);
         }
     }
 
@@ -351,44 +173,16 @@ class ConstructionLogController extends Controller
         }
 
         try {
-            DB::beginTransaction();
-
-            // Delete attachments
-            foreach ($log->attachments as $attachment) {
-                // Delete file from storage
-                if ($attachment->file_path && Storage::disk('public')->exists($attachment->file_path)) {
-                    Storage::disk('public')->delete($attachment->file_path);
-                }
-                $attachment->delete();
-            }
-
-            // Store task_id before deletion for recalculation
-            $taskId = $log->task_id;
-
-            // Delete log
-            $log->delete();
-
-            // Recalculate task progress after log deletion
-            if ($taskId) {
-                $task = \App\Models\ProjectTask::find($taskId);
-                if ($task) {
-                    $service = app(TaskProgressService::class);
-                    $service->updateTaskFromLogs($task, true); // Update parent if exists
-                }
-            }
-
-            DB::commit();
+            $this->logService->delete($log);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Nhật ký công trình đã được xóa.'
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi xóa nhật ký.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra khi xóa nhật ký: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -412,40 +206,11 @@ class ConstructionLogController extends Controller
 
         $date = $request->get('date', now()->format('Y-m-d'));
 
-        $logs = ConstructionLog::where('project_id', $projectId)
-            ->where('log_date', $date)
-            ->with(['creator', 'task', 'attachments'])
-            ->orderBy('shift')
-            ->get();
-
-        // Aggregate stats
-        $totalPersonnel = $logs->sum('personnel_count');
-        $tasksWorked = $logs->pluck('task_id')->filter()->unique()->count();
-        $avgCompletion = $logs->whereNotNull('completion_percentage')->avg('completion_percentage');
-        $issues = $logs->pluck('issues')->filter()->values();
-        $delayReasons = $logs->pluck('delay_reason')->filter()->values();
-
-        // Weather summary
-        $weatherSummary = $logs->pluck('weather')->filter()->unique()->implode(', ');
+        $reportData = $this->logService->getDailyReport($project, $date);
 
         return response()->json([
             'success' => true,
-            'data' => [
-                'date'             => $date,
-                'logs'             => $logs,
-                'summary'          => [
-                    'total_logs'       => $logs->count(),
-                    'total_personnel'  => $totalPersonnel,
-                    'tasks_worked'     => $tasksWorked,
-                    'avg_completion'   => round($avgCompletion, 2),
-                    'weather'          => $weatherSummary,
-                    'has_issues'       => $issues->isNotEmpty(),
-                    'issue_count'      => $issues->count(),
-                    'has_delays'       => $delayReasons->isNotEmpty(),
-                ],
-                'issues'       => $issues,
-                'delay_reasons' => $delayReasons,
-            ],
+            'data' => $reportData,
         ]);
     }
 
@@ -468,33 +233,22 @@ class ConstructionLogController extends Controller
             'notes'  => 'nullable|string|max:500',
         ]);
 
-        // Create or update approval
-        $approval = DailyReportApproval::updateOrCreate(
-            [
-                'construction_log_id' => $log->id,
-                'approver_id'         => $user->id,
-            ],
-            [
-                'status'      => $validated['status'],
-                'notes'       => $validated['notes'] ?? null,
-                'approved_at' => $validated['status'] === 'approved' ? now() : null,
-            ]
-        );
+        try {
+            $this->logService->approve($log, $validated, $user);
 
-        // Update log approval status
-        $log->update([
-            'approval_status' => $validated['status'],
-            'approved_by'     => $user->id,
-            'approved_at'     => $validated['status'] === 'approved' ? now() : null,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => $validated['status'] === 'approved'
-                ? 'Đã duyệt nhật ký công trường'
-                : 'Đã từ chối nhật ký công trường',
-            'data' => $log->fresh(['creator', 'task', 'attachments']),
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => $validated['status'] === 'approved'
+                    ? 'Đã duyệt nhật ký công trường'
+                    : 'Đã từ chối nhật ký công trường',
+                'data' => $log->fresh(['creator', 'task', 'attachments']),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
+            ], 422);
+        }
     }
 
     /**
@@ -509,39 +263,11 @@ class ConstructionLogController extends Controller
             return response()->json(['success' => false, 'message' => 'Không có quyền'], 403);
         }
 
-        $ganttService = app(GanttService::class);
-        $ganttData = $ganttService->getGanttData((int) $projectId);
-
-        // Build comparison with latest log data per task
-        $comparison = [];
-        foreach ($ganttData['tasks'] as $task) {
-            $latestLog = ConstructionLog::where('task_id', $task['id'])
-                ->orderByDesc('log_date')
-                ->first();
-
-            $comparison[] = [
-                'task_id'           => $task['id'],
-                'task_name'         => $task['name'],
-                'planned_start'     => $task['start_date'],
-                'planned_end'       => $task['end_date'],
-                'planned_progress'  => round($task['expected_progress'], 1),
-                'actual_progress'   => round($task['progress'], 1),
-                'gap'               => round($task['expected_progress'] - $task['progress'], 1),
-                'delay_days'        => $task['delay_days'],
-                'delay_status'      => $task['delay_status'],
-                'is_critical'       => $task['is_critical'],
-                'last_log_date'     => $latestLog?->log_date?->format('Y-m-d'),
-                'last_log_notes'    => $latestLog?->notes,
-                'has_delay_reason'  => !empty($latestLog?->delay_reason),
-            ];
-        }
+        $comparisonData = $this->logService->getProgressComparison($project);
 
         return response()->json([
             'success' => true,
-            'data' => [
-                'comparison' => $comparison,
-                'stats'      => $ganttData['project_stats'],
-            ],
+            'data' => $comparisonData,
         ]);
     }
 
@@ -571,32 +297,19 @@ class ConstructionLogController extends Controller
             'impact_analysis' => 'nullable|string|max:2000',
         ]);
 
-        $task = ProjectTask::findOrFail($log->task_id);
+        try {
+            $adjustment = $this->logService->requestAdjustment($log, $validated, $user);
 
-        $adjustment = ScheduleAdjustment::create([
-            'project_id'      => $projectId,
-            'task_id'         => $task->id,
-            'type'            => 'adjustment_proposal',
-            'original_start'  => $task->start_date,
-            'original_end'    => $task->end_date,
-            'proposed_start'  => $task->start_date,
-            'proposed_end'    => $validated['proposed_end'],
-            'delay_days'      => $task->end_date
-                ? \Carbon\Carbon::parse($validated['proposed_end'])->diffInDays($task->end_date, false)
-                : 0,
-            'reason'          => $validated['reason'],
-            'impact_analysis' => $validated['impact_analysis'] ?? null,
-            'priority'        => $task->children()->exists() ? 'high' : 'medium',
-            'created_by'      => $user->id,
-        ]);
-
-        // Link adjustment to log
-        $log->update(['adjustment_id' => $adjustment->id]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã tạo đề xuất hiệu chỉnh tiến độ',
-            'data'    => $adjustment->load(['task', 'creator']),
-        ], 201);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã tạo đề xuất hiệu chỉnh tiến độ',
+                'data'    => $adjustment->load(['task', 'creator']),
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
+            ], 422);
+        }
     }
 }

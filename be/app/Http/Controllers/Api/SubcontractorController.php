@@ -15,10 +15,12 @@ use Illuminate\Support\Facades\DB;
 class SubcontractorController extends Controller
 {
     protected $authService;
+    protected $subcontractorService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(AuthorizationService $authService, \App\Services\SubcontractorService $subcontractorService)
     {
         $this->authService = $authService;
+        $this->subcontractorService = $subcontractorService;
     }
     /**
      * Danh sách nhà thầu phụ
@@ -73,9 +75,6 @@ class SubcontractorController extends Controller
         ]);
     }
 
-    /**
-     * Xóa nhà thầu phụ
-     */
     public function destroy(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
@@ -90,21 +89,20 @@ class SubcontractorController extends Controller
 
         $subcontractor = Subcontractor::where('project_id', $projectId)->findOrFail($id);
         
-        // Xử lý chi phí liên quan: Set subcontractor_id = null để giữ lại dữ liệu chi phí
-        \App\Models\Cost::where('subcontractor_id', $subcontractor->id)
-            ->update(['subcontractor_id' => null]);
-        
-        $subcontractor->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Nhà thầu phụ đã được xóa. Các chi phí liên quan đã được tách khỏi nhà thầu phụ này.'
-        ]);
+        try {
+            $this->subcontractorService->delete($subcontractor);
+            return response()->json([
+                'success' => true,
+                'message' => 'Nhà thầu phụ đã được xóa.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
-    /**
-     * Duyệt nhà thầu phụ
-     */
     public function approve(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
@@ -119,18 +117,21 @@ class SubcontractorController extends Controller
 
         $subcontractor = Subcontractor::where('project_id', $projectId)->findOrFail($id);
 
-        $subcontractor->approve($user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Nhà thầu phụ đã được duyệt.',
-            'data' => $subcontractor->fresh(['approver'])
-        ]);
+        try {
+            $this->subcontractorService->approve($subcontractor, $user);
+            return response()->json([
+                'success' => true,
+                'message' => 'Nhà thầu phụ đã được duyệt.',
+                'data' => $subcontractor->fresh(['approver'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
-    /**
-     * Tạo nhà thầu phụ
-     */
     public function store(Request $request, string $projectId)
     {
         $project = Project::findOrFail($projectId);
@@ -156,19 +157,10 @@ class SubcontractorController extends Controller
             'progress_status' => ['nullable', 'in:not_started,in_progress,completed,delayed'],
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'exists:attachments,id',
-            'create_cost' => 'nullable|boolean',
-            'cost_group_id' => 'nullable|exists:cost_groups,id',
-            'cost_date' => 'nullable|date',
             'payment_schedule' => 'nullable|array',
-            'payment_schedule.*.milestone' => 'required|string',
-            'payment_schedule.*.percentage' => 'required|numeric|min:0|max:100',
-            'payment_schedule.*.amount' => 'nullable|numeric',
-            'payment_schedule.*.due_date' => 'nullable|date',
         ]);
 
         try {
-            DB::beginTransaction();
-
             // Nếu có global_subcontractor_id, lấy thông tin từ global subcontractor
             if (isset($validated['global_subcontractor_id'])) {
                 $globalSubcontractor = GlobalSubcontractor::findOrFail($validated['global_subcontractor_id']);
@@ -179,25 +171,13 @@ class SubcontractorController extends Controller
                 $validated['bank_account_name'] = $globalSubcontractor->bank_account_name ?? $validated['bank_account_name'] ?? null;
             }
 
-            $subcontractor = Subcontractor::create([
-                'project_id' => $project->id,
-                'global_subcontractor_id' => $validated['global_subcontractor_id'] ?? null,
-                'name' => $validated['name'],
-                'category' => $validated['category'] ?? null,
-                'bank_name' => $validated['bank_name'] ?? null,
-                'bank_account_number' => $validated['bank_account_number'] ?? null,
-                'bank_account_name' => $validated['bank_account_name'] ?? null,
-                'total_quote' => $validated['total_quote'],
-                'advance_payment' => 0, // Không còn sử dụng, tạm ứng sẽ tạo từ Chi phí dự án
-                'progress_start_date' => $validated['progress_start_date'] ?? null,
-                'progress_end_date' => $validated['progress_end_date'] ?? null,
-                'progress_status' => $validated['progress_status'] ?? 'not_started',
-                'payment_status' => 'pending',
-                'payment_schedule' => $validated['payment_schedule'] ?? null,
-                'created_by' => $request->user()->id,
-            ]);
+            $subcontractor = $this->subcontractorService->upsert(
+                array_merge($validated, ['project_id' => $project->id]),
+                null,
+                $user
+            );
 
-            // Attach files if provided
+            // Link attachments if provided
             if (!empty($validated['attachment_ids'])) {
                 \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
                     ->update([
@@ -206,30 +186,19 @@ class SubcontractorController extends Controller
                     ]);
             }
 
-            // Tự động tạo Cost record đã bị gỡ bỏ để tránh tính trùng chi phí (Double Counting)
-            // Hợp đồng thầu phụ dự kiến chỉ được theo dõi qua bảng subcontractors
-            // Chi phí thực tế chỉ phát sinh khi có phiếu thanh toán (SubcontractorPayment)
-
-            DB::commit();
-
             return response()->json([
                 'success' => true,
                 'message' => 'Nhà thầu phụ đã được thêm.',
                 'data' => $subcontractor
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
             ], 500);
         }
     }
 
-    /**
-     * Cập nhật nhà thầu phụ
-     */
     public function update(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
@@ -255,21 +224,21 @@ class SubcontractorController extends Controller
             'progress_end_date' => 'nullable|date|after_or_equal:progress_start_date',
             'progress_status' => ['sometimes', 'in:not_started,in_progress,completed,delayed'],
             'payment_schedule' => 'nullable|array',
-            'payment_schedule.*.milestone' => 'required|string',
-            'payment_schedule.*.percentage' => 'required|numeric|min:0|max:100',
-            'payment_schedule.*.amount' => 'nullable|numeric',
-            'payment_schedule.*.due_date' => 'nullable|date',
         ]);
 
-        $subcontractor->update([
-            ...$validated,
-            'updated_by' => $request->user()->id,
-        ]);
+        try {
+            $this->subcontractorService->upsert($validated, $subcontractor, $user);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Nhà thầu phụ đã được cập nhật.',
-            'data' => $subcontractor->fresh(['items', 'payments'])
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Nhà thầu phụ đã được cập nhật.',
+                'data' => $subcontractor->fresh(['items', 'payments'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

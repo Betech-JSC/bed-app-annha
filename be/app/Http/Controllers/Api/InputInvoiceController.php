@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\Validator;
 
 class InputInvoiceController extends Controller
 {
+    protected $invoiceService;
+
+    public function __construct(\App\Services\InputInvoiceService $invoiceService)
+    {
+        $this->invoiceService = $invoiceService;
+    }
+
     /**
      * Danh sách hóa đơn đầu vào
      * Có thể lọc theo project hoặc lấy tất cả
@@ -75,7 +82,7 @@ class InputInvoiceController extends Controller
             ], 403);
         }
 
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'project_id' => 'nullable|exists:projects,id',
             'invoice_type' => 'nullable|string|max:100',
             'issue_date' => 'required|date',
@@ -89,84 +96,23 @@ class InputInvoiceController extends Controller
             'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
         try {
-            DB::beginTransaction();
-
-            // Ưu tiên project_id từ route, nếu không có thì lấy từ request
-            $finalProjectId = $projectId ?: $request->project_id;
-
-            // Tính VAT amount và total amount
-            $vatPercentage = $request->vat_percentage ?? 0;
-            $amountBeforeVat = $request->amount_before_vat;
-            $vatAmount = $vatPercentage > 0 ? ($amountBeforeVat * $vatPercentage / 100) : 0;
-            $totalAmount = $amountBeforeVat + $vatAmount;
-
-            $invoice = InputInvoice::create([
-                'project_id' => $finalProjectId,
-                'invoice_type' => $request->invoice_type,
-                'issue_date' => $request->issue_date,
-                'invoice_number' => $request->invoice_number,
-                'supplier_name' => $request->supplier_name,
-                'amount_before_vat' => $amountBeforeVat,
-                'vat_percentage' => $vatPercentage,
-                'vat_amount' => $vatAmount,
-                'total_amount' => $totalAmount,
-                'description' => $request->description,
-                'notes' => $request->notes,
-                'created_by' => $user->id,
-            ]);
-
-            // Đính kèm files nếu có
-            if (!empty($request->attachment_ids)) {
-                foreach ($request->attachment_ids as $attachmentId) {
-                    $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
-                        $attachment->update([
-                            'attachable_type' => InputInvoice::class,
-                            'attachable_id' => $invoice->id,
-                        ]);
-                    }
-                }
+            // Prioritize project_id from route
+            if ($projectId) {
+                $validated['project_id'] = $projectId;
             }
 
-            // TỰ ĐỘNG TẠO BẢN GHI CHI PHÍ (COST) ĐỂ ĐỒNG BỘ DÒNG TIỀN
-            // Mặc định gán vào nhóm "Vật liệu xây dựng" (ID 1)
-            Cost::create([
-                'project_id' => $finalProjectId,
-                'input_invoice_id' => $invoice->id,
-                'name' => "Hóa đơn đầu vào: " . ($request->supplier_name ?? 'N/A') . " (#" . ($request->invoice_number ?? 'N/A') . ")",
-                'amount' => $totalAmount,
-                'cost_date' => $request->issue_date ?: now(),
-                'category' => 'construction_materials',
-                'cost_group_id' => 1, // Vật liệu xây dựng
-                'description' => $request->description ?: "Tự động tạo từ hóa đơn đầu vào " . ($request->invoice_number ?? ''),
-                'status' => 'approved', // Hóa đơn đầu vào thường được coi là chi phí đã xác nhận
-                'created_by' => $user->id,
-                'accountant_approved_by' => $user->id,
-                'accountant_approved_at' => now(),
-            ]);
-
-            DB::commit();
+            $invoice = $this->invoiceService->createInvoice($validated, $user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Đã tạo hóa đơn đầu vào thành công.',
-                'data' => $invoice->load(['project', 'creator', 'attachments'])
+                'data' => $invoice
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -222,7 +168,7 @@ class InputInvoiceController extends Controller
         }
         $invoice = $query->findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'project_id' => 'nullable|exists:projects,id',
             'invoice_type' => 'nullable|string|max:100',
             'issue_date' => 'sometimes|required|date',
@@ -236,76 +182,18 @@ class InputInvoiceController extends Controller
             'attachment_ids.*' => 'required|integer|exists:attachments,id',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
         try {
-            DB::beginTransaction();
-
-            $updateData = $request->only([
-                'project_id', 'invoice_type', 'issue_date', 'invoice_number',
-                'supplier_name', 'amount_before_vat', 'vat_percentage',
-                'description', 'notes'
-            ]);
-
-            // Tính lại VAT amount và total amount nếu có thay đổi
-            if ($request->has('amount_before_vat') || $request->has('vat_percentage')) {
-                $amountBeforeVat = $updateData['amount_before_vat'] ?? $invoice->amount_before_vat;
-                $vatPercentage = $updateData['vat_percentage'] ?? $invoice->vat_percentage;
-                $vatAmount = $vatPercentage > 0 ? ($amountBeforeVat * $vatPercentage / 100) : 0;
-                $updateData['vat_amount'] = $vatAmount;
-                $updateData['total_amount'] = $amountBeforeVat + $vatAmount;
-            }
-
-            $invoice->update($updateData);
-
-            // Cập nhật attachments nếu có
-            if ($request->has('attachment_ids')) {
-                // Xóa các attachments cũ không còn trong danh sách mới
-                $existingAttachmentIds = $invoice->attachments()->pluck('id')->toArray();
-                $newAttachmentIds = $request->attachment_ids;
-                $toRemove = array_diff($existingAttachmentIds, $newAttachmentIds);
-                
-                foreach ($toRemove as $attachmentId) {
-                    $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment) {
-                        $attachment->update([
-                            'attachable_type' => null,
-                            'attachable_id' => null,
-                        ]);
-                    }
-                }
-
-                // Thêm các attachments mới
-                foreach ($newAttachmentIds as $attachmentId) {
-                    $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
-                        $attachment->update([
-                            'attachable_type' => InputInvoice::class,
-                            'attachable_id' => $invoice->id,
-                        ]);
-                    }
-                }
-            }
-
-            DB::commit();
+            $invoice = $this->invoiceService->updateInvoice($invoice, $validated, $user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Đã cập nhật hóa đơn đầu vào thành công.',
-                'data' => $invoice->fresh(['project', 'creator', 'attachments'])
+                'data' => $invoice
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
             ], 500);
         }
     }

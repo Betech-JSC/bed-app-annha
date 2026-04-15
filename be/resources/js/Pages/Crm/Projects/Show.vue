@@ -1493,6 +1493,9 @@
             </div>
             <div class="flex gap-2">
               <a-date-picker v-model:value="attendanceDate" picker="month" size="small" format="MM/YYYY" @change="loadAttendanceData()" />
+              <a-button size="small" @click="showGenerateLaborCostModal = true" :loading="generatingLaborCosts">
+                <template #icon><CalculatorOutlined /></template>Tổng hợp lương
+              </a-button>
               <a-button type="primary" size="small" @click="showAttendanceModal = true">
                 <template #icon><PlusOutlined /></template>Chấm công thủ công
               </a-button>
@@ -5192,6 +5195,70 @@
     </a-form>
   </a-modal>
 
+  <!-- ============ GENERATE LABOR COST MODAL ============ -->
+  <a-modal
+    v-model:open="showGenerateLaborCostModal"
+    title="🧮 Tổng hợp chi phí nhân công từ chấm công"
+    :width="560"
+    :footer="null"
+    centered
+    destroy-on-close
+    class="crm-modal"
+  >
+    <div class="space-y-4 mt-4">
+      <a-alert
+        message="Hệ thống sẽ tìm tất cả bản chấm công đã duyệt trong tháng và tự tạo phiếu Chi phí nhân công (nhóm NC) dựa trên cấu hình lương của nhân viên."
+        type="info"
+        show-icon
+        class="rounded-lg"
+      />
+      <div class="grid grid-cols-2 gap-3">
+        <a-form-item label="Tháng">
+          <a-select v-model:value="laborCostForm.month" size="large" class="w-full">
+            <a-select-option v-for="m in 12" :key="m" :value="m">Tháng {{ m }}</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="Năm">
+          <a-input-number v-model:value="laborCostForm.year" size="large" class="w-full" :min="2020" :max="2030" />
+        </a-form-item>
+      </div>
+
+      <!-- Result after generate -->
+      <div v-if="laborCostResult" class="space-y-3">
+        <a-divider>Kết quả</a-divider>
+        <div class="grid grid-cols-3 gap-3">
+          <div class="bg-green-50 p-3 rounded-lg text-center">
+            <div class="text-2xl font-bold text-green-700">{{ laborCostResult.created }}</div>
+            <div class="text-xs text-gray-500">Đã tạo</div>
+          </div>
+          <div class="bg-gray-50 p-3 rounded-lg text-center">
+            <div class="text-2xl font-bold text-gray-600">{{ laborCostResult.skipped }}</div>
+            <div class="text-xs text-gray-500">Đã có</div>
+          </div>
+          <div class="bg-amber-50 p-3 rounded-lg text-center">
+            <div class="text-2xl font-bold text-amber-600">{{ laborCostResult.no_config }}</div>
+            <div class="text-xs text-gray-500">Chưa cấu hình lương</div>
+          </div>
+        </div>
+        <div class="bg-blue-50 p-3 rounded-lg text-center">
+          <div class="text-sm text-gray-500">Tổng chi phí tạo mới</div>
+          <div class="text-2xl font-bold text-blue-700">{{ fmtMoney(laborCostResult.total_amount) }}</div>
+        </div>
+        <div v-if="laborCostResult.errors?.length" class="mt-2">
+          <a-alert v-for="(err, i) in laborCostResult.errors" :key="i" :message="err" type="error" class="mb-1 rounded" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <a-button @click="showGenerateLaborCostModal = false">Đóng</a-button>
+        <a-button type="primary" :loading="generatingLaborCosts" @click="submitGenerateLaborCosts">
+          <template #icon><CalculatorOutlined /></template>
+          Tổng hợp
+        </a-button>
+      </div>
+    </div>
+  </a-modal>
+
   <!-- ============ SHIFT MODAL ============ -->
   <a-modal v-model:open="showShiftModal" title="Tạo ca làm việc" :width="480" @ok="submitShift" ok-text="Lưu" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :confirm-loading="shiftSaving">
     <a-form layout="vertical" class="mt-4">
@@ -5547,7 +5614,8 @@ import {
   ProjectOutlined, CloudOutlined, TeamOutlined, PictureOutlined,
   FilePdfOutlined, FileWordOutlined, FileExcelOutlined, ClockCircleOutlined,
   LineChartOutlined, FileProtectOutlined, BankOutlined, HistoryOutlined,
-  FileAddOutlined, SafetyCertificateOutlined, PaperClipOutlined
+  FileAddOutlined, SafetyCertificateOutlined, PaperClipOutlined,
+  CalculatorOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -5556,26 +5624,77 @@ const props = defineProps({
   project: Object,
   users: Array,
   permissions: Array,
+  counts: { type: Object, default: () => ({}) },
   costGroups: { type: Array, default: () => [] },
   personnelRoles: { type: Array, default: () => [] },
+  contract: Object,
   materials: { type: Array, default: () => [] },
-  globalSubcontractors: { type: Array, default: () => [] },
-  projectTasks: { type: Array, default: () => [] },
-  allTasks: { type: Array, default: () => [] },
-  acceptanceTemplates: { type: Array, default: () => [] },
-  parentTasks: { type: Array, default: () => [] },
-  projectMaterials: { type: Array, default: () => [] },
-  materialBills: { type: Array, default: () => [] },
   suppliers: { type: Array, default: () => [] },
-  projectEquipment: { type: Array, default: () => [] },
-  allEquipment: { type: Array, default: () => [] },
-  equipmentRentals: { type: Array, default: () => [] },
-  equipmentPurchases: { type: Array, default: () => [] },
-  assetUsages: { type: Array, default: () => [] },
-  companyAssets: { type: Array, default: () => [] },
+  acceptanceTemplates: { type: Array, default: () => [] },
+  globalSubcontractors: { type: Array, default: () => [] },
+  financeData: Object,
+  scheduleData: Object,
+  monitorData: Object,
+  teamData: Object,
+  equipmentData: Object,
+  otherData: Object,
 })
 
-// ============ RBAC ============
+// ============ LAZY DATA BRIDGES ============
+const costs = computed(() => props.financeData?.costs || props.project.costs || [])
+const payments = computed(() => props.financeData?.payments || props.project.payments || [])
+const invoices = computed(() => props.financeData?.invoices || [])
+const budgets = computed(() => props.financeData?.budgets || props.project.budgets || [])
+const allTasks = computed(() => props.scheduleData?.allTasks || [])
+const materialBills = computed(() => props.scheduleData?.materialBills || [])
+const logs = computed(() => props.monitorData?.logs || props.project.construction_logs || [])
+const acceptanceStages = computed(() => props.monitorData?.acceptanceStages || props.project.acceptance_stages || [])
+const defects = computed(() => props.monitorData?.defects || props.project.defects || [])
+const additionalCosts = computed(() => props.monitorData?.additional_costs || props.project.additional_costs || [])
+const changeRequests = computed(() => props.monitorData?.change_requests || props.project.change_requests || [])
+const personnel = computed(() => props.teamData?.personnel || props.project.personnel || [])
+const subcontractors = computed(() => props.teamData?.subcontractors || props.project.subcontractors || [])
+const equipmentRentals = computed(() => props.equipmentData?.rentals || [])
+const equipmentPurchases = computed(() => props.equipmentData?.purchases || [])
+const assetUsages = computed(() => props.equipmentData?.usages || [])
+const allEquipment = computed(() => props.equipmentData?.allEquipment || [])
+const companyAssets = computed(() => props.equipmentData?.companyAssets || [])
+const contract = computed(() => props.contract || props.otherData?.contract || props.project?.contract || null)
+const warranties = computed(() => props.otherData?.warranties || [])
+const maintenances = computed(() => props.otherData?.maintenances || [])
+const attachments = computed(() => props.otherData?.attachments || [])
+const risks = computed(() => props.otherData?.risks || [])
+const comments = computed(() => props.otherData?.comments || [])
+
+// ============ PROXY PROJECT (The Magic Optimization) ============
+// This computed property overrides the 'project' prop in template scope.
+// It redirects array access to our lazy-loaded computed bridges.
+const project = computed(() => {
+  return new Proxy(props.project || {}, {
+    get(target, prop) {
+      if (prop === 'costs') return costs.value
+      if (prop === 'payments') return payments.value
+      if (prop === 'subcontractors') return subcontractors.value
+      if (prop === 'personnel') return personnel.value
+      if (prop === 'defects') return defects.value
+      if (prop === 'acceptanceStages' || prop === 'acceptance_stages') return acceptanceStages.value
+      if (prop === 'constructionLogs' || prop === 'construction_logs') return logs.value
+      if (prop === 'additionalCosts' || prop === 'additional_costs') return additionalCosts.value
+      if (prop === 'changeRequests' || prop === 'change_requests') return changeRequests.value
+      if (prop === 'warranties') return warranties.value
+      if (prop === 'maintenances') return maintenances.value
+      if (prop === 'comments') return comments.value
+      if (prop === 'risks') return risks.value
+      if (prop === 'invoices') return invoices.value
+      if (prop === 'budgets') return budgets.value
+      if (prop === 'attachments') return attachments.value
+      if (prop === 'contract') return contract.value
+      if (prop === 'materialBills' || prop === 'material_bills') return materialBills.value
+      return target[prop]
+    }
+  })
+})
+
 const can = (perm) => {
   if (!props.permissions || !Array.isArray(props.permissions)) return true // fallback for admin or invalid state
   return props.permissions.includes(perm) || props.permissions.includes('*')
@@ -5597,7 +5716,7 @@ const isAccepted = (task) => {
     return task.acceptance_item?.workflow_status === 'customer_approved'
   }
 }
-const totalCosts = computed(() => (props.project.costs || []).reduce((s, c) => s + Number(c.amount || 0), 0))
+const totalCosts = computed(() => costs.value.reduce((s, c) => s + Number(c.amount || 0), 0))
 
 // ============ OVERVIEW COMPUTED ============
 const totalAdditionalCosts = computed(() => (props.project.additional_costs || []).reduce((s, c) => s + Number(c.amount || 0), 0))
@@ -5878,13 +5997,13 @@ const isTabVisible = (tabKey) => {
 
 // Tab groups with dynamic badge counts
 const tabGroups = computed(() => [
-  { key: 'schedule', icon: '📅', label: 'Kế hoạch', defaultTab: 'gantt', badge: props.allTasks?.length || 0 },
-  { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.project.costs?.length || 0) + (props.project.payments?.length || 0) },
-  { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: (props.project.subcontractors?.length || 0) },
-  { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'logs', badge: (props.project.defects?.filter(d => d.status !== 'closed')?.length || 0) },
-  { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.project.personnel?.length || 0 },
-  { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: (props.project.warranties?.length || 0) + (props.project.maintenances?.length || 0) },
-  { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.project.attachments?.length || 0 },
+  { key: 'schedule', icon: '📅', label: 'Kế hoạch', defaultTab: 'gantt', badge: props.counts?.tasks || 0 },
+  { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: props.counts?.finance || 0 },
+  { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: props.counts?.expense || 0 },
+  { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'logs', badge: props.counts?.monitor || 0 },
+  { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.counts?.hr || 0 },
+  { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: props.counts?.warranty || 0 },
+  { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.counts?.other || 0 },
 ])
 
 // Map activeTab to correct group (for when tab clicked directly)
@@ -5893,33 +6012,33 @@ watch(activeTab, (tab) => {
 })
 
 const filteredCosts = computed(() => {
-  let costs = props.project.costs || []
+  let c = costs.value
 
   // Status filter
   if (costStatusFilter.value === 'pending') {
-    costs = costs.filter(c => ['pending_management_approval', 'pending_accountant_approval'].includes(c.status))
+    c = c.filter(c => ['pending_management_approval', 'pending_accountant_approval'].includes(c.status))
   } else if (costStatusFilter.value !== 'all') {
-    costs = costs.filter(c => c.status === costStatusFilter.value)
+    c = c.filter(item => item.status === costStatusFilter.value)
   }
 
   // Group filter
   const gf = costGroupFilter.value
   if (gf && gf !== 'all') {
     if (gf === '_vatlieu') {
-      costs = costs.filter(c => c.category === 'construction_materials')
+      c = c.filter(item => item.category === 'construction_materials')
     } else if (gf === '_thietbi') {
-      costs = costs.filter(c => c.category === 'equipment')
+      c = c.filter(item => item.category === 'equipment')
     } else if (gf === '_ntp') {
-      costs = costs.filter(c => c.subcontractor_id != null)
+      c = c.filter(item => item.subcontractor_id != null)
     } else if (gf === '_other') {
-      costs = costs.filter(c => !['construction_materials', 'equipment'].includes(c.category) && !c.subcontractor_id)
+      c = c.filter(item => !['construction_materials', 'equipment'].includes(item.category) && !item.subcontractor_id)
     } else {
       // Filter by cost_group_id
-      costs = costs.filter(c => c.cost_group_id === gf)
+      c = c.filter(item => item.cost_group_id === gf)
     }
   }
 
-  return costs
+  return c
 })
 
 // ============ GANTT/CPM STATE (Sprint 1) ============
@@ -6049,14 +6168,33 @@ const importWbsTemplate = async () => {
 }
 
 // Auto-load gantt data when switching to gantt tab
+// Auto-load data when switching tabs (SOA Lazy Loading)
 watch(activeTab, (val) => {
+  // 1. Logic for specific data loading functions
   if (val === 'gantt') {
     loadGanttData()
     loadWbsTemplates()
     loadDelayWarnings()
   }
+  if (val === 'attendance') loadAttendanceData()
+  if (val === 'labor') { loadLaborDashboard(); loadLaborRecords() }
   if (val === 'finance') loadFinanceData()
-})
+
+  // 2. Logic for SOA Partial Reloads (Inertia::lazy)
+  if (['costs', 'payments', 'invoices', 'budgets', 'finance', 'pnl'].includes(val)) {
+    router.reload({ only: ['financeData'], preserveState: true, preserveScroll: true })
+  } else if (['gantt', 'progress', 'materials', 'material_bills'].includes(val)) {
+    router.reload({ only: ['scheduleData'], preserveState: true, preserveScroll: true })
+  } else if (['logs', 'acceptance', 'defects', 'change_requests', 'additional_costs'].includes(val)) {
+    router.reload({ only: ['monitorData'], preserveState: true, preserveScroll: true })
+  } else if (['personnel', 'subcontractors'].includes(val)) {
+    router.reload({ only: ['teamData'], preserveState: true, preserveScroll: true })
+  } else if (['equipment', 'equipment_rentals', 'equipment_purchases', 'asset_usages'].includes(val)) {
+    router.reload({ only: ['equipmentData'], preserveState: true, preserveScroll: true })
+  } else if (['other', 'documents', 'discussion', 'risks', 'warranty', 'maintenances', 'contract', 'comments'].includes(val)) {
+    router.reload({ only: ['otherData'], preserveState: true, preserveScroll: true })
+  }
+}, { immediate: true })
 
 // ============ Sprint 2 — Finance Dashboard State ============
 const financeView = ref('cashflow')
@@ -6187,12 +6325,12 @@ const logColsGrouped = [
 ]
 
 const groupedLogs = computed(() => {
-  const logs = props.project.construction_logs || []
-  if (!logs.length) return []
+  const logsArr = project.value.construction_logs || []
+  if (!logsArr.length) return []
 
   // Group by log_date
   const groups = {}
-  logs.forEach(log => {
+  logsArr.forEach(log => {
     const dateKey = log.log_date || 'unknown'
     if (!groups[dateKey]) groups[dateKey] = []
     groups[dateKey].push(log)
@@ -6649,7 +6787,7 @@ const onLogTaskChange = (taskId, isEditing = false) => {
   }
   
   // Find task in allTasks to get current progress percentage (backend calculated)
-  const task = (props.allTasks || []).find(t => t.id === taskId)
+  const task = (allTasks.value).find(t => t.id === taskId)
   if (task) {
     const currentPct = Number(task.progress_percentage || 0)
     logTaskCurrentProgress.value = currentPct
@@ -6856,11 +6994,11 @@ const taskStatusColors = { not_started: 'default', in_progress: 'processing', de
 
 // Build tree: root = tasks with no parent_id
 const rootTasks = computed(() => {
-  return (props.allTasks || []).filter(t => !t.parent_id)
+  return (allTasks.value).filter(t => !t.parent_id)
 })
 
 const taskStats = computed(() => {
-  const all = props.allTasks || []
+  const all = allTasks.value
   return {
     total: all.length,
     not_started: all.filter(t => t.status === 'not_started').length,
@@ -6951,7 +7089,7 @@ const onGlobalSubSelect = (id) => {
     subForm.value.name = '';
     return;
   }
-  const gs = props.globalSubcontractors.find(g => g.id === id)
+  const gs = (props.globalSubcontractors || []).find(g => g.id === id)
   if (gs) { 
     subForm.value.name = gs.name; 
     subForm.value.bank_name = gs.bank_name || ''; 
@@ -7709,6 +7847,33 @@ const loadShifts = async () => {
   } catch (e) { console.error('Load shifts:', e) }
 }
 
+// ============ GENERATE LABOR COSTS ============
+const showGenerateLaborCostModal = ref(false)
+const generatingLaborCosts = ref(false)
+const laborCostResult = ref(null)
+const laborCostForm = ref({
+  month: new Date().getMonth() + 1,
+  year: new Date().getFullYear(),
+})
+
+const submitGenerateLaborCosts = async () => {
+  generatingLaborCosts.value = true
+  laborCostResult.value = null
+  try {
+    const res = await axios.post(`/projects/${props.project.id}/attendance/generate-labor-costs`, laborCostForm.value)
+    laborCostResult.value = res.data?.data || res.data
+    if (res.data?.data?.created > 0) {
+      message.success(res.data.message)
+    } else {
+      message.info(res.data.message || 'Không có chi phí mới được tạo')
+    }
+  } catch (e) {
+    message.error(e.response?.data?.message || 'Lỗi tổng hợp chi phí nhân công')
+  } finally {
+    generatingLaborCosts.value = false
+  }
+}
+
 // ============ LABOR PRODUCTIVITY TAB STATE ============
 const laborView = ref('dashboard')
 const laborDashboard = ref(null)
@@ -7844,15 +8009,11 @@ const submitLaborRecord = async () => {
   finally { laborSaving.value = false }
 }
 
-// Auto-load when switching to these tabs
-watch(activeTab, (tab) => {
-  if (tab === 'attendance') loadAttendanceData()
-  if (tab === 'labor') { loadLaborDashboard(); loadLaborRecords() }
-})
+// Attendance and Labor logic moved to main activeTab watcher
 
 // ============ MATERIALS TAB — Bill-based tracking (Giống APP) ============
 const fmtQty = (v) => new Intl.NumberFormat('vi-VN').format(v)
-const totalBillAmount = computed(() => (props.materialBills || []).reduce((s, b) => s + Number(b.total_amount || 0), 0))
+const totalBillAmount = computed(() => (materialBills.value).reduce((s, b) => s + Number(b.total_amount || 0), 0))
 
 const billCols = [
   { title: 'Mã phiếu', key: 'bill_number', width: 130 },
@@ -8115,7 +8276,7 @@ const eqSubTab = ref('rental')
 const rejectReason = ref('')
 
 const totalEquipmentCount = computed(() =>
-  (props.equipmentRentals?.length || 0) + (props.assetUsages?.length || 0)
+  (equipmentRentals.value?.length || 0) + (assetUsages.value?.length || 0)
 )
 
 // Column definitions

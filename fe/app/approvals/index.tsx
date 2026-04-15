@@ -460,6 +460,12 @@ export default function ApprovalCenterScreen() {
         <View style={styles.container}>
             <ScreenHeader title="Trung tâm Duyệt" showBackButton />
             
+            {loading && !data && (
+                <View style={styles.loadingFull}>
+                    <ActivityIndicator size="large" color="#1B4F72" />
+                    <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+                </View>
+            )}
             <SectionList
                 sections={sections}
                 keyExtractor={(item, index) => `${item.id}-${index}`}
@@ -828,4 +834,18 @@ const styles = StyleSheet.create({
     budgetAmountRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 4 },
     budgetAmountLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
     budgetAmountValue: { fontSize: 13, fontWeight: '800' },
+
+    loadingFull: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(251, 252, 254, 0.95)',
+        zIndex: 1000,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: '#64748B',
+        fontWeight: '600',
+    },
 });

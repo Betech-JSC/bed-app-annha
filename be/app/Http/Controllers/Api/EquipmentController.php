@@ -7,51 +7,25 @@ use App\Models\Equipment;
 use App\Models\EquipmentAllocation;
 use App\Models\EquipmentMaintenance;
 use App\Constants\Permissions;
+use App\Services\EquipmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
 class EquipmentController extends Controller
 {
+    protected $equipmentService;
+
+    public function __construct(\App\Services\EquipmentService $equipmentService)
+    {
+        $this->equipmentService = $equipmentService;
+    }
     public function index(Request $request)
     {
         // Relaxed for project modules
         // if (!$user->hasPermission(Permissions::EQUIPMENT_VIEW)) { ... }
 
-        $query = Equipment::query();
-
-        if ($request->query('active_only') === 'true') {
-            $query->whereIn('status', ['available', 'in_use']);
-        }
-
-        if ($search = $request->query('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('code', 'like', "%{$search}%")
-                    ->orWhere('category', 'like', "%{$search}%");
-            });
-        }
-
-        if ($category = $request->query('category')) {
-            $query->where('category', $category);
-        }
-
-        if ($type = $request->query('type')) {
-            $query->where('type', $type);
-        }
-
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        $equipment = $query->paginate(20);
-
-        // Bổ sung remaining_quantity vào từng item
-        $items = $equipment->getCollection()->map(function ($item) {
-            $item->remaining_quantity = $item->remaining_quantity;
-            return $item;
-        });
-        $equipment->setCollection($items);
+        $equipment = $this->equipmentService->getEquipment($request->only(['active_only', 'search', 'category', 'type', 'status']));
 
         return response()->json([
             'success' => true,
@@ -70,51 +44,26 @@ class EquipmentController extends Controller
             ], 403);
         }
 
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'code' => 'nullable|string|max:50|unique:equipment,code',
-            'category' => 'nullable|string|max:100',
-            'notes' => 'nullable|string',
-            'quantity' => 'nullable|integer|min:1',
-            'purchase_price' => 'nullable|numeric|min:0',
-            'unit' => 'nullable|string|max:50',
-            'status' => 'nullable|string',
-        ]);
+        try {
+            $equipment = $this->equipmentService->upsert($request->all(), null, $user);
 
-        if ($validator->fails()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã tạo thiết bị (Nháp). Vui lòng gửi duyệt.',
+                'data' => $equipment->load('attachments')
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
+                'errors' => $e->errors()
             ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
         }
-
-        $equipment = Equipment::create([
-            'name'           => $request->name,
-            'code'           => $request->code,
-            'category'       => $request->category,
-            'notes'          => $request->notes,
-            'quantity'       => $request->quantity ?? 1,
-            'purchase_price' => $request->purchase_price ?? 0,
-            'unit'           => $request->unit ?? 'cái',
-            'status'         => 'draft',
-            'created_by'     => $user->id,
-        ]);
-
-        // Handle attachment_ids from UniversalFileUploader
-        if ($request->has('attachment_ids')) {
-            $attachmentIds = is_array($request->attachment_ids) ? $request->attachment_ids : explode(',', $request->attachment_ids);
-            \App\Models\Attachment::whereIn('id', $attachmentIds)->update([
-                'attachable_id' => $equipment->id,
-                'attachable_type' => get_class($equipment)
-            ]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã tạo thiết bị (Nháp). Vui lòng gửi duyệt.',
-            'data' => $equipment->load('attachments')
-        ], 201);
     }
 
     public function show(string $id)
@@ -202,61 +151,7 @@ class EquipmentController extends Controller
             ], 403);
         }
 
-        // Lấy các equipment đã có allocation trong project này
-        $allocationStatus = $request->query('allocation_status');
-
-        $query = Equipment::whereHas('allocations', function ($q) use ($projectId, $allocationStatus) {
-            $q->where('project_id', $projectId);
-            
-            if ($allocationStatus) {
-                $q->where('status', $allocationStatus);
-            }
-        })->with(['allocations' => function ($q) use ($projectId) {
-            $q->where('project_id', $projectId)
-                ->with(['allocatedTo', 'creator'])
-                ->orderBy('start_date', 'desc');
-        }]);
-
-        if ($search = $request->query('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('code', 'like', "%{$search}%")
-                    ->orWhere('category', 'like', "%{$search}%");
-            });
-        }
-
-        if ($category = $request->query('category')) {
-            $query->where('category', $category);
-        }
-
-        if ($type = $request->query('type')) {
-            $query->where('type', $type);
-        }
-
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        $equipment = $query->paginate(20);
-
-        // Thêm thông tin allocation cho project
-        $equipment->getCollection()->transform(function ($item) use ($projectId, $allocationStatus) {
-            $projectAllocations = $item->allocations->where('project_id', $projectId);
-            
-            // Determine which allocation to show as "primary"
-            if ($allocationStatus) {
-                 $primaryAllocation = $projectAllocations->where('status', $allocationStatus)->sortByDesc('start_date')->first();
-            } else {
-                 // Prefer active, otherwise latest returned
-                 $primaryAllocation = $projectAllocations->where('status', 'active')->first() 
-                                      ?? $projectAllocations->sortByDesc('start_date')->first();
-            }
-            
-            $item->project_allocation = $primaryAllocation;
-            $item->project_allocations_count = $projectAllocations->count();
-            
-            return $item;
-        });
+        $equipment = $this->equipmentService->getEquipmentByProject((int)$projectId, $request->only(['allocation_status', 'search', 'category', 'type', 'status']));
 
         return response()->json([
             'success' => true,
@@ -277,43 +172,26 @@ class EquipmentController extends Controller
 
         $equipment = Equipment::findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|required|string|max:255',
-            'code' => 'sometimes|nullable|string|max:50|unique:equipment,code,' . $id,
-            'category' => 'nullable|string|max:100',
-            'notes' => 'nullable|string',
-            'quantity' => 'sometimes|integer|min:1',
-            'purchase_price' => 'sometimes|numeric|min:0',
-            'unit' => 'nullable|string|max:50',
-            'status' => 'nullable|in:available,in_use,maintenance,retired,draft,pending_management,pending_accountant,rejected',
-        ]);
+        try {
+            $this->equipmentService->upsert($request->all(), $equipment, $user);
 
-        if ($validator->fails()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã cập nhật thiết bị thành công.',
+                'data' => $equipment->load('attachments')
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
+                'errors' => $e->errors()
             ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 403);
         }
-
-        $equipment->update($request->only([
-            'name', 'code', 'category', 'notes', 'status', 'quantity', 'purchase_price', 'unit'
-        ]));
-
-        // Handle attachment_ids from UniversalFileUploader
-        if ($request->has('attachment_ids')) {
-            $attachmentIds = is_array($request->attachment_ids) ? $request->attachment_ids : explode(',', $request->attachment_ids);
-            \App\Models\Attachment::whereIn('id', $attachmentIds)->update([
-                'attachable_id' => $equipment->id,
-                'attachable_type' => get_class($equipment)
-            ]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã cập nhật thiết bị thành công.',
-            'data' => $equipment->load('attachments')
-        ]);
     }
 
     public function destroy(string $id)
@@ -329,20 +207,18 @@ class EquipmentController extends Controller
 
         $equipment = Equipment::findOrFail($id);
 
-        // Kiểm tra có phân bổ đang active không
-        if ($equipment->allocations()->where('status', 'active')->count() > 0) {
+        try {
+            $this->equipmentService->delete($equipment);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã xóa thiết bị thành công.'
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không thể xóa thiết bị đang được sử dụng.'
+                'message' => $e->getMessage()
             ], 422);
         }
-
-        $equipment->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã xóa thiết bị thành công.'
-        ]);
     }
 
     /**
@@ -386,73 +262,11 @@ class EquipmentController extends Controller
             ], 422);
         }
 
-        // Kiểm tra equipment
-        $equipment = Equipment::findOrFail($request->equipment_id);
-
-        // Kiểm tra status
-        if (!in_array($equipment->status, ['available', 'in_use', 'returned'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Thiết bị hiện ' . (Equipment::STATUS_LABELS[$equipment->status] ?? $equipment->status) . '. Vui lòng kiểm tra lại.'
-            ], 422);
-        }
-
-        // Chặn nếu hết số lượng
-        if ($request->quantity > $equipment->remaining_quantity) {
-            return response()->json([
-                'success' => false,
-                'message' => "Không đủ số lượng trong kho. Hiện còn {$equipment->remaining_quantity} {$equipment->unit}."
-            ], 422);
-        }
-
         try {
-            DB::beginTransaction();
-
-            // Tạo allocation
-            $allocationData = [
-                'equipment_id' => $request->equipment_id,
-                'project_id' => $projectId,
-                'allocation_type' => $request->allocation_type,
-                'quantity' => $request->quantity,
-                'start_date' => $request->start_date,
-                'end_date' => $request->end_date,
-                'allocated_to' => $request->allocated_to,
-                'notes' => $request->notes,
-                'status' => 'active',
-                'created_by' => $user->id,
-            ];
-
-            // Cho MUA (buy)
-            if ($request->allocation_type === 'buy') {
-                $allocationData['manager_id'] = $request->manager_id;
-                $allocationData['handover_date'] = $request->handover_date ?? $request->start_date;
-                $allocationData['return_date'] = $request->return_date;
-                $allocationData['daily_rate'] = null;
-                $allocationData['rental_fee'] = null;
-            }
-
-            // Cho THUÊ (rent)
-            if ($request->allocation_type === 'rent') {
-                $allocationData['rental_fee'] = $request->rental_fee;
-                $allocationData['billing_start_date'] = $request->billing_start_date ?? $request->start_date;
-                $allocationData['billing_end_date'] = $request->billing_end_date ?? $request->end_date;
-            }
-
-            $allocation = EquipmentAllocation::create($allocationData);
-
-            // Tự động tạo Cost - CHỈ cho Thuê. Có sẵn (buy) KHÔNG đẩy qua hạng mục thanh toán, mục đích theo dõi người sử dụng thiết bị
-            $allocationService = app(\App\Services\EquipmentAllocationService::class);
-            if ($request->allocation_type === 'rent') {
-                $allocationService->createCostFromRental($allocation);
-            }
-
-            // Cập nhật status của equipment nếu cần
-            if ($equipment->status === 'available') {
-                $equipment->update(['status' => 'in_use']);
-            }
-
-            DB::commit();
-
+            $data = $request->all();
+            $data['project_id'] = $projectId;
+            
+            $allocation = $this->equipmentService->upsertAllocation($data, null, $user);
             $allocation->load(['equipment', 'project', 'allocatedTo', 'manager', 'creator', 'cost']);
 
             return response()->json([
@@ -463,11 +277,9 @@ class EquipmentController extends Controller
                 'data' => $allocation
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi tạo phân bổ thiết bị.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
             ], 500);
         }
     }

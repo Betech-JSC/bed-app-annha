@@ -13,14 +13,17 @@ use App\Models\Project;
 use App\Services\AuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\EquipmentService;
 
 class EquipmentPurchaseController extends Controller
 {
     protected $authService;
+    protected $equipmentService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(AuthorizationService $authService, \App\Services\EquipmentService $equipmentService)
     {
         $this->authService = $authService;
+        $this->equipmentService = $equipmentService;
     }
     /**
      * Danh sách phiếu mua thiết bị theo dự án
@@ -103,36 +106,8 @@ class EquipmentPurchaseController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $purchase = EquipmentPurchase::create([
-                'project_id'   => $projectId,
-                'notes'        => $validated['notes'] ?? null,
-                'status'       => 'draft',
-                'total_amount' => 0,
-                'created_by'   => $user->id,
-            ]);
-
-            foreach ($validated['items'] as $itemData) {
-                $purchase->items()->create([
-                    'name'       => $itemData['name'],
-                    'code'       => $itemData['code'] ?? null,
-                    'quantity'   => $itemData['quantity'],
-                    'unit_price' => $itemData['unit_price'],
-                    // total_price auto-calculated by model boot
-                ]);
-            }
-
-            $purchase->recalculateTotal();
-
-            // Gắn attachments
-            if (!empty($validated['attachment_ids'])) {
-                \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
-                    ->update([
-                        'attachable_type' => EquipmentPurchase::class,
-                        'attachable_id'   => $purchase->id,
-                    ]);
-            }
+            $validated['project_id'] = $projectId;
+            $purchase = $this->equipmentService->upsertPurchase($validated, null, $user);
 
             // Create project cost (draft) for tracking
             $costGroup = CostGroup::where('code', 'equipment')
@@ -152,12 +127,10 @@ class EquipmentPurchaseController extends Controller
                 'name' => "Mua thiết bị: {$itemNames}",
                 'amount' => $purchase->total_amount,
                 'description' => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
-                'cost_date' => now()->toDateString(), // purchase date is today (store time) 
+                'cost_date' => now()->toDateString(),
                 'status' => 'draft',
                 'created_by' => $user->id,
             ]);
-
-            DB::commit();
 
             return response()->json([
                 'success' => true,
@@ -165,7 +138,6 @@ class EquipmentPurchaseController extends Controller
                 'data'    => $purchase->fresh(['items', 'creator:id,name', 'attachments']),
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi: ' . $e->getMessage(),
@@ -190,13 +162,6 @@ class EquipmentPurchaseController extends Controller
 
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
-        if (!in_array($purchase->status, ['draft', 'rejected'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể chỉnh sửa phiếu ở trạng thái Nháp hoặc Từ chối.',
-            ], 422);
-        }
-
         $validated = $request->validate([
             'notes'              => 'nullable|string',
             'items'              => 'sometimes|array|min:1',
@@ -209,35 +174,7 @@ class EquipmentPurchaseController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            if (isset($validated['notes'])) {
-                $purchase->update(['notes' => $validated['notes']]);
-            }
-
-            // Rebuild items if provided
-            if (isset($validated['items'])) {
-                $purchase->items()->delete();
-                foreach ($validated['items'] as $itemData) {
-                    $purchase->items()->create([
-                        'name'       => $itemData['name'],
-                        'code'       => $itemData['code'] ?? null,
-                        'quantity'   => $itemData['quantity'],
-                        'unit_price' => $itemData['unit_price'],
-                    ]);
-                }
-                $purchase->recalculateTotal();
-            }
-
-            if (!empty($validated['attachment_ids'])) {
-                \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])
-                    ->update([
-                        'attachable_type' => EquipmentPurchase::class,
-                        'attachable_id'   => $purchase->id,
-                    ]);
-            }
-
-            DB::commit();
+            $this->equipmentService->upsertPurchase($validated, $purchase, $user);
 
             return response()->json([
                 'success' => true,
@@ -245,11 +182,10 @@ class EquipmentPurchaseController extends Controller
                 'data'    => $purchase->fresh(['items', 'creator:id,name', 'attachments']),
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi: ' . $e->getMessage(),
-            ], 500);
+            ], 422);
         }
     }
 
@@ -303,30 +239,20 @@ class EquipmentPurchaseController extends Controller
 
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
-        if (!in_array($purchase->status, ['draft', 'rejected'])) {
+        try {
+            $this->equipmentService->submitPurchase($purchase);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã gửi phiếu mua để BĐH duyệt.',
+                'data'    => $purchase->fresh(['items', 'creator:id,name']),
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể gửi duyệt phiếu ở trạng thái Nháp hoặc Từ chối.',
+                'message' => $e->getMessage(),
             ], 422);
         }
-
-        if ($purchase->items()->count() === 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Phiếu mua phải có ít nhất 1 thiết bị.',
-            ], 422);
-        }
-
-        $purchase->update([
-            'status'           => 'pending_management',
-            'rejection_reason' => null,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi phiếu mua để BĐH duyệt.',
-            'data'    => $purchase->fresh(['items', 'creator:id,name']),
-        ]);
     }
 
     public function approveManagement(string $projectId, string $id)
@@ -343,24 +269,18 @@ class EquipmentPurchaseController extends Controller
 
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
-        if ($purchase->status !== 'pending_management') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Phiếu không ở trạng thái chờ BĐH duyệt.',
-            ], 422);
+        if ($this->equipmentService->approvePurchaseByManagement($purchase, $user)) {
+             return response()->json([
+                 'success' => true,
+                 'message' => 'BĐH đã duyệt. Chuyển sang Kế toán.',
+                 'data'    => $purchase->fresh(['items', 'creator:id,name', 'approver:id,name']),
+             ]);
         }
 
-        $purchase->update([
-            'status'      => 'pending_accountant',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-
         return response()->json([
-            'success' => true,
-            'message' => 'BĐH đã duyệt. Chuyển sang Kế toán.',
-            'data'    => $purchase->fresh(['items', 'creator:id,name', 'approver:id,name']),
-        ]);
+            'success' => false,
+            'message' => 'Thao tác không thành công hoặc sai trạng thái.',
+        ], 422);
     }
 
     public function rejectManagement(string $projectId, string $id, Request $request)
@@ -376,28 +296,20 @@ class EquipmentPurchaseController extends Controller
         }
 
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
-
-        if ($purchase->status !== 'pending_management') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Phiếu không ở trạng thái chờ BĐH duyệt.',
-            ], 422);
-        }
-
         $request->validate(['reason' => 'required|string']);
 
-        $purchase->update([
-            'status'           => 'rejected',
-            'rejection_reason' => $request->reason,
-            'approved_by'      => $user->id,
-            'approved_at'      => now(),
-        ]);
+        if ($this->equipmentService->rejectPurchase($purchase, $request->reason, $user)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã từ chối phiếu mua.',
+                'data'    => $purchase->fresh(['items', 'creator:id,name', 'approver:id,name']),
+            ]);
+        }
 
         return response()->json([
-            'success' => true,
-            'message' => 'Đã từ chối phiếu mua.',
-            'data'    => $purchase->fresh(['items', 'creator:id,name', 'approver:id,name']),
-        ]);
+            'success' => false,
+            'message' => 'Thao tác không thành công hoặc sai trạng thái.',
+        ], 422);
     }
 
     /**
@@ -417,41 +329,30 @@ class EquipmentPurchaseController extends Controller
 
         $purchase = EquipmentPurchase::where('project_id', $projectId)->findOrFail($id);
 
-        if ($purchase->status !== 'pending_accountant') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Phiếu không ở trạng thái chờ Kế toán.',
-            ], 422);
-        }
-
         try {
-            DB::beginTransaction();
+            $this->equipmentService->confirmPurchaseByAccountant($purchase, $user);
 
-            $purchase->update([
-                'status'       => 'completed',
-                'confirmed_by' => $user->id,
-                'confirmed_at' => now(),
+            // Create global project cost for reporting (approved state)
+            $costGroup = CostGroup::where('code', 'equipment')
+                ->orWhere('name', 'like', '%thiết bị%')
+                ->where('is_active', true)
+                ->first();
+
+            Cost::create([
+                'project_id'             => $projectId,
+                'cost_group_id'          => $costGroup ? $costGroup->id : null,
+                'category'               => 'equipment',
+                'name'                   => "Mua thiết bị cho DA: {$project->name}",
+                'amount'                 => $purchase->total_amount,
+                'description'            => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
+                'cost_date'              => now(),
+                'status'                 => 'approved',
+                'created_by'             => $purchase->created_by,
+                'management_approved_by' => $purchase->approved_by,
+                'management_approved_at' => $purchase->approved_at,
+                'accountant_approved_by' => $user->id,
+                'accountant_approved_at' => now(),
             ]);
-
-            // Nghiệp vụ đặc biệt: Tạo Equipment cho mỗi item
-            foreach ($purchase->items as $item) {
-                Equipment::create([
-                    'name'           => $item->name,
-                    'code'           => $item->code ?: ('EQP-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(4))),
-                    'type'           => 'owned',
-                    'category'       => 'machinery', // default
-                    'purchase_price' => $item->total_price,
-                    'purchase_date'  => now()->toDateString(),
-                    'useful_life_months' => 60, // default 5 năm
-                    'residual_value' => 0,
-                    'current_value'  => $item->total_price,
-                    'status'         => 'available',
-                    'notes'          => "Nhập kho từ phiếu mua #{$purchase->id} - Dự án #{$projectId}",
-                    'created_by'     => $purchase->created_by,
-                ]);
-            }
-
-            DB::commit();
 
             return response()->json([
                 'success' => true,
@@ -459,7 +360,6 @@ class EquipmentPurchaseController extends Controller
                 'data'    => $purchase->fresh(['items', 'creator:id,name', 'approver:id,name', 'confirmer:id,name']),
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi: ' . $e->getMessage(),

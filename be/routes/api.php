@@ -159,6 +159,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [AttendanceController::class, 'store']);
         Route::post('/{id}/approve', [AttendanceController::class, 'approve']);
         Route::get('/statistics', [AttendanceController::class, 'statistics']);
+        Route::post('/generate-labor-costs', [AttendanceController::class, 'generateLaborCosts']);
     });
 
     Route::prefix('shifts')->group(function () {

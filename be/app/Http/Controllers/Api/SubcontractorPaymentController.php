@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\DB;
 class SubcontractorPaymentController extends Controller
 {
     use ApiAuthorization;
+
+    protected $financialService;
+
+    public function __construct(\App\Services\FinancialService $financialService)
+    {
+        $this->financialService = $financialService;
+    }
     /**
      * Danh sách thanh toán nhà thầu phụ
      */
@@ -77,46 +84,27 @@ class SubcontractorPaymentController extends Controller
             'payment_method' => 'required|in:cash,bank_transfer,check,other',
             'reference_number' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
-        // Validate subcontractor belongs to project
-        $subcontractor = Subcontractor::where('project_id', $project->id)
-            ->findOrFail($validated['subcontractor_id']);
-
-        // Check if amount exceeds remaining amount
-        $remaining = $subcontractor->total_quote - $subcontractor->total_paid;
-        if ($validated['amount'] > $remaining) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Số tiền thanh toán vượt quá số tiền còn lại.'
-            ], 400);
-        }
-
         try {
-            DB::beginTransaction();
-
-            $payment = SubcontractorPayment::create([
-                'subcontractor_id' => $subcontractor->id,
-                'project_id' => $project->id,
-                ...$validated,
-                'status' => 'draft', // Bắt đầu từ draft
-                'created_by' => $user->id,
-            ]);
-
-            DB::commit();
+            $payment = $this->financialService->upsertSubPayment(
+                array_merge($validated, ['project_id' => $project->id]),
+                null,
+                $user
+            );
 
             return response()->json([
                 'success' => true,
-                'message' => 'Phiếu thanh toán đã được tạo.',
-                'data' => $payment->load(['subcontractor', 'creator'])
+                'message' => 'Phiếu đề nghị thanh toán đã được tạo.',
+                'data' => $payment
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 400);
         }
     }
 
@@ -140,38 +128,30 @@ class SubcontractorPaymentController extends Controller
 
         $validated = $request->validate([
             'payment_stage' => 'nullable|string|max:255',
-            'amount' => 'sometimes|numeric|min:0',
+            'amount' => 'required|numeric|min:0',
             'accepted_volume' => 'nullable|numeric|min:0',
             'payment_date' => 'nullable|date',
-            'payment_method' => 'sometimes|in:cash,bank_transfer,check,other',
+            'payment_method' => 'required|in:cash,bank_transfer,check,other',
             'reference_number' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
-        // Check amount if changed
-        if (isset($validated['amount'])) {
-            $subcontractor = $payment->subcontractor;
-            $otherPaymentsTotal = $subcontractor->payments()
-                ->where('id', '!=', $payment->id)
-                ->where('status', '!=', 'cancelled')
-                ->sum('amount');
-            $remaining = $subcontractor->total_quote - $otherPaymentsTotal;
-            
-            if ($validated['amount'] > $remaining) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Số tiền thanh toán vượt quá số tiền còn lại.'
-                ], 400);
-            }
+        try {
+            $payment = $this->financialService->upsertSubPayment($validated, $payment, $request->user());
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Phiếu thanh toán đã được cập nhật.',
+                'data' => $payment
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 400);
         }
-
-        $payment->update($validated);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Phiếu thanh toán đã được cập nhật.',
-            'data' => $payment->fresh(['subcontractor'])
-        ]);
     }
 
     /**
@@ -203,68 +183,48 @@ class SubcontractorPaymentController extends Controller
     /**
      * Gửi phiếu chi để duyệt (từ draft -> pending_management_approval)
      */
-    public function submit(Request $request, string $projectId, string $id)
+    public function submit(string $projectId, string $id)
     {
-        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_CREATE, $projectId);
+        $this->apiRequire(auth()->user(), Permissions::SUBCONTRACTOR_PAYMENT_EDIT, $projectId);
+        $payment = SubcontractorPayment::where('project_id', $projectId)->findOrFail($id);
 
-        $payment = SubcontractorPayment::where('project_id', $projectId)
-            ->findOrFail($id);
-        $user = $request->user();
+        try {
+            $this->financialService->submitSubPayment($payment, auth()->user());
 
-        if ($payment->status !== 'draft') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Phiếu thanh toán đã được gửi duyệt.',
+                'data' => $payment->fresh()
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể gửi phiếu chi ở trạng thái nháp.'
+                'message' => 'Lỗi: ' . $e->getMessage()
             ], 400);
         }
-
-        $payment->submitForApproval();
-
-        // Notify management and PM
-        $payment->notifyEvent('submitted', $user);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Phiếu chi đã được gửi để duyệt.',
-            'data' => $payment->fresh()
-        ]);
     }
 
     /**
      * Ban điều hành duyệt (từ pending_management_approval -> pending_accountant_confirmation)
      */
-    public function approve(Request $request, string $projectId, string $id)
+    public function approve(string $projectId, string $id)
     {
-        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $projectId);
-
-        $payment = SubcontractorPayment::where('project_id', $projectId)
-            ->findOrFail($id);
-        $user = $request->user();
-
-        if ($payment->status !== 'pending_management_approval') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể duyệt phiếu thanh toán ở trạng thái chờ ban điều hành duyệt.'
-            ], 400);
-        }
+        $this->apiRequire(auth()->user(), Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $projectId);
+        $payment = SubcontractorPayment::where('project_id', $projectId)->findOrFail($id);
 
         try {
-            DB::beginTransaction();
-            $payment->approve($user);
-
-            // Notify creator, PM and accountants
-            $payment->notifyEvent('approved_management', $user);
-
-            DB::commit();
+            $this->financialService->approveSubPayment($payment, auth()->user());
 
             return response()->json([
                 'success' => true,
-                'message' => 'Phiếu thanh toán đã được ban điều hành duyệt.',
-                'data' => $payment->fresh(['approver'])
+                'message' => 'Phiếu thanh toán đã được duyệt thành công.',
+                'data' => $payment->fresh()
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Lỗi hệ thống.', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 400);
         }
     }
 
@@ -273,50 +233,31 @@ class SubcontractorPaymentController extends Controller
      */
     public function reject(Request $request, string $projectId, string $id)
     {
-        $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $projectId);
+        $this->apiRequire(auth()->user(), Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $projectId);
 
         $payment = SubcontractorPayment::where('project_id', $projectId)
             ->findOrFail($id);
         $user = $request->user();
-
-        if (!in_array($payment->status, ['pending_management_approval', 'pending_accountant_confirmation'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể từ chối phiếu chi đang chờ duyệt.'
-            ], 400);
-        }
 
         $validated = $request->validate([
             'rejection_reason' => 'nullable|string|max:1000',
         ]);
 
         try {
-            DB::beginTransaction();
-            $result = $payment->reject($user, $validated['rejection_reason'] ?? null);
-            if (!$result) {
-                DB::rollBack();
-                return response()->json(['success' => false, 'message' => 'Không thể từ chối phiếu chi.'], 400);
-            }
-
-            // Notify creator and PM
-            $payment->notifyEvent('rejected', $user, ['reason' => $validated['rejection_reason'] ?? '']);
-
-            DB::commit();
+            $this->financialService->rejectSubPayment($payment, $validated['rejection_reason'] ?? null, $user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Phiếu chi đã bị từ chối.',
-                'data' => $payment->fresh(['rejector'])
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Lỗi hệ thống.', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 400);
         }
     }
 
-    /**
-     * Kế toán xác nhận đã thanh toán (từ pending_accountant_confirmation -> paid)
-     */
     public function markAsPaid(Request $request, string $projectId, string $id)
     {
         $this->apiRequire($request->user(), Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID, $projectId);
@@ -325,21 +266,8 @@ class SubcontractorPaymentController extends Controller
             ->findOrFail($id);
         $user = $request->user();
 
-        if ($payment->status !== 'pending_accountant_confirmation') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể xác nhận thanh toán phiếu đã được ban điều hành duyệt.'
-            ], 400);
-        }
-
         try {
-            DB::beginTransaction();
-            $payment->markAsPaid($user);
-
-            // Notify creator and PM
-            $payment->notifyEvent('paid', $user);
-
-            DB::commit();
+            $this->financialService->confirmSubPayment($payment, $user);
 
             return response()->json([
                 'success' => true,
@@ -347,8 +275,10 @@ class SubcontractorPaymentController extends Controller
                 'data' => $payment->fresh(['payer', 'subcontractor'])
             ]);
         } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Lỗi hệ thống.', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'success' => false, 
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

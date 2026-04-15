@@ -14,11 +14,16 @@ class AcceptanceStageController extends Controller
 {
     protected $notificationService;
     protected $authService;
+    protected $acceptanceService;
 
-    public function __construct(NotificationService $notificationService, \App\Services\AuthorizationService $authService)
-    {
+    public function __construct(
+        NotificationService $notificationService, 
+        \App\Services\AuthorizationService $authService,
+        \App\Services\AcceptanceService $acceptanceService
+    ) {
         $this->notificationService = $notificationService;
         $this->authService = $authService;
+        $this->acceptanceService = $acceptanceService;
     }
 
     /**
@@ -36,41 +41,7 @@ class AcceptanceStageController extends Controller
                 'message' => 'Bạn không có quyền xem giai đoạn nghiệm thu của dự án này.'
             ], 403);
         }
-        $stages = $project->acceptanceStages()
-            ->with([
-                'internalApprover',
-                'customerApprover',
-                'designApprover',
-                'ownerApprover',
-                'task', // BUSINESS RULE: Link to parent task (A) - parent task acts as "phase"
-                'acceptanceTemplate', // Link to acceptance template from Settings
-                'defects' => function ($q) {
-                    $q->whereIn('status', ['open', 'in_progress']);
-                },
-                'attachments',
-                'items' => function ($q) {
-                    // BUSINESS RULE: Show ONLY Category A (parent) items, hide children A' and A''
-                    $q->where(function ($query) {
-                        // Items without task_id (Category A items)
-                        $query->whereNull('task_id')
-                            // OR items linked to parent tasks (task.parent_id is null)
-                            ->orWhereHas('task', function ($taskQuery) {
-                                $taskQuery->whereNull('parent_id');
-                            });
-                    })
-                        ->orderBy('order')
-                        ->with([
-                            'attachments',
-                            'task',
-                            'template.attachments',
-                            'submitter',
-                            'projectManagerApprover',
-                            'customerApprover',
-                        ]);
-                }
-            ])
-            ->orderBy('order')
-            ->get();
+        $stages = $this->acceptanceService->getStagesForProject($project);
 
         return response()->json([
             'success' => true,
@@ -89,37 +60,26 @@ class AcceptanceStageController extends Controller
         $user = $request->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_1)) {
+        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 1 - Giám sát).'
             ], 403);
         }
 
-        // BUSINESS RULE: Super Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
-        if (!$user->owner && $stage->status !== 'pending') {
+        try {
+            $this->acceptanceService->approveStage($stage, $user, 1);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt thành công.',
+                'data' => $stage->fresh(['supervisorApprover'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt khi ở trạng thái pending.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        $success = $stage->approveSupervisor($user);
-
-        if (!$success) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể duyệt giai đoạn này.'
-            ], 400);
-        }
-
-        $this->notificationService->notifyAcceptanceStageApproved($stage, "Giám sát");
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt thành công.',
-            'data' => $stage->fresh(['supervisorApprover'])
-        ]);
     }
 
     /**
@@ -133,37 +93,26 @@ class AcceptanceStageController extends Controller
         $user = $request->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_2)) {
+        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 2 - Quản lý dự án).'
             ], 403);
         }
 
-        // BUSINESS RULE: Super Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
-        if (!$user->owner && $stage->status !== 'supervisor_approved') {
+        try {
+            $this->acceptanceService->approveStage($stage, $user, 2);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt thành công.',
+                'data' => $stage->fresh(['projectManagerApprover'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt sau khi giám sát đã duyệt.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        $success = $stage->approveProjectManager($user);
-
-        if (!$success) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể duyệt giai đoạn này.'
-            ], 400);
-        }
-
-        $this->notificationService->notifyAcceptanceStageApproved($stage, "Quản lý dự án");
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt thành công.',
-            'data' => $stage->fresh(['projectManagerApprover'])
-        ]);
     }
 
     /**
@@ -177,45 +126,26 @@ class AcceptanceStageController extends Controller
         $user = $request->user();
 
         // Check RBAC permission
-        if (!$user->owner && !$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3)) {
+        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 3 - Khách hàng).'
             ], 403);
         }
 
-        // BUSINESS RULE: Super Admin có thể duyệt bất kỳ status nào, không cần kiểm tra status
-        if (!$user->owner && $stage->status !== 'project_manager_approved') {
+        try {
+            $this->acceptanceService->approveStage($stage, $user, 3);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt nghiệm thu thành công.',
+                'data' => $stage->fresh(['customerApprover'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt sau khi quản lý dự án đã duyệt.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        // Check for open defects (admin vẫn phải kiểm tra defects)
-        if ($stage->has_open_defects) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể duyệt vì còn lỗi chưa được khắc phục.'
-            ], 400);
-        }
-
-        $success = $stage->approveCustomer($user);
-
-        if (!$success) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể duyệt giai đoạn này.'
-            ], 400);
-        }
-
-        $this->notificationService->notifyAcceptanceStageApproved($stage, "Khách hàng");
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt nghiệm thu thành công.',
-            'data' => $stage->fresh(['customerApprover'])
-        ]);
     }
 
     /**
@@ -231,56 +161,27 @@ class AcceptanceStageController extends Controller
             'approval_type' => ['required', 'in:internal,customer,design,owner,supervisor,project_manager'],
         ]);
 
-        $approvalType = $validated['approval_type'];
-        $success = false;
+        try {
+            $success = $this->acceptanceService->approveStageLegacy($stage, $validated['approval_type'], $user);
 
-        switch ($approvalType) {
-            case 'supervisor':
-                $success = $stage->approveSupervisor($user);
-                break;
-            case 'project_manager':
-                $success = $stage->approveProjectManager($user);
-                break;
-            case 'customer':
-                $success = $stage->approveCustomer($user);
-                break;
-            case 'internal':
-                // Legacy: Giám sát nội bộ
-                $success = $stage->approveInternal($user);
-                break;
-            case 'design':
-                // Legacy: Thiết kế
-                if ($stage->status === 'customer_approved') {
-                    $success = $stage->approveDesign($user);
-                }
-                break;
-            case 'owner':
-                // Legacy: Chủ nhà
-                // MUST check defects BEFORE approving, not after
-                if ($stage->has_open_defects) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Không thể duyệt vì còn lỗi chưa được khắc phục.'
-                    ], 400);
-                }
-                if ($project->customer_id === $user->id && $stage->status === 'design_approved') {
-                    $success = $stage->approveOwner($user);
-                }
-                break;
-        }
+            if (!$success) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không thể duyệt giai đoạn này. Vui lòng kiểm tra trạng thái và quyền truy cập.'
+                ], 400);
+            }
 
-        if (!$success) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Giai đoạn nghiệm thu đã được duyệt.',
+                'data' => $stage->fresh()
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không thể duyệt giai đoạn này. Vui lòng kiểm tra trạng thái và quyền truy cập.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Giai đoạn nghiệm thu đã được duyệt.',
-            'data' => $stage->fresh()
-        ]);
     }
 
     /**
@@ -298,21 +199,7 @@ class AcceptanceStageController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $attached = [];
-            foreach ($validated['attachment_ids'] as $attachmentId) {
-                $attachment = Attachment::find($attachmentId);
-                if ($attachment && ($attachment->uploaded_by === $user->id || $user->id === $project->project_manager_id)) {
-                    $attachment->update([
-                        'attachable_type' => AcceptanceStage::class,
-                        'attachable_id' => $stage->id,
-                    ]);
-                    $attached[] = $attachment;
-                }
-            }
-
-            DB::commit();
+            $attached = $this->acceptanceService->attachFiles($stage, $validated['attachment_ids'], $user);
 
             return response()->json([
                 'success' => true,
@@ -414,16 +301,10 @@ class AcceptanceStageController extends Controller
                 $validated['order'] = $maxOrder + 1;
             }
 
-            $stage = AcceptanceStage::create([
+            $stage = $this->acceptanceService->upsertStage(array_merge($validated, [
                 'project_id' => $project->id,
-                'task_id' => $validated['task_id'], // BUSINESS RULE: Link to parent task (A)
-                'acceptance_template_id' => $validated['acceptance_template_id'] ?? null, // Link to template from Settings
-                'name' => $validated['name'],
-                'description' => $validated['description'] ?? null,
-                'order' => $validated['order'],
                 'is_custom' => true,
-                'status' => 'pending',
-            ]);
+            ]), null, $user);
 
             return response()->json([
                 'success' => true,
@@ -490,13 +371,20 @@ class AcceptanceStageController extends Controller
             }
         }
 
-        $stage->update($validated);
+        try {
+            $this->acceptanceService->upsertStage($validated, $stage, $user);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã cập nhật giai đoạn nghiệm thu.',
-            'data' => $stage->fresh(['attachments'])
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã cập nhật giai đoạn nghiệm thu.',
+                'data' => $stage->fresh(['attachments'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
     }
 
     /**
@@ -516,27 +404,17 @@ class AcceptanceStageController extends Controller
             ], 403);
         }
 
-        // Không cho phép xóa nếu đã được duyệt hoàn toàn
-        if ($stage->status === 'owner_approved') {
+        try {
+            $this->acceptanceService->deleteStage($stage);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã xóa giai đoạn nghiệm thu.'
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không thể xóa giai đoạn đã được duyệt hoàn toàn.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        // Không cho phép xóa nếu có lỗi chưa được khắc phục
-        if ($stage->has_open_defects) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể xóa giai đoạn còn lỗi chưa được khắc phục.'
-            ], 400);
-        }
-
-        $stage->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã xóa giai đoạn nghiệm thu.'
-        ]);
     }
 }

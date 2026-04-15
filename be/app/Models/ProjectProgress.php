@@ -210,9 +210,17 @@ class ProjectProgress extends Model
 
     /**
      * Tính tiến độ tổng hợp từ nhiều nguồn (ưu tiên nghiệm thu)
+     * 
+     * @param bool $force Ép buộc tính toán lại ngay cả khi mới tính gần đây
      */
-    public function calculateOverall(): float
+    public function calculateOverall(bool $force = false): float
     {
+        // BUSINESS RULE: Nếu mới tính toán trong vòng 10 phút, trả về giá trị cũ để tăng hiệu năng
+        // Trừ khi $force = true
+        if (!$force && $this->last_calculated_at && $this->last_calculated_at->diffInMinutes(now()) < 10) {
+            return (float) $this->overall_percentage;
+        }
+
         // Ưu tiên tính từ nghiệm thu nếu có
         $acceptanceProgress = $this->calculateFromAcceptance();
         

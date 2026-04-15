@@ -15,10 +15,14 @@ use Illuminate\Validation\Rule;
 class AcceptanceItemController extends Controller
 {
     protected $authService;
+    protected $acceptanceService;
 
-    public function __construct(\App\Services\AuthorizationService $authService)
-    {
+    public function __construct(
+        \App\Services\AuthorizationService $authService,
+        \App\Services\AcceptanceService $acceptanceService
+    ) {
         $this->authService = $authService;
+        $this->acceptanceService = $acceptanceService;
     }
     /**
      * Danh sách hạng mục của giai đoạn nghiệm thu
@@ -37,30 +41,7 @@ class AcceptanceItemController extends Controller
             ], 403);
         }
 
-        // BUSINESS RULE: Show ONLY Category A (parent) items, hide children A' and A''
-        $items = $stage->items()
-            ->where(function ($query) {
-                // Items without task_id (Category A items)
-                $query->whereNull('task_id')
-                    // OR items linked to parent tasks (task.parent_id is null)
-                    ->orWhereHas('task', function ($taskQuery) {
-                        $taskQuery->whereNull('parent_id');
-                    });
-            })
-            ->with([
-                'approver',
-                'rejector',
-                'creator',
-                'updater',
-                'task',
-                'template.attachments',
-                'submitter',
-                'projectManagerApprover',
-                'customerApprover',
-                'attachments'
-            ])
-            ->ordered()
-            ->get();
+        $items = $this->acceptanceService->getStageItems($stage);
 
         return response()->json([
             'success' => true,
@@ -100,44 +81,13 @@ class AcceptanceItemController extends Controller
         try {
             DB::beginTransaction();
 
-            // Auto-calculate order if not provided
-            if (!isset($validated['order'])) {
-                $maxOrder = $stage->items()->max('order') ?? -1;
-                $validated['order'] = $maxOrder + 1;
-            }
-
-            // Determine initial status based on dates
-            $acceptanceStatus = 'not_started';
-            if (now()->toDateString() >= $validated['end_date']) {
-                $acceptanceStatus = 'pending';
-            }
-
-            $item = AcceptanceItem::create([
+            $item = $this->acceptanceService->upsertItem(array_merge($validated, [
                 'acceptance_stage_id' => $stage->id,
-                'task_id' => $validated['task_id'] ?? null,
-                'acceptance_template_id' => $validated['acceptance_template_id'] ?? null,
-                'name' => $validated['name'],
-                'description' => $validated['description'] ?? null,
-                'start_date' => $validated['start_date'],
-                'end_date' => $validated['end_date'],
-                'notes' => $validated['notes'] ?? null,
-                'order' => $validated['order'] ?? $maxOrder + 1,
-                'acceptance_status' => $acceptanceStatus,
-                'workflow_status' => 'draft',
-                'created_by' => $user->id,
-            ]);
+            ]), null, $user);
 
             // Attach files if provided
             if (isset($validated['attachment_ids']) && is_array($validated['attachment_ids'])) {
-                foreach ($validated['attachment_ids'] as $attachmentId) {
-                    $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && $attachment->uploaded_by === $user->id) {
-                        $attachment->update([
-                            'attachable_type' => AcceptanceItem::class,
-                            'attachable_id' => $item->id,
-                        ]);
-                    }
-                }
+                $this->acceptanceService->attachFiles($item, $validated['attachment_ids'], $user);
             }
 
             DB::commit();
@@ -229,23 +179,20 @@ class AcceptanceItemController extends Controller
             'order' => 'sometimes|integer|min:0',
         ]);
 
-        $item->update([
-            ...$validated,
-            'updated_by' => $user->id,
-        ]);
+        try {
+            $this->acceptanceService->upsertItem($validated, $item, $user);
 
-        // Auto update status if end_date changed
-        if (isset($validated['end_date']) && now()->toDateString() >= $validated['end_date']) {
-            if ($item->acceptance_status === 'not_started') {
-                $item->update(['acceptance_status' => 'pending']);
-            }
+            return response()->json([
+                'success' => true,
+                'message' => 'Hạng mục đã được cập nhật.',
+                'data' => $item->fresh()->load(['attachments', 'updater'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
         }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Hạng mục đã được cập nhật.',
-            'data' => $item->fresh()->load(['attachments', 'updater'])
-        ]);
     }
 
     /**
@@ -265,20 +212,18 @@ class AcceptanceItemController extends Controller
             ], 403);
         }
 
-        // Không cho phép xóa nếu đã được nghiệm thu
-        if ($item->acceptance_status === 'approved') {
+        try {
+            $this->acceptanceService->deleteItem($item);
+            return response()->json([
+                'success' => true,
+                'message' => 'Hạng mục đã được xóa.',
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không thể xóa hạng mục đã được nghiệm thu.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        $item->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Hạng mục đã được xóa.',
-        ]);
     }
 
     /**
@@ -302,27 +247,19 @@ class AcceptanceItemController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        if (!$item->can_accept) {
+        try {
+            $this->acceptanceService->approveItem($item, $user, 3); // Level 3 for customer approve
+            return response()->json([
+                'success' => true,
+                'message' => 'Hạng mục đã được nghiệm thu (Đạt).',
+                'data' => $item->fresh()->load(['approver', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Hạng mục chỉ được nghiệm thu sau khi hoàn thành (ngày kết thúc đã qua).'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        $success = $item->approve($user, $validated['notes'] ?? null);
-
-        if (!$success) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể nghiệm thu hạng mục này.'
-            ], 400);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Hạng mục đã được nghiệm thu (Đạt).',
-            'data' => $item->fresh()->load(['approver', 'attachments'])
-        ]);
     }
 
     /**
@@ -346,27 +283,19 @@ class AcceptanceItemController extends Controller
             'rejection_reason' => 'required|string|max:1000',
         ]);
 
-        if (!$item->can_accept) {
+        try {
+            $this->acceptanceService->rejectItem($item, $user, $validated['rejection_reason']);
+            return response()->json([
+                'success' => true,
+                'message' => 'Hạng mục đã bị từ chối nghiệm thu (Không đạt).',
+                'data' => $item->fresh()->load(['rejector'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Hạng mục chỉ được nghiệm thu sau khi hoàn thành (ngày kết thúc đã qua).'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        $success = $item->reject($validated['rejection_reason'], $user);
-
-        if (!$success) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể từ chối nghiệm thu hạng mục này.'
-            ], 400);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Hạng mục đã bị từ chối nghiệm thu (Không đạt).',
-            'data' => $item->fresh()->load(['rejector'])
-        ]);
     }
 
     /**
@@ -425,15 +354,7 @@ class AcceptanceItemController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            foreach ($validated['items'] as $itemData) {
-                AcceptanceItem::where('id', $itemData['id'])
-                    ->where('acceptance_stage_id', $stage->id)
-                    ->update(['order' => $itemData['order']]);
-            }
-
-            DB::commit();
+            $this->acceptanceService->reorderItems($stage, $validated['items']);
 
             return response()->json([
                 'success' => true,
@@ -472,21 +393,7 @@ class AcceptanceItemController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $attached = [];
-            foreach ($validated['attachment_ids'] as $attachmentId) {
-                $attachment = \App\Models\Attachment::find($attachmentId);
-                if ($attachment && ($attachment->uploaded_by === $user->id || $user->id === $project->project_manager_id)) {
-                    $attachment->update([
-                        'attachable_type' => AcceptanceItem::class,
-                        'attachable_id' => $item->id,
-                    ]);
-                    $attached[] = $attachment;
-                }
-            }
-
-            DB::commit();
+            $attached = $this->acceptanceService->attachFiles($item, $validated['attachment_ids'], $user);
 
             return response()->json([
                 'success' => true,
@@ -520,55 +427,19 @@ class AcceptanceItemController extends Controller
             ], 403);
         }
 
-        // Cho phép gửi lại khi ở trạng thái draft hoặc rejected
-        if (!in_array($item->workflow_status, ['draft', 'rejected'])) {
+        try {
+            $this->acceptanceService->submitItem($item, $user);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã gửi duyệt thành công.',
+                'data' => $item->fresh()->load(['submitter', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể gửi duyệt khi ở trạng thái draft hoặc rejected.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        // Chỉ cho phép người tạo nghiệm thu gửi duyệt
-        if ($item->created_by !== $user->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ người tạo nghiệm thu mới có quyền gửi duyệt.'
-            ], 403);
-        }
-
-        // Validate có upload hình ảnh
-        if ($item->attachments()->count() === 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vui lòng upload hình ảnh thực tế nghiệm thu trước khi gửi duyệt.'
-            ], 400);
-        }
-
-        // Validate tất cả hạng mục trong giai đoạn có task_id phải đạt 100% tiến độ
-        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
-            ->whereNotNull('task_id')
-            ->with('task')
-            ->get();
-
-        // Lưu trạng thái cũ để kiểm tra
-        $oldStatus = $item->workflow_status;
-
-        $item->workflow_status = 'submitted';
-        $item->submitted_by = $user->id;
-        $item->submitted_at = now();
-        // Xóa rejection_reason khi gửi lại từ rejected
-        if ($oldStatus === 'rejected') {
-            $item->rejection_reason = null;
-            $item->rejected_by = null;
-            $item->rejected_at = null;
-        }
-        $item->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi duyệt thành công.',
-            'data' => $item->fresh()->load(['submitter', 'attachments'])
-        ]);
     }
 
     /**
@@ -589,38 +460,19 @@ class AcceptanceItemController extends Controller
             ], 403);
         }
 
-        if ($item->workflow_status !== 'submitted') {
+        try {
+            $this->acceptanceService->approveItem($item, $user, 1);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt thành công.',
+                'data' => $item->fresh()->load(['supervisorApprover', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt khi đã được gửi duyệt.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        // Kiểm tra lỗi (defects) liên quan đến task của item
-        if ($item->task_id) {
-            $openDefects = \App\Models\Defect::where('project_id', $project->id)
-                ->where('task_id', $item->task_id)
-                ->whereIn('status', ['open', 'in_progress'])
-                ->count();
-
-            if ($openDefects > 0) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong. Vui lòng xử lý tất cả lỗi trước khi duyệt nghiệm thu."
-                ], 400);
-            }
-        }
-
-        $item->workflow_status = 'supervisor_approved';
-        $item->supervisor_approved_by = $user->id;
-        $item->supervisor_approved_at = now();
-        $item->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt thành công.',
-            'data' => $item->fresh()->load(['supervisorApprover', 'attachments'])
-        ]);
     }
 
     /**
@@ -641,58 +493,19 @@ class AcceptanceItemController extends Controller
             ], 403);
         }
 
-        if ($item->workflow_status !== 'supervisor_approved') {
+        try {
+            $this->acceptanceService->approveItem($item, $user, 2);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt thành công.',
+                'data' => $item->fresh()->load(['projectManagerApprover', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt sau khi giám sát đã duyệt.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        // Kiểm tra lỗi (defects) liên quan đến task của item
-        if ($item->task_id) {
-            $openDefects = \App\Models\Defect::where('project_id', $project->id)
-                ->where('task_id', $item->task_id)
-                ->whereIn('status', ['open', 'in_progress'])
-                ->count();
-
-            if ($openDefects > 0) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong. Vui lòng xử lý tất cả lỗi trước khi duyệt nghiệm thu."
-                ], 400);
-            }
-        }
-
-        // Validate tất cả hạng mục trong giai đoạn có task_id phải đạt 100% tiến độ
-        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
-            ->whereNotNull('task_id')
-            ->with('task')
-            ->get();
-
-        $incompleteTasks = [];
-        foreach ($stageItems as $stageItem) {
-            if ($stageItem->task && $stageItem->task->progress_percentage < 100) {
-                $incompleteTasks[] = $stageItem->task->name ?? "Hạng mục #{$stageItem->id}";
-            }
-        }
-
-        if (count($incompleteTasks) > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể duyệt. Các hạng mục sau chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks)
-            ], 400);
-        }
-
-        $item->workflow_status = 'project_manager_approved';
-        $item->project_manager_approved_by = $user->id;
-        $item->project_manager_approved_at = now();
-        $item->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt thành công.',
-            'data' => $item->fresh()->load(['projectManagerApprover', 'attachments'])
-        ]);
     }
 
     /**
@@ -705,76 +518,19 @@ class AcceptanceItemController extends Controller
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
 
-        if ($item->workflow_status !== 'project_manager_approved') {
+        try {
+            $this->acceptanceService->approveItem($item, $user, 3);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã duyệt nghiệm thu thành công.',
+                'data' => $item->fresh()->load(['customerApprover', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể duyệt sau khi quản lý dự án đã duyệt.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        // Check RBAC permission
-        if (!$this->authService->can($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $project)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 3 - Khách hàng).'
-            ], 403);
-        }
-
-        // Kiểm tra lỗi (defects) liên quan đến task của item
-        if ($item->task_id) {
-            $openDefects = \App\Models\Defect::where('project_id', $project->id)
-                ->where('task_id', $item->task_id)
-                ->whereIn('status', ['open', 'in_progress'])
-                ->count();
-
-            if ($openDefects > 0) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong. Vui lòng xử lý tất cả lỗi trước khi duyệt nghiệm thu."
-                ], 400);
-            }
-        }
-
-        // Validate tất cả hạng mục trong giai đoạn có task_id phải đạt 100% tiến độ
-        $stageItems = AcceptanceItem::where('acceptance_stage_id', $stage->id)
-            ->whereNotNull('task_id')
-            ->with('task')
-            ->get();
-
-        $incompleteTasks = [];
-        foreach ($stageItems as $stageItem) {
-            if ($stageItem->task && $stageItem->task->progress_percentage < 100) {
-                $incompleteTasks[] = $stageItem->task->name ?? "Hạng mục #{$stageItem->id}";
-            }
-        }
-
-        if (count($incompleteTasks) > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Không thể duyệt. Các hạng mục sau chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks)
-            ], 400);
-        }
-
-        $item->workflow_status = 'customer_approved';
-        $item->customer_approved_by = $user->id;
-        $item->customer_approved_at = now();
-        // Also update acceptance_status to approved
-        $item->acceptance_status = 'approved';
-        $item->approved_by = $user->id;
-        $item->approved_at = now();
-        $item->save();
-
-        // Update project progress
-        $item->updateProjectProgress();
-
-        // Check if stage is completed (100% items customer_approved)
-        $stage->checkCompletion();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã duyệt nghiệm thu thành công.',
-            'data' => $item->fresh()->load(['customerApprover', 'attachments'])
-        ]);
     }
 
     /**
@@ -791,26 +547,18 @@ class AcceptanceItemController extends Controller
             'rejection_reason' => 'required|string|max:1000',
         ]);
 
-        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved', 'project_manager_approved'])) {
+        try {
+            $this->acceptanceService->rejectItem($item, $user, $validated['rejection_reason']);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã từ chối nghiệm thu. Lỗi ghi nhận đã được tự động tạo.',
+                'data' => $item->fresh()->load(['rejector', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể từ chối khi đã được gửi duyệt.'
+                'message' => $e->getMessage()
             ], 400);
         }
-
-        $item->workflow_status = 'rejected';
-        $item->rejection_reason = $validated['rejection_reason'];
-        $item->rejected_by = $user->id;
-        $item->rejected_at = now();
-        $item->save();
-
-        // BUSINESS RULE: Khi từ chối nghiệm thu → tự động tạo lỗi ghi nhận
-        $item->autoCreateDefectOnReject($user, $validated['rejection_reason']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã từ chối nghiệm thu. Lỗi ghi nhận đã được tự động tạo.',
-            'data' => $item->fresh()->load(['rejector', 'attachments'])
-        ]);
     }
 }

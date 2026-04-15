@@ -111,4 +111,41 @@ class ProjectService
 
         return $result;
     }
+
+    /**
+     * Create a new project with all necessary side effects
+     */
+    public function createProject(array $data, \App\Models\User $creator): Project
+    {
+        return DB::transaction(function () use ($data, $creator) {
+            $project = Project::create([
+                ...$data,
+                'created_by' => $creator->id,
+                'status' => $data['status'] ?? 'planning',
+            ]);
+
+            // Create initial progress record
+            $project->progress()->create([
+                'overall_percentage' => 0,
+                'calculated_from' => 'manual',
+            ]);
+
+            // Auto-assign creator as project manager if not specified
+            if (empty($project->project_manager_id)) {
+                $project->update(['project_manager_id' => $creator->id]);
+            }
+
+            // Add creator to personnel if not customer
+            if ($project->customer_id !== $creator->id) {
+                $pmRole = \App\Models\PersonnelRole::where('code', 'project_manager')->first();
+                $project->personnel()->create([
+                    'user_id' => $creator->id,
+                    'role_id' => $pmRole ? $pmRole->id : null,
+                    'assigned_by' => $creator->id,
+                ]);
+            }
+
+            return $project->fresh(['customer', 'projectManager', 'progress']);
+        });
+    }
 }

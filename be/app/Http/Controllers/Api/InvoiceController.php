@@ -16,10 +16,12 @@ use App\Services\AuthorizationService;
 class InvoiceController extends Controller
 {
     protected $authService;
+    protected $documentService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(AuthorizationService $authService, \App\Services\ProjectDocumentService $documentService)
     {
         $this->authService = $authService;
+        $this->documentService = $documentService;
     }
     public function index(string $projectId)
     {
@@ -75,44 +77,21 @@ class InvoiceController extends Controller
             ], 422);
         }
 
-        $totalAmount = $request->subtotal 
-            + ($request->tax_amount ?? 0) 
-            - ($request->discount_amount ?? 0);
+        try {
+            $invoice = $this->documentService->createInvoice($project, $request->all(), $user);
+            $invoice->load(['customer', 'creator', 'costGroup', 'attachments']);
 
-        $invoice = Invoice::create([
-            'project_id' => $project->id,
-            'cost_group_id' => $request->cost_group_id,
-            'invoice_date' => $request->invoice_date,
-            'customer_id' => $project->customer_id,
-            'subtotal' => $request->subtotal,
-            'tax_amount' => $request->tax_amount ?? 0,
-            'discount_amount' => $request->discount_amount ?? 0,
-            'total_amount' => $totalAmount,
-            'description' => $request->description,
-            'notes' => $request->notes,
-            'created_by' => $user->id,
-        ]);
-
-        // Attach files if provided
-        if (!empty($request->attachment_ids)) {
-            foreach ($request->attachment_ids as $attachmentId) {
-                $attachment = \App\Models\Attachment::find($attachmentId);
-                if ($attachment && $attachment->uploaded_by === $user->id) {
-                    $attachment->update([
-                        'attachable_type' => Invoice::class,
-                        'attachable_id' => $invoice->id,
-                    ]);
-                }
-            }
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã tạo hóa đơn thành công.',
+                'data' => $invoice
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $invoice->load(['customer', 'creator', 'costGroup', 'attachments']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã tạo hóa đơn thành công.',
-            'data' => $invoice
-        ], 201);
     }
 
     public function show(string $projectId, string $id)
@@ -175,40 +154,20 @@ class InvoiceController extends Controller
             ], 422);
         }
 
-        $updateData = $request->only([
-            'invoice_date', 'cost_group_id', 'subtotal', 'tax_amount', 
-            'discount_amount', 'description', 'notes'
-        ]);
+        try {
+            $this->documentService->updateInvoice($invoice, $request->all(), $user);
 
-        // Handle file attachments if provided
-        if ($request->has('attachment_ids')) {
-            foreach ($request->attachment_ids as $attachmentId) {
-                $attachment = \App\Models\Attachment::find($attachmentId);
-                if ($attachment && $attachment->uploaded_by === $user->id) {
-                    $attachment->update([
-                        'attachable_type' => Invoice::class,
-                        'attachable_id' => $invoice->id,
-                    ]);
-                }
-            }
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã cập nhật hóa đơn thành công.',
+                'data' => $invoice
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
+            ], 500);
         }
-
-        // Tính lại total_amount nếu có thay đổi
-        if ($request->has('subtotal') || $request->has('tax_amount') || $request->has('discount_amount')) {
-            $subtotal = $updateData['subtotal'] ?? $invoice->subtotal;
-            $taxAmount = $updateData['tax_amount'] ?? $invoice->tax_amount;
-            $discountAmount = $updateData['discount_amount'] ?? $invoice->discount_amount;
-            $updateData['total_amount'] = $subtotal + $taxAmount - $discountAmount;
-        }
-
-        $invoice->update($updateData);
-        $invoice->load(['customer', 'creator', 'costGroup', 'attachments']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã cập nhật hóa đơn thành công.',
-            'data' => $invoice
-        ]);
     }
 
     public function destroy(string $projectId, string $id)
@@ -245,13 +204,8 @@ class InvoiceController extends Controller
             ], 403);
         }
 
-        $summary = Invoice::where('project_id', $projectId)
-            ->whereNotNull('cost_group_id')
-            ->select('cost_group_id', DB::raw('sum(total_amount) as total_amount'))
-            ->groupBy('cost_group_id')
-            ->with('costGroup:id,name')
-            ->get();
-            
+        $summary = $this->documentService->getInvoiceSummaryByCostGroup($project);
+
         return response()->json([
             'success' => true,
             'data' => $summary

@@ -13,10 +13,12 @@ use App\Services\AuthorizationService;
 class ProjectDocumentController extends Controller
 {
     protected $authService;
+    protected $documentService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(AuthorizationService $authService, \App\Services\ProjectDocumentService $documentService)
     {
         $this->authService = $authService;
+        $this->documentService = $documentService;
     }
 
     /**
@@ -29,14 +31,7 @@ class ProjectDocumentController extends Controller
         // Check permission
         $this->authService->require($request->user(), Permissions::PROJECT_DOCUMENT_VIEW, $project);
 
-        $query = $project->attachments();
-
-        // Filter by type
-        if ($type = $request->query('type')) {
-            $query->where('type', $type);
-        }
-
-        $documents = $query->orderByDesc('created_at')->get();
+        $documents = $this->documentService->getProjectDocuments($project, $request->only('type'));
 
         return response()->json([
             'success' => true,
@@ -61,14 +56,7 @@ class ProjectDocumentController extends Controller
             'description' => 'nullable|string|max:1000',
         ]);
 
-        $attachment = Attachment::findOrFail($validated['attachment_id']);
-
-        // Attach to project with description
-        $attachment->update([
-            'attachable_type' => Project::class,
-            'attachable_id' => $project->id,
-            'description' => $validated['description'] ?? null,
-        ]);
+        $attachment = $this->documentService->attachToProject($project, $validated['attachment_id'], $validated['description'] ?? null);
 
         return response()->json([
             'success' => true,
@@ -91,13 +79,7 @@ class ProjectDocumentController extends Controller
             ->where('attachable_id', $project->id)
             ->findOrFail($id);
 
-        $validated = $request->validate([
-            'description' => 'nullable|string|max:1000',
-        ]);
-
-        $attachment->update([
-            'description' => $validated['description'] ?? null,
-        ]);
+        $attachment = $this->documentService->updateDescription($attachment, $request->input('description'));
 
         return response()->json([
             'success' => true,
@@ -108,7 +90,6 @@ class ProjectDocumentController extends Controller
 
     /**
      * Xóa tài liệu khỏi dự án
-     * Note: Thực chất là xóa attachment (soft delete nếu model support hoặc hard delete)
      */
     public function destroy(Request $request, string $projectId, string $id)
     {
@@ -121,7 +102,7 @@ class ProjectDocumentController extends Controller
             ->where('attachable_id', $project->id)
             ->findOrFail($id);
 
-        $attachment->delete();
+        $this->documentService->removeFromProject($attachment);
 
         return response()->json([
             'success' => true,

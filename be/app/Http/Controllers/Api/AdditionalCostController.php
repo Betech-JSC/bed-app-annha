@@ -16,11 +16,16 @@ class AdditionalCostController extends Controller
 {
     protected $notificationService;
     protected $authService;
+    protected $analysisService;
 
-    public function __construct(NotificationService $notificationService, AuthorizationService $authService)
-    {
+    public function __construct(
+        NotificationService $notificationService, 
+        AuthorizationService $authService,
+        \App\Services\ProjectAnalysisService $analysisService
+    ) {
         $this->notificationService = $notificationService;
         $this->authService = $authService;
+        $this->analysisService = $analysisService;
     }
 
     /**
@@ -80,48 +85,7 @@ class AdditionalCostController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $attachmentIds = $validated['attachment_ids'] ?? [];
-            unset($validated['attachment_ids']);
-
-            $cost = AdditionalCost::create([
-                'project_id' => $project->id,
-                'proposed_by' => $user->id,
-                ...$validated,
-                'status' => 'pending_approval',
-            ]);
-
-            // Đính kèm files nếu có
-            if (!empty($attachmentIds)) {
-                foreach ($attachmentIds as $attachmentId) {
-                    $attachment = \App\Models\Attachment::find($attachmentId);
-                    if ($attachment && ($attachment->uploaded_by === $user->id || $user->hasPermission(\App\Constants\Permissions::SETTINGS_MANAGE))) {
-                        $attachment->update([
-                            'attachable_type' => AdditionalCost::class,
-                            'attachable_id' => $cost->id,
-                        ]);
-                    }
-                }
-            }
-
-            DB::commit();
-
-            // Notify customers for APPROVAL
-            $this->notificationService->sendToPermissionUsers(
-                Permissions::ADDITIONAL_COST_APPROVE,
-                $project->id,
-                Notification::TYPE_WORKFLOW,
-                Notification::CATEGORY_WORKFLOW_APPROVAL,
-                "Yêu cầu duyệt chi phí phát sinh",
-                "Có một yêu cầu chi phí phát sinh mới cho dự án '{$project->name}' với số tiền " . number_format((float)$cost->amount) . " VND. Vui lòng kiểm tra và duyệt.",
-                [
-                    'project_id' => $project->id,
-                    'cost_id' => $cost->id,
-                ],
-                Notification::PRIORITY_HIGH,
-                "/projects/{$project->id}/additional-costs"
-            );
+            $cost = $this->analysisService->createAdditionalCost($project, $validated, $user);
 
             return response()->json([
                 'success' => true,
@@ -129,11 +93,9 @@ class AdditionalCostController extends Controller
                 'data' => $cost->load(['proposer', 'attachments'])
             ], 201);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -265,69 +227,19 @@ class AdditionalCostController extends Controller
             ], 403);
         }
 
-        // Chỉ duyệt khi đang chờ duyệt
-        if (!in_array($cost->status, ['pending_approval', 'pending'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chi phí không ở trạng thái chờ duyệt.'
-            ], 400);
-        }
-
         try {
-            DB::beginTransaction();
-
-            // Nếu status là 'pending', chuyển sang 'pending_approval' trước
-            if ($cost->status === 'pending') {
-                $cost->status = 'pending_approval';
-                $cost->save();
-            }
-
-            // Sử dụng model method để đảm bảo audit trail đầy đủ
-            if (!$cost->approve($user)) {
-                DB::rollBack();
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Không thể duyệt chi phí phát sinh.'
-                ], 400);
-            }
-
-            // Cập nhật giá trị hợp đồng
-            $contract = $project->contract;
-            if ($contract) {
-                $contract->contract_value += $cost->amount;
-                $contract->save();
-            }
-
-            DB::commit();
-
-            // Notify proposer
-            $this->notificationService->sendToUser(
-                $cost->proposed_by,
-                Notification::TYPE_WORKFLOW,
-                Notification::CATEGORY_WORKFLOW_APPROVAL,
-                "Chi phí phát sinh đã được duyệt",
-                "Chi phí phát sinh " . number_format((float)$cost->amount) . " VND cho dự án '{$project->name}' đã được duyệt và cộng vào hợp đồng.",
-                [
-                    'project_id' => $project->id,
-                    'cost_id' => $cost->id,
-                ],
-                Notification::PRIORITY_MEDIUM,
-                 "/projects/{$project->id}/additional-costs"
-            );
+            $this->analysisService->approveAdditionalCost($cost, $user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Chi phí phát sinh đã được duyệt và cộng vào giá trị hợp đồng.',
                 'data' => $cost->fresh()
             ]);
-
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi duyệt chi phí.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
+            ], 400);
         }
     }
 
@@ -352,16 +264,20 @@ class AdditionalCostController extends Controller
             'rejected_reason' => 'required|string|max:500',
         ]);
 
-        $cost->reject($validated['rejected_reason'], $request->user());
+        try {
+            $this->analysisService->rejectAdditionalCost($cost, $validated['rejected_reason'], $user);
 
-        // Notify proposer and customer
-        $this->notificationService->notifyCostRejected($cost, $validated['rejected_reason']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Chi phí phát sinh đã bị từ chối.',
-            'data' => $cost->fresh()
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Chi phí phát sinh đã bị từ chối.',
+                'data' => $cost->fresh()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
+            ], 400);
+        }
     }
 
     /**
