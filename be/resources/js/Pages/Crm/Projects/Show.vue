@@ -328,8 +328,8 @@
                       <div class="flex items-center gap-2">
                         <span v-if="task.children?.length" class="text-gray-400 text-xs transition-transform" :class="expandedTasks.has(task.id) ? 'rotate-90' : ''">▶</span>
                         <span v-else class="w-3"></span>
-                        <span>{{ task.name }}</span>
-                        <span v-if="task.children?.length" class="text-xs text-gray-400">({{ task.children.length }})</span>
+                        <span :class="task.children?.length ? 'font-bold text-blue-900' : ''">{{ task.name }}</span>
+                        <span v-if="task.children?.length" class="text-xs text-blue-400 font-normal">({{ task.children.length }})</span>
                       </div>
                     </td>
                     <td class="text-center py-2 px-3"><a-tag :color="priorityColors[task.priority]" class="rounded-full text-xs">{{ priorityLabels[task.priority] || task.priority }}</a-tag></td>
@@ -358,48 +358,81 @@
                     </td>
                   </tr>
                   <!-- Children Rows -->
-                  <template v-if="expandedTasks.has(task.id) && task.children?.length">
-                    <tr v-for="child in task.children" :key="child.id" class="border-b hover:bg-gray-50 transition-colors">
-                      <td class="py-2 px-3 pl-10">
-                        <div class="flex items-center gap-1 text-gray-600">
-                          <span class="text-gray-300 mr-1">└</span>
-                          {{ child.name }}
-                        </div>
-                      </td>
-                      <td class="text-center py-2 px-3"><a-tag :color="priorityColors[child.priority]" class="rounded-full text-xs">{{ priorityLabels[child.priority] || child.priority }}</a-tag></td>
-                      <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[child.status]" class="rounded-full text-xs">{{ taskStatusLabels[child.status] || child.status }}</a-tag></td>
-                      <td class="py-2 px-3">
-                        <a-progress :percent="parseFloat(child.progress_percentage || 0)" size="small" :stroke-color="parseFloat(child.progress_percentage || 0) >= 100 && isAccepted(child) ? '#27AE60' : (parseFloat(child.progress_percentage || 0) >= 100 ? '#FAAD14' : '#2E86C1')" />
-                        <div v-if="parseFloat(child.progress_percentage || 0) >= 100 && !isAccepted(child)" class="text-[10px] text-amber-500 mt-0.5 font-bold flex items-center gap-1">
-                          <ClockCircleOutlined /> Đang chờ nghiệm thu
-                        </div>
-                      </td>
-                      <td class="text-center py-2 px-3 text-xs text-gray-500">
-                        <span v-if="child.start_date">{{ fmtDate(child.start_date) }}</span>
-                        <span v-if="child.start_date && child.end_date"> ~ </span>
-                        <span v-if="child.end_date">{{ fmtDate(child.end_date) }}</span>
-                        <span v-if="!child.start_date && !child.end_date" class="text-gray-300">—</span>
-                      </td>
-                      <td class="text-center py-2 px-3 text-xs">{{ child.assigned_user?.name || '—' }}</td>
-                      <td class="text-center py-2 px-3" @click.stop>
-                        <div class="flex gap-1 justify-center">
-                          <a-tooltip v-if="can('log.create')" title="Ghi nhật ký">
-                            <a-button type="text" size="small" @click.stop="openLogModal(null, child.id)" class="text-blue-500 hover:bg-blue-50"><FileAddOutlined /></a-button>
-                          </a-tooltip>
-                          <a-tooltip title="Sửa"><a-button type="text" size="small" @click="openTaskModal(child)"><EditOutlined /></a-button></a-tooltip>
-                          <a-popconfirm title="Xóa?" @confirm="deleteTask(child)"><a-button type="text" size="small" danger><DeleteOutlined /></a-button></a-popconfirm>
-                        </div>
-                      </td>
-                    </tr>
-                      <!-- Add child task row -->
-                      <tr v-if="can('project.task.create')" class="border-b">
-                        <td class="py-1 px-3 pl-10" colspan="7">
-                          <a-button type="dashed" size="small" class="text-xs text-blue-500" @click="openTaskModal(null, task.id)">
-                            <template #icon><PlusOutlined /></template>Thêm công việc con
+                    <template v-for="child in task.children" :key="child.id">
+                      <tr class="border-b hover:bg-gray-50 transition-colors cursor-pointer" @click="toggleExpand(child.id)">
+                        <td class="py-2 px-3 pl-10">
+                          <div class="flex items-center gap-1">
+                            <span v-if="child.children?.length" class="text-gray-400 text-[10px] transition-transform mr-1" :class="expandedTasks.has(child.id) ? 'rotate-90' : ''">▶</span>
+                            <span v-else class="text-gray-300 mr-1">└</span>
+                            <span :class="child.children?.length ? 'font-semibold text-gray-800' : 'text-gray-600'">{{ child.name }}</span>
+                            <span v-if="child.children?.length" class="text-[10px] text-gray-400 ml-1">({{ child.children.length }})</span>
+                          </div>
+                        </td>
+                        <td class="text-center py-2 px-3"><a-tag :color="priorityColors[child.priority]" class="rounded-full text-xs">{{ priorityLabels[child.priority] || child.priority }}</a-tag></td>
+                        <td class="text-center py-2 px-3"><a-tag :color="taskStatusColors[child.status]" class="rounded-full text-xs">{{ taskStatusLabels[child.status] || child.status }}</a-tag></td>
+                        <td class="py-2 px-3">
+                          <a-progress :percent="parseFloat(child.progress_percentage || 0)" size="small" :stroke-color="parseFloat(child.progress_percentage || 0) >= 100 && isAccepted(child) ? '#27AE60' : (parseFloat(child.progress_percentage || 0) >= 100 ? '#FAAD14' : '#2E86C1')" />
+                          <div v-if="parseFloat(child.progress_percentage || 0) >= 100 && !isAccepted(child)" class="text-[10px] text-amber-500 mt-0.5 font-bold flex items-center gap-1">
+                            <ClockCircleOutlined /> Đang chờ nghiệm thu
+                          </div>
+                        </td>
+                        <td class="text-center py-2 px-3 text-xs text-gray-500">
+                          <span v-if="child.start_date">{{ fmtDate(child.start_date) }}</span>
+                          <span v-if="child.start_date && child.end_date"> ~ </span>
+                          <span v-if="child.end_date">{{ fmtDate(child.end_date) }}</span>
+                        </td>
+                        <td class="text-center py-2 px-3 text-xs">{{ child.assigned_user?.name || '—' }}</td>
+                        <td class="text-center py-2 px-3" @click.stop>
+                          <div class="flex gap-1 justify-center">
+                            <a-tooltip v-if="!child.children?.length && can('log.create')" title="Ghi nhật ký">
+                              <a-button type="text" size="small" @click.stop="openLogModal(null, child.id)" class="text-blue-500 hover:bg-blue-50"><FileAddOutlined /></a-button>
+                            </a-tooltip>
+                            <a-tooltip title="Sửa"><a-button type="text" size="small" @click="openTaskModal(child)"><EditOutlined /></a-button></a-tooltip>
+                            <a-popconfirm title="Xóa?" @confirm="deleteTask(child)"><a-button type="text" size="small" danger><DeleteOutlined /></a-button></a-popconfirm>
+                          </div>
+                        </td>
+                      </tr>
+                      <!-- Grandchildren (3rd level) -->
+                      <template v-if="expandedTasks.has(child.id) && child.children?.length">
+                        <tr v-for="sub in child.children" :key="sub.id" class="border-b hover:bg-gray-50/80 transition-colors bg-gray-50/20">
+                          <td class="py-1.5 px-3 pl-16">
+                            <div class="flex items-center gap-1 text-gray-500 italic text-[13px]">
+                              <span class="text-gray-300 mr-1">└─</span>
+                              {{ sub.name }}
+                            </div>
+                          </td>
+                          <td class="text-center py-1.5 px-3"><span class="text-[11px] text-gray-400">{{ priorityLabels[sub.priority] }}</span></td>
+                          <td class="text-center py-1.5 px-3"><a-tag :color="taskStatusColors[sub.status]" class="scale-90 opacity-75">{{ taskStatusLabels[sub.status] }}</a-tag></td>
+                          <td class="py-1.5 px-3">
+                            <a-progress :percent="parseFloat(sub.progress_percentage || 0)" size="small" stroke-width="2" style="width: 80px" />
+                          </td>
+                          <td class="text-center py-1.5 px-3 text-[10px] text-gray-400">{{ fmtDate(sub.start_date) }} - {{ fmtDate(sub.end_date) }}</td>
+                          <td class="text-center py-1.5 px-3 text-[11px]">{{ sub.assigned_user?.name || '—' }}</td>
+                          <td class="text-center py-1.5 px-3" @click.stop>
+                            <div class="flex gap-1 justify-center">
+                              <a-button type="text" size="small" @click="openTaskModal(sub)" class="scale-75"><EditOutlined /></a-button>
+                              <a-button type="text" size="small" danger @click="deleteTask(sub)" class="scale-75"><DeleteOutlined /></a-button>
+                            </div>
+                          </td>
+                        </tr>
+                      </template>
+                      <!-- Add grandchild button -->
+                      <tr v-if="can('project.task.create') && expandedTasks.has(child.id)" class="border-b">
+                        <td class="py-1 px-3 pl-16" colspan="7">
+                          <a-button type="dashed" size="small" class="text-[10px] text-gray-400 border-gray-200" @click="openTaskModal(null, child.id)">
+                            <template #icon><PlusOutlined /></template>Thêm mục con
                           </a-button>
                         </td>
                       </tr>
                     </template>
+                    <!-- Add child task row -->
+                    <tr v-if="can('project.task.create')" class="border-b bg-blue-50/10">
+                      <td class="py-1 px-3 pl-10" colspan="7">
+                        <a-button type="dashed" size="small" class="text-xs text-blue-500 border-blue-100" @click="openTaskModal(null, task.id)">
+                          <template #icon><PlusOutlined /></template>Thêm hạng mục con
+                        </a-button>
+                      </td>
+                    </tr>
                   </template>
                 </tbody>
                 <tbody v-else>
@@ -1117,6 +1150,7 @@
                       <span><CalendarOutlined /> {{ fmtDate(budget.budget_date) }}</span>
                       <span><HistoryOutlined /> {{ budget.version || 'v1.0' }}</span>
                       <span class="text-blue-500 bg-blue-50 px-1.5 rounded">{{ budget.items?.length || 0 }} hạng mục</span>
+                      <span v-if="budget.profit_percentage" class="text-emerald-600 bg-emerald-50 px-1.5 rounded">LN: {{ budget.profit_percentage }}%</span>
                     </div>
                   </div>
                 </div>
@@ -2291,9 +2325,24 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp đính kèm</div>
         <div v-if="editingCost?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingCost.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-          </a>
+          <div v-for="a in editingCost.attachments" :key="a.id" class="relative group">
+            <a href="#" @click.prevent="openFilePreview(a)" 
+               class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
+               :class="isAttachmentDeleted(a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+              <span v-if="isAttachmentDeleted(a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+              <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
+            </a>
+            <div v-if="!isAttachmentDeleted(a.id)" 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                 @click.stop="toggleDeleteAttachment(a.id)">
+              <CloseOutlined class="text-[10px] font-bold" />
+            </div>
+            <div v-else 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                 @click.stop="toggleDeleteAttachment(a.id)">
+              <ReloadOutlined class="text-[10px] font-bold" />
+            </div>
+          </div>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
         <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
@@ -3097,22 +3146,38 @@
   <a-drawer v-model:open="showBudgetDetailDrawer" title="Chi tiết Ngân sách dự án" :width="640" @close="budgetDetail = null" destroy-on-close class="crm-drawer">
     <div v-if="budgetDetail" class="space-y-6 pb-24">
       <!-- Premium Header Card -->
-      <div class="p-5 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl text-white shadow-xl shadow-blue-100 flex items-center justify-between overflow-hidden relative">
-        <div class="absolute -right-4 -top-8 opacity-10 text-8xl rotate-12">💰</div>
-        <div class="relative z-10">
-          <div class="text-[10px] text-blue-100 uppercase font-bold tracking-wider mb-0.5">Mã ngân sách: {{ budgetDetail.version || `#${budgetDetail.id}` }}</div>
-          <div class="text-xl font-bold flex items-center gap-2">
-            {{ budgetDetail.name }}
-            <a-tag v-if="budgetDetail.status === 'active'" color="success" class="rounded-full border-none px-2 text-[10px] uppercase font-bold bg-white/20 text-white">ĐANG SỬ DỤNG</a-tag>
+      <div class="p-6 bg-gradient-to-br from-indigo-700 via-blue-600 to-cyan-500 rounded-3xl text-white shadow-xl shadow-blue-100 flex flex-col gap-6 overflow-hidden relative">
+        <div class="absolute -right-4 -top-8 opacity-10 text-9xl rotate-12 pointer-events-none">💰</div>
+        
+        <div class="flex justify-between items-start relative z-10">
+          <div>
+            <div class="text-[10px] text-blue-100 uppercase font-bold tracking-wider mb-1 px-2 py-0.5 bg-white/10 rounded-full w-fit">Mã ngân sách: {{ budgetDetail.version || `#${budgetDetail.id}` }}</div>
+            <div class="text-2xl font-black tracking-tight leading-tight">
+              {{ budgetDetail.name }}
+            </div>
+            <div class="text-xs text-blue-100 mt-2 flex gap-4 opacity-90 font-medium">
+              <span><CalendarOutlined class="mr-1" /> {{ fmtDate(budgetDetail.budget_date) }}</span>
+              <span><UserOutlined class="mr-1" /> {{ budgetDetail.creator?.name || '—' }}</span>
+            </div>
           </div>
-          <div class="text-[11px] text-blue-100 mt-1 flex gap-3 opacity-90">
-            <span><CalendarOutlined /> {{ fmtDate(budgetDetail.budget_date) }}</span>
-            <span><UserOutlined /> {{ budgetDetail.creator?.name || '—' }}</span>
+          <div v-if="budgetDetail.status === 'active'" class="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest border border-white/30">
+            Đang áp dụng
           </div>
         </div>
-        <div class="text-right relative z-10">
-          <div class="text-xs text-blue-100 mb-0.5 opacity-80">Tổng dự toán</div>
-          <div class="text-3xl font-black text-white leading-none">{{ fmt(budgetDetail.total_budget) }}</div>
+
+        <div class="grid grid-cols-3 gap-4 pt-4 border-t border-white/20 relative z-10">
+          <div>
+            <div class="text-[10px] text-indigo-100 opacity-80 uppercase font-bold mb-1">Giá trị hợp đồng</div>
+            <div class="text-lg font-bold truncate">{{ fmt(budgetDetail.contract_value || 0) }}</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-indigo-100 opacity-80 uppercase font-bold mb-1">Lợi nhuận ({{ budgetDetail.profit_percentage || 0 }}%)</div>
+            <div class="text-lg font-bold text-cyan-200 truncate">{{ fmt(budgetDetail.profit_amount || 0) }}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] text-indigo-100 opacity-80 uppercase font-bold mb-1">Tổng dự toán</div>
+            <div class="text-xl font-black text-yellow-300 leading-none">{{ fmt(budgetDetail.total_budget) }}</div>
+          </div>
         </div>
       </div>
 
@@ -3156,8 +3221,9 @@
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
-              <tr class="text-left text-[11px] text-gray-400 uppercase border-b border-gray-50">
+              <tr class="text-left text-[11px] text-gray-400 uppercase border-b border-gray-50 bg-gray-50/50">
                 <th class="px-5 py-3 font-bold">Hạng mục</th>
+                <th class="px-5 py-3 font-bold text-center">Tỷ lệ</th>
                 <th class="px-5 py-3 font-bold text-right">Dự toán</th>
                 <th class="px-5 py-3 font-bold text-right">Thực chi</th>
                 <th class="px-5 py-3 font-bold text-right">Còn lại</th>
@@ -3166,18 +3232,26 @@
             <tbody class="divide-y divide-gray-50">
               <tr v-for="item in (budgetDetail.items || [])" :key="item.id" class="hover:bg-blue-50/50 transition-colors">
                 <td class="px-5 py-4">
-                  <div class="font-bold text-gray-800">{{ item.name }}</div>
-                  <div v-if="item.description" class="text-[10px] text-gray-400 mt-0.5">{{ item.description }}</div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span v-if="item.cost_group" class="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold uppercase">{{ item.cost_group.code || 'GP' }}</span>
+                    <div class="font-bold text-gray-800 leading-tight">{{ item.name }}</div>
+                  </div>
+                  <div v-if="item.description" class="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{{ item.description }}</div>
+                </td>
+                <td class="px-5 py-4 text-center">
+                  <span class="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{{ item.percentage || 0 }}%</span>
                 </td>
                 <td class="px-5 py-4 text-right">
-                  <div class="font-semibold text-blue-600">{{ fmt(item.estimated_amount) }}</div>
+                  <div class="font-bold text-indigo-600">{{ fmt(item.estimated_amount) }}</div>
                 </td>
                 <td class="px-5 py-4 text-right">
                   <div class="font-bold" :class="(item.actual_amount > item.estimated_amount) ? 'text-red-500' : 'text-emerald-500'">{{ fmt(item.actual_amount || 0) }}</div>
                   <div class="text-[9px] text-gray-400">{{ Math.round(((item.actual_amount || 0) / (item.estimated_amount || 1)) * 100) }}%</div>
                 </td>
-                <td class="px-5 py-4 text-right font-medium" :class="(item.remaining_amount < 0) ? 'text-red-600' : 'text-gray-600'">
-                  {{ fmt(item.remaining_amount ?? item.estimated_amount) }}
+                <td class="px-5 py-4 text-right">
+                  <div class="font-bold" :class="(item.remaining_amount < 0) ? 'text-red-600' : 'text-gray-600'">
+                    {{ fmt(item.remaining_amount ?? item.estimated_amount) }}
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -4420,26 +4494,91 @@
   </a-modal>
 
   <!-- Budget Modal -->
-  <a-modal v-model:open="showBudgetModal" :title="editingBudget ? 'Chỉnh sửa ngân sách' : 'Tạo ngân sách'" :width="700" @ok="saveBudget" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
+  <!-- Budget Modal -->
+  <a-modal v-model:open="showBudgetModal" :title="editingBudget ? 'Chỉnh sửa ngân sách' : 'Tạo ngân sách'" :width="850" @ok="saveBudget" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-row :gutter="16">
-        <a-col :span="8"><a-form-item label="Tên ngân sách" required v-bind="fieldStatus('name')"><a-input v-model:value="budgetForm.name" size="large" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Ngày" required v-bind="fieldStatus('budget_date')"><a-date-picker v-model:value="budgetForm.budget_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-        <a-col :span="4"><a-form-item label="Phiên bản"><a-input v-model:value="budgetForm.version" size="large" placeholder="v1" /></a-form-item></a-col>
-        <a-col :span="4"><a-form-item label="Trạng thái"><a-select v-model:value="budgetForm.status" size="large" class="w-full">
-          <a-select-option value="draft">Nháp</a-select-option>
-          <a-select-option value="approved">Đã duyệt</a-select-option>
-          <a-select-option value="revised">Sửa đổi</a-select-option>
-        </a-select></a-form-item></a-col>
-      </a-row>
-      <a-form-item label="Ghi chú"><a-textarea v-model:value="budgetForm.notes" :rows="2" /></a-form-item>
-      <div class="mb-2 font-bold text-sm text-gray-700">Hạng mục</div>
-      <div v-for="(item, idx) in budgetForm.items" :key="idx" class="flex gap-2 mb-2 items-end">
-        <a-input v-model:value="item.name" placeholder="Tên hạng mục" size="small" class="flex-1" />
-        <a-input-number v-model:value="item.estimated_amount" :min="0" placeholder="Số tiền" size="small" style="width: 160px" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" />
-        <a-button type="text" size="small" danger @click="budgetForm.items.splice(idx, 1)" :disabled="budgetForm.items.length <= 1"><DeleteOutlined /></a-button>
+      <div class="p-4 bg-gray-50 rounded-xl mb-4 border border-gray-100">
+        <a-row :gutter="16">
+          <a-col :span="10"><a-form-item label="Tên ngân sách" required v-bind="fieldStatus('name')"><a-input v-model:value="budgetForm.name" size="large" placeholder="Ví dụ: Ngân sách xây thô v1" /></a-form-item></a-col>
+          <a-col :span="6"><a-form-item label="Ngày" required v-bind="fieldStatus('budget_date')"><a-date-picker v-model:value="budgetForm.budget_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+          <a-col :span="4"><a-form-item label="Phiên bản"><a-input v-model:value="budgetForm.version" size="large" placeholder="v1" /></a-form-item></a-col>
+          <a-col :span="4">
+            <a-form-item label="Trạng thái">
+              <a-select v-model:value="budgetForm.status" size="large" class="w-full">
+                <a-select-option value="draft">Nháp</a-select-option>
+                <a-select-option value="approved" v-if="can('budgets.approve')">Đã duyệt</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        
+        <a-row :gutter="16" class="mt-2">
+          <a-col :span="8">
+            <a-form-item label="Giá trị hợp đồng">
+              <a-input-number v-model:value="budgetForm.contract_value" :min="0" class="w-full" size="large" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateProfitByTotal" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Tổng ngân sách (Dự toán)">
+              <div class="h-10 px-3 bg-white border border-gray-300 rounded-lg flex items-center font-bold text-gray-800 text-lg">
+                {{ fmt(budgetForm.total_budget || totalBudgetSum) }}
+              </div>
+            </a-form-item>
+          </a-col>
+          <a-col :span="4">
+            <a-form-item label="Lợi nhuận (%)">
+              <a-input-number v-model:value="budgetForm.profit_percentage" :min="0" :max="100" class="w-full" size="large" @change="recalculateProfitByPercent" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="4">
+            <a-form-item label="Lợi nhuận (đ)">
+              <a-input-number v-model:value="budgetForm.profit_amount" :min="0" class="w-full" size="large" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateProfitByAmount" />
+            </a-form-item>
+          </a-col>
+        </a-row>
       </div>
-      <a-button type="dashed" size="small" @click="budgetForm.items.push({ name: '', estimated_amount: 0 })"><PlusOutlined /> Thêm hạng mục</a-button>
+
+      <div class="flex justify-between items-center mb-3">
+        <div class="font-bold text-base text-gray-700 flex items-center gap-2"><CalculatorOutlined class="text-blue-500" /> Phân bổ hạng mục</div>
+        <div class="text-xs text-gray-500 italic">Tổng cộng: {{ (itemsPercentageSum || 0).toFixed(1) }}%</div>
+      </div>
+
+      <div class="max-h-[350px] overflow-y-auto pr-2">
+        <div v-for="(item, idx) in budgetForm.items" :key="idx" class="p-3 bg-white border border-gray-200 rounded-xl mb-3 shadow-sm hover:border-blue-300 transition-all relative group">
+          <a-row :gutter="12">
+            <a-col :span="10">
+              <div class="text-[10px] text-gray-400 mb-1 uppercase font-bold">Nhóm chi phí / Tên hạng mục</div>
+              <div class="flex gap-1">
+                <a-select v-model:value="item.cost_group_id" placeholder="Chọn nhóm" size="small" style="width: 140px" @change="val => onBudgetCostGroupChange(idx, val)" show-search option-filter-prop="label">
+                  <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id" :label="g.name">{{ g.name }}</a-select-option>
+                </a-select>
+                <a-input v-model:value="item.name" placeholder="Tên tùy chỉnh" size="small" class="flex-1" />
+              </div>
+            </a-col>
+            <a-col :span="4">
+              <div class="text-[10px] text-gray-400 mb-1 uppercase font-bold">Tỷ lệ (%)</div>
+              <a-input-number v-model:value="item.percentage" :min="0" :max="100" size="small" class="w-full" @change="recalculateItemByPercent(idx)" />
+            </a-col>
+            <a-col :span="10">
+              <div class="text-[10px] text-gray-400 mb-1 uppercase font-bold">Số tiền dự toán</div>
+              <div class="flex gap-1 items-center">
+                <a-input-number v-model:value="item.estimated_amount" :min="0" placeholder="Số tiền" size="small" class="flex-1" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateItemByAmount(idx)" />
+                <a-button type="text" size="small" danger @click="budgetForm.items.splice(idx, 1)" :disabled="budgetForm.items.length <= 1"><DeleteOutlined /></a-button>
+              </div>
+            </a-col>
+          </a-row>
+        </div>
+      </div>
+      
+      <div class="mt-4 flex justify-between items-center">
+        <a-button type="dashed" @click="budgetForm.items.push({ cost_group_id: null, name: '', estimated_amount: 0, percentage: 0 })">
+          <template #icon><PlusOutlined /></template> Thêm hạng mục
+        </a-button>
+        <div class="text-right">
+          <div class="text-xs text-gray-400">Ghi chú chung</div>
+          <a-textarea v-model:value="budgetForm.notes" :rows="1" placeholder="Ghi chú cho bản ngân sách này..." class="mt-1" />
+        </div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -5731,7 +5870,7 @@ dayjs.extend(utc)
 import {
   ArrowLeftOutlined, EditOutlined, PlusOutlined, DeleteOutlined,
   SendOutlined, CheckCircleOutlined, CloseCircleOutlined, PlayCircleOutlined,
-  CheckOutlined, CloseOutlined, DollarOutlined,
+  CheckOutlined, CloseOutlined, DollarOutlined, ReloadOutlined,
   UploadOutlined, DownloadOutlined, FileOutlined,
   UserOutlined, CalendarOutlined, EyeOutlined, CheckSquareOutlined,
   LinkOutlined, CameraOutlined, CheckCircleFilled, MoreOutlined,
@@ -5771,6 +5910,7 @@ const payments = computed(() => props.financeData?.payments || props.project.pay
 const invoices = computed(() => props.financeData?.invoices || [])
 const budgets = computed(() => props.financeData?.budgets || props.project.budgets || [])
 const allTasks = computed(() => props.scheduleData?.allTasks || [])
+const counts = computed(() => props.counts || {})
 const materialBills = computed(() => props.scheduleData?.materialBills || [])
 const logs = computed(() => props.monitorData?.logs || props.project.construction_logs || [])
 const acceptanceStages = computed(() => props.monitorData?.acceptanceStages || props.project.acceptance_stages || [])
@@ -5994,6 +6134,22 @@ let removeFinishListener = null
 onMounted(() => {
   removeStartListener = router.on('start', () => { pageLoading.value = true })
   removeFinishListener = router.on('finish', () => { pageLoading.value = false })
+
+  // Auto-load data based on initial tab
+  if (activeTab.value === 'gantt' || activeTab.value === 'progress') {
+    loadGanttData()
+  }
+  
+  // Pre-fill ganttTasks from allTasks immediately to avoid "empty" state flicker
+  if (allTasks.value.length > 0 && ganttTasks.value.length === 0) {
+    ganttTasks.value = allTasks.value.map(t => ({
+      ...t,
+      progress: parseFloat(t.progress_percentage || 0),
+      start_date: t.start_date || props.project?.start_date,
+      end_date: t.end_date || props.project?.end_date,
+      is_critical: false // fallback
+    }))
+  }
 })
 onBeforeUnmount(() => {
   removeStartListener?.()
@@ -6211,11 +6367,36 @@ const apiPost = async (url, body = {}) => {
 }
 
 const loadGanttData = async () => {
+  if (ganttLoading.value) return
   ganttLoading.value = true
   try {
     const data = await apiGet(`/projects/${props.project.id}/gantt`)
-    ganttTasks.value = data.data?.tasks || []
-  } catch (e) { console.error('Gantt load error', e) }
+    const backendTasks = data.data?.tasks || []
+    
+    if (backendTasks.length > 0) {
+      ganttTasks.value = backendTasks
+    } else if (allTasks.value.length > 0) {
+      // Fallback to allTasks if API returns nothing but we have tasks in props
+      ganttTasks.value = allTasks.value.map(t => ({
+        ...t,
+        progress: parseFloat(t.progress_percentage || 0),
+        start_date: t.start_date || props.project?.start_date,
+        end_date: t.end_date || props.project?.end_date,
+        is_critical: false
+      }))
+    }
+  } catch (e) { 
+    console.error('Gantt load error', e)
+    // Emergency fallback to props data on network error
+    if (allTasks.value.length > 0 && ganttTasks.value.length === 0) {
+      ganttTasks.value = allTasks.value.map(t => ({
+        ...t,
+        progress: parseFloat(t.progress_percentage || 0),
+        start_date: t.start_date || props.project?.start_date,
+        end_date: t.end_date || props.project?.end_date
+      }))
+    }
+  }
   ganttLoading.value = false
 }
 
@@ -6568,11 +6749,29 @@ const modalFiles = ref([])
 // ============ COST CRUD ============
 const showCostModal = ref(false)
 const editingCost = ref(null)
-const costForm = ref({ name: '', amount: null, cost_date: null, cost_group_id: null, budget_item_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '' })
+const costForm = ref({ name: '', amount: null, cost_date: null, cost_group_id: null, budget_item_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '', deleted_attachment_ids: [] })
+const toggleDeleteAttachment = (id) => {
+  const idx = costForm.value.deleted_attachment_ids.indexOf(id)
+  if (idx === -1) costForm.value.deleted_attachment_ids.push(id)
+  else costForm.value.deleted_attachment_ids.splice(idx, 1)
+}
+const isAttachmentDeleted = (id) => costForm.value.deleted_attachment_ids.includes(id)
 const openCostModal = (c) => {
   editingCost.value = c
   modalFiles.value = []
-  costForm.value = c ? { name: c.name, amount: c.amount, cost_date: c.cost_date, cost_group_id: c.cost_group_id, budget_item_id: c.budget_item_id || null, subcontractor_id: c.subcontractor_id || null, material_id: c.material_id || null, quantity: c.quantity || null, unit: c.unit || '', description: c.description || '' } : { name: '', amount: null, cost_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, budget_item_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '' }
+  costForm.value = c ? { 
+    name: c.name, 
+    amount: c.amount, 
+    cost_date: c.cost_date, 
+    cost_group_id: c.cost_group_id, 
+    budget_item_id: c.budget_item_id || null, 
+    subcontractor_id: c.subcontractor_id || null, 
+    material_id: c.material_id || null, 
+    quantity: c.quantity || null, 
+    unit: c.unit || '', 
+    description: c.description || '',
+    deleted_attachment_ids: []
+  } : { name: '', amount: null, cost_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, budget_item_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '', deleted_attachment_ids: [] }
   showCostModal.value = true
 }
 const saveCost = () => {
@@ -7352,11 +7551,65 @@ const openRejectACModal = (ac) => { rejectingAC.value = ac; rejectACReason.value
 const rejectAC = () => { router.post(`/projects/${props.project.id}/additional-costs/${rejectingAC.value.id}/reject`, { rejected_reason: rejectACReason.value }, savingOptions({ onSuccess: () => showRejectACModal.value = false })) }
 const deleteAC = (ac) => router.delete(`/projects/${props.project.id}/additional-costs/${ac.id}`, loadingOptions(`delete-ac-${ac.id}`))
 
-// ============ BUDGET CRUD ============
 const showBudgetModal = ref(false)
 const editingBudget = ref(null)
-const budgetForm = ref({ name: '', budget_date: null, version: '', status: 'draft', notes: '', items: [{ name: '', estimated_amount: 0 }] })
+const budgetForm = ref({ 
+  name: '', 
+  budget_date: null, 
+  version: '', 
+  status: 'draft', 
+  notes: '', 
+  contract_value: 0,
+  profit_percentage: 0,
+  profit_amount: 0,
+  total_budget: 0,
+  items: [{ cost_group_id: null, name: '', estimated_amount: 0, percentage: 0 }] 
+})
+
+const totalBudgetSum = computed(() => budgetForm.value.items.reduce((s, i) => s + (parseFloat(i.estimated_amount) || 0), 0))
+const itemsPercentageSum = computed(() => budgetForm.value.items.reduce((s, i) => s + (parseFloat(i.percentage) || 0), 0))
+
+const recalculateProfitByPercent = () => {
+  if (budgetForm.value.contract_value) {
+    budgetForm.value.profit_amount = Math.round(budgetForm.value.contract_value * (budgetForm.value.profit_percentage / 100))
+    budgetForm.value.total_budget = budgetForm.value.contract_value - budgetForm.value.profit_amount
+  }
+}
+const recalculateProfitByAmount = () => {
+  if (budgetForm.value.contract_value) {
+    budgetForm.value.profit_percentage = parseFloat(((budgetForm.value.profit_amount / budgetForm.value.contract_value) * 100).toFixed(2))
+    budgetForm.value.total_budget = budgetForm.value.contract_value - budgetForm.value.profit_amount
+  }
+}
+const recalculateProfitByTotal = () => {
+  if (budgetForm.value.contract_value) {
+    budgetForm.value.profit_amount = budgetForm.value.contract_value - (budgetForm.value.total_budget || 0)
+    budgetForm.value.profit_percentage = parseFloat(((budgetForm.value.profit_amount / budgetForm.value.contract_value) * 100).toFixed(2))
+  }
+}
+
+const recalculateItemByPercent = (idx) => {
+  const item = budgetForm.value.items[idx]
+  if (budgetForm.value.total_budget) {
+    item.estimated_amount = Math.round(budgetForm.value.total_budget * (item.percentage / 100))
+  }
+}
+const recalculateItemByAmount = (idx) => {
+  const item = budgetForm.value.items[idx]
+  if (budgetForm.value.total_budget) {
+    item.percentage = parseFloat(((item.estimated_amount / budgetForm.value.total_budget) * 100).toFixed(2))
+  }
+}
+
+const onBudgetCostGroupChange = (idx, groupId) => {
+  const group = props.costGroups.find(g => g.id === groupId)
+  if (group && !budgetForm.value.items[idx].name) {
+    budgetForm.value.items[idx].name = group.name
+  }
+}
+
 const openBudgetModal = (budget = null) => {
+  clearFormErrors()
   editingBudget.value = budget
   if (budget) {
     budgetForm.value = {
@@ -7365,12 +7618,35 @@ const openBudgetModal = (budget = null) => {
       version: budget.version || '',
       status: budget.status || 'draft',
       notes: budget.notes || '',
+      contract_value: budget.contract_value || 0,
+      profit_percentage: budget.profit_percentage || 0,
+      profit_amount: budget.profit_amount || 0,
+      total_budget: budget.total_budget || 0,
       items: budget.items?.length
-        ? budget.items.map(i => ({ name: i.name, estimated_amount: i.estimated_amount, description: i.description || '' }))
-        : [{ name: '', estimated_amount: 0 }],
+        ? budget.items.map(i => ({ 
+            cost_group_id: i.cost_group_id,
+            name: i.name, 
+            percentage: i.percentage || 0,
+            estimated_amount: i.estimated_amount, 
+            description: i.description || '' 
+          }))
+        : [{ cost_group_id: null, name: '', estimated_amount: 0, percentage: 0 }],
     }
   } else {
-    budgetForm.value = { name: '', budget_date: dayjs().format('YYYY-MM-DD'), version: 'v1', status: 'draft', notes: '', items: [{ name: '', estimated_amount: 0 }] }
+    // Reset ve 0 hoac rong cho ngan sach moi
+    const defaultContractValue = props.contract?.contract_value || 0
+    budgetForm.value = { 
+      name: '', 
+      budget_date: dayjs().format('YYYY-MM-DD'), 
+      version: 'v1', 
+      status: 'draft', 
+      notes: '', 
+      contract_value: defaultContractValue,
+      profit_percentage: 0,
+      profit_amount: 0,
+      total_budget: defaultContractValue,
+      items: [{ cost_group_id: null, name: '', estimated_amount: 0, percentage: 0 }] 
+    }
   }
   showBudgetModal.value = true
 }

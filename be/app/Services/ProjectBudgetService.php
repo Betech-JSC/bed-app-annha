@@ -35,11 +35,14 @@ class ProjectBudgetService
             // Prepare budget data
             $budgetData = [
                 'project_id' => $project->id,
-                'name'       => $data['name'],
-                'version'    => $data['version'] ?? ($isNew ? '1.0' : $budget->version),
-                'budget_date'=> $data['budget_date'],
-                'notes'      => $data['notes'] ?? null,
-                'status'     => $data['status'] ?? ($isNew ? 'draft' : $budget->status),
+                'name'              => $data['name'],
+                'version'           => $data['version'] ?? ($isNew ? '1.0' : $budget->version),
+                'budget_date'       => $data['budget_date'],
+                'notes'             => $data['notes'] ?? null,
+                'status'            => $data['status'] ?? ($isNew ? 'draft' : $budget->status),
+                'contract_value'    => $data['contract_value'] ?? null,
+                'profit_percentage' => $data['profit_percentage'] ?? null,
+                'profit_amount'     => $data['profit_amount'] ?? null,
             ];
 
             if ($isNew) {
@@ -61,6 +64,7 @@ class ProjectBudgetService
                     BudgetItem::create([
                         'budget_id'        => $budget->id,
                         'cost_group_id'    => $itemData['cost_group_id'] ?? null,
+                        'percentage'       => $itemData['percentage'] ?? null,
                         'name'             => $itemData['name'],
                         'description'      => $itemData['description'] ?? null,
                         'estimated_amount' => $itemData['estimated_amount'],

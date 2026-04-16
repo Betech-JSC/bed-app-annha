@@ -12,6 +12,7 @@ class BudgetItem extends Model
         'uuid',
         'budget_id',
         'cost_group_id',
+        'percentage',
         'name',
         'description',
         'estimated_amount',
@@ -23,6 +24,7 @@ class BudgetItem extends Model
     ];
 
     protected $casts = [
+        'percentage' => 'decimal:2',
         'estimated_amount' => 'decimal:2',
         'actual_amount' => 'decimal:2',
         'remaining_amount' => 'decimal:2',

@@ -93,4 +93,53 @@ class AttachmentService
                 'attachable_id' => null
             ]);
     }
+
+    /**
+     * Delete specific attachments from storage and database.
+     *
+     * @param array $ids
+     * @param Model|null $entity Optional verify ownership
+     * @return int Number of deleted files
+     */
+    public function deleteAttachments(array $ids, ?Model $entity = null): int
+    {
+        if (empty($ids)) return 0;
+
+        $query = Attachment::whereIn('id', $ids);
+        if ($entity) {
+            $query->where('attachable_id', $entity->id)
+                  ->where('attachable_type', get_class($entity));
+        }
+
+        $attachments = $query->get();
+        $count = 0;
+
+        foreach ($attachments as $attachment) {
+            if ($attachment->file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($attachment->file_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($attachment->file_path);
+            }
+            $attachment->delete();
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Process 'deleted_attachment_ids' from request and perform deletion.
+     *
+     * @param Request $request
+     * @param Model $entity
+     * @param string $key
+     * @return int
+     */
+    public function handleDeletedRequest(Request $request, Model $entity, string $key = 'deleted_attachment_ids'): int
+    {
+        if (!$request->has($key)) return 0;
+        
+        $ids = $request->input($key);
+        if (!is_array($ids)) return 0;
+
+        return $this->deleteAttachments($ids, $entity);
+    }
 }

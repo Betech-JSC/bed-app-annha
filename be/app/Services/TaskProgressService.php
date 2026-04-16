@@ -157,37 +157,32 @@ class TaskProgressService
      */
     public function canParentBeCompleted(ProjectTask $task): bool
     {
-        // 1. Check if the task itself is accepted if it's a leaf/standalone task
-        // But typically root tasks (Category A) are parent containers.
-        if (!$this->isTaskAccepted($task)) {
-            return false;
-        }
-
         $children = ProjectTask::where('parent_id', $task->id)
             ->whereNull('deleted_at')
             ->get();
 
-        if ($children->isEmpty()) {
-            // No children, check its own progress
-            $progress = $this->calculateProgressFromLogs($task);
-            return $progress >= 100;
-        }
-
-        // All children must be 100% AND accepted
+        // Check children first (Recursive)
         foreach ($children as $child) {
-            $childProgress = $this->calculateProgressFromLogs($child);
-            
-            // Recurse to handle nested hierarchies
             if (!$this->canParentBeCompleted($child)) {
                 return false;
             }
+        }
 
-            if ($childProgress < 100) {
+        // Check self-acceptance ONLY IF it's a sub-task (Category B)
+        // Root tasks (Category A) turn 'completed' once children are done,
+        // which then triggers their own AcceptanceStage creation.
+        if ($task->parent_id !== null && $children->isEmpty()) {
+            if (!$this->isTaskAccepted($task)) {
                 return false;
             }
         }
 
-        return true;
+        // Final progress check
+        $progress = $children->isEmpty() 
+            ? $this->calculateProgressFromLogs($task)
+            : $this->calculateParentProgress($task);
+
+        return $progress >= 100;
     }
 
     /**

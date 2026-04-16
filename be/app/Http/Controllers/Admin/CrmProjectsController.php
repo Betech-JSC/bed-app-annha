@@ -435,8 +435,11 @@ class CrmProjectsController extends Controller
         try {
             $cost->update($validated);
 
+            // Handle file deletions via SOA
+            $this->attachmentService->handleDeletedRequest($request, $cost);
+
             // Handle file uploads during update
-            $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$cost->id}", false);
+            $this->attachmentService->handleCrmUpload($request, $cost, "costs/{$project->id}/{$cost->id}", false);
 
             DB::commit();
             return back()->with('success', 'Đã cập nhật phiếu chi.');
@@ -878,37 +881,7 @@ class CrmProjectsController extends Controller
      */
     private function attachFilesToEntity(Request $request, $entity, string $storagePath, bool $validate = true): int
     {
-        if ($validate || $request->hasFile('files')) {
-            $request->validate([
-                'files' => ($validate ? 'required|' : 'nullable|') . 'array' . ($validate ? '|min:1' : ''),
-                'files.*' => 'required|file|max:20480', // max 20MB each
-            ]);
-        }
-
-        if (!$request->hasFile('files')) {
-            return 0;
-        }
-
-        $user = auth('admin')->user();
-        $count = 0;
-
-        foreach ($request->file('files') as $file) {
-            $path = $file->store($storagePath, 'public');
-            Attachment::create([
-                'original_name' => $file->getClientOriginalName(),
-                'file_name' => $file->getClientOriginalName(),
-                'file_path' => $path,
-                'file_url' => '/storage/' . $path,
-                'file_size' => $file->getSize(),
-                'mime_type' => $file->getClientMimeType(),
-                'type' => $request->input('type') ?? $file->getClientOriginalExtension(),
-                'attachable_type' => get_class($entity),
-                'attachable_id' => $entity->id,
-                'uploaded_by' => $user->id ?? null,
-            ]);
-            $count++;
-        }
-        return $count;
+        return $this->attachmentService->handleCrmUpload($request, $entity, $storagePath, $validate);
     }
 
     /**
@@ -1980,10 +1953,14 @@ class CrmProjectsController extends Controller
             'budget_date' => 'required|date',
             'version' => 'nullable|string|max:20',
             'notes' => 'nullable|string',
+            'contract_value' => 'nullable|numeric|min:0',
+            'profit_percentage' => 'nullable|numeric|min:0',
+            'profit_amount' => 'nullable|numeric|min:0',
             'items' => 'required|array|min:1',
             'items.*.name' => 'required|string|max:255',
             'items.*.estimated_amount' => 'required|numeric|min:0',
             'items.*.cost_group_id' => 'nullable|exists:cost_groups,id',
+            'items.*.percentage' => 'nullable|numeric|min:0',
         ]);
 
         try {
@@ -2011,10 +1988,14 @@ class CrmProjectsController extends Controller
             'budget_date' => 'required|date',
             'version' => 'nullable|string|max:20',
             'notes' => 'nullable|string',
+            'contract_value' => 'nullable|numeric|min:0',
+            'profit_percentage' => 'nullable|numeric|min:0',
+            'profit_amount' => 'nullable|numeric|min:0',
             'items' => 'required|array|min:1',
             'items.*.name' => 'required|string|max:255',
             'items.*.estimated_amount' => 'required|numeric|min:0',
             'items.*.cost_group_id' => 'nullable|exists:cost_groups,id',
+            'items.*.percentage' => 'nullable|numeric|min:0',
         ]);
 
         try {
