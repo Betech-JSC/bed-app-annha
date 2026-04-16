@@ -380,6 +380,8 @@ class ApprovalActionService
             } elseif ($model instanceof ProjectBudget) {
                 $this->budgetService->reject($model, $reason, $user);
                 $result = true;
+            } elseif ($model instanceof ProjectPayment) {
+                $result = $this->financialService->rejectProjectPayment($model, $reason, $user);
             } elseif (method_exists($model, 'reject')) {
                 // Models with signature: reject(string $reason, ?User $user)
                 if ($model instanceof Cost 

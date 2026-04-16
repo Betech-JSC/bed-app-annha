@@ -601,6 +601,7 @@
               <template v-else-if="column.key === 'amount'"><span class="font-semibold text-green-600">{{ fmt(record.amount) }}</span></template>
               <template v-else-if="column.key === 'actual_amount'">
                 <span v-if="record.actual_amount" class="font-semibold" :class="record.actual_amount >= record.amount ? 'text-green-600' : 'text-orange-500'">{{ fmt(record.actual_amount) }}</span>
+                <span v-else-if="record.status === 'confirmed'" class="font-semibold text-green-600">{{ fmt(record.amount) }}</span>
                 <span v-else class="text-gray-300">—</span>
               </template>
               <template v-else-if="column.key === 'status'">
@@ -4487,12 +4488,26 @@
            <a-button v-if="can('payment.update') && ['pending','overdue'].includes(paymentDetailRecord.status)" size="small" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Thay đổi NS</a-button>
         </div>
         <div class="flex gap-2">
+          <!-- Staff: Submit request to customer -->
+          <template v-if="['pending','overdue'].includes(paymentDetailRecord.status) && can('payment.update')">
+            <a-button type="primary" @click="submitPaymentAction(paymentDetailRecord)">Gửi yêu cầu thanh toán</a-button>
+          </template>
+
+          <!-- Customer: Approve & Pay -->
+          <template v-if="paymentDetailRecord.status === 'customer_pending_approval' && can('payment.approve')">
+            <a-button type="primary" class="bg-blue-600 border-blue-600" @click="openPaymentProofModal(paymentDetailRecord)">Duyệt & Báo cáo thanh toán</a-button>
+            <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
+          </template>
+
+          <!-- Customer: Report paid (if approved but not paid) -->
+          <template v-if="paymentDetailRecord.status === 'customer_approved' && can('payment.mark_paid_by_customer')">
+            <a-button type="primary" class="bg-green-600 border-green-600" @click="openPaymentProofModal(paymentDetailRecord)">Báo cáo Đã thanh toán</a-button>
+          </template>
+
+          <!-- Accountant: Confirm payment -->
           <template v-if="paymentDetailRecord.status === 'customer_paid' && can('payment.confirm')">
              <a-button type="primary" class="bg-green-600 border-green-600" @click="confirmPaymentAction(paymentDetailRecord)">KT Xác nhận</a-button>
              <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
-          </template>
-          <template v-else-if="['pending','overdue'].includes(paymentDetailRecord.status) && can('payment.mark_paid_by_customer')">
-            <a-button type="primary" @click="openPaymentProofModal(paymentDetailRecord)">Báo cáo Đã thanh toán</a-button>
           </template>
         </div>
       </div>
@@ -6234,6 +6249,17 @@ const project = computed(() => {
       if (prop === 'attachments') return attachments.value
       if (prop === 'contract') return contract.value
       if (prop === 'materialBills' || prop === 'material_bills') return materialBills.value
+      
+      // Dynamic financial properties for summary cards
+      if (prop === 'total_value') {
+        const contractVal = Number(contract.value?.contract_value || 0)
+        const additionalVal = additionalCosts.value.reduce((s, c) => s + Number(c.amount || 0), 0)
+        return contractVal + additionalVal
+      }
+      if (prop === 'total_paid_receivable') {
+        return payments.value.filter(p => p.status === 'confirmed').reduce((s, p) => s + Number((p.actual_amount ?? p.amount) || 0), 0)
+      }
+
       return target[prop]
     }
   })
@@ -6879,8 +6905,8 @@ const acStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', pending_appro
 const acStatusColors = { draft: 'default', pending: 'orange', pending_approval: 'orange', approved: 'green', rejected: 'red', cancelled: 'default' }
 const contractStatusLabels = { draft: 'Nháp', pending_customer_approval: 'Chờ KH duyệt', pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận', active: 'Đang hiệu lực', approved: 'Đã duyệt', rejected: 'Từ chối', expired: 'Hết hạn', terminated: 'Đã thanh lý', cancelled: 'Đã hủy' }
 const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', active: 'green', approved: 'green', rejected: 'red', expired: 'orange', terminated: 'red', cancelled: 'default' }
-const paymentStatusLabelsMap = { pending: 'Chưa thanh toán', customer_paid: 'Đã thanh toán', customer_pending_approval: 'Chưa thanh toán', customer_approved: 'Chưa thanh toán', confirmed: 'Đã thanh toán', paid: 'Đã thanh toán', partial: 'TT 1 phần', completed: 'Hoàn tất', overdue: 'Chưa thanh toán' }
-const paymentTagColors = { pending: 'orange', customer_paid: 'blue', customer_pending_approval: 'cyan', customer_approved: 'geekblue', confirmed: 'green', paid: 'green', partial: 'blue', completed: 'green', overdue: 'red' }
+const paymentStatusLabelsMap = { pending: 'Chờ gửi y/c', customer_paid: 'Đã thanh toán', customer_pending_approval: 'Chờ KH duyệt', customer_approved: 'Đã duyệt (Chờ TT)', confirmed: 'Đã xác nhận', paid: 'Đã xác nhận', partial: 'TT 1 phần', completed: 'Hoàn tất', overdue: 'Quá hạn' }
+const paymentTagColors = { pending: 'default', customer_paid: 'blue', customer_pending_approval: 'cyan', customer_approved: 'geekblue', confirmed: 'green', paid: 'green', partial: 'blue', completed: 'green', overdue: 'red' }
 const defectStatusLabels = { open: 'Mới', in_progress: 'Đang sửa lỗi', rejected: 'Chưa đạt', fixed: 'Đã sửa', verified: 'Đã xác nhận', closed: 'Đã đóng' }
 const defectStatusColors = { open: 'red', in_progress: 'processing', rejected: 'red', fixed: 'green', verified: 'cyan', closed: 'default' }
 const crStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', implemented: 'Đã triển khai', cancelled: 'Đã hủy' }
@@ -7349,6 +7375,8 @@ const submitPaymentProof = () => {
   }))
 }
 const deletePayment = (p) => router.delete(`/projects/${props.project.id}/payments/${p.id}`, loadingOptions(`delete-pay-${p.id}`))
+const submitPaymentAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/submit`, {}, loadingOptions(`submit-pay-${p.id}`))
+const approvePaymentByCustomerAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/customer-approve`, {}, loadingOptions(`approve-pay-${p.id}`))
 const confirmPaymentAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/confirm`, { paid_date: new Date().toISOString().slice(0, 10) }, loadingOptions(`confirm-pay-${p.id}`))
 const showRejectPaymentModal = ref(false)
 const rejectPaymentTarget = ref(null)

@@ -122,21 +122,6 @@ class CrmProjectsController extends Controller
             'progress',
         ]);
 
-        $user = auth()->user();
-        $isGlobalAdmin = ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) || ($user instanceof \App\Models\User && $user->owner);
-
-        // Filter projects based on user permissions
-        if (!$isGlobalAdmin && !$user->hasPermission(Permissions::PROJECT_MANAGE)) {
-            $query->where(function ($q) use ($user) {
-                $q->where('customer_id', $user->id)
-                    ->orWhere('project_manager_id', $user->id)
-                    ->orWhere('supervisor_id', $user->id)
-                    ->orWhereHas('personnel', function ($pq) use ($user) {
-                        $pq->where('user_id', $user->id);
-                    });
-            });
-        }
-
         if ($status = $request->query('status')) {
             $query->where('status', $status);
         }
@@ -189,10 +174,6 @@ class CrmProjectsController extends Controller
         $counts = [
             'tasks' => \App\Models\ProjectTask::where('project_id', $id)->whereNull('deleted_at')->count(),
             'costs' => \App\Models\Cost::where('project_id', $id)
-                // ->whereNull('material_bill_id')
-                // ->whereNull('subcontractor_payment_id')
-                // ->whereNull('equipment_rental_id')
-                // ->whereNull('equipment_allocation_id')
                 ->count(),
             'payments' => \App\Models\ProjectPayment::where('project_id', $id)->count(),
             'personnel' => \App\Models\ProjectPersonnel::where('project_id', $id)->count(),
@@ -227,17 +208,17 @@ class CrmProjectsController extends Controller
         $suppliers = \App\Models\Supplier::select('id', 'name', 'phone', 'email')->orderBy('name')->get();
         $acceptanceTemplates = \App\Models\AcceptanceTemplate::select('id', 'name')->orderBy('name')->get();
         $globalSubcontractors = class_exists(\App\Models\GlobalSubcontractor::class) ? \App\Models\GlobalSubcontractor::select('id', 'name', 'category')->orderBy('name')->get() : [];
-        
+
         return Inertia::render('Crm/Projects/Show', [
-            'project'     => $project,
-            'contract'    => $project->contract,
+            'project' => $project,
+            'contract' => $project->contract,
             'permissions' => $permissions,
-            'users'       => $users,
-            'counts'      => $counts,
-            'costGroups'  => $costGroups,
+            'users' => $users,
+            'counts' => $counts,
+            'costGroups' => $costGroups,
             'personnelRoles' => $personnelRoles,
-            'materials'   => $materials,
-            'suppliers'   => $suppliers,
+            'materials' => $materials,
+            'suppliers' => $suppliers,
             'acceptanceTemplates' => $acceptanceTemplates,
             'globalSubcontractors' => $globalSubcontractors,
 
@@ -262,8 +243,8 @@ class CrmProjectsController extends Controller
             'scheduleData' => [
                 'allTasks' => \App\Models\ProjectTask::where('project_id', $id)->whereNull('deleted_at')->orderBy('order')
                     ->with([
-                        'assignedUser:id,name', 
-                        'acceptanceStages:id,task_id,status', 
+                        'assignedUser:id,name',
+                        'acceptanceStages:id,task_id,status',
                         'acceptanceItem:id,task_id,workflow_status',
                         'children.assignedUser:id,name',
                         'children.acceptanceStages:id,task_id,status',
@@ -292,7 +273,7 @@ class CrmProjectsController extends Controller
                 'allEquipment' => class_exists(\App\Models\Equipment::class) ? \App\Models\Equipment::select('id', 'name', 'code', 'type', 'status')->orderBy('name')->get() : [],
                 'companyAssets' => class_exists(\App\Models\CompanyAsset::class) ? \App\Models\CompanyAsset::where('quantity', '>', 0)->select('id', 'name', 'code', 'category', 'unit')->orderBy('name')->get() : [],
             ],
-            
+
             'otherData' => Inertia::lazy(fn() => [
                 'comments' => $project->comments()->whereNull('parent_id')->with(['user', 'replies.user'])->latest()->get(),
                 'risks' => $project->risks()->with('owner')->get(),
@@ -618,7 +599,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_DELETE, $project);
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
-        
+
         try {
             $this->financialService->deleteProjectPayment($payment);
             return back()->with('success', 'Đã xóa thanh toán.');
@@ -847,7 +828,7 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
-        
+
         try {
             $this->financialService->approveProjectPaymentByCustomer($payment, null);
             $payment->notifyEvent('customer_approved', $user);
@@ -902,9 +883,9 @@ class CrmProjectsController extends Controller
 
         try {
             $this->logService->approve($log, ['status' => 'approved'], $user);
-            
+
             $this->notifyFromCrm($project, 'log_approved', "Nhật ký thi công ngày {$log->log_date} đã được duyệt.");
-            
+
             return back()->with('success', 'Đã duyệt nhật ký thi công.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
@@ -1016,10 +997,10 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PERSONNEL_ASSIGN, $project);
 
         $validated = $request->validate([
-            'user_id'            => 'required|exists:users,id',
-            'personnel_role_id'  => 'nullable|exists:personnel_roles,id',
-            'role_id'            => 'nullable|exists:personnel_roles,id',
-            'permissions'        => 'nullable|array',
+            'user_id' => 'required|exists:users,id',
+            'personnel_role_id' => 'nullable|exists:personnel_roles,id',
+            'role_id' => 'nullable|exists:personnel_roles,id',
+            'permissions' => 'nullable|array',
         ]);
 
         // Accept either field name from the frontend
@@ -1045,7 +1026,7 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::PERSONNEL_REMOVE, $project);
 
-        $this->personnelService->removeById((int)$personnelId);
+        $this->personnelService->removeById((int) $personnelId);
         return back()->with('success', 'Đã gỡ nhân sự.');
     }
 
@@ -1286,7 +1267,7 @@ class CrmProjectsController extends Controller
         try {
             // Handle file uploads (After images)
             // We use description='after' to distinguish from initial 'before' images
-            $request->merge(['description' => 'after']); 
+            $request->merge(['description' => 'after']);
             $this->attachmentService->handleCrmUpload($request, $defect, "defects/{$project->id}/{$defect->id}/after", false);
 
             $this->defectService->transitionStatus($defect, 'fixed', $user, $request->only(['rectification_details', 'rectification_plan']));
@@ -1396,7 +1377,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $project);
 
         $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
-        
+
         try {
             $this->changeRequestService->approve($cr, $user, $request->input('notes'));
             return back()->with('success', 'Đã duyệt yêu cầu thay đổi.');
@@ -1411,7 +1392,7 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
 
         $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
-        
+
         try {
             $this->changeRequestService->reject($cr, $user, $request->input('reason', 'Không đồng ý'));
             return back()->with('success', 'Đã từ chối yêu cầu thay đổi.');
@@ -1424,7 +1405,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
-        
+
         try {
             $this->changeRequestService->markAsImplemented($cr);
             return back()->with('success', 'Đã đánh dấu đã triển khai.');
@@ -1506,7 +1487,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $risk = ProjectRisk::where('project_id', $project->id)->findOrFail($riskId);
-        
+
         $this->riskService->resolve($risk);
 
         return back()->with('success', 'Đã đánh dấu rủi ro đã xử lý.');
@@ -1763,7 +1744,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($admin, Permissions::SUBCONTRACTOR_APPROVE, $project);
 
         $sub = Subcontractor::where('project_id', $project->id)->findOrFail($id);
-        
+
         try {
             $this->subcontractorService->approve($sub, null); // Pass null as User to match current admin logic
             return back()->with('success', 'Đã duyệt nhà thầu phụ.');
@@ -2088,7 +2069,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::BUDGET_UPDATE, $project);
 
         $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
-        
+
         if (!in_array($budget->status, ['draft', 'rejected'])) {
             return back()->with('error', 'Chỉ có thể gửi duyệt ngân sách ở trạng thái Nháp hoặc Bị từ chối.');
         }
@@ -2121,9 +2102,9 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::BUDGET_APPROVE, $project);
 
         $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
-        
+
         $request->validate(['rejected_reason' => 'required|string|max:500']);
-        
+
         $budget->update([
             'status' => 'rejected',
             'rejected_reason' => $request->rejected_reason
@@ -2139,7 +2120,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::BUDGET_APPROVE, $project);
 
         $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
-        
+
         if ($budget->status !== 'approved') {
             return back()->with('error', 'Chỉ có thể áp dụng ngân sách đã được duyệt.');
         }
@@ -2355,7 +2336,7 @@ class CrmProjectsController extends Controller
             $permConstant = "ACCEPTANCE_APPROVE_LEVEL_" . $validated['level'];
             $this->crmRequire($admin, constant(Permissions::class . "::" . $permConstant), $project);
 
-            $this->acceptanceService->approveStage($stage, $admin, (int)$validated['level']);
+            $this->acceptanceService->approveStage($stage, $admin, (int) $validated['level']);
             return back()->with('success', 'Đã duyệt nghiệm thu cấp ' . $validated['level'] . '.');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
@@ -2583,20 +2564,20 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        
+
         $validated = $request->validate([
-            'equipment_name'    => 'required|string|max:255',
-            'equipment_id'      => 'nullable|exists:equipment,id',
-            'supplier_id'       => 'nullable|exists:suppliers,id',
+            'equipment_name' => 'required|string|max:255',
+            'equipment_id' => 'nullable|exists:equipment,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
             'rental_start_date' => 'required|date',
-            'rental_end_date'   => 'required|date|after:rental_start_date',
-            'total_cost'        => 'required|numeric|min:0',
-            'notes'             => 'nullable|string',
+            'rental_end_date' => 'required|date|after:rental_start_date',
+            'total_cost' => 'required|numeric|min:0',
+            'notes' => 'nullable|string',
         ]);
 
         try {
             $this->equipmentService->upsertRental($validated, $rental, $user);
-            
+
             // Handle file uploads (append)
             $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
 
@@ -2613,13 +2594,13 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
 
         $validated = $request->validate([
-            'equipment_name'    => 'required|string|max:255',
-            'equipment_id'      => 'nullable|exists:equipment,id',
-            'supplier_id'       => 'nullable|exists:suppliers,id',
+            'equipment_name' => 'required|string|max:255',
+            'equipment_id' => 'nullable|exists:equipment,id',
+            'supplier_id' => 'nullable|exists:suppliers,id',
             'rental_start_date' => 'required|date',
-            'rental_end_date'   => 'required|date|after:rental_start_date',
-            'total_cost'        => 'required|numeric|min:0',
-            'notes'             => 'nullable|string',
+            'rental_end_date' => 'required|date|after:rental_start_date',
+            'total_cost' => 'required|numeric|min:0',
+            'notes' => 'nullable|string',
         ]);
 
         try {
@@ -2642,7 +2623,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        
+
         try {
             $this->equipmentService->submitRental($rental);
             return back()->with('success', 'Đã gửi phiếu thuê để BĐH duyệt.');
@@ -2658,7 +2639,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        
+
         if ($this->equipmentService->approveRentalByManagement($rental, $user)) {
             return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
         }
@@ -2672,7 +2653,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
-        
+
         if ($this->equipmentService->confirmRentalByAccountant($rental, $user)) {
             return back()->with('success', 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
         }
@@ -2702,7 +2683,7 @@ class CrmProjectsController extends Controller
 
         try {
             $this->equipmentService->requestReturnRental($rental);
-             return back()->with('success', 'Đã gửi yêu cầu trả thiết bị thuê.');
+            return back()->with('success', 'Đã gửi yêu cầu trả thiết bị thuê.');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -2754,19 +2735,19 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
 
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
-        
+
         $validated = $request->validate([
-            'notes'              => 'nullable|string',
-            'items'              => 'required|array|min:1',
-            'items.*.name'       => 'required|string|max:255',
-            'items.*.code'       => 'nullable|string|max:100',
-            'items.*.quantity'   => 'required|integer|min:1',
+            'notes' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.name' => 'required|string|max:255',
+            'items.*.code' => 'nullable|string|max:100',
+            'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
         ]);
 
         try {
             $this->equipmentService->upsertPurchase($validated, $purchase, $user);
-            
+
             // Handle file uploads (append)
             $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$project->id}/{$purchase->id}", true);
 
@@ -2783,11 +2764,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
 
         $validated = $request->validate([
-            'notes'              => 'nullable|string',
-            'items'              => 'required|array|min:1',
-            'items.*.name'       => 'required|string|max:255',
-            'items.*.code'       => 'nullable|string|max:100',
-            'items.*.quantity'   => 'required|integer|min:1',
+            'notes' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.name' => 'required|string|max:255',
+            'items.*.code' => 'nullable|string|max:100',
+            'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
         ]);
 
@@ -2811,7 +2792,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
 
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
-        
+
         try {
             $this->equipmentService->submitPurchase($purchase);
             return back()->with('success', 'Đã gửi phiếu mua để BĐH duyệt.');
@@ -2827,7 +2808,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
 
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
-        
+
         if ($this->equipmentService->approvePurchaseByManagement($purchase, $user)) {
             return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
         }
@@ -2843,7 +2824,7 @@ class CrmProjectsController extends Controller
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)
             ->with('items')
             ->findOrFail($purchaseId);
-        
+
         try {
             $this->equipmentService->confirmPurchaseByAccountant($purchase, $user);
 
@@ -2854,15 +2835,15 @@ class CrmProjectsController extends Controller
                 ->first();
 
             Cost::create([
-                'project_id'             => $project->id,
-                'cost_group_id'          => $costGroup ? $costGroup->id : null,
-                'category'               => 'equipment',
-                'name'                   => "Mua thiết bị cho DA: {$project->name}",
-                'amount'                 => $purchase->total_amount,
-                'description'            => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
-                'cost_date'              => now(),
-                'status'                 => 'approved',
-                'created_by'             => $purchase->created_by,
+                'project_id' => $project->id,
+                'cost_group_id' => $costGroup ? $costGroup->id : null,
+                'category' => 'equipment',
+                'name' => "Mua thiết bị cho DA: {$project->name}",
+                'amount' => $purchase->total_amount,
+                'description' => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
+                'cost_date' => now(),
+                'status' => 'approved',
+                'created_by' => $purchase->created_by,
                 'management_approved_by' => $purchase->approved_by,
                 'management_approved_at' => $purchase->approved_at,
                 'accountant_approved_by' => $user->id,
@@ -2917,18 +2898,18 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $project);
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
-        
+
         $validated = $request->validate([
             'equipment_id' => 'required|exists:equipment,id',
-            'quantity'     => 'required|integer|min:1',
-            'receiver_id'  => 'required|exists:users,id',
+            'quantity' => 'required|integer|min:1',
+            'receiver_id' => 'required|exists:users,id',
             'received_date' => 'required|date',
-            'notes'        => 'nullable|string',
+            'notes' => 'nullable|string',
         ]);
 
         try {
             $this->equipmentService->upsertUsage($validated, $usage, $user);
-            
+
             // Handle file uploads (append)
             $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
 
@@ -2946,10 +2927,10 @@ class CrmProjectsController extends Controller
 
         $validated = $request->validate([
             'equipment_id' => 'required|exists:equipment,id',
-            'quantity'     => 'required|integer|min:1',
-            'receiver_id'  => 'required|exists:users,id',
+            'quantity' => 'required|integer|min:1',
+            'receiver_id' => 'required|exists:users,id',
             'received_date' => 'required|date',
-            'notes'        => 'nullable|string',
+            'notes' => 'nullable|string',
         ]);
 
         try {
@@ -3057,7 +3038,7 @@ class CrmProjectsController extends Controller
             DB::beginTransaction();
 
             $usage->update([
-                'status'        => 'returned',
+                'status' => 'returned',
                 'returned_date' => now()->toDateString(),
             ]);
 
@@ -3287,9 +3268,9 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
-        
+
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
-        
+
         try {
             $count = $this->acceptanceService->approveAllInStage($stage, $user);
             if ($count > 0) {
@@ -3708,10 +3689,12 @@ class CrmProjectsController extends Controller
      */
     private function syncSubcontractorPaymentFromCost(Cost $cost): void
     {
-        if (!$cost->subcontractor_id) return;
+        if (!$cost->subcontractor_id)
+            return;
 
         $sub = \App\Models\Subcontractor::find($cost->subcontractor_id);
-        if (!$sub) return;
+        if (!$sub)
+            return;
 
         $totalPaid = Cost::where('subcontractor_id', $sub->id)
             ->where('status', 'approved')
@@ -3770,13 +3753,15 @@ class CrmProjectsController extends Controller
         $query = \App\Models\Attendance::with(['user:id,name,email', 'project:id,name', 'approver:id,name', 'laborCost'])
             ->forProject($projectId);
 
-        if ($request->user_id) $query->forUser($request->user_id);
+        if ($request->user_id)
+            $query->forUser($request->user_id);
         if ($request->month && $request->year) {
             $query->forMonth($request->year, $request->month);
         } elseif ($request->date) {
             $query->forDate($request->date);
         }
-        if ($request->status) $query->where('status', $request->status);
+        if ($request->status)
+            $query->where('status', $request->status);
 
         $records = $query->orderByDesc('work_date')->orderByDesc('id')->paginate($request->per_page ?? 30);
 
@@ -3858,7 +3843,8 @@ class CrmProjectsController extends Controller
     public function getShifts(Request $request, string $projectId)
     {
         $query = \App\Models\WorkShift::where('project_id', $projectId);
-        if ($request->active_only) $query->where('is_active', true);
+        if ($request->active_only)
+            $query->where('is_active', true);
         return response()->json($query->orderBy('start_time')->get());
     }
 
@@ -3874,10 +3860,14 @@ class CrmProjectsController extends Controller
         $query = \App\Models\LaborProductivity::with(['user:id,name', 'task:id,name', 'creator:id,name'])
             ->forProject($projectId);
 
-        if ($request->user_id) $query->forUser($request->user_id);
-        if ($request->task_id) $query->where('task_id', $request->task_id);
-        if ($request->from) $query->where('record_date', '>=', $request->from);
-        if ($request->to) $query->where('record_date', '<=', $request->to);
+        if ($request->user_id)
+            $query->forUser($request->user_id);
+        if ($request->task_id)
+            $query->where('task_id', $request->task_id);
+        if ($request->from)
+            $query->where('record_date', '>=', $request->from);
+        if ($request->to)
+            $query->where('record_date', '<=', $request->to);
 
         return response()->json($query->orderByDesc('record_date')->paginate($request->per_page ?? 20));
     }
@@ -3905,7 +3895,7 @@ class CrmProjectsController extends Controller
 
     public function laborProductivityDashboard(Request $request, string $projectId)
     {
-        $data = $this->productivityService->getDashboardData((int)$projectId, $request->all());
+        $data = $this->productivityService->getDashboardData((int) $projectId, $request->all());
         return response()->json($data);
     }
 
@@ -3918,7 +3908,7 @@ class CrmProjectsController extends Controller
         $project = Project::findOrFail($projectId);
 
         $validated = $request->validate([
-            'year'  => 'required|integer|min:2020|max:2030',
+            'year' => 'required|integer|min:2020|max:2030',
             'month' => 'required|integer|min:1|max:12',
         ]);
 
@@ -3932,7 +3922,7 @@ class CrmProjectsController extends Controller
 
             return response()->json([
                 'message' => "Đã tạo {$result['created']} chi phí nhân công, tổng " . number_format($result['total_amount'], 0, ',', '.') . 'đ',
-                'data'    => $result,
+                'data' => $result,
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 500);
@@ -3984,7 +3974,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::WARRANTY_UPDATE, $project);
 
         $warranty = \App\Models\ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
-        
+
         $validated = $request->validate([
             'handover_date' => 'required|date',
             'warranty_content' => 'required|string',
@@ -4033,7 +4023,7 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $project);
 
         $warranty = \App\Models\ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
-        
+
         $warranty->update(['status' => \App\Models\ProjectWarranty::STATUS_REJECTED]);
 
         return back()->with('success', 'Đã từ chối phiếu bảo hành.');

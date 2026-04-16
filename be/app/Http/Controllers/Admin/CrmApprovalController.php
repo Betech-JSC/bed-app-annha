@@ -159,7 +159,7 @@ class CrmApprovalController extends Controller
                     ->values()
                 : collect([]),
 
-            'accountant' => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT)
+            'accountant' => ($this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT) || $this->crmCan($user, Permissions::PAYMENT_CONFIRM))
                 ? collect([])
                     ->concat($accountantItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'accountant'])))
                     ->concat($subPaymentAccountantFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'sub_payment_confirm'])))
@@ -208,7 +208,7 @@ class CrmApprovalController extends Controller
         // Add a "permissions" map to help UI decide initial tab
         $userPermissions = [
             'can_management' => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT),
-            'can_accountant' => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT),
+            'can_accountant' => ($this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT) || $this->crmCan($user, Permissions::PAYMENT_CONFIRM)),
             'can_pm' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2),
             'can_supervisor' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1),
             'can_customer' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $this->crmCan($user, Permissions::PAYMENT_APPROVE),

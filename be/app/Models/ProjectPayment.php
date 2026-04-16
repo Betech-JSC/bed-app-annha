@@ -35,6 +35,7 @@ class ProjectPayment extends Model
         'payment_proof_uploaded_at',
         'reminder_sent_at',
         'reminder_count',
+        'actual_amount',
     ];
 
     protected $casts = [
@@ -101,6 +102,19 @@ class ProjectPayment extends Model
     // ==================================================================
 
     /**
+     * Gửi yêu cầu thanh toán cho khách hàng duyệt (Nhân viên thực hiện)
+     */
+    public function submit(): bool
+    {
+        if ($this->status !== 'pending' && $this->status !== 'overdue') {
+            return false;
+        }
+
+        $this->status = 'customer_pending_approval';
+        return $this->save();
+    }
+
+    /**
      * Khách hàng duyệt thanh toán (sau khi upload hình xác nhận)
      */
     public function approveByCustomer(?User $user = null): bool
@@ -140,8 +154,8 @@ class ProjectPayment extends Model
      */
     public function markAsPaidByCustomer(?User $user = null, ?string $paidDate = null, ?float $actualAmount = null): bool
     {
-        // FIX BUG 4: Also accept 'overdue' payments (controller already checks both)
-        if (!in_array($this->status, ['pending', 'overdue'])) {
+        // Allow reporting payment from any initial pending state
+        if (!in_array($this->status, ['pending', 'overdue', 'customer_pending_approval', 'customer_approved'])) {
             return false;
         }
 
@@ -152,10 +166,13 @@ class ProjectPayment extends Model
             $this->paid_date = now()->toDateString();
         }
         
-        // Nếu có số tiền thực tế khác với số tiền ban đầu, lưu vào notes hoặc tạo field mới
-        if ($actualAmount !== null && $actualAmount != $this->amount) {
-            $this->notes = ($this->notes ? $this->notes . "\n" : '') . 
-                "Số tiền thực tế: " . number_format($actualAmount, 0, ',', '.') . " VND";
+        // Nếu có số tiền thực tế khác với số tiền ban đầu, lưu vào notes và cập nhật column thực tế
+        if ($actualAmount !== null) {
+            $this->actual_amount = $actualAmount;
+            if ($actualAmount != $this->amount) {
+                $this->notes = ($this->notes ? $this->notes . "\n" : '') . 
+                    "Số tiền thực tế: " . number_format($actualAmount, 0, ',', '.') . " VND";
+            }
         }
 
         if ($user) {

@@ -200,10 +200,9 @@ class ApprovalQueryService
         $isSuperAdmin = $user->isSuperAdmin();
         $isCustomer = $user->isCustomer();
 
-        // Define global approver roles (Accountant, Business Management, etc.)
-        // These roles should see pending items from ALL projects even if not explicitly assigned as personnel.
         $isGlobalApprover = $user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) 
             || $user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)
+            || $user->hasPermission(Permissions::PAYMENT_CONFIRM)
             || $user->hasPermission(Permissions::FINANCE_MANAGE);
 
         $canSeeAllProjects = $isSuperAdmin || $isGlobalApprover;
@@ -635,10 +634,10 @@ class ApprovalQueryService
         $realPendingManagement = isset($data['costs_management']) 
             ? $data['costs_management']->whereIn('status', ['pending', 'pending_management_approval'])->count()
             : Cost::whereIn('status', ['pending', 'pending_management_approval'])->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))->count();
-
         $realPendingAccountant = isset($data['costs_accountant'])
-            ? $data['costs_accountant']->count()
-            : Cost::whereIn('status', ['pending_accountant_approval'])->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))->count();
+            ? ($data['costs_accountant']->count() + ($data['payments_paid'] ?? collect())->count())
+            : (Cost::whereIn('status', ['pending_accountant_approval'])->whereNull('material_bill_id')->whereNull('subcontractor_payment_id')->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))->count() +
+               ProjectPayment::where('status', 'customer_paid')->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))->count());
 
         $realPendingAcceptance = (isset($data['acceptance_supervisor']) ? $data['acceptance_supervisor']->count() : 0) +
                                  (isset($data['acceptance_pm']) ? $data['acceptance_pm']->count() : 0) +
@@ -658,7 +657,8 @@ class ApprovalQueryService
                 'change_requests', 'additional_costs', 'sub_payments_management', 
                 'sub_payments_accountant', 'material_bills_management', 'material_bills_accountant',
                 'equipment_rentals_management', 'equipment_rentals_accountant', 'equipment_rentals_return',
-                'asset_usages_management', 'asset_usages_accountant', 'asset_usages_return'
+                'asset_usages_management', 'asset_usages_accountant', 'asset_usages_return',
+                'payments_paid'
             ];
             foreach ($otherKeys as $key) {
                 $pendingOthers += isset($data[$key]) ? $data[$key]->count() : 0;
@@ -689,6 +689,7 @@ class ApprovalQueryService
             $totalPendingAmount += (isset($data['sub_payments_accountant']) ? $data['sub_payments_accountant']->sum('amount') : 0);
             $totalPendingAmount += (isset($data['material_bills_management']) ? $data['material_bills_management']->sum('total_amount') : 0);
             $totalPendingAmount += (isset($data['material_bills_accountant']) ? $data['material_bills_accountant']->sum('total_amount') : 0);
+            $totalPendingAmount += (isset($data['payments_paid']) ? $data['payments_paid']->sum('amount') : 0);
             
             // Fallback for amount if costs weren't loaded
             if (!isset($data['costs_management'])) {
@@ -874,6 +875,20 @@ class ApprovalQueryService
                             'attachments_count' => $p->attachments->count(),
                         ];
                     }
+                }
+            }
+            if ($type === 'all' || $type === 'accountant' || $type === 'payment') {
+                foreach ($data['payments_paid'] ?? [] as $p) {
+                    $items[] = [
+                        'id' => $p->id, 'type' => 'payment', 'title' => 'TT Dự án: # ' . ($p->payment_number ?? $p->id),
+                        'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
+                        'status' => $p->status, 'status_label' => 'Cần xác nhận',
+                        'created_by' => 'KH đã up chứng từ', 'created_at' => $p->updated_at->toISOString(),
+                        'project_id' => $p->project_id, 'can_approve' => $canApproveAccountant,
+                        'approval_level' => 'accountant', 'role_group' => 'accountant',
+                        'attachments' => $this->formatAttachments($p),
+                        'attachments_count' => $p->attachments->count(),
+                    ];
                 }
             }
         }

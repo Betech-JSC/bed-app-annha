@@ -541,6 +541,79 @@
       </a-empty>
     </div>
   </a-modal>
+
+  <!-- ─── Payment Report Modal (KH báo cáo thanh toán) ─── -->
+  <a-modal
+    v-model:open="showPaymentProofModal"
+    title="Báo cáo thanh toán"
+    :width="560"
+    @ok="submitPaymentProof"
+    :confirm-loading="paymentProofLoading"
+    ok-text="Gửi báo cáo"
+    cancel-text="Hủy"
+    :ok-button-props="{ style: { background: '#10B981', borderColor: '#10B981' } }"
+    centered
+    destroy-on-close
+    class="crm-modal"
+  >
+    <div class="mt-4 space-y-5">
+      <div v-if="paymentProofTarget" class="p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 text-xl shadow-inner">
+          <CreditCardOutlined />
+        </div>
+        <div class="flex-1">
+          <div class="text-sm font-bold text-gray-800">{{ paymentProofTarget.title }}</div>
+          <div class="text-xs text-gray-500 mt-0.5">{{ paymentProofTarget.subtitle }}</div>
+          <div class="text-xs font-bold text-blue-600 mt-1">Số tiền thanh toán dự kiến: {{ formatCurrency(paymentProofTarget.amount) }}</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Ngày thanh toán <span class="text-red-500">*</span></label>
+          <a-date-picker v-model:value="paymentProofForm.paid_date" class="w-full rounded-xl" size="large" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Chọn ngày" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Số tiền thực tế (Nếu khác)</label>
+          <a-input-number v-model:value="paymentProofForm.actual_amount" class="w-full rounded-xl" size="large" placeholder="Nhập số tiền" :formatter="value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="value => value.replace(/\$\s?|(,*)/g, '')" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider flex items-center justify-between">
+          <span>Tệp đính kèm (Ảnh chứng từ/Bill) <span class="text-red-500">*</span></span>
+          <span v-if="paymentProofFiles.length" class="text-emerald-600">Đã chọn {{ paymentProofFiles.length }} tệp</span>
+        </label>
+        <div 
+          class="relative border-2 border-dashed border-gray-200 rounded-2xl p-8 transition-all hover:border-blue-400 hover:bg-blue-50/30 group cursor-pointer overflow-hidden"
+          @click="$refs.proofFileInput.click()"
+        >
+          <input type="file" ref="proofFileInput" class="hidden" multiple @change="onPaymentProofFileChange" />
+          <div class="text-center">
+            <div class="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform duration-300">
+              <CloudUploadOutlined class="text-2xl text-gray-400 group-hover:text-blue-500" />
+            </div>
+            <div class="text-sm font-semibold text-gray-600">Nhấn để tải tệp lên</div>
+            <div class="text-xs text-gray-400 mt-1">Yêu cầu ảnh chụp bill chuyển khoản hoặc phiếu thu</div>
+          </div>
+          
+          <div v-if="paymentProofFiles.length" class="mt-4 flex flex-wrap gap-2">
+            <div v-for="(file, idx) in paymentProofFiles" :key="idx" class="px-3 py-1 bg-white border border-gray-100 rounded-lg text-xs flex items-center gap-2 shadow-sm animate-slide-up">
+              <FileOutlined class="text-blue-500" />
+              <span class="truncate max-w-[120px]">{{ file.name }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex items-start gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
+        <div class="text-amber-500 mt-0.5"><InfoCircleOutlined /></div>
+        <div class="text-[11px] text-amber-700 leading-relaxed italic">
+          <strong>Lưu ý:</strong> Một khi bạn gửi báo cáo, thông tin sẽ được chuyển qua bộ phận Kế toán để đối soát và xác nhận nhận tiền thành công. Trạng thái đợt thanh toán sẽ chuyển sang "Đã báo cáo thanh toán".
+        </div>
+      </div>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
@@ -640,6 +713,11 @@ const budgetModalVisible = ref(false)
 const budgetApprovalTarget = ref(null)
 const selectedBudgetItemId = ref(null)
 const budgetApprovalLoading = ref(false)
+const showPaymentProofModal = ref(false)
+const paymentProofTarget = ref(null)
+const paymentProofFiles = ref([])
+const paymentProofForm = ref({ paid_date: new Date().toISOString().slice(0, 10), actual_amount: null })
+const paymentProofLoading = ref(false)
 
 const budgetItemsForTarget = computed(() => {
   if (!budgetApprovalTarget.value?.project_id) return []
@@ -729,7 +807,7 @@ const activeItems = computed(() => {
   // Filter by status
   if (activeStatus.value !== 'all') {
     items = items.filter(i => {
-      if (activeStatus.value === 'pending') return ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'pending_return', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed'].includes(i.status)
+      if (activeStatus.value === 'pending') return ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'pending_return', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed', 'customer_paid', 'customer_pending_approval', 'overdue'].includes(i.status)
       if (activeStatus.value === 'draft') return i.status === 'draft'
       if (activeStatus.value === 'rejected') return i.status === 'rejected'
       if (activeStatus.value === 'approved') return ['approved', 'confirmed', 'paid', 'customer_approved', 'in_use', 'returned'].includes(i.status)
@@ -877,6 +955,48 @@ const approveUrlMap = {
   attendance: (r) => `/approvals/attendance/${r.id}/approve`,
 }
 
+const openPaymentProofModal = (record) => {
+  paymentProofTarget.value = record
+  paymentProofFiles.value = []
+  paymentProofForm.value = { 
+    paid_date: new Date().toISOString().slice(0, 10), 
+    actual_amount: record.amount || null 
+  }
+  showPaymentProofModal.value = true
+}
+
+const onPaymentProofFileChange = (e) => {
+  paymentProofFiles.value = Array.from(e.target.files || [])
+}
+
+const submitPaymentProof = () => {
+  if (!paymentProofFiles.value.length || !paymentProofTarget.value) {
+    message.warning('Vui lòng chọn ít nhất một tệp chứng từ')
+    return
+  }
+  
+  paymentProofLoading.value = true
+  const record = paymentProofTarget.value
+  const formData = new FormData()
+  paymentProofFiles.value.forEach(f => formData.append('files[]', f))
+  if (paymentProofForm.value.paid_date) formData.append('paid_date', paymentProofForm.value.paid_date)
+  if (paymentProofForm.value.actual_amount) formData.append('actual_amount', paymentProofForm.value.actual_amount)
+  
+  router.post(`/projects/${record.project_id}/payments/${record.id}/mark-paid`, formData, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      message.success('Báo cáo thanh toán thành công. Đã gửi cho Kế toán xác nhận.')
+      showPaymentProofModal.value = false
+      paymentProofFiles.value = []; paymentProofTarget.value = null; paymentProofLoading.value = false
+    },
+    onError: (errors) => {
+      message.error(Object.values(errors).flat()[0] || 'Lỗi khi gửi báo cáo')
+      paymentProofLoading.value = false
+    }
+  })
+}
+
 const approveLabels = {
   management: 'BĐH duyệt',
   accountant: 'Kế Toán xác nhận',
@@ -911,6 +1031,12 @@ const handleApproveByType = (record) => {
   const label = approveLabels[type] || 'Duyệt'
   const urlFn = approveUrlMap[type]
   if (!urlFn) return
+
+  // Customer reporting payment MUST upload proof
+  if (type === 'project_payment' && activeRole.value === 'customer') {
+    openPaymentProofModal(record)
+    return
+  }
 
   // Enforce mandatory attachments for Accountant level on financial items (skip for HR items and labor costs from attendance)
   if (type !== 'attendance' && record.category !== 'labor' && activeRole.value === 'accountant' && (record.attachments_count === 0 || !record.attachments_count)) {

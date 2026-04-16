@@ -159,6 +159,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::PAYMENT_CREATE,
             Permissions::PAYMENT_UPDATE,
             Permissions::PAYMENT_DELETE,
+            Permissions::PAYMENT_APPROVE,
             Permissions::PAYMENT_CONFIRM,
             Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
 
@@ -651,6 +652,8 @@ class RolePermissionSeeder extends Seeder
 
             // Payment
             Permissions::PAYMENT_VIEW,
+            Permissions::PAYMENT_CREATE,
+            Permissions::PAYMENT_APPROVE,
             Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
 
             // Invoice

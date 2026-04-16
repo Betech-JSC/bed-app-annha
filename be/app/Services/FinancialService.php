@@ -376,6 +376,19 @@ class FinancialService
     }
 
     /**
+     * Staff submits a payment request to the customer
+     */
+    public function submitProjectPayment(ProjectPayment $payment, $user = null): bool
+    {
+        $submitted = $payment->submit();
+        if ($submitted) {
+            // Trigger notifications or other side effects
+            // $payment->notifyEvent('submitted', $user);
+        }
+        return $submitted;
+    }
+
+    /**
      * Delete project payment
      */
     public function deleteProjectPayment(ProjectPayment $payment): bool
@@ -459,8 +472,8 @@ class FinancialService
      */
     public function customerMarkAsPaid(ProjectPayment $payment, array $data, User $user): bool
     {
-        if ($payment->status !== 'pending') {
-            throw new \Exception('Chỉ có thể đánh dấu đã thanh toán khi thanh toán ở trạng thái chờ thanh toán.');
+        if (!in_array($payment->status, ['customer_pending_approval', 'customer_approved'])) {
+            throw new \Exception('Chỉ có thể đánh dấu đã thanh toán khi yêu cầu thanh toán đang chờ duyệt hoặc đã được duyệt.');
         }
 
         return DB::transaction(function () use ($payment, $data, $user) {

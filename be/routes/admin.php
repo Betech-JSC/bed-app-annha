@@ -248,6 +248,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
 
         // Payments
         Route::post('/{project}/payments', [CrmProjectsController::class, 'storePayment'])->name('payments.store');
+        Route::post('/{project}/payments/{payment}/submit', [CrmProjectsController::class, 'submitPayment'])->name('payments.submit');
         Route::put('/{project}/payments/{payment}', [CrmProjectsController::class, 'updatePayment'])->name('payments.update');
         Route::post('/{project}/payments/{payment}/mark-paid', [CrmProjectsController::class, 'markPaymentPaidByCustomer'])->name('payments.mark-paid');
         Route::post('/{project}/payments/{payment}/upload-proof', [CrmProjectsController::class, 'uploadPaymentProof'])->name('payments.upload-proof');

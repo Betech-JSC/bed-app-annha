@@ -234,6 +234,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{projectId}/payments', [ProjectPaymentController::class, 'index']);
         Route::get('/{projectId}/payments/{id}', [ProjectPaymentController::class, 'show']);
         Route::post('/{projectId}/payments', [ProjectPaymentController::class, 'store']);
+        Route::post('/{projectId}/payments/{id}/submit', [ProjectPaymentController::class, 'submit']);
         Route::put('/{projectId}/payments/{id}', [ProjectPaymentController::class, 'update']);
         Route::post('/{projectId}/payments/{id}/upload-proof', [ProjectPaymentController::class, 'uploadPaymentProof']);
         Route::post('/{projectId}/payments/{id}/mark-paid-by-customer', [ProjectPaymentController::class, 'markAsPaidByCustomer']);

@@ -155,6 +155,34 @@ class ProjectPaymentController extends Controller
         }
     }
 
+    public function submit(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+        $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
+
+        if (!$this->authService->can($user, Permissions::PAYMENT_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền gửi yêu cầu thanh toán cho dự án này.'
+            ], 403);
+        }
+
+        try {
+            $this->financialService->submitProjectPayment($payment, $user);
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã gửi yêu cầu thanh toán cho khách hàng.',
+                'data' => $payment->fresh()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function confirm(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
@@ -276,13 +304,20 @@ class ProjectPaymentController extends Controller
 
         $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
 
+        $validated = $request->validate([
+            'paid_date' => 'nullable|date',
+            'actual_amount' => 'nullable|numeric|min:0',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
+        ]);
+
         try {
-            $this->financialService->approveProjectPaymentByCustomer($payment, $user);
-            $this->notificationService->notifyPaymentConfirmed($payment); 
+            // Merged Approve & Mark as Paid as per requirement: "Duyệt up files gửi Kế toán"
+            $this->financialService->customerMarkAsPaid($payment, $validated, $user);
             
             return response()->json([
                 'success' => true,
-                'message' => 'Đã duyệt thanh toán. Đang chờ kế toán xác nhận.',
+                'message' => 'Đã duyệt và gởi báo cáo thanh toán cho Kế toán.',
                 'data' => $payment->fresh(['customerApprover', 'attachments'])
             ]);
         } catch (\Exception $e) {

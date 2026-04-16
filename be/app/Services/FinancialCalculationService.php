@@ -33,7 +33,7 @@ class FinancialCalculationService
             $paidPaymentsQuery->whereBetween('paid_date', [$startDate, $endDate]);
         }
         
-        $paidPayments = $paidPaymentsQuery->sum('amount');
+        $paidPayments = $paidPaymentsQuery->sum(\DB::raw('COALESCE(actual_amount, amount)'));
 
         // Tổng doanh thu = Giá trị hợp đồng + Phát sinh
         $totalRevenue = $contractValue + $additionalRevenue;
