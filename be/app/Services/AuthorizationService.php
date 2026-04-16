@@ -63,13 +63,25 @@ class AuthorizationService
         $projectId = $project instanceof Project ? $project->id : $project;
 
         // 4. Check project assignment
+        // A user is considered "assigned" if:
+        // a. They exist in the project_personnel table
+        // b. They are the CUSTOMER assigned to the project
+        // c. They are the PM or SUPERVISOR assigned to the project
+        
+        $projectModel = $project instanceof Project ? $project : Project::find($projectId);
+        if (!$projectModel) return false;
+
+        $isDirectlyAssigned = $projectModel->customer_id === $user->id 
+            || $projectModel->project_manager_id === $user->id
+            || $projectModel->supervisor_id === $user->id;
+
         $personnel = ProjectPersonnel::where('project_id', $projectId)
             ->where('user_id', $user->id)
             ->first();
 
-        if ($personnel) {
+        if ($personnel || $isDirectlyAssigned) {
             // Check project-specific permission overrides (JSON column)
-            if ($personnel->permissions && is_array($personnel->permissions) && count($personnel->permissions) > 0) {
+            if ($personnel && $personnel->permissions && is_array($personnel->permissions) && count($personnel->permissions) > 0) {
                 if (in_array('*', $personnel->permissions) || in_array($permission, $personnel->permissions)) {
                     return true;
                 }

@@ -198,6 +198,7 @@ class ApprovalQueryService
     public function getApprovalData($user, string $type = 'all'): array
     {
         $isSuperAdmin = $user->isSuperAdmin();
+        $isCustomer = $user->isCustomer();
 
         // Define global approver roles (Accountant, Business Management, etc.)
         // These roles should see pending items from ALL projects even if not explicitly assigned as personnel.
@@ -206,7 +207,21 @@ class ApprovalQueryService
             || $user->hasPermission(Permissions::FINANCE_MANAGE);
 
         $canSeeAllProjects = $isSuperAdmin || $isGlobalApprover;
-        $projectIds = $canSeeAllProjects ? [] : $user->projects()->pluck('projects.id')->toArray();
+        
+        // Define projects the user is explicitly linked to
+        $projectIds = [];
+        if (!$canSeeAllProjects) {
+            $assignedViaPersonnel = $user->projects()->pluck('projects.id')->toArray();
+            
+            // Also include projects where user is explicitly set as Customer, PM or Supervisor on the project model
+            $assignedViaModel = \App\Models\Project::where('customer_id', $user->id)
+                ->orWhere('project_manager_id', $user->id)
+                ->orWhere('supervisor_id', $user->id)
+                ->pluck('id')
+                ->toArray();
+                
+            $projectIds = array_unique(array_merge($assignedViaPersonnel, $assignedViaModel));
+        }
 
         $data = [];
 
@@ -322,7 +337,14 @@ class ApprovalQueryService
         // PROJECT PAYMENTS (Thanh toán dự án)
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'payment'])) {
-            $data['payments_pending'] = ProjectPayment::where('status', 'customer_pending_approval')
+            $paymentStatuses = ['customer_pending_approval'];
+            if ($isCustomer) {
+                // For customers, they should also see and be reminded of payments they need to make
+                $paymentStatuses[] = 'pending';
+                $paymentStatuses[] = 'overdue';
+            }
+
+            $data['payments_pending'] = ProjectPayment::whereIn('status', $paymentStatuses)
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
                 ->with(['project:id,name,code', 'contract:id,contract_value', 'attachments'])
                 ->orderBy('updated_at', 'desc')
@@ -702,12 +724,12 @@ class ApprovalQueryService
     {
         return match ($status) {
             'draft' => 'Nháp',
-            'pending', 'pending_approval' => 'Chờ duyệt',
+            'pending', 'pending_approval' => 'Chưa thanh toán',
             'pending_management_approval', 'pending_management' => 'Chờ BĐH duyệt',
             'pending_accountant_approval', 'pending_accountant' => 'Chờ KT xác nhận',
             'pending_accountant_confirmation' => 'Chờ KT xác nhận',
-            'pending_customer_approval', 'customer_pending_approval' => 'Chờ KH duyệt',
-            'project_manager_approved' => 'Chờ KH duyệt',
+            'pending_customer_approval', 'customer_pending_approval' => 'Chưa thanh toán',
+            'project_manager_approved' => 'Chưa thanh toán',
             'supervisor_approved' => 'Chờ QLDA duyệt',
             'submitted' => 'Đã gửi',
             'under_review' => 'Đang xem xét',
@@ -717,6 +739,7 @@ class ApprovalQueryService
             'fixed' => 'Đã sửa — Chờ xác nhận',
             'verified' => 'Đã xác nhận',
             'pending_return' => 'Chờ xác nhận trả',
+            'overdue' => 'Chưa thanh toán',
             default => $status,
         };
     }
@@ -962,17 +985,47 @@ class ApprovalQueryService
                     ];
                 }
             }
+            // Contracts for Customer
+            if ($type === 'all' || $type === 'customer' || $type === 'contract') {
+                foreach ($data['contracts'] ?? [] as $contract) {
+                    $items[] = [
+                        'id' => $contract->id, 'type' => 'contract', 'title' => 'Hợp đồng: ' . ($contract->contract_number ?? 'Mới'),
+                        'subtitle' => $contract->project->name ?? 'Dự án', 'amount' => (float) $contract->contract_value,
+                        'status' => $contract->status, 'status_label' => 'Chờ ký',
+                        'created_by' => 'Hệ thống', 'created_at' => $contract->updated_at->toISOString(),
+                        'project_id' => $contract->project_id, 'can_approve' => $user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_2) || $user->isSuperAdmin(), 
+                        'approval_level' => 'customer', 'role_group' => 'customer',
+                        'attachments' => $this->formatAttachments($contract),
+                        'attachments_count' => $contract->attachments->count(),
+                    ];
+                }
+            }
+
             if ($type === 'all' || $type === 'customer' || $type === 'payment') {
                 foreach (($data['payments_pending'] ?? collect())->unique('id') as $p) {
+                    $itemType = 'payment';
+                    $statusLabel = $this->getStatusLabel($p->status);
+                    
+                    if ($p->status === 'customer_pending_approval') {
+                        $statusLabel = 'Duyệt chứng từ';
+                    } elseif ($p->status === 'pending') {
+                        $statusLabel = 'Cần thanh toán';
+                        $itemType = 'payment_reminder';
+                    } elseif ($p->status === 'overdue') {
+                        $statusLabel = 'TRỄ HẠN';
+                        $itemType = 'payment_reminder';
+                    }
+
                     $items[] = [
-                        'id' => $p->id, 'type' => 'payment', 'title' => 'TT Dự án: ' . ($p->payment_name ?? 'Thanh toán'),
+                        'id' => $p->id, 'type' => $itemType, 'title' => 'TT Dự án: # ' . ($p->payment_number ?? 'N/A'),
                         'subtitle' => $p->project->name ?? 'Dự án', 'amount' => (float) $p->amount,
-                        'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
+                        'status' => $p->status, 'status_label' => $statusLabel,
                         'created_by' => 'Hệ thống', 'created_at' => $p->updated_at->toISOString(),
                         'project_id' => $p->project_id, 'can_approve' => $user->hasPermission(Permissions::PAYMENT_APPROVE) || $user->isSuperAdmin(),
                         'approval_level' => 'customer', 'role_group' => 'customer',
                         'attachments' => $this->formatAttachments($p),
                         'attachments_count' => $p->attachments->count(),
+                        'due_date' => $p->due_date ? $p->due_date->toISOString() : null,
                     ];
                 }
             }

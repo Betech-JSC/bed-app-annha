@@ -122,6 +122,21 @@ class CrmProjectsController extends Controller
             'progress',
         ]);
 
+        $user = auth()->user();
+        $isGlobalAdmin = ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) || ($user instanceof \App\Models\User && $user->owner);
+
+        // Filter projects based on user permissions
+        if (!$isGlobalAdmin && !$user->hasPermission(Permissions::PROJECT_MANAGE)) {
+            $query->where(function ($q) use ($user) {
+                $q->where('customer_id', $user->id)
+                    ->orWhere('project_manager_id', $user->id)
+                    ->orWhere('supervisor_id', $user->id)
+                    ->orWhereHas('personnel', function ($pq) use ($user) {
+                        $pq->where('user_id', $user->id);
+                    });
+            });
+        }
+
         if ($status = $request->query('status')) {
             $query->where('status', $status);
         }

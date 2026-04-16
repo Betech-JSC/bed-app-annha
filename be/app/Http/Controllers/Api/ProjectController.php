@@ -49,6 +49,7 @@ class ProjectController extends Controller
             $query->where(function ($q) use ($user) {
                 $q->where('customer_id', $user->id)
                     ->orWhere('project_manager_id', $user->id)
+                    ->orWhere('supervisor_id', $user->id)
                     ->orWhereHas('personnel', function ($pq) use ($user) {
                         $pq->where('user_id', $user->id);
                     });

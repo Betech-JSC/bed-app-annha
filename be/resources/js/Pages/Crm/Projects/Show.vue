@@ -4492,7 +4492,7 @@
              <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
           </template>
           <template v-else-if="['pending','overdue'].includes(paymentDetailRecord.status) && can('payment.mark_paid_by_customer')">
-            <a-button type="primary" @click="openPaymentProofModal(paymentDetailRecord)">Báo cáo KH đã TT</a-button>
+            <a-button type="primary" @click="openPaymentProofModal(paymentDetailRecord)">Báo cáo Đã thanh toán</a-button>
           </template>
         </div>
       </div>
@@ -6842,7 +6842,7 @@ const acStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', pending_appro
 const acStatusColors = { draft: 'default', pending: 'orange', pending_approval: 'orange', approved: 'green', rejected: 'red', cancelled: 'default' }
 const contractStatusLabels = { draft: 'Nháp', pending_customer_approval: 'Chờ KH duyệt', pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận', active: 'Đang hiệu lực', approved: 'Đã duyệt', rejected: 'Từ chối', expired: 'Hết hạn', terminated: 'Đã thanh lý', cancelled: 'Đã hủy' }
 const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', active: 'green', approved: 'green', rejected: 'red', expired: 'orange', terminated: 'red', cancelled: 'default' }
-const paymentStatusLabelsMap = { pending: 'Chờ thanh toán', customer_paid: 'KH đã TT', customer_pending_approval: 'Chờ KH duyệt', customer_approved: 'KH đã duyệt', confirmed: 'KT đã xác nhận', paid: 'Đã TT đủ', partial: 'TT 1 phần', completed: 'Hoàn tất', overdue: 'Quá hạn TT' }
+const paymentStatusLabelsMap = { pending: 'Chưa thanh toán', customer_paid: 'Đã thanh toán', customer_pending_approval: 'Chưa thanh toán', customer_approved: 'Chưa thanh toán', confirmed: 'Đã thanh toán', paid: 'Đã thanh toán', partial: 'TT 1 phần', completed: 'Hoàn tất', overdue: 'Chưa thanh toán' }
 const paymentTagColors = { pending: 'orange', customer_paid: 'blue', customer_pending_approval: 'cyan', customer_approved: 'geekblue', confirmed: 'green', paid: 'green', partial: 'blue', completed: 'green', overdue: 'red' }
 const defectStatusLabels = { open: 'Mới', in_progress: 'Đang sửa lỗi', rejected: 'Chưa đạt', fixed: 'Đã sửa', verified: 'Đã xác nhận', closed: 'Đã đóng' }
 const defectStatusColors = { open: 'red', in_progress: 'processing', rejected: 'red', fixed: 'green', verified: 'cyan', closed: 'default' }
