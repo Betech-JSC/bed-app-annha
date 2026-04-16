@@ -202,7 +202,6 @@ class ApprovalCenterController extends Controller
     {
         if ($user->owner || $user->isSuperAdmin()) return true;
 
-        $projectIds = $user->projects()->pluck('projects.id')->toArray();
         $modelMap = [
             'project_cost' => Cost::class,
             'material_bill' => 'App\\Models\\MaterialBill',
@@ -222,18 +221,6 @@ class ApprovalCenterController extends Controller
             'asset_usage' => AssetUsage::class,
         ];
 
-        if (isset($modelMap[$type])) {
-            $modelClass = $modelMap[$type];
-            if (class_exists($modelClass)) {
-                $item = $modelClass::find($id);
-                if ($item && isset($item->project_id) && !in_array($item->project_id, $projectIds)) {
-                    if ($item->project_id !== null) {
-                        return response()->json(['success' => false, 'message' => 'Bạn không được phân công vào dự án này.'], 403);
-                    }
-                }
-            }
-        }
-
         $permission = match ($type) {
             'company_cost', 'project_cost' => $this->getCostPermission($id),
             'material_bill' => Permissions::MATERIAL_APPROVE,
@@ -251,7 +238,22 @@ class ApprovalCenterController extends Controller
             default => null,
         };
 
-        if ($permission && !$user->hasPermission($permission)) {
+        if (!$permission) return true; // No specific permission defined, allow service to handle
+
+        // Find the item to get project context
+        $project = null;
+        if (isset($modelMap[$type])) {
+            $modelClass = $modelMap[$type];
+            if (class_exists($modelClass)) {
+                $item = $modelClass::find($id);
+                if ($item && isset($item->project_id)) {
+                    $project = $item->project;
+                }
+            }
+        }
+
+        // Use AuthorizationService for uniform check
+        if (!$this->authService->can($user, $permission, $project)) {
             return response()->json(['success' => false, 'message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
         }
 

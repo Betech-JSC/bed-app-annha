@@ -353,7 +353,7 @@ class FinancialService
 
             $fillable = [
                 'project_id', 'contract_id', 'payment_number', 'amount', 
-                'notes', 'due_date', 'paid_date', 'status'
+                'notes', 'due_date', 'paid_date', 'status', 'actual_amount'
             ];
 
             foreach ($fillable as $field) {

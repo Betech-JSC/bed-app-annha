@@ -370,8 +370,26 @@ class CrmApprovalController extends Controller
 
     public function approveChangeRequest(Request $request, $id)
     {
+        $item = ChangeRequest::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $item->project);
+
         $result = $this->approvalActionService->approve($user, 'change_request', $id, ['notes' => $request->input('notes')]);
+
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
+        }
+        return back()->with('error', $result['message']);
+    }
+
+    public function rejectChangeRequest(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $item = ChangeRequest::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::CHANGE_REQUEST_APPROVE, $item->project);
+
+        $result = $this->approvalActionService->reject($user, 'change_request', $id, $request->reason);
 
         if ($result['success']) {
             return back()->with('success', $result['message']);
@@ -386,8 +404,26 @@ class CrmApprovalController extends Controller
 
     public function approveAdditionalCost(Request $request, $id)
     {
+        $item = AdditionalCost::findOrFail($id);
         $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ADDITIONAL_COST_APPROVE, $item->project);
+
         $result = $this->approvalActionService->approve($user, 'additional_cost', $id);
+
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
+        }
+        return back()->with('error', $result['message']);
+    }
+
+    public function rejectAdditionalCost(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $item = AdditionalCost::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ADDITIONAL_COST_APPROVE, $item->project);
+
+        $result = $this->approvalActionService->reject($user, 'additional_cost', $id, $request->reason);
 
         if ($result['success']) {
             return back()->with('success', $result['message']);

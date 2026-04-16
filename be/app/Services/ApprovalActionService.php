@@ -166,6 +166,12 @@ class ApprovalActionService
                     $message = "Đã duyệt hợp đồng";
                     break;
 
+                case 'project_payment_submit':
+                    $p = ProjectPayment::findOrFail($id);
+                    $result = $p->submit();
+                    $message = "Đã gửi yêu cầu thanh toán cho khách hàng";
+                    break;
+
                 case 'project_payment':
                     $p = ProjectPayment::findOrFail($id);
                     $result = $p->approveByCustomer($user);
@@ -409,8 +415,14 @@ class ApprovalActionService
             } else {
                 // Fallback for models without reject()
                 $model->status = 'rejected';
-                $rejectionField = in_array('rejection_reason', $model->getFillable()) ? 'rejection_reason' : 'rejected_reason';
-                $model->$rejectionField = $reason;
+                $fillable = $model->getFillable();
+                if (in_array('rejection_reason', $fillable)) {
+                    $model->rejection_reason = $reason;
+                } elseif (in_array('rejected_reason', $fillable)) {
+                    $model->rejected_reason = $reason;
+                } elseif (in_array('notes', $fillable)) {
+                    $model->notes = ($model->notes ? $model->notes . "\n\n" : '') . "Lý do từ chối: " . $reason;
+                }
                 $model->save();
                 $result = true;
             }

@@ -564,7 +564,6 @@ class CrmProjectsController extends Controller
             'notes' => 'nullable|string|max:2000',
             'amount' => 'required|numeric|min:0',
             'due_date' => 'required|date',
-            'status' => 'nullable|string',
         ]);
 
         // Auto-generate payment_number if not provided
@@ -574,10 +573,12 @@ class CrmProjectsController extends Controller
         }
 
         try {
+            DB::beginTransaction();
             // CRM: Default to pending so payment goes through proper approval workflow
+            // Force status to 'pending' for all new payments regardless of input
             $paymentData = array_merge($validated, [
                 'project_id' => $project->id,
-                'status' => $validated['status'] ?? 'pending',
+                'status' => 'pending',
             ]);
 
             $payment = $this->financialService->upsertProjectPayment($paymentData, null, $user);
@@ -585,8 +586,10 @@ class CrmProjectsController extends Controller
             // Handle file uploads
             $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", true);
 
-            return back()->with('success', 'Đã thêm đợt thanh toán và gửi cho Kế toán xác nhận.');
+            DB::commit();
+            return back()->with('success', 'Đã thêm đợt thanh toán thành công.');
         } catch (\Exception $e) {
+            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }

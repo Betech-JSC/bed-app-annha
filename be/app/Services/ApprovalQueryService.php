@@ -336,12 +336,8 @@ class ApprovalQueryService
         // PROJECT PAYMENTS (Thanh toán dự án)
         // ═══════════════════════════════════════════════════════════════
         if ($this->shouldInclude($type, ['all', 'payment'])) {
-            $paymentStatuses = ['customer_pending_approval'];
-            if ($isCustomer) {
-                // For customers, they should also see and be reminded of payments they need to make
-                $paymentStatuses[] = 'pending';
-                $paymentStatuses[] = 'overdue';
-            }
+            $paymentStatuses = ['customer_pending_approval', 'pending', 'overdue'];
+
 
             $data['payments_pending'] = ProjectPayment::whereIn('status', $paymentStatuses)
                 ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
@@ -725,22 +721,22 @@ class ApprovalQueryService
     {
         return match ($status) {
             'draft' => 'Nháp',
-            'pending', 'pending_approval' => 'Chưa thanh toán',
+            'pending', 'pending_approval' => 'Chờ duyệt',
             'pending_management_approval', 'pending_management' => 'Chờ BĐH duyệt',
             'pending_accountant_approval', 'pending_accountant' => 'Chờ KT xác nhận',
             'pending_accountant_confirmation' => 'Chờ KT xác nhận',
-            'pending_customer_approval', 'customer_pending_approval' => 'Chưa thanh toán',
-            'project_manager_approved' => 'Chưa thanh toán',
+            'pending_customer_approval', 'customer_pending_approval' => 'Chờ duyệt',
+            'project_manager_approved' => 'Đã duyệt (PM)',
             'supervisor_approved' => 'Chờ QLDA duyệt',
             'submitted' => 'Đã gửi',
             'under_review' => 'Đang xem xét',
             'approved', 'customer_approved' => 'Đã duyệt',
-            'paid', 'customer_paid' => 'Đã thanh toán',
-            'rejected' => 'Từ chối',
+            'paid', 'customer_paid' => 'Đã thanh toán (Chờ xác nhận)',
+            'rejected' => 'Bị từ chối',
             'fixed' => 'Đã sửa — Chờ xác nhận',
             'verified' => 'Đã xác nhận',
             'pending_return' => 'Chờ xác nhận trả',
-            'overdue' => 'Chưa thanh toán',
+            'overdue' => 'Quá hạn (Chờ thanh toán)',
             default => $status,
         };
     }

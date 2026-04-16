@@ -36,6 +36,7 @@ class ProjectPayment extends Model
         'reminder_sent_at',
         'reminder_count',
         'actual_amount',
+        'rejected_reason',
     ];
 
     protected $casts = [
