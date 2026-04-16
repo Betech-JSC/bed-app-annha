@@ -5910,8 +5910,8 @@ const activeTabGroup = ref(getGroupForTab(initialTab))
 const costStatusFilter = ref('all')
 const costGroupFilter = ref(null)
 const commentText = ref('')
-const openDefects = computed(() => (props.project.defects || []).filter(d => d.status === 'open' || d.status === 'in_progress').length)
-const activeRisks = computed(() => (props.project.risks || []).filter(r => r.status !== 'closed').length)
+const openDefects = computed(() => defects.value.filter(d => d.status === 'open' || d.status === 'in_progress').length)
+const activeRisks = computed(() => risks.value.filter(r => r.status !== 'closed').length)
 
 
 // Drawer Detail Refs
@@ -6123,12 +6123,12 @@ const isTabVisible = (tabKey) => {
 // Tab groups with dynamic badge counts
 const tabGroups = computed(() => [
   { key: 'schedule', icon: '📅', label: 'Kế hoạch', defaultTab: 'gantt', badge: props.counts?.tasks || 0 },
-  { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: props.counts?.finance || 0 },
-  { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: props.counts?.expense || 0 },
-  { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'logs', badge: props.counts?.monitor || 0 },
-  { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.counts?.hr || 0 },
-  { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: props.counts?.warranty || 0 },
-  { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.counts?.other || 0 },
+  { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.counts?.costs || 0) + (props.counts?.payments || 0) + (props.counts?.budgets || 0) },
+  { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: (props.counts?.subcontractors || 0) + (props.counts?.material_bills || 0) + (props.counts?.equipment || 0) },
+  { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'logs', badge: (props.counts?.construction_logs || 0) + (props.counts?.acceptance_stages || 0) + (props.counts?.defects || 0) + (props.counts?.additional_costs || 0) + (props.counts?.change_requests || 0) },
+  { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.counts?.personnel || 0 },
+  { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: (props.counts?.warranties || 0) + (props.counts?.maintenances || 0) },
+  { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.counts?.attachments || 0 },
 ])
 
 // Map activeTab to correct group (for when tab clicked directly)

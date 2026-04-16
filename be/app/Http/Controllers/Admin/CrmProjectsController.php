@@ -229,11 +229,18 @@ class CrmProjectsController extends Controller
                 'budgets' => $project->budgets()->select('id', 'project_id', 'name', 'status', 'total_budget', 'actual_cost', 'budget_date', 'version', 'created_by', 'approved_at', 'created_at')->with(['items', 'creator:id,name'])->get(),
             ]),
 
-            'scheduleData' => Inertia::lazy(fn() => [
-                'allTasks' => \App\Models\ProjectTask::where('project_id', $project->id)->whereNull('deleted_at')->orderBy('order')
-                    ->with(['assignedUser:id,name', 'acceptanceStages:id,task_id,status', 'acceptanceItem:id,task_id,workflow_status'])->get(),
-                'materialBills' => MaterialBill::where('project_id', $project->id)->with(['items.material', 'supplier', 'creator', 'attachments'])->get(),
-            ]),
+            'scheduleData' => [
+                'allTasks' => \App\Models\ProjectTask::where('project_id', $id)->whereNull('deleted_at')->orderBy('order')
+                    ->with([
+                        'assignedUser:id,name', 
+                        'acceptanceStages:id,task_id,status', 
+                        'acceptanceItem:id,task_id,workflow_status',
+                        'children.assignedUser:id,name',
+                        'children.acceptanceStages:id,task_id,status',
+                        'children.acceptanceItem:id,task_id,workflow_status'
+                    ])->get(),
+                'materialBills' => \App\Models\MaterialBill::where('project_id', $id)->with(['items.material', 'supplier', 'creator', 'attachments'])->get(),
+            ],
 
             'monitorData' => Inertia::lazy(fn() => [
                 'logs' => $project->constructionLogs()->with(['creator', 'task', 'attachments'])->orderByDesc('log_date')->get(),
