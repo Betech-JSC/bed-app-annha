@@ -2672,31 +2672,34 @@
         <a-select-option value="standard_violation">Vi phạm tiêu chuẩn</a-select-option>
         <a-select-option value="other">Khác</a-select-option>
       </a-select></a-form-item>
-      <!-- Inline Attachments -->
+      <!-- Inline Attachments — Ảnh trước khi sửa -->
       <div class="border-t pt-3 mt-2">
-        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Hình ảnh / File đính kèm</div>
-        <div v-if="editingDefect?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <div v-for="a in editingDefect.attachments" :key="a.id" class="relative group">
-            <a href="#" @click.prevent="openFilePreview(a)" 
+        <div class="text-xs font-semibold text-orange-500 mb-2 flex items-center gap-1.5">
+          <PictureOutlined /> Ảnh lỗi (Trước khi sửa)
+          <span class="text-[10px] font-normal text-gray-400 ml-1">— dùng để đối chiếu sau khi khắc phục</span>
+        </div>
+        <div v-if="editingDefect?.before_images?.length" class="flex flex-wrap gap-2 mb-2">
+          <div v-for="a in editingDefect.before_images" :key="a.id" class="relative group">
+            <a href="#" @click.prevent="openFilePreview(a)"
                class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
-               :class="isAttachmentDeleted(defectForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+               :class="isAttachmentDeleted(defectForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100 shadow-sm'">
               <span v-if="isAttachmentDeleted(defectForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
               <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
             </a>
-            <div v-if="!isAttachmentDeleted(defectForm, a.id)" 
+            <div v-if="!isAttachmentDeleted(defectForm, a.id)"
                  class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
                  @click.stop="toggleDeleteAttachment(defectForm, a.id)">
               <CloseOutlined class="text-[10px] font-bold" />
             </div>
-            <div v-else 
+            <div v-else
                  class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
                  @click.stop="toggleDeleteAttachment(defectForm, a.id)">
               <ReloadOutlined class="text-[10px] font-bold" />
             </div>
           </div>
         </div>
-        <input type="file" multiple accept="image/*,.pdf,.doc,.docx" @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+        <input type="file" multiple accept="image/*,.pdf,.doc,.docx" @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-orange-200 rounded-lg hover:border-orange-400 transition bg-orange-50/30" />
+        <div v-if="modalFiles.length" class="text-[10px] text-orange-600 mt-1">{{ modalFiles.length }} ảnh đã chọn — sẽ upload khi lưu</div>
       </div>
     </a-form>
   </a-modal>
@@ -3826,59 +3829,80 @@
         </div>
       </div>
 
-      <!-- Hình ảnh lỗi (Trước khi sửa) -->
-      <div v-if="defectDetail.before_images?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-[10px] font-bold text-orange-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <PictureOutlined /> Hình ảnh lỗi (Trước khi sửa) ({{ defectDetail.before_images.length }})
+      <!-- Đối chiếu ảnh Trước / Sau khi sửa -->
+      <div v-if="defectDetail.before_images?.length || defectDetail.after_images?.length" class="rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+          <PictureOutlined class="text-gray-400" />
+          <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Đối chiếu hình ảnh Trước / Sau khi sửa</span>
         </div>
-        <div class="grid grid-cols-3 gap-3">
-          <div
-            v-for="att in defectDetail.before_images"
-            :key="att.id"
-            class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-gray-100 hover:border-blue-300 transition-all"
-            @click="openFilePreview(att)"
-          >
-            <img
-              v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
-              :src="att.file_url"
-              :alt="att.original_name || 'Ảnh lỗi'"
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform"
-            />
-            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400">
-              <FileOutlined class="text-2xl mb-1" />
-              <span class="text-[10px] px-2 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
+        <div class="grid grid-cols-2 divide-x divide-gray-100">
+          <!-- BEFORE column -->
+          <div class="p-4">
+            <div class="flex items-center gap-1.5 mb-3">
+              <span class="w-2 h-2 rounded-full bg-orange-400 shrink-0"></span>
+              <span class="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Trước khi sửa</span>
+              <span class="text-[10px] text-gray-400 ml-auto">({{ defectDetail.before_images?.length || 0 }})</span>
             </div>
-            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-              <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+            <div v-if="defectDetail.before_images?.length" class="grid grid-cols-2 gap-2">
+              <div
+                v-for="att in defectDetail.before_images"
+                :key="att.id"
+                class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-orange-100 hover:border-orange-300 transition-all"
+                @click="openFilePreview(att)"
+              >
+                <img
+                  v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
+                  :src="att.file_url"
+                  :alt="att.original_name || 'Ảnh lỗi'"
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                />
+                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-orange-50 text-orange-300">
+                  <FileOutlined class="text-xl mb-1" />
+                  <span class="text-[9px] px-1 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
+                </div>
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                  <EyeOutlined class="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+                </div>
+              </div>
+            </div>
+            <div v-else class="flex flex-col items-center justify-center py-6 text-orange-200">
+              <PictureOutlined class="text-2xl mb-1" />
+              <span class="text-[10px] text-orange-300">Chưa có ảnh lỗi</span>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- Hình ảnh khắc phục (Sau khi sửa) -->
-      <div v-if="defectDetail.after_images?.length" class="p-5 bg-white rounded-2xl border border-blue-100 shadow-sm bg-blue-50/10">
-        <div class="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <PictureOutlined /> Hình ảnh đã khắc phục (Sau khi sửa) ({{ defectDetail.after_images.length }})
-        </div>
-        <div class="grid grid-cols-3 gap-3">
-          <div
-            v-for="att in defectDetail.after_images"
-            :key="att.id"
-            class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-blue-200 hover:border-blue-400 transition-all"
-            @click="openFilePreview(att)"
-          >
-            <img
-              v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
-              :src="att.file_url"
-              :alt="att.original_name || 'Ảnh khắc phục'"
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform"
-            />
-            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400">
-              <FileOutlined class="text-2xl mb-1" />
-              <span class="text-[10px] px-2 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
+          <!-- AFTER column -->
+          <div class="p-4">
+            <div class="flex items-center gap-1.5 mb-3">
+              <span class="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>
+              <span class="text-[10px] font-bold text-green-600 uppercase tracking-wider">Sau khi sửa</span>
+              <span class="text-[10px] text-gray-400 ml-auto">({{ defectDetail.after_images?.length || 0 }})</span>
             </div>
-            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-              <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+            <div v-if="defectDetail.after_images?.length" class="grid grid-cols-2 gap-2">
+              <div
+                v-for="att in defectDetail.after_images"
+                :key="att.id"
+                class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-green-200 hover:border-green-400 transition-all"
+                @click="openFilePreview(att)"
+              >
+                <img
+                  v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
+                  :src="att.file_url"
+                  :alt="att.original_name || 'Ảnh đã sửa'"
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                />
+                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-green-50 text-green-300">
+                  <FileOutlined class="text-xl mb-1" />
+                  <span class="text-[9px] px-1 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
+                </div>
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                  <EyeOutlined class="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+                </div>
+              </div>
+            </div>
+            <div v-else class="flex flex-col items-center justify-center py-6 text-green-200">
+              <CheckCircleOutlined class="text-2xl mb-1" />
+              <span class="text-[10px] text-green-300">Chờ ảnh khắc phục</span>
             </div>
           </div>
         </div>
@@ -3887,18 +3911,16 @@
       <!-- Action Footer -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
         <div class="flex gap-2">
-           <a-popconfirm v-if="can('defect.delete')" title="Xóa?" @confirm="deleteDefect(defectDetail)">
+           <a-popconfirm v-if="can('defect.delete') && ['open','rejected'].includes(defectDetail.status)" title="Xóa?" @confirm="deleteDefect(defectDetail)">
              <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
            </a-popconfirm>
-           <a-button v-if="can('defect.update')" type="text" @click="openDefectModal(defectDetail)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="can('defect.update') && ['open','rejected'].includes(defectDetail.status)" type="text" @click="openDefectModal(defectDetail)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
            <a-popconfirm v-if="defectDetail.status === 'open' && can('defect.update')" title="Nhận xử lý lỗi này?" @confirm="defectAction(defectDetail, 'mark-in-progress')" ok-text="Nhận" cancel-text="Hủy">
              <a-button type="primary" ghost>🔧 Nhận xử lý</a-button>
            </a-popconfirm>
-           <a-popconfirm v-if="defectDetail.status === 'in_progress' && can('defect.update')" title="Đánh dấu lỗi đã sửa xong?" @confirm="defectAction(defectDetail, 'mark-fixed')" ok-text="Đã sửa" cancel-text="Hủy">
-             <a-button class="text-green-600 border-green-600 hover:bg-green-50">✅ Báo cáo xong</a-button>
-           </a-popconfirm>
+           <a-button v-if="defectDetail.status === 'in_progress' && can('defect.update')" class="text-green-600 border-green-600 hover:bg-green-50" @click="defectAction(defectDetail, 'mark-fixed')">✅ Báo cáo đã sửa</a-button>
            <template v-if="defectDetail.status === 'fixed' && can('defect.update')">
              <a-button danger ghost @click="openRejectDefectModal(defectDetail)">✗ Từ chối KQ</a-button>
              <a-popconfirm title="Xác nhận lỗi đã sửa xong?" @confirm="defectAction(defectDetail, 'verify')" ok-text="Xác nhận" cancel-text="Hủy">
@@ -3911,29 +3933,77 @@
   </a-drawer>
 
   <!-- REPORT DEFECT FIXED MODAL -->
-  <a-modal v-model:open="showDefectFixModal" title="Báo cáo đã sửa lỗi" @ok="submitDefectFix" :confirm-loading="actionLoading['submit-defect-fix']" ok-text="Gửi báo cáo" cancel-text="Hủy" :width="500" class="crm-modal">
-    <div class="space-y-4 py-2">
-      <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-3">
-        <InfoCircleOutlined class="text-blue-500 mt-1" />
+  <a-modal v-model:open="showDefectFixModal" title="Báo cáo đã sửa lỗi — Đối chiếu trước / sau" @ok="submitDefectFix" :confirm-loading="actionLoading['submit-defect-fix']" ok-text="Gửi báo cáo" cancel-text="Hủy" :width="760" class="crm-modal">
+    <div class="py-2 space-y-4">
+      <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-start gap-2">
+        <InfoCircleOutlined class="text-blue-500 mt-0.5 shrink-0" />
         <div class="text-xs text-blue-700 leading-relaxed">
-          Vui lòng tải lên hình ảnh kết quả đã khắc phục để Giám sát/Khách hàng đối soát và nghiệm thu.
+          Tải lên ảnh sau khi sửa để Giám sát/Khách hàng đối chiếu với ảnh lỗi ban đầu và nghiệm thu.
         </div>
       </div>
-      
-      <div>
-        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Hình ảnh khắc phục (Bắt buộc)</div>
-        <div class="grid grid-cols-4 gap-2">
-          <div v-for="(file, idx) in defectFixForm.files" :key="idx" class="relative aspect-square rounded-lg overflow-hidden border border-gray-100 shadow-sm">
-            <img :src="file.preview" class="w-full h-full object-cover" />
-            <div class="absolute top-1 right-1 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer hover:bg-black/70" @click="defectFixForm.files.splice(idx, 1)">
-              <CloseOutlined class="text-[10px]" />
+
+      <!-- Side-by-side comparison -->
+      <div class="grid grid-cols-2 gap-4">
+        <!-- LEFT: Before images (read-only) -->
+        <div class="rounded-xl border border-orange-200 bg-orange-50/30 overflow-hidden">
+          <div class="px-3 py-2 bg-orange-50 border-b border-orange-200 flex items-center gap-1.5">
+            <PictureOutlined class="text-orange-500 text-sm" />
+            <span class="text-[11px] font-bold text-orange-600 uppercase tracking-wide">Ảnh lỗi (Trước khi sửa)</span>
+            <span class="ml-auto text-[10px] text-orange-400">({{ editingDefect?.before_images?.length || 0 }} ảnh)</span>
+          </div>
+          <div class="p-3">
+            <div v-if="editingDefect?.before_images?.length" class="grid grid-cols-3 gap-2">
+              <div
+                v-for="att in editingDefect.before_images"
+                :key="att.id"
+                class="relative aspect-square rounded-lg overflow-hidden cursor-pointer group border border-orange-100 hover:border-orange-300 transition-all"
+                @click="openFilePreview(att)"
+              >
+                <img
+                  v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
+                  :src="att.file_url"
+                  :alt="att.original_name || 'Ảnh lỗi'"
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                />
+                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-orange-50 text-orange-300">
+                  <FileOutlined class="text-xl mb-1" />
+                  <span class="text-[9px] px-1 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
+                </div>
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                  <EyeOutlined class="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                </div>
+              </div>
+            </div>
+            <div v-else class="flex flex-col items-center justify-center py-6 text-orange-200">
+              <PictureOutlined class="text-3xl mb-2" />
+              <span class="text-[11px] text-orange-300">Chưa có ảnh lỗi</span>
             </div>
           </div>
-          <label v-if="defectFixForm.files.length < 8" class="aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-blue-400 flex flex-col items-center justify-center cursor-pointer transition-colors bg-gray-50 hover:bg-white group">
-            <input type="file" multiple accept="image/*" class="hidden" @change="onFixFilesChange" />
-            <CameraOutlined class="text-gray-300 group-hover:text-blue-500 text-xl mb-1" />
-            <span class="text-[10px] text-gray-400 group-hover:text-blue-500 font-medium">Tải ảnh</span>
-          </label>
+        </div>
+
+        <!-- RIGHT: After images (upload) -->
+        <div class="rounded-xl border border-green-200 bg-green-50/30 overflow-hidden">
+          <div class="px-3 py-2 bg-green-50 border-b border-green-200 flex items-center gap-1.5">
+            <CheckCircleOutlined class="text-green-500 text-sm" />
+            <span class="text-[11px] font-bold text-green-600 uppercase tracking-wide">Ảnh đã sửa (Sau khi sửa)</span>
+            <span class="ml-auto text-[10px] text-green-400">({{ defectFixForm.files.length }} ảnh)</span>
+          </div>
+          <div class="p-3">
+            <div class="grid grid-cols-3 gap-2">
+              <div v-for="(file, idx) in defectFixForm.files" :key="idx" class="relative aspect-square rounded-lg overflow-hidden border border-green-100 shadow-sm">
+                <img :src="file.preview" class="w-full h-full object-cover" />
+                <div class="absolute top-1 right-1 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer hover:bg-black/70" @click="defectFixForm.files.splice(idx, 1)">
+                  <CloseOutlined class="text-[10px]" />
+                </div>
+              </div>
+              <label v-if="defectFixForm.files.length < 9" class="aspect-square rounded-lg border-2 border-dashed border-green-200 hover:border-green-400 flex flex-col items-center justify-center cursor-pointer transition-colors bg-white hover:bg-green-50 group">
+                <input type="file" multiple accept="image/*" class="hidden" @change="onFixFilesChange" />
+                <CameraOutlined class="text-green-300 group-hover:text-green-500 text-xl mb-1" />
+                <span class="text-[10px] text-green-400 group-hover:text-green-600 font-medium">Tải ảnh</span>
+              </label>
+            </div>
+            <p class="text-[10px] text-green-500 mt-2 text-center">Bắt buộc tải ít nhất 1 ảnh minh chứng</p>
+          </div>
         </div>
       </div>
 
@@ -4384,7 +4454,7 @@
            <a-popconfirm v-if="can('payment.delete') && !['confirmed','paid'].includes(paymentDetailRecord.status)" title="Xóa đợt thanh toán này?" @confirm="deletePayment(paymentDetailRecord)">
              <a-button danger type="text"><DeleteOutlined /> Xóa đợt</a-button>
            </a-popconfirm>
-           <a-button v-if="can('payment.update')" size="small" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Thay đổi NS</a-button>
+           <a-button v-if="can('payment.update') && ['pending','overdue'].includes(paymentDetailRecord.status)" size="small" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Thay đổi NS</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="paymentDetailRecord.status === 'customer_paid' && can('payment.confirm')">

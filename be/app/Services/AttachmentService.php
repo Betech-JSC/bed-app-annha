@@ -46,6 +46,7 @@ class AttachmentService
                 'file_size' => $file->getSize(),
                 'mime_type' => $file->getClientMimeType(),
                 'type' => $request->input('type') ?? $file->getClientOriginalExtension(),
+                'description' => $request->input('description') ?? null,
                 'attachable_type' => get_class($entity),
                 'attachable_id' => $entity->id,
                 'uploaded_by' => $user->id ?? null,

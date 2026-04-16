@@ -616,6 +616,12 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_UPDATE, $project);
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        // Status guard: only edit when pending/overdue (before KH marks as paid)
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && !in_array($payment->status, ['pending', 'overdue'])) {
+            return back()->with('error', 'Chỉ có thể chỉnh sửa thanh toán ở trạng thái chờ thanh toán.');
+        }
+
         $validated = $request->validate([
             'amount' => 'sometimes|numeric|min:0',
             'notes' => 'nullable|string|max:2000',
@@ -1168,7 +1174,8 @@ class CrmProjectsController extends Controller
             $data = array_merge($validated, ['project_id' => $project->id]);
             $defect = $this->defectService->upsertDefect($data, null, $user);
 
-            // Handle multi-file upload for CRM
+            // Handle multi-file upload for CRM — tag as 'before' (ảnh lỗi trước khi sửa)
+            $request->merge(['description' => 'before']);
             $this->attachmentService->handleCrmUpload($request, $defect, "defects/{$project->id}", false);
 
             DB::commit();
@@ -1186,6 +1193,12 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
 
         $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
+
+        // Status guard: only edit description/severity when open or rejected
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && !in_array($defect->status, ['open', 'rejected']) && !$request->has('status')) {
+            return back()->with('error', 'Chỉ có thể chỉnh sửa lỗi ở trạng thái mới tạo hoặc từ chối.');
+        }
+
         $validated = $request->validate([
             'description' => 'sometimes|string',
             'severity' => 'sometimes|in:low,medium,high,critical',
@@ -1200,6 +1213,8 @@ class CrmProjectsController extends Controller
             }
             $this->defectService->upsertDefect(array_merge($validated, ['project_id' => $project->id]), $defect, $user);
             $this->attachmentService->handleDeletedRequest($request, $defect);
+            // Tag new uploads as 'before' (ảnh lỗi — chỉ update khi status=open/rejected)
+            $request->merge(['description' => 'before']);
             $this->attachmentService->handleCrmUpload($request, $defect, "defects/{$project->id}", false);
 
             DB::commit();
