@@ -2962,6 +2962,32 @@
         </div>
       </div>
       
+      <!-- Attachments -->
+      <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500">
+            <PaperClipOutlined /> Hình ảnh / Tài liệu ({{ subDetail.attachments?.length || 0 }})
+          </div>
+          <a-button v-if="can('subcontractor.update')" type="link" size="small" @click="openAttachModal('subcontractor', subDetail)" class="p-0">
+            <PlusOutlined /> Thêm file
+          </a-button>
+        </div>
+        <div v-if="subDetail.attachments?.length" class="flex flex-wrap gap-2">
+          <div v-for="att in subDetail.attachments" :key="att.id"
+               class="relative group cursor-pointer"
+               @click="openFilePreview(att)">
+            <img v-if="att.mime_type?.startsWith('image/')"
+                 :src="att.file_url || att.file_path"
+                 class="w-20 h-20 object-cover rounded-xl border border-gray-200 shadow-sm group-hover:opacity-80 transition" />
+            <div v-else class="w-20 h-20 rounded-xl border border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-1 group-hover:bg-gray-100 transition">
+              <FileOutlined class="text-2xl text-gray-400" />
+              <span class="text-[9px] text-gray-400 uppercase font-bold">{{ (att.original_name || att.file_name || '').split('.').pop() }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="text-xs text-gray-400 italic">Chưa có tài liệu đính kèm.</div>
+      </div>
+
       <!-- Action Footer -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
         <a-popconfirm v-if="can('subcontractor.delete')" title="Xóa NTP này khỏi dự án?" @confirm="deleteSub(subDetail)">
@@ -7298,11 +7324,18 @@ const rejectPaymentAction = () => {
 
 // ============ SHARED FILE UPLOAD ============
 const showAttachModal = ref(false)
-const attachType = ref('') // 'cost' | 'payment' | 'additional-cost' | 'logs'
+const attachType = ref('') // 'cost' | 'payment' | 'additional-cost' | 'logs' | 'material_bill' | 'subcontractor'
 const attachTarget = ref(null)
 const attachFiles = ref([])
 const attachFileInput = ref(null)
-const attachModalTitles = { cost: 'Đính kèm file — Phiếu chi', payment: 'Đính kèm chứng từ — Thanh toán', 'additional-cost': 'Đính kèm file — CP Phát sinh', logs: 'Đính kèm hình ảnh — Nhật ký thi công' }
+const attachModalTitles = {
+  cost: 'Đính kèm file — Phiếu chi',
+  payment: 'Đính kèm chứng từ — Thanh toán',
+  'additional-cost': 'Đính kèm file — CP Phát sinh',
+  logs: 'Đính kèm hình ảnh — Nhật ký thi công',
+  material_bill: 'Đính kèm chứng từ — Phiếu vật tư',
+  subcontractor: 'Đính kèm file — Nhà thầu phụ',
+}
 const attachModalTitle = computed(() => attachModalTitles[attachType.value] || 'Đính kèm file')
 const openAttachModal = (type, record) => { attachType.value = type; attachTarget.value = record; attachFiles.value = []; showAttachModal.value = true }
 const onAttachFileChange = (e) => { attachFiles.value = Array.from(e.target.files || []) }
@@ -7315,6 +7348,8 @@ const submitAttachFiles = () => {
     payment: `/projects/${props.project.id}/payments/${attachTarget.value.id}/attach-files`,
     'additional-cost': `/projects/${props.project.id}/additional-costs/${attachTarget.value.id}/attach-files`,
     logs: `/projects/${props.project.id}/logs/${attachTarget.value.id}/attach-files`,
+    material_bill: `/projects/${props.project.id}/material-bills/${attachTarget.value.id}/attach-files`,
+    subcontractor: `/projects/${props.project.id}/subcontractors/${attachTarget.value.id}/attach-files`,
   }
   router.post(urlMap[attachType.value], formData, savingOptions({
     forceFormData: true,

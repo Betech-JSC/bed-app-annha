@@ -3474,6 +3474,17 @@ class CrmProjectsController extends Controller
      * Retroactively sync Cost records for approved MaterialBills that were approved
      * before the Cost-creation logic was implemented.
      */
+    public function attachFilesToMaterialBill(Request $request, string $projectId, string $billId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::MATERIAL_CREATE, $project);
+
+        $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
+        $count = $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$billId}");
+        return back()->with('success', "Đã đính kèm {$count} file vào phiếu vật tư.");
+    }
+
     public function syncMaterialBillCosts(string $projectId)
     {
         $project = Project::findOrFail($projectId);
