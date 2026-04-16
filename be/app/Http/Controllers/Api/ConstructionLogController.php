@@ -44,7 +44,7 @@ class ConstructionLogController extends Controller
             ], 403);
         }
 
-        $logs = $this->logService->getLogs($project, $request->only(['start_date', 'end_date']));
+        $logs = $this->logService->getLogs($project, $request->only(['start_date', 'end_date', 'per_page']));
 
         return response()->json([
             'success' => true,

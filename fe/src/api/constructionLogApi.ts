@@ -50,7 +50,7 @@ export interface CreateConstructionLogData {
 
 export const constructionLogApi = {
   // Get construction logs for project
-  getLogs: async (projectId: string | number, params?: { start_date?: string; end_date?: string }) => {
+  getLogs: async (projectId: string | number, params?: { start_date?: string; end_date?: string; per_page?: number }) => {
     const response = await api.get(`/projects/${projectId}/logs`, { params });
     return response.data;
   },

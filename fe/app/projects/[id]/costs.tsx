@@ -413,24 +413,36 @@ export default function CostsScreen() {
         <Text style={styles.costDescription}>{item.description}</Text>
       )}
 
-      {/* Linked Bill Indicator */}
+      {/* Source indicators — hiện nguồn tạo phiếu chi */}
       {item.material_bill && (
         <View style={styles.linkedBillIndicator}>
           <Ionicons name="receipt-outline" size={14} color="#3B82F6" />
           <Text style={styles.linkedBillIndicatorText}>
-            Phiếu VL: {item.material_bill.bill_number || `#${item.material_bill.id}`}
+            Từ phiếu VL: {item.material_bill.bill_number || `#${item.material_bill.id}`}
           </Text>
           <Ionicons name="chevron-forward" size={14} color="#93C5FD" />
         </View>
       )}
-
-      {/* Linked Equipment Source */}
       {item.equipment_allocation && (
         <View style={styles.linkedBillIndicator}>
           <Ionicons name="construct-outline" size={14} color="#10B981" />
           <Text style={styles.linkedBillIndicatorText}>
-            Thiết bị: {item.equipment_allocation.equipment?.name || "N/A"}
+            Từ thiết bị: {item.equipment_allocation.equipment?.name || "N/A"}
           </Text>
+        </View>
+      )}
+      {item.subcontractor_payment_id && item.subcontractor && (
+        <View style={styles.linkedBillIndicator}>
+          <Ionicons name="people-outline" size={14} color="#F59E0B" />
+          <Text style={styles.linkedBillIndicatorText}>
+            Từ thanh toán NT: {item.subcontractor.name}
+          </Text>
+        </View>
+      )}
+      {item.equipment_rental_id && !item.equipment_allocation && (
+        <View style={styles.linkedBillIndicator}>
+          <Ionicons name="car-outline" size={14} color="#8B5CF6" />
+          <Text style={styles.linkedBillIndicatorText}>Từ thuê thiết bị</Text>
         </View>
       )}
 

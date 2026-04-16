@@ -213,6 +213,8 @@ export default function ConstructionLogsScreen() {
       const response = await constructionLogApi.getLogs(id!, {
         start_date: startDate,
         end_date: endDate,
+        // When no date filter (list view), request more records
+        per_page: (!startDate && !endDate) ? 100 : 30,
       });
       if (response.success) {
         // More robust parsing: check response.data.data (paginated) or response.data (flat list)
@@ -253,12 +255,17 @@ export default function ConstructionLogsScreen() {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    // Refresh for currently visible month
-    const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
-    const lastDay = new Date(currentYear, currentMonth, 0);
-    const endDate = formatDateLocal(lastDay);
-    loadLogs(startDate, endDate, true);
-  }, [loadLogs, currentMonth, currentYear]);
+    if (viewMode === "list") {
+      // In list mode, load all recent logs without date filter
+      loadLogs(undefined, undefined, true);
+    } else {
+      // In calendar mode, refresh for currently visible month
+      const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+      const lastDay = new Date(currentYear, currentMonth, 0);
+      const endDate = formatDateLocal(lastDay);
+      loadLogs(startDate, endDate, true);
+    }
+  }, [loadLogs, currentMonth, currentYear, viewMode]);
 
   const loadTasks = React.useCallback(async () => {
     try {
@@ -310,11 +317,13 @@ export default function ConstructionLogsScreen() {
 
       // Use a longer delay for focus effect to avoid immediate calls
       const logsTimeout = setTimeout(() => {
-        if (currentMonth && currentYear) {
+        if (viewMode === "list") {
+          loadLogs(undefined, undefined, false); // List view: all recent logs
+        } else if (currentMonth && currentYear) {
           const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
           const lastDay = new Date(currentYear, currentMonth, 0);
           const endDate = formatDateLocal(lastDay);
-          loadLogs(startDate, endDate, false); // Use debouncing
+          loadLogs(startDate, endDate, false); // Calendar view: current month
         } else {
           loadLogs(undefined, undefined, false); // Use debouncing
         }
@@ -329,19 +338,19 @@ export default function ConstructionLogsScreen() {
           loadLogsTimeoutRef.current = null;
         }
       };
-    }, [id, refreshPermissions, currentMonth, currentYear, loadLogs, loadTasks])
+    }, [id, refreshPermissions, currentMonth, currentYear, viewMode, loadLogs, loadTasks])
   );
 
-  // Load logs when month/year changes
+  // Load logs when month/year changes (only in calendar mode)
   useEffect(() => {
-    if (currentMonth && currentYear && id) {
+    if (viewMode === "calendar" && currentMonth && currentYear && id) {
       const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
       const lastDay = new Date(currentYear, currentMonth, 0);
       const endDate = formatDateLocal(lastDay);
       loadLogs(startDate, endDate, false); // Use debouncing
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonth, currentYear, loadLogs]);
+  }, [currentMonth, currentYear, loadLogs, viewMode]);
 
   const openEditModal = (log: ConstructionLog) => {
     setEditingLog(log);
@@ -695,7 +704,14 @@ export default function ConstructionLogsScreen() {
       <View style={styles.viewModeContainer}>
         <TouchableOpacity
           style={[styles.viewModeButton, viewMode === "calendar" && styles.viewModeButtonActive]}
-          onPress={() => setViewMode("calendar")}
+          onPress={() => {
+            setViewMode("calendar");
+            // Reload current month data for calendar view
+            const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+            const lastDay = new Date(currentYear, currentMonth, 0);
+            const endDate = formatDateLocal(lastDay);
+            loadLogs(startDate, endDate, true);
+          }}
         >
           <Ionicons name="calendar-outline" size={20} color={viewMode === "calendar" ? "#FFFFFF" : "#6B7280"} />
           <Text style={[styles.viewModeText, viewMode === "calendar" && styles.viewModeTextActive]}>
@@ -704,7 +720,11 @@ export default function ConstructionLogsScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.viewModeButton, viewMode === "list" && styles.viewModeButtonActive]}
-          onPress={() => setViewMode("list")}
+          onPress={() => {
+            setViewMode("list");
+            // Load all recent logs without date filter for list view
+            loadLogs(undefined, undefined, true);
+          }}
         >
           <Ionicons name="list-outline" size={20} color={viewMode === "list" ? "#FFFFFF" : "#6B7280"} />
           <Text style={[styles.viewModeText, viewMode === "list" && styles.viewModeTextActive]}>
@@ -805,6 +825,15 @@ export default function ConstructionLogsScreen() {
           sections={logSections}
           refreshing={refreshing}
           onRefresh={onRefresh}
+          ListHeaderComponent={
+            <View style={styles.listHeader}>
+              <Text style={styles.listHeaderText}>
+                {logs.length > 0
+                  ? `${logs.length} nhật ký gần nhất`
+                  : ""}
+              </Text>
+            </View>
+          }
           renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderLeft}>
@@ -1750,6 +1779,15 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+  },
+  listHeader: {
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+  },
+  listHeaderText: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontStyle: "italic",
   },
   sectionHeader: {
     flexDirection: "row",

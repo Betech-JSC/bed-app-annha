@@ -39,11 +39,7 @@ class CostController extends Controller
         }
 
         $query = Cost::where('project_id', $project->id)
-            ->whereNull('material_bill_id')
-            ->whereNull('subcontractor_payment_id')
-            ->whereNull('equipment_rental_id')
-            ->whereNull('equipment_allocation_id')
-            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialTransactions', 'materialBill.items.material', 'materialBill.supplier', 'equipmentAllocation.equipment']);
+            ->with(['creator', 'managementApprover', 'accountantApprover', 'attachments', 'costGroup', 'subcontractor', 'material', 'materialBill', 'equipmentAllocation.equipment']);
 
         // Filter theo category hoặc cost_group_id
         if ($category = $request->query('category')) {

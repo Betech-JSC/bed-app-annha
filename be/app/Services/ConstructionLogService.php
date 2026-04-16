@@ -237,7 +237,8 @@ class ConstructionLogService
     {
         $query = $project->constructionLogs()
             ->with(['creator', 'attachments', 'task'])
-            ->orderByDesc('log_date');
+            ->orderByDesc('log_date')
+            ->orderByDesc('created_at');
 
         if (!empty($filters['start_date'])) {
             $query->where('log_date', '>=', $filters['start_date']);
@@ -246,7 +247,9 @@ class ConstructionLogService
             $query->where('log_date', '<=', $filters['end_date']);
         }
 
-        return $query->paginate(30);
+        $perPage = isset($filters['per_page']) ? min((int) $filters['per_page'], 200) : 30;
+
+        return $query->paginate($perPage);
     }
 
     /**

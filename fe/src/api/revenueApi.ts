@@ -95,6 +95,9 @@ export interface Cost {
   };
   material_transaction?: any;
   material_bill_id?: number;
+  subcontractor_payment_id?: number;
+  equipment_rental_id?: number;
+  equipment_allocation_id?: number;
   material_bill?: {
     id: number;
     uuid: string;
