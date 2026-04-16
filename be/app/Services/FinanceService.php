@@ -101,15 +101,19 @@ class FinanceService
             ->where('status', 'approved')
             ->get();
 
-        $costByCategory = [
-            'material'      => $approvedCosts->where('category', 'construction_materials')->sum('amount')
-                + $approvedCosts->where('category', 'concrete')->sum('amount'),
-            'labor'         => $approvedCosts->where('category', 'labor')->sum('amount'),
-            'equipment'     => $approvedCosts->where('category', 'equipment')->sum('amount'),
-            'subcontractor' => $approvedCosts->whereNotNull('subcontractor_payment_id')->sum('amount'),
-            'transportation' => $approvedCosts->where('category', 'transportation')->sum('amount'),
-            'other'         => $approvedCosts->where('category', 'other')->whereNull('subcontractor_id')->sum('amount'),
-        ];
+        // COSTS (Chi phí) — grouped by CostGroup directly from DB
+        $costGroups = \App\Models\CostGroup::active()->get();
+        $costByCategory = [];
+
+        foreach ($costGroups as $group) {
+            $costByCategory[$group->name] = (float) $approvedCosts->where('cost_group_id', $group->id)->sum('amount');
+        }
+
+        // Catch costs without a cost_group_id (legacy or unassigned)
+        $noGroupSum = $approvedCosts->whereNull('cost_group_id')->sum('amount');
+        if ($noGroupSum > 0) {
+            $costByCategory['Khác'] = (float) ($costByCategory['Khác'] ?? 0) + $noGroupSum;
+        }
 
         $totalCosts = array_sum($costByCategory);
 
@@ -162,7 +166,7 @@ class FinanceService
      */
     public function getBudgetVsActual(int $projectId): array
     {
-        $project = Project::with(['budgets.items'])->findOrFail($projectId);
+        $project = Project::with(['budgets.items.costGroup'])->findOrFail($projectId);
         $latestBudget = $project->budgets()->latest()->first();
 
         if (!$latestBudget) {
@@ -179,7 +183,7 @@ class FinanceService
             $items[] = [
                 'id'                => $item->id,
                 'name'              => $item->name,
-                'cost_group'        => $item->cost_group,
+                'cost_group'        => $item->costGroup->name ?? 'Chi phí khác',
                 'budget_amount'     => $budgetAmt,
                 'actual_amount'     => $actualAmt,
                 'variance'          => $variance,

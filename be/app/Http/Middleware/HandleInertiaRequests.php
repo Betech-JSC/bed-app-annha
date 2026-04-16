@@ -139,6 +139,12 @@ class HandleInertiaRequests extends Middleware
                     return 0; // Return 0 gracefully if any DB error
                 }
             },
+            'system_cost_categories' => function () {
+                if (class_exists('App\Models\Cost')) {
+                    return \App\Models\Cost::getSystemCategories();
+                }
+                return [];
+            },
         ]);
     }
 }

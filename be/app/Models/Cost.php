@@ -199,21 +199,42 @@ class Cost extends Model
 
     public function getCategoryLabelAttribute(): string
     {
-        // Ưu tiên lấy từ CostGroup nếu có
+        // Always try to get from CostGroup relationship first
         if ($this->costGroup) {
             return $this->costGroup->name;
         }
-        
-        // Fallback về category enum cũ (backward compatible)
-        return match ($this->category) {
-            'construction_materials' => 'Vật liệu xây dựng',
-            'concrete' => 'Bê tông',
-            'labor' => 'Nhân công',
-            'equipment' => 'Thiết bị',
-            'transportation' => 'Vận chuyển',
-            'other' => 'Chi phí khác',
-            default => 'Khác',
-        };
+
+        // Return the raw category if it's not mapped to a group, or 'Khác' as final fallback
+        return $this->category ?? 'Khác';
+    }
+
+    /**
+     * Get system categories dynamically from the database.
+     * These are groups that the system recognizes for special filtering logic.
+     */
+    public static function getSystemCategories(): array
+    {
+        return \App\Models\CostGroup::active()
+            ->whereIn('code', ['labor', 'construction_materials', 'equipment', 'subcontractor', 'other'])
+            ->get(['id', 'name', 'code'])
+            ->map(function($group) {
+                // Prefix ID with underscore for frontend logic compatibility if needed
+                // or just return the DB data. Show.vue uses underscores for system groups.
+                $prefixMap = [
+                    'labor' => '_labor',
+                    'construction_materials' => '_vatlieu',
+                    'equipment' => '_thietbi',
+                    'subcontractor' => '_ntp',
+                    'other' => '_other'
+                ];
+                
+                return [
+                    'id' => $prefixMap[$group->code] ?? $group->id,
+                    'name' => $group->name,
+                    'db_id' => $group->id
+                ];
+            })
+            ->toArray();
     }
 
     // ==================================================================

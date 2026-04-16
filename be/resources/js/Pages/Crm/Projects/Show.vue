@@ -513,12 +513,7 @@
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-center">
               <a-select v-model:value="costGroupFilter" size="small" class="w-full" allow-clear placeholder="Lọc theo nhóm">
                 <a-select-option value="all">Tất cả nhóm</a-select-option>
-                <a-select-option value="_labor">Nhân công (Chấm công)</a-select-option>
-                <a-select-option value="_vatlieu">Vật liệu xây dựng</a-select-option>
-                <a-select-option value="_thietbi">Thiết bị</a-select-option>
-                <a-select-option value="_ntp">Nhà thầu phụ</a-select-option>
-                <a-select-option value="_other">Khác</a-select-option>
-                <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
+                <a-select-option v-for="g in allFilterGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
               </a-select>
             </div>
             <div class="flex items-center justify-end">
@@ -2328,18 +2323,18 @@
           <div v-for="a in editingCost.attachments" :key="a.id" class="relative group">
             <a href="#" @click.prevent="openFilePreview(a)" 
                class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
-               :class="isAttachmentDeleted(a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
-              <span v-if="isAttachmentDeleted(a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+               :class="isAttachmentDeleted(costForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+              <span v-if="isAttachmentDeleted(costForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
               <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
             </a>
-            <div v-if="!isAttachmentDeleted(a.id)" 
+            <div v-if="!isAttachmentDeleted(costForm, a.id)" 
                  class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
-                 @click.stop="toggleDeleteAttachment(a.id)">
+                 @click.stop="toggleDeleteAttachment(costForm, a.id)">
               <CloseOutlined class="text-[10px] font-bold" />
             </div>
             <div v-else 
                  class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
-                 @click.stop="toggleDeleteAttachment(a.id)">
+                 @click.stop="toggleDeleteAttachment(costForm, a.id)">
               <ReloadOutlined class="text-[10px] font-bold" />
             </div>
           </div>
@@ -2376,9 +2371,24 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp hợp đồng đính kèm</div>
         <div v-if="editingContract?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingContract.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-          </a>
+          <div v-for="a in editingContract.attachments" :key="a.id" class="relative group">
+            <a href="#" @click.prevent="openFilePreview(a)" 
+               class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
+               :class="isAttachmentDeleted(contractForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+              <span v-if="isAttachmentDeleted(contractForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+              <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
+            </a>
+            <div v-if="!isAttachmentDeleted(contractForm, a.id)" 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                 @click.stop="toggleDeleteAttachment(contractForm, a.id)">
+              <CloseOutlined class="text-[10px] font-bold" />
+            </div>
+            <div v-else 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                 @click.stop="toggleDeleteAttachment(contractForm, a.id)">
+              <ReloadOutlined class="text-[10px] font-bold" />
+            </div>
+          </div>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
         <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
@@ -2439,10 +2449,27 @@
         </div>
         
         <div v-if="editingPayment?.attachments?.length" class="flex flex-wrap gap-2 mb-3">
-          <div v-for="a in editingPayment.attachments" :key="a.id" @click="openFilePreview(a)" class="group relative flex items-center gap-2 text-xs bg-gray-50 border border-gray-100 px-3 py-2 rounded-xl hover:bg-white hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer">
-            <FileTextOutlined class="text-blue-500" /> 
-            <span class="max-w-[120px] truncate text-gray-600 font-medium">{{ a.original_name || a.file_name }}</span>
-            <EyeOutlined class="text-gray-300 group-hover:text-blue-400 ml-1" />
+          <div v-for="a in editingPayment.attachments" :key="a.id" class="relative group">
+            <div @click="openFilePreview(a)" 
+               class="flex items-center gap-2 text-xs px-3 py-2 rounded-xl transition-all cursor-pointer border"
+               :class="isAttachmentDeleted(paymentForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-gray-50 border-gray-100 hover:bg-white hover:border-blue-300 hover:shadow-sm'">
+              <span v-if="isAttachmentDeleted(paymentForm, a.id)" class="text-[10px] line-through italic flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+              <template v-else>
+                <FileTextOutlined class="text-blue-500" /> 
+                <span class="max-w-[120px] truncate text-gray-600 font-medium">{{ a.original_name || a.file_name }}</span>
+                <EyeOutlined class="text-gray-300 group-hover:text-blue-400 ml-1" />
+              </template>
+            </div>
+            <div v-if="!isAttachmentDeleted(paymentForm, a.id)" 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                 @click.stop="toggleDeleteAttachment(paymentForm, a.id)">
+              <CloseOutlined class="text-[10px] font-bold" />
+            </div>
+            <div v-else 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                 @click.stop="toggleDeleteAttachment(paymentForm, a.id)">
+              <ReloadOutlined class="text-[10px] font-bold" />
+            </div>
           </div>
         </div>
 
@@ -2590,9 +2617,24 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Chứng từ / Hình ảnh đính kèm</div>
         <div v-if="editingLog?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingLog.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-          </a>
+          <div v-for="a in editingLog.attachments" :key="a.id" class="relative group">
+            <a href="#" @click.prevent="openFilePreview(a)" 
+               class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
+               :class="isAttachmentDeleted(logForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+              <span v-if="isAttachmentDeleted(logForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+              <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
+            </a>
+            <div v-if="!isAttachmentDeleted(logForm, a.id)" 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                 @click.stop="toggleDeleteAttachment(logForm, a.id)">
+              <CloseOutlined class="text-[10px] font-bold" />
+            </div>
+            <div v-else 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                 @click.stop="toggleDeleteAttachment(logForm, a.id)">
+              <ReloadOutlined class="text-[10px] font-bold" />
+            </div>
+          </div>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
         <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
@@ -2634,9 +2676,24 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Hình ảnh / File đính kèm</div>
         <div v-if="editingDefect?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingDefect.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-          </a>
+          <div v-for="a in editingDefect.attachments" :key="a.id" class="relative group">
+            <a href="#" @click.prevent="openFilePreview(a)" 
+               class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
+               :class="isAttachmentDeleted(defectForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+              <span v-if="isAttachmentDeleted(defectForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+              <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
+            </a>
+            <div v-if="!isAttachmentDeleted(defectForm, a.id)" 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                 @click.stop="toggleDeleteAttachment(defectForm, a.id)">
+              <CloseOutlined class="text-[10px] font-bold" />
+            </div>
+            <div v-else 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                 @click.stop="toggleDeleteAttachment(defectForm, a.id)">
+              <ReloadOutlined class="text-[10px] font-bold" />
+            </div>
+          </div>
         </div>
         <input type="file" multiple accept="image/*,.pdf,.doc,.docx" @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
         <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
@@ -4515,9 +4572,24 @@
         
         <div class="border-2 border-dashed border-gray-200 rounded-xl p-4 transition-colors hover:border-blue-400 bg-gray-50/30">
           <div v-if="editingSub?.attachments?.length" class="flex flex-wrap gap-2 mb-3">
-            <a v-for="a in editingSub.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-              <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-            </a>
+            <div v-for="a in editingSub.attachments" :key="a.id" class="relative group">
+              <a href="#" @click.prevent="openFilePreview(a)" 
+                 class="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition cursor-pointer border"
+                 :class="isAttachmentDeleted(subForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+                <span v-if="isAttachmentDeleted(subForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+                <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
+              </a>
+              <div v-if="!isAttachmentDeleted(subForm, a.id)" 
+                   class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                   @click.stop="toggleDeleteAttachment(subForm, a.id)">
+                <CloseOutlined class="text-[10px] font-bold" />
+              </div>
+              <div v-else 
+                   class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                   @click.stop="toggleDeleteAttachment(subForm, a.id)">
+                <ReloadOutlined class="text-[10px] font-bold" />
+              </div>
+            </div>
           </div>
           
           <input type="file" multiple @change="e => subFiles = [...(e.target.files || [])]" class="block w-full text-sm cursor-pointer file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border file:border-gray-300 file:text-xs file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-50" />
@@ -4541,9 +4613,24 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp minh chứng</div>
         <div v-if="editingAC?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingAC.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-          </a>
+          <div v-for="a in editingAC.attachments" :key="a.id" class="relative group">
+            <a href="#" @click.prevent="openFilePreview(a)" 
+               class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
+               :class="isAttachmentDeleted(acForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+              <span v-if="isAttachmentDeleted(acForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+              <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
+            </a>
+            <div v-if="!isAttachmentDeleted(acForm, a.id)" 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                 @click.stop="toggleDeleteAttachment(acForm, a.id)">
+              <CloseOutlined class="text-[10px] font-bold" />
+            </div>
+            <div v-else 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                 @click.stop="toggleDeleteAttachment(acForm, a.id)">
+              <ReloadOutlined class="text-[10px] font-bold" />
+            </div>
+          </div>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
         <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
@@ -4724,9 +4811,24 @@
       <div class="border-t pt-3 mt-2">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> File hóa đơn đính kèm</div>
         <div v-if="editingInvoice?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <a v-for="a in editingInvoice.attachments" :key="a.id" href="#" @click.prevent="openFilePreview(a)" class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100 transition cursor-pointer">
-            <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
-          </a>
+          <div v-for="a in editingInvoice.attachments" :key="a.id" class="relative group">
+            <a href="#" @click.prevent="openFilePreview(a)" 
+               class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
+               :class="isAttachmentDeleted(invoiceForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+              <span v-if="isAttachmentDeleted(invoiceForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+              <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
+            </a>
+            <div v-if="!isAttachmentDeleted(invoiceForm, a.id)" 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                 @click.stop="toggleDeleteAttachment(invoiceForm, a.id)">
+              <CloseOutlined class="text-[10px] font-bold" />
+            </div>
+            <div v-else 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                 @click.stop="toggleDeleteAttachment(invoiceForm, a.id)">
+              <ReloadOutlined class="text-[10px] font-bold" />
+            </div>
+          </div>
         </div>
         <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
         <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
@@ -5948,6 +6050,8 @@ import {
 
 defineOptions({ layout: CrmLayout })
 
+const page = usePage()
+
 const props = defineProps({
   project: Object,
   users: Array,
@@ -6116,7 +6220,12 @@ const costGroupFilter = ref(null)
 const commentText = ref('')
 const openDefects = computed(() => defects.value.filter(d => d.status === 'open' || d.status === 'in_progress').length)
 const activeRisks = computed(() => risks.value.filter(r => r.status !== 'closed').length)
-
+const allFilterGroups = computed(() => {
+  const systemGroups = page.props.system_cost_categories || []
+  const dbGroups = props.costGroups || []
+  const filteredDbGroups = dbGroups.filter(dg => !systemGroups.some(sg => sg.name === dg.name))
+  return [...systemGroups, ...filteredDbGroups]
+})
 
 // Drawer Detail Refs
 const showCostDetail = ref(false)
@@ -6357,7 +6466,8 @@ watch(activeTab, (tab) => {
 })
 
 const filteredCosts = computed(() => {
-  let c = costs.value
+  // Temporarily showing all for debugging
+  let c = costs.value // .filter(item => !item.material_bill_id && !item.subcontractor_payment_id && !item.equipment_rental_id && !item.equipment_allocation_id)
 
   // Status filter
   if (costStatusFilter.value === 'pending') {
@@ -6810,16 +6920,33 @@ const saveProject = () => { router.put(`/projects/${props.project.id}`, projectF
 const modalFiles = ref([])
 // uploadModalFiles removed - unified into single request logic
 
+// ============ FORM DATA HELPER ============
+const appendFormEntries = (formData, formObj) => {
+  Object.entries(formObj).forEach(([k, v]) => {
+    if (v === null || v === undefined) return
+    if (Array.isArray(v)) {
+      v.forEach(item => formData.append(`${k}[]`, item))
+    } else {
+      formData.append(k, v)
+    }
+  })
+}
+
 // ============ COST CRUD ============
 const showCostModal = ref(false)
 const editingCost = ref(null)
 const costForm = ref({ name: '', amount: null, cost_date: null, cost_group_id: null, budget_item_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '', deleted_attachment_ids: [] })
-const toggleDeleteAttachment = (id) => {
-  const idx = costForm.value.deleted_attachment_ids.indexOf(id)
-  if (idx === -1) costForm.value.deleted_attachment_ids.push(id)
-  else costForm.value.deleted_attachment_ids.splice(idx, 1)
+const toggleDeleteAttachment = (form, id) => {
+  if (!form.deleted_attachment_ids) form.deleted_attachment_ids = []
+  const idx = form.deleted_attachment_ids.indexOf(id)
+  if (idx === -1) form.deleted_attachment_ids.push(id)
+  else form.deleted_attachment_ids.splice(idx, 1)
 }
-const isAttachmentDeleted = (id) => costForm.value.deleted_attachment_ids.includes(id)
+const isAttachmentDeleted = (form, id) => form.deleted_attachment_ids?.includes(id) || false
+
+const removeSelectedFile = (index) => {
+  modalFiles.value.splice(index, 1)
+}
 const openCostModal = (c) => {
   editingCost.value = c
   modalFiles.value = []
@@ -6947,7 +7074,7 @@ const rejectCost = () => { router.post(`/projects/${props.project.id}/costs/${re
 // ============ CONTRACT CRUD ============
 const showContractModal = ref(false)
 const editingContract = ref(null)
-const contractForm = ref({ contract_value: null, signed_date: null, status: 'draft' })
+const contractForm = ref({ contract_value: null, signed_date: null, status: 'draft', deleted_attachment_ids: [] })
 
 // ============ FILE PREVIEW (Premium Inline Viewer) ============
 const showFilePreview = ref(false)
@@ -7000,8 +7127,8 @@ const openContractModal = (c) => {
   editingContract.value = c
   modalFiles.value = []
   contractForm.value = c
-    ? { contract_value: c.contract_value, signed_date: c.signed_date, status: c.status || 'draft' }
-    : { contract_value: null, signed_date: null, status: 'draft' }
+    ? { contract_value: c.contract_value, signed_date: c.signed_date, status: c.status || 'draft', deleted_attachment_ids: [] }
+    : { contract_value: null, signed_date: null, status: 'draft', deleted_attachment_ids: [] }
   showContractModal.value = true
 }
 const saveContract = () => {
@@ -7011,7 +7138,7 @@ const saveContract = () => {
   const url = `/projects/${props.project.id}/contract`
   const method = editingContract.value ? 'put' : 'post'
   const formData = new FormData()
-  Object.entries(contractForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  appendFormEntries(formData, contractForm.value)
   modalFiles.value.forEach(f => formData.append('files[]', f))
   if (editingContract.value) formData.append('_method', 'PUT')
   
@@ -7027,11 +7154,11 @@ const saveContract = () => {
 // ============ PAYMENT CRUD ============
 const showPaymentModal = ref(false)
 const editingPayment = ref(null)
-const paymentForm = ref({ payment_number: '', contract_id: null, notes: '', amount: null, due_date: null })
+const paymentForm = ref({ payment_number: '', contract_id: null, notes: '', amount: null, due_date: null, deleted_attachment_ids: [] })
 const openPaymentModal = (p = null) => {
   editingPayment.value = p
   modalFiles.value = []
-  paymentForm.value = p ? { payment_number: p.payment_number, contract_id: p.contract_id || null, notes: p.notes || '', amount: p.amount, due_date: p.due_date } : { payment_number: '', contract_id: props.project.contract?.id || null, notes: '', amount: null, due_date: null }
+  paymentForm.value = p ? { payment_number: p.payment_number, contract_id: p.contract_id || null, notes: p.notes || '', amount: p.amount, due_date: p.due_date, deleted_attachment_ids: [] } : { payment_number: '', contract_id: props.project.contract?.id || null, notes: '', amount: null, due_date: null, deleted_attachment_ids: [] }
   showPaymentModal.value = true
 }
 const savePayment = () => {
@@ -7039,7 +7166,7 @@ const savePayment = () => {
     return Modal.warning({ title: 'Yêu cầu chứng từ', content: 'Mọi đợt thanh toán đều cần đính kèm ảnh chụp ủy nhiệm chi hoặc biên lai để xác nhận.' })
   }
   const formData = new FormData()
-  Object.entries(paymentForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  appendFormEntries(formData, paymentForm.value)
   modalFiles.value.forEach(f => formData.append('files[]', f))
   
   router.post(`/projects/${props.project.id}/payments`, formData, savingOptions({
@@ -7120,7 +7247,7 @@ const removePersonnel = (p) => router.delete(`/projects/${props.project.id}/pers
 // ============ LOG CRUD ============
 const showLogModal = ref(false)
 const editingLog = ref(null)
-const logForm = ref({ log_date: null, task_id: null, weather: null, personnel_count: null, completion_percentage: 0, notes: '' })
+const logForm = ref({ log_date: null, task_id: null, weather: null, personnel_count: null, completion_percentage: 0, notes: '', deleted_attachment_ids: [] })
 
 // Log Detail Drawer
 const showLogDetailDrawer = ref(false)
@@ -7142,6 +7269,7 @@ const openLogModal = (record = null, preSelectedTaskId = null) => {
       personnel_count: record.personnel_count ?? null,
       completion_percentage: Number(record.completion_percentage || 0),
       notes: record.notes || '',
+      deleted_attachment_ids: []
     }
     // Prefill current progress from task's logs
     if (record.task_id) {
@@ -7149,7 +7277,7 @@ const openLogModal = (record = null, preSelectedTaskId = null) => {
     }
   } else {
     editingLog.value = null
-    logForm.value = { log_date: dayjs().format('YYYY-MM-DD'), task_id: preSelectedTaskId || null, weather: null, personnel_count: null, completion_percentage: 0, notes: '' }
+    logForm.value = { log_date: dayjs().format('YYYY-MM-DD'), task_id: preSelectedTaskId || null, weather: null, personnel_count: null, completion_percentage: 0, notes: '', deleted_attachment_ids: [] }
     if (preSelectedTaskId) {
       onLogTaskChange(preSelectedTaskId)
     }
@@ -7204,7 +7332,7 @@ const onLogTaskChange = (taskId, isEditing = false) => {
 const saveLog = () => {
   const url = editingLog.value ? `/projects/${props.project.id}/logs/${editingLog.value.id}` : `/projects/${props.project.id}/logs`
   const formData = new FormData()
-  Object.entries(logForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  appendFormEntries(formData, logForm.value)
   modalFiles.value.forEach(f => formData.append('files[]', f))
   if (editingLog.value) formData.append('_method', 'PUT')
 
@@ -7251,19 +7379,19 @@ const showDefectModal = ref(false)
 const showDefectFixModal = ref(false)
 const defectFixForm = ref({ files: [], rectification_details: '' })
 const editingDefect = ref(null)
-const defectForm = ref({ description: '', severity: 'medium', status: 'open', task_id: null, acceptance_stage_id: null, defect_type: null })
+const defectForm = ref({ description: '', severity: 'medium', status: 'open', task_id: null, acceptance_stage_id: null, defect_type: null, deleted_attachment_ids: [] })
 const openDefectModal = (d) => {
   editingDefect.value = d
   modalFiles.value = []
   defectForm.value = d
-    ? { description: d.description || '', severity: d.severity, status: d.status, task_id: d.task_id || null, acceptance_stage_id: d.acceptance_stage_id || null, defect_type: d.defect_type || null }
-    : { description: '', severity: 'medium', status: 'open', task_id: null, acceptance_stage_id: null, defect_type: null }
+    ? { description: d.description || '', severity: d.severity, status: d.status, task_id: d.task_id || null, acceptance_stage_id: d.acceptance_stage_id || null, defect_type: d.defect_type || null, deleted_attachment_ids: [] }
+    : { description: '', severity: 'medium', status: 'open', task_id: null, acceptance_stage_id: null, defect_type: null, deleted_attachment_ids: [] }
   showDefectModal.value = true
 }
 const saveDefect = () => {
   const url = editingDefect.value ? `/projects/${props.project.id}/defects/${editingDefect.value.id}` : `/projects/${props.project.id}/defects`
   const formData = new FormData()
-  Object.entries(defectForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  appendFormEntries(formData, defectForm.value)
   modalFiles.value.forEach(f => formData.append('files[]', f))
   if (editingDefect.value) formData.append('_method', 'PUT')
 
@@ -7512,12 +7640,12 @@ const deleteTask = (t) => router.delete(`/projects/${props.project.id}/tasks/${t
 const showSubModal = ref(false)
 const editingSub = ref(null)
 const subFiles = ref([])
-const subForm = ref({ name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: true, cost_group_id: null })
+const subForm = ref({ name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: true, cost_group_id: null, deleted_attachment_ids: [] })
 const openSubModal = (s) => {
   editingSub.value = s
   subFiles.value = []
-  subForm.value = s ? { name: s.name, category: s.category || '', total_quote: s.total_quote, bank_name: s.bank_name || '', bank_account_number: s.bank_account_number || '', bank_account_name: s.bank_account_name || '', progress_start_date: s.progress_start_date || null, progress_end_date: s.progress_end_date || null, progress_status: s.progress_status || 'not_started' }
-    : { name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: true, cost_group_id: null }
+  subForm.value = s ? { name: s.name, category: s.category || '', total_quote: s.total_quote, bank_name: s.bank_name || '', bank_account_number: s.bank_account_number || '', bank_account_name: s.bank_account_name || '', progress_start_date: s.progress_start_date || null, progress_end_date: s.progress_end_date || null, progress_status: s.progress_status || 'not_started', deleted_attachment_ids: [] }
+    : { name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: true, cost_group_id: null, deleted_attachment_ids: [] }
   showSubModal.value = true
 }
 const onGlobalSubSelect = (id) => {
@@ -7542,6 +7670,7 @@ const saveSub = () => {
   if (subFiles.value.length > 0 || !editingSub.value) {
     const fd = new FormData()
     Object.entries(subForm.value).forEach(([k, v]) => { 
+      if (k === 'deleted_attachment_ids' && Array.isArray(v)) { v.forEach(item => fd.append(`${k}[]`, item)); return }
       if (v === true) fd.append(k, '1')
       else if (v === false) fd.append(k, '0')
       else if (v !== null && v !== undefined && v !== '') fd.append(k, v) 
@@ -7629,15 +7758,15 @@ const deleteSubPayment = (sub, p) => router.delete(`/projects/${props.project.id
 // ============ ADDITIONAL COST CRUD ============
 const showACModal = ref(false)
 const editingAC = ref(null)
-const acForm = ref({ amount: null, description: '' })
+const acForm = ref({ amount: null, description: '', deleted_attachment_ids: [] })
 const openAdditionalCostModal = (ac = null) => {
   editingAC.value = ac
   modalFiles.value = []
-  acForm.value = ac ? { amount: ac.amount, description: ac.description || '' } : { amount: null, description: '' }
+  acForm.value = ac ? { amount: ac.amount, description: ac.description || '', deleted_attachment_ids: [] } : { amount: null, description: '', deleted_attachment_ids: [] }
   showACModal.value = true
 }
 const saveAC = () => {
-  if (!modalFiles.value.length) {
+  if (!modalFiles.value.length && (!editingAC.value || !editingAC.value.attachments?.length)) {
     return Modal.warning({ title: 'Yêu cầu minh chứng', content: 'Chi phí phát sinh bắt buộc phải có ảnh chụp hiện trường hoặc phiếu đề xuất có chữ ký.' })
   }
   const data = { ...acForm.value }
@@ -7803,12 +7932,12 @@ const confirmRejectBudget = () => {
 // ============ INVOICE CRUD ============
 const showInvoiceModal = ref(false)
 const editingInvoice = ref(null)
-const invoiceForm = ref({ invoice_date: null, cost_group_id: null, subtotal: null, tax_amount: 0, discount_amount: 0, description: '', notes: '' })
+const invoiceForm = ref({ invoice_date: null, cost_group_id: null, subtotal: null, tax_amount: 0, discount_amount: 0, description: '', notes: '', deleted_attachment_ids: [] })
 const openInvoiceModal = (inv) => {
   editingInvoice.value = inv
   modalFiles.value = []
-  invoiceForm.value = inv ? { invoice_date: inv.invoice_date, cost_group_id: inv.cost_group_id || null, subtotal: inv.subtotal, tax_amount: inv.tax_amount || 0, discount_amount: inv.discount_amount || 0, description: inv.description || '', notes: inv.notes || '' }
-    : { invoice_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, subtotal: null, tax_amount: 0, discount_amount: 0, description: '', notes: '' }
+  invoiceForm.value = inv ? { invoice_date: inv.invoice_date, cost_group_id: inv.cost_group_id || null, subtotal: inv.subtotal, tax_amount: inv.tax_amount || 0, discount_amount: inv.discount_amount || 0, description: inv.description || '', notes: inv.notes || '', deleted_attachment_ids: [] }
+    : { invoice_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, subtotal: null, tax_amount: 0, discount_amount: 0, description: '', notes: '', deleted_attachment_ids: [] }
   showInvoiceModal.value = true
 }
 const saveInvoice = () => {
@@ -7817,7 +7946,7 @@ const saveInvoice = () => {
   }
   const url = editingInvoice.value ? `/projects/${props.project.id}/invoices/${editingInvoice.value.id}` : `/projects/${props.project.id}/invoices`
   const formData = new FormData()
-  Object.entries(invoiceForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
+  appendFormEntries(formData, invoiceForm.value)
   modalFiles.value.forEach(f => formData.append('files[]', f))
   if (editingInvoice.value) formData.append('_method', 'PUT')
 

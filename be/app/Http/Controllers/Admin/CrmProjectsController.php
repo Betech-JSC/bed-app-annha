@@ -167,7 +167,12 @@ class CrmProjectsController extends Controller
         // 2. Fast Counts for Tab Badges (Very efficient)
         $counts = [
             'tasks' => \App\Models\ProjectTask::where('project_id', $id)->whereNull('deleted_at')->count(),
-            'costs' => \App\Models\Cost::where('project_id', $id)->count(),
+            'costs' => \App\Models\Cost::where('project_id', $id)
+                // ->whereNull('material_bill_id')
+                // ->whereNull('subcontractor_payment_id')
+                // ->whereNull('equipment_rental_id')
+                // ->whereNull('equipment_allocation_id')
+                ->count(),
             'payments' => \App\Models\ProjectPayment::where('project_id', $id)->count(),
             'personnel' => \App\Models\ProjectPersonnel::where('project_id', $id)->count(),
             'subcontractors' => \App\Models\Subcontractor::where('project_id', $id)->count(),
@@ -216,13 +221,17 @@ class CrmProjectsController extends Controller
             'globalSubcontractors' => $globalSubcontractors,
 
             // 5. DATA CLOSURES — Loaded on initial load AND available for partial reloads
-            'financeData' => fn() => [
+            'financeData' => [
                 'payments' => $project->payments()
                     ->select('id', 'project_id', 'payment_number', 'amount', 'status', 'due_date', 'contract_id', 'notes', 'created_at')
                     ->with('attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type')
                     ->orderByDesc('payment_number')->get(),
                 'costs' => $project->costs()
-                    ->select('id', 'project_id', 'name', 'amount', 'status', 'category', 'attendance_id', 'cost_date', 'created_by', 'management_approved_by', 'accountant_approved_by', 'cost_group_id', 'subcontractor_id', 'supplier_id', 'budget_item_id', 'created_at')
+                    // ->whereNull('material_bill_id')
+                    // ->whereNull('subcontractor_payment_id')
+                    // ->whereNull('equipment_rental_id')
+                    // ->whereNull('equipment_allocation_id')
+                    ->select('id', 'project_id', 'name', 'amount', 'status', 'category', 'attendance_id', 'cost_date', 'created_by', 'management_approved_by', 'accountant_approved_by', 'cost_group_id', 'subcontractor_id', 'supplier_id', 'budget_item_id', 'created_at', 'material_bill_id', 'subcontractor_payment_id', 'equipment_rental_id', 'equipment_allocation_id')
                     ->with(['creator:id,name', 'costGroup:id,name,code', 'subcontractor:id,name', 'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type', 'managementApprover:id,name', 'accountantApprover:id,name'])
                     ->orderByDesc('cost_date')->orderByDesc('created_at')->get(),
                 'invoices' => $project->invoices()->select('id', 'project_id', 'invoice_number', 'subtotal', 'total_amount', 'invoice_date', 'description')->get(),
@@ -242,7 +251,7 @@ class CrmProjectsController extends Controller
                 'materialBills' => \App\Models\MaterialBill::where('project_id', $id)->with(['items.material', 'supplier', 'creator', 'attachments'])->get(),
             ],
 
-            'monitorData' => fn() => [
+            'monitorData' => [
                 'logs' => $project->constructionLogs()->with(['creator', 'task', 'attachments'])->orderByDesc('log_date')->get(),
                 'acceptanceStages' => $project->acceptanceStages()->with(['items.task', 'task', 'acceptanceTemplate', 'defects.attachments', 'attachments'])->get(),
                 'defects' => $project->defects()->with('attachments')->get(),
@@ -250,7 +259,7 @@ class CrmProjectsController extends Controller
                 'change_requests' => $project->changeRequests()->with(['requester', 'attachments'])->latest()->get(),
             ],
 
-            'teamData' => fn() => [
+            'teamData' => [
                 'personnel' => $project->personnel()->with(['user:id,name,email,image as avatar,phone', 'personnelRole:id,name'])->get(),
                 'subcontractors' => $project->subcontractors()->with(['attachments', 'payments.attachments'])->get(),
             ],
@@ -615,6 +624,9 @@ class CrmProjectsController extends Controller
 
         try {
             $this->financialService->upsertProjectPayment($validated, $payment, $user);
+
+            // Handle file deletions
+            $this->attachmentService->handleDeletedRequest($request, $payment);
 
             // Handle file uploads during update
             $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", false);
@@ -1067,6 +1079,9 @@ class CrmProjectsController extends Controller
             DB::beginTransaction();
             $this->logService->upsert(array_merge($validated, ['project_id' => $project->id]), $log, $user);
 
+            // Handle file deletions
+            $this->attachmentService->handleDeletedRequest($request, $log);
+
             // Handle multi-file upload for CRM
             $this->attachmentService->handleCrmUpload($request, $log, "projects/{$project->id}/logs", false);
 
@@ -1184,6 +1199,7 @@ class CrmProjectsController extends Controller
                 $this->defectService->transitionStatus($defect, $validated['status'], $user, $validated);
             }
             $this->defectService->upsertDefect(array_merge($validated, ['project_id' => $project->id]), $defect, $user);
+            $this->attachmentService->handleDeletedRequest($request, $defect);
             $this->attachmentService->handleCrmUpload($request, $defect, "defects/{$project->id}", false);
 
             DB::commit();
@@ -1596,6 +1612,9 @@ class CrmProjectsController extends Controller
         try {
             $this->contractService->upsert($validated, $contract, $user);
 
+            // Handle file deletions
+            $this->attachmentService->handleDeletedRequest($request, $contract);
+
             // Handle file uploads during update
             $this->attachFilesToEntity($request, $contract, "contracts/{$project->id}", false);
 
@@ -1688,6 +1707,9 @@ class CrmProjectsController extends Controller
 
         try {
             $this->subcontractorService->upsert($validated, $sub, $user);
+
+            // Handle file deletions
+            $this->attachmentService->handleDeletedRequest($request, $sub);
 
             // Handle file uploads on update
             $this->attachFilesToEntity($request, $sub, "subcontractors/{$project->id}/{$sub->id}", false);
@@ -2182,6 +2204,9 @@ class CrmProjectsController extends Controller
         DB::beginTransaction();
         try {
             $invoice->update($validated);
+
+            // Handle file deletions
+            $this->attachmentService->handleDeletedRequest($request, $invoice);
 
             // Handle file uploads during update
             $this->attachFilesToEntity($request, $invoice, "invoices/{$project->id}", false);
