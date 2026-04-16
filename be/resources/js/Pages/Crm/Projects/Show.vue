@@ -6555,21 +6555,58 @@ const tabGroupTabs = {
 }
 
 // Only render tab-pane if it belongs to the active group
+const tabPermissions = {
+  gantt: 'gantt.view',
+  progress: 'project.task.view',
+  contract: 'contract.view',
+  costs: 'cost.view',
+  payments: 'payment.view',
+  invoices: 'invoice.view',
+  budgets: 'budgets.view',
+  finance: 'finance.view',
+  pnl: 'finance.view',
+  bva: 'finance.view',
+  debt: 'finance.view',
+  cashflow: 'finance.view',
+  subcontractors: 'subcontractor.view',
+  materials: 'material.view',
+  material_bills: 'material.view',
+  equipment: 'equipment.view',
+  logs: 'log.view',
+  acceptance: 'acceptance.view',
+  defects: 'defect.view',
+  change_requests: 'change_request.view',
+  additional_costs: 'additional_cost.view',
+  comments: 'project.comment.view',
+  risks: 'project.risk.view',
+  personnel: 'personnel.view',
+  attendance: 'attendance.view',
+  labor: 'labor_productivity.view',
+  warranty: 'warranty.view',
+  maintenances: 'warranty.view',
+  documents: 'document.view',
+}
+
+// Only render tab-pane if it belongs to the active group AND user has permission
 const isTabVisible = (tabKey) => {
+  if (tabPermissions[tabKey] && !can(tabPermissions[tabKey])) return false
   const tabs = tabGroupTabs[activeTabGroup.value]
   return tabs ? tabs.includes(tabKey) : false
 }
 
-// Tab groups with dynamic badge counts
-const tabGroups = computed(() => [
-  { key: 'schedule', icon: '📅', label: 'Kế hoạch', defaultTab: 'gantt', badge: props.counts?.tasks || 0 },
-  { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.counts?.costs || 0) + (props.counts?.payments || 0) + (props.counts?.budgets || 0) },
-  { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: (props.counts?.subcontractors || 0) + (props.counts?.material_bills || 0) + (props.counts?.equipment || 0) },
-  { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'logs', badge: (props.counts?.construction_logs || 0) + (props.counts?.acceptance_stages || 0) + (props.counts?.defects || 0) + (props.counts?.additional_costs || 0) + (props.counts?.change_requests || 0) },
-  { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.counts?.personnel || 0 },
-  { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: (props.counts?.warranties || 0) + (props.counts?.maintenances || 0) },
-  { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.counts?.attachments || 0 },
-])
+// Tab groups with dynamic badge counts and permission filtering
+const tabGroups = computed(() => {
+  const groups = [
+    { key: 'schedule', icon: '📅', label: 'Kế hoạch', defaultTab: 'gantt', badge: props.counts?.tasks || 0, perms: ['gantt.view', 'project.task.view'] },
+    { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.counts?.costs || 0) + (props.counts?.payments || 0) + (props.counts?.budgets || 0), perms: ['contract.view', 'payment.view', 'invoice.view', 'cost.view', 'budgets.view', 'finance.view'] },
+    { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: (props.counts?.subcontractors || 0) + (props.counts?.material_bills || 0) + (props.counts?.equipment || 0), perms: ['subcontractor.view', 'material.view', 'equipment.view'] },
+    { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'logs', badge: (props.counts?.construction_logs || 0) + (props.counts?.acceptance_stages || 0) + (props.counts?.defects || 0) + (props.counts?.additional_costs || 0) + (props.counts?.change_requests || 0), perms: ['log.view', 'acceptance.view', 'defect.view', 'change_request.view', 'additional_cost.view', 'project.comment.view', 'project.risk.view'] },
+    { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.counts?.personnel || 0, perms: ['personnel.view', 'attendance.view', 'labor_productivity.view'] },
+    { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: (props.counts?.warranties || 0) + (props.counts?.maintenances || 0), perms: ['warranty.view'] },
+    { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.counts?.attachments || 0, perms: ['document.view'] },
+  ]
+  return groups.filter(g => g.perms.some(p => can(p)))
+})
 
 // Map activeTab to correct group (for when tab clicked directly)
 watch(activeTab, (tab) => {
