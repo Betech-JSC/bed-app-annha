@@ -3362,7 +3362,10 @@ class CrmProjectsController extends Controller
             $data = $request->all();
             $data['project_id'] = $projectId;
 
-            $this->materialBillService->upsert($data, null, $user);
+            $bill = $this->materialBillService->upsert($data, null, $user);
+
+            // Handle file uploads during creation (Web/Mobile)
+            $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", false);
 
             return back()->with('success', "Đã tạo phiếu vật tư.");
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -3381,6 +3384,9 @@ class CrmProjectsController extends Controller
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
         try {
+            // Handle logical file deletions before update
+            $this->attachmentService->handleDeletedRequest($request, $bill);
+
             $this->materialBillService->upsert($request->all(), $bill, $user);
 
             // Handle file uploads during update (Web only)

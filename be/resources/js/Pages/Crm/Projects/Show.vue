@@ -517,9 +517,7 @@
               </a-select>
             </div>
             <div class="flex items-center justify-end">
-              <a-button v-if="can('cost.create')" type="primary" class="h-10 rounded-lg shadow-blue-100 shadow-lg" @click="openCostModal(null)">
-                <template #icon><PlusOutlined /></template>Thêm phiếu chi
-              </a-button>
+              <!-- Removed manual cost creation to maintain DB integrity as per request -->
             </div>
           </div>
 
@@ -1835,6 +1833,9 @@
               <template v-else-if="column.key === 'supplier'">
                 <span v-if="record.supplier" class="text-sm">{{ record.supplier.name }}</span>
                 <span v-else class="text-xs text-gray-400 italic">—</span>
+              </template>
+              <template v-else-if="column.key === 'material_group'">
+                <span class="text-[11px] text-gray-500 line-clamp-2" :title="getMaterialGroups(record)">{{ getMaterialGroups(record) }}</span>
               </template>
               <template v-else-if="column.key === 'items_count'">
                 <span class="font-medium">{{ record.items?.length || 0 }} <span class="text-gray-400 text-xs">mặt hàng</span></span>
@@ -5365,17 +5366,20 @@
           <PaperClipOutlined /> Tệp chứng từ hiện có ({{ attachTargetForBill.attachments.length }})
         </div>
         <div class="space-y-1">
-          <div v-for="att in attachTargetForBill.attachments" :key="att.id" class="flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-100">
+          <div v-for="att in attachTargetForBill.attachments" :key="att.id" 
+               class="flex items-center justify-between p-2 rounded-lg border transition-all"
+               :class="billForm.deleted_attachment_ids.includes(att.id) ? 'bg-red-50 border-red-100 opacity-60' : 'bg-gray-50 border-gray-100'">
             <div class="flex items-center gap-2 min-w-0">
               <FileOutlined class="text-gray-400 text-xs" />
-              <a href="#" @click.prevent="openFilePreview(att)" class="text-[10px] text-gray-700 hover:text-blue-600 truncate max-w-[200px]">{{ att.original_name }}</a>
+              <a href="#" @click.prevent="openFilePreview(att)" 
+                 class="text-[10px] truncate max-w-[200px]"
+                 :class="billForm.deleted_attachment_ids.includes(att.id) ? 'text-red-400 line-through' : 'text-gray-700 hover:text-blue-600'">{{ att.original_name }}</a>
               <span class="text-[9px] text-gray-400">({{ formatFileSize(att.file_size) }})</span>
             </div>
-            <a-popconfirm title="Xóa tệp này?" @confirm="deleteExistingAttachment(att.id)">
-              <a-button type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center">
-                <DeleteOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
-              </a-button>
-            </a-popconfirm>
+            <a-button type="text" size="small" @click="toggleBillAttachmentDeletion(att.id)" class="h-6 w-6 p-0 flex items-center justify-center">
+              <UndoOutlined v-if="billForm.deleted_attachment_ids.includes(att.id)" class="text-[10px] text-blue-500" />
+              <DeleteOutlined v-else class="text-[10px] text-gray-400 hover:text-red-500" />
+            </a-button>
           </div>
         </div>
       </div>
@@ -6149,7 +6153,15 @@ const invoices = computed(() => props.financeData?.invoices || [])
 const budgets = computed(() => props.financeData?.budgets || props.project.budgets || [])
 const allTasks = computed(() => props.scheduleData?.allTasks || [])
 const counts = computed(() => props.counts || {})
-const materialBills = computed(() => props.scheduleData?.materialBills || [])
+const materialBills = computed(() => {
+  const bills = props.scheduleData?.materialBills || [];
+  return [...bills].sort((a, b) => {
+    const dateA = new Date(a.bill_date || a.created_at || 0);
+    const dateB = new Date(b.bill_date || b.created_at || 0);
+    if (dateB.getTime() !== dateA.getTime()) return dateB.getTime() - dateA.getTime();
+    return (b.id || 0) - (a.id || 0);
+  });
+})
 const logs = computed(() => props.monitorData?.logs || props.project.construction_logs || [])
 const acceptanceStages = computed(() => props.monitorData?.acceptanceStages || props.project.acceptance_stages || [])
 const defects = computed(() => props.monitorData?.defects || props.project.defects || [])
@@ -8761,6 +8773,7 @@ const totalBillAmount = computed(() => (materialBills.value).reduce((s, b) => s 
 const billCols = [
   { title: 'Mã phiếu', key: 'bill_number', width: 130 },
   { title: 'Nhà cung cấp', key: 'supplier' },
+  { title: 'Nhóm vật tư', key: 'material_group', width: 150 },
   { title: 'Mặt hàng', key: 'items_count', width: 100, align: 'center' },
   { title: 'Tổng tiền', key: 'total', width: 150, align: 'right' },
   { title: 'Trạng thái', key: 'status', width: 140, align: 'center' },
@@ -8772,6 +8785,14 @@ const billStatusLabel = (s) => ({
 const billStatusColor = (s) => ({
   draft: 'default', pending_management: 'processing', pending_accountant: 'warning', approved: 'success', rejected: 'error'
 }[s] || 'default')
+
+const getMaterialGroups = (bill) => {
+  if (!bill.items?.length) return '—'
+  const groups = bill.items
+    .map(item => item.material?.group?.name || item.material?.material_group?.name || '')
+    .filter((v, i, a) => v && a.indexOf(v) === i)
+  return groups.length ? groups.join(', ') : '—'
+}
 
 const billExpandedRow = () => null // handled in template
 
@@ -8789,32 +8810,30 @@ const syncMaterialBillCosts = () => {
 const showBillModal = ref(false)
 const submittingBill = ref(false)
 const billFiles = ref([])
-const billForm = ref({ bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [] })
+const billForm = ref({ bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: 2, notes: '', items: [], deleted_attachment_ids: [] })
 const billItemForm = ref({ material_id: null, quantity: 1, unit_price: 0, total_price: 0 })
 
 const isEditBill = ref(false)
 const editingBillId = ref(null)
 const attachTargetForBill = ref(null)
 
-const deleteExistingAttachment = (attachmentId) => {
-  router.delete(`/files/${attachmentId}`, {
-    preserveScroll: true,
-    onSuccess: () => {
-      // Update local state if needed, though Inertia refresh should handle it
-      if (attachTargetForBill.value?.attachments) {
-        attachTargetForBill.value.attachments = attachTargetForBill.value.attachments.filter(a => a.id !== attachmentId)
-      }
-    }
-  })
+const toggleBillAttachmentDeletion = (id) => {
+  if (billForm.value.deleted_attachment_ids.includes(id)) {
+    billForm.value.deleted_attachment_ids = billForm.value.deleted_attachment_ids.filter(x => x !== id)
+  } else {
+    billForm.value.deleted_attachment_ids.push(id)
+  }
 }
 
 const openBillModal = (record = null) => {
+  isEditBill.value = !!record
+  editingBillId.value = record?.id || null
+  attachTargetForBill.value = record
+  billFiles.value = []
+  
   if (record) {
-    isEditBill.value = true
-    editingBillId.value = record.id
-    attachTargetForBill.value = record
     billForm.value = {
-      bill_date: record.bill_date,
+      bill_date: dayjs(record.bill_date).format('YYYY-MM-DD'),
       supplier_id: record.supplier_id,
       cost_group_id: record.cost_group_id,
       notes: record.notes || '',
@@ -8824,16 +8843,13 @@ const openBillModal = (record = null) => {
         unit_price: i.unit_price,
         _name: i.material?.name || '—',
         _unit: i.material?.unit || ''
-      }))
+      })),
+      deleted_attachment_ids: []
     }
   } else {
-    isEditBill.value = false
-    editingBillId.value = null
-    attachTargetForBill.value = null
-    billForm.value = { bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [] }
+    billForm.value = { bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: 2, notes: '', items: [], deleted_attachment_ids: [] }
   }
   billItemForm.value = { material_id: null, quantity: 1, unit_price: 0, total_price: 0 }
-  billFiles.value = []
   showBillModal.value = true
 }
 
@@ -8867,16 +8883,7 @@ const submitBillForm = () => {
   submittingBill.value = true
   
   const fd = new FormData()
-  fd.append('bill_date', billForm.value.bill_date)
-  if (billForm.value.supplier_id) fd.append('supplier_id', billForm.value.supplier_id)
-  if (billForm.value.cost_group_id) fd.append('cost_group_id', billForm.value.cost_group_id)
-  if (billForm.value.notes) fd.append('notes', billForm.value.notes)
-  
-  billForm.value.items.forEach((item, idx) => {
-    fd.append(`items[${idx}][material_id]`, item.material_id)
-    fd.append(`items[${idx}][quantity]`, item.quantity)
-    fd.append(`items[${idx}][unit_price]`, item.unit_price)
-  })
+  appendFormEntries(fd, billForm.value)
 
   if (billFiles.value.length) {
     billFiles.value.forEach(f => fd.append('files[]', f))
