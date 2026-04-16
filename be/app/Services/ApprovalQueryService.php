@@ -147,7 +147,26 @@ class ApprovalQueryService
             'url' => str_starts_with($a->file_url, 'http') ? $a->file_url : asset($a->file_url),
             'size' => $a->file_size_formatted ?? '',
             'type' => $a->mime_type ?? 'application/octet-stream',
+            'tag' => $a->description, // 'before' or 'after'
         ])->toArray();
+    }
+
+    private function formatAttachmentsByTag($model, string $tag): array
+    {
+        if (!$model || !method_exists($model, 'attachments') || !$model->attachments) {
+            return [];
+        }
+
+        return $model->attachments
+            ->filter(fn($a) => $a->description === $tag || ($tag === 'before' && empty($a->description)))
+            ->map(fn($a) => [
+                'id' => $a->id,
+                'name' => $a->original_name ?? $a->file_name,
+                'url' => str_starts_with($a->file_url, 'http') ? $a->file_url : asset($a->file_url),
+                'size' => $a->file_size_formatted ?? '',
+                'type' => $a->mime_type ?? 'application/octet-stream',
+                'tag' => $a->description,
+            ])->values()->toArray();
     }
 
     /**
@@ -853,6 +872,23 @@ class ApprovalQueryService
                     ];
                 }
             }
+            // Defects for PM
+            foreach ($data['defects'] ?? [] as $defect) {
+                if ($defect->acceptanceStage && $defect->acceptanceStage->status === 'supervisor_approved') {
+                    $items[] = [
+                        'id' => $defect->id, 'type' => 'defect_verify', 'title' => 'Lỗi: ' . Str::limit($defect->description, 40),
+                        'subtitle' => $defect->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $defect->status, 'status_label' => $this->getDefectStatusLabel($defect->status),
+                        'created_by' => $defect->fixer->name ?? 'N/A', 'created_at' => optional($defect->fixed_at ?? $defect->created_at)->toISOString(),
+                        'project_id' => $defect->project_id, 'can_approve' => $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2) || $user->isSuperAdmin(),
+                        'approval_level' => 'project_manager', 'role_group' => 'project_manager',
+                        'attachments' => $this->formatAttachments($defect),
+                        'attachments_count' => $defect->attachments->count(),
+                        'before_attachments' => $this->formatAttachmentsByTag($defect, 'before'),
+                        'after_attachments' => $this->formatAttachmentsByTag($defect, 'after'),
+                    ];
+                }
+            }
         }
 
         // 4. SUPERVISOR BUCKET
@@ -872,6 +908,24 @@ class ApprovalQueryService
                     ];
                 }
             }
+            // Defects for Supervisor
+            foreach ($data['defects'] ?? [] as $defect) {
+                // If no acceptanceStage, or acceptanceStage is pending/rejected, it's for supervisor
+                if (!$defect->acceptanceStage || in_array($defect->acceptanceStage->status, ['pending', 'rejected'])) {
+                    $items[] = [
+                        'id' => $defect->id, 'type' => 'defect_verify', 'title' => 'Lỗi: ' . Str::limit($defect->description, 40),
+                        'subtitle' => $defect->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $defect->status, 'status_label' => $this->getDefectStatusLabel($defect->status),
+                        'created_by' => $defect->fixer->name ?? 'N/A', 'created_at' => optional($defect->fixed_at ?? $defect->created_at)->toISOString(),
+                        'project_id' => $defect->project_id, 'can_approve' => $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1) || $user->isSuperAdmin(),
+                        'approval_level' => 'supervisor', 'role_group' => 'supervisor',
+                        'attachments' => $this->formatAttachments($defect),
+                        'attachments_count' => $defect->attachments->count(),
+                        'before_attachments' => $this->formatAttachmentsByTag($defect, 'before'),
+                        'after_attachments' => $this->formatAttachmentsByTag($defect, 'after'),
+                    ];
+                }
+            }
         }
 
         // 5. CUSTOMER BUCKET
@@ -888,6 +942,23 @@ class ApprovalQueryService
                         'approval_level' => 'customer', 'role_group' => 'customer',
                         'attachments' => $this->formatAttachments($st),
                         'attachments_count' => $st->attachments->count(),
+                    ];
+                }
+            }
+            // Defects for Customer
+            foreach ($data['defects'] ?? [] as $defect) {
+                if ($defect->acceptanceStage && $defect->acceptanceStage->status === 'project_manager_approved') {
+                    $items[] = [
+                        'id' => $defect->id, 'type' => 'defect_verify', 'title' => 'Lỗi: ' . Str::limit($defect->description, 40),
+                        'subtitle' => $defect->project->name ?? 'Dự án', 'amount' => 0,
+                        'status' => $defect->status, 'status_label' => $this->getDefectStatusLabel($defect->status),
+                        'created_by' => $defect->fixer->name ?? 'N/A', 'created_at' => optional($defect->fixed_at ?? $defect->created_at)->toISOString(),
+                        'project_id' => $defect->project_id, 'can_approve' => $user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $user->isSuperAdmin(),
+                        'approval_level' => 'customer', 'role_group' => 'customer',
+                        'attachments' => $this->formatAttachments($defect),
+                        'attachments_count' => $defect->attachments->count(),
+                        'before_attachments' => $this->formatAttachmentsByTag($defect, 'before'),
+                        'after_attachments' => $this->formatAttachmentsByTag($defect, 'after'),
                     ];
                 }
             }
@@ -1041,5 +1112,16 @@ class ApprovalQueryService
             }
         }
         return $budgetItemsByProject;
+    }
+    private function getDefectStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'open' => 'Mới',
+            'rejected' => 'Chưa đạt',
+            'in_progress' => 'Đang sửa lỗi',
+            'fixed' => 'Đã sửa — Chờ xác nhận',
+            'verified' => 'Đã xác nhận',
+            default => $status,
+        };
     }
 }

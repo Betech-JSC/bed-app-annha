@@ -247,7 +247,7 @@ class AcceptanceStage extends Model
                 ];
             case 'rejected':
                 return [
-                    'label' => 'Bị từ chối - Chờ xử lý lỗi',
+                    'label' => 'Chưa đạt - Chờ xử lý lỗi',
                     'role' => 'team',
                     'action' => 'Sửa lỗi và gửi lại',
                 ];
@@ -536,7 +536,7 @@ class AcceptanceStage extends Model
                 'acceptance_stage_id' => $this->id,
                 'description' => $description,
                 'severity' => 'high', // Mặc định là high vì nghiệm thu không đạt
-                'status' => 'open',
+                'status' => 'rejected',
                 'reported_by' => $user?->id ?? $this->rejected_by ?? $this->customer_approved_by ?? $this->project_manager_approved_by ?? null,
                 'reported_at' => now(),
             ]);
@@ -545,7 +545,7 @@ class AcceptanceStage extends Model
             \App\Models\DefectHistory::create([
                 'defect_id' => $defect->id,
                 'action' => 'created',
-                'new_status' => 'open',
+                'new_status' => 'rejected',
                 'user_id' => $defect->reported_by,
                 'comment' => 'Tự động tạo khi nghiệm thu không đạt',
             ]);

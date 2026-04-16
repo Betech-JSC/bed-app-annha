@@ -215,8 +215,8 @@ class CrmProjectsController extends Controller
             'acceptanceTemplates' => $acceptanceTemplates,
             'globalSubcontractors' => $globalSubcontractors,
 
-            // 5. LAZY PROPERTIES — Only loaded when requested via partial reload
-            'financeData' => Inertia::lazy(fn() => [
+            // 5. DATA CLOSURES — Loaded on initial load AND available for partial reloads
+            'financeData' => fn() => [
                 'payments' => $project->payments()
                     ->select('id', 'project_id', 'payment_number', 'amount', 'status', 'due_date', 'contract_id', 'notes', 'created_at')
                     ->with('attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type')
@@ -227,7 +227,7 @@ class CrmProjectsController extends Controller
                     ->orderByDesc('cost_date')->orderByDesc('created_at')->get(),
                 'invoices' => $project->invoices()->select('id', 'project_id', 'invoice_number', 'subtotal', 'total_amount', 'invoice_date', 'description')->get(),
                 'budgets' => $project->budgets()->select('id', 'project_id', 'name', 'status', 'total_budget', 'actual_cost', 'budget_date', 'version', 'created_by', 'approved_at', 'created_at')->with(['items', 'creator:id,name'])->get(),
-            ]),
+            ],
 
             'scheduleData' => [
                 'allTasks' => \App\Models\ProjectTask::where('project_id', $id)->whereNull('deleted_at')->orderBy('order')
@@ -242,26 +242,26 @@ class CrmProjectsController extends Controller
                 'materialBills' => \App\Models\MaterialBill::where('project_id', $id)->with(['items.material', 'supplier', 'creator', 'attachments'])->get(),
             ],
 
-            'monitorData' => Inertia::lazy(fn() => [
+            'monitorData' => fn() => [
                 'logs' => $project->constructionLogs()->with(['creator', 'task', 'attachments'])->orderByDesc('log_date')->get(),
                 'acceptanceStages' => $project->acceptanceStages()->with(['items.task', 'task', 'acceptanceTemplate', 'defects.attachments', 'attachments'])->get(),
                 'defects' => $project->defects()->with('attachments')->get(),
                 'additional_costs' => $project->additionalCosts()->with(['proposer', 'attachments'])->latest()->get(),
                 'change_requests' => $project->changeRequests()->with(['requester', 'attachments'])->latest()->get(),
-            ]),
+            ],
 
-            'teamData' => Inertia::lazy(fn() => [
-                'personnel' => $project->personnel()->with(['user', 'personnelRole'])->get(),
-                'subcontractors' => $project->subcontractors()->with(['attachments', 'payments'])->get(),
-            ]),
+            'teamData' => fn() => [
+                'personnel' => $project->personnel()->with(['user:id,name,email,image as avatar,phone', 'personnelRole:id,name'])->get(),
+                'subcontractors' => $project->subcontractors()->with(['attachments', 'payments.attachments'])->get(),
+            ],
 
-            'equipmentData' => Inertia::lazy(fn() => [
+            'equipmentData' => fn() => [
                 'rentals' => class_exists(\App\Models\EquipmentRental::class) ? \App\Models\EquipmentRental::where('project_id', $project->id)->with(['equipment', 'supplier', 'creator', 'attachments'])->latest()->get() : [],
                 'purchases' => class_exists(\App\Models\EquipmentPurchase::class) ? \App\Models\EquipmentPurchase::where('project_id', $project->id)->with(['items', 'creator', 'attachments'])->latest()->get() : [],
                 'usages' => class_exists(\App\Models\AssetUsage::class) ? \App\Models\AssetUsage::where('project_id', $project->id)->with(['asset', 'receiver', 'creator', 'attachments'])->latest()->get() : [],
                 'allEquipment' => class_exists(\App\Models\Equipment::class) ? \App\Models\Equipment::select('id', 'name', 'code', 'type', 'status')->orderBy('name')->get() : [],
                 'companyAssets' => class_exists(\App\Models\CompanyAsset::class) ? \App\Models\CompanyAsset::where('quantity', '>', 0)->select('id', 'name', 'code', 'category', 'unit')->orderBy('name')->get() : [],
-            ]),
+            ],
             
             'otherData' => Inertia::lazy(fn() => [
                 'comments' => $project->comments()->whereNull('parent_id')->with(['user', 'replies.user'])->latest()->get(),
@@ -1229,9 +1229,22 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
 
         $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
-        $this->defectService->transitionStatus($defect, 'fixed', $user);
-        
-        return back()->with('success', 'Đã đánh dấu lỗi đã sửa — chờ xác nhận.');
+
+        DB::beginTransaction();
+        try {
+            // Handle file uploads (After images)
+            // We use description='after' to distinguish from initial 'before' images
+            $request->merge(['description' => 'after']); 
+            $this->attachmentService->handleCrmUpload($request, $defect, "defects/{$project->id}/{$defect->id}/after", false);
+
+            $this->defectService->transitionStatus($defect, 'fixed', $user, $request->only(['rectification_details', 'rectification_plan']));
+
+            DB::commit();
+            return back()->with('success', 'Đã đánh dấu lỗi đã sửa — kèm hình ảnh minh chứng.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     public function verifyDefect(Request $request, string $projectId, string $defectId)

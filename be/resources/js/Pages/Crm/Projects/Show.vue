@@ -508,7 +508,7 @@
             </div>
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
               <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Chờ duyệt</div>
-              <div class="text-xl font-bold text-orange-500">{{ (project.costs || []).filter(c => ['pending_management_approval','pending_accountant_approval'].includes(c.status)).length }} <span class="text-xs font-normal text-gray-400">phiếu</span></div>
+              <div class="text-xl font-bold text-orange-500">{{ costs.filter(c => ['pending_management_approval','pending_accountant_approval'].includes(c.status)).length }} <span class="text-xs font-normal text-gray-400">phiếu</span></div>
             </div>
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-center">
               <a-select v-model:value="costGroupFilter" size="small" class="w-full" allow-clear placeholder="Lọc theo nhóm">
@@ -2009,7 +2009,7 @@
         <div class="relative mb-4">
           <a-progress
             type="circle"
-            :percent="project.progress?.overall_percentage || 0"
+            :percent="overallTaskProgress"
             :size="160"
             :stroke-width="10"
             :stroke-color="{ '0%': '#3B82F6', '100%': '#6366F1' }"
@@ -3769,12 +3769,14 @@
         </div>
       </div>
 
-      <!-- Hình ảnh đính kèm -->
-      <div v-if="defectDetail.attachments?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-orange-500"><PictureOutlined /> Hình ảnh lỗi ({{ defectDetail.attachments.length }})</div>
+      <!-- Hình ảnh lỗi (Trước khi sửa) -->
+      <div v-if="defectDetail.before_images?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-[10px] font-bold text-orange-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <PictureOutlined /> Hình ảnh lỗi (Trước khi sửa) ({{ defectDetail.before_images.length }})
+        </div>
         <div class="grid grid-cols-3 gap-3">
           <div
-            v-for="att in defectDetail.attachments"
+            v-for="att in defectDetail.before_images"
             :key="att.id"
             class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-gray-100 hover:border-blue-300 transition-all"
             @click="openFilePreview(att)"
@@ -3790,6 +3792,35 @@
               <span class="text-[10px] px-2 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
             </div>
             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+              <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hình ảnh khắc phục (Sau khi sửa) -->
+      <div v-if="defectDetail.after_images?.length" class="p-5 bg-white rounded-2xl border border-blue-100 shadow-sm bg-blue-50/10">
+        <div class="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <PictureOutlined /> Hình ảnh đã khắc phục (Sau khi sửa) ({{ defectDetail.after_images.length }})
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div
+            v-for="att in defectDetail.after_images"
+            :key="att.id"
+            class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-blue-200 hover:border-blue-400 transition-all"
+            @click="openFilePreview(att)"
+          >
+            <img
+              v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
+              :src="att.file_url"
+              :alt="att.original_name || 'Ảnh khắc phục'"
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+            />
+            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400">
+              <FileOutlined class="text-2xl mb-1" />
+              <span class="text-[10px] px-2 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
+            </div>
+            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
               <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
             </div>
           </div>
@@ -3821,6 +3852,40 @@
       </div>
     </div>
   </a-drawer>
+
+  <!-- REPORT DEFECT FIXED MODAL -->
+  <a-modal v-model:open="showDefectFixModal" title="Báo cáo đã sửa lỗi" @ok="submitDefectFix" :confirm-loading="actionLoading['submit-defect-fix']" ok-text="Gửi báo cáo" cancel-text="Hủy" :width="500" class="crm-modal">
+    <div class="space-y-4 py-2">
+      <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-3">
+        <InfoCircleOutlined class="text-blue-500 mt-1" />
+        <div class="text-xs text-blue-700 leading-relaxed">
+          Vui lòng tải lên hình ảnh kết quả đã khắc phục để Giám sát/Khách hàng đối soát và nghiệm thu.
+        </div>
+      </div>
+      
+      <div>
+        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Hình ảnh khắc phục (Bắt buộc)</div>
+        <div class="grid grid-cols-4 gap-2">
+          <div v-for="(file, idx) in defectFixForm.files" :key="idx" class="relative aspect-square rounded-lg overflow-hidden border border-gray-100 shadow-sm">
+            <img :src="file.preview" class="w-full h-full object-cover" />
+            <div class="absolute top-1 right-1 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer hover:bg-black/70" @click="defectFixForm.files.splice(idx, 1)">
+              <CloseOutlined class="text-[10px]" />
+            </div>
+          </div>
+          <label v-if="defectFixForm.files.length < 8" class="aspect-square rounded-lg border-2 border-dashed border-gray-200 hover:border-blue-400 flex flex-col items-center justify-center cursor-pointer transition-colors bg-gray-50 hover:bg-white group">
+            <input type="file" multiple accept="image/*" class="hidden" @change="onFixFilesChange" />
+            <CameraOutlined class="text-gray-300 group-hover:text-blue-500 text-xl mb-1" />
+            <span class="text-[10px] text-gray-400 group-hover:text-blue-500 font-medium">Tải ảnh</span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Ghi chú khắc phục (Nếu có)</div>
+        <a-textarea v-model:value="defectFixForm.rectification_details" placeholder="Mô tả ngắn gọn kết quả xử lý..." :rows="3" class="rounded-xl border-gray-200" />
+      </div>
+    </div>
+  </a-modal>
 
   <!-- CHANGE REQUEST DETAIL DRAWER -->
   <a-drawer v-model:open="showChangeRequestDetailDrawer" title="Chi tiết Yêu cầu thay đổi" :width="560" @close="changeRequestDetail = null" destroy-on-close class="crm-drawer">
@@ -4549,10 +4614,9 @@
             <a-col :span="10">
               <div class="text-[10px] text-gray-400 mb-1 uppercase font-bold">Nhóm chi phí / Tên hạng mục</div>
               <div class="flex gap-1">
-                <a-select v-model:value="item.cost_group_id" placeholder="Chọn nhóm" size="small" style="width: 140px" @change="val => onBudgetCostGroupChange(idx, val)" show-search option-filter-prop="label">
+                <a-select v-model:value="item.cost_group_id" placeholder="Chọn Nhóm chi phí..." size="small" class="w-full" @change="val => onBudgetCostGroupChange(idx, val)" show-search option-filter-prop="label">
                   <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id" :label="g.name">{{ g.name }}</a-select-option>
                 </a-select>
-                <a-input v-model:value="item.name" placeholder="Tên tùy chỉnh" size="small" class="flex-1" />
               </div>
             </a-col>
             <a-col :span="4">
@@ -6559,8 +6623,8 @@ const contractStatusLabels = { draft: 'Nháp', pending_customer_approval: 'Chờ
 const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', active: 'green', approved: 'green', rejected: 'red', expired: 'orange', terminated: 'red', cancelled: 'default' }
 const paymentStatusLabelsMap = { pending: 'Chờ thanh toán', customer_paid: 'KH đã TT', customer_pending_approval: 'Chờ KH duyệt', customer_approved: 'KH đã duyệt', confirmed: 'KT đã xác nhận', paid: 'Đã TT đủ', partial: 'TT 1 phần', completed: 'Hoàn tất', overdue: 'Quá hạn TT' }
 const paymentTagColors = { pending: 'orange', customer_paid: 'blue', customer_pending_approval: 'cyan', customer_approved: 'geekblue', confirmed: 'green', paid: 'green', partial: 'blue', completed: 'green', overdue: 'red' }
-const defectStatusLabels = { open: 'Mở', in_progress: 'Đang xử lý', fixed: 'Đã sửa', verified: 'Đã xác nhận', closed: 'Đã đóng' }
-const defectStatusColors = { open: 'red', in_progress: 'processing', fixed: 'green', verified: 'cyan', closed: 'default' }
+const defectStatusLabels = { open: 'Mới', in_progress: 'Đang sửa lỗi', rejected: 'Chưa đạt', fixed: 'Đã sửa', verified: 'Đã xác nhận', closed: 'Đã đóng' }
+const defectStatusColors = { open: 'red', in_progress: 'processing', rejected: 'red', fixed: 'green', verified: 'cyan', closed: 'default' }
 const crStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', implemented: 'Đã triển khai', cancelled: 'Đã hủy' }
 const crStatusColors = { draft: 'default', pending: 'orange', approved: 'green', rejected: 'red', implemented: 'cyan', cancelled: 'default' }
 const crTypeLabels = { scope: 'Phạm vi', schedule: 'Tiến độ', cost: 'Chi phí', quality: 'Chất lượng', resource: 'Nguồn lực', other: 'Khác' }
@@ -7184,6 +7248,8 @@ const deleteComment = (c) => router.delete(`/projects/${props.project.id}/commen
 
 // ============ DEFECT CRUD ============
 const showDefectModal = ref(false)
+const showDefectFixModal = ref(false)
+const defectFixForm = ref({ files: [], rectification_details: '' })
 const editingDefect = ref(null)
 const defectForm = ref({ description: '', severity: 'medium', status: 'open', task_id: null, acceptance_stage_id: null, defect_type: null })
 const openDefectModal = (d) => {
@@ -7213,8 +7279,52 @@ const deleteDefect = (d) => router.delete(`/projects/${props.project.id}/defects
 
 // ============ DEFECT WORKFLOW ACTIONS ============
 const defectAction = (record, action) => {
+  if (action === 'mark-fixed') {
+    editingDefect.value = record
+    defectFixForm.value = { files: [], rectification_details: '' }
+    showDefectFixModal.value = true
+    return
+  }
   router.post(`/projects/${props.project.id}/defects/${record.id}/${action}`, {}, loadingOptions(`defect-action-${record.id}`))
 }
+
+const onFixFilesChange = (e) => {
+  const files = Array.from(e.target.files)
+  files.forEach(file => {
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      defectFixForm.value.files.push({
+        file: file,
+        preview: ev.target.result
+      })
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+const submitDefectFix = () => {
+  if (!defectFixForm.value.files.length) {
+    return message.warning('Vui lòng tải lên ít nhất một hình ảnh minh chứng đã khắc phục lỗi.')
+  }
+
+  const fd = new FormData()
+  fd.append('rectification_details', defectFixForm.value.rectification_details)
+  defectFixForm.value.files.forEach(f => fd.append('files[]', f.file))
+
+  router.post(`/projects/${props.project.id}/defects/${editingDefect.value.id}/mark-fixed`, fd, {
+    forceFormData: true,
+    preserveScroll: true,
+    ...loadingOptions('submit-defect-fix', {
+      onSuccess: () => {
+        showDefectFixModal.value = false
+        defectFixForm.value = { files: [], rectification_details: '' }
+        showDefectDetailDrawer.value = false
+        message.success('Đã gửi báo cáo khắc phục lỗi.')
+      }
+    })
+  })
+}
+
 const rejectDefectRecord = ref(null)
 const rejectDefectReason = ref('')
 const showRejectDefectModal = ref(false)
@@ -7603,7 +7713,7 @@ const recalculateItemByAmount = (idx) => {
 
 const onBudgetCostGroupChange = (idx, groupId) => {
   const group = props.costGroups.find(g => g.id === groupId)
-  if (group && !budgetForm.value.items[idx].name) {
+  if (group) {
     budgetForm.value.items[idx].name = group.name
   }
 }

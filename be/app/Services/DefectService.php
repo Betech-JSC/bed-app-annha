@@ -72,7 +72,7 @@ class DefectService
                     if (isset($params['rejection_reason'])) {
                         // Rejection loop
                         $defect->markAsRejected($actor, $params['rejection_reason']);
-                        $this->logHistory($defect, 'rejected', 'in_progress', $actor, $oldStatus);
+                        $this->logHistory($defect, 'rejected', 'rejected', $actor, $oldStatus);
                     } else {
                         $defect->markAsInProgress($actor);
                         if (isset($params['expected_completion_date'])) {

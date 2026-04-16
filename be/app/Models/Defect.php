@@ -45,6 +45,8 @@ class Defect extends Model
         'is_fixed',
         'next_action',
         'workflow_status_info',
+        'before_images',
+        'after_images',
     ];
 
     // ==================================================================
@@ -117,7 +119,7 @@ class Defect extends Model
 
     public function getIsOpenAttribute(): bool
     {
-        return in_array($this->status, ['open', 'in_progress']);
+        return in_array($this->status, ['open', 'in_progress', 'rejected']);
     }
 
     public function getIsFixedAttribute(): bool
@@ -129,15 +131,26 @@ class Defect extends Model
     {
         switch ($this->status) {
             case 'open':
+                return [
+                    'label' => 'Mới (Chờ GS ấn khắc phục)',
+                    'role' => 'supervisor',
+                    'action' => 'Khắc phục lỗi',
+                ];
+            case 'rejected':
+                return [
+                    'label' => 'Chưa đạt (GS ấn khắc phục)',
+                    'role' => 'supervisor',
+                    'action' => 'Khắc phục lỗi',
+                ];
             case 'in_progress':
                 return [
-                    'label' => 'Chờ khắc phục',
+                    'label' => 'Đang sửa lỗi',
                     'role' => 'team',
                     'action' => 'Đánh dấu đã sửa',
                 ];
             case 'fixed':
                 return [
-                    'label' => 'Chờ xác nhận (Verify)',
+                    'label' => 'Đã sửa - Chờ xác nhận',
                     'role' => 'supervisor',
                     'action' => 'Xác nhận (Verify)',
                 ];
@@ -169,9 +182,23 @@ class Defect extends Model
             $info[] = ['stage' => 'Xác nhận', 'user' => $this->verifier->name ?? 'N/A', 'at' => $this->verified_at];
         }
         if ($this->rejection_reason) {
-            $info[] = ['stage' => 'Từ chối xác nhận', 'user' => 'Hệ thống/Giám sát', 'at' => $this->updated_at, 'reason' => $this->rejection_reason];
+            $info[] = ['stage' => 'Chưa đạt', 'user' => 'Hệ thống/Giám sát', 'at' => $this->updated_at, 'reason' => $this->rejection_reason];
         }
         return $info;
+    }
+
+    public function getBeforeImagesAttribute()
+    {
+        return $this->attachments->filter(function($att) {
+            return $att->description === 'before' || empty($att->description);
+        })->values();
+    }
+
+    public function getAfterImagesAttribute()
+    {
+        return $this->attachments->filter(function($att) {
+            return $att->description === 'after';
+        })->values();
     }
 
     // ==================================================================
@@ -222,7 +249,7 @@ class Defect extends Model
 
     public function markAsRejected(?User $user = null, ?string $reason = null): bool
     {
-        $this->status = 'in_progress';
+        $this->status = 'rejected';
         $this->rejection_reason = $reason;
         // Reset fixed info since it's rejected
         $this->fixed_by = null;

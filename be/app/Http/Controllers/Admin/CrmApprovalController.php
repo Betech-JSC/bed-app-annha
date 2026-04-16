@@ -122,6 +122,30 @@ class CrmApprovalController extends Controller
         // ─────────────────────────────────────────────────────────────────────
         // GROUP ITEMS BY ROLE BUCKET (Web CRM) — WITH STRICT RBAC FILTERING
         // ─────────────────────────────────────────────────────────────────────
+        
+        // Better: use the already loaded data if possible or map it beforehand
+        $defectsByRole = [
+            'supervisor' => collect([]),
+            'project_manager' => collect([]),
+            'customer' => collect([]),
+        ];
+        
+        foreach ($data['defects'] as $defect) {
+            $formatted = $this->formatDefectItem($defect);
+            $formatted['_approveType'] = 'defect_verify';
+            
+            $targetRole = 'supervisor'; // Default
+            if ($defect->acceptanceStage) {
+                if ($defect->acceptanceStage->status === 'supervisor_approved') {
+                    $targetRole = 'project_manager';
+                } elseif ($defect->acceptanceStage->status === 'project_manager_approved') {
+                    $targetRole = 'customer';
+                }
+            }
+            
+            $defectsByRole[$targetRole]->push($formatted);
+        }
+
         $roleGroups = [
             'management' => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT)
                 ? collect([])
@@ -154,6 +178,7 @@ class CrmApprovalController extends Controller
                     ->concat($scheduleAdjustmentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'schedule_adjustment'])))
                     ->concat($equipmentRentalReturnFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_return'])))
                     ->concat($assetUsageReturnFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_return'])))
+                    ->concat($defectsByRole['project_manager'])
                     ->values()
                 : collect([]),
 
@@ -162,7 +187,7 @@ class CrmApprovalController extends Controller
                     ->concat($acceptanceSupervisorItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'acceptance_supervisor'])))
                     ->concat($subAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'sub_acceptance'])))
                     ->concat($supplierAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'supplier_acceptance'])))
-                    ->concat($defectItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'defect_verify'])))
+                    ->concat($defectsByRole['supervisor'])
                     ->values()
                 : collect([]),
 
@@ -171,6 +196,7 @@ class CrmApprovalController extends Controller
                     ->concat($customerAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'acceptance'])))
                     ->concat($contractItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'contract'])))
                     ->concat($pendingPaymentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'project_payment'])))
+                    ->concat($defectsByRole['customer'])
                     ->values()
                 : collect([]),
 
@@ -1073,7 +1099,9 @@ class CrmApprovalController extends Controller
             'active' => 'Đang áp dụng',
             'archived' => 'Đã lưu trữ',
             'paid' => 'Đã thanh toán',
-            'rejected' => 'Từ chối',
+            'rejected' => 'Chưa đạt',
+            'open' => 'Mới',
+            'in_progress' => 'Đang sửa lỗi',
             'fixed' => 'Đã sửa — Chờ xác nhận',
             'verified' => 'Đã xác nhận',
             default => $status,
