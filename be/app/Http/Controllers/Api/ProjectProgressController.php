@@ -134,12 +134,16 @@ class ProjectProgressController extends Controller
 
         $taskTree = $buildTree();
 
-        // Calculate overall progress from root tasks (using the already fetched collection)
-        $rootTasks = $tasksGrouped->get(null, collect());
-        $overallProgress = 0;
-        if ($rootTasks->isNotEmpty()) {
-            $overallProgress = round($rootTasks->avg('progress_percentage') ?? 0, 2);
+        // Calculate overall progress using the canonical ProjectProgress model
+        // (Acceptance → Tasks → Logs → Subcontractors priority chain)
+        $progress = $project->progress;
+        if (!$progress) {
+            $progress = $project->progress()->create([
+                'overall_percentage' => 0,
+                'calculated_from'    => 'manual',
+            ]);
         }
+        $overallProgress = (float) $progress->calculateOverall();
 
         // Statistics
         $stats = [

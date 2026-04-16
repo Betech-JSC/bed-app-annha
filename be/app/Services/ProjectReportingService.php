@@ -34,44 +34,21 @@ class ProjectReportingService
 
     /**
      * Get overall project progress percentage.
-     * Single source of truth calculation.
+     * Delegates to ProjectProgress model — single source of truth.
+     * Priority: Acceptance → Tasks → Logs → Subcontractors
      */
     public function calculateOverallProgress(Project $project): float
     {
-        // BUSINESS RULE: Prioritize Daily Construction Logs for overall completion
-        $latestLog = ConstructionLog::where('project_id', $project->id)
-            ->whereNotNull('completion_percentage')
-            ->orderBy('log_date', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->first();
+        $progress = $project->progress;
 
-        if ($latestLog) {
-            return (float) $latestLog->completion_percentage;
+        if (!$progress) {
+            $progress = $project->progress()->create([
+                'overall_percentage' => 0,
+                'calculated_from'    => 'manual',
+            ]);
         }
 
-        // Fallback: Average of root tasks
-        $taskProgressService = app(TaskProgressService::class);
-        $rootTasks = $project->tasks()
-            ->whereNull('deleted_at')
-            ->whereNull('parent_id')
-            ->get();
-
-        if ($rootTasks->isEmpty()) {
-            return 0.0;
-        }
-
-        $totalProgress = 0;
-        foreach ($rootTasks as $task) {
-            $hasChildren = ProjectTask::where('parent_id', $task->id)
-                ->whereNull('deleted_at')
-                ->exists();
-
-            $totalProgress += $hasChildren 
-                ? $taskProgressService->calculateParentProgress($task)
-                : $taskProgressService->calculateProgressFromLogs($task);
-        }
-
-        return round($totalProgress / $rootTasks->count(), 2);
+        return (float) $progress->calculateOverall();
     }
 
     /**

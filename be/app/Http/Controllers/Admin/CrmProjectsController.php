@@ -164,6 +164,12 @@ class CrmProjectsController extends Controller
             'contract.attachments'
         ])->findOrFail($id);
 
+        // 1b. Tính lại tiến độ tổng thể (force=true để luôn fresh khi mở trang)
+        if ($project->progress) {
+            $project->progress->calculateOverall(true);
+            $project->setRelation('progress', $project->progress->fresh());
+        }
+
         // 2. Fast Counts for Tab Badges (Very efficient)
         $counts = [
             'tasks' => \App\Models\ProjectTask::where('project_id', $id)->whereNull('deleted_at')->count(),

@@ -209,50 +209,103 @@ class ProjectProgress extends Model
     }
 
     /**
-     * Tính tiến độ tổng hợp từ nhiều nguồn (ưu tiên nghiệm thu)
-     * 
-     * @param bool $force Ép buộc tính toán lại ngay cả khi mới tính gần đây
+     * Tính tiến độ từ WBS Tasks (root tasks, weighted bằng trung bình đơn giản)
+     * Đây là nguồn ưu tiên 2 — sau Nghiệm thu, trước Nhật ký/Nhà thầu
+     *
+     * @return float|null null nếu không có task nào
+     */
+    public function calculateFromTasks(): ?float
+    {
+        $rootTasks = $this->project->tasks()
+            ->whereNull('parent_id')
+            ->whereNull('deleted_at')
+            ->get(['id', 'progress_percentage', 'duration']);
+
+        if ($rootTasks->isEmpty()) {
+            return null;
+        }
+
+        $totalWeight  = 0;
+        $weightedSum  = 0;
+
+        foreach ($rootTasks as $task) {
+            // Trọng số = thời lượng (ngày). Nếu không có → dùng 1 (đồng đều)
+            $weight       = max(1, (int) ($task->duration ?? 0));
+            $progress     = (float) ($task->progress_percentage ?? 0);
+
+            $weightedSum  += $progress * $weight;
+            $totalWeight  += $weight;
+        }
+
+        $finalProgress = $totalWeight > 0 ? round($weightedSum / $totalWeight, 2) : 0.0;
+
+        $this->overall_percentage = $finalProgress;
+        $this->calculated_from    = 'tasks';
+        $this->last_calculated_at = now();
+        $this->save();
+
+        return $finalProgress;
+    }
+
+    /**
+     * Tính tiến độ tổng hợp — ưu tiên lần lượt:
+     *   1. Nghiệm thu (acceptance stages với items)
+     *   2. WBS Tasks (root tasks progress_percentage)
+     *   3. Nhật ký thi công (construction logs — giá trị mới nhất)
+     *   4. Nhà thầu (weighted by total_quote)
+     *   → Nếu có nhiều nguồn 3+4 thì lấy MAX
+     *
+     * @param bool $force Bỏ qua cache 10 phút — bắt buộc tính lại ngay
      */
     public function calculateOverall(bool $force = false): float
     {
-        // BUSINESS RULE: Nếu mới tính toán trong vòng 10 phút, trả về giá trị cũ để tăng hiệu năng
-        // Trừ khi $force = true
+        // Cache 10 phút để tránh tính toán lặp — bỏ qua nếu $force = true
         if (!$force && $this->last_calculated_at && $this->last_calculated_at->diffInMinutes(now()) < 10) {
             return (float) $this->overall_percentage;
         }
 
-        // Ưu tiên tính từ nghiệm thu nếu có
+        // === ƯU TIÊN 1: Nghiệm thu ===
         $acceptanceProgress = $this->calculateFromAcceptance();
-        
-        // Nếu có nghiệm thu, ưu tiên sử dụng tiến độ từ nghiệm thu
         if ($acceptanceProgress !== null) {
             $finalProgress = $acceptanceProgress;
-        } else {
-            // Nếu không có nghiệm thu, tính từ các nguồn khác
-            $logProgress = $this->calculateFromLogs();
-            $subcontractorProgress = $this->calculateFromSubcontractors();
-
-            // Lấy giá trị cao nhất (hoặc có thể tính trung bình có trọng số)
-            $finalProgress = max($logProgress, $subcontractorProgress);
-            
-            $this->overall_percentage = $finalProgress;
-            $this->calculated_from = 'mixed';
-            $this->last_calculated_at = now();
-            $this->save();
+            $this->autoCompleteProject($finalProgress);
+            return (float) $this->overall_percentage;
         }
 
-        // Tự động cập nhật trạng thái dự án khi tiến độ đạt 100%
-        if ($finalProgress >= 100 && $this->project) {
-            $project = $this->project;
-            // Chỉ cập nhật nếu trạng thái hiện tại chưa phải 'completed'
-            if ($project->status !== 'completed') {
-                $project->update([
-                    'status' => 'completed',
-                    'updated_by' => auth()->id() ?? $project->updated_by,
-                ]);
-            }
+        // === ƯU TIÊN 2: WBS Tasks ===
+        $taskProgress = $this->calculateFromTasks();
+        if ($taskProgress !== null) {
+            $finalProgress = $taskProgress;
+            $this->autoCompleteProject($finalProgress);
+            return (float) $this->overall_percentage;
         }
 
-        return $this->overall_percentage;
+        // === ƯU TIÊN 3+4: Nhật ký & Nhà thầu — lấy giá trị lớn hơn ===
+        $logProgress           = $this->calculateFromLogs();
+        $subcontractorProgress = $this->calculateFromSubcontractors();
+        $finalProgress         = max($logProgress, $subcontractorProgress);
+
+        $this->overall_percentage = $finalProgress;
+        $this->calculated_from    = ($logProgress > 0 && $subcontractorProgress > 0) ? 'mixed'
+            : ($logProgress > 0 ? 'logs' : ($subcontractorProgress > 0 ? 'subcontractors' : 'manual'));
+        $this->last_calculated_at = now();
+        $this->save();
+
+        $this->autoCompleteProject($finalProgress);
+
+        return (float) $this->overall_percentage;
+    }
+
+    /**
+     * Tự động đánh dấu dự án hoàn thành khi tiến độ đạt 100%
+     */
+    private function autoCompleteProject(float $progress): void
+    {
+        if ($progress >= 100 && $this->project && $this->project->status !== 'completed') {
+            $this->project->update([
+                'status'     => 'completed',
+                'updated_by' => auth()->id() ?? $this->project->updated_by,
+            ]);
+        }
     }
 }

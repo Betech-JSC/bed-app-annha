@@ -2005,10 +2005,10 @@
         <div class="relative mb-4">
           <a-progress
             type="circle"
-            :percent="overallTaskProgress"
+            :percent="overallProjectProgress"
             :size="160"
             :stroke-width="10"
-            :stroke-color="{ '0%': '#3B82F6', '100%': '#6366F1' }"
+            :stroke-color="overallProjectProgress >= 100 ? { '0%': '#10B981', '100%': '#059669' } : { '0%': '#3B82F6', '100%': '#6366F1' }"
             trail-color="#F1F5F9"
           >
             <template #format="percent">
@@ -2022,6 +2022,9 @@
         <div class="text-center">
           <div class="text-sm font-bold text-gray-700">Tiến độ tổng thể</div>
           <div class="text-xs text-gray-400 mt-1">{{ taskStats.completed }}/{{ taskStats.total }} hạng mục hoàn thành</div>
+          <div v-if="progressSourceLabel" class="mt-1 inline-flex items-center gap-1 text-[10px] text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Tính từ: {{ progressSourceLabel }}
+          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3 mt-6 w-full pt-6 border-t border-gray-50">
@@ -7654,11 +7657,28 @@ const taskStats = computed(() => {
   }
 })
 
+// Tiến độ tính từ WBS tasks (dùng trong tab Tiến độ — context task-level)
 const overallTaskProgress = computed(() => {
   const roots = rootTasks.value
-  if (!roots.length) return 0
-  const total = roots.reduce((sum, t) => sum + parseFloat(t.progress_percentage || 0), 0)
-  return Math.round(total / roots.length * 10) / 10
+  if (!roots.length) return parseFloat(props.project?.progress?.overall_percentage || 0)
+  const totalWeight = roots.reduce((sum, t) => sum + Math.max(1, parseInt(t.duration || 0)), 0)
+  const weightedSum = roots.reduce((sum, t) => sum + parseFloat(t.progress_percentage || 0) * Math.max(1, parseInt(t.duration || 0)), 0)
+  return Math.round(weightedSum / totalWeight * 10) / 10
+})
+
+// Tiến độ tổng thể toàn dự án (ưu tiên: DB overall_percentage → overallTaskProgress)
+// DB value đã được backend tính đúng theo thứ tự: Acceptance → Tasks → Logs → Subcontractors
+const overallProjectProgress = computed(() => {
+  const dbValue = parseFloat(props.project?.progress?.overall_percentage || 0)
+  if (dbValue > 0) return Math.round(dbValue * 10) / 10
+  return overallTaskProgress.value
+})
+
+// Nguồn tính tiến độ (hiển thị label trong UI)
+const progressSourceLabel = computed(() => {
+  const src = props.project?.progress?.calculated_from
+  const map = { acceptance: 'Nghiệm thu', tasks: 'Công việc', logs: 'Nhật ký', subcontractors: 'Nhà thầu', mixed: 'Hỗn hợp', manual: 'Thủ công' }
+  return map[src] || ''
 })
 
 // Expand/Collapse
