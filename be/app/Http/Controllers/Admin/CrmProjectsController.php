@@ -574,11 +574,10 @@ class CrmProjectsController extends Controller
         }
 
         try {
-            // CRM: Default to customer_paid status when manually created by Admin
+            // CRM: Default to pending so payment goes through proper approval workflow
             $paymentData = array_merge($validated, [
                 'project_id' => $project->id,
-                'status' => $validated['status'] ?? 'customer_paid',
-                'paid_date' => now()->toDateString(),
+                'status' => $validated['status'] ?? 'pending',
             ]);
 
             $payment = $this->financialService->upsertProjectPayment($paymentData, null, $user);
@@ -587,6 +586,31 @@ class CrmProjectsController extends Controller
             $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", true);
 
             return back()->with('success', 'Đã thêm đợt thanh toán và gửi cho Kế toán xác nhận.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * CRM: Gửi yêu cầu thanh toán cho khách hàng (pending → customer_pending_approval)
+     */
+    public function submitPayment(Request $request, string $projectId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PAYMENT_UPDATE, $project);
+
+        $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        if (!in_array($payment->status, ['pending', 'overdue'])) {
+            return back()->with('error', 'Chỉ có thể gửi yêu cầu thanh toán ở trạng thái chờ xử lý.');
+        }
+
+        try {
+            if (!$payment->submit()) {
+                return back()->with('error', 'Không thể gửi yêu cầu thanh toán. Vui lòng thử lại.');
+            }
+            return back()->with('success', 'Đã gửi yêu cầu thanh toán cho khách hàng xem xét.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
@@ -655,7 +679,7 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
-        if ($payment->status !== 'pending' && $payment->status !== 'overdue') {
+        if (!in_array($payment->status, ['pending', 'overdue', 'customer_pending_approval', 'customer_approved'])) {
             return back()->with('error', 'Thanh toán không ở trạng thái chờ thanh toán.');
         }
 
@@ -691,6 +715,11 @@ class CrmProjectsController extends Controller
                         'uploaded_by' => $user->id,
                     ]);
                 }
+            }
+
+            // Advance to customer_pending_approval first if still in initial state
+            if (in_array($payment->status, ['pending', 'overdue'])) {
+                $payment->submit();
             }
 
             // Mark as paid by customer

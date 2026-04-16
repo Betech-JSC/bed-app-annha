@@ -207,6 +207,11 @@ export default function NotificationsScreen() {
             return `/projects/${projectId}`;
         }
 
+        // Approval center deep-link
+        if (actionUrl === '/approvals' || actionUrl.startsWith('/approvals')) {
+            return '/approvals';
+        }
+
         // Non-project routes
         if (actionUrl.startsWith('/company-costs')) return null;
         if (actionUrl.startsWith('/settings')) return null;
@@ -225,6 +230,12 @@ export default function NotificationsScreen() {
         const { data, action_url } = notification;
 
         try {
+            // Workflow approval notifications → go straight to approval center
+            if (notification.type === 'workflow' && notification.category === 'workflow_approval') {
+                router.push("/approvals" as any);
+                return;
+            }
+
             // Map action_url to a valid mobile route
             if (action_url) {
                 const mobileRoute = mapActionUrlToMobileRoute(action_url);

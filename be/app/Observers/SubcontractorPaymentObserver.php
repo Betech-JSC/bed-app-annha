@@ -44,9 +44,11 @@ class SubcontractorPaymentObserver
                     'project_id' => $payment->project_id,
                     'subcontractor_id' => $payment->subcontractor_id,
                     'amount' => $payment->amount,
+                    'item_type' => 'sub_payment',
+                    'item_id' => $payment->id,
                 ],
                 Notification::PRIORITY_HIGH,
-                "/projects/{$payment->project_id}",
+                '/approvals',
                 true,
                 [$payment->created_by]
             );
@@ -65,9 +67,11 @@ class SubcontractorPaymentObserver
                     'payment_id' => $payment->id,
                     'project_id' => $payment->project_id,
                     'amount' => $payment->amount,
+                    'item_type' => 'sub_payment',
+                    'item_id' => $payment->id,
                 ],
                 Notification::PRIORITY_HIGH,
-                "/projects/{$payment->project_id}",
+                '/approvals',
                 true
             );
         }

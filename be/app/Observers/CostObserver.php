@@ -44,9 +44,11 @@ class CostObserver
                             'project_id' => $cost->project_id,
                             'amount' => $cost->amount,
                             'category' => $cost->category_label,
+                            'item_type' => 'project_cost',
+                            'item_id' => $cost->id,
                         ],
                         Notification::PRIORITY_HIGH,
-                        "/projects/{$cost->project_id}/costs/{$cost->id}",
+                        '/approvals',
                         true,
                         [$cost->created_by]
                     );
@@ -63,9 +65,11 @@ class CostObserver
                             'cost_id' => $cost->id,
                             'amount' => $cost->amount,
                             'cost_name' => $cost->name,
+                            'item_type' => 'company_cost',
+                            'item_id' => $cost->id,
                         ],
                         Notification::PRIORITY_HIGH,
-                        "/company-costs/{$cost->id}",
+                        '/approvals',
                         true,
                         [$cost->created_by]
                     );
@@ -87,9 +91,11 @@ class CostObserver
                         [
                             'cost_id' => $cost->id,
                             'project_id' => $cost->project_id,
+                            'item_type' => 'project_cost',
+                            'item_id' => $cost->id,
                         ],
                         Notification::PRIORITY_HIGH,
-                        "/projects/{$cost->project_id}/costs/{$cost->id}",
+                        '/approvals',
                         true
                     );
                 } else {
@@ -104,9 +110,11 @@ class CostObserver
                         [
                             'cost_id' => $cost->id,
                             'amount' => $cost->amount,
+                            'item_type' => 'company_cost',
+                            'item_id' => $cost->id,
                         ],
                         Notification::PRIORITY_HIGH,
-                        "/company-costs/{$cost->id}",
+                        '/approvals',
                         true
                     );
                 }

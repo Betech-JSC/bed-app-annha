@@ -28,10 +28,12 @@ export function usePushNotifications() {
     }, [userId, token]);
 
     useEffect(() => {
-        // 1️⃣ App đang foreground - notification sẽ hiển thị qua NotificationHandler
+        // 1️⃣ App đang foreground - Expo tự show native banner (shouldShowAlert: true trong NotificationService.setup())
+        // Khi user tap banner, addNotificationResponseReceivedListener sẽ handle navigation
         const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
             console.log('Notification received in foreground:', notification.request.content);
-            // Unread count sẽ được cập nhật qua polling hoặc next focus
+            // Native banner tự hiển thị - không cần làm gì thêm
+            // Unread/approval count sẽ được cập nhật qua polling
         });
 
         // 2️⃣ App background / killed → user tap notification

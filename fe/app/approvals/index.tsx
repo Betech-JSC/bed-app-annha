@@ -18,7 +18,7 @@ import {
     Dimensions,
     Linking,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { approvalCenterApi, ApprovalItem, ApprovalCenterData, BudgetItemOption } from '@/api/approvalCenterApi';
 import { ScreenHeader, PermissionDenied } from '@/components';
@@ -87,14 +87,16 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }
 
 export default function ApprovalCenterScreen() {
     const router = useRouter();
+    const { tab: initialTab } = useLocalSearchParams<{ tab?: string }>();
     const tabBarHeight = useTabBarHeight();
 
     const [data, setData] = useState<ApprovalCenterData | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    
+
     // UI States
-    const [selectedRole, setSelectedRole] = useState<string>(''); 
+    // Pre-select tab from notification deep-link if provided
+    const [selectedRole, setSelectedRole] = useState<string>(initialTab || '');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string>('pending');
     
@@ -123,10 +125,11 @@ export default function ApprovalCenterScreen() {
             const response = await approvalCenterApi.getApprovals();
             if (response.success) {
                 setData(response.data);
-                
-                // Set initial tab based on available items or first summary
-                if (response.data.summary.length > 0 && !selectedRole) {
-                    setSelectedRole(response.data.summary[0].type);
+
+                // Set initial tab: prefer notification deep-link tab, then first available summary tab
+                if (!selectedRole && response.data.summary.length > 0) {
+                    const deepLinkTab = initialTab && ROLE_TABS.find(t => t.key === initialTab);
+                    setSelectedRole(deepLinkTab ? initialTab! : response.data.summary[0].type);
                 }
             }
         } catch (error: any) {

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootState } from "@/reducers/index";
 import { NotificationBadge } from "./NotificationBadge";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
+import { useApprovalCount } from "@/hooks/useApprovalCount";
 
 import { Permissions } from "@/constants/Permissions";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -92,6 +93,7 @@ export default function CustomTabBar() {
   const { hasPermission, hasAnyPermission, loading: permissionsLoading } = usePermissions();
   // Tăng interval lên 60 giây để giảm số lần gọi API
   const { unreadCount } = useUnreadCount({ autoRefresh: true, refreshInterval: 60000 });
+  const { pendingCount: approvalPendingCount } = useApprovalCount({ autoRefresh: true, refreshInterval: 60000 });
 
   // Ẩn tab bar ở các màn hình auth
   const hideTabBarRoutes = [
@@ -161,11 +163,16 @@ export default function CustomTabBar() {
             onPress={() => router.push(tab.route as any)}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name={active ? (tab.iconFocused as any) : (tab.icon as any)}
-              size={active ? 26 : 24}
-              color={active ? "#3B82F6" : "#9CA3AF"}
-            />
+            <View style={styles.notificationIconContainer}>
+              <Ionicons
+                name={active ? (tab.iconFocused as any) : (tab.icon as any)}
+                size={active ? 26 : 24}
+                color={active ? "#3B82F6" : "#9CA3AF"}
+              />
+              {tab.route === "/approvals" && approvalPendingCount > 0 && (
+                <NotificationBadge count={approvalPendingCount} size="small" style={styles.notificationBadge} />
+              )}
+            </View>
             <Text
               style={[
                 styles.label,

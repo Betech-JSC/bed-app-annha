@@ -21,6 +21,8 @@ use App\Models\AssetUsage;
 use App\Models\MaterialBill;
 use App\Models\Attendance;
 use App\Models\User;
+use App\Models\Notification;
+use App\Constants\Permissions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -33,11 +35,14 @@ use Exception;
  */
 class ApprovalActionService
 {
-    protected $financialService;
-    protected $equipmentService;
-    protected $logService;
-    protected $budgetService;
-    protected $attendanceService;
+    protected MaterialBillService $materialBillService;
+    protected AcceptanceService $acceptanceService;
+    protected FinancialService $financialService;
+    protected EquipmentService $equipmentService;
+    protected ConstructionLogService $logService;
+    protected ProjectBudgetService $budgetService;
+    protected AttendanceService $attendanceService;
+    protected NotificationService $notificationService;
 
     public function __construct(
         MaterialBillService $materialBillService,
@@ -46,7 +51,8 @@ class ApprovalActionService
         EquipmentService $equipmentService,
         ConstructionLogService $logService,
         ProjectBudgetService $budgetService,
-        AttendanceService $attendanceService
+        AttendanceService $attendanceService,
+        NotificationService $notificationService
     ) {
         $this->materialBillService = $materialBillService;
         $this->acceptanceService = $acceptanceService;
@@ -55,6 +61,7 @@ class ApprovalActionService
         $this->logService = $logService;
         $this->budgetService = $budgetService;
         $this->attendanceService = $attendanceService;
+        $this->notificationService = $notificationService;
     }
     /**
      * Unified Approval Method
@@ -282,6 +289,12 @@ class ApprovalActionService
             DB::commit();
             Log::info("ApprovalActionService: Approved type {$type}", ['id' => $id, 'user' => $user->id]);
 
+            // Thông báo cho người tạo biết yêu cầu của họ đã được duyệt
+            $this->dispatchApprovalResultNotification($type, $id, 'approved', null);
+
+            // Thông báo cho người duyệt tiếp theo (nếu cần)
+            $this->dispatchNextApproverNotification($type, $id);
+
             return ['success' => true, 'message' => $message];
 
         } catch (Exception $e) {
@@ -410,12 +423,134 @@ class ApprovalActionService
             DB::commit();
             Log::info("ApprovalActionService: Rejected type {$type}", ['id' => $id, 'user' => $user->id, 'reason' => $reason]);
 
+            // Thông báo cho người tạo biết yêu cầu bị từ chối
+            $this->dispatchApprovalResultNotification($type, $id, 'rejected', $reason);
+
             return ['success' => true, 'message' => 'Đã từ chối yêu cầu thành công'];
 
         } catch (Exception $e) {
             DB::rollBack();
             Log::error("ApprovalActionService Reject Error: " . $e->getMessage(), ['type' => $type, 'id' => $id]);
             return ['success' => false, 'message' => 'Lỗi hệ thống: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Gửi thông báo kết quả duyệt (approved/rejected) cho người tạo request.
+     * Áp dụng cho các loại chưa có Observer riêng.
+     */
+    protected function dispatchApprovalResultNotification(string $type, $id, string $status, ?string $reason): void
+    {
+        try {
+            [$submitterId, $itemLabel, $itemType, $projectId] = match ($type) {
+                'equipment_rental_management', 'equipment_rental_accountant', 'equipment_rental_return' => (function () use ($id, $type) {
+                    $r = EquipmentRental::find($id);
+                    return $r ? [$r->created_by, "Thuê thiết bị #{$r->id}", 'equipment_rental', $r->project_id ?? null] : [null, '', null, null];
+                })(),
+                'asset_usage_management', 'asset_usage_accountant', 'asset_usage_return' => (function () use ($id) {
+                    $u = AssetUsage::find($id);
+                    return $u ? [$u->created_by, "Sử dụng thiết bị #{$u->id}", 'asset_usage', $u->project_id ?? null] : [null, '', null, null];
+                })(),
+                'attendance' => (function () use ($id) {
+                    $a = Attendance::find($id);
+                    return $a ? [$a->user_id, "Chấm công " . optional($a->work_date)->format('d/m/Y'), 'attendance', null] : [null, '', null, null];
+                })(),
+                'material_bill' => (function () use ($id) {
+                    $b = MaterialBill::find($id);
+                    return $b ? [$b->created_by, "Phiếu vật tư {$b->bill_number}", 'material_bill', $b->project_id ?? null] : [null, '', null, null];
+                })(),
+                'project_payment', 'project_payment_confirm' => (function () use ($id) {
+                    $p = ProjectPayment::find($id);
+                    return $p ? [$p->created_by, "Thanh toán đợt #{$p->payment_number}", 'project_payment', $p->project_id ?? null] : [null, '', null, null];
+                })(),
+                'contract' => (function () use ($id) {
+                    $c = Contract::find($id);
+                    return $c ? [$c->created_by, "Hợp đồng #{$c->id}", 'contract', $c->project_id ?? null] : [null, '', null, null];
+                })(),
+                'budget' => (function () use ($id) {
+                    $b = ProjectBudget::find($id);
+                    return $b ? [$b->created_by, "Ngân sách dự án #{$b->project_id}", 'budget', $b->project_id ?? null] : [null, '', null, null];
+                })(),
+                'equipment_purchase_management', 'equipment_purchase_accountant' => (function () use ($id) {
+                    $p = \App\Models\EquipmentPurchase::find($id);
+                    return $p ? [$p->created_by, "Mua thiết bị #{$p->id}", 'equipment_purchase', null] : [null, '', null, null];
+                })(),
+                default => [null, '', null, null],
+            };
+
+            if ($submitterId) {
+                $this->notificationService->notifyApprovalResult(
+                    $submitterId, $itemLabel, $status, $reason, $itemType, $id, $projectId
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning("dispatchApprovalResultNotification failed: {$e->getMessage()}", ['type' => $type, 'id' => $id]);
+        }
+    }
+
+    /**
+     * Gửi thông báo cho người duyệt tiếp theo trong workflow
+     * (áp dụng cho các loại thiếu Observer)
+     */
+    protected function dispatchNextApproverNotification(string $type, $id): void
+    {
+        try {
+            switch ($type) {
+                case 'equipment_rental_management':
+                    $r = EquipmentRental::find($id);
+                    if ($r) {
+                        $this->notificationService->sendToPermissionUsers(
+                            Permissions::COST_APPROVE_ACCOUNTANT, $r->project_id ?? null,
+                            Notification::TYPE_WORKFLOW, Notification::CATEGORY_WORKFLOW_APPROVAL,
+                            "Yêu cầu xác nhận thuê thiết bị",
+                            "Phiếu thuê thiết bị #{$r->id} đã được BĐH duyệt, cần KT xác nhận.",
+                            ['item_type' => 'equipment_rental', 'item_id' => $r->id, 'project_id' => $r->project_id],
+                            Notification::PRIORITY_HIGH, '/approvals', true
+                        );
+                    }
+                    break;
+                case 'asset_usage_management':
+                    $u = AssetUsage::find($id);
+                    if ($u) {
+                        $this->notificationService->sendToPermissionUsers(
+                            Permissions::COST_APPROVE_ACCOUNTANT, $u->project_id ?? null,
+                            Notification::TYPE_WORKFLOW, Notification::CATEGORY_WORKFLOW_APPROVAL,
+                            "Yêu cầu xác nhận sử dụng thiết bị",
+                            "Phiếu sử dụng thiết bị #{$u->id} đã được BĐH duyệt, cần KT xác nhận.",
+                            ['item_type' => 'asset_usage', 'item_id' => $u->id, 'project_id' => $u->project_id],
+                            Notification::PRIORITY_HIGH, '/approvals', true
+                        );
+                    }
+                    break;
+                case 'equipment_purchase_management':
+                    $p = \App\Models\EquipmentPurchase::find($id);
+                    if ($p) {
+                        $this->notificationService->sendToPermissionUsers(
+                            Permissions::COST_APPROVE_ACCOUNTANT, null,
+                            Notification::TYPE_WORKFLOW, Notification::CATEGORY_WORKFLOW_APPROVAL,
+                            "Yêu cầu xác nhận thanh toán mua thiết bị",
+                            "Phiếu mua thiết bị #{$p->id} đã được BĐH duyệt, cần KT xác nhận thanh toán.",
+                            ['item_type' => 'equipment_purchase', 'item_id' => $p->id],
+                            Notification::PRIORITY_HIGH, '/approvals', true
+                        );
+                    }
+                    break;
+                case 'project_payment':
+                    $p = ProjectPayment::find($id);
+                    if ($p) {
+                        $this->notificationService->sendToPermissionUsers(
+                            Permissions::COST_APPROVE_ACCOUNTANT, $p->project_id ?? null,
+                            Notification::TYPE_WORKFLOW, Notification::CATEGORY_WORKFLOW_APPROVAL,
+                            "Yêu cầu xác nhận thanh toán khách hàng",
+                            "Thanh toán đợt #{$p->payment_number} đã được khách hàng duyệt, cần KT xác nhận.",
+                            ['item_type' => 'project_payment', 'item_id' => $p->id, 'project_id' => $p->project_id],
+                            Notification::PRIORITY_HIGH, '/approvals', true
+                        );
+                    }
+                    break;
+            }
+        } catch (\Throwable $e) {
+            Log::warning("dispatchNextApproverNotification failed: {$e->getMessage()}", ['type' => $type, 'id' => $id]);
         }
     }
 }

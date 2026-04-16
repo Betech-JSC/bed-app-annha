@@ -37,9 +37,11 @@ class ChangeRequestObserver
                 'project_id' => $changeRequest->project_id,
                 'change_type' => $changeRequest->change_type,
                 'priority' => $changeRequest->priority,
+                'item_type' => 'change_request',
+                'item_id' => $changeRequest->id,
             ],
             $changeRequest->priority === 'high' ? Notification::PRIORITY_HIGH : Notification::PRIORITY_MEDIUM,
-            "/projects/{$changeRequest->project_id}",
+            '/approvals',
             true,
             [$changeRequest->requested_by] // Exclude requester
         );

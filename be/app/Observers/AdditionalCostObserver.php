@@ -40,9 +40,11 @@ class AdditionalCostObserver
                     'cost_id' => $additionalCost->id,
                     'project_id' => $additionalCost->project_id,
                     'amount' => $additionalCost->amount,
+                    'item_type' => 'additional_cost',
+                    'item_id' => $additionalCost->id,
                 ],
                 Notification::PRIORITY_HIGH,
-                "/projects/{$additionalCost->project_id}/additional-costs/{$additionalCost->id}",
+                '/approvals',
                 true,
                 [$additionalCost->proposed_by] // Exclude proposer
             );
@@ -111,9 +113,14 @@ class AdditionalCostObserver
                     Notification::CATEGORY_WORKFLOW_APPROVAL,
                     $title,
                     $body,
-                    ['cost_id' => $additionalCost->id, 'project_id' => $additionalCost->project_id],
+                    [
+                        'cost_id' => $additionalCost->id,
+                        'project_id' => $additionalCost->project_id,
+                        'item_type' => 'additional_cost',
+                        'item_id' => $additionalCost->id,
+                    ],
                     Notification::PRIORITY_HIGH,
-                    "/projects/{$additionalCost->project_id}/additional-costs/{$additionalCost->id}",
+                    '/approvals',
                     true
                 );
             }

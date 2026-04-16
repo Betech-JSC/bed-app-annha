@@ -154,8 +154,8 @@ class ProjectPayment extends Model
      */
     public function markAsPaidByCustomer(?User $user = null, ?string $paidDate = null, ?float $actualAmount = null): bool
     {
-        // Allow reporting payment from any initial pending state
-        if (!in_array($this->status, ['pending', 'overdue', 'customer_pending_approval', 'customer_approved'])) {
+        // Only allow marking as paid after customer has been notified and approved
+        if (!in_array($this->status, ['customer_pending_approval', 'customer_approved'])) {
             return false;
         }
 

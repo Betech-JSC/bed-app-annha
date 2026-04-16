@@ -38,9 +38,11 @@ class AcceptanceStageObserver
                     'stage_id' => $acceptanceStage->id,
                     'stage_name' => $acceptanceStage->name,
                     'project_id' => $acceptanceStage->project_id,
+                    'item_type' => 'acceptance',
+                    'item_id' => $acceptanceStage->id,
                 ],
                 Notification::PRIORITY_HIGH,
-                "/projects/{$acceptanceStage->project_id}/acceptance",
+                '/approvals',
                 true
             );
         }

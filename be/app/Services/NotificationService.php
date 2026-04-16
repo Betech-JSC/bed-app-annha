@@ -105,7 +105,7 @@ class NotificationService
     }
 
     /**
-     * Gửi notification cho nhiều users
+     * Gửi notification cho nhiều users (async khi queue driver không phải sync)
      */
     public function sendToUsers(
         array $userIds,
@@ -120,36 +120,18 @@ class NotificationService
         ?int $notifiableId = null,
         bool $sendPush = true
     ): array {
-        $notifications = [];
         $userIds = array_values(array_unique(array_filter($userIds)));
 
-        foreach ($userIds as $userId) {
-            $notifications[] = $this->createNotification(
-                $userId,
-                $type,
-                $category,
-                $title,
-                $body,
-                $data,
-                $priority,
-                $actionUrl,
-                $notifiableType,
-                $notifiableId,
-                null,
-                false // Không gửi push lẻ ở đây
-            );
+        if (empty($userIds)) {
+            return [];
         }
 
-        // Gửi push theo lô
-        if ($sendPush && !empty($userIds)) {
-            $this->sendBatchPushNotifications($userIds, $title, $body, array_merge($data, [
-                'type' => $type,
-                'category' => $category,
-                'action_url' => $actionUrl,
-            ]));
-        }
+        // Dispatch async job — khi QUEUE_CONNECTION=sync sẽ chạy đồng bộ (backward compat)
+        \App\Jobs\SendNotificationJob::dispatch(
+            $userIds, $type, $category, $title, $body, $data, $priority, $actionUrl, $notifiableType, $notifiableId
+        );
 
-        return $notifications;
+        return []; // Job handles creation asynchronously
     }
 
     /**
@@ -524,12 +506,10 @@ class NotificationService
     /**
      * Tạo notification cho workflow approval
      */
-    public function notifyWorkflowApproval(int $userId, string $workflowType, string $itemName, ?int $projectId = null): void
+    public function notifyWorkflowApproval(int $userId, string $workflowType, string $itemName, ?int $projectId = null, ?string $itemType = null, ?int $itemId = null): void
     {
         $title = "Yêu cầu duyệt";
         $body = "Bạn có yêu cầu duyệt {$workflowType}: {$itemName}";
-
-        $actionUrl = $projectId ? "/projects/{$projectId}" : null;
 
         $this->sendToUser(
             $userId,
@@ -541,9 +521,50 @@ class NotificationService
                 'workflow_type' => $workflowType,
                 'item_name' => $itemName,
                 'project_id' => $projectId,
+                'item_type' => $itemType,
+                'item_id' => $itemId,
             ],
             Notification::PRIORITY_HIGH,
-            $actionUrl,
+            '/approvals',
+            null,
+            null,
+            true
+        );
+    }
+
+    /**
+     * Thông báo kết quả duyệt cho người tạo/submitter
+     */
+    public function notifyApprovalResult(
+        int $submitterId,
+        string $itemLabel,
+        string $status,
+        ?string $reason = null,
+        ?string $itemType = null,
+        ?int $itemId = null,
+        ?int $projectId = null
+    ): void {
+        $isApproved = $status === 'approved';
+        $title = $isApproved ? "Yêu cầu đã được duyệt" : "Yêu cầu bị từ chối";
+        $body = $isApproved
+            ? "{$itemLabel} đã được duyệt thành công."
+            : "{$itemLabel} đã bị từ chối." . ($reason ? " Lý do: {$reason}" : '');
+
+        $this->sendToUser(
+            $submitterId,
+            Notification::TYPE_SYSTEM,
+            Notification::CATEGORY_STATUS_CHANGE,
+            $title,
+            $body,
+            array_filter([
+                'item_type' => $itemType,
+                'item_id' => $itemId,
+                'project_id' => $projectId,
+                'status' => $status,
+                'reason' => $reason,
+            ]),
+            $isApproved ? Notification::PRIORITY_MEDIUM : Notification::PRIORITY_HIGH,
+            $projectId ? "/projects/{$projectId}" : null,
             null,
             null,
             true

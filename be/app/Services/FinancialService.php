@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ProjectPayment;
+use App\Models\Notification;
 use App\Models\Subcontractor;
 use App\Models\SubcontractorPayment;
 use App\Models\User;
@@ -369,6 +370,25 @@ class FinancialService
                     'attachable_type' => ProjectPayment::class,
                     'attachable_id' => $payment->id,
                 ]);
+            }
+
+            // Notify customer users when a new payment is created
+            if ($isNew && $payment->project_id) {
+                try {
+                    app(\App\Services\NotificationService::class)->sendToPermissionUsers(
+                        \App\Constants\Permissions::PAYMENT_APPROVE,
+                        $payment->project_id,
+                        Notification::TYPE_WORKFLOW,
+                        Notification::CATEGORY_WORKFLOW_APPROVAL,
+                        'Đợt thanh toán mới cần xử lý',
+                        "Đợt thanh toán #{$payment->payment_number} vừa được tạo, cần bạn xem xét và xác nhận.",
+                        ['item_type' => 'payment', 'item_id' => $payment->id, 'project_id' => $payment->project_id],
+                        Notification::PRIORITY_HIGH,
+                        '/approvals'
+                    );
+                } catch (\Throwable $e) {
+                    Log::error('FinancialService: Failed to send payment creation notification: ' . $e->getMessage());
+                }
             }
 
             return $payment->fresh(['project', 'contract', 'attachments']);
