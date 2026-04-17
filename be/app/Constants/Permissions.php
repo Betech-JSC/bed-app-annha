@@ -537,6 +537,7 @@ class Permissions
             self::PAYMENT_UPDATE,
             self::PAYMENT_DELETE,
             self::PAYMENT_CONFIRM,
+            self::PAYMENT_APPROVE,
             self::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
 
             // Subcontractor
@@ -544,6 +545,7 @@ class Permissions
             self::SUBCONTRACTOR_CREATE,
             self::SUBCONTRACTOR_UPDATE,
             self::SUBCONTRACTOR_DELETE,
+            self::SUBCONTRACTOR_APPROVE,
 
             // Subcontractor Payment
             self::SUBCONTRACTOR_PAYMENT_VIEW,
@@ -850,6 +852,7 @@ class Permissions
                 self::PAYMENT_UPDATE,
                 self::PAYMENT_DELETE,
                 self::PAYMENT_CONFIRM,
+                self::PAYMENT_APPROVE,
                 self::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
             ],
             'subcontractor' => [
@@ -857,6 +860,7 @@ class Permissions
                 self::SUBCONTRACTOR_CREATE,
                 self::SUBCONTRACTOR_UPDATE,
                 self::SUBCONTRACTOR_DELETE,
+                self::SUBCONTRACTOR_APPROVE,
             ],
             'subcontractor_payment' => [
                 self::SUBCONTRACTOR_PAYMENT_VIEW,
