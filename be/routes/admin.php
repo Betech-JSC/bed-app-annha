@@ -244,6 +244,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/costs/{cost}/approve-management', [CrmProjectsController::class, 'approveCostManagement'])->name('costs.approve.management');
         Route::post('/{project}/costs/{cost}/approve-accountant', [CrmProjectsController::class, 'approveCostAccountant'])->name('costs.approve.accountant');
         Route::post('/{project}/costs/{cost}/reject', [CrmProjectsController::class, 'rejectCost'])->name('costs.reject');
+        Route::post('/{project}/costs/{cost}/revert', [CrmProjectsController::class, 'revertCostToDraft'])->name('costs.revert');
         Route::post('/{project}/costs/{cost}/attach-files', [CrmProjectsController::class, 'attachFilesToCost'])->name('costs.attach-files');
 
         // Payments
@@ -256,6 +257,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/payments/{payment}/customer-reject', [CrmProjectsController::class, 'rejectPaymentByCustomer'])->name('payments.customer-reject');
         Route::post('/{project}/payments/{payment}/confirm', [CrmProjectsController::class, 'confirmPayment'])->name('payments.confirm');
         Route::post('/{project}/payments/{payment}/reject', [CrmProjectsController::class, 'rejectPayment'])->name('payments.reject');
+        Route::post('/{project}/payments/{payment}/revert', [CrmProjectsController::class, 'revertPaymentToPending'])->name('payments.revert');
         Route::delete('/{project}/payments/{payment}', [CrmProjectsController::class, 'destroyPayment'])->name('payments.destroy');
         Route::post('/{project}/payments/{payment}/attach-files', [CrmProjectsController::class, 'attachFilesToPayment'])->name('payments.attach-files');
 
@@ -267,6 +269,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/logs', [CrmProjectsController::class, 'storeLog'])->name('logs.store');
         Route::put('/{project}/logs/{log}', [CrmProjectsController::class, 'updateLog'])->name('logs.update');
         Route::post('/{project}/logs/{log}/approve', [CrmProjectsController::class, 'approveLog'])->name('logs.approve');
+        Route::post('/{project}/logs/{log}/revert', [CrmProjectsController::class, 'revertLogToDraft'])->name('logs.revert');
         Route::delete('/{project}/logs/{log}', [CrmProjectsController::class, 'destroyLog'])->name('logs.destroy');
         Route::post('/{project}/logs/{log}/attach-files', [CrmProjectsController::class, 'attachFilesToLog'])->name('logs.attach-files');
 
@@ -290,6 +293,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::put('/{project}/change-requests/{cr}', [CrmProjectsController::class, 'updateChangeRequest'])->name('change-requests.update');
         Route::post('/{project}/change-requests/{cr}/submit', [CrmProjectsController::class, 'submitChangeRequest'])->name('change-requests.submit');
         Route::post('/{project}/change-requests/{cr}/approve', [CrmProjectsController::class, 'approveChangeRequest'])->name('change-requests.approve');
+        Route::post('/{project}/change-requests/{cr}/revert', [CrmProjectsController::class, 'revertChangeRequestToDraft'])->name('change-requests.revert');
         Route::post('/{project}/change-requests/{cr}/reject', [CrmProjectsController::class, 'rejectChangeRequest'])->name('change-requests.reject');
         Route::post('/{project}/change-requests/{cr}/implement', [CrmProjectsController::class, 'implementChangeRequest'])->name('change-requests.implement');
         Route::delete('/{project}/change-requests/{cr}', [CrmProjectsController::class, 'destroyChangeRequest'])->name('change-requests.destroy');
@@ -314,6 +318,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/subcontractors', [CrmProjectsController::class, 'storeSubcontractor'])->name('subcontractors.store');
         Route::put('/{project}/subcontractors/{sub}', [CrmProjectsController::class, 'updateSubcontractor'])->name('subcontractors.update');
         Route::post('/{project}/subcontractors/{sub}/approve', [CrmProjectsController::class, 'approveSubcontractor'])->name('subcontractors.approve');
+        Route::post('/{project}/subcontractors/{sub}/revert', [CrmProjectsController::class, 'revertSubcontractorToDraft'])->name('subcontractors.revert');
         Route::delete('/{project}/subcontractors/{sub}', [CrmProjectsController::class, 'destroySubcontractor'])->name('subcontractors.destroy');
         Route::post('/{project}/subcontractors/{sub}/attach-files', [CrmProjectsController::class, 'attachFilesToSubcontractor'])->name('subcontractors.attach-files');
 
@@ -328,6 +333,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/approve', [CrmProjectsController::class, 'approveSubPayment'])->name('subcontractors.payments.approve');
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/reject', [CrmProjectsController::class, 'rejectSubPayment'])->name('subcontractors.payments.reject');
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/confirm', [CrmProjectsController::class, 'confirmSubPayment'])->name('subcontractors.payments.confirm');
+        Route::post('/{project}/subcontractors/{sub}/payments/{payment}/revert', [CrmProjectsController::class, 'revertSubPaymentToDraft'])->name('subcontractors.payments.revert');
         Route::delete('/{project}/subcontractors/{sub}/payments/{payment}', [CrmProjectsController::class, 'destroySubPayment'])->name('subcontractors.payments.destroy');
 
         // Additional Costs
@@ -336,6 +342,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/additional-costs/{ac}/reject', [CrmProjectsController::class, 'rejectAdditionalCost'])->name('additional-costs.reject');
         Route::delete('/{project}/additional-costs/{ac}', [CrmProjectsController::class, 'destroyAdditionalCost'])->name('additional-costs.destroy');
         Route::post('/{project}/additional-costs/{ac}/attach-files', [CrmProjectsController::class, 'attachFilesToAdditionalCost'])->name('additional-costs.attach-files');
+        Route::post('/{project}/additional-costs/{ac}/revert', [CrmProjectsController::class, 'revertAdditionalCostToDraft'])->name('additional-costs.revert');
 
         // Budgets
         Route::post('/{project}/budgets', [CrmProjectsController::class, 'storeBudget'])->name('budgets.store');
@@ -343,6 +350,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/budgets/{budget}/submit', [CrmProjectsController::class, 'submitBudget'])->name('budgets.submit');
         Route::post('/{project}/budgets/{budget}/approve', [CrmProjectsController::class, 'approveBudgetManual'])->name('budgets.approve_manual');
         Route::post('/{project}/budgets/{budget}/reject', [CrmProjectsController::class, 'rejectBudget'])->name('budgets.reject');
+        Route::post('/{project}/budgets/{budget}/revert', [CrmProjectsController::class, 'revertBudgetToDraft'])->name('budgets.revert');
         Route::post('/{project}/budgets/{budget}/activate', [CrmProjectsController::class, 'activateBudget'])->name('budgets.activate');
         Route::delete('/{project}/budgets/{budget}', [CrmProjectsController::class, 'destroyBudget'])->name('budgets.destroy');
 
@@ -368,6 +376,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/acceptance/{stage}/items/{item}/approve-pm', [CrmProjectsController::class, 'approveAcceptanceItemPM'])->name('acceptance.items.approve.pm');
         Route::post('/{project}/acceptance/{stage}/items/{item}/approve-customer', [CrmProjectsController::class, 'approveAcceptanceItemCustomer'])->name('acceptance.items.approve.customer');
         Route::post('/{project}/acceptance/{stage}/items/{item}/reject', [CrmProjectsController::class, 'rejectAcceptanceItem'])->name('acceptance.items.reject');
+        Route::post('/{project}/acceptance/{stage}/items/{item}/revert', [CrmProjectsController::class, 'revertAcceptanceItemToDraft'])->name('acceptance.items.revert');
         Route::post('/{project}/acceptance/{stage}/items/{item}/attach-files', [CrmProjectsController::class, 'attachFilesToAcceptanceItem'])->name('acceptance.items.attach-files');
         Route::post('/{project}/acceptance/{stage}/approve-all', [CrmProjectsController::class, 'approveAllAcceptanceItems'])->name('acceptance.approve-all');
 
@@ -388,6 +397,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::put('/{project}/equipment-rentals/{rental}', [CrmProjectsController::class, 'updateEquipmentRental'])->name('equipment-rentals.update');
         Route::post('/{project}/equipment-rentals/{rental}/submit', [CrmProjectsController::class, 'submitEquipmentRental'])->name('equipment-rentals.submit');
         Route::post('/{project}/equipment-rentals/{rental}/approve-management', [CrmProjectsController::class, 'approveRentalManagement'])->name('equipment-rentals.approve.management');
+        Route::post('/{project}/equipment-rentals/{rental}/revert', [CrmProjectsController::class, 'revertRentalToDraft'])->name('equipment-rentals.revert');
         Route::post('/{project}/equipment-rentals/{rental}/confirm-accountant', [CrmProjectsController::class, 'confirmRentalAccountant'])->name('equipment-rentals.confirm.accountant');
         Route::post('/{project}/equipment-rentals/{rental}/reject', [CrmProjectsController::class, 'rejectEquipmentRental'])->name('equipment-rentals.reject');
         Route::post('/{project}/equipment-rentals/{rental}/request-return', [CrmProjectsController::class, 'requestReturnRental'])->name('equipment-rentals.request-return');
@@ -408,6 +418,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::put('/{project}/asset-usages/{usage}', [CrmProjectsController::class, 'updateAssetUsage'])->name('asset-usages.update');
         Route::post('/{project}/asset-usages/{usage}/submit', [CrmProjectsController::class, 'submitAssetUsage'])->name('asset-usages.submit');
         Route::post('/{project}/asset-usages/{usage}/approve-management', [CrmProjectsController::class, 'approveAssetUsageManagement'])->name('asset-usages.approve.management');
+        Route::post('/{project}/asset-usages/{usage}/revert', [CrmProjectsController::class, 'revertAssetUsageToDraft'])->name('asset-usages.revert');
         Route::post('/{project}/asset-usages/{usage}/confirm-accountant', [CrmProjectsController::class, 'confirmAssetUsageAccountant'])->name('asset-usages.confirm.accountant');
         Route::post('/{project}/asset-usages/{usage}/reject', [CrmProjectsController::class, 'rejectAssetUsage'])->name('asset-usages.reject');
         Route::post('/{project}/asset-usages/{usage}/request-return', [CrmProjectsController::class, 'requestReturnAsset'])->name('asset-usages.request-return');
@@ -421,6 +432,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/material-bills/{bill}/submit', [CrmProjectsController::class, 'submitMaterialBill'])->name('material-bills.submit');
         Route::post('/{project}/material-bills/{bill}/approve-management', [CrmProjectsController::class, 'approveMaterialBillManagement'])->name('material-bills.approve.management');
         Route::post('/{project}/material-bills/{bill}/approve-accountant', [CrmProjectsController::class, 'approveMaterialBillAccountant'])->name('material-bills.approve.accountant');
+        Route::post('/{project}/material-bills/{bill}/revert', [CrmProjectsController::class, 'revertMaterialBillToDraft'])->name('material-bills.revert');
         Route::post('/{project}/material-bills/{bill}/reject', [CrmProjectsController::class, 'rejectMaterialBill'])->name('material-bills.reject');
         Route::post('/{project}/material-bills/{bill}/attach-files', [CrmProjectsController::class, 'attachFilesToMaterialBill'])->name('material-bills.attach-files');
         Route::post('/{project}/material-bills/sync-costs', [CrmProjectsController::class, 'syncMaterialBillCosts'])->name('material-bills.sync-costs');
@@ -435,6 +447,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::get('/{project}/attendance', [CrmProjectsController::class, 'getAttendance'])->name('attendance.index');
         Route::post('/{project}/attendance/{id}/approve', [CrmProjectsController::class, 'approveAttendance'])->name('attendance.approve');
         Route::post('/{project}/attendance/{id}/reject', [CrmProjectsController::class, 'rejectAttendance'])->name('attendance.reject');
+        Route::post('/{project}/attendance/{id}/revert', [CrmProjectsController::class, 'revertAttendance'])->name('attendance.revert');
         Route::post('/{project}/attendance', [CrmProjectsController::class, 'storeAttendance'])->name('attendance.store');
 
         // Shifts (CRM proxy)
@@ -461,6 +474,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
             Route::post('/warranties', [CrmProjectsController::class, 'storeProjectWarranty'])->name('warranties.store');
             Route::put('/warranties/{uuid}', [CrmProjectsController::class, 'updateProjectWarranty'])->name('warranties.update');
             Route::post('/warranties/{uuid}/approve', [CrmProjectsController::class, 'approveProjectWarranty'])->name('warranties.approve');
+            Route::post('/warranties/{uuid}/revert', [CrmProjectsController::class, 'revertProjectWarrantyToDraft'])->name('warranties.revert');
             Route::post('/warranties/{uuid}/reject', [CrmProjectsController::class, 'rejectProjectWarranty'])->name('warranties.reject');
             Route::delete('/warranties/{uuid}', [CrmProjectsController::class, 'destroyProjectWarranty'])->name('warranties.destroy');
 
@@ -468,6 +482,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
             Route::put('/maintenances/{uuid}', [CrmProjectsController::class, 'updateProjectMaintenance'])->name('maintenances.update');
             Route::post('/maintenances/{uuid}/submit', [CrmProjectsController::class, 'submitProjectMaintenance'])->name('maintenances.submit');
             Route::post('/maintenances/{uuid}/approve', [CrmProjectsController::class, 'approveProjectMaintenance'])->name('maintenances.approve');
+            Route::post('/maintenances/{uuid}/revert', [CrmProjectsController::class, 'revertProjectMaintenanceToDraft'])->name('maintenances.revert');
             Route::post('/maintenances/{uuid}/reject', [CrmProjectsController::class, 'rejectProjectMaintenance'])->name('maintenances.reject');
             Route::delete('/maintenances/{uuid}', [CrmProjectsController::class, 'destroyProjectMaintenance'])->name('maintenances.destroy');
         });
@@ -504,6 +519,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/attendance', [CrmHrController::class, 'storeAttendanceHr'])->name('attendance.store');
         Route::post('/attendance/{id}/approve', [CrmHrController::class, 'approveAttendanceHr'])->name('attendance.approve');
         Route::post('/attendance/{id}/reject', [CrmHrController::class, 'rejectAttendanceHr'])->name('attendance.reject');
+        Route::post('/attendance/{id}/revert', [CrmHrController::class, 'revertAttendanceHr'])->name('attendance.revert');
         Route::post('/attendance/generate-labor-costs', [CrmHrController::class, 'generateLaborCostsHr'])->name('attendance.generate-costs');
 
         // KPI
@@ -550,6 +566,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::put('/company-costs/{id}', [CrmFinanceController::class, 'updateCompanyCost'])->name('company-costs.update');
         Route::delete('/company-costs/{id}', [CrmFinanceController::class, 'destroyCompanyCost'])->name('company-costs.destroy');
         Route::post('/company-costs/{id}/submit', [CrmFinanceController::class, 'submitCompanyCost'])->name('company-costs.submit');
+        Route::post('/company-costs/{id}/revert', [CrmFinanceController::class, 'revertCompanyCostToDraft'])->name('company-costs.revert');
     });
 
     // Materials
@@ -580,6 +597,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{id}/approve-management', [CrmEquipmentController::class, 'approveManagement'])->name('approve.management');
         Route::post('/{id}/confirm-accountant', [CrmEquipmentController::class, 'confirmAccountant'])->name('confirm.accountant');
         Route::post('/{id}/reject', [CrmEquipmentController::class, 'reject'])->name('reject');
+        Route::post('/{id}/revert', [CrmEquipmentController::class, 'revertToDraft'])->name('revert');
     });
 
     // Settings

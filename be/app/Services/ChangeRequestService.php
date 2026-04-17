@@ -96,4 +96,23 @@ class ChangeRequestService
 
         return $cr->markAsImplemented();
     }
+
+    /**
+     * Revert to Draft.
+     */
+    public function revertToDraft(ChangeRequest $cr, $user = null): bool
+    {
+        $revertibleStatuses = ['submitted', 'under_review', 'approved', 'rejected'];
+        if (!in_array($cr->status, $revertibleStatuses)) {
+            throw new \Exception('Trạng thái hiện tại không thể hoàn duyệt.');
+        }
+
+        return $cr->update([
+            'status' => 'draft',
+            'reviewed_by' => null,
+            'reviewed_at' => null,
+            'approved_by' => null,
+            'approved_at' => null,
+        ]);
+    }
 }

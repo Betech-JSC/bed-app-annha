@@ -269,6 +269,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/costs/{id}/submit', [CostController::class, 'submit']);
         Route::post('/{projectId}/costs/{id}/approve-management', [CostController::class, 'approveByManagement']);
         Route::post('/{projectId}/costs/{id}/approve-accountant', [CostController::class, 'approveByAccountant']);
+        Route::post('/{projectId}/costs/{id}/revert', [CostController::class, 'revertToDraft']);
         Route::post('/{projectId}/costs/{id}/reject', [CostController::class, 'reject']);
 
         // Personnel
@@ -442,6 +443,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/project-manager-approve', [AcceptanceItemController::class, 'projectManagerApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/customer-approve', [AcceptanceItemController::class, 'customerApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
         Route::post('/{projectId}/acceptance/{stageId}/items/{id}/workflow-reject', [AcceptanceItemController::class, 'workflowReject'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/revert', [AcceptanceItemController::class, 'revertToDraft'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
 
         // Defects
         Route::get('/{projectId}/defects', [DefectController::class, 'index'])->middleware('permission:defect.view,projectId');
@@ -572,6 +574,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/subcontractor-payments/{id}/submit', [SubcontractorPaymentController::class, 'submit'])->middleware('permission:subcontractor_payment.create,projectId');
         Route::post('/{projectId}/subcontractor-payments/{id}/approve', [SubcontractorPaymentController::class, 'approve'])->middleware('permission:subcontractor_payment.approve,projectId');
         Route::post('/{projectId}/subcontractor-payments/{id}/reject', [SubcontractorPaymentController::class, 'reject'])->middleware('permission:subcontractor_payment.approve,projectId');
+        Route::post('/{projectId}/subcontractor-payments/{id}/revert', [SubcontractorPaymentController::class, 'revertToDraft'])->middleware('permission:subcontractor_payment.approve,projectId');
         Route::post('/{projectId}/subcontractor-payments/{id}/mark-paid', [SubcontractorPaymentController::class, 'markAsPaid'])->middleware('permission:subcontractor_payment.mark_paid,projectId');
 
         // Warranty & Maintenance

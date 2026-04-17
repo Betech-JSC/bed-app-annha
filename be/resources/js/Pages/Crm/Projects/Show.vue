@@ -939,7 +939,13 @@
               <div v-for="item in stage.items" :key="item.id" class="flex items-center gap-2 text-sm py-1.5 border-b border-gray-50 last:border-0">
                 <a-checkbox :checked="item.workflow_status === 'customer_approved'" disabled />
                 <span :class="item.workflow_status === 'customer_approved' ? 'text-gray-400 line-through' : 'text-gray-700'">{{ item.name }}</span>
-                <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px] ml-auto">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
+                <div class="flex items-center gap-2 ml-auto">
+                  <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px]">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
+                  <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved', 'rejected'].includes(item.workflow_status) && (can('acceptance.approve.level_1') || item.created_by === page.props.auth?.user?.id)"
+                            type="text" size="small" class="text-orange-500 hover:text-orange-600 p-0 h-auto" @click.stop="revertAcceptItemAction(stage, item)">
+                    <ReloadOutlined class="text-[10px]" />
+                  </a-button>
+                </div>
               </div>
             </div>
 
@@ -2997,6 +3003,7 @@
           <a-button type="primary" size="small" ghost @click="openSubPaymentHistory(subDetail)"><HistoryOutlined /> TT Nhà thầu</a-button>
           <a-button type="link" @click="openSubModal(subDetail)" class="p-0 border-0 shadow-none"><EditOutlined /> Sửa thông tin</a-button>
           <a-button v-if="subDetail.progress_status === 'not_started'" type="primary" size="small" @click="approveSub(subDetail)">Bắt đầu</a-button>
+          <a-button v-if="subDetail.status === 'approved' && can('subcontractor.approve')" type="primary" size="small" ghost danger @click="revertSubcontractorAction(subDetail)">Hoàn duyệt</a-button>
         </div>
       </div>
 
@@ -3107,6 +3114,12 @@
             <a-button type="primary" class="bg-green-600 border-green-600" @click="approveCostAcct(costDetailRecord)">KT Xác nhận</a-button>
             <a-button danger ghost @click="openRejectCostModal(costDetailRecord)">Từ chối</a-button>
           </template>
+
+          <!-- Hoàn duyệt action -->
+          <a-button v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(costDetailRecord.status) && (can('cost.approve.management') || costDetailRecord.created_by === $page.props.auth?.user?.id)"
+                    class="border-orange-500 text-orange-500 hover:bg-orange-50 transition-colors" @click="revertCostAction(costDetailRecord)">
+            <ReloadOutlined /> Hoàn duyệt
+          </a-button>
         </div>
       </div>
     </div>
@@ -3491,6 +3504,10 @@
             <a-tooltip title="Xác nhận ngân sách hợp lệ" placement="bottom">
               <a-button type="primary" class="bg-emerald-500 border-none" @click="approveBudget(budgetDetail)"><CheckCircleOutlined /> Duyệt</a-button>
             </a-tooltip>
+          </template>
+
+          <template v-if="['approved', 'pending_approval', 'rejected'].includes(budgetDetail.status) && can('budgets.approve')">
+             <a-button danger ghost @click="revertBudgetAction(budgetDetail)">Hoàn duyệt</a-button>
           </template>
 
           <!-- Áp dụng (Active): Chỉ khi đã Đã duyệt -->
@@ -4387,6 +4404,17 @@
             Tiếp nhận / Từ chối
           </a-button>
         </a-tooltip>
+
+        <a-button 
+          v-if="['approved', 'rejected'].includes(selectedAttendance.workflow_status) && can('attendance.approve')" 
+          danger 
+          ghost
+          size="large" 
+          class="flex-1 rounded-2xl font-bold hover:scale-[1.02] transition-all" 
+          @click="revertAttendanceAction(selectedAttendance); showAttendanceDetailDrawer = false"
+        >
+          Hoàn duyệt
+        </a-button>
       </div>
     </div>
   </a-drawer>
@@ -4617,6 +4645,11 @@
              <a-button type="primary" class="bg-green-600 border-green-600" @click="confirmPaymentAction(paymentDetailRecord)">KT Xác nhận</a-button>
              <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
           </template>
+
+          <!-- Hoàn duyệt: Khi đã Duyệt hoặc Chờ duyệt -->
+          <template v-if="['customer_approved', 'customer_paid', 'confirmed'].includes(paymentDetailRecord.status) && can('payment.confirm')">
+             <a-button danger ghost @click="revertPaymentAction(paymentDetailRecord)">Hoàn duyệt</a-button>
+          </template>
         </div>
       </div>
     </div>
@@ -4654,6 +4687,12 @@
               <a-popconfirm v-if="p.status === 'pending_accountant_confirmation' && can('subcontractor_payment.mark_paid')" title="KT xác nhận đã thanh toán?" @confirm="confirmSubPayment(subDetail, p)" ok-text="Xác nhận">
                 <a-button type="text" size="small" class="text-green-600"><CheckSquareOutlined /></a-button>
               </a-popconfirm>
+
+              <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'rejected'].includes(p.status) && (can('subcontractor_payment.approve') || p.created_by === page.props.auth?.user?.id)"
+                        type="text" size="small" class="text-orange-500 hover:text-orange-600" @click="revertSubPaymentAction(subDetail, p)">
+                <ReloadOutlined />
+              </a-button>
+
               <a-popconfirm v-if="['pending_management_approval','pending_accountant_confirmation'].includes(p.status) && (can('subcontractor_payment.approve') || can('subcontractor_payment.mark_paid'))" title="Từ chối phiếu này?" @confirm="rejectSubPayment(subDetail, p)" ok-text="Từ chối" :ok-button-props="{ danger: true }">
                 <a-button type="text" size="small" danger><CloseCircleOutlined /></a-button>
               </a-popconfirm>
@@ -7390,6 +7429,15 @@ const rejectingCost = ref(null)
 const rejectCostReason = ref('')
 const openRejectCostModal = (c) => { rejectingCost.value = c; rejectCostReason.value = ''; showRejectCostModal.value = true }
 const rejectCost = () => { router.post(`/projects/${props.project.id}/costs/${rejectingCost.value.id}/reject`, { rejected_reason: rejectCostReason.value }, savingOptions({ onSuccess: () => showRejectCostModal.value = false })) }
+const revertCostAction = (c) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Dữ liệu này sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => router.post(`/projects/${props.project.id}/costs/${c.id}/revert`, {}, loadingOptions(`revert-cost-${c.id}`))
+  })
+}
 
 // ============ CONTRACT CRUD ============
 const showContractModal = ref(false)
@@ -8139,6 +8187,15 @@ const approveSubPayment = (sub, p) => router.post(`/projects/${props.project.id}
 const rejectSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/reject`, {}, loadingOptions(`reject-subpay-${p.id}`, { preserveScroll: true }))
 // confirmSubPayment is moved up to use unified modal logic
 const deleteSubPayment = (sub, p) => router.delete(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}`, loadingOptions(`delete-subpay-${p.id}`, { preserveScroll: true }))
+const revertSubPaymentAction = (sub, p) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Phiếu thanh toán này sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/revert`, {}, loadingOptions(`revert-subpay-${p.id}`, { preserveScroll: true }))
+  })
+}
 
 // ============ ADDITIONAL COST CRUD ============
 const showACModal = ref(false)
@@ -8768,6 +8825,23 @@ const confirmRejectAcceptItem = () => {
       showRejectAcceptItemModal.value = false
       showAcceptDetailDrawer.value = false // close to refresh
     },
+  })
+}
+
+const revertAcceptItemAction = (stage, item) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Hạng mục này sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/acceptance/${stage.id}/items/${item.id}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showAcceptDetailDrawer.value) showAcceptDetailDrawer.value = false 
+        },
+      })
+    }
   })
 }
 
@@ -9735,6 +9809,222 @@ const rejectMaintenanceRecord = (m) => {
 const deleteMaintenance = (m) => {
   router.delete(`/projects/${props.project.id}/maintenances/${m.uuid}`, {
     onSuccess: () => { showMaintenanceDetailDrawer.value = false; maintenanceDetail.value = null }
+  })
+}
+
+// ============ REVERT WORKFLOW ACTIONS ============
+const canRevert = (record) => {
+  const user = props.auth.user
+  const isSuperAdmin = method_exists(user, 'isSuperAdmin') ? user.isSuperAdmin() : (user.is_admin || user.role === 'admin')
+  return isSuperAdmin || record.created_by === user.id
+}
+
+const revertLogAction = (log) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Nhật ký thi công sẽ được đưa về trạng thái Đang chờ để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/logs/${log.id}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showLogDetailDrawer.value) showLogDetailDrawer.value = false 
+        },
+      })
+    }
+  })
+}
+
+const revertACAction = (ac) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Chi phí phát sinh sẽ được đưa về trạng thái Đang chờ duyệt để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/additional-costs/${ac.id}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showAdditionalCostDetailDrawer.value) showAdditionalCostDetailDrawer.value = false 
+        },
+      })
+    }
+  })
+}
+
+const revertMaterialBillAction = (bill) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Phiếu vật tư sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/material-bills/${bill.id}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showMaterialDetailDrawer.value) showMaterialDetailDrawer.value = false 
+        },
+      })
+    }
+  })
+}
+
+const revertRentalAction = (rental) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Phiếu thuê thiết bị sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/equipment-rentals/${rental.id}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showRentalDetailDrawer.value) showRentalDetailDrawer.value = false 
+        },
+      })
+    }
+  })
+}
+
+const revertPurchaseAction = (purchase) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Phiếu mua thiết bị sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/equipment-purchases/${purchase.id}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showPurchaseDetailDrawer.value) showPurchaseDetailDrawer.value = false 
+        },
+      })
+    }
+  })
+}
+
+const revertUsageAction = (usage) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Phiếu mượn thiết bị sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/asset-usages/${usage.id}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showUsageDetailDrawer.value) showUsageDetailDrawer.value = false 
+        },
+      })
+    }
+  })
+}
+
+const revertChangeRequestAction = (cr) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Yêu cầu thay đổi sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/change-requests/${cr.id}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showChangeRequestDetailDrawer.value) showChangeRequestDetailDrawer.value = false 
+        },
+      })
+    }
+  })
+}
+
+const revertProjectWarrantyAction = (w) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Phiếu bảo hành sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/warranties/${w.uuid}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showWarrantyDetailDrawer.value) showWarrantyDetailDrawer.value = false 
+        },
+      })
+    }
+  })
+}
+
+const revertProjectMaintenanceAction = (m) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Phiếu bảo trì sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/maintenances/${m.uuid}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => { 
+          if (showMaintenanceDetailDrawer.value) showMaintenanceDetailDrawer.value = false 
+        },
+      })
+    }
+  })
+}
+
+const revertSubcontractorAction = (sub) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Nhà thầu phụ sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/revert`, {}, {
+        preserveScroll: true,
+      })
+    }
+  })
+}
+
+const revertBudgetAction = (budget) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Ngân sách sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Lưu ý: Các liên kết thực tế có thể cần cập nhật lại.',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/budgets/${budget.id}/revert`, {}, {
+        preserveScroll: true,
+      })
+    }
+  })
+}
+
+const revertPaymentAction = (payment) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Thanh toán sẽ được đưa về trạng thái Chờ xác nhận. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/payments/${payment.id}/revert`, {}, {
+        preserveScroll: true,
+      })
+    }
+  })
+}
+
+const revertAttendanceAction = (attendance) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Bản ghi chấm công sẽ được đưa về trạng thái Chờ duyệt. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/attendance/${attendance.id}/revert`, {}, {
+        preserveScroll: true,
+      })
+    }
   })
 }
 </script>

@@ -163,6 +163,33 @@ class ConstructionLogService
     }
 
     /**
+     * Revert log to draft (pending)
+     */
+    public function revertToDraft(ConstructionLog $log, $user = null): bool
+    {
+        if ($log->approval_status === 'approved') {
+            // Special rule: only admins can revert approved logs because it affects progress
+            $isSuperAdmin = ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin());
+            if (!$isSuperAdmin) {
+                throw new \Exception('Chỉ có quản trị viên mới có thể hoàn duyệt nhật ký đã được phê duyệt.');
+            }
+        }
+
+        return DB::transaction(function () use ($log) {
+            $log->update([
+                'approval_status' => 'pending',
+                'approved_at'     => null,
+                'approved_by'     => null,
+            ]);
+
+            // Clear approval details
+            DailyReportApproval::where('construction_log_id', $log->id)->delete();
+
+            return true;
+        });
+    }
+
+    /**
      * Delete a construction log
      */
     public function delete(ConstructionLog $log): bool

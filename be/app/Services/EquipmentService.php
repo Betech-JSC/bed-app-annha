@@ -469,6 +469,63 @@ class EquipmentService
         });
     }
 
+    /**
+     * Revert Equipment Rental to Draft.
+     */
+    public function revertRentalToDraft(\App\Models\EquipmentRental $rental, $user = null): bool
+    {
+        $revertibleStatuses = ['pending_management', 'pending_accountant', 'rejected'];
+        if (!in_array($rental->status, $revertibleStatuses)) {
+            throw new \Exception('Trạng thái hiện tại không thể hoàn duyệt phiếu thuê.');
+        }
+
+        return $rental->update([
+            'status' => 'draft',
+            'approved_by' => null,
+            'approved_at' => null,
+            'confirmed_by' => null,
+            'confirmed_at' => null,
+        ]);
+    }
+
+    /**
+     * Revert Equipment Purchase to Draft.
+     */
+    public function revertPurchaseToDraft(\App\Models\EquipmentPurchase $purchase, $user = null): bool
+    {
+        $revertibleStatuses = ['pending_management', 'pending_accountant', 'rejected'];
+        if (!in_array($purchase->status, $revertibleStatuses)) {
+            throw new \Exception('Trạng thái hiện tại không thể hoàn duyệt phiếu mua.');
+        }
+
+        return $purchase->update([
+            'status' => 'draft',
+            'approved_by' => null,
+            'approved_at' => null,
+            'confirmed_by' => null,
+            'confirmed_at' => null,
+        ]);
+    }
+
+    /**
+     * Revert Asset Usage to Draft.
+     */
+    public function revertUsageToDraft(\App\Models\AssetUsage $usage, $user = null): bool
+    {
+        $revertibleStatuses = ['pending_management', 'pending_accountant', 'rejected'];
+        if (!in_array($usage->status, $revertibleStatuses)) {
+            throw new \Exception('Trạng thái hiện tại không thể hoàn duyệt phiếu mượn.');
+        }
+
+        return $usage->update([
+            'status' => 'draft',
+            'approved_by' => null,
+            'approved_at' => null,
+            'confirmed_by' => null,
+            'confirmed_at' => null,
+        ]);
+    }
+
     // =========================================================================
     // UTILS
     // =========================================================================
@@ -585,5 +642,30 @@ class EquipmentService
         });
 
         return $equipment;
+    }
+    /**
+     * Revert Equipment to Draft (Hoàn duyệt)
+     */
+    public function revertToDraft(\App\Models\Equipment $equipment, $user = null): bool
+    {
+        $revertibleStatuses = ['pending_management', 'pending_accountant', 'available', 'rejected'];
+        if (!in_array($equipment->status, $revertibleStatuses)) {
+            throw new \Exception('Trạng thái hiện tại không thể hoàn duyệt thiết bị.');
+        }
+
+        return DB::transaction(function () use ($equipment) {
+            $equipment->update([
+                'status' => 'draft',
+                'approved_by' => null,
+                'approved_at' => null,
+                'confirmed_by' => null,
+                'confirmed_at' => null,
+            ]);
+
+            // Sync with cost: revert cost to draft or delete it if not approved/paid
+            $this->syncCost($equipment);
+
+            return true;
+        });
     }
 }

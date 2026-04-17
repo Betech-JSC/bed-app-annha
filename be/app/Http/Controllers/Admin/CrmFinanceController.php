@@ -287,4 +287,21 @@ class CrmFinanceController extends Controller
             return redirect()->back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Revert company cost to draft (Hoàn duyệt)
+     */
+    public function revertCompanyCostToDraft($id)
+    {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::COMPANY_COST_SUBMIT); // Reuse submit permission for revert
+        $cost = Cost::companyCosts()->findOrFail($id);
+
+        try {
+            $this->financialService->revertCostToDraft($cost, $user);
+            return redirect()->back()->with('success', 'Đã hoàn duyệt chi phí công ty.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
 }

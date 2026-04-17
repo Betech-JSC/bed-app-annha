@@ -153,6 +153,29 @@ class MaterialBillService
     }
 
     /**
+     * Revert to Draft.
+     */
+    public function revertToDraft(MaterialBill $bill, $user): void
+    {
+        $revertibleStatuses = ['pending_management', 'pending_accountant', 'approved', 'rejected'];
+        if (!in_array($bill->status, $revertibleStatuses)) {
+            throw new \Exception('Trạng thái hiện tại không thể hoàn duyệt.');
+        }
+
+        DB::transaction(function () use ($bill, $user) {
+            $bill->update([
+                'status' => 'draft',
+                'budget_item_id' => null,
+            ]);
+
+            // Sync with linked Cost record
+            $this->ensureLinkedCost($bill, $user);
+            
+            $bill->notifyEvent('reverted_to_draft', $user);
+        });
+    }
+
+    /**
      * Delete.
      */
     public function delete(MaterialBill $bill): void

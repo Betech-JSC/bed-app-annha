@@ -523,6 +523,27 @@ class CrmProjectsController extends Controller
         }
     }
 
+    public function revertCostToDraft(string $projectId, string $costId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        
+        $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
+        
+        // Permission: Creator or Admin/PM
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        if ($cost->created_by !== $user->id && !$user->can(Permissions::COST_APPROVE_MANAGEMENT) && !$isSuperAdmin) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu chi này.');
+        }
+
+        try {
+            $this->financialService->revertCostToDraft($cost, $user);
+            return back()->with('success', 'Đã đưa phiếu chi về trạng thái nháp.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
     public function approveCostManagement(string $projectId, string $costId)
     {
         $project = Project::findOrFail($projectId);
@@ -820,6 +841,25 @@ class CrmProjectsController extends Controller
     }
 
     /**
+     * CRM: Hoàn duyệt thanh toán (customer_approved/customer_paid/confirmed → pending)
+     */
+    public function revertPaymentToPending(string $projectId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $project);
+
+        $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        try {
+            $this->financialService->revertProjectPaymentToPending($payment, $user);
+            return back()->with('success', 'Đã hoàn duyệt thanh toán.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * CRM: Upload hình ảnh xác nhận chuyển khoản (matching APP uploadPaymentProof)
      * Flow: pending → customer_pending_approval (đợi KH duyệt hình)
      */
@@ -943,6 +983,26 @@ class CrmProjectsController extends Controller
             return back()->with('success', 'Đã duyệt nhật ký thi công.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function revertLogToDraft(string $projectId, string $logId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        $log = ConstructionLog::where('project_id', $project->id)->findOrFail($logId);
+
+        if (!$isSuperAdmin && $log->created_by !== $user->id && !$user->can(Permissions::LOG_APPROVE)) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt nhật ký này.');
+        }
+
+        try {
+            $this->logService->revertToDraft($log, $user);
+            return back()->with('success', 'Đã hoàn duyệt nhật ký thi công.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
     }
 
@@ -1440,6 +1500,26 @@ class CrmProjectsController extends Controller
         }
     }
 
+    public function revertChangeRequestToDraft(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
+
+        if (!$isSuperAdmin && $cr->requested_by !== $user->id && !$user->can(Permissions::CHANGE_REQUEST_APPROVE)) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt yêu cầu này.');
+        }
+
+        try {
+            $this->changeRequestService->revertToDraft($cr, $user);
+            return back()->with('success', 'Đã hoàn duyệt yêu cầu thay đổi.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     public function rejectChangeRequest(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
@@ -1807,6 +1887,25 @@ class CrmProjectsController extends Controller
         }
     }
 
+    /**
+     * CRM: Hoàn duyệt nhà thầu phụ (approved → draft)
+     */
+    public function revertSubcontractorToDraft(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $admin = auth('admin')->user();
+        $this->crmRequire($admin, Permissions::SUBCONTRACTOR_APPROVE, $project);
+
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($id);
+
+        try {
+            $this->subcontractorService->revertToDraft($sub);
+            return back()->with('success', 'Đã đưa nhà thầu phụ về trạng thái nháp.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
     public function destroySubcontractor(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
@@ -1902,6 +2001,27 @@ class CrmProjectsController extends Controller
         try {
             $this->financialService->rejectSubPayment($payment, $request->input('rejection_reason'), $admin);
             return back()->with('success', 'Đã từ chối phiếu thanh toán.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function revertSubPaymentToDraft(string $projectId, string $subId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        
+        $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        // Permission: Creator or Admin/PM
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        if ($payment->created_by !== $user->id && !$user->can(Permissions::SUBCONTRACTOR_PAYMENT_APPROVE) && !$isSuperAdmin) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu thanh toán này.');
+        }
+
+        try {
+            $this->financialService->revertSubPaymentToDraft($payment, $user);
+            return back()->with('success', 'Đã đưa phiếu thanh toán về trạng thái nháp.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
@@ -2044,6 +2164,43 @@ class CrmProjectsController extends Controller
         return back()->with('success', 'Đã xóa chi phí phát sinh.');
     }
 
+    public function revertAdditionalCostToDraft(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::ADDITIONAL_COST_APPROVE, $project);
+
+        $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
+        if (!in_array($cost->status, ['approved', 'rejected', 'pending_approval', 'pending'])) {
+            return back()->with('error', 'Trạng thái hiện tại không thể hoàn duyệt.');
+        }
+
+        DB::beginTransaction();
+        try {
+            // Nếu đã duyệt, cần khấu trừ lại vào giá trị Hợp đồng
+            if ($cost->status === 'approved') {
+                $contract = $project->contract;
+                if ($contract) {
+                    $contract->contract_value -= $cost->amount;
+                    $contract->save();
+                }
+            }
+
+            $cost->status = 'pending_approval';
+            $cost->approved_at = null;
+            $cost->rejected_at = null;
+            $cost->rejected_reason = null;
+            $cost->save();
+
+            DB::commit();
+            return back()->with('success', 'Đã hoàn duyệt chi phí phát sinh.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi hoàn duyệt CP phát sinh: ' . $e->getMessage());
+        }
+    }
+
+
     // ===================================================================
     // SUB-ITEM CRUD — Budgets (Gap 3)
     // ===================================================================
@@ -2131,6 +2288,25 @@ class CrmProjectsController extends Controller
         $budget->update(['status' => 'pending_approval']);
 
         return back()->with('success', "Đã gửi duyệt ngân sách \"{$budget->name}\"");
+    }
+
+    /**
+     * CRM: Hoàn duyệt ngân sách (approved/pending → draft)
+     */
+    public function revertBudgetToDraft(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::BUDGET_APPROVE, $project);
+
+        $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
+
+        try {
+            $this->budgetService->revertToDraft($budget);
+            return back()->with('success', 'Đã đưa ngân sách về trạng thái nháp.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     public function approveBudgetManual(string $projectId, string $id)
@@ -2714,6 +2890,26 @@ class CrmProjectsController extends Controller
         return back()->with('error', 'Thao tác không thành công.');
     }
 
+    public function revertRentalToDraft(string $projectId, string $rentalId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+
+        if (!$isSuperAdmin && $rental->created_by !== $user->id && !$user->can(Permissions::COST_APPROVE_MANAGEMENT)) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu thuê này.');
+        }
+
+        try {
+            $this->equipmentService->revertRentalToDraft($rental, $user);
+            return back()->with('success', 'Đã hoàn duyệt phiếu thuê thiết bị.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     public function rejectEquipmentRental(Request $request, string $projectId, string $rentalId)
     {
         $project = Project::findOrFail($projectId);
@@ -3047,6 +3243,26 @@ class CrmProjectsController extends Controller
         return back()->with('error', 'Thao tác không thành công.');
     }
 
+    public function revertAssetUsageToDraft(string $projectId, string $usageId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+
+        if (!$isSuperAdmin && $usage->created_by !== $user->id && !$user->can(Permissions::COST_APPROVE_MANAGEMENT)) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu mượn này.');
+        }
+
+        try {
+            $this->equipmentService->revertUsageToDraft($usage, $user);
+            return back()->with('success', 'Đã hoàn duyệt phiếu mượn thiết bị.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     // ─── Asset Usage: Từ chối ───
     public function rejectAssetUsage(Request $request, string $projectId, string $usageId)
     {
@@ -3256,6 +3472,28 @@ class CrmProjectsController extends Controller
             return back()->with('success', 'Đã duyệt (PM).');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function revertAcceptanceItemToDraft(string $projectId, string $stageId, string $itemId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+        $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
+
+        // Permission: Creator or PM/Admin
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        if ($item->created_by !== $user->id && !$user->can(Permissions::ACCEPTANCE_APPROVE_LEVEL_2) && !$isSuperAdmin) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt hạng mục này.');
+        }
+
+        try {
+            $this->acceptanceService->revertItemToDraft($item, $user);
+            return back()->with('success', 'Đã đưa hạng mục về trạng thái nháp.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 
@@ -3517,6 +3755,26 @@ class CrmProjectsController extends Controller
             return back()->with('success', 'Đã xác nhận phiếu vật tư. Dữ liệu đã đẩy qua Chi phí dự án.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function revertMaterialBillToDraft(string $projectId, string $billId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
+
+        if (!$isSuperAdmin && $bill->created_by !== $user->id && !$user->can(Permissions::COST_APPROVE_MANAGEMENT)) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu vật tư này.');
+        }
+
+        try {
+            $this->materialBillService->revertToDraft($bill, $user);
+            return back()->with('success', 'Đã hoàn duyệt phiếu vật tư về trạng thái nháp.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
     }
 
@@ -3869,6 +4127,25 @@ class CrmProjectsController extends Controller
         return response()->json(['message' => 'Đã duyệt chấm công', 'data' => $attendance->fresh()]);
     }
 
+    /**
+     * CRM: Hoàn duyệt chấm công (approved/rejected → submitted)
+     */
+    public function revertAttendance(string $projectId, string $id)
+    {
+        $admin = auth('admin')->user();
+        $project = Project::findOrFail($projectId);
+        $this->crmRequire($admin, Permissions::ATTENDANCE_APPROVE, $project);
+
+        $attendance = \App\Models\Attendance::findOrFail($id);
+
+        try {
+            $this->attendanceService->revertToSubmitted($attendance, $admin);
+            return response()->json(['message' => 'Đã hoàn duyệt chấm công', 'data' => $attendance->fresh()]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 400);
+        }
+    }
+
     public function rejectAttendance(Request $request, string $projectId, string $id)
     {
         $admin = auth('admin')->user();
@@ -4067,6 +4344,26 @@ class CrmProjectsController extends Controller
         return back()->with('success', 'Đã duyệt phiếu bảo hành.');
     }
 
+    public function revertProjectWarrantyToDraft(string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        $warranty = \App\Models\ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+
+        if (!$isSuperAdmin && $warranty->created_by !== $user->id && !$user->can(Permissions::WARRANTY_APPROVE)) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu này.');
+        }
+
+        try {
+            $this->warrantyService->revertToDraft($warranty, $user);
+            return back()->with('success', 'Đã hoàn duyệt phiếu bảo hành.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     /**
      * Reject project warranty
      */
@@ -4191,6 +4488,26 @@ class CrmProjectsController extends Controller
         $this->warrantyService->updateStatus($maintenance, \App\Models\ProjectMaintenance::STATUS_APPROVED, $user);
 
         return back()->with('success', 'Đã duyệt phiếu bảo trì.');
+    }
+
+    public function revertProjectMaintenanceToDraft(string $projectId, string $uuid)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        $maintenance = \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
+
+        if (!$isSuperAdmin && $maintenance->created_by !== $user->id && !$user->can(Permissions::WARRANTY_APPROVE)) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu này.');
+        }
+
+        try {
+            $this->warrantyService->revertToDraft($maintenance, $user);
+            return back()->with('success', 'Đã hoàn duyệt phiếu bảo trì.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     /**

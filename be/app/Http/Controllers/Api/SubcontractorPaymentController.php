@@ -281,4 +281,39 @@ class SubcontractorPaymentController extends Controller
             ], 500);
         }
     }
+    /**
+     * Hoàn duyệt phiếu chi về trạng thái nháp
+     */
+    public function revertToDraft(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check permission (Creator or Approver)
+        $isCreator = $payment->created_by === $user->id;
+        $canApprove = $this->apiCan(Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $project);
+
+        if (!$isCreator && !$canApprove) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền hoàn duyệt phiếu chi này.'
+            ], 403);
+        }
+
+        try {
+            $this->financialService->revertSubPaymentToDraft($payment);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Phiếu chi đã được hoàn về trạng thái nháp.',
+                'data' => $payment->fresh(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 400);
+        }
+    }
 }

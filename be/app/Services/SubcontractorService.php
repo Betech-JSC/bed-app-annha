@@ -66,6 +66,18 @@ class SubcontractorService
     }
 
     /**
+     * Revert subcontractor to draft (Hoàn duyệt)
+     */
+    public function revertToDraft(Subcontractor $subcontractor): bool
+    {
+        return $subcontractor->update([
+            'status' => 'draft',
+            'approved_by' => null,
+            'approved_at' => null,
+        ]);
+    }
+
+    /**
      * Recalculate financial data from payments
      */
     public function recalculate(Subcontractor $subcontractor): bool
@@ -142,6 +154,23 @@ class SubcontractorService
         }
 
         return $acceptance->reject($reason, $user);
+    }
+
+    /**
+     * Revert acceptance to pending (Hoàn duyệt)
+     */
+    public function revertAcceptanceToPending(\App\Models\SubcontractorAcceptance $acceptance): bool
+    {
+        if (!in_array($acceptance->status, ['approved', 'rejected'])) {
+            throw new \Exception('Chỉ có thể hoàn duyệt nghiệm thu đã được duyệt hoặc từ chối.');
+        }
+
+        return $acceptance->update([
+            'status' => 'pending',
+            'approved_by' => null,
+            'approved_at' => null,
+            'rejected_reason' => null,
+        ]);
     }
 
     // =========================================================================

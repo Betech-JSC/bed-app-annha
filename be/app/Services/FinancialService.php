@@ -178,6 +178,32 @@ class FinancialService
     }
 
     /**
+     * Revert Cost to Draft (Hoàn duyệt)
+     * Allowed for costs in pending approval stages
+     */
+    public function revertCostToDraft(Cost $cost, $user = null): bool
+    {
+        $revertibleStatuses = ['pending_management_approval', 'pending_accountant_approval', 'rejected'];
+        if (!in_array($cost->status, $revertibleStatuses)) {
+            throw new \Exception('Chỉ có thể hoàn duyệt chi phí đang chờ duyệt hoặc đã bị từ chối.');
+        }
+
+        $cost->status = 'draft';
+        $cost->management_approved_by = null;
+        $cost->management_approved_at = null;
+        $cost->accountant_approved_by = null;
+        $cost->accountant_approved_at = null;
+        
+        $saved = $cost->save();
+
+        if ($saved) {
+            $cost->notifyEvent('reverted_to_draft', $user);
+        }
+
+        return $saved;
+    }
+
+    /**
      * upsert Subcontractor Payment
      */
     public function upsertSubPayment(array $data, ?SubcontractorPayment $payment = null, $user = null): SubcontractorPayment
@@ -331,6 +357,29 @@ class FinancialService
         return $saved;
     }
 
+    /**
+     * Revert Subcontractor Payment to Draft (Hoàn duyệt)
+     */
+    public function revertSubPaymentToDraft(SubcontractorPayment $payment, $user = null): bool
+    {
+        $revertibleStatuses = ['pending_management_approval', 'pending_accountant_confirmation', 'rejected'];
+        if (!in_array($payment->status, $revertibleStatuses)) {
+            throw new \Exception('Chỉ có thể hoàn duyệt phiếu đang chờ duyệt hoặc bị từ chối.');
+        }
+
+        $payment->status = 'draft';
+        $payment->approved_by = null;
+        $payment->approved_at = null;
+        
+        $saved = $payment->save();
+
+        if ($saved) {
+            $payment->notifyEvent('reverted_to_draft', $user);
+        }
+
+        return $saved;
+    }
+
     // ==================================================================
     // PROJECT PAYMENTS (CUSTOMER REVENUE)
     // ==================================================================
@@ -440,6 +489,25 @@ class FinancialService
         $payment->status = 'pending';
         $payment->notes = ($payment->notes ? $payment->notes . "\n\n" : '') . 
             ($user ? "Kế toán từ chối - Lý do: " : "KH từ chối — Lý do: ") . $reason;
+        
+        return $payment->save();
+    }
+
+    /**
+     * Revert project payment to pending (Hoàn duyệt)
+     */
+    public function revertProjectPaymentToPending(ProjectPayment $payment, ?User $user = null): bool
+    {
+        // Revertible if approved, customer_paid or confirmed
+        $revertibleStatuses = ['customer_approved', 'customer_paid', 'confirmed'];
+        if (!in_array($payment->status, $revertibleStatuses)) {
+            throw new \Exception('Chỉ có thể hoàn duyệt thanh toán đã được KH duyệt, đã trả hoặc đã xác nhận.');
+        }
+
+        $payment->status = 'pending';
+        // Clear approval/paid metadata
+        $payment->paid_date = null;
+        $payment->actual_amount = null;
         
         return $payment->save();
     }

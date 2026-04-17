@@ -420,4 +420,22 @@ class CrmHrController extends Controller
 
         return back()->with('success', "Đã tạo {$result['created']} chi phí nhân công, tổng " . number_format($result['total_amount'], 0, ',', '.') . 'đ');
     }
+
+    /**
+     * REVERT ATTENDANCE HR (Hoàn duyệt)
+     */
+    public function revertAttendanceHr($id)
+    {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::ATTENDANCE_APPROVE);
+
+        $attendance = \App\Models\Attendance::findOrFail($id);
+
+        try {
+            app(\App\Services\AttendanceService::class)->revertToSubmitted($attendance, $admin);
+            return back()->with('success', 'Đã hoàn duyệt chấm công.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
 }

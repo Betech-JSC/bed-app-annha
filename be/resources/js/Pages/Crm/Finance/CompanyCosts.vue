@@ -99,9 +99,11 @@
                 <a-button type="text" size="small"><SendOutlined style="color: #1B4F72;" /></a-button>
               </a-popconfirm>
             </a-tooltip>
-            <!-- Edit -->
-            <a-tooltip v-if="['draft', 'rejected'].includes(record.status)" title="Sửa">
-              <a-button type="text" size="small" @click="showEditModal(record)"><EditOutlined /></a-button>
+            <!-- Revert -->
+            <a-tooltip v-if="['pending_management_approval', 'pending_accountant_approval', 'approved', 'rejected'].includes(record.status)" title="Hoàn duyệt">
+              <a-popconfirm title="Đưa chi phí này về trạng thái Nháp để chỉnh sửa?" ok-text="Đồng ý" cancel-text="Hủy" @confirm="revertCost(record.id)">
+                <a-button type="text" size="small"><UndoOutlined /></a-button>
+              </a-popconfirm>
             </a-tooltip>
             <!-- Delete -->
             <a-popconfirm v-if="['draft', 'rejected'].includes(record.status)" title="Xóa chi phí này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteCost(record.id)">
@@ -216,7 +218,7 @@ import ChartCard from '@/Components/Crm/ChartCard.vue'
 import { useChart, CHART_COLORS } from '@/Composables/useChart'
 import {
   PlusOutlined, DollarOutlined, CheckCircleOutlined, ClockCircleOutlined,
-  FileTextOutlined, EditOutlined, DeleteOutlined, SendOutlined,
+  FileTextOutlined, EditOutlined, DeleteOutlined, SendOutlined, UndoOutlined,
 } from '@ant-design/icons-vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
@@ -399,5 +401,9 @@ const submitCost = (id) => {
 
 const deleteCost = (id) => {
   router.delete(`/finance/company-costs/${id}`, { preserveScroll: true })
+}
+
+const revertCost = (id) => {
+  router.post(`/finance/company-costs/${id}/revert`, {}, { preserveScroll: true })
 }
 </script>

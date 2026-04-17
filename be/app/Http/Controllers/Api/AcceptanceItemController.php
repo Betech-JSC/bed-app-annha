@@ -561,4 +561,41 @@ class AcceptanceItemController extends Controller
             ], 400);
         }
     }
+    /**
+     * Hoàn duyệt hạng mục về trạng thái nháp
+     */
+    public function revertToDraft(Request $request, string $projectId, string $stageId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+        $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check permission (Creator, Level 1 or Level 2 Approver)
+        $isCreator = $item->created_by === $user->id;
+        $canApproveLevel1 = $this->authService->can($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project);
+        $canApproveLevel2 = $this->authService->can($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project);
+
+        if (!$isCreator && !$canApproveLevel1 && !$canApproveLevel2) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền hoàn duyệt hạng mục này.'
+            ], 403);
+        }
+
+        try {
+            $this->acceptanceService->revertItemToDraft($item->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Hạng mục đã được hoàn về trạng thái nháp.',
+                'data' => $item->fresh(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 400);
+        }
+    }
 }

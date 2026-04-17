@@ -282,4 +282,23 @@ class CrmEquipmentController extends Controller
             : back()->with('success', $msg);
     }
 
+    /**
+     * Hoàn duyệt tài sản (confirmed/approved → draft)
+     */
+    public function revertToDraft($id)
+    {
+        $user = auth()->user() ?: auth('admin')->user();
+        if (!$user || !$user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT)) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt.');
+        }
+
+        $eq = Equipment::findOrFail($id);
+
+        try {
+            $this->equipmentService->revertToDraft($eq, $user);
+            return back()->with('success', 'Đã hoàn duyệt hồ sơ tài sản về trạng thái nháp.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
 }

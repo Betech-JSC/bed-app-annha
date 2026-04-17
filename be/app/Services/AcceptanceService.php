@@ -204,6 +204,31 @@ class AcceptanceService
     }
 
     /**
+     * Revert Acceptance Item to Draft (Hoàn duyệt)
+     */
+    public function revertItemToDraft(AcceptanceItem $item, $user = null): bool
+    {
+        $revertibleStatuses = ['submitted', 'supervisor_approved', 'project_manager_approved', 'rejected'];
+        if (!in_array($item->workflow_status, $revertibleStatuses)) {
+            throw new \Exception('Chỉ có thể hoàn duyệt hạng mục đang chờ duyệt hoặc bị từ chối.');
+        }
+
+        $item->workflow_status = 'draft';
+        $item->supervisor_approved_by = null;
+        $item->supervisor_approved_at = null;
+        $item->project_manager_approved_by = null;
+        $item->project_manager_approved_at = null;
+        
+        $saved = $item->save();
+
+        if ($saved) {
+            $item->acceptanceStage->notifyEvent('reverted_to_draft', $user);
+        }
+
+        return $saved;
+    }
+
+    /**
      * Universal approval method for Acceptance Stages
      */
     public function approveStage(AcceptanceStage $stage, $user, ?int $level = null): bool
@@ -422,6 +447,13 @@ class AcceptanceService
 
     protected function hasPermission($user, string $permission, $project): bool
     {
+        if (!$user) return false;
+        
+        // Super Admin bypass
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
         // Simple permission check compatibility
         if (method_exists($user, 'hasPermission')) {
             return $user->hasPermission($permission);

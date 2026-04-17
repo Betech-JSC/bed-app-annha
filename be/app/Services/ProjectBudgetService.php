@@ -145,6 +145,22 @@ class ProjectBudgetService
     }
 
     /**
+     * Revert budget to draft (Hoàn duyệt)
+     */
+    public function revertToDraft(ProjectBudget $budget): bool
+    {
+        if (!in_array($budget->status, ['pending_approval', 'approved', 'rejected'])) {
+            throw new Exception('Chỉ có thể hoàn duyệt ngân sách đang chờ duyệt, đã duyệt hoặc bị từ chối.');
+        }
+
+        return $budget->update([
+            'status'      => 'draft',
+            'approved_by' => null,
+            'approved_at' => null,
+        ]);
+    }
+
+    /**
      * Activate budget
      */
     public function activate(ProjectBudget $budget): bool

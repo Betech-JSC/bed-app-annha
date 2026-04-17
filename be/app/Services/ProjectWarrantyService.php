@@ -114,4 +114,21 @@ class ProjectWarrantyService
             'notes' => $reason ? ($entity->notes . "\nLý do từ chối: " . $reason) : $entity->notes,
         ]);
     }
+
+    /**
+     * Revert record to draft.
+     */
+    public function revertToDraft($entity, $actor = null): bool
+    {
+        $revertibleStatuses = ['pending_customer', 'approved', 'rejected'];
+        if (!in_array($entity->status, $revertibleStatuses)) {
+            throw new \Exception('Trạng thái hiện tại không thể hoàn duyệt.');
+        }
+
+        return $entity->update([
+            'status' => 'draft',
+            'approved_by' => null,
+            'approved_at' => null,
+        ]);
+    }
 }

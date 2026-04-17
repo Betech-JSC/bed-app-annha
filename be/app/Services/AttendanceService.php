@@ -190,6 +190,34 @@ class AttendanceService
     }
 
     /**
+     * Revert Attendance to Submitted status (Hoàn duyệt)
+     */
+    public function revertToSubmitted(Attendance $attendance, User $user): bool
+    {
+        if (!in_array($attendance->workflow_status, ['approved', 'rejected'])) {
+            throw new Exception('Chỉ có thể hoàn duyệt chấm công đã được duyệt hoặc từ chối.');
+        }
+
+        return DB::transaction(function () use ($attendance, $user) {
+            $attendance->update([
+                'workflow_status' => 'submitted',
+                'approved_by'     => null,
+                'approved_at'     => null,
+                'rejected_reason' => null,
+            ]);
+
+            // Delete generated labor cost if it's draft (safe to delete)
+            // If it's already approved/paid, generateLaborCost should handle it but here we're safer deleting if not yet paid
+            $cost = Cost::where('attendance_id', $attendance->id)->first();
+            if ($cost && $cost->status !== 'paid') {
+                $cost->delete();
+            }
+
+            return true;
+        });
+    }
+
+    /**
      * Hàm dùng chung để kích hoạt tạo chi phí nhân công một cách an toàn
      * @throws Exception
      */

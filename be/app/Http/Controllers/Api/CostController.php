@@ -379,4 +379,39 @@ class CostController extends Controller
             'message' => 'Chi phí đã được xóa.',
         ]);
     }
+    /**
+     * Hoàn duyệt chi phí về trạng thái nháp
+     */
+    public function revertToDraft(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $cost = Cost::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        // Check permission (Creator can revert, or Management Approver)
+        $isCreator = $cost->created_by === $user->id;
+        $canApprove = $this->authService->can($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
+
+        if (!$isCreator && !$canApprove) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền hoàn duyệt chi phí này.'
+            ], 403);
+        }
+
+        try {
+            $this->financialService->revertCostToDraft($cost);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Chi phí đã được hoàn về trạng thái nháp.',
+                'data' => $cost->fresh(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 400);
+        }
+    }
 }

@@ -194,6 +194,7 @@
             </template>
             <a-button danger>Từ chối</a-button>
           </a-popconfirm>
+          <a-button v-if="['pending_management', 'pending_accountant', 'available', 'rejected'].includes(selectedItem.status)" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -309,6 +310,7 @@ const submitItem = (e) => router.post(`/equipment/${e.id}/submit`, {}, { preserv
 const approveItem = (e) => router.post(`/equipment/${e.id}/approve-management`, {}, { preserveScroll: true })
 const confirmItem = (e) => router.post(`/equipment/${e.id}/confirm-accountant`, {}, { preserveScroll: true })
 const rejectItem = (e) => router.post(`/equipment/${e.id}/reject`, { reason: rejectReason.value }, { preserveScroll: true, onSuccess: () => { rejectReason.value = ''; showDetailDrawer.value = false } })
+const revertItem = (e) => router.post(`/equipment/${e.id}/revert`, {}, { preserveScroll: true, onSuccess: () => { showDetailDrawer.value = false } })
 const deleteItem = (e) => router.delete(`/equipment/${e.id}`)
 
 const formatCurrency = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v) : '—'
