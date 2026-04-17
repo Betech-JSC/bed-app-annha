@@ -294,178 +294,101 @@ class ApprovalQueryService
         )->pluck('approvable')->filter();
 
         // ═══════════════════════════════════════════════════════════════
-        // LEGACY MODELS (Direct query until migrated)
+        // ALL REMAINING MODELS (via Centralized Approvals)
         // ═══════════════════════════════════════════════════════════════
 
-        // ACCEPTANCE ITEMS (Hạng mục nghiệm thu)
-        if ($this->shouldInclude($type, ['all', 'acceptance_item'])) {
-            $data['acceptance_items'] = AcceptanceItem::where('acceptance_status', 'pending')
-                ->whereDate('end_date', '<=', now())
-                ->whereHas('acceptanceStage', function($q) use ($canSeeAllProjects, $projectIds) {
-                    $q->when(!$canSeeAllProjects, fn($sq) => $sq->whereIn('project_id', $projectIds));
-                })
-                ->with(['acceptanceStage.project:id,name,code', 'creator:id,name', 'task:id,name'])
-                ->orderBy('end_date', 'asc')
-                ->get();
-        }
+        // Acceptance Items (Hạng mục nghiệm thu)
+        $data['acceptance_items'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === AcceptanceItem::class
+        )->pluck('approvable')->filter();
 
-        // CHANGE REQUESTS (Yêu cầu thay đổi)
-        if ($this->shouldInclude($type, ['all', 'change_request'])) {
-            $data['change_requests'] = ChangeRequest::whereIn('status', ['submitted', 'under_review'])
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'requester:id,name,email', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        }
+        // Change Requests (Yêu cầu thay đổi)
+        $data['change_requests'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === ChangeRequest::class
+        )->pluck('approvable')->filter();
 
-        // SUBCONTRACTOR PAYMENTS (Thanh toán NTP)
-        if ($this->shouldInclude($type, ['all', 'sub_payment'])) {
-            $data['sub_payments_management'] = SubcontractorPayment::where('status', 'pending_management_approval')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
+        // Subcontractor Payments (Thanh toán NTP)
+        $data['sub_payments_management'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === SubcontractorPayment::class &&
+            str_contains($a->approvable->status ?? '', 'management')
+        )->pluck('approvable')->filter();
 
-            $data['sub_payments_accountant'] = SubcontractorPayment::where('status', 'pending_accountant_confirmation')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name,email', 'approver:id,name', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        }
+        $data['sub_payments_accountant'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === SubcontractorPayment::class &&
+            str_contains($a->approvable->status ?? '', 'accountant')
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // SUBCONTRACTOR ACCEPTANCES (Nghiệm thu NTP)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'sub_acceptance'])) {
-            $data['sub_acceptances'] = SubcontractorAcceptance::where('status', 'pending')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['subcontractor:id,name', 'project:id,name,code', 'creator:id,name', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        }
+        // Subcontractor Acceptances (Nghiệm thu NTP)
+        $data['sub_acceptances'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === SubcontractorAcceptance::class
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // SUPPLIER ACCEPTANCES (Nghiệm thu NCC)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'supplier_acceptance'])) {
-            $data['supplier_acceptances'] = SupplierAcceptance::where('status', 'pending')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['supplier:id,name', 'project:id,name,code', 'creator:id,name', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        }
+        // Supplier Acceptances (Nghiệm thu NCC)
+        $data['supplier_acceptances'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === SupplierAcceptance::class
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // CONTRACTS (Hợp đồng)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'contract'])) {
-            $data['contracts'] = Contract::where('status', 'pending')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        }
+        // Contracts (Hợp đồng)
+        $data['contracts'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === Contract::class
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // CONSTRUCTION LOGS (Nhật ký công trường)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'construction_log'])) {
-            $data['construction_logs'] = ConstructionLog::where('approval_status', 'pending')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
-                ->orderBy('log_date', 'desc')
-                ->get();
-        }
+        // Construction Logs (Nhật ký công trường)
+        $data['construction_logs'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === ConstructionLog::class
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // SCHEDULE ADJUSTMENTS (Điều chỉnh tiến độ)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'schedule_adjustment'])) {
-            $data['schedule_adjustments'] = ScheduleAdjustment::where('status', 'pending')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'creator:id,name', 'task:id,name', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        }
+        // Schedule Adjustments (Điều chỉnh tiến độ)
+        $data['schedule_adjustments'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === ScheduleAdjustment::class
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // DEFECTS (Lỗi chờ xác nhận)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'defect'])) {
-            $data['defects'] = Defect::where('status', 'fixed')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'reporter:id,name', 'fixer:id,name', 'task:id,name', 'acceptanceStage:id,name', 'attachments'])
-                ->orderBy('fixed_at', 'desc')
-                ->get();
-        }
+        // Defects (Lỗi chờ xác nhận)
+        $data['defects'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === Defect::class
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // PROJECT BUDGETS (Ngân sách dự án)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'budget'])) {
-            $data['budgets'] = ProjectBudget::whereIn('status', ['pending_approval'])
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        }
+        // Project Budgets (Ngân sách dự án)
+        $data['budgets'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === ProjectBudget::class
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // EQUIPMENT RENTALS (Thuê thiết bị)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'equipment_rental'])) {
-            $data['equipment_rentals_management'] = EquipmentRental::where('status', 'pending_management')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
+        // Equipment Rentals (Thuê thiết bị)
+        $data['equipment_rentals_management'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === EquipmentRental::class &&
+            str_contains($a->approvable->status ?? '', 'management')
+        )->pluck('approvable')->filter();
 
-            $data['equipment_rentals_accountant'] = EquipmentRental::where('status', 'pending_accountant')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'creator:id,name,email', 'approver:id,name', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
+        $data['equipment_rentals_accountant'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === EquipmentRental::class &&
+            str_contains($a->approvable->status ?? '', 'accountant')
+        )->pluck('approvable')->filter();
 
-            $data['equipment_rentals_return'] = EquipmentRental::where('status', 'pending_return')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'creator:id,name,email', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        }
+        $data['equipment_rentals_return'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === EquipmentRental::class &&
+            str_contains($a->approvable->status ?? '', 'return')
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // ASSET USAGES (Sử dụng thiết bị)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'asset_usage'])) {
-            $data['asset_usages_management'] = AssetUsage::where('status', 'pending_management')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
+        // Asset Usages (Sử dụng thiết bị)
+        $data['asset_usages_management'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === AssetUsage::class &&
+            str_contains($a->approvable->status ?? '', 'management')
+        )->pluck('approvable')->filter();
 
-            $data['asset_usages_accountant'] = AssetUsage::where('status', 'pending_accountant')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'approver:id,name', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
+        $data['asset_usages_accountant'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === AssetUsage::class &&
+            str_contains($a->approvable->status ?? '', 'accountant')
+        )->pluck('approvable')->filter();
 
-            $data['asset_usages_return'] = AssetUsage::where('status', 'pending_return')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['project:id,name,code', 'creator:id,name,email', 'asset:id,name', 'attachments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        }
+        $data['asset_usages_return'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === AssetUsage::class &&
+            str_contains($a->approvable->status ?? '', 'return')
+        )->pluck('approvable')->filter();
 
-        // ═══════════════════════════════════════════════════════════════
-        // ATTENDANCES (Chấm công chờ duyệt)
-        // ═══════════════════════════════════════════════════════════════
-        if ($this->shouldInclude($type, ['all', 'attendance'])) {
-            $data['attendances_pending'] = Attendance::where('workflow_status', 'submitted')
-                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                ->with(['user:id,name,email', 'project:id,name,code'])
-                ->orderByDesc('work_date')
-                ->get();
-        }
+        // Attendances (Chấm công chờ duyệt)
+        $data['attendances_pending'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === Attendance::class
+        )->pluck('approvable')->filter();
 
         // ═══════════════════════════════════════════════════════════════
         // RECENT ACTIVITY (Hoạt động gần đây)

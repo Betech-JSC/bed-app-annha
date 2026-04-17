@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class SubcontractorAcceptance extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, \App\Traits\Approvable;
 
     protected $fillable = [
         'uuid',
@@ -81,6 +81,24 @@ class SubcontractorAcceptance extends Model
     public function attachments(): MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable');
+    }
+
+    // ==================================================================
+    // APPROVABLE OVERRIDES
+    // ==================================================================
+
+    public function getApprovalSummary(): string
+    {
+        return "Nghiệm thu NTP: " . ($this->acceptance_name ?? "#{$this->id}");
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'accepted_amount' => $this->accepted_amount,
+            'subcontractor_id' => $this->subcontractor_id,
+            'acceptance_number' => $this->acceptance_number,
+        ];
     }
 
     // ==================================================================

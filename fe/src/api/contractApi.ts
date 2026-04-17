@@ -44,6 +44,12 @@ export const contractApi = {
     return response.data;
   },
 
+  // Reject contract
+  rejectContract: async (projectId: string | number, reason: string) => {
+    const response = await api.post(`/projects/${projectId}/contract/reject`, { reason });
+    return response.data;
+  },
+
   // Attach files to contract
   attachFiles: async (projectId: string | number, attachmentIds: number[]) => {
     const response = await api.post(`/projects/${projectId}/contract/attach-files`, {

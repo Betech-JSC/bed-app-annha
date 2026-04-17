@@ -228,6 +228,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/contract', [ContractController::class, 'store']);
         Route::put('/{projectId}/contract', [ContractController::class, 'update']);
         Route::post('/{projectId}/contract/approve', [ContractController::class, 'approve']);
+        Route::post('/{projectId}/contract/reject', [ContractController::class, 'reject']);
         Route::post('/{projectId}/contract/attach-files', [ContractController::class, 'attachFiles']);
 
         // Payments

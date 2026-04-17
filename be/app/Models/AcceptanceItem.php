@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class AcceptanceItem extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, \App\Traits\Approvable;
 
     protected $fillable = [
         'uuid',
@@ -121,6 +121,37 @@ class AcceptanceItem extends Model
     public function attachments(): MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable');
+    }
+
+    // ==================================================================
+    // APPROVABLE OVERRIDES
+    // ==================================================================
+
+    protected function getModelStatusValue(): string
+    {
+        return $this->acceptance_status ?? '';
+    }
+
+    public function syncApproval(array $options = []): \App\Models\Approval
+    {
+        $projectId = $this->acceptanceStage?->project_id;
+        return parent::syncApproval(array_merge($options, [
+            'project_id' => $projectId,
+        ]));
+    }
+
+    public function getApprovalSummary(): string
+    {
+        return "Hạng mục NT: " . ($this->name ?? "#{$this->id}");
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'name' => $this->name,
+            'acceptance_stage_id' => $this->acceptance_stage_id,
+            'task_id' => $this->task_id,
+        ];
     }
 
     // ==================================================================

@@ -178,6 +178,50 @@ class ContractController extends Controller
     }
 
     /**
+     * Từ chối hợp đồng
+     */
+    public function reject(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $contract = $project->contract;
+
+        if (!$contract) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hợp đồng chưa được tạo.'
+            ], 404);
+        }
+
+        if ($contract->status !== 'pending_customer_approval') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hợp đồng không ở trạng thái chờ duyệt.'
+            ], 400);
+        }
+
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::CONTRACT_APPROVE_LEVEL_1, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền từ chối hợp đồng của dự án này.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $contract->reject($validated['reason'], $user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Hợp đồng đã bị từ chối.',
+            'data' => $contract->fresh()
+        ]);
+    }
+
+    /**
      * Đính kèm file vào hợp đồng
      */
     public function attachFiles(Request $request, string $projectId)

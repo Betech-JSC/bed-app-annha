@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -46,6 +47,10 @@ export default function ContractScreen() {
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [showDetailDrawer, setShowDetailDrawer] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     loadContract();
@@ -233,6 +238,80 @@ export default function ContractScreen() {
     }
   };
 
+  const handleReject = async () => {
+    if (!contract || !rejectReason.trim()) return;
+
+    try {
+      setActionLoading("reject");
+      const response = await contractApi.rejectContract(id!, rejectReason.trim());
+      if (response.success) {
+        Alert.alert("Thành công", "Hợp đồng đã bị từ chối.");
+        setShowRejectModal(false);
+        setShowDetailDrawer(false);
+        setRejectReason("");
+        loadContract();
+      } else {
+        Alert.alert("Lỗi", response.message || "Không thể từ chối hợp đồng");
+      }
+    } catch (error: any) {
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Có lỗi xảy ra khi từ chối hợp đồng"
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleApproveFromDrawer = async () => {
+    if (!contract) return;
+
+    try {
+      setActionLoading("approve");
+      const response = await contractApi.approveContract(id!);
+      if (response.success) {
+        Alert.alert("Thành công", "Hợp đồng đã được duyệt.");
+        setShowDetailDrawer(false);
+        loadContract();
+      } else {
+        Alert.alert("Lỗi", response.message || "Không thể duyệt hợp đồng");
+      }
+    } catch (error: any) {
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Có lỗi xảy ra khi duyệt hợp đồng"
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const getContractStatusColor = (status: string) => {
+    switch (status) {
+      case "draft": return "#6B7280";
+      case "pending_customer_approval": return "#F59E0B";
+      case "approved": return "#10B981";
+      case "rejected": return "#EF4444";
+      default: return "#6B7280";
+    }
+  };
+
+  const getContractStatusText = (status: string) => {
+    switch (status) {
+      case "draft": return "Nháp";
+      case "pending_customer_approval": return "Chờ duyệt";
+      case "approved": return "Đã duyệt";
+      case "rejected": return "Từ chối";
+      default: return "Chưa xác định";
+    }
+  };
+
+  const formatContractCurrency = (value: number | string) => {
+    const numValue = typeof value === "string" ? parseFloat(value) : value;
+    if (isNaN(numValue)) return "0 ₫";
+    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(numValue);
+  };
+
   const handleFileUploadComplete = async (files: any[]) => {
     if (files.length === 0) return;
 
@@ -392,24 +471,51 @@ export default function ContractScreen() {
       />
 
       {contract && project && (
-        <View style={styles.statusCard}>
-          <Text style={styles.statusLabel}>Trạng thái</Text>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(project.status) + "20" },
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                { color: getStatusColor(project.status) },
-              ]}
-            >
-              {getStatusText(project.status)}
-            </Text>
+        <TouchableOpacity
+          style={styles.statusCard}
+          activeOpacity={0.7}
+          onPress={() => setShowDetailDrawer(true)}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.statusLabel}>Trạng thái hợp đồng</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: getContractStatusColor(contract.status) + "20" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusText,
+                    { color: getContractStatusColor(contract.status) },
+                  ]}
+                >
+                  {getContractStatusText(contract.status)}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: getStatusColor(project.status) + "20" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusText,
+                    { color: getStatusColor(project.status) },
+                  ]}
+                >
+                  {getStatusText(project.status)}
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 13, color: "#3B82F6", fontWeight: "600" }}>Chi tiết</Text>
+            <Ionicons name="chevron-forward" size={18} color="#3B82F6" />
+          </View>
+        </TouchableOpacity>
       )}
 
       {!contract && !loading && (
@@ -582,9 +688,377 @@ export default function ContractScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Detail Drawer Modal */}
+      <Modal
+        visible={showDetailDrawer}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowDetailDrawer(false)}
+      >
+        <View style={drawerStyles.sheetOverlay}>
+          <TouchableWithoutFeedback onPress={() => setShowDetailDrawer(false)}>
+            <View style={drawerStyles.sheetCloser} />
+          </TouchableWithoutFeedback>
+          <View style={drawerStyles.sheetContent}>
+            <View style={drawerStyles.sheetHandle} />
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {contract && (
+                <View style={drawerStyles.detailBody}>
+                  {/* Header */}
+                  <View style={drawerStyles.sheetHeader}>
+                    <View style={[drawerStyles.typeTag, { backgroundColor: getContractStatusColor(contract.status) + "15" }]}>
+                      <Text style={[drawerStyles.typeTagText, { color: getContractStatusColor(contract.status) }]}>
+                        {getContractStatusText(contract.status)}
+                      </Text>
+                    </View>
+                    <Text style={drawerStyles.sheetTitle}>Hợp đồng dự án</Text>
+                    <Text style={drawerStyles.sheetSubtitle}>{project?.name || ""}</Text>
+                  </View>
+
+                  {/* Detail Grid */}
+                  <View style={drawerStyles.detailGrid}>
+                    <View style={drawerStyles.detailBox}>
+                      <Text style={drawerStyles.detailLabel}>Giá trị hợp đồng</Text>
+                      <Text style={drawerStyles.detailValueAmount}>{formatContractCurrency(contract.contract_value)}</Text>
+                    </View>
+                    <View style={drawerStyles.detailBox}>
+                      <Text style={drawerStyles.detailLabel}>Ngày ký</Text>
+                      <Text style={drawerStyles.detailValue}>
+                        {contract.signed_date
+                          ? new Date(contract.signed_date).toLocaleDateString("vi-VN")
+                          : "Chưa có"}
+                      </Text>
+                    </View>
+                    <View style={drawerStyles.detailBox}>
+                      <Text style={drawerStyles.detailLabel}>Trạng thái HĐ</Text>
+                      <Text style={[drawerStyles.detailValue, { color: getContractStatusColor(contract.status) }]}>
+                        {getContractStatusText(contract.status)}
+                      </Text>
+                    </View>
+                    {project && (
+                      <View style={drawerStyles.detailBox}>
+                        <Text style={drawerStyles.detailLabel}>Trạng thái DA</Text>
+                        <Text style={[drawerStyles.detailValue, { color: getStatusColor(project.status) }]}>
+                          {getStatusText(project.status)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Approver Info */}
+                  {contract.approved_by && contract.approved_at && (
+                    <View style={drawerStyles.descBox}>
+                      <Text style={drawerStyles.detailLabel}>Thông tin phê duyệt</Text>
+                      <Text style={drawerStyles.descText}>
+                        Duyệt lúc: {new Date(contract.approved_at).toLocaleString("vi-VN")}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Rejected Reason */}
+                  {contract.rejected_reason && (
+                    <View style={[drawerStyles.descBox, { backgroundColor: "#FEF2F2" }]}>
+                      <Text style={[drawerStyles.detailLabel, { color: "#EF4444" }]}>Lý do từ chối</Text>
+                      <Text style={[drawerStyles.descText, { color: "#B91C1C" }]}>{contract.rejected_reason}</Text>
+                    </View>
+                  )}
+
+                  {/* Attachments */}
+                  <View style={drawerStyles.attachSection}>
+                    <Text style={drawerStyles.detailLabel}>Tệp đính kèm ({contract.attachments?.length || 0})</Text>
+                    {contract.attachments && contract.attachments.length > 0 ? (
+                      contract.attachments.map((att: any) => (
+                        <TouchableOpacity
+                          key={att.id}
+                          style={drawerStyles.fileRow}
+                          onPress={() => handleFilePress(att)}
+                        >
+                          <View style={drawerStyles.fileIcon}>
+                            <Ionicons
+                              name={
+                                (att.file_url || att.url || "").match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                                  ? "image-outline"
+                                  : "document-outline"
+                              }
+                              size={20}
+                              color="#3B82F6"
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={drawerStyles.fileName} numberOfLines={1}>
+                              {att.original_name || att.file_name || "File"}
+                            </Text>
+                            {att.file_size ? (
+                              <Text style={drawerStyles.fileSize}>{(att.file_size / 1024).toFixed(1)} KB</Text>
+                            ) : null}
+                          </View>
+                          <Ionicons name="eye-outline" size={20} color="#94A3B8" />
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <View style={drawerStyles.noAttach}>
+                        <Ionicons name="attach-outline" size={20} color="#CBD5E1" />
+                        <Text style={drawerStyles.noAttachText}>Không có tệp đính kèm</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Action Buttons */}
+            {contract && contract.status === "pending_customer_approval" && (
+              <PermissionGuard permission={Permissions.CONTRACT_APPROVE_LEVEL_1} projectId={id}>
+                <View style={drawerStyles.sheetActions}>
+                  <TouchableOpacity
+                    style={drawerStyles.actionBtnReject}
+                    onPress={() => setShowRejectModal(true)}
+                  >
+                    <Text style={drawerStyles.actionBtnTextReject}>Từ chối</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={drawerStyles.actionBtnApprove}
+                    onPress={handleApproveFromDrawer}
+                  >
+                    {actionLoading === "approve" ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <Text style={drawerStyles.actionBtnTextApprove}>Phê duyệt</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </PermissionGuard>
+            )}
+
+            <TouchableOpacity style={drawerStyles.closeSheet} onPress={() => setShowDetailDrawer(false)}>
+              <Text style={drawerStyles.closeSheetText}>Đóng</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reject Reason Modal */}
+      <Modal
+        visible={showRejectModal}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={drawerStyles.modalBg}>
+          <View style={drawerStyles.modalWindow}>
+            <Text style={drawerStyles.modalTitle}>Lý do từ chối</Text>
+            <TextInput
+              style={drawerStyles.modalInput}
+              placeholder="Nhập lý do tại đây..."
+              multiline
+              numberOfLines={4}
+              value={rejectReason}
+              onChangeText={setRejectReason}
+            />
+            <View style={drawerStyles.modalButs}>
+              <TouchableOpacity
+                style={drawerStyles.mBtnCan}
+                onPress={() => {
+                  setShowRejectModal(false);
+                  setRejectReason("");
+                }}
+              >
+                <Text style={drawerStyles.mBtnCanText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[drawerStyles.mBtnSub, !rejectReason.trim() && { opacity: 0.5 }]}
+                onPress={handleReject}
+                disabled={!rejectReason.trim() || actionLoading === "reject"}
+              >
+                {actionLoading === "reject" ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={drawerStyles.mBtnSubText}>Xác nhận từ chối</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
+
+/* ============ Drawer Styles ============ */
+const drawerStyles = StyleSheet.create({
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  sheetCloser: { flex: 1 },
+  sheetContent: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingBottom: 40,
+    maxHeight: "90%",
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#E2E8F0",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  detailBody: { paddingHorizontal: 24 },
+  sheetHeader: { marginBottom: 24 },
+  typeTag: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  typeTagText: { fontSize: 12, fontWeight: "700" },
+  sheetTitle: { fontSize: 20, fontWeight: "800", color: "#1E293B", marginTop: 4 },
+  sheetSubtitle: { fontSize: 14, color: "#64748B", marginTop: 2 },
+  detailGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 24,
+  },
+  detailBox: {
+    width: "47%",
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  detailLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#94A3B8",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  detailValue: { fontSize: 13, fontWeight: "600", color: "#475569" },
+  detailValueAmount: { fontSize: 16, fontWeight: "800", color: "#059669" },
+  descBox: {
+    backgroundColor: "#F1F5F9",
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 24,
+  },
+  descText: { fontSize: 14, color: "#475569", lineHeight: 22 },
+  attachSection: { marginBottom: 24 },
+  fileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    borderRadius: 16,
+    marginBottom: 8,
+    gap: 12,
+  },
+  fileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fileName: { fontSize: 13, fontWeight: "600", color: "#1E293B" },
+  fileSize: { fontSize: 11, color: "#94A3B8", marginTop: 2 },
+  noAttach: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderStyle: "dashed",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  noAttachText: { fontSize: 13, color: "#94A3B8" },
+  sheetActions: {
+    flexDirection: "row",
+    padding: 24,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  actionBtnReject: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: "#FEF2F2",
+    alignItems: "center",
+  },
+  actionBtnApprove: {
+    flex: 2,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: "#10B981",
+    alignItems: "center",
+  },
+  actionBtnTextReject: { color: "#EF4444", fontWeight: "800", fontSize: 15 },
+  actionBtnTextApprove: { color: "#FFF", fontWeight: "800", fontSize: 15 },
+  closeSheet: { alignSelf: "center", padding: 12 },
+  closeSheetText: { color: "#94A3B8", fontWeight: "700" },
+  modalBg: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalWindow: {
+    backgroundColor: "#FFF",
+    borderRadius: 24,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#1E293B",
+    marginBottom: 16,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 16,
+    padding: 14,
+    fontSize: 14,
+    color: "#334155",
+    minHeight: 100,
+    textAlignVertical: "top",
+    marginBottom: 20,
+  },
+  modalButs: { flexDirection: "row", gap: 12 },
+  mBtnCan: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+  },
+  mBtnCanText: { color: "#64748B", fontWeight: "700", fontSize: 14 },
+  mBtnSub: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+  },
+  mBtnSubText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
+});
 
 const styles = StyleSheet.create({
   container: {

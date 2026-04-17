@@ -456,15 +456,22 @@
         <div class="p-6">
           <div class="flex items-center justify-between mb-4">
             <h4 class="font-bold text-gray-700">Hợp đồng</h4>
-            <a-button v-if="!project.contract && can('contract.create')" type="primary" size="small" @click="openContractModal(null)">
-              <template #icon><PlusOutlined /></template>Tạo hợp đồng
-            </a-button>
-            <a-button v-if="project.contract && can('contract.update')" size="small" @click="openContractModal(project.contract)">
-              <template #icon><EditOutlined /></template>Sửa
-            </a-button>
+            <div class="flex items-center gap-2">
+              <a-button v-if="project.contract" size="small" @click="openContractDetail(project.contract)">
+                <template #icon><EyeOutlined /></template>Chi tiết
+              </a-button>
+              <a-button v-if="!project.contract && can('contract.create')" type="primary" size="small" @click="openContractModal(null)">
+                <template #icon><PlusOutlined /></template>Tạo hợp đồng
+              </a-button>
+              <a-button v-if="project.contract && can('contract.update')" size="small" @click="openContractModal(project.contract)">
+                <template #icon><EditOutlined /></template>Sửa
+              </a-button>
+            </div>
           </div>
           <div v-if="project.contract" class="space-y-2 text-sm">
-            <div class="flex justify-between"><span class="text-gray-400">Giá trị</span><span class="font-bold text-lg">{{ fmt(project.contract.contract_value) }}</span></div>
+            <div class="flex justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-lg -mx-2 transition" @click="openContractDetail(project.contract)">
+              <span class="text-gray-400">Giá trị</span><span class="font-bold text-lg">{{ fmt(project.contract.contract_value) }}</span>
+            </div>
             <div class="flex justify-between"><span class="text-gray-400">Ngày ký</span><span>{{ fmtDate(project.contract.signed_date) }}</span></div>
             <div class="flex justify-between"><span class="text-gray-400">Trạng thái</span><a-tag :color="contractStatusColors[project.contract.status]" class="rounded-full">{{ contractStatusLabels[project.contract.status] || project.contract.status }}</a-tag></div>
 
@@ -2361,14 +2368,6 @@
           <a-form-item label="Ngày ký" v-bind="fieldStatus('signed_date')"><a-date-picker v-model:value="contractForm.signed_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
         </a-col>
       </a-row>
-      <a-form-item label="Trạng thái">
-        <a-select v-model:value="contractForm.status" size="large" class="w-full">
-          <a-select-option value="draft">Bản nháp</a-select-option>
-          <a-select-option value="pending_customer_approval">Chờ KH duyệt</a-select-option>
-          <a-select-option value="approved">Đã duyệt</a-select-option>
-          <a-select-option value="rejected">Từ chối</a-select-option>
-        </a-select>
-      </a-form-item>
       <a-form-item v-if="editingContract?.rejected_reason" label="Lý do từ chối">
         <a-alert :message="editingContract.rejected_reason" type="error" show-icon class="!text-xs" />
       </a-form-item>
@@ -3112,6 +3111,115 @@
       </div>
     </div>
   </a-drawer>
+
+  <!-- CONTRACT DETAIL DRAWER -->
+  <a-drawer v-model:open="showContractDetail" title="Chi tiết Hợp đồng" :width="560" @close="contractDetailRecord = null" destroy-on-close class="crm-drawer">
+    <div v-if="contractDetailRecord" class="space-y-6">
+      <!-- Status Header -->
+      <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-100"><AuditOutlined class="text-2xl" /></div>
+          <div>
+             <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã HĐ: #{{ contractDetailRecord.id }}</div>
+             <div class="text-lg font-bold text-gray-800">Hợp đồng dự án</div>
+          </div>
+        </div>
+        <a-tag :color="contractStatusColors[contractDetailRecord.status]" class="rounded-full px-4 py-1 text-xs font-semibold">{{ contractStatusLabels[contractDetailRecord.status] || contractDetailRecord.status }}</a-tag>
+      </div>
+
+      <!-- Financial summary -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><DollarOutlined /> Thông tin hợp đồng</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Giá trị hợp đồng</span>
+            <span class="text-xl font-bold text-green-600">{{ fmt(contractDetailRecord.contract_value) }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+            <span class="text-gray-400">Ngày ký</span>
+            <span class="font-medium text-gray-700">{{ fmtDate(contractDetailRecord.signed_date) || 'Chưa có' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">Trạng thái</span>
+            <a-tag :color="contractStatusColors[contractDetailRecord.status]" class="rounded-full">{{ contractStatusLabels[contractDetailRecord.status] || contractDetailRecord.status }}</a-tag>
+          </div>
+        </div>
+      </div>
+
+      <!-- Approval Info -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><TeamOutlined /> Thông tin phê duyệt</div>
+        <div class="grid grid-cols-1 gap-3">
+          <div v-if="contractDetailRecord.approver" class="flex items-center gap-3">
+            <a-avatar size="small" class="bg-green-500">{{ contractDetailRecord.approver.name?.charAt(0) }}</a-avatar>
+            <div class="flex-1">
+              <div class="text-[10px] text-green-500 uppercase font-bold tracking-wider">Người phê duyệt</div>
+              <div class="text-sm font-medium text-gray-700">{{ contractDetailRecord.approver.name }} <span v-if="contractDetailRecord.approved_at" class="text-gray-400 text-xs font-normal">• {{ fmtDateTime(contractDetailRecord.approved_at) }}</span></div>
+            </div>
+          </div>
+          <div v-else class="text-xs text-gray-400 flex items-center gap-1.5">
+            <ClockCircleOutlined /> Chưa có thông tin phê duyệt
+          </div>
+        </div>
+      </div>
+
+      <!-- Rejected Reason -->
+      <div v-if="contractDetailRecord.rejected_reason" class="p-5 bg-red-50 rounded-2xl border border-red-100 shadow-sm">
+        <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-3 flex items-center gap-2"><CloseCircleOutlined /> Lý do từ chối</div>
+        <div class="text-sm text-red-700 leading-relaxed">{{ contractDetailRecord.rejected_reason }}</div>
+      </div>
+
+      <!-- Attachments Section -->
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+           <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileProtectOutlined /> Tệp đính kèm ({{ contractDetailRecord.attachments?.length || 0 }})</div>
+        </div>
+        <div v-if="contractDetailRecord.attachments?.length" class="flex flex-wrap gap-2">
+           <div v-for="att in contractDetailRecord.attachments" :key="att.id"
+                class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                @click="openFilePreview(att)">
+             <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+             <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+               {{ fileExt(att).toUpperCase() }}
+             </div>
+             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+               <EyeOutlined class="text-white text-lg" />
+             </div>
+           </div>
+        </div>
+        <a-empty v-else :image="null" description="Chưa có tệp đính kèm" class="text-gray-300 my-0 py-2" />
+      </div>
+
+      <!-- Action Footer -->
+      <div class="pt-6 mt-6 border-t border-gray-100 flex flex-wrap justify-between items-center bg-white sticky bottom-0 z-10 py-4">
+        <div class="flex gap-2">
+           <a-button v-if="can('contract.update')" size="small" @click="openContractModal(contractDetailRecord); showContractDetail = false"><EditOutlined /> Sửa</a-button>
+        </div>
+        <div class="flex gap-2">
+          <template v-if="contractDetailRecord.status === 'draft' && can('contract.update')">
+            <a-button type="primary" :loading="actionLoading['submit-contract']" @click="submitContractForApproval(contractDetailRecord)">Gửi duyệt</a-button>
+          </template>
+          <template v-if="contractDetailRecord.status === 'pending_customer_approval' && can('contract.approve.level_1')">
+            <a-button type="primary" class="bg-green-600 border-green-600" :loading="actionLoading['approve-contract']" @click="approveContract(contractDetailRecord)">Phê duyệt</a-button>
+            <a-button danger ghost @click="openRejectContractModal(contractDetailRecord)">Từ chối</a-button>
+          </template>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- Reject Contract Modal -->
+  <a-modal v-model:open="showRejectContractModal" title="Từ chối hợp đồng" :width="480" @ok="rejectContract" ok-text="Từ chối" cancel-text="Hủy" :confirm-loading="savingForm" :ok-button-props="{ danger: true }" centered destroy-on-close class="crm-modal">
+    <div class="mt-4">
+      <div v-if="rejectingContract" class="mb-3 p-3 bg-red-50 rounded-lg border border-red-100">
+        <div class="font-medium text-red-800">Hợp đồng #{{ rejectingContract.id }}</div>
+        <div class="text-xs text-red-600">{{ fmt(rejectingContract.contract_value) }} — {{ contractStatusLabels[rejectingContract.status] }}</div>
+      </div>
+      <a-form-item label="Lý do từ chối" required>
+        <a-textarea v-model:value="rejectContractReason" :rows="3" placeholder="Nhập lý do từ chối hợp đồng..." />
+      </a-form-item>
+    </div>
+  </a-modal>
 
   <!-- MATERIAL DETAIL DRAWER -->
   <a-drawer v-model:open="showMaterialDetailDrawer" title="Chi tiết Phiếu nhập vật liệu" :width="560" @close="materialDetail = null" destroy-on-close class="crm-drawer">
@@ -6433,6 +6541,10 @@ watch(() => props, (newProps) => {
     const updated = logs.find(x => x.id === logDetailRecord.value.id)
     if (updated) logDetailRecord.value = updated; else showLogDetailDrawer.value = false;
   }
+  if (showContractDetail.value && contractDetailRecord.value) {
+    const updated = newProps.project?.contract
+    if (updated) contractDetailRecord.value = updated; else showContractDetail.value = false;
+  }
 }, { deep: true })
 
 // ============ UNIVERSAL LOADING SYSTEM ============
@@ -7249,6 +7361,43 @@ const rejectCost = () => { router.post(`/projects/${props.project.id}/costs/${re
 const showContractModal = ref(false)
 const editingContract = ref(null)
 const contractForm = ref({ contract_value: null, signed_date: null, status: 'draft', deleted_attachment_ids: [] })
+
+// ============ CONTRACT DETAIL DRAWER ============
+const showContractDetail = ref(false)
+const contractDetailRecord = ref(null)
+const openContractDetail = (c) => { contractDetailRecord.value = c; showContractDetail.value = true }
+
+const submitContractForApproval = (c) => {
+  router.put(`/projects/${props.project.id}/contract`, { contract_value: c.contract_value, signed_date: c.signed_date, status: 'pending_customer_approval' }, loadingOptions('submit-contract', {
+    onSuccess: () => {
+      const updated = props.project?.contract
+      if (updated) contractDetailRecord.value = updated
+    }
+  }))
+}
+
+const approveContract = (c) => {
+  router.post(`/approvals/contract/${c.id}/approve`, {}, loadingOptions('approve-contract', {
+    onSuccess: () => {
+      const updated = props.project?.contract
+      if (updated) contractDetailRecord.value = updated; else showContractDetail.value = false
+    }
+  }))
+}
+
+const showRejectContractModal = ref(false)
+const rejectingContract = ref(null)
+const rejectContractReason = ref('')
+const openRejectContractModal = (c) => { rejectingContract.value = c; rejectContractReason.value = ''; showRejectContractModal.value = true }
+const rejectContract = () => {
+  router.post(`/approvals/contract/${rejectingContract.value.id}/reject`, { reason: rejectContractReason.value }, savingOptions({
+    onSuccess: () => {
+      showRejectContractModal.value = false
+      const updated = props.project?.contract
+      if (updated) contractDetailRecord.value = updated; else showContractDetail.value = false
+    }
+  }))
+}
 
 // ============ FILE PREVIEW (Premium Inline Viewer) ============
 const showFilePreview = ref(false)
