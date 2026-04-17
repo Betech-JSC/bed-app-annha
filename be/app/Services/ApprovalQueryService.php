@@ -247,51 +247,51 @@ class ApprovalQueryService
         $data['costs_management'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === Cost::class && 
             str_contains($a->approvable->status ?? '', 'management')
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         $data['costs_accountant'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === Cost::class && 
             str_contains($a->approvable->status ?? '', 'accountant')
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         $data['acceptance_supervisor'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === AcceptanceStage::class && 
             ($a->approvable->status ?? '') === 'pending'
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         $data['acceptance_pm'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === AcceptanceStage::class && 
             ($a->approvable->status ?? '') === 'supervisor_approved'
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         $data['acceptance_customer'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === AcceptanceStage::class && 
             ($a->approvable->status ?? '') === 'project_manager_approved'
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         $data['additional_costs'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === AdditionalCost::class
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         $data['material_bills_management'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === MaterialBill::class && 
             str_contains($a->approvable->status ?? '', 'management')
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         $data['material_bills_accountant'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === MaterialBill::class && 
             str_contains($a->approvable->status ?? '', 'accountant')
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         $data['payments_pending'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === ProjectPayment::class && 
             ($a->approvable->status ?? '') !== 'customer_paid'
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         $data['payments_paid'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === ProjectPayment::class && 
             ($a->approvable->status ?? '') === 'customer_paid'
-        )->pluck('approvable');
+        )->pluck('approvable')->filter();
 
         // ═══════════════════════════════════════════════════════════════
         // LEGACY MODELS (Direct query until migrated)
