@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 
 class EquipmentRental extends Model
 {
+    use \App\Traits\NotifiesUsers, \App\Traits\Approvable;
     protected $fillable = [
         'uuid', 'project_id', 'equipment_name', 'equipment_id',
         'quantity', 'unit_price',
@@ -30,6 +31,25 @@ class EquipmentRental extends Model
     ];
 
     // ─── Relationships ───
+    public function getApprovalSummary(): string
+    {
+        return "Yêu cầu thuê thiết bị";
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'total_cost' => $this->total_cost,
+            'equipment_count' => $this->items()->count(),
+            'type' => $this->status // status identifies which step it is
+        ];
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return in_array($this->status, ['pending_management', 'pending_accountant', 'pending_return']);
+    }
+
     public function project(): BelongsTo { return $this->belongsTo(Project::class); }
     public function equipment(): BelongsTo { return $this->belongsTo(Equipment::class, 'equipment_id'); }
     public function supplier(): BelongsTo { return $this->belongsTo(Supplier::class); }
@@ -159,5 +179,56 @@ class EquipmentRental extends Model
         static::deleted(function ($model) {
             Cost::where('equipment_rental_id', $model->id)->delete();
         });
+    }
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return $this->equipment_name ?? ($this->equipment->name ?? "Thiết bị #{$this->id}");
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Yêu cầu thuê thiết bị cần duyệt',
+                'body'     => 'Yêu cầu thuê thiết bị "{name}" đang chờ duyệt.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved_management' => [
+                'title'    => 'BĐH đã duyệt thuê thiết bị',
+                'body'     => 'Yêu cầu thuê thiết bị "{name}" đã được BĐH duyệt, chờ Kế toán xác nhận.',
+                'target'   => ['creator', 'accountant', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'medium',
+                'category' => 'workflow_approval',
+            ],
+            'confirmed' => [
+                'title'    => 'KT đã xác nhận hồ sơ thuê thiết bị',
+                'body'     => 'Yêu cầu thuê thiết bị "{name}" đã được xác nhận hoàn tất.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Yêu cầu thuê thiết bị bị từ chối',
+                'body'     => 'Yêu cầu thuê thiết bị "{name}" bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }

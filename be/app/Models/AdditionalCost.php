@@ -7,8 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
+use App\Traits\Approvable;
+
 class AdditionalCost extends Model
 {
+    use Approvable;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -186,6 +189,27 @@ class AdditionalCost extends Model
             $this->approved_at = now();
         }
         return $this->save();
+    }
+
+    // ==================================================================
+    // APPROVABLE OVERRIDES
+    // ==================================================================
+
+    protected function getApprovalSummary(): string
+    {
+        return "Chi phí phát sinh " . ($this->project ? $this->project->name : "dự án") . " - " . number_format($this->amount, 0, ',', '.') . "đ";
+    }
+
+    protected function getApprovalMetadata(): array
+    {
+        return [
+            'project_name' => $this->project?->name,
+            'project_code' => $this->project?->code,
+            'amount' => $this->amount,
+            'description' => $this->description,
+            'type_label' => 'Chi phí phát sinh',
+            'proposer' => $this->proposer?->name,
+        ];
     }
 
     // ==================================================================

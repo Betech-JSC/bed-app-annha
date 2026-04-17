@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 
 class ConstructionLog extends Model
 {
+    use \App\Traits\NotifiesUsers, \App\Traits\Approvable;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -42,6 +43,24 @@ class ConstructionLog extends Model
     // ==================================================================
     // QUAN HỆ
     // ==================================================================
+
+    public function getApprovalSummary(): string
+    {
+        return "Duyệt nhật ký công trường: " . $this->log_date;
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'log_date' => $this->log_date,
+            'creator' => $this->creator->name ?? 'N/A',
+        ];
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return $this->approval_status === 'pending';
+    }
 
     public function project(): BelongsTo
     {
@@ -154,5 +173,48 @@ class ConstructionLog extends Model
                 });
             }
         });
+    }
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return "Nhật ký: " . ($this->log_date ? $this->log_date->format('d/m/Y') : "#{$this->id}");
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Nhật ký công trường mới',
+                'body'     => 'Nhật ký ngày {name} đã được cập nhật.',
+                'target'   => ['management', 'pm', 'supervisor'],
+                'tab'      => 'logs',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'approved' => [
+                'title'    => 'Nhật ký đã được duyệt',
+                'body'     => 'Nhật ký ngày {name} đã được phê duyệt.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'logs',
+                'priority' => 'low',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Nhật ký bị yêu cầu chỉnh sửa',
+                'body'     => 'Nhật ký ngày {name} bị từ chối/yêu cầu sửa: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'logs',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }

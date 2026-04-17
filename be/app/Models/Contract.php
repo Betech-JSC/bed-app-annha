@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class Contract extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, \App\Traits\NotifiesUsers, \App\Traits\Approvable;
 
     protected $fillable = [
         'uuid',
@@ -38,6 +38,19 @@ class Contract extends Model
     // ==================================================================
     // QUAN HỆ
     // ==================================================================
+
+    public function getApprovalSummary(): string
+    {
+        return "Duyệt hợp đồng dự án";
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'contract_value' => $this->contract_value,
+            'contract_number' => $this->contract_number,
+        ];
+    }
 
     public function project(): BelongsTo
     {
@@ -107,5 +120,48 @@ class Contract extends Model
                 $contract->uuid = Str::uuid();
             }
         });
+    }
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return $this->name ?? "Hợp đồng #{$this->id}";
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Hợp đồng mới cần duyệt',
+                'body'     => 'Hợp đồng "{name}" đã được tải lên và chờ duyệt.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'contracts',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved' => [
+                'title'    => 'Hợp đồng đã được duyệt',
+                'body'     => 'Hợp đồng "{name}" đã được phê duyệt.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'contracts',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Hợp đồng bị từ chối',
+                'body'     => 'Hợp đồng "{name}" bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'contracts',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }

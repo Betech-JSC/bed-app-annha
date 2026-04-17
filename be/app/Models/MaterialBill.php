@@ -10,10 +10,11 @@ use Illuminate\Support\Str;
 
 use App\Traits\NotifiesUsers;
 use App\Traits\HasAutoCode;
+use App\Traits\Approvable;
 
 class MaterialBill extends Model
 {
-    use SoftDeletes, NotifiesUsers, HasAutoCode;
+    use SoftDeletes, NotifiesUsers, HasAutoCode, Approvable;
 
     public function getCodeColumn(): string
     {
@@ -135,6 +136,29 @@ class MaterialBill extends Model
             'rejected_reason' => $reason,
         ]);
         return true;
+    }
+
+    // ==================================================================
+    // APPROVABLE OVERRIDES
+    // ==================================================================
+
+    protected function getApprovalSummary(): string
+    {
+        return "Phiếu vật tư " . ($this->project ? $this->project->name : "dự án") . " - " . ($this->bill_number ?? "#".$this->id);
+    }
+
+    protected function getApprovalMetadata(): array
+    {
+        return [
+            'project_name' => $this->project?->name,
+            'project_code' => $this->project?->code,
+            'bill_number' => $this->bill_number,
+            'total_amount' => $this->total_amount,
+            'supplier_name' => $this->supplier?->name,
+            'bill_date' => $this->bill_date?->format('d/m/Y'),
+            'type_label' => 'Phiếu vật tư',
+            'creator' => $this->creator?->name,
+        ];
     }
 
     /**

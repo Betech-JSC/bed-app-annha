@@ -164,7 +164,9 @@ class ApprovalCenterController extends Controller
 
         if ($type === 'payment') {
             $p = ProjectPayment::findOrFail($id);
-            return ($p->status === 'accountant_pending_confirmation') ? 'project_payment_confirm' : 'project_payment';
+            if ($p->status === 'customer_paid') return 'project_payment_confirm';
+            if ($p->status === 'pending' || $p->status === 'overdue') return 'project_payment_submit';
+            return 'project_payment';
         }
 
         return $type;
@@ -233,8 +235,11 @@ class ApprovalCenterController extends Controller
             'construction_log' => Permissions::LOG_APPROVE,
             'defect' => Permissions::DEFECT_VERIFY,
             'contract' => Permissions::CONTRACT_APPROVE_LEVEL_2,
-            'payment' => Permissions::PAYMENT_APPROVE,
-            'attendance' => Permissions::ATTENDANCE_APPROVE,
+            'payment' => match($this->mapToServiceType('payment', $id)) {
+                'project_payment_confirm' => Permissions::PAYMENT_CONFIRM,
+                'project_payment_submit' => Permissions::PAYMENT_UPDATE,
+                default => Permissions::PAYMENT_APPROVE,
+            },
             default => null,
         };
 

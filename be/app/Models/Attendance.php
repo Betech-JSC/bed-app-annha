@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Attendance extends Model
 {
+    use \App\Traits\Approvable, \App\Traits\NotifiesUsers;
+
     protected $fillable = [
         'user_id', 'project_id', 'work_date',
         'check_in', 'check_out', 'hours_worked', 'overtime_hours',
@@ -88,5 +90,26 @@ class Attendance extends Model
             'holiday' => 'Nghỉ lễ',
             default => $this->status,
         };
+    }
+
+    // ───── Notification Helpers (NotifiesUsers) ─────
+    public function getNotificationProject(): ?\App\Models\Project { return $this->project; }
+    public function getNotificationLabel(): string { return "chấm công ngày " . optional($this->work_date)->format('d/m/Y'); }
+    
+    public function notificationMap(): array
+    {
+        return [
+            'type' => 'attendance',
+            'submitted_status' => 'submitted',
+            'approved_status' => 'approved',
+            'rejected_status' => 'rejected',
+            'approver_permission' => \App\Constants\Permissions::ATTENDANCE_APPROVE,
+            'fallback_role' => 'Ban điều hành'
+        ];
+    }
+    
+    protected function getModelStatusValue(): string
+    {
+        return $this->workflow_status ?? ''; // Use workflow_status for Approvable trait 
     }
 }

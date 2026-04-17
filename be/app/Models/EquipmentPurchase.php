@@ -10,6 +10,8 @@ use Illuminate\Support\Str;
 
 class EquipmentPurchase extends Model
 {
+    use \App\Traits\Approvable, \App\Traits\NotifiesUsers;
+
     protected $fillable = [
         'uuid', 'project_id', 'total_amount', 'status', 'rejection_reason',
         'notes', 'created_by', 'approved_by', 'approved_at',
@@ -54,5 +56,21 @@ class EquipmentPurchase extends Model
         static::creating(function ($model) {
             $model->uuid = $model->uuid ?: Str::uuid();
         });
+    }
+
+    // ───── Notification Helpers (NotifiesUsers) ─────
+    public function getNotificationProject(): ?\App\Models\Project { return $this->project; }
+    public function getNotificationLabel(): string { return "mua thiết bị mới #" . $this->id; }
+
+    public function notificationMap(): array
+    {
+        return [
+            'type' => 'equipment_purchase',
+            'submitted_status' => 'pending_management',
+            'approved_status' => 'completed',
+            'rejected_status' => 'rejected',
+            'approver_permission' => \App\Constants\Permissions::COST_APPROVE_MANAGEMENT,
+            'fallback_role' => 'Ban điều hành'
+        ];
     }
 }

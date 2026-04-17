@@ -20,6 +20,8 @@ use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Models\MaterialBill;
 use App\Models\Attendance;
+use App\Models\Approval;
+use App\Models\ApprovalLog;
 use App\Models\User;
 use App\Models\Notification;
 use App\Constants\Permissions;
@@ -295,6 +297,9 @@ class ApprovalActionService
             DB::commit();
             Log::info("ApprovalActionService: Approved type {$type}", ['id' => $id, 'user' => $user->id]);
 
+            // Centralized Approval Update
+            $this->completeCentralizedApproval($type, $id, 'approved', $user, $params['notes'] ?? null);
+
             // Thông báo cho người tạo biết yêu cầu của họ đã được duyệt
             $this->dispatchApprovalResultNotification($type, $id, 'approved', null);
 
@@ -435,6 +440,9 @@ class ApprovalActionService
             DB::commit();
             Log::info("ApprovalActionService: Rejected type {$type}", ['id' => $id, 'user' => $user->id, 'reason' => $reason]);
 
+            // Centralized Approval Update
+            $this->completeCentralizedApproval($type, $id, 'rejected', $user, $reason);
+
             // Thông báo cho người tạo biết yêu cầu bị từ chối
             $this->dispatchApprovalResultNotification($type, $id, 'rejected', $reason);
 
@@ -563,6 +571,64 @@ class ApprovalActionService
             }
         } catch (\Throwable $e) {
             Log::warning("dispatchNextApproverNotification failed: {$e->getMessage()}", ['type' => $type, 'id' => $id]);
+        }
+    }
+
+    /**
+     * Complete or log the centralized approval action.
+     */
+    protected function completeCentralizedApproval(string $type, $id, string $status, User $user, ?string $reason = null): void
+    {
+        try {
+            $modelClass = match ($type) {
+                'management', 'accountant', 'project_cost', 'company_cost' => Cost::class,
+                'acceptance', 'acceptance_customer', 'acceptance_pm', 'acceptance_supervisor' => AcceptanceStage::class,
+                'acceptance_item', 'acceptance_item_supervisor', 'acceptance_item_pm', 'acceptance_item_customer' => AcceptanceItem::class,
+                'change_request' => ChangeRequest::class,
+                'additional_cost' => AdditionalCost::class,
+                'sub_payment', 'sub_payment_confirm' => SubcontractorPayment::class,
+                'contract' => Contract::class,
+                'project_payment', 'project_payment_confirm', 'project_payment_submit' => ProjectPayment::class,
+                'material_bill' => MaterialBill::class,
+                'sub_acceptance' => SubcontractorAcceptance::class,
+                'supplier_acceptance' => SupplierAcceptance::class,
+                'construction_log' => ConstructionLog::class,
+                'schedule_adjustment' => ScheduleAdjustment::class,
+                'defect_verify' => Defect::class,
+                'budget' => ProjectBudget::class,
+                'equipment_rental_management', 'equipment_rental_accountant', 'equipment_rental_return' => EquipmentRental::class,
+                'asset_usage_management', 'asset_usage_accountant', 'asset_usage_return' => AssetUsage::class,
+                'equipment_purchase_management', 'equipment_purchase_accountant' => \App\Models\EquipmentPurchase::class,
+                'attendance' => Attendance::class,
+                default => null,
+            };
+
+            if (!$modelClass) return;
+            
+            $approval = Approval::where('approvable_type', $modelClass)
+                ->where('approvable_id', $id)
+                ->latest()
+                ->first();
+
+            if ($approval) {
+                // Keep the approval updated if the saved hook didn't catch the exact status
+                if ($status === 'rejected' && $approval->status !== 'rejected') {
+                    $approval->status = 'rejected';
+                    $approval->last_action = 'rejected';
+                    $approval->last_actor_id = $user->id;
+                    $approval->save();
+                }
+
+                ApprovalLog::create([
+                    'approval_id' => $approval->id,
+                    'user_id' => $user->id,
+                    'action' => $status,
+                    'to_status' => $approval->status,
+                    'notes' => $reason,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning("completeCentralizedApproval failed: {$e->getMessage()}", ['type' => $type, 'id' => $id]);
         }
     }
 }

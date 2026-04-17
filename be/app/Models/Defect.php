@@ -12,7 +12,7 @@ use App\Traits\NotifiesUsers;
 
 class Defect extends Model
 {
-    use NotifiesUsers;
+    use NotifiesUsers, \App\Traits\Approvable;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -52,6 +52,24 @@ class Defect extends Model
     // ==================================================================
     // QUAN HỆ
     // ==================================================================
+ 
+    public function getApprovalSummary(): string
+    {
+        return "Nghiệm thu lỗi: " . \Illuminate\Support\Str::limit($this->description, 30);
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'severity' => $this->severity,
+            'reporter' => $this->reporter->name ?? 'N/A',
+        ];
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return $this->status === 'fixed';
+    }
 
     public function project(): BelongsTo
     {

@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 
 class ChangeRequest extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, \App\Traits\NotifiesUsers, \App\Traits\Approvable;
 
     protected $fillable = [
         'uuid',
@@ -47,6 +47,24 @@ class ChangeRequest extends Model
     // ==================================================================
     // QUAN HỆ
     // ==================================================================
+
+    public function getApprovalSummary(): string
+    {
+        return "Yêu cầu thay đổi: " . ($this->title ?: 'N/A');
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'impact' => $this->estimated_cost_impact,
+            'requester' => $this->requester->name ?? 'N/A',
+        ];
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return in_array($this->status, ['submitted', 'under_review']);
+    }
 
     public function project(): BelongsTo
     {
@@ -168,5 +186,48 @@ class ChangeRequest extends Model
                 $changeRequest->uuid = Str::uuid();
             }
         });
+    }
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return $this->title ?? "Yêu cầu thay đổi #{$this->id}";
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Yêu cầu thay đổi cần duyệt',
+                'body'     => 'Yêu cầu thay đổi "{name}" cần được xem xét.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'change_requests',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved' => [
+                'title'    => 'Yêu cầu thay đổi đã được duyệt',
+                'body'     => 'Yêu cầu thay đổi "{name}" đã được phê duyệt.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'change_requests',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Yêu cầu thay đổi bị từ chối',
+                'body'     => 'Yêu cầu thay đổi "{name}" bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'change_requests',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }

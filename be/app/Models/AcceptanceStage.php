@@ -10,10 +10,11 @@ use Illuminate\Support\Str;
 use App\Models\AcceptanceTemplate;
 
 use App\Traits\NotifiesUsers;
+use App\Traits\Approvable;
 
 class AcceptanceStage extends Model
 {
-    use NotifiesUsers;
+    use NotifiesUsers, Approvable;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -353,6 +354,51 @@ class AcceptanceStage extends Model
         }
         
         return $saved;
+    }
+
+    // ==================================================================
+    // APPROVABLE OVERRIDES
+    // ==================================================================
+
+    public function isPendingApproval(): bool
+    {
+        return in_array($this->status, [
+            'pending', // chờ GS
+            'internal_approved', // (nếu có dùng)
+            'supervisor_approved', // chờ PM
+            'project_manager_approved', // chờ KH
+            'design_approved' // chờ chủ nhà
+        ]);
+    }
+
+    public function getApprovalResolvedStatus(): string
+    {
+        if (in_array($this->status, ['customer_approved', 'owner_approved'])) {
+            return 'approved';
+        }
+        if ($this->status === 'rejected') {
+            return 'rejected';
+        }
+        return 'done';
+    }
+
+
+    protected function getApprovalSummary(): string
+    {
+        return "Nghiệm thu " . ($this->project ? $this->project->name : "dự án") . " - " . ($this->name ?? "Hạng mục");
+    }
+
+    protected function getApprovalMetadata(): array
+    {
+        return [
+            'project_name' => $this->project?->name,
+            'project_code' => $this->project?->code,
+            'name' => $this->name,
+            'description' => $this->description,
+            'type_label' => 'Nghiệm thu dự án',
+            'task_name' => $this->task?->name,
+            'current_step' => $this->next_action['label'] ?? 'Đang xử lý',
+        ];
     }
 
     /**

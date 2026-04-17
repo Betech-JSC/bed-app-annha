@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class SubcontractorPayment extends Model
 {
-    use SoftDeletes, \App\Traits\NotifiesUsers;
+    use SoftDeletes, \App\Traits\NotifiesUsers, \App\Traits\Approvable;
 
     protected $fillable = [
         'uuid',
@@ -54,6 +54,25 @@ class SubcontractorPayment extends Model
     // ==================================================================
     // RELATIONSHIPS
     // ==================================================================
+
+    public function getApprovalSummary(): string
+    {
+        return "Thanh toán NTP: " . ($this->subcontractor->name ?? 'N/A');
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'amount' => $this->amount,
+            'subcontractor' => $this->subcontractor->name ?? 'N/A',
+            'type' => 'sub_payment'
+        ];
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return in_array($this->status, ['pending_management_approval', 'pending_accountant_confirmation']);
+    }
 
     public function subcontractor(): BelongsTo
     {

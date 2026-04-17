@@ -10,7 +10,7 @@ use App\Traits\HasAutoCode;
 
 class ProjectBudget extends Model
 {
-    use HasAutoCode;
+    use HasAutoCode, \App\Traits\NotifiesUsers, \App\Traits\Approvable;
 
     protected $fillable = [
         'uuid',
@@ -103,6 +103,71 @@ class ProjectBudget extends Model
     }
 
     // ==================================================================
+    // Approvable Implementation
+    // ==================================================================
+    public function getApprovalSummary(): string
+    {
+        return "Duyệt ngân sách dự án: " . ($this->name ?: 'N/A');
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'total_amount' => $this->total_amount,
+            'version' => $this->version,
+        ];
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return $this->status === 'pending_approval';
+    }
+
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return $this->name ?? "Ngân sách #{$this->id}";
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Ngân sách dự án cần duyệt',
+                'body'     => 'Phiên bản ngân sách "{name}" cần được phê duyệt.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'budgets',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved' => [
+                'title'    => 'Ngân sách đã được duyệt',
+                'body'     => 'Ngân sách "{name}" đã được phê duyệt.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'budgets',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Ngân sách bị từ chối',
+                'body'     => 'Ngân sách "{name}" bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'budgets',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
+    }
+
+    // ==================================================================
     // QUAN HỆ
     // ==================================================================
 
@@ -171,4 +236,3 @@ class ProjectBudget extends Model
         });
     }
 }
-

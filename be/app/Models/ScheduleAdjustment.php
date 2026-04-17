@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 
 class ScheduleAdjustment extends Model
 {
+    use \App\Traits\NotifiesUsers, \App\Traits\Approvable;
     protected $fillable = [
         'uuid', 'project_id', 'task_id', 'type',
         'original_start', 'original_end',
@@ -29,6 +30,19 @@ class ScheduleAdjustment extends Model
     // ==================================================================
     // QUAN HỆ
     // ==================================================================
+
+    public function getApprovalSummary(): string
+    {
+        return "Điều chỉnh tiến độ: " . ($this->task->name ?? 'N/A');
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'task_name' => $this->task->name ?? 'N/A',
+            'days_adjusted' => $this->days_adjusted,
+        ];
+    }
 
     public function project(): BelongsTo
     {
@@ -119,5 +133,53 @@ class ScheduleAdjustment extends Model
                 $model->uuid = Str::uuid();
             }
         });
+    }
+    public function isPendingApproval(): bool
+    {
+        return $this->status === 'pending';
+    }
+
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return "Điều chỉnh: " . ($this->task->name ?? "#{$this->id}");
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Yêu cầu điều chỉnh tiến độ',
+                'body'     => 'Công việc "{name}" có yêu cầu thay đổi ngày hoàn thành.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'schedule',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved' => [
+                'title'    => 'Điều chỉnh tiến độ đã duyệt',
+                'body'     => 'Điều chỉnh tiến độ cho "{name}" đã được phê duyệt.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'schedule',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Điều chỉnh tiến độ bị từ chối',
+                'body'     => 'Yêu cầu điều chỉnh cho "{name}" bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'schedule',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 }

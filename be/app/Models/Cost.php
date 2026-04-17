@@ -9,10 +9,11 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
 use App\Traits\NotifiesUsers;
+use App\Traits\Approvable;
 
 class Cost extends Model
 {
-    use NotifiesUsers;
+    use NotifiesUsers, Approvable;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -424,6 +425,31 @@ class Cost extends Model
         }
         
         return $saved;
+    }
+
+    // ==================================================================
+    // APPROVABLE OVERRIDES
+    // ==================================================================
+
+    protected function getApprovalSummary(): string
+    {
+        $prefix = $this->project_id ? "Chi phí dự án - " : "Chi phí công ty - ";
+        return $prefix . ($this->name ?? "Không có tiêu đề") . " (" . number_format($this->amount, 0, ',', '.') . "đ)";
+    }
+
+    protected function getApprovalMetadata(): array
+    {
+        return [
+            'project_name' => $this->project?->name ?? 'Chi phí công ty',
+            'project_code' => $this->project?->code,
+            'amount' => $this->amount,
+            'category' => $this->costGroup?->name ?? $this->category,
+            'name' => $this->name,
+            'cost_date' => $this->cost_date?->format('d/m/Y'),
+            'description' => $this->description,
+            'type_label' => $this->project_id ? 'Chi phí dự án' : 'Chi phí công ty',
+            'creator' => $this->creator?->name,
+        ];
     }
 
     // ==================================================================

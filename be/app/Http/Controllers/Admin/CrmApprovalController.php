@@ -115,6 +115,15 @@ class CrmApprovalController extends Controller
             ->concat($recent['budgets']->map(fn(ProjectBudget $item) => $this->formatBudget($item)))
             ->concat($recent['equipment_rentals']->map(fn(EquipmentRental $item) => $this->formatEquipmentRentalItem($item)))
             ->concat($recent['asset_usages']->map(fn(AssetUsage $item) => $this->formatAssetUsageItem($item)))
+            ->concat($recent['contracts']->map(fn(Contract $item) => $this->formatContractItem($item)))
+            ->concat($recent['project_payments']->map(fn(ProjectPayment $item) => $this->formatPaymentItem($item)))
+            ->concat($recent['material_bills']->map(fn(MaterialBill $item) => $this->formatMaterialBillItem($item)))
+            ->concat($recent['sub_acceptances']->map(fn(SubcontractorAcceptance $item) => $this->formatSubAcceptanceItem($item)))
+            ->concat($recent['supplier_acceptances']->map(fn(SupplierAcceptance $item) => $this->formatSupplierAcceptanceItem($item)))
+            ->concat($recent['construction_logs']->map(fn(ConstructionLog $item) => $this->formatConstructionLogItem($item)))
+            ->concat($recent['schedule_adjustments']->map(fn(ScheduleAdjustment $item) => $this->formatScheduleAdjustmentItem($item)))
+            ->concat($recent['defects']->map(fn(Defect $item) => $this->formatDefectItem($item)))
+            ->concat($recent['attendances']->map(fn(Attendance $item) => $this->formatAttendanceItem($item)))
             ->sortByDesc(fn($item) => $item['created_at']) // Use simple sort since they are formatted
             ->take(30)
             ->values();

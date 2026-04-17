@@ -9,6 +9,59 @@ use Illuminate\Support\Str;
 
 class AssetUsage extends Model
 {
+    use \App\Traits\Approvable, \App\Traits\NotifiesUsers;
+
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return $this->asset->name ?? "Tài sản #{$this->id}";
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Yêu cầu sử dụng tài sản cần duyệt',
+                'body'     => 'Yêu cầu sử dụng "{name}" đang chờ duyệt.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'assets',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved_management' => [
+                'title'    => 'BĐH đã duyệt sử dụng tài sản',
+                'body'     => 'Yêu cầu sử dụng "{name}" đã được BĐH duyệt, chờ Kế toán xác nhận.',
+                'target'   => ['creator', 'accountant', 'pm'],
+                'tab'      => 'assets',
+                'priority' => 'medium',
+                'category' => 'workflow_approval',
+            ],
+            'confirmed' => [
+                'title'    => 'KT đã xác nhận cấp tài sản',
+                'body'     => 'Yêu cầu sử dụng "{name}" đã được xác nhận hoàn tất.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'assets',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Yêu cầu sử dụng tài sản bị từ chối',
+                'body'     => 'Yêu cầu sử dụng "{name}" bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'assets',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
+    }
     protected $fillable = [
         'uuid', 'project_id', 'equipment_id', 'quantity',
         'receiver_id', 'received_date', 'returned_date',
@@ -27,6 +80,24 @@ class AssetUsage extends Model
     ];
 
     // ─── Relationships ───
+    public function getApprovalSummary(): string
+    {
+        return "Sử dụng tài sản: " . ($this->asset->name ?? 'N/A');
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'asset_name' => $this->asset->name ?? 'N/A',
+            'type' => $this->status
+        ];
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return in_array($this->status, ['pending_management', 'pending_accountant', 'pending_return']);
+    }
+
     public function project(): BelongsTo { return $this->belongsTo(Project::class); }
     public function asset(): BelongsTo { return $this->belongsTo(Equipment::class, 'equipment_id'); }
     public function receiver(): BelongsTo { return $this->belongsTo(User::class, 'receiver_id'); }

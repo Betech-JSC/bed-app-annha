@@ -9,10 +9,11 @@ use Illuminate\Support\Str;
 
 use App\Traits\NotifiesUsers;
 use App\Traits\HasAutoCode;
+use App\Traits\Approvable;
 
 class ProjectPayment extends Model
 {
-    use NotifiesUsers, HasAutoCode;
+    use NotifiesUsers, HasAutoCode, Approvable;
 
     public function getCodeColumn(): string
     {
@@ -212,6 +213,45 @@ class ProjectPayment extends Model
         $this->reminder_count++;
         $this->reminder_sent_at = now();
         return $this->save();
+    }
+
+    // ==================================================================
+    // APPROVABLE OVERRIDES
+    // ==================================================================
+
+    public function isPendingApproval(): bool
+    {
+        return in_array($this->status, ['customer_pending_approval', 'customer_paid']);
+    }
+
+    public function getApprovalResolvedStatus(): string
+    {
+        if (in_array($this->status, ['customer_approved', 'confirmed', 'paid'])) {
+            return 'approved';
+        }
+        if (in_array($this->status, ['rejected', 'customer_rejected'])) {
+            return 'rejected';
+        }
+        return 'done';
+    }
+
+    protected function getApprovalSummary(): string
+    {
+        return "Yêu cầu thanh toán " . ($this->project ? $this->project->name : "dự án") . " - Đợt " . $this->payment_number;
+    }
+
+    protected function getApprovalMetadata(): array
+    {
+        return [
+            'project_name' => $this->project?->name,
+            'project_code' => $this->project?->code,
+            'amount' => $this->amount,
+            'actual_amount' => $this->actual_amount,
+            'payment_number' => $this->payment_number,
+            'due_date' => $this->due_date?->format('d/m/Y'),
+            'notes' => $this->notes,
+            'type_label' => 'Thanh toán dự án',
+        ];
     }
 
     // ==================================================================
