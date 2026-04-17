@@ -115,12 +115,34 @@ class CrmProjectsController extends Controller
      */
     public function index(Request $request)
     {
+        $user = auth('admin')->user();
+        
+        $isGlobalAdmin = false;
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $isGlobalAdmin = true;
+        } elseif ($user instanceof \App\Models\User) {
+            $isGlobalAdmin = $user->owner;
+        }
+
+        $canManageAll = $isGlobalAdmin || ($user && $user->hasPermission(Permissions::PROJECT_MANAGE));
+
         $query = Project::with([
             'customer:id,name,email,phone',
             'projectManager:id,name,email',
             'contract:id,project_id,contract_value,status',
             'progress',
         ]);
+
+        if (!$canManageAll && $user) {
+            $query->where(function ($q) use ($user) {
+                $q->where('customer_id', $user->id)
+                  ->orWhere('project_manager_id', $user->id)
+                  ->orWhere('supervisor_id', $user->id)
+                  ->orWhereHas('personnel', function($p) use ($user) {
+                      $p->where('user_id', $user->id);
+                  });
+            });
+        }
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);

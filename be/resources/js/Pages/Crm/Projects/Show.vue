@@ -2048,7 +2048,7 @@
       </div>
 
       <!-- 2. Financial Overview Sidebar Card -->
-      <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+      <div v-if="can('finance.view') || can('cost.view')" class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
         <h4 class="text-sm font-bold text-gray-800 mb-5 flex items-center gap-2">
           <span class="w-1 h-4 bg-blue-600 rounded-full"></span> Báo cáo tài chính
         </h4>
@@ -5199,52 +5199,6 @@
         </div>
       </div>
 
-      <!-- 2. CHECKLIST HẠNG MỤC (Giống Mobile) -->
-      <div class="mb-5 border-t pt-5">
-        <div class="text-sm font-bold text-gray-700 mb-3 flex items-center justify-between">
-          <div class="flex items-center gap-1"><CheckSquareOutlined /> Checklist hạng mục</div>
-          <a-button v-if="acceptDetailStage.items?.length && can('acceptance.approve')" size="small" ghost type="primary" class="rounded-lg text-[10px]" @click="approveAllItems">Duyệt tất cả</a-button>
-        </div>
-
-        <div v-if="!acceptDetailStage.items?.length" class="p-6 bg-gray-50 border border-dashed rounded-xl text-center text-xs text-gray-400">
-          Giai đoạn này chưa có hạng mục kiểm tra
-        </div>
-        
-        <div v-else class="space-y-3">
-          <div v-for="item in acceptDetailStage.items" :key="item.id" class="p-3 bg-white border border-gray-100 rounded-xl shadow-sm hover:border-blue-200 transition group/item">
-            <div class="flex justify-between items-start gap-2">
-              <div class="flex-1">
-                <div class="text-sm font-bold text-gray-800 leading-tight group-hover/item:text-blue-600 transition-colors uppercase">{{ item.name }}</div>
-                <div v-if="item.task" class="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
-                   <span class="text-blue-400 h-3 w-3 flex items-center justify-center">📐</span> CV: {{ item.task.name }} ({{ item.task.progress_percentage }}%)
-                </div>
-                <div v-if="item.notes" class="mt-2 text-[11px] text-gray-500 bg-gray-50 p-2 rounded-lg italic border-l-2 border-gray-200">
-                  "{{ item.notes }}"
-                </div>
-              </div>
-              <div class="flex flex-col items-end gap-2">
-                 <a-tag :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[9px] m-0">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
-
-                 <div class="flex gap-1 shadow-sm rounded-lg overflow-hidden">
-                    <a-button v-if="(item.workflow_status === 'submitted' && can('acceptance.approve.level_1')) || (item.workflow_status === 'supervisor_approved' && can('acceptance.approve.level_2')) || (item.workflow_status === 'project_manager_approved' && can('acceptance.approve.level_3'))" type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center text-white bg-green-500 rounded-none hover:bg-green-600 transition-colors" @click="approveItem(item)">
-                      <CheckOutlined style="font-size: 10px" />
-                    </a-button>
-                    <a-button v-if="['submitted', 'supervisor_approved', 'project_manager_approved'].includes(item.workflow_status) && (can('acceptance.approve.level_1') || can('acceptance.approve.level_2') || can('acceptance.approve.level_3'))" type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center text-white bg-red-500 rounded-none hover:bg-red-600 transition-colors" @click="rejectItem(item)">
-                      <CloseOutlined style="font-size: 10px" />
-                    </a-button>
-                 </div>
-              </div>
-            </div>
-            
-            <div v-if="item.attachments?.length" class="mt-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
-               <div v-for="att in item.attachments" :key="att.id" class="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0 cursor-pointer shadow-sm hover:border-blue-300 transition" @click="openFilePreview(att)">
-                  <img :src="att.file_url" class="w-full h-full object-cover" />
-               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div class="mb-5">
         <div class="flex items-center justify-between mb-2">
           <div>
@@ -6374,8 +6328,52 @@ const project = computed(() => {
 })
 
 const can = (perm) => {
-  if (!props.permissions || !Array.isArray(props.permissions)) return true // fallback for admin or invalid state
-  return props.permissions.includes(perm) || props.permissions.includes('*')
+  if (!page.props.permissions || !Array.isArray(page.props.permissions)) return true
+  return page.props.permissions.includes(perm) || page.props.permissions.includes('*')
+}
+
+// Tab group → sub-tab mapping
+const tabGroupTabs = {
+  overview: ['overview'],
+  schedule: ['gantt', 'progress'],
+  finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
+  expense: ['subcontractors', 'materials', 'equipment'],
+  monitor: ['logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
+  hr: ['personnel', 'attendance', 'labor'],
+  warranty: ['warranty', 'maintenances'],
+  other: ['documents'],
+}
+
+const tabPermissions = {
+  gantt: 'gantt.view',
+  progress: 'project.task.view',
+  contract: 'contract.view',
+  costs: 'cost.view',
+  payments: 'payment.view',
+  invoices: 'invoice.view',
+  budgets: 'budgets.view',
+  finance: 'finance.view',
+  subcontractors: 'subcontractor.view',
+  materials: 'material.view',
+  equipment: 'equipment.view',
+  logs: 'log.view',
+  acceptance: 'acceptance.view',
+  defects: 'defect.view',
+  change_requests: 'change_request.view',
+  additional_costs: 'additional_cost.view',
+  comments: 'project.comment.view',
+  risks: 'project.risk.view',
+  personnel: 'personnel.view',
+  attendance: 'attendance.view',
+  labor: 'labor_productivity.view',
+  warranty: 'warranty.view',
+  maintenances: 'warranty.view',
+  documents: 'document.view',
+}
+
+const isTabPermitted = (tabKey) => {
+  if (!tabPermissions[tabKey]) return true
+  return can(tabPermissions[tabKey])
 }
 
 // ============ HELPERS ============
@@ -6385,13 +6383,14 @@ const fmtDateTime = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY HH:mm') :
 const isAccepted = (task) => {
   if (!task) return false
   if (!task.parent_id) {
-    // Category A: check acceptanceStages (eager loaded)
+    // Category A (Parent): Check if any linked stage is approved
     const stages = task.acceptance_stages || []
-    if (stages.length === 0) return false
+    if (stages.length === 0) return true // Align with backend: default true if no stages defined
     return stages.some(s => s.status === 'customer_approved')
   } else {
-    // Category B: check acceptanceItem (eager loaded)
-    return task.acceptance_item?.workflow_status === 'customer_approved'
+    // Category B (Child): Check linked acceptance item workflow
+    if (!task.acceptance_item) return true // Align with backend: default true if no item defined
+    return task.acceptance_item.workflow_status === 'customer_approved'
   }
 }
 const totalCosts = computed(() => costs.value.reduce((s, c) => s + Number(c.amount || 0), 0))
@@ -6427,10 +6426,23 @@ const daysRemaining = computed(() => {
 
 // ============ STATE ============
 // Read initial tab from URL query string (?tab=costs, ?tab=materials, etc.)
+const getSubTabCount = (tabKey) => {
+  const c = props.counts || {}
+  const map = {
+    gantt: c.tasks, progress: c.tasks,
+    contract: 1, costs: c.costs, payments: c.payments, additional_costs: c.additional_costs, budgets: c.budgets, finance: 1, invoices: c.invoices,
+    subcontractors: c.subcontractors, materials: c.material_bills || c.materials, equipment: c.equipment,
+    logs: c.construction_logs, acceptance: c.acceptance_stages, defects: c.defects, change_requests: c.change_requests, comments: c.comments, risks: c.risks,
+    personnel: c.personnel, attendance: c.attendance, labor: c.labor_productivity,
+    warranty: c.warranties, maintenances: c.maintenances,
+    documents: c.attachments,
+  }
+  return map[tabKey] || 0
+}
+
 const getInitialTab = () => {
   const urlParams = new URLSearchParams(window.location.search)
   const tabParam = urlParams.get('tab')
-  // Map of valid tab keys (must match tabGroupTabs keys)
   const validTabs = [
     'overview', 'gantt', 'progress',
     'contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices',
@@ -6440,7 +6452,34 @@ const getInitialTab = () => {
     'warranty', 'maintenances',
     'documents',
   ]
-  return (tabParam && validTabs.includes(tabParam)) ? tabParam : 'gantt'
+  const target = (tabParam && validTabs.includes(tabParam)) ? tabParam : null
+  
+  if (target && isTabPermitted(target)) return target
+  
+  // Smart landing: find first group with data
+  const groups = [
+    { key: 'schedule', tabs: ['gantt', 'progress'] },
+    { key: 'finance', tabs: ['contract', 'costs', 'payments'] },
+    { key: 'expense', tabs: ['subcontractors', 'materials', 'equipment'] },
+    { key: 'monitor', tabs: ['logs', 'acceptance', 'defects', 'change_requests'] },
+    { key: 'hr', tabs: ['personnel', 'attendance'] },
+    { key: 'warranty', tabs: ['warranty', 'maintenances'] },
+    { key: 'other', tabs: ['documents'] },
+  ]
+
+  // 1st pass: find tab with permission AND data
+  for (const g of groups) {
+    const bestTab = g.tabs.find(t => isTabPermitted(t) && getSubTabCount(t) > 0)
+    if (bestTab) return bestTab
+  }
+
+  // 2nd pass: just permission
+  for (const g of groups) {
+    const firstVis = g.tabs.find(t => isTabPermitted(t))
+    if (firstVis) return firstVis
+  }
+
+  return 'overview'
 }
 
 const getGroupForTab = (tab) => {
@@ -6680,57 +6719,7 @@ const savingOptions = (extraOptions = {}) => ({
 // Helper to check loading state
 const isLoading = (key) => !!actionLoading[key]
 
-// Tab group → sub-tab mapping
-const tabGroupTabs = {
-  overview: ['overview'],
-  schedule: ['gantt', 'progress'],
-  finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
-  expense: ['subcontractors', 'materials', 'equipment'],
-  monitor: ['logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
-  hr: ['personnel', 'attendance', 'labor'],
-  warranty: ['warranty', 'maintenances'],
-  other: ['documents'],
-}
-
-// Only render tab-pane if it belongs to the active group
-const tabPermissions = {
-  gantt: 'gantt.view',
-  progress: 'project.task.view',
-  contract: 'contract.view',
-  costs: 'cost.view',
-  payments: 'payment.view',
-  invoices: 'invoice.view',
-  budgets: 'budgets.view',
-  finance: 'finance.view',
-  pnl: 'finance.view',
-  bva: 'finance.view',
-  debt: 'finance.view',
-  cashflow: 'finance.view',
-  subcontractors: 'subcontractor.view',
-  materials: 'material.view',
-  material_bills: 'material.view',
-  equipment: 'equipment.view',
-  logs: 'log.view',
-  acceptance: 'acceptance.view',
-  defects: 'defect.view',
-  change_requests: 'change_request.view',
-  additional_costs: 'additional_cost.view',
-  comments: 'project.comment.view',
-  risks: 'project.risk.view',
-  personnel: 'personnel.view',
-  attendance: 'attendance.view',
-  labor: 'labor_productivity.view',
-  warranty: 'warranty.view',
-  maintenances: 'warranty.view',
-  documents: 'document.view',
-}
-
-// Only render tab-pane if it belongs to the active group AND user has permission
-const isTabVisible = (tabKey) => {
-  if (tabPermissions[tabKey] && !can(tabPermissions[tabKey])) return false
-  const tabs = tabGroupTabs[activeTabGroup.value]
-  return tabs ? tabs.includes(tabKey) : false
-}
+// Helpers below used by tabGroups computed logic previously defined
 
 // Tab groups with dynamic badge counts and permission filtering
 const tabGroups = computed(() => {
@@ -6743,8 +6732,31 @@ const tabGroups = computed(() => {
     { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: (props.counts?.warranties || 0) + (props.counts?.maintenances || 0), perms: ['warranty.view'] },
     { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.counts?.attachments || 0, perms: ['document.view'] },
   ]
-  return groups.filter(g => g.perms.some(p => can(p)))
+  return groups
+    .map(g => {
+      const visibleSubTabs = (tabGroupTabs[g.key] || []).filter(t => isTabPermitted(t))
+      if (visibleSubTabs.length === 0) return null
+      
+      // Preference logic: 
+      // 1. If original default is permitted AND has data -> use it
+      // 2. Else find first visible tab with data
+      // 3. Fallback to first visible tab
+      let effectiveDefault = g.defaultTab
+      if (!isTabPermitted(effectiveDefault) || getSubTabCount(effectiveDefault) === 0) {
+        const withData = visibleSubTabs.find(t => getSubTabCount(t) > 0)
+        effectiveDefault = withData || visibleSubTabs[0]
+      }
+      
+      return { ...g, defaultTab: effectiveDefault }
+    })
+    .filter(Boolean)
 })
+
+const isTabVisible = (tabKey) => {
+  if (!isTabPermitted(tabKey)) return false
+  const tabs = tabGroupTabs[activeTabGroup.value]
+  return tabs ? tabs.includes(tabKey) : false
+}
 
 // Map activeTab to correct group (for when tab clicked directly)
 watch(activeTab, (tab) => {
