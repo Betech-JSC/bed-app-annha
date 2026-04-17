@@ -2585,7 +2585,7 @@
       </a-row>
       <a-form-item label="Công việc liên quan">
         <a-select v-model:value="logForm.task_id" size="large" class="w-full" placeholder="Chọn công việc (tùy chọn)" allow-clear show-search :filter-option="(input, opt) => opt.label?.toLowerCase().includes(input.toLowerCase())" @change="onLogTaskChange">
-          <a-select-option v-for="t in projectTasks" :key="t.id" :value="t.id" :label="t.name">
+          <a-select-option v-for="t in allTasks" :key="t.id" :value="t.id" :label="t.name">
             <div class="flex justify-between items-center w-full">
               <span>{{ t.name }}</span>
               <span v-if="t.start_date" class="text-[10px] text-gray-400 font-normal ml-2">🕒 {{ dayjs(t.start_date).format('DD/MM/YYYY') }}</span>
@@ -2666,7 +2666,7 @@
       </a-row>
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Công việc liên quan"><a-select v-model:value="defectForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn công việc">
-          <a-select-option v-for="t in projectTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+          <a-select-option v-for="t in allTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
         </a-select></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Giai đoạn nghiệm thu"><a-select v-model:value="defectForm.acceptance_stage_id" size="large" class="w-full" allow-clear placeholder="Chọn giai đoạn">
           <a-select-option v-for="s in (project.acceptance_stages || [])" :key="s.id" :value="s.id">{{ s.name }}</a-select-option>
@@ -5223,13 +5223,13 @@
                 </div>
               </div>
               <div class="flex flex-col items-end gap-2">
-                 <a-tag :color="acceptItemStatusColor(item.status)" class="rounded-full text-[9px] m-0">{{ acceptItemStatusLabel(item.status) }}</a-tag>
-                 
+                 <a-tag :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[9px] m-0">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
+
                  <div class="flex gap-1 shadow-sm rounded-lg overflow-hidden">
-                    <a-button v-if="item.status === 'pending' && (can('acceptance.approve.level_1') || can('acceptance.approve.level_2'))" type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center text-white bg-green-500 rounded-none hover:bg-green-600 transition-colors" @click="approveItem(item)">
+                    <a-button v-if="(item.workflow_status === 'submitted' && can('acceptance.approve.level_1')) || (item.workflow_status === 'supervisor_approved' && can('acceptance.approve.level_2')) || (item.workflow_status === 'project_manager_approved' && can('acceptance.approve.level_3'))" type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center text-white bg-green-500 rounded-none hover:bg-green-600 transition-colors" @click="approveItem(item)">
                       <CheckOutlined style="font-size: 10px" />
                     </a-button>
-                    <a-button v-if="item.status === 'pending' && (can('acceptance.approve.level_1') || can('acceptance.approve.level_2'))" type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center text-white bg-red-500 rounded-none hover:bg-red-600 transition-colors" @click="rejectItem(item)">
+                    <a-button v-if="['submitted', 'supervisor_approved', 'project_manager_approved'].includes(item.workflow_status) && (can('acceptance.approve.level_1') || can('acceptance.approve.level_2') || can('acceptance.approve.level_3'))" type="text" size="small" class="h-6 w-6 p-0 flex items-center justify-center text-white bg-red-500 rounded-none hover:bg-red-600 transition-colors" @click="rejectItem(item)">
                       <CloseOutlined style="font-size: 10px" />
                     </a-button>
                  </div>
@@ -5420,12 +5420,12 @@
       <a-form layout="vertical">
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="Ngày nhập" required class="mb-3">
+            <a-form-item label="Ngày nhập" required class="mb-3" v-bind="fieldStatus('bill_date')">
               <a-date-picker v-model:value="billForm.bill_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="Nhà cung cấp" class="mb-3">
+            <a-form-item label="Nhà cung cấp" class="mb-3" v-bind="fieldStatus('supplier_id')">
               <a-select v-model:value="billForm.supplier_id" placeholder="Chọn NCC (tùy chọn)" size="large" class="w-full" allow-clear show-search option-filter-prop="label">
                 <a-select-option v-for="s in suppliers" :key="s.id" :value="s.id" :label="s.name">{{ s.name }}</a-select-option>
               </a-select>
@@ -5646,7 +5646,7 @@
   <!-- ==================== EQUIPMENT RENTAL MODAL ==================== -->
   <a-modal v-model:open="showRentalModal" :title="isEditRental ? 'Cập nhật Phiếu Thuê Thiết Bị' : 'Tạo Phiếu Thuê Thiết Bị'" :width="640" @ok="submitRentalForm" :ok-text="isEditRental ? 'Cập nhật' : 'Tạo phiếu'" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tên thiết bị thuê" required>
+      <a-form-item label="Tên thiết bị thuê" required v-bind="fieldStatus('equipment_name')">
         <a-input v-model:value="rentalForm.equipment_name" size="large" placeholder="VD: Máy đào CAT 320..." />
       </a-form-item>
       <a-row :gutter="12">
@@ -5663,10 +5663,10 @@
       </a-row>
       <a-row :gutter="12">
         <a-col :span="8">
-          <a-form-item label="Ngày bắt đầu" required><a-date-picker v-model:value="rentalForm.rental_start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
+          <a-form-item label="Ngày bắt đầu" required v-bind="fieldStatus('rental_start_date')"><a-date-picker v-model:value="rentalForm.rental_start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
         </a-col>
         <a-col :span="8">
-          <a-form-item label="Ngày kết thúc" required><a-date-picker v-model:value="rentalForm.rental_end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
+          <a-form-item label="Ngày kết thúc" required v-bind="fieldStatus('rental_end_date')"><a-date-picker v-model:value="rentalForm.rental_end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
         </a-col>
         <a-col :span="8">
           <a-form-item label="Thành tiền (VNĐ)">
@@ -7207,13 +7207,35 @@ const modalFiles = ref([])
 // uploadModalFiles removed - unified into single request logic
 
 // ============ FORM DATA HELPER ============
-const appendFormEntries = (formData, formObj) => {
+const appendFormEntries = (formData, formObj, parentKey = null) => {
   Object.entries(formObj).forEach(([k, v]) => {
     if (v === null || v === undefined) return
+    const key = parentKey ? `${parentKey}[${k}]` : k
+    
+    // Check if it's a file or array of files first to NOT recurse into them
+    if (v instanceof File || (Array.isArray(v) && v[0] instanceof File)) {
+      if (Array.isArray(v)) {
+        v.forEach(f => formData.append(`${key}[]`, f))
+      } else {
+        formData.append(key, v)
+      }
+      return
+    }
+
     if (Array.isArray(v)) {
-      v.forEach(item => formData.append(`${k}[]`, item))
+      v.forEach((item, index) => {
+        // If it's an object in the array (like material bill items), recurse with index
+        if (typeof item === 'object' && item !== null) {
+          appendFormEntries(formData, item, `${key}[${index}]`)
+        } else {
+          formData.append(`${key}[]`, item)
+        }
+      })
+    } else if (typeof v === 'object' && v !== null) {
+      // Recurse for nested objects
+      appendFormEntries(formData, v, key)
     } else {
-      formData.append(k, v)
+      formData.append(key, v)
     }
   })
 }
@@ -8349,13 +8371,16 @@ const deleteAccept = (stage) => {
 // Item actions inside drawer
 const approveItem = (item) => {
   const stageId = acceptDetailStage.value.id
-  let url = `/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-supervisor`
-  
-  // Decide which level to approve based on status and permissions
-  if (item.workflow_status === 'supervisor_approved' || can('acceptance.approve.level_2')) {
-    url = `/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-pm`
+  const base = `/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}`
+
+  // Chọn URL duyệt theo workflow_status hiện tại
+  let url = `${base}/approve-supervisor`
+  if (item.workflow_status === 'supervisor_approved') {
+    url = `${base}/approve-pm`
+  } else if (item.workflow_status === 'project_manager_approved') {
+    url = `${base}/approve-customer`
   }
-  
+
   router.post(url, {}, {
     preserveState: true,
     preserveScroll: true,
@@ -8451,16 +8476,17 @@ const getAcceptIconClass = (status) => {
   return 'bg-orange-100 text-orange-600'
 }
 const getAcceptability = (stage) => {
-  // 1. All approval levels must be passed (final status = owner_approved)
-  const isFullyApproved = stage.status === 'owner_approved'
-  
+  // 1. Stage phải đạt ít nhất customer_approved
+  const approvedStatuses = ['customer_approved', 'design_approved', 'owner_approved']
+  const isFullyApproved = approvedStatuses.includes(stage.status)
+
   // 2. No open or in-progress defects
   const hasOpenDefects = (stage.defects || []).some(d => d.status === 'open' || d.status === 'in_progress')
-  
+
   // 3. All checklist items must be customer_approved (if items exist)
   const items = stage.items || []
   const allItemsApproved = items.length === 0 || items.every(i => i.workflow_status === 'customer_approved')
-  
+
   return (isFullyApproved && !hasOpenDefects && allItemsApproved) ? 'acceptable' : 'not_acceptable'
 }
 const getAcceptCompletion = (stage) => {
@@ -8472,8 +8498,8 @@ const getAcceptCompletion = (stage) => {
 const getOpenDefects = (stage) => {
   return (stage.defects || []).filter(d => d.status !== 'verified').length
 }
-const acceptItemStatusColor = (status) => ({ draft: 'default', pending: 'default', submitted: 'processing', supervisor_approved: 'cyan', project_manager_approved: 'blue', pm_approved: 'blue', customer_approved: 'success', rejected: 'error' }[status] || 'default')
-const acceptItemStatusLabel = (status) => ({ draft: 'Nháp', pending: 'Chờ', submitted: 'Đã nộp', supervisor_approved: 'GS duyệt', project_manager_approved: 'PM duyệt', pm_approved: 'PM duyệt', customer_approved: 'KH duyệt', rejected: 'Từ chối' }[status] || status)
+const acceptItemStatusColor = (status) => ({ draft: 'default', pending: 'default', submitted: 'processing', supervisor_approved: 'cyan', project_manager_approved: 'blue', customer_approved: 'success', rejected: 'error' }[status] || 'default')
+const acceptItemStatusLabel = (status) => ({ draft: 'Nháp', pending: 'Chờ duyệt', submitted: 'Chờ GS duyệt', supervisor_approved: 'Chờ PM duyệt', project_manager_approved: 'Chờ KH duyệt', customer_approved: 'KH đã duyệt', rejected: 'Từ chối' }[status] || status)
 
 // ============ ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ============
 const showAcceptDetailDrawer = ref(false)
@@ -9173,6 +9199,11 @@ const submitBillForm = () => {
         const updated = props.project.material_bills?.find(x => x.id === materialDetail.value.id)
         if (updated) materialDetail.value = updated
       }
+      clearFormErrors()
+    },
+    onError: (errors) => {
+      Object.assign(formErrors, errors)
+      showValidationErrors(errors)
     },
     onFinish: () => { submittingBill.value = false },
     forceFormData: true
@@ -9373,7 +9404,16 @@ const submitRentalForm = () => {
   if (isEditRental.value) fd.append('_method', 'PUT')
 
   router.post(url, fd, {
-    onSuccess: () => { showRentalModal.value = false; rentalFiles.value = []; if (selectedRental.value) selectedRental.value = props.project.equipment_rentals?.find(r => r.id === selectedRental.value.id) },
+    onSuccess: () => { 
+      showRentalModal.value = false; 
+      rentalFiles.value = []; 
+      if (selectedRental.value) selectedRental.value = props.project.equipment_rentals?.find(r => r.id === selectedRental.value.id) 
+      clearFormErrors()
+    },
+    onError: (errors) => {
+      Object.assign(formErrors, errors)
+      showValidationErrors(errors)
+    },
     forceFormData: true
   })
 }

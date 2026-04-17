@@ -2602,7 +2602,7 @@ class CrmProjectsController extends Controller
             'equipment_id' => 'nullable|exists:equipment,id',
             'supplier_id' => 'nullable|exists:suppliers,id',
             'rental_start_date' => 'required|date',
-            'rental_end_date' => 'required|date|after:rental_start_date',
+            'rental_end_date' => 'required|date|after_or_equal:rental_start_date',
             'total_cost' => 'required|numeric|min:0',
             'notes' => 'nullable|string',
         ]);
@@ -2630,7 +2630,7 @@ class CrmProjectsController extends Controller
             'equipment_id' => 'nullable|exists:equipment,id',
             'supplier_id' => 'nullable|exists:suppliers,id',
             'rental_start_date' => 'required|date',
-            'rental_end_date' => 'required|date|after:rental_start_date',
+            'rental_end_date' => 'required|date|after_or_equal:rental_start_date',
             'total_cost' => 'required|numeric|min:0',
             'notes' => 'nullable|string',
         ]);

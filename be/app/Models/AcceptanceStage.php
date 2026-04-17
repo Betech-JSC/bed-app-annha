@@ -317,15 +317,16 @@ class AcceptanceStage extends Model
     }
 
     /**
-     * Unified approval method for ApprovalCenter compatibility
+     * Unified approval method for ApprovalCenter compatibility.
+     * Tự động chọn level tiếp theo dựa trên status hiện tại.
      */
     public function approve($user)
     {
-        if ($this->status === 'pending_supervisor') {
+        if ($this->status === 'pending') {
             return $this->approveSupervisor($user);
-        } elseif ($this->status === 'pending_pm' || $this->status === 'supervisor_approved') {
+        } elseif ($this->status === 'supervisor_approved') {
             return $this->approveProjectManager($user);
-        } elseif (in_array($this->status, ['pending_customer', 'pending_approval', 'project_manager_approved'])) {
+        } elseif ($this->status === 'project_manager_approved') {
             return $this->approveCustomer($user);
         }
         return false;
@@ -334,7 +335,7 @@ class AcceptanceStage extends Model
     public function reject($user, ?string $reason = null): bool
     {
         // Only allow rejection from non-final states
-        $rejectableStatuses = ['pending', 'internal_approved', 'supervisor_approved', 'project_manager_approved'];
+        $rejectableStatuses = ['pending', 'internal_approved', 'supervisor_approved', 'project_manager_approved', 'design_approved'];
         if (!in_array($this->status, $rejectableStatuses)) {
             return false;
         }
@@ -483,12 +484,35 @@ class AcceptanceStage extends Model
 
 
     /**
-     * Kiểm tra và cập nhật trạng thái hoàn thành của tiến độ
+     * Kiểm tra và cập nhật trạng thái hoàn thành của tiến độ.
+     * BUSINESS RULE: Khi 100% hạng mục con đều customer_approved
+     * → hạng mục cha (stage) tự động chuyển status tương ứng.
      */
     public function checkCompletion(): void
     {
-        // BUSINESS RULE: Stage chỉ hoàn thành khi 100% items customer_approved
-        // Không tự động cập nhật status, phải qua workflow: pending → supervisor_approved → project_manager_approved → customer_approved
+        $this->refresh();
+        $items = $this->items()->get();
+
+        if ($items->isNotEmpty()) {
+            // Tự động chuyển status stage dựa trên trạng thái tối thiểu của tất cả items
+            $allCustomerApproved = $items->every(fn($i) => $i->workflow_status === 'customer_approved');
+            $allPmApproved = $items->every(fn($i) => in_array($i->workflow_status, ['project_manager_approved', 'customer_approved']));
+            $allSupervisorApproved = $items->every(fn($i) => in_array($i->workflow_status, ['supervisor_approved', 'project_manager_approved', 'customer_approved']));
+
+            if ($allCustomerApproved && $this->status !== 'customer_approved') {
+                $this->status = 'customer_approved';
+                $this->customer_approved_at = now();
+                $this->save();
+            } elseif ($allPmApproved && !$allCustomerApproved && !in_array($this->status, ['project_manager_approved', 'customer_approved'])) {
+                $this->status = 'project_manager_approved';
+                $this->project_manager_approved_at = now();
+                $this->save();
+            } elseif ($allSupervisorApproved && !$allPmApproved && !in_array($this->status, ['supervisor_approved', 'project_manager_approved', 'customer_approved'])) {
+                $this->status = 'supervisor_approved';
+                $this->supervisor_approved_at = now();
+                $this->save();
+            }
+        }
 
         // Cập nhật tiến độ dự án
         $this->updateProjectProgress();

@@ -125,7 +125,7 @@ class AcceptanceService
                 }
                 break;
             case 3: // Customer
-                if (!in_array($item->workflow_status, ['pm_approved', 'project_manager_approved'])) {
+                if ($item->workflow_status !== 'project_manager_approved') {
                     throw new \Exception('Hạng mục cần được PM duyệt trước.');
                 }
                 break;
@@ -142,32 +142,38 @@ class AcceptanceService
                     $item->workflow_status = 'supervisor_approved';
                     $item->supervisor_approved_by = $user->id;
                     $item->supervisor_approved_at = now();
-                    $item->acceptanceStage->notifyEvent('supervisor_approved', $user);
                     break;
                 case 2:
                     $item->workflow_status = 'project_manager_approved';
                     $item->project_manager_approved_by = $user->id;
                     $item->project_manager_approved_at = now();
-                    $item->acceptanceStage->notifyEvent('pm_approved', $user);
                     break;
                 case 3:
                     $item->workflow_status = 'customer_approved';
                     $item->customer_approved_by = $user->id;
                     $item->customer_approved_at = now();
-                    
-                    // Final Acceptance status
                     $item->acceptance_status = 'approved';
                     $item->approved_by = $user->id;
                     $item->approved_at = now();
-                    
-                    // Side Effects
-                    $item->updateProjectProgress();
-                    $item->acceptanceStage->checkCompletion();
-                    $item->acceptanceStage->notifyEvent('customer_approved', $user);
                     break;
             }
 
-            return $item->save();
+            $saved = $item->save();
+
+            // Side effects AFTER save — checkCompletion cần DB đã cập nhật
+            if ($saved) {
+                $stage = $item->acceptanceStage;
+                $stage->checkCompletion();
+
+                $eventMap = [1 => 'supervisor_approved', 2 => 'pm_approved', 3 => 'customer_approved'];
+                $stage->notifyEvent($eventMap[$level], $user);
+
+                if ($level === 3) {
+                    $item->updateProjectProgress();
+                }
+            }
+
+            return $saved;
         });
     }
 
@@ -176,7 +182,7 @@ class AcceptanceService
      */
     public function rejectItem(AcceptanceItem $item, $user, string $reason): bool
     {
-        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved', 'pm_approved', 'project_manager_approved'])) {
+        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved', 'project_manager_approved'])) {
             throw new \Exception('Hạng mục không ở trạng thái chờ duyệt.');
         }
 
