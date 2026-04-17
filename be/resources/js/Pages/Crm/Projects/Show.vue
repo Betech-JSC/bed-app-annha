@@ -3436,32 +3436,59 @@
               <tr class="text-left text-[11px] text-gray-400 uppercase border-b border-gray-50 bg-gray-50/50">
                 <th class="px-5 py-3 font-bold">Hạng mục</th>
                 <th class="px-5 py-3 font-bold text-center">Tỷ lệ</th>
-                <th class="px-5 py-3 font-bold text-right">Dự toán</th>
-                <th class="px-5 py-3 font-bold text-right">Thực chi</th>
-                <th class="px-5 py-3 font-bold text-right">Còn lại</th>
+                <th class="px-5 py-3 font-bold text-right text-indigo-500">Dự toán</th>
+                <th class="px-5 py-3 font-bold text-right text-emerald-500">Thực chi</th>
+                <th class="px-5 py-3 font-bold text-right text-gray-400">Còn lại</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-50">
-              <tr v-for="item in (budgetDetail.items || [])" :key="item.id" class="hover:bg-blue-50/50 transition-colors">
+            <tbody class="divide-y divide-gray-100">
+              <tr v-for="item in (budgetDetail.items || [])" :key="item.id" class="group hover:bg-blue-50/40 transition-all duration-200">
                 <td class="px-5 py-4">
-                  <div class="flex items-center gap-2 mb-1">
-                    <span v-if="item.cost_group" class="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold uppercase">{{ item.cost_group.code || 'GP' }}</span>
-                    <div class="font-bold text-gray-800 leading-tight">{{ item.name }}</div>
+                  <div class="flex items-start gap-3">
+                    <div v-if="item.cost_group" 
+                      class="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-[10px] font-black tracking-tighter"
+                      :style="{ 
+                        backgroundColor: (item.cost_group.code?.startsWith('NC') ? '#fef3c7' : item.cost_group.code?.startsWith('VL') ? '#dbeafe' : '#f1f5f9'),
+                        color: (item.cost_group.code?.startsWith('NC') ? '#92400e' : item.cost_group.code?.startsWith('VL') ? '#1e40af' : '#475569')
+                      }"
+                    >
+                      {{ item.cost_group.code?.substring(0, 4) || 'GP' }}
+                    </div>
+                    <div>
+                      <div class="font-bold text-gray-800 leading-snug group-hover:text-blue-600 transition-colors">{{ item.name }}</div>
+                      <div v-if="item.description" class="text-[10px] text-gray-400 mt-0.5 line-clamp-1 italic max-w-xs">{{ item.description }}</div>
+                    </div>
                   </div>
-                  <div v-if="item.description" class="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{{ item.description }}</div>
                 </td>
                 <td class="px-5 py-4 text-center">
-                  <span class="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{{ item.percentage || 0 }}%</span>
+                  <div class="text-[11px] font-black text-gray-400 mb-1">{{ item.percentage || 0 }}%</div>
+                  <div class="w-12 h-1 bg-gray-100 rounded-full mx-auto overflow-hidden">
+                    <div class="h-full bg-blue-400" :style="{ width: `${item.percentage || 0}%` }"></div>
+                  </div>
                 </td>
                 <td class="px-5 py-4 text-right">
-                  <div class="font-bold text-indigo-600">{{ fmt(item.estimated_amount) }}</div>
+                  <div class="font-bold text-indigo-700 text-sm tracking-tight">{{ fmt(item.estimated_amount) }}</div>
                 </td>
                 <td class="px-5 py-4 text-right">
-                  <div class="font-bold" :class="(item.actual_amount > item.estimated_amount) ? 'text-red-500' : 'text-emerald-500'">{{ fmt(item.actual_amount || 0) }}</div>
-                  <div class="text-[9px] text-gray-400">{{ Math.round(((item.actual_amount || 0) / (item.estimated_amount || 1)) * 100) }}%</div>
+                  <div class="inline-flex flex-col items-end">
+                    <div class="font-black text-sm tracking-tight" :class="(parseFloat(item.actual_amount) > parseFloat(item.estimated_amount)) ? 'text-red-500' : 'text-emerald-600'">
+                      {{ fmt(item.actual_amount || 0) }}
+                    </div>
+                    <div class="flex items-center gap-1.5 mt-1">
+                       <span class="text-[9px] font-bold" :class="(parseFloat(item.actual_amount) > parseFloat(item.estimated_amount)) ? 'text-red-400' : 'text-gray-400'">
+                        {{ parseFloat(item.estimated_amount) > 0 ? Math.round((parseFloat(item.actual_amount || 0) / parseFloat(item.estimated_amount)) * 100) : 0 }}%
+                      </span>
+                      <div class="w-16 h-1 bg-gray-50 rounded-full overflow-hidden border border-gray-100/50">
+                        <div class="h-full transition-all duration-500" 
+                          :class="(parseFloat(item.actual_amount) > parseFloat(item.estimated_amount)) ? 'bg-red-500' : 'bg-emerald-500'" 
+                          :style="{ width: `${Math.min(100, parseFloat(item.estimated_amount) > 0 ? (parseFloat(item.actual_amount || 0) / parseFloat(item.estimated_amount)) * 100 : 0)}%` }"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
                 </td>
                 <td class="px-5 py-4 text-right">
-                  <div class="font-bold" :class="(item.remaining_amount < 0) ? 'text-red-600' : 'text-gray-600'">
+                  <div class="font-bold text-sm tracking-tight" :class="(parseFloat(item.remaining_amount) < 0) ? 'text-red-600 bg-red-50 px-2 py-0.5 rounded-lg inline-block' : 'text-gray-500'">
                     {{ fmt(item.remaining_amount ?? item.estimated_amount) }}
                   </div>
                 </td>
@@ -3469,7 +3496,10 @@
             </tbody>
           </table>
         </div>
-        <div v-if="!budgetDetail.items?.length" class="p-8 text-center text-gray-300">Chưa có hạng mục ngân sách</div>
+        <div v-if="!budgetDetail.items?.length" class="p-12 text-center text-gray-300 flex flex-col items-center gap-3">
+          <div class="text-4xl opacity-20">📂</div>
+          <div class="text-[11px] font-bold uppercase tracking-widest">Chưa có hạng mục ngân sách</div>
+        </div>
       </div>
 
       <!-- Action Footer (Sticky) -->
@@ -3486,6 +3516,8 @@
           <a-tooltip v-if="['draft', 'rejected', 'approved', 'pending_approval'].includes(budgetDetail.status) && can('budgets.update')" title="Thay đổi thông tin phiên bản hoặc hạng mục" placement="bottom">
             <a-button size="small" @click="openBudgetModal(budgetDetail)"><EditOutlined /> Sửa</a-button>
           </a-tooltip>
+          
+          <a-button size="small" type="primary" ghost @click="recalculateBudget(budgetDetail)"><SyncOutlined /> Cập nhật dữ liệu</a-button>
         </div>
 
         <div class="flex gap-2">
@@ -8350,6 +8382,19 @@ const activateBudget = (b) => {
   router.post(`/projects/${props.project.id}/budgets/${b.id}/activate`, {}, loadingOptions(`activate-budget-${b.id}`))
 }
 const deleteBudget = (b) => router.delete(`/projects/${props.project.id}/budgets/${b.id}`, loadingOptions(`delete-budget-${b.id}`))
+const recalculateBudget = (budget) => {
+  router.post(`/projects/${props.project.id}/budgets/${budget.id}/recalculate`, {}, {
+    ...loadingOptions(`sync-budget-${budget.id}`),
+    onSuccess: (page) => {
+      // Find the updated budget in the new props
+      const updatedBudgets = page.props.financeData.budgets;
+      const found = updatedBudgets.find(b => b.id === budget.id);
+      if (found && budgetDetail.value) {
+        budgetDetail.value = found;
+      }
+    }
+  })
+}
 
 const showRejectBudgetModal = ref(false)
 const rejectBudgetReason = ref('')

@@ -84,13 +84,28 @@ class BudgetSyncService
             return;
         }
 
+        // Fetch contract value if not set on budget
+        if (empty($budget->contract_value) || $budget->contract_value == 0) {
+            $contract = $project->contract;
+            if ($contract && $contract->contract_value > 0) {
+                // Sử dụng number_format để tránh lỗi decimal
+                $budget->contract_value = number_format((float) $contract->contract_value, 2, '.', '');
+            }
+        }
+
+        // Calculate profit if contract value is available
+        if ($budget->contract_value > 0) {
+            $totalBudget = (float)($budget->total_budget ?? 0);
+            $budget->profit_amount = number_format((float) ($budget->contract_value - $totalBudget), 2, '.', '');
+            $budget->profit_percentage = number_format(($budget->profit_amount / $budget->contract_value) * 100, 2, '.', '');
+        }
+
         // Tính tổng actual cost từ tất cả costs đã approved
         $totalActualCost = Cost::where('project_id', $project->id)
             ->where('status', 'approved')
             ->sum('amount');
 
         // Cập nhật actual_cost và remaining_budget cho budget
-        // Sử dụng number_format để chuyển sang string, tránh cảnh báo conversion sang decimal
         $actualCostStr = number_format((float) $totalActualCost, 2, '.', '');
         $budget->actual_cost = $actualCostStr;
         

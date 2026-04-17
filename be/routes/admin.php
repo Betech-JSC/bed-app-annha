@@ -350,6 +350,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/budgets/{budget}/submit', [CrmProjectsController::class, 'submitBudget'])->name('budgets.submit');
         Route::post('/{project}/budgets/{budget}/approve', [CrmProjectsController::class, 'approveBudgetManual'])->name('budgets.approve_manual');
         Route::post('/{project}/budgets/{budget}/reject', [CrmProjectsController::class, 'rejectBudget'])->name('budgets.reject');
+        Route::post('/{project}/budgets/{budget}/recalculate', [CrmProjectsController::class, 'recalculateBudget'])->name('budgets.recalculate');
         Route::post('/{project}/budgets/{budget}/revert', [CrmProjectsController::class, 'revertBudgetToDraft'])->name('budgets.revert');
         Route::post('/{project}/budgets/{budget}/activate', [CrmProjectsController::class, 'activateBudget'])->name('budgets.activate');
         Route::delete('/{project}/budgets/{budget}', [CrmProjectsController::class, 'destroyBudget'])->name('budgets.destroy');
