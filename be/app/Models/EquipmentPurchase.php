@@ -50,6 +50,11 @@ class EquipmentPurchase extends Model
         ]);
     }
 
+    public function isPendingApproval(): bool
+    {
+        return in_array($this->status, ['pending_management', 'pending_accountant']);
+    }
+
     protected static function boot()
     {
         parent::boot();
@@ -58,19 +63,61 @@ class EquipmentPurchase extends Model
         });
     }
 
+    protected function getApprovalSummary(): string
+    {
+        return "Yêu cầu mua thiết bị mới" . ($this->project ? " [Dự án: " . $this->project->name . "]" : "") . " - Tổng: " . number_format($this->total_amount, 0, ',', '.') . "đ";
+    }
+
+    protected function getApprovalMetadata(): array
+    {
+        return [
+            'project_name' => $this->project?->name,
+            'total_amount' => $this->total_amount,
+            'items_count' => $this->items()->count(),
+            'notes' => $this->notes,
+            'type_label' => 'Mua thiết bị',
+        ];
+    }
+
     // ───── Notification Helpers (NotifiesUsers) ─────
     public function getNotificationProject(): ?\App\Models\Project { return $this->project; }
     public function getNotificationLabel(): string { return "mua thiết bị mới #" . $this->id; }
 
-    public function notificationMap(): array
+    protected function notificationMap(): array
     {
         return [
-            'type' => 'equipment_purchase',
-            'submitted_status' => 'pending_management',
-            'approved_status' => 'completed',
-            'rejected_status' => 'rejected',
-            'approver_permission' => \App\Constants\Permissions::COST_APPROVE_MANAGEMENT,
-            'fallback_role' => 'Ban điều hành'
+            'submitted' => [
+                'title'    => 'Yêu cầu mua thiết bị mới cần duyệt',
+                'body'     => 'Yêu cầu mua thiết bị cho dự án "{project}" đang chờ duyệt.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved_management' => [
+                'title'    => 'BĐH đã duyệt mua thiết bị',
+                'body'     => 'Yêu cầu mua thiết bị cho dự án "{project}" đã được BĐH duyệt, chờ Kế toán xác nhận.',
+                'target'   => ['creator', 'accountant', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'medium',
+                'category' => 'workflow_approval',
+            ],
+            'completed' => [
+                'title'    => 'KT đã xác nhận mua thiết bị',
+                'body'     => 'Yêu cầu mua thiết bị cho dự án "{project}" đã được xác nhận hoàn tất.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Yêu cầu mua thiết bị bị từ chối',
+                'body'     => 'Yêu cầu mua thiết bị cho dự án "{project}" bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
         ];
     }
 }

@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class Equipment extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, \App\Traits\Approvable, \App\Traits\NotifiesUsers;
 
     protected $fillable = [
         'uuid',
@@ -202,6 +202,80 @@ class Equipment extends Model
                 $equipment->uuid = Str::uuid();
             }
         });
+    }
+
+    // ==================================================================
+    // APPROVABLE OVERRIDES
+    // ==================================================================
+
+    protected function getApprovalSummary(): string
+    {
+        return "Mua tài sản/thiết bị mới: " . $this->name . ($this->project ? " [Dự án: " . $this->project->name . "]" : "");
+    }
+
+    protected function getApprovalMetadata(): array
+    {
+        return [
+            'name' => $this->name,
+            'project_name' => $this->project?->name,
+            'quantity' => $this->quantity,
+            'purchase_price' => $this->purchase_price,
+            'total_amount' => $this->purchase_price * $this->quantity,
+            'type_label' => 'Mua tài sản mới',
+            'creator' => $this->creator?->name,
+        ];
+    }
+
+    // ==================================================================
+    // NotifiesUsers Implementation
+    // ==================================================================
+
+    public function getNotificationProject(): ?Project
+    {
+        return $this->project;
+    }
+
+    public function getNotificationLabel(): string
+    {
+        return "Tài sản/Thiết bị: " . $this->name;
+    }
+
+    protected function notificationMap(): array
+    {
+        return [
+            'submitted' => [
+                'title'    => 'Yêu cầu duyệt mua thiết bị',
+                'body'     => 'Yêu cầu mua thiết bị {name} cho dự án {project} cần BĐH duyệt.',
+                'target'   => ['management', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'approved_management' => [
+                'title'    => 'BĐH đã duyệt mua thiết bị',
+                'body'     => 'Yêu cầu mua thiết bị {name} đã được BĐH duyệt, chờ KT xác nhận.',
+                'target'   => ['creator', 'accountant', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+            'available' => [
+                'title'    => 'Thiết bị đã sẵn sàng',
+                'body'     => 'Thiết bị {name} đã được nhập kho và sẵn sàng sử dụng.',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'medium',
+                'category' => 'status_change',
+            ],
+            'rejected' => [
+                'title'    => 'Yêu cầu mua thiết bị bị từ chối',
+                'body'     => 'Yêu cầu mua thiết bị {name} bị từ chối: {reason}',
+                'target'   => ['creator', 'pm'],
+                'tab'      => 'equipment',
+                'priority' => 'high',
+                'category' => 'workflow_approval',
+            ],
+        ];
     }
 
     /**

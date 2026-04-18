@@ -33,15 +33,17 @@ class EquipmentRental extends Model
     // ─── Relationships ───
     public function getApprovalSummary(): string
     {
-        return "Yêu cầu thuê thiết bị";
+        return "Yêu cầu thuê thiết bị: " . ($this->equipment_name ?: ($this->equipment->name ?? 'N/A')) . 
+               ($this->project ? " [Dự án: " . $this->project->name . "]" : "");
     }
 
     public function getApprovalMetadata(): array
     {
         return [
             'total_cost' => $this->total_cost,
-            'equipment_count' => $this->items()->count(),
-            'type' => $this->status // status identifies which step it is
+            'equipment_name' => $this->equipment_name ?: ($this->equipment->name ?? 'N/A'),
+            'type_label' => 'Thuê thiết bị',
+            'notes' => $this->notes,
         ];
     }
 

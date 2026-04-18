@@ -20,7 +20,7 @@ trait Approvable
                 // Model is no longer pending — resolve the approval status
                 $resolvedStatus = $model->getApprovalResolvedStatus();
                 
-                $model->approvals()->where('status', 'pending')->update([
+                $model->approvals()->update([
                     'status'        => $resolvedStatus,
                     'last_action'   => $resolvedStatus,
                     'last_actor_id' => auth()->id(),
@@ -111,20 +111,21 @@ trait Approvable
      */
     public function syncApproval(array $options = []): Approval
     {
+        \Illuminate\Support\Facades\Log::info("Approvable: Syncing approval for " . get_class($this) . " #{$this->id}");
         $userId = $options['user_id'] ?? (auth()->id() ?? $this->user_id ?? $this->creator_id ?? $this->created_by ?? 71);
         $projectId = $options['project_id'] ?? $this->project_id;
         $status = $options['status'] ?? 'pending';
         $summary = $options['summary'] ?? $this->getApprovalSummary();
         $metadata = $options['metadata'] ?? $this->getApprovalMetadata();
 
-        // Update existing pending approval or create a new one
+        // Update existing approval (regardless of current status) or create a new one
         $approval = Approval::updateOrCreate(
             [
                 'approvable_type' => get_class($this),
                 'approvable_id' => $this->id,
-                'status' => 'pending',
             ],
             [
+                'status' => $status,
                 'project_id' => $projectId,
                 'user_id' => $userId,
                 'summary' => $summary,

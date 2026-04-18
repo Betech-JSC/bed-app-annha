@@ -139,6 +139,12 @@ class AttachmentService
         if (!$request->has($key)) return 0;
         
         $ids = $request->input($key);
+        
+        // When sending arrays inside FormData, JS might convert it to a comma-separated string '1,2'
+        if (is_string($ids)) {
+            $ids = array_filter(explode(',', $ids));
+        }
+
         if (!is_array($ids)) return 0;
 
         return $this->deleteAttachments($ids, $entity);

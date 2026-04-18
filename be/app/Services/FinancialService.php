@@ -397,7 +397,7 @@ class FinancialService
             if ($isNew) {
                 $payment = new ProjectPayment();
                 $payment->uuid = (string) Str::uuid();
-                $payment->status = $data['status'] ?? 'pending';
+                $payment->status = $data['status'] ?? 'draft';
             }
 
             $fillable = [

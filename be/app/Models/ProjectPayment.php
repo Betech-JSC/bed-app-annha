@@ -108,7 +108,7 @@ class ProjectPayment extends Model
      */
     public function submit(): bool
     {
-        if ($this->status !== 'pending' && $this->status !== 'overdue') {
+        if (!in_array($this->status, ['draft', 'pending', 'overdue'])) {
             return false;
         }
 

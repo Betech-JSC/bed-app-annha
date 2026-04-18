@@ -2122,6 +2122,7 @@ class CrmProjectsController extends Controller
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0',
             'description' => 'required|string|max:1000',
+            'status' => 'nullable|in:draft,pending_approval'
         ]);
 
         DB::beginTransaction();
@@ -2129,8 +2130,9 @@ class CrmProjectsController extends Controller
             $cost = AdditionalCost::create([
                 'project_id' => $project->id,
                 'proposed_by' => $user->id,
-                'status' => 'pending_approval',
-                ...$validated,
+                'status' => $validated['status'] ?? 'draft',
+                'amount' => $validated['amount'],
+                'description' => $validated['description'],
             ]);
 
             // Handle file uploads if any
@@ -2142,6 +2144,70 @@ class CrmProjectsController extends Controller
             DB::rollBack();
             return back()->with('error', 'Lỗi khi tạo chi phí phát sinh: ' . $e->getMessage());
         }
+    }
+
+    public function updateAdditionalCost(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::ADDITIONAL_COST_UPDATE, $project);
+
+        $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
+        if (!in_array($cost->status, ['draft', 'rejected'])) {
+            return back()->with('error', 'Chỉ có thể cập nhật chi phí phát sinh khi ở trạng thái Nháp hoặc Bị từ chối.');
+        }
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0',
+            'description' => 'required|string|max:1000',
+            'status' => 'nullable|in:draft,pending_approval',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $cost->update([
+                'amount' => $validated['amount'],
+                'description' => $validated['description'],
+                'status' => $validated['status'] ?? $cost->status,
+            ]);
+
+            // Clean up old status metadata if sending for approval again
+            if (($validated['status'] ?? null) === 'pending_approval') {
+                $cost->rejected_reason = null;
+                $cost->save();
+            }
+
+            // Handle file attachments
+            app(\App\Services\AttachmentService::class)->handleDeletedRequest(
+                $request,
+                "project_additional_cost_{$cost->id}",
+                "additional-costs/{$project->id}/{$cost->id}"
+            );
+            $this->attachFilesToEntity($request, $cost, "additional-costs/{$project->id}/{$cost->id}", true);
+
+            DB::commit();
+            return back()->with('success', 'Đã cập nhật chi phí phát sinh.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi cập nhật chi phí phát sinh: ' . $e->getMessage());
+        }
+    }
+
+    public function submitAdditionalCost(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::ADDITIONAL_COST_UPDATE, $project);
+
+        $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
+        if ($cost->status !== 'draft') {
+            return back()->with('error', 'Chỉ có thể gửi duyệt từ trạng thái Nháp.');
+        }
+
+        $cost->status = 'pending_approval';
+        $cost->save();
+
+        return back()->with('success', 'Đã gửi duyệt chi phí phát sinh.');
     }
 
     public function approveAdditionalCost(string $projectId, string $id)
@@ -2199,8 +2265,8 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::ADDITIONAL_COST_DELETE, $project);
 
         $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
-        if (!in_array($cost->status, ['pending_approval', 'rejected'])) {
-            return back()->with('error', 'Chỉ xóa được CP phát sinh ở trạng thái chờ duyệt hoặc bị từ chối.');
+        if (!in_array($cost->status, ['draft', 'pending_approval', 'rejected'])) {
+            return back()->with('error', 'Chỉ xóa được CP phát sinh ở trạng thái Nháp, Chờ duyệt hoặc Bị từ chối.');
         }
         $cost->delete();
         return back()->with('success', 'Đã xóa chi phí phát sinh.');
@@ -2213,29 +2279,20 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::ADDITIONAL_COST_REVERT, $project);
 
         $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
-        if (!in_array($cost->status, ['approved', 'rejected', 'pending_approval', 'pending'])) {
+        if (!in_array($cost->status, ['rejected', 'pending_approval', 'pending'])) {
             return back()->with('error', 'Trạng thái hiện tại không thể hoàn duyệt.');
         }
 
         DB::beginTransaction();
         try {
-            // Nếu đã duyệt, cần khấu trừ lại vào giá trị Hợp đồng
-            if ($cost->status === 'approved') {
-                $contract = $project->contract;
-                if ($contract) {
-                    $contract->contract_value -= $cost->amount;
-                    $contract->save();
-                }
-            }
 
-            $cost->status = 'pending_approval';
+            $cost->status = 'draft';
             $cost->approved_at = null;
-            $cost->rejected_at = null;
             $cost->rejected_reason = null;
             $cost->save();
 
             DB::commit();
-            return back()->with('success', 'Đã hoàn duyệt chi phí phát sinh.');
+            return back()->with('success', 'Đã chuyển chi phí phát sinh về trạng thái Nháp.');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Lỗi hoàn duyệt CP phát sinh: ' . $e->getMessage());
@@ -2591,6 +2648,8 @@ class CrmProjectsController extends Controller
         try {
             $this->acceptanceService->upsertStage($validated, $stage, $user);
 
+            $this->attachmentService->handleDeletedRequest($request, $stage);
+
             // Handle file uploads during update
             $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stage->id}", false);
 
@@ -2861,6 +2920,8 @@ class CrmProjectsController extends Controller
         try {
             $this->equipmentService->upsertRental($validated, $rental, $user);
 
+            $this->attachmentService->handleDeletedRequest($request, $rental);
+
             // Handle file uploads (append)
             $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
 
@@ -3051,6 +3112,8 @@ class CrmProjectsController extends Controller
         try {
             $this->equipmentService->upsertPurchase($validated, $purchase, $user);
 
+            $this->attachmentService->handleDeletedRequest($request, $purchase);
+
             // Handle file uploads (append)
             $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$project->id}/{$purchase->id}", true);
 
@@ -3212,6 +3275,8 @@ class CrmProjectsController extends Controller
 
         try {
             $this->equipmentService->upsertUsage($validated, $usage, $user);
+
+            $this->attachmentService->handleDeletedRequest($request, $usage);
 
             // Handle file uploads (append)
             $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
@@ -4369,6 +4434,7 @@ class CrmProjectsController extends Controller
             DB::beginTransaction();
             $data = array_merge($validated, ['project_id' => $project->id]);
             $this->warrantyService->upsertWarranty($data, $warranty, $user);
+            $this->attachmentService->handleDeletedRequest($request, $warranty);
             $this->attachmentService->handleCrmUpload($request, $warranty, "projects/{$project->id}/warranties", false);
 
             DB::commit();
@@ -4493,6 +4559,7 @@ class CrmProjectsController extends Controller
             DB::beginTransaction();
             $data = array_merge($validated, ['project_id' => $project->id]);
             $this->warrantyService->upsertMaintenance($data, $maintenance, $user);
+            $this->attachmentService->handleDeletedRequest($request, $maintenance);
             $this->attachmentService->handleCrmUpload($request, $maintenance, "projects/{$project->id}/maintenance", false);
 
             DB::commit();

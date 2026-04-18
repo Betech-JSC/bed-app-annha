@@ -390,6 +390,17 @@ class ApprovalQueryService
             $a->approvable_type === Attendance::class
         )->pluck('approvable')->filter();
 
+        // Equipment Purchases (Mua thiết bị mới)
+        $data['equipment_purchases_management'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === \App\Models\EquipmentPurchase::class &&
+            str_contains($a->approvable->status ?? '', 'management')
+        )->pluck('approvable')->filter();
+
+        $data['equipment_purchases_accountant'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === \App\Models\EquipmentPurchase::class &&
+            str_contains($a->approvable->status ?? '', 'accountant')
+        )->pluck('approvable')->filter();
+
         // ═══════════════════════════════════════════════════════════════
         // RECENT ACTIVITY (Hoạt động gần đây)
         // ═══════════════════════════════════════════════════════════════
@@ -493,7 +504,11 @@ class ApprovalQueryService
                 ($type === Cost::class && in_array($status, ['pending', 'pending_management_approval'])) ||
                 ($type === MaterialBill::class && in_array($status, ['pending', 'pending_management'])) ||
                 ($type === AdditionalCost::class) ||
-                ($type === SubcontractorPayment::class && $status === 'pending_management_approval')
+                ($type === SubcontractorPayment::class && $status === 'pending_management_approval') ||
+                ($type === EquipmentRental::class && $status === 'pending_management') ||
+                ($type === AssetUsage::class && $status === 'pending_management') ||
+                ($type === \App\Models\EquipmentPurchase::class && $status === 'pending_management') ||
+                ($type === \App\Models\Equipment::class && $status === 'pending_management')
             );
         })->count();
 
@@ -504,7 +519,11 @@ class ApprovalQueryService
                 ($type === Cost::class && $status === 'pending_accountant_approval') ||
                 ($type === MaterialBill::class && $status === 'pending_accountant') ||
                 ($type === ProjectPayment::class && $status === 'customer_paid') ||
-                ($type === SubcontractorPayment::class && $status === 'pending_accountant_confirmation')
+                ($type === SubcontractorPayment::class && $status === 'pending_accountant_confirmation') ||
+                ($type === EquipmentRental::class && in_array($status, ['pending_accountant', 'pending_return'])) ||
+                ($type === AssetUsage::class && in_array($status, ['pending_accountant', 'pending_return'])) ||
+                ($type === \App\Models\EquipmentPurchase::class && $status === 'pending_accountant') ||
+                ($type === \App\Models\Equipment::class && $status === 'pending_accountant')
             );
         })->count();
 
@@ -523,7 +542,7 @@ class ApprovalQueryService
 
         // Amount calculation
         $totalPendingAmount = $allApprovals->sum(function($a) {
-            return (float) ($a->metadata['amount'] ?? $a->metadata['total_amount'] ?? 0);
+            return (float) ($a->metadata['amount'] ?? $a->metadata['total_amount'] ?? $a->metadata['total_cost'] ?? 0);
         });
 
         $isSuperAdmin = $user->isSuperAdmin();
@@ -659,6 +678,50 @@ class ApprovalQueryService
                     ];
                 }
             }
+
+            // Equipment Related (Management)
+            if ($type === 'all' || $type === 'management' || $type === 'equipment_rental') {
+                foreach ($data['equipment_rentals_management'] ?? [] as $r) {
+                    $items[] = [
+                        'id' => $r->id, 'type' => 'equipment_rental', 'title' => 'Thuê TB: ' . ($r->equipment_name ?: ($r->equipment->name ?? 'N/A')),
+                        'subtitle' => $r->project->name ?? 'Dự án', 'amount' => (float) $r->total_cost,
+                        'status' => $r->status, 'status_label' => $this->getStatusLabel($r->status),
+                        'created_by' => $r->creator->name ?? 'N/A', 'created_at' => $r->created_at->toISOString(),
+                        'project_id' => $r->project_id, 'can_approve' => $canApproveManagement,
+                        'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($r),
+                        'attachments_count' => $r->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'management' || $type === 'asset_usage') {
+                foreach ($data['asset_usages_management'] ?? [] as $u) {
+                    $items[] = [
+                        'id' => $u->id, 'type' => 'asset_usage', 'title' => 'Sử dụng TB: ' . ($u->asset->name ?? 'N/A'),
+                        'subtitle' => ($u->project->code ?? '') . ' - ' . ($u->project->name ?? 'Dự án'), 'amount' => 0,
+                        'status' => $u->status, 'status_label' => $this->getStatusLabel($u->status),
+                        'created_by' => $u->creator->name ?? 'N/A', 'created_at' => $u->created_at->toISOString(),
+                        'project_id' => $u->project_id, 'can_approve' => $canApproveManagement,
+                        'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($u),
+                        'attachments_count' => $u->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'management' || $type === 'equipment_purchase') {
+                foreach ($data['equipment_purchases_management'] ?? [] as $p) {
+                    $items[] = [
+                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . ($p->project->name ?? 'Dự án'),
+                        'subtitle' => 'Tổng cộng: ' . number_format($p->total_amount, 0) . 'đ', 'amount' => (float) $p->total_amount,
+                        'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
+                        'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
+                        'project_id' => $p->project_id, 'can_approve' => $canApproveManagement,
+                        'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($p),
+                        'attachments_count' => $p->attachments->count(),
+                    ];
+                }
+            }
         }
 
         // 2. ACCOUNTANT BUCKET
@@ -679,6 +742,50 @@ class ApprovalQueryService
                         'approval_level' => 'accountant', 'role_group' => 'accountant',
                         'attachments' => $this->formatAttachments($b),
                         'attachments_count' => $b->attachments->count(),
+                    ];
+                }
+            }
+
+            // Equipment Related (Accountant)
+            if ($type === 'all' || $type === 'accountant' || $type === 'equipment_rental') {
+                foreach (($data['equipment_rentals_accountant'] ?? collect())->concat($data['equipment_rentals_return'] ?? collect())->unique('id') as $r) {
+                    $items[] = [
+                        'id' => $r->id, 'type' => 'equipment_rental', 'title' => 'Thuê TB: ' . ($r->equipment_name ?: ($r->equipment->name ?? 'N/A')),
+                        'subtitle' => $r->project->name ?? 'Dự án', 'amount' => (float) $r->total_cost,
+                        'status' => $r->status, 'status_label' => $this->getStatusLabel($r->status),
+                        'created_by' => $r->creator->name ?? 'N/A', 'created_at' => $r->created_at->toISOString(),
+                        'project_id' => $r->project_id, 'can_approve' => $canApproveAccountant,
+                        'approval_level' => 'accountant', 'role_group' => 'accountant',
+                        'attachments' => $this->formatAttachments($r),
+                        'attachments_count' => $r->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'accountant' || $type === 'asset_usage') {
+                foreach (($data['asset_usages_accountant'] ?? collect())->concat($data['asset_usages_return'] ?? collect())->unique('id') as $u) {
+                    $items[] = [
+                        'id' => $u->id, 'type' => 'asset_usage', 'title' => 'Sử dụng TB: ' . ($u->asset->name ?? 'N/A'),
+                        'subtitle' => ($u->project->code ?? '') . ' - ' . ($u->project->name ?? 'Dự án'), 'amount' => 0,
+                        'status' => $u->status, 'status_label' => $this->getStatusLabel($u->status),
+                        'created_by' => $u->creator->name ?? 'N/A', 'created_at' => $u->created_at->toISOString(),
+                        'project_id' => $u->project_id, 'can_approve' => $canApproveAccountant,
+                        'approval_level' => 'accountant', 'role_group' => 'accountant',
+                        'attachments' => $this->formatAttachments($u),
+                        'attachments_count' => $u->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'accountant' || $type === 'equipment_purchase') {
+                foreach ($data['equipment_purchases_accountant'] ?? [] as $p) {
+                    $items[] = [
+                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . ($p->project->name ?? 'Dự án'),
+                        'subtitle' => 'Tổng cộng: ' . number_format($p->total_amount, 0) . 'đ', 'amount' => (float) $p->total_amount,
+                        'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
+                        'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
+                        'project_id' => $p->project_id, 'can_approve' => $canApproveAccountant,
+                        'approval_level' => 'accountant', 'role_group' => 'accountant',
+                        'attachments' => $this->formatAttachments($p),
+                        'attachments_count' => $p->attachments->count(),
                     ];
                 }
             }

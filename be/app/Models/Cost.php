@@ -427,6 +427,27 @@ class Cost extends Model
         return $saved;
     }
 
+    /**
+     * Determine if this Cost should trigger an approval record.
+     * We exclude costs that are mirrors of other approvable entities
+     * (MaterialBill, SubcontractorPayment, EquipmentPurchase, etc.)
+     * because those parents handle their own approval workflow.
+     */
+    public function isPendingApproval(): bool
+    {
+        // If this cost is linked to a parent entity that has its own approval flow, 
+        // we return false to prevent duplication in the Approvals table.
+        if ($this->material_bill_id || 
+            $this->subcontractor_payment_id || 
+            $this->equipment_id || 
+            $this->equipment_rental_id) {
+            return false;
+        }
+
+        return $this->getModelStatusValue() === 'pending_management_approval' || 
+               $this->getModelStatusValue() === 'pending_accountant_approval';
+    }
+
     // ==================================================================
     // APPROVABLE OVERRIDES
     // ==================================================================

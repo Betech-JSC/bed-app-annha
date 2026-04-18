@@ -558,7 +558,7 @@ export default function BudgetDetailScreen() {
 
                     {/* Workflow Action Buttons */}
                     <View style={styles.workflowActions}>
-                        {budget.status === "draft" && hasPermission(Permissions.BUDGET_UPDATE) && (
+                        {(budget.status === "draft" || budget.status === "rejected") && hasPermission(Permissions.BUDGET_UPDATE) && (
                             <TouchableOpacity
                                 style={[styles.workflowButton, styles.workflowButtonPrimary]}
                                 onPress={handleSubmitForApproval}

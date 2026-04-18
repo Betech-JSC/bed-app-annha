@@ -88,8 +88,11 @@ class AssetUsage extends Model
     public function getApprovalMetadata(): array
     {
         return [
-            'asset_name' => $this->asset->name ?? 'N/A',
-            'type' => $this->status
+            'asset_name'   => $this->asset->name ?? 'N/A',
+            'quantity'     => $this->quantity,
+            'project_name' => $this->project?->name,
+            'notes'        => $this->notes,
+            'type_label'   => 'Sử dụng thiết bị',
         ];
     }
 

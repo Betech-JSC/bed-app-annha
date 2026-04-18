@@ -340,6 +340,8 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
 
         // Additional Costs
         Route::post('/{project}/additional-costs', [CrmProjectsController::class, 'storeAdditionalCost'])->name('additional-costs.store');
+        Route::put('/{project}/additional-costs/{ac}', [CrmProjectsController::class, 'updateAdditionalCost'])->name('additional-costs.update');
+        Route::post('/{project}/additional-costs/{ac}/submit', [CrmProjectsController::class, 'submitAdditionalCost'])->name('additional-costs.submit');
         Route::post('/{project}/additional-costs/{ac}/approve', [CrmProjectsController::class, 'approveAdditionalCost'])->name('additional-costs.approve');
         Route::post('/{project}/additional-costs/{ac}/reject', [CrmProjectsController::class, 'rejectAdditionalCost'])->name('additional-costs.reject');
         Route::delete('/{project}/additional-costs/{ac}', [CrmProjectsController::class, 'destroyAdditionalCost'])->name('additional-costs.destroy');
