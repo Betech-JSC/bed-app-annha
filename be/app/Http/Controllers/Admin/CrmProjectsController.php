@@ -530,9 +530,9 @@ class CrmProjectsController extends Controller
         
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
         
-        // Permission: Creator or Admin/PM
+        // Permission: Requires dedicated revert permission
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        if ($cost->created_by !== $user->id && !$user->can(Permissions::COST_APPROVE_MANAGEMENT) && !$isSuperAdmin) {
+        if (!$user->can(Permissions::COST_REVERT) && !$isSuperAdmin) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu chi này.');
         }
 
@@ -847,7 +847,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
-        $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $project);
+        $this->crmRequire($user, Permissions::PAYMENT_REVERT, $project);
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
@@ -1789,6 +1789,32 @@ class CrmProjectsController extends Controller
         return back()->with('success', "Đã đính kèm {$count} file vào hợp đồng.");
     }
 
+    /**
+     * Hoàn duyệt hợp đồng về trạng thái nháp
+     */
+    public function revertContractToDraft(string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::CONTRACT_REVERT, $project);
+
+        $contract = Contract::where('project_id', $project->id)->firstOrFail();
+
+        $revertibleStatuses = ['pending_customer_approval', 'approved', 'rejected', 'confirmed', 'signed'];
+        if (!in_array($contract->status, $revertibleStatuses)) {
+            return back()->with('error', 'Không thể hoàn duyệt hợp đồng ở trạng thái hiện tại.');
+        }
+
+        $contract->update([
+            'status' => 'draft',
+            'approved_by' => null,
+            'approved_at' => null,
+            'rejected_reason' => null,
+        ]);
+
+        return back()->with('success', 'Đã hoàn duyệt hợp đồng về trạng thái nháp.');
+    }
+
     // ===================================================================
     // SUB-ITEM CRUD — Subcontractors (Gap 1)
     // ===================================================================
@@ -1894,7 +1920,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $admin = auth('admin')->user();
-        $this->crmRequire($admin, Permissions::SUBCONTRACTOR_APPROVE, $project);
+        $this->crmRequire($admin, Permissions::SUBCONTRACTOR_REVERT, $project);
 
         $sub = Subcontractor::where('project_id', $project->id)->findOrFail($id);
 
@@ -2013,9 +2039,9 @@ class CrmProjectsController extends Controller
         
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
-        // Permission: Creator or Admin/PM
+        // Permission: Requires dedicated revert permission
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        if ($payment->created_by !== $user->id && !$user->can(Permissions::SUBCONTRACTOR_PAYMENT_APPROVE) && !$isSuperAdmin) {
+        if (!$user->can(Permissions::SUBCONTRACTOR_PAYMENT_REVERT) && !$isSuperAdmin) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu thanh toán này.');
         }
 
@@ -2168,7 +2194,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
-        $this->crmRequire($user, Permissions::ADDITIONAL_COST_APPROVE, $project);
+        $this->crmRequire($user, Permissions::ADDITIONAL_COST_REVERT, $project);
 
         $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
         if (!in_array($cost->status, ['approved', 'rejected', 'pending_approval', 'pending'])) {
@@ -2308,7 +2334,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
-        $this->crmRequire($user, Permissions::BUDGET_APPROVE, $project);
+        $this->crmRequire($user, Permissions::BUDGET_REVERT, $project);
 
         $budget = ProjectBudget::where('project_id', $project->id)->findOrFail($id);
 
@@ -2909,7 +2935,7 @@ class CrmProjectsController extends Controller
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
 
-        if (!$isSuperAdmin && $rental->created_by !== $user->id && !$user->can(Permissions::COST_APPROVE_MANAGEMENT)) {
+        if (!$isSuperAdmin && !$user->can(Permissions::EQUIPMENT_REVERT)) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu thuê này.');
         }
 
@@ -3262,7 +3288,7 @@ class CrmProjectsController extends Controller
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
 
-        if (!$isSuperAdmin && $usage->created_by !== $user->id && !$user->can(Permissions::COST_APPROVE_MANAGEMENT)) {
+        if (!$isSuperAdmin && !$user->can(Permissions::EQUIPMENT_REVERT)) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu mượn này.');
         }
 
@@ -3494,11 +3520,8 @@ class CrmProjectsController extends Controller
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
 
-        // Permission: Creator or PM/Admin
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        if ($item->created_by !== $user->id && !$user->can(Permissions::ACCEPTANCE_APPROVE_LEVEL_2) && !$isSuperAdmin) {
-            return back()->with('error', 'Bạn không có quyền hoàn duyệt hạng mục này.');
-        }
+        // Permission: Dedicated revert permission
+        $this->crmRequire($user, Permissions::ACCEPTANCE_REVERT, $project);
 
         try {
             $this->acceptanceService->revertItemToDraft($item, $user);
@@ -3777,7 +3800,7 @@ class CrmProjectsController extends Controller
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if (!$isSuperAdmin && $bill->created_by !== $user->id && !$user->can(Permissions::COST_APPROVE_MANAGEMENT)) {
+        if (!$isSuperAdmin && !$user->can(Permissions::MATERIAL_REVERT)) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu vật tư này.');
         }
 
@@ -4145,7 +4168,7 @@ class CrmProjectsController extends Controller
     {
         $admin = auth('admin')->user();
         $project = Project::findOrFail($projectId);
-        $this->crmRequire($admin, Permissions::ATTENDANCE_APPROVE, $project);
+        $this->crmRequire($admin, Permissions::ATTENDANCE_REVERT, $project);
 
         $attendance = \App\Models\Attendance::findOrFail($id);
 

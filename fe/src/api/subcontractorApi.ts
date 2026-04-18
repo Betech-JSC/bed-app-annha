@@ -295,4 +295,10 @@ export const subcontractorApi = {
     const response = await api.post(`/projects/${projectId}/subcontractor-payments/${paymentId}/mark-paid`);
     return response.data;
   },
+
+  // Hoàn duyệt thanh toán thầu phụ về trạng thái nháp
+  revertPaymentToDraft: async (projectId: string | number, paymentId: string | number) => {
+    const response = await api.post(`/projects/${projectId}/subcontractor-payments/${paymentId}/revert`);
+    return response.data;
+  },
 };

@@ -164,6 +164,34 @@ export default function CostDetailScreen() {
     );
   };
 
+  const handleRevertToDraft = () => {
+    Alert.alert(
+      "Xác nhận hoàn duyệt",
+      "Bạn có chắc chắn muốn đưa chi phí này về trạng thái nháp?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Hoàn duyệt",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              const response = await costApi.revertCostToDraft(id!, costId!);
+              if (response.success) {
+                Alert.alert("Thành công", "Đã đưa chi phí về trạng thái nháp");
+                loadCost();
+              }
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
 
 
   const formatCurrency = (amount: number) => {
@@ -644,7 +672,7 @@ export default function CostDetailScreen() {
       </ScrollView>
 
       {/* Action Buttons - Always visible for actionable statuses */}
-      {(cost.status === "draft" || cost.status === "pending_management_approval" || cost.status === "pending_accountant_approval") && (
+      {(cost.status === "draft" || cost.status === "pending_management_approval" || cost.status === "pending_accountant_approval" || cost.status === "approved") && (
         <View style={styles.actionBar}>
           {cost.status === "draft" && (
             <PermissionGuard permission={Permissions.COST_SUBMIT} projectId={id} style={{ flex: 1 }}>
@@ -725,6 +753,25 @@ export default function CostDetailScreen() {
               >
                 <Ionicons name="trash-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
                 <Text style={styles.actionButtonText}>Xóa</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
+          )}
+
+          {cost.status === "approved" && (
+            <PermissionGuard permission={Permissions.COST_REVERT} projectId={id} style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#F59E0B' }]}
+                onPress={handleRevertToDraft}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="arrow-undo-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.actionButtonText}>Hoàn duyệt</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </PermissionGuard>
           )}

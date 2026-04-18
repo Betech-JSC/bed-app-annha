@@ -375,4 +375,37 @@ class EquipmentRentalController extends Controller
             'message' => 'Thao tác không thành công hoặc sai trạng thái.',
         ], 422);
     }
+
+    /**
+     * Hoàn duyệt phiếu thuê thiết bị về trạng thái nháp
+     */
+    public function revertToDraft(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::EQUIPMENT_REVERT, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền hoàn duyệt phiếu thuê thiết bị này.'
+            ], 403);
+        }
+
+        $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
+
+        try {
+            $this->equipmentService->revertRentalToDraft($rental, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã đưa phiếu thuê thiết bị về trạng thái nháp.',
+                'data' => $rental->fresh(['equipment', 'supplier:id,name', 'creator:id,name', 'approver:id,name'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 400);
+        }
+    }
 }

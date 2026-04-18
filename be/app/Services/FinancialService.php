@@ -183,9 +183,9 @@ class FinancialService
      */
     public function revertCostToDraft(Cost $cost, $user = null): bool
     {
-        $revertibleStatuses = ['pending_management_approval', 'pending_accountant_approval', 'rejected'];
+        $revertibleStatuses = ['pending_management_approval', 'pending_accountant_approval', 'approved', 'rejected'];
         if (!in_array($cost->status, $revertibleStatuses)) {
-            throw new \Exception('Chỉ có thể hoàn duyệt chi phí đang chờ duyệt hoặc đã bị từ chối.');
+            throw new \Exception('Chỉ có thể hoàn duyệt chi phí đang chờ duyệt, đã duyệt hoặc đã bị từ chối.');
         }
 
         $cost->status = 'draft';
@@ -362,9 +362,9 @@ class FinancialService
      */
     public function revertSubPaymentToDraft(SubcontractorPayment $payment, $user = null): bool
     {
-        $revertibleStatuses = ['pending_management_approval', 'pending_accountant_confirmation', 'rejected'];
+        $revertibleStatuses = ['pending_management_approval', 'pending_accountant_confirmation', 'paid', 'rejected'];
         if (!in_array($payment->status, $revertibleStatuses)) {
-            throw new \Exception('Chỉ có thể hoàn duyệt phiếu đang chờ duyệt hoặc bị từ chối.');
+            throw new \Exception('Chỉ có thể hoàn duyệt phiếu đang chờ duyệt, đã thanh toán hoặc bị từ chối.');
         }
 
         $payment->status = 'draft';

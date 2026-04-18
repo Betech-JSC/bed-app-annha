@@ -395,4 +395,37 @@ class ProjectPaymentController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Hoàn duyệt thanh toán về trạng thái chờ
+     */
+    public function revertToPending(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::PAYMENT_REVERT, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền hoàn duyệt thanh toán này.'
+            ], 403);
+        }
+
+        $payment = ProjectPayment::where('project_id', $projectId)->findOrFail($id);
+
+        try {
+            $this->financialService->revertProjectPaymentToPending($payment, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã hoàn duyệt thanh toán về trạng thái chờ.',
+                'data' => $payment->fresh(['confirmer', 'customerApprover', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 400);
+        }
+    }
 }

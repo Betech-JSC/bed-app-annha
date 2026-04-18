@@ -83,6 +83,7 @@ class PermissionSeeder extends Seeder
             'company_cost.approve.management' => 'BĐH duyệt chi phí công ty',
             'company_cost.approve.accountant' => 'Kế toán duyệt chi phí công ty',
             'company_cost.reject' => 'Từ chối chi phí công ty',
+            'company_cost.revert' => 'Hoàn duyệt chi phí công ty',
 
             // ===== DỰ ÁN =====
             'project.view'    => 'Xem danh sách & chi tiết dự án',
@@ -136,6 +137,7 @@ class PermissionSeeder extends Seeder
             'cost.approve.management' => 'Ban quản lý duyệt chi phí',
             'cost.approve.accountant' => 'Kế toán xác nhận chi phí',
             'cost.reject'             => 'Từ chối chi phí nội bộ',
+            'cost.revert'             => 'Hoàn duyệt chi phí nội bộ',
 
             // ===== CHI PHÍ PHÁT SINH =====
             'additional_cost.view'                  => 'Xem chi phí phát sinh',
@@ -146,6 +148,7 @@ class PermissionSeeder extends Seeder
             'additional_cost.reject'                => 'Từ chối chi phí phát sinh',
             'additional_cost.confirm'               => 'Kế toán xác nhận đã nhận tiền phát sinh',
             'additional_cost.mark_paid_by_customer' => 'KH xác nhận đã thanh toán CP phát sinh',
+            'additional_cost.revert'                => 'Hoàn duyệt chi phí phát sinh',
 
             // ===== VẬT TƯ / VẬT LIỆU =====
             'material.view'    => 'Xem kho vật tư / vật liệu',
@@ -153,6 +156,7 @@ class PermissionSeeder extends Seeder
             'material.update'  => 'Sửa thông tin vật tư',
             'material.delete'  => 'Xóa vật tư khỏi kho',
             'material.approve' => 'Duyệt yêu cầu xuất vật tư',
+            'material.revert'  => 'Hoàn duyệt phiếu vật liệu',
 
             // ===== THIẾT BỊ =====
             'equipment.view'    => 'Xem danh sách thiết bị',
@@ -160,6 +164,7 @@ class PermissionSeeder extends Seeder
             'equipment.update'  => 'Sửa thông tin thiết bị',
             'equipment.delete'  => 'Xóa thiết bị',
             'equipment.approve' => 'Duyệt yêu cầu thiết bị',
+            'equipment.revert'  => 'Hoàn duyệt hồ sơ thiết bị',
 
             // ===== BẢO HÀNH & BẢO TRÌ =====
             'warranty.view'    => 'Xem danh sách bảo hành',
@@ -196,6 +201,7 @@ class PermissionSeeder extends Seeder
             'contract.delete'          => 'Xóa hợp đồng',
             'contract.approve.level_1' => 'Duyệt hợp đồng — cấp Kỹ thuật',
             'contract.approve.level_2' => 'Phê duyệt hợp đồng — cấp Ban Giám đốc',
+            'contract.revert'          => 'Hoàn duyệt hợp đồng về nháp',
 
             // ===== THANH TOÁN (đợt TT từ KH) =====
             'payment.view'                  => 'Xem các đợt thanh toán',
@@ -205,12 +211,15 @@ class PermissionSeeder extends Seeder
             'payment.confirm'               => 'Kế toán xác nhận đã nhận tiền',
             'payment.approve'               => 'Duyệt đợt thanh toán',
             'payment.mark_paid_by_customer' => 'KH xác nhận đã chuyển tiền',
+            'payment.revert'                => 'Hoàn duyệt đợt thanh toán',
 
             // ===== NHÀ THẦU PHỤ =====
             'subcontractor.view'   => 'Xem danh sách nhà thầu phụ',
             'subcontractor.create' => 'Thêm nhà thầu phụ',
             'subcontractor.update' => 'Sửa thông tin nhà thầu phụ',
             'subcontractor.delete' => 'Xóa nhà thầu phụ',
+            'subcontractor.approve' => 'Duyệt nhà thầu phụ',
+            'subcontractor.revert' => 'Hoàn duyệt nhà thầu phụ',
 
             // Thanh toán nhà thầu phụ
             'subcontractor_payment.view'      => 'Xem thanh toán nhà thầu phụ',
@@ -219,6 +228,7 @@ class PermissionSeeder extends Seeder
             'subcontractor_payment.delete'    => 'Xóa thanh toán nhà thầu phụ',
             'subcontractor_payment.approve'   => 'Duyệt thanh toán nhà thầu phụ',
             'subcontractor_payment.mark_paid' => 'Xác nhận đã trả tiền cho NTP',
+            'subcontractor_payment.revert'    => 'Hoàn duyệt thanh toán nhà thầu phụ',
 
             // ===== TÀI LIỆU =====
             'document.view'   => 'Xem danh sách tài liệu',
@@ -262,6 +272,7 @@ class PermissionSeeder extends Seeder
             'budgets.update'  => 'Sửa ngân sách dự án',
             'budgets.delete'  => 'Xóa ngân sách dự án',
             'budgets.approve' => 'Duyệt ngân sách dự án',
+            'budgets.revert'  => 'Hoàn duyệt ngân sách dự án',
 
             // ===== NGHIỆM THU =====
             'acceptance.view'            => 'Xem hồ sơ nghiệm thu',
@@ -272,6 +283,7 @@ class PermissionSeeder extends Seeder
             'acceptance.approve.level_1' => 'Giám sát duyệt nghiệm thu',
             'acceptance.approve.level_2' => 'Quản lý dự án duyệt nghiệm thu',
             'acceptance.approve.level_3' => 'Khách hàng phê duyệt nghiệm thu',
+            'acceptance.revert'          => 'Hoàn duyệt hạng mục nghiệm thu',
 
             // Mẫu nghiệm thu
             'acceptance.template.view'   => 'Xem bộ mẫu nghiệm thu',
@@ -335,6 +347,7 @@ class PermissionSeeder extends Seeder
             'attendance.check_in' => 'Điểm danh vào / ra',
             'attendance.manage'   => 'Quản lý dữ liệu chấm công',
             'attendance.approve'  => 'Duyệt bản ghi chấm công',
+            'attendance.revert'   => 'Hoàn duyệt bản ghi chấm công',
 
             // ===== NĂNG SUẤT LAO ĐỘNG =====
             'labor_productivity.view'   => 'Xem báo cáo năng suất lao động',
@@ -386,6 +399,7 @@ class PermissionSeeder extends Seeder
             'approve' => 'Duyệt', 'reject' => 'Từ chối', 'confirm' => 'Xác nhận',
             'verify' => 'Xác minh', 'assign' => 'Phân bổ', 'remove' => 'Gỡ bỏ',
             'upload' => 'Tải lên', 'export' => 'Xuất', 'send' => 'Gửi',
+            'revert' => 'Hoàn duyệt', 'mark_paid' => 'Xác nhận đã thanh toán',
         ];
 
         $actionName = $actionNames[$action] ?? ucfirst($action);

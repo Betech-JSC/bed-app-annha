@@ -468,4 +468,37 @@ class BudgetController extends Controller
             return response()->json($result);
         }
     }
+
+    /**
+     * Hoàn duyệt ngân sách về trạng thái nháp
+     */
+    public function revertToDraft(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::BUDGET_REVERT, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền hoàn duyệt ngân sách dự án này.'
+            ], 403);
+        }
+
+        $budget = ProjectBudget::where('project_id', $projectId)->findOrFail($id);
+
+        try {
+            $this->budgetService->revertToDraft($budget);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã đưa ngân sách về trạng thái nháp.',
+                'data' => $budget->fresh(['items.costGroup', 'creator', 'approver'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 400);
+        }
+    }
 }

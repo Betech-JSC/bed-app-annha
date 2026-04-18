@@ -87,12 +87,13 @@ const costColumns = [
   { title: 'Ngày', key: 'date', width: 110 },
 ]
 
-const statusColors = { draft: 'default', submitted: 'processing', pending_management_approval: 'orange', pending_accountant_approval: 'cyan', approved_management: 'blue', approved_accountant: 'green', approved: 'green', rejected: 'red', paid: 'green' }
-const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', active: 'green', approved: 'green', expired: 'default', terminated: 'red' }
+const statusColors = { draft: 'default', submitted: 'processing', pending_management_approval: 'orange', pending_accountant_approval: 'cyan', approved_management: 'blue', approved_accountant: 'green', approved: 'green', rejected: 'red', paid: 'green', confirmed: 'cyan', completed: 'green' }
+const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', active: 'green', approved: 'green', confirmed: 'cyan', signed: 'geekblue', expired: 'default', terminated: 'red', cancelled: 'default', completed: 'green' }
 const statusLabels = {
   draft: 'Nháp',
   submitted: 'Đã gửi',
   pending: 'Chờ duyệt',
+  pending_approval: 'Chờ duyệt',
   pending_management_approval: 'Chờ BĐH duyệt',
   pending_accountant_approval: 'Chờ KT xác nhận',
   pending_customer_approval: 'Chờ KH duyệt',
@@ -100,10 +101,14 @@ const statusLabels = {
   approved_management: 'BĐH đã duyệt',
   approved_accountant: 'KT đã duyệt',
   approved: 'Đã duyệt',
+  confirmed: 'Đã xác nhận',
+  signed: 'Đã ký',
   rejected: 'Từ chối',
   active: 'Đang hiệu lực',
   expired: 'Hết hạn',
   terminated: 'Đã thanh lý',
+  cancelled: 'Đã hủy',
+  completed: 'Hoàn thành',
   paid: 'Đã thanh toán',
   customer_paid: 'KH đã thanh toán',
   customer_approved: 'KH đã duyệt',

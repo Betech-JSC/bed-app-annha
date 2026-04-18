@@ -941,7 +941,7 @@
                 <span :class="item.workflow_status === 'customer_approved' ? 'text-gray-400 line-through' : 'text-gray-700'">{{ item.name }}</span>
                 <div class="flex items-center gap-2 ml-auto">
                   <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px]">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
-                  <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved', 'rejected'].includes(item.workflow_status) && (can('acceptance.approve.level_1') || item.created_by === page.props.auth?.user?.id)"
+                  <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved', 'rejected'].includes(item.workflow_status) && can('acceptance.revert')"
                             type="text" size="small" class="text-orange-500 hover:text-orange-600 p-0 h-auto" @click.stop="revertAcceptItemAction(stage, item)">
                     <ReloadOutlined class="text-[10px]" />
                   </a-button>
@@ -3003,7 +3003,7 @@
           <a-button type="primary" size="small" ghost @click="openSubPaymentHistory(subDetail)"><HistoryOutlined /> TT Nhà thầu</a-button>
           <a-button type="link" @click="openSubModal(subDetail)" class="p-0 border-0 shadow-none"><EditOutlined /> Sửa thông tin</a-button>
           <a-button v-if="subDetail.progress_status === 'not_started'" type="primary" size="small" @click="approveSub(subDetail)">Bắt đầu</a-button>
-          <a-button v-if="subDetail.status === 'approved' && can('subcontractor.approve')" type="primary" size="small" ghost danger @click="revertSubcontractorAction(subDetail)">Hoàn duyệt</a-button>
+          <a-button v-if="subDetail.status === 'approved' && can('subcontractor.revert')" type="primary" size="small" ghost danger @click="revertSubcontractorAction(subDetail)">Hoàn duyệt</a-button>
         </div>
       </div>
 
@@ -3116,7 +3116,7 @@
           </template>
 
           <!-- Hoàn duyệt action -->
-          <a-button v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(costDetailRecord.status) && (can('cost.approve.management') || costDetailRecord.created_by === $page.props.auth?.user?.id)"
+          <a-button v-if="['pending_management_approval', 'pending_accountant_approval', 'approved_management', 'approved_accountant', 'approved'].includes(costDetailRecord.status) && can('cost.revert')"
                     class="border-orange-500 text-orange-500 hover:bg-orange-50 transition-colors" @click="revertCostAction(costDetailRecord)">
             <ReloadOutlined /> Hoàn duyệt
           </a-button>
@@ -3206,7 +3206,7 @@
       <!-- Action Footer -->
       <div class="pt-6 mt-6 border-t border-gray-100 flex flex-wrap justify-between items-center bg-white sticky bottom-0 z-10 py-4">
         <div class="flex gap-2">
-           <a-button v-if="can('contract.update')" size="small" @click="openContractModal(contractDetailRecord); showContractDetail = false"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="['draft', 'rejected'].includes(contractDetailRecord.status) && can('contract.update')" size="small" @click="openContractModal(contractDetailRecord); showContractDetail = false"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="contractDetailRecord.status === 'draft' && can('contract.update')">
@@ -3216,6 +3216,8 @@
             <a-button type="primary" class="bg-green-600 border-green-600" :loading="actionLoading['approve-contract']" @click="approveContract(contractDetailRecord)">Phê duyệt</a-button>
             <a-button danger ghost @click="openRejectContractModal(contractDetailRecord)">Từ chối</a-button>
           </template>
+          <!-- Hoàn duyệt hợp đồng -->
+          <a-button v-if="['pending_customer_approval', 'approved', 'rejected', 'confirmed', 'signed'].includes(contractDetailRecord.status) && can('contract.revert')" danger ghost @click="revertContractAction(contractDetailRecord)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -3349,6 +3351,8 @@
             <a-button type="primary" class="bg-green-600 border-green-600" @click="approveBillAccountant(materialDetail)">KT Xác nhận</a-button>
             <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
           </template>
+          <!-- Hoàn duyệt phiếu vật liệu -->
+          <a-button v-if="['pending_management', 'pending_accountant', 'approved', 'rejected'].includes(materialDetail.status) && can('material.revert')" danger ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -3512,8 +3516,8 @@
             </a-popconfirm>
           </a-tooltip>
 
-          <!-- Sửa: Khi Nháp, Từ chối, hoặc Đã duyệt (nhưng chưa Active) -->
-          <a-tooltip v-if="['draft', 'rejected', 'approved', 'pending_approval'].includes(budgetDetail.status) && can('budgets.update')" title="Thay đổi thông tin phiên bản hoặc hạng mục" placement="bottom">
+          <!-- Sửa: Chỉ khi Nháp hoặc Từ chối -->
+          <a-tooltip v-if="['draft', 'rejected'].includes(budgetDetail.status) && can('budgets.update')" title="Thay đổi thông tin phiên bản hoặc hạng mục" placement="bottom">
             <a-button size="small" @click="openBudgetModal(budgetDetail)"><EditOutlined /> Sửa</a-button>
           </a-tooltip>
           
@@ -3538,7 +3542,7 @@
             </a-tooltip>
           </template>
 
-          <template v-if="['approved', 'pending_approval', 'rejected'].includes(budgetDetail.status) && can('budgets.approve')">
+          <template v-if="['approved', 'pending_approval'].includes(budgetDetail.status) && can('budgets.revert')">
              <a-button danger ghost @click="revertBudgetAction(budgetDetail)">Hoàn duyệt</a-button>
           </template>
 
@@ -3635,13 +3639,14 @@
          </div>
          <div class="flex gap-2">
            <a-button @click="showRentalDetailDrawer = false">Đóng</a-button>
-           <a-button v-if="selectedRental.status === 'draft'" @click="openRentalModal(selectedRental)"><EditOutlined /> Sửa</a-button>
-           <a-button v-if="selectedRental.status === 'draft'" type="primary" @click="submitRental(selectedRental)">Gửi duyệt</a-button>
-           <a-button v-if="selectedRental.status === 'pending_management'" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveRentalMgmt(selectedRental)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
-            <a-button v-if="selectedRental.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" @click="confirmRentalKT(selectedRental)"><CheckSquareOutlined /> KT Xác nhận</a-button>
-            <a-button v-if="selectedRental.status === 'in_use'" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturnRental(selectedRental)">Đánh dấu đã trả</a-button>
-            <a-button v-if="selectedRental.status === 'pending_return' && can('cost.approve.accountant')" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckSquareOutlined /> KT Xác nhận trả</a-button>
-            <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status)" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
+           <a-button v-if="selectedRental.status === 'draft' && can('equipment.update')" @click="openRentalModal(selectedRental)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="selectedRental.status === 'draft' && can('equipment.update')" type="primary" @click="submitRental(selectedRental)">Gửi duyệt</a-button>
+           <a-button v-if="selectedRental.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveRentalMgmt(selectedRental)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
+            <a-button v-if="selectedRental.status === 'pending_accountant' && can('equipment.approve')" type="primary" @click="confirmRentalKT(selectedRental)"><CheckSquareOutlined /> KT Xác nhận</a-button>
+            <a-button v-if="selectedRental.status === 'in_use' && can('equipment.update')" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturnRental(selectedRental)">Đánh dấu đã trả</a-button>
+            <a-button v-if="selectedRental.status === 'pending_return' && can('equipment.approve')" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckSquareOutlined /> KT Xác nhận trả</a-button>
+            <a-button v-if="['pending_management', 'pending_accountant', 'in_use', 'approved'].includes(selectedRental.status) && can('equipment.revert')" danger ghost @click="revertRentalAction && revertRentalAction(selectedRental)">Hoàn duyệt</a-button>
+            <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status) && can('equipment.approve')" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
              <template #description>
                <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
              </template>
@@ -3902,9 +3907,10 @@
       <!-- Action Footer -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
         <div class="flex gap-2">
-          <a-popconfirm v-if="can('additional_cost.delete') && ['pending_approval','rejected'].includes(additionalCostDetail.status)" title="Xóa đề xuất?" @confirm="deleteAC(additionalCostDetail)">
+          <a-popconfirm v-if="can('additional_cost.delete') && ['draft','pending_approval','rejected'].includes(additionalCostDetail.status)" title="Xóa đề xuất?" @confirm="deleteAC(additionalCostDetail)">
             <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
+          <a-button v-if="can('additional_cost.update') && ['draft','rejected'].includes(additionalCostDetail.status)" size="small" @click="openAdditionalCostModal(additionalCostDetail); showAdditionalCostDetailDrawer = false"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="additionalCostDetail.status === 'pending_approval' && can('additional_cost.approve')">
@@ -3918,6 +3924,11 @@
             </template>
             <a-button danger ghost @click="openRejectACModal(additionalCostDetail)">Từ chối</a-button>
           </template>
+          <!-- Hoàn duyệt -->
+          <a-button v-if="['pending_approval', 'approved'].includes(additionalCostDetail.status) && can('additional_cost.revert')"
+                    class="border-orange-500 text-orange-500 hover:bg-orange-50 transition-colors" @click="revertACAction && revertACAction(additionalCostDetail)">
+            <ReloadOutlined /> Hoàn duyệt
+          </a-button>
         </div>
       </div>
     </div>
@@ -4438,7 +4449,7 @@
         </a-tooltip>
 
         <a-button 
-          v-if="['approved', 'rejected'].includes(selectedAttendance.workflow_status) && can('attendance.approve')" 
+          v-if="['approved', 'rejected'].includes(selectedAttendance.workflow_status) && can('attendance.revert')" 
           danger 
           ghost
           size="large" 
@@ -4679,7 +4690,7 @@
           </template>
 
           <!-- Hoàn duyệt: Khi đã Duyệt hoặc Chờ duyệt -->
-          <template v-if="['customer_approved', 'customer_paid', 'confirmed'].includes(paymentDetailRecord.status) && can('payment.confirm')">
+          <template v-if="['customer_approved', 'customer_paid', 'confirmed'].includes(paymentDetailRecord.status) && can('payment.revert')">
              <a-button danger ghost @click="revertPaymentAction(paymentDetailRecord)">Hoàn duyệt</a-button>
           </template>
         </div>
@@ -4720,7 +4731,7 @@
                 <a-button type="text" size="small" class="text-green-600"><CheckSquareOutlined /></a-button>
               </a-popconfirm>
 
-              <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'rejected'].includes(p.status) && (can('subcontractor_payment.approve') || p.created_by === page.props.auth?.user?.id)"
+              <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'paid'].includes(p.status) && can('subcontractor_payment.revert')"
                         type="text" size="small" class="text-orange-500 hover:text-orange-600" @click="revertSubPaymentAction(subDetail, p)">
                 <ReloadOutlined />
               </a-button>
@@ -7098,8 +7109,8 @@ const subPayStatusColors = { draft: 'default', pending_management_approval: 'ora
 const subPayMethodLabels = { bank_transfer: 'Chuyển khoản', cash: 'Tiền mặt', check: 'Séc', other: 'Khác' }
 const acStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', pending_approval: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', cancelled: 'Đã hủy' }
 const acStatusColors = { draft: 'default', pending: 'orange', pending_approval: 'orange', approved: 'green', rejected: 'red', cancelled: 'default' }
-const contractStatusLabels = { draft: 'Nháp', pending_customer_approval: 'Chờ KH duyệt', pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận', active: 'Đang hiệu lực', approved: 'Đã duyệt', rejected: 'Từ chối', expired: 'Hết hạn', terminated: 'Đã thanh lý', cancelled: 'Đã hủy' }
-const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', active: 'green', approved: 'green', rejected: 'red', expired: 'orange', terminated: 'red', cancelled: 'default' }
+const contractStatusLabels = { draft: 'Nháp', pending_customer_approval: 'Chờ KH duyệt', pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận', active: 'Đang hiệu lực', approved: 'Đã duyệt', confirmed: 'Đã xác nhận', signed: 'Đã ký', rejected: 'Từ chối', expired: 'Hết hạn', terminated: 'Đã thanh lý', cancelled: 'Đã hủy', completed: 'Hoàn thành' }
+const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', active: 'green', approved: 'green', confirmed: 'cyan', signed: 'geekblue', rejected: 'red', expired: 'orange', terminated: 'red', cancelled: 'default', completed: 'green' }
 const paymentStatusLabelsMap = { pending: 'Chờ gửi y/c', customer_paid: 'Đã thanh toán', customer_pending_approval: 'Chờ KH duyệt', customer_approved: 'Đã duyệt (Chờ TT)', confirmed: 'Đã xác nhận', paid: 'Đã xác nhận', partial: 'TT 1 phần', completed: 'Hoàn tất', overdue: 'Quá hạn' }
 const paymentTagColors = { pending: 'default', customer_paid: 'blue', customer_pending_approval: 'cyan', customer_approved: 'geekblue', confirmed: 'green', paid: 'green', partial: 'blue', completed: 'green', overdue: 'red' }
 const defectStatusLabels = { open: 'Mới', in_progress: 'Đang sửa lỗi', rejected: 'Chưa đạt', fixed: 'Đã sửa', verified: 'Đã xác nhận', closed: 'Đã đóng' }
@@ -10068,6 +10079,40 @@ const revertAttendanceAction = (attendance) => {
     onOk: () => {
       router.post(`/projects/${props.project.id}/attendance/${attendance.id}/revert`, {}, {
         preserveScroll: true,
+      })
+    }
+  })
+}
+
+const revertContractAction = (contract) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Hợp đồng sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/contract/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+          if (showContractDetail.value) showContractDetail.value = false
+        },
+      })
+    }
+  })
+}
+
+const revertMaterialBillAction = (bill) => {
+  Modal.confirm({
+    title: 'Xác nhận hoàn duyệt',
+    content: 'Phiếu nhập vật liệu sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onOk: () => {
+      router.post(`/projects/${props.project.id}/material-bills/${bill.id}/revert`, {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+          if (showMaterialDetailDrawer.value) showMaterialDetailDrawer.value = false
+        },
       })
     }
   })

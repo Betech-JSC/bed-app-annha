@@ -484,6 +484,28 @@ export default function AcceptanceItemList({
     );
   };
 
+  const handleRevertToDraft = (item: AcceptanceItem) => {
+    Alert.alert(
+      "Xác nhận hoàn duyệt",
+      "Hạng mục này sẽ được đưa về trạng thái Nháp để có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Đồng ý",
+          onPress: async () => {
+            try {
+              await acceptanceApi.revertItemToDraft(projectId, stage.id, item.id);
+              Alert.alert("Thành công", "Hạng mục đã được hoàn về trạng thái nháp.");
+              onRefresh();
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <TouchableOpacity
@@ -1048,6 +1070,19 @@ export default function AcceptanceItemList({
                     </View>
                   )}
 
+                  {/* Hoàn duyệt - Revert to draft */}
+                  {['submitted', 'supervisor_approved', 'project_manager_approved', 'rejected'].includes(item.workflow_status) && (
+                    <PermissionGuard permission="acceptance.revert">
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.revertButton]}
+                        onPress={() => handleRevertToDraft(item)}
+                      >
+                        <Ionicons name="arrow-undo-outline" size={16} color="#F59E0B" />
+                        <Text style={styles.revertButtonText}>Hoàn duyệt</Text>
+                      </TouchableOpacity>
+                    </PermissionGuard>
+                  )}
+
                   {/* Legacy approval (for backward compatibility) */}
                   {!item.workflow_status && item.can_accept && item.acceptance_status === "pending" && (
                     <View style={styles.actionButtonGroup}>
@@ -1437,6 +1472,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#EF4444",
+  },
+  revertButton: {
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    marginTop: 8,
+  },
+  revertButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#F59E0B",
   },
   editButton: {
     padding: 6,

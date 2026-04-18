@@ -294,7 +294,7 @@ class CrmFinanceController extends Controller
     public function revertCompanyCostToDraft($id)
     {
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::COMPANY_COST_SUBMIT); // Reuse submit permission for revert
+        $this->crmRequire($user, Permissions::COMPANY_COST_REVERT);
         $cost = Cost::companyCosts()->findOrFail($id);
 
         try {

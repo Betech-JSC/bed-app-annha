@@ -427,7 +427,7 @@ class CrmHrController extends Controller
     public function revertAttendanceHr($id)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::ATTENDANCE_APPROVE);
+        $this->crmRequire($admin, Permissions::ATTENDANCE_REVERT);
 
         $attendance = \App\Models\Attendance::findOrFail($id);
 

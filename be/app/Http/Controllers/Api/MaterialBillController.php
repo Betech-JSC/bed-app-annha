@@ -329,4 +329,36 @@ class MaterialBillController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Hoàn duyệt phiếu vật liệu về trạng thái nháp
+     */
+    public function revertToDraft(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $bill = MaterialBill::where('project_id', $projectId)->findOrFail($id);
+        $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::MATERIAL_REVERT, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền hoàn duyệt phiếu vật liệu này.'
+            ], 403);
+        }
+
+        try {
+            $this->materialBillService->revertToDraft($bill, $user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã đưa phiếu vật liệu về trạng thái nháp.',
+                'data' => $bill->fresh(['items.material', 'supplier', 'costGroup', 'creator'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage()
+            ], 400);
+        }
+    }
 }

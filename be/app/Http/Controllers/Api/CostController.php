@@ -388,11 +388,10 @@ class CostController extends Controller
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check permission (Creator can revert, or Management Approver)
-        $isCreator = $cost->created_by === $user->id;
-        $canApprove = $this->authService->can($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
+        // Check permission - Requires dedicated revert permission
+        $canRevert = $this->authService->can($user, Permissions::COST_REVERT, $project);
 
-        if (!$isCreator && !$canApprove) {
+        if (!$canRevert) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền hoàn duyệt chi phí này.'

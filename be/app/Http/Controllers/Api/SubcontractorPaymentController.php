@@ -290,11 +290,10 @@ class SubcontractorPaymentController extends Controller
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check permission (Creator or Approver)
-        $isCreator = $payment->created_by === $user->id;
-        $canApprove = $this->apiCan(Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $project);
+        // Check permission - Requires dedicated revert permission
+        $canRevert = $this->apiCan(Permissions::SUBCONTRACTOR_PAYMENT_REVERT, $project);
 
-        if (!$isCreator && !$canApprove) {
+        if (!$canRevert) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền hoàn duyệt phiếu chi này.'

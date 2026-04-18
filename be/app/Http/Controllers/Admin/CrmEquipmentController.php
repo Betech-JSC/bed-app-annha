@@ -176,7 +176,7 @@ class CrmEquipmentController extends Controller
             $user = auth('admin')->user();
         }
 
-        if (!$user || !$user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT)) {
+        if (!$user || !$user->hasPermission(Permissions::EQUIPMENT_APPROVE)) {
             $msg = 'Bạn không có quyền duyệt.';
             return request()->wantsJson() 
                 ? response()->json(['success' => false, 'message' => $msg], 403)
@@ -216,7 +216,7 @@ class CrmEquipmentController extends Controller
             $user = auth('admin')->user();
         }
 
-        if (!$user || !$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) {
+        if (!$user || !$user->hasPermission(Permissions::EQUIPMENT_APPROVE)) {
             $msg = 'Bạn không có quyền xác nhận.';
             return request()->wantsJson() 
                 ? response()->json(['success' => false, 'message' => $msg], 403)
@@ -288,7 +288,7 @@ class CrmEquipmentController extends Controller
     public function revertToDraft($id)
     {
         $user = auth()->user() ?: auth('admin')->user();
-        if (!$user || !$user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT)) {
+        if (!$user || !$user->hasPermission(Permissions::EQUIPMENT_REVERT)) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt.');
         }
 

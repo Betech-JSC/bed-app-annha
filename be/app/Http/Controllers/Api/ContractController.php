@@ -274,4 +274,47 @@ class ContractController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Hoàn duyệt hợp đồng về trạng thái nháp
+     */
+    public function revertToDraft(Request $request, string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $contract = $project->contract;
+        $user = $request->user();
+
+        if (!$contract) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hợp đồng chưa được tạo.'
+            ], 404);
+        }
+
+        if (!$this->authService->can($user, Permissions::CONTRACT_REVERT, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền hoàn duyệt hợp đồng này.'
+            ], 403);
+        }
+
+        $revertibleStatuses = ['pending_customer_approval', 'approved', 'rejected', 'confirmed', 'signed'];
+        if (!in_array($contract->status, $revertibleStatuses)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Trạng thái hiện tại không thể hoàn duyệt.'
+            ], 400);
+        }
+
+        $contract->status = 'draft';
+        $contract->approved_by = null;
+        $contract->approved_at = null;
+        $contract->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã đưa hợp đồng về trạng thái nháp.',
+            'data' => $contract->fresh(['attachments', 'approver'])
+        ]);
+    }
 }

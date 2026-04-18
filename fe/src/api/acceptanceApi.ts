@@ -420,6 +420,18 @@ export const acceptanceApi = {
     return response.data;
   },
 
+  // Revert item to draft (Hoàn duyệt)
+  revertItemToDraft: async (
+    projectId: string | number,
+    stageId: string | number,
+    itemId: string | number
+  ) => {
+    const response = await api.post(
+      `/projects/${projectId}/acceptance/${stageId}/items/${itemId}/revert`
+    );
+    return response.data;
+  },
+
   // ==================================================================
   // ACCEPTANCE TEMPLATES
   // ==================================================================

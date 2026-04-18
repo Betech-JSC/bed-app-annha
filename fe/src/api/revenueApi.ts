@@ -303,4 +303,15 @@ export const costApi = {
     );
     return response.data;
   },
+
+  // Hoàn duyệt chi phí về trạng thái nháp
+  revertCostToDraft: async (
+    projectId: string | number,
+    costId: string | number
+  ) => {
+    const response = await api.post(
+      `/projects/${projectId}/costs/${costId}/revert`
+    );
+    return response.data;
+  },
 };

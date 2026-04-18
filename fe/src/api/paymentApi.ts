@@ -124,4 +124,10 @@ export const paymentApi = {
     });
     return response.data;
   },
+
+  // Hoàn duyệt thanh toán về trạng thái chờ
+  revertPaymentToPending: async (projectId: string | number, paymentId: string | number) => {
+    const response = await api.post(`/projects/${projectId}/payments/${paymentId}/revert`);
+    return response.data;
+  },
 };

@@ -135,4 +135,10 @@ export const additionalCostApi = {
     const response = await api.delete(`/projects/${projectId}/additional-costs/${costId}`);
     return response.data;
   },
+
+  // Hoàn duyệt chi phí phát sinh
+  revertToDraft: async (projectId: string | number, costId: string | number) => {
+    const response = await api.post(`/projects/${projectId}/additional-costs/${costId}/revert`);
+    return response.data;
+  },
 };

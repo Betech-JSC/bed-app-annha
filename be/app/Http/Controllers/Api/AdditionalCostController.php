@@ -408,4 +408,59 @@ class AdditionalCostController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Hoàn duyệt chi phí phát sinh về trạng thái chờ duyệt
+     */
+    public function revertToDraft(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
+        $user = $request->user();
+
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_REVERT, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền hoàn duyệt chi phí phát sinh này.'
+            ], 403);
+        }
+
+        if (!in_array($cost->status, ['approved', 'rejected', 'pending_approval', 'pending'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Trạng thái hiện tại không thể hoàn duyệt.'
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Nếu đã duyệt, cần khấu trừ lại vào giá trị Hợp đồng
+            if ($cost->status === 'approved') {
+                $contract = $project->contract;
+                if ($contract) {
+                    $contract->contract_value -= $cost->amount;
+                    $contract->save();
+                }
+            }
+
+            $cost->status = 'pending_approval';
+            $cost->approved_at = null;
+            $cost->rejected_at = null;
+            $cost->rejected_reason = null;
+            $cost->save();
+
+            DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã hoàn duyệt chi phí phát sinh.',
+                'data' => $cost->fresh()
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 400);
+        }
+    }
 }

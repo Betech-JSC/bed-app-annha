@@ -65,6 +65,7 @@ class Permissions
     public const ACCEPTANCE_APPROVE_LEVEL_1 = 'acceptance.approve.level_1'; // Supervisor
     public const ACCEPTANCE_APPROVE_LEVEL_2 = 'acceptance.approve.level_2'; // Project Manager
     public const ACCEPTANCE_APPROVE_LEVEL_3 = 'acceptance.approve.level_3'; // Client/Customer
+    public const ACCEPTANCE_REVERT = 'acceptance.revert';
 
     // ===================================================================
     // COST MODULE
@@ -79,6 +80,7 @@ class Permissions
     public const COST_APPROVE_MANAGEMENT = 'cost.approve.management'; // Management approval
     public const COST_APPROVE_ACCOUNTANT = 'cost.approve.accountant'; // Accountant confirmation
     public const COST_REJECT = 'cost.reject';
+    public const COST_REVERT = 'cost.revert';
 
     // ===================================================================
     // ADDITIONAL COST MODULE
@@ -91,6 +93,7 @@ class Permissions
     public const ADDITIONAL_COST_REJECT = 'additional_cost.reject';
     public const ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER = 'additional_cost.mark_paid_by_customer';
     public const ADDITIONAL_COST_CONFIRM = 'additional_cost.confirm';
+    public const ADDITIONAL_COST_REVERT = 'additional_cost.revert';
 
     // ===================================================================
     // COMPANY COST MODULE
@@ -103,6 +106,7 @@ class Permissions
     public const COMPANY_COST_APPROVE_MANAGEMENT = 'company_cost.approve.management';
     public const COMPANY_COST_APPROVE_ACCOUNTANT = 'company_cost.approve.accountant';
     public const COMPANY_COST_REJECT = 'company_cost.reject';
+    public const COMPANY_COST_REVERT = 'company_cost.revert';
 
     // ===================================================================
     // MATERIAL MODULE
@@ -112,6 +116,7 @@ class Permissions
     public const MATERIAL_UPDATE = 'material.update';
     public const MATERIAL_DELETE = 'material.delete';
     public const MATERIAL_APPROVE = 'material.approve';
+    public const MATERIAL_REVERT = 'material.revert';
 
     // ===================================================================
     // EQUIPMENT MODULE
@@ -121,6 +126,7 @@ class Permissions
     public const EQUIPMENT_UPDATE = 'equipment.update';
     public const EQUIPMENT_DELETE = 'equipment.delete';
     public const EQUIPMENT_APPROVE = 'equipment.approve';
+    public const EQUIPMENT_REVERT = 'equipment.revert';
 
     // ===================================================================
     // WARRANTY MODULE
@@ -167,6 +173,7 @@ class Permissions
     public const CONTRACT_DELETE = 'contract.delete';
     public const CONTRACT_APPROVE_LEVEL_1 = 'contract.approve.level_1';
     public const CONTRACT_APPROVE_LEVEL_2 = 'contract.approve.level_2';
+    public const CONTRACT_REVERT = 'contract.revert';
 
     // ===================================================================
     // PAYMENT MODULE
@@ -178,6 +185,7 @@ class Permissions
     public const PAYMENT_CONFIRM = 'payment.confirm';
     public const PAYMENT_APPROVE = 'payment.approve';
     public const PAYMENT_MARK_AS_PAID_BY_CUSTOMER = 'payment.mark_paid_by_customer';
+    public const PAYMENT_REVERT = 'payment.revert';
 
     // ===================================================================
     // SUBCONTRACTOR MODULE
@@ -187,6 +195,7 @@ class Permissions
     public const SUBCONTRACTOR_UPDATE = 'subcontractor.update';
     public const SUBCONTRACTOR_DELETE = 'subcontractor.delete';
     public const SUBCONTRACTOR_APPROVE = 'subcontractor.approve';
+    public const SUBCONTRACTOR_REVERT = 'subcontractor.revert';
 
     // ===================================================================
     // SUBCONTRACTOR PAYMENT MODULE
@@ -197,6 +206,7 @@ class Permissions
     public const SUBCONTRACTOR_PAYMENT_DELETE = 'subcontractor_payment.delete';
     public const SUBCONTRACTOR_PAYMENT_APPROVE = 'subcontractor_payment.approve';
     public const SUBCONTRACTOR_PAYMENT_MARK_PAID = 'subcontractor_payment.mark_paid';
+    public const SUBCONTRACTOR_PAYMENT_REVERT = 'subcontractor_payment.revert';
 
     // ===================================================================
     // DOCUMENT MODULE
@@ -254,6 +264,7 @@ class Permissions
     public const BUDGET_UPDATE = 'budgets.update';
     public const BUDGET_DELETE = 'budgets.delete';
     public const BUDGET_APPROVE = 'budgets.approve';
+    public const BUDGET_REVERT = 'budgets.revert';
 
     // ===================================================================
     // PROJECT PHASE MODULE
@@ -360,6 +371,7 @@ class Permissions
     public const ATTENDANCE_CHECK_IN = 'attendance.check_in';
     public const ATTENDANCE_MANAGE = 'attendance.manage';
     public const ATTENDANCE_APPROVE = 'attendance.approve';
+    public const ATTENDANCE_REVERT = 'attendance.revert';
 
     // ===================================================================
     // LABOR PRODUCTIVITY MODULE
@@ -457,6 +469,7 @@ class Permissions
             self::ACCEPTANCE_APPROVE_LEVEL_1,
             self::ACCEPTANCE_APPROVE_LEVEL_2,
             self::ACCEPTANCE_APPROVE_LEVEL_3,
+            self::ACCEPTANCE_REVERT,
 
             // Cost
             self::COST_VIEW,
@@ -467,6 +480,7 @@ class Permissions
             self::COST_APPROVE_MANAGEMENT,
             self::COST_APPROVE_ACCOUNTANT,
             self::COST_REJECT,
+            self::COST_REVERT,
 
             // Company Cost
             self::COMPANY_COST_VIEW,
@@ -477,6 +491,7 @@ class Permissions
             self::COMPANY_COST_APPROVE_MANAGEMENT,
             self::COMPANY_COST_APPROVE_ACCOUNTANT,
             self::COMPANY_COST_REJECT,
+            self::COMPANY_COST_REVERT,
 
             // Additional Cost
             self::ADDITIONAL_COST_VIEW,
@@ -487,6 +502,7 @@ class Permissions
             self::ADDITIONAL_COST_REJECT,
             self::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
             self::ADDITIONAL_COST_CONFIRM,
+            self::ADDITIONAL_COST_REVERT,
 
             // Material
             self::MATERIAL_VIEW,
@@ -494,6 +510,7 @@ class Permissions
             self::MATERIAL_UPDATE,
             self::MATERIAL_DELETE,
             self::MATERIAL_APPROVE,
+            self::MATERIAL_REVERT,
 
             // Equipment
             self::EQUIPMENT_VIEW,
@@ -501,6 +518,7 @@ class Permissions
             self::EQUIPMENT_UPDATE,
             self::EQUIPMENT_DELETE,
             self::EQUIPMENT_APPROVE,
+            self::EQUIPMENT_REVERT,
 
 
             // Report
@@ -530,6 +548,7 @@ class Permissions
             self::CONTRACT_DELETE,
             self::CONTRACT_APPROVE_LEVEL_1,
             self::CONTRACT_APPROVE_LEVEL_2,
+            self::CONTRACT_REVERT,
 
             // Payment
             self::PAYMENT_VIEW,
@@ -539,6 +558,7 @@ class Permissions
             self::PAYMENT_CONFIRM,
             self::PAYMENT_APPROVE,
             self::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
+            self::PAYMENT_REVERT,
 
             // Subcontractor
             self::SUBCONTRACTOR_VIEW,
@@ -546,6 +566,7 @@ class Permissions
             self::SUBCONTRACTOR_UPDATE,
             self::SUBCONTRACTOR_DELETE,
             self::SUBCONTRACTOR_APPROVE,
+            self::SUBCONTRACTOR_REVERT,
 
             // Subcontractor Payment
             self::SUBCONTRACTOR_PAYMENT_VIEW,
@@ -554,6 +575,7 @@ class Permissions
             self::SUBCONTRACTOR_PAYMENT_DELETE,
             self::SUBCONTRACTOR_PAYMENT_APPROVE,
             self::SUBCONTRACTOR_PAYMENT_MARK_PAID,
+            self::SUBCONTRACTOR_PAYMENT_REVERT,
 
             // Document
             self::DOCUMENT_VIEW,
@@ -597,6 +619,7 @@ class Permissions
             self::BUDGET_UPDATE,
             self::BUDGET_DELETE,
             self::BUDGET_APPROVE,
+            self::BUDGET_REVERT,
 
             // Project Phase
             self::PROJECT_PHASE_VIEW,
@@ -677,6 +700,7 @@ class Permissions
             self::ATTENDANCE_CHECK_IN,
             self::ATTENDANCE_MANAGE,
             self::ATTENDANCE_APPROVE,
+            self::ATTENDANCE_REVERT,
 
             // Labor Productivity
             self::LABOR_PRODUCTIVITY_VIEW,
@@ -759,6 +783,7 @@ class Permissions
                 self::ACCEPTANCE_APPROVE_LEVEL_1,
                 self::ACCEPTANCE_APPROVE_LEVEL_2,
                 self::ACCEPTANCE_APPROVE_LEVEL_3,
+                self::ACCEPTANCE_REVERT,
             ],
             'cost' => [
                 self::COST_VIEW,
@@ -769,6 +794,7 @@ class Permissions
                 self::COST_APPROVE_MANAGEMENT,
                 self::COST_APPROVE_ACCOUNTANT,
                 self::COST_REJECT,
+                self::COST_REVERT,
             ],
             'company_cost' => [
                 self::COMPANY_COST_VIEW,
@@ -779,6 +805,7 @@ class Permissions
                 self::COMPANY_COST_APPROVE_MANAGEMENT,
                 self::COMPANY_COST_APPROVE_ACCOUNTANT,
                 self::COMPANY_COST_REJECT,
+                self::COMPANY_COST_REVERT,
             ],
             'additional_cost' => [
                 self::ADDITIONAL_COST_VIEW,
@@ -789,6 +816,7 @@ class Permissions
                 self::ADDITIONAL_COST_REJECT,
                 self::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
                 self::ADDITIONAL_COST_CONFIRM,
+                self::ADDITIONAL_COST_REVERT,
             ],
             'material' => [
                 self::MATERIAL_VIEW,
@@ -796,6 +824,7 @@ class Permissions
                 self::MATERIAL_UPDATE,
                 self::MATERIAL_DELETE,
                 self::MATERIAL_APPROVE,
+                self::MATERIAL_REVERT,
             ],
             'equipment' => [
                 self::EQUIPMENT_VIEW,
@@ -803,6 +832,7 @@ class Permissions
                 self::EQUIPMENT_UPDATE,
                 self::EQUIPMENT_DELETE,
                 self::EQUIPMENT_APPROVE,
+                self::EQUIPMENT_REVERT,
             ],
             'hr' => [
                 self::PERSONNEL_VIEW,
@@ -812,6 +842,7 @@ class Permissions
                 self::ATTENDANCE_CHECK_IN,
                 self::ATTENDANCE_MANAGE,
                 self::ATTENDANCE_APPROVE,
+                self::ATTENDANCE_REVERT,
                 self::KPI_VIEW,
                 self::KPI_CREATE,
                 self::KPI_UPDATE,
@@ -845,6 +876,7 @@ class Permissions
                 self::CONTRACT_DELETE,
                 self::CONTRACT_APPROVE_LEVEL_1,
                 self::CONTRACT_APPROVE_LEVEL_2,
+                self::CONTRACT_REVERT,
             ],
             'payment' => [
                 self::PAYMENT_VIEW,
@@ -854,6 +886,7 @@ class Permissions
                 self::PAYMENT_CONFIRM,
                 self::PAYMENT_APPROVE,
                 self::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
+                self::PAYMENT_REVERT,
             ],
             'subcontractor' => [
                 self::SUBCONTRACTOR_VIEW,
@@ -861,6 +894,7 @@ class Permissions
                 self::SUBCONTRACTOR_UPDATE,
                 self::SUBCONTRACTOR_DELETE,
                 self::SUBCONTRACTOR_APPROVE,
+                self::SUBCONTRACTOR_REVERT,
             ],
             'subcontractor_payment' => [
                 self::SUBCONTRACTOR_PAYMENT_VIEW,
@@ -869,6 +903,7 @@ class Permissions
                 self::SUBCONTRACTOR_PAYMENT_DELETE,
                 self::SUBCONTRACTOR_PAYMENT_APPROVE,
                 self::SUBCONTRACTOR_PAYMENT_MARK_PAID,
+                self::SUBCONTRACTOR_PAYMENT_REVERT,
             ],
             'document' => [
                 self::DOCUMENT_VIEW,

@@ -571,12 +571,8 @@ class AcceptanceItemController extends Controller
         $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check permission (Creator, Level 1 or Level 2 Approver)
-        $isCreator = $item->created_by === $user->id;
-        $canApproveLevel1 = $this->authService->can($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project);
-        $canApproveLevel2 = $this->authService->can($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project);
-
-        if (!$isCreator && !$canApproveLevel1 && !$canApproveLevel2) {
+        // Check permission: Dedicated revert permission
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_REVERT, $project)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền hoàn duyệt hạng mục này.'

@@ -97,6 +97,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::ACCEPTANCE_APPROVE_LEVEL_1,
             Permissions::ACCEPTANCE_APPROVE_LEVEL_2,
             Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
+            Permissions::ACCEPTANCE_REVERT,
 
             // Cost - Full access
             Permissions::COST_VIEW,
@@ -107,6 +108,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::COST_APPROVE_MANAGEMENT,
             Permissions::COST_APPROVE_ACCOUNTANT,
             Permissions::COST_REJECT,
+            Permissions::COST_REVERT,
 
             // Additional Cost
             Permissions::ADDITIONAL_COST_VIEW,
@@ -117,6 +119,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::ADDITIONAL_COST_REJECT,
             Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
             Permissions::ADDITIONAL_COST_CONFIRM,
+            Permissions::ADDITIONAL_COST_REVERT,
 
             // Material
             Permissions::MATERIAL_VIEW,
@@ -124,6 +127,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::MATERIAL_UPDATE,
             Permissions::MATERIAL_DELETE,
             Permissions::MATERIAL_APPROVE,
+            Permissions::MATERIAL_REVERT,
 
             // Equipment
             Permissions::EQUIPMENT_VIEW,
@@ -131,6 +135,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::EQUIPMENT_UPDATE,
             Permissions::EQUIPMENT_DELETE,
             Permissions::EQUIPMENT_APPROVE,
+            Permissions::EQUIPMENT_REVERT,
 
             // Report - Full access (HR reports removed)
             Permissions::REPORT_VIEW,
@@ -153,6 +158,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::CONTRACT_DELETE,
             Permissions::CONTRACT_APPROVE_LEVEL_1,
             Permissions::CONTRACT_APPROVE_LEVEL_2,
+            Permissions::CONTRACT_REVERT,
 
             // Payment
             Permissions::PAYMENT_VIEW,
@@ -162,12 +168,14 @@ class RolePermissionSeeder extends Seeder
             Permissions::PAYMENT_APPROVE,
             Permissions::PAYMENT_CONFIRM,
             Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
+            Permissions::PAYMENT_REVERT,
 
             // Subcontractor
             Permissions::SUBCONTRACTOR_VIEW,
             Permissions::SUBCONTRACTOR_CREATE,
             Permissions::SUBCONTRACTOR_UPDATE,
             Permissions::SUBCONTRACTOR_DELETE,
+            Permissions::SUBCONTRACTOR_REVERT,
 
             // Subcontractor Payment
             Permissions::SUBCONTRACTOR_PAYMENT_VIEW,
@@ -176,6 +184,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::SUBCONTRACTOR_PAYMENT_DELETE,
             Permissions::SUBCONTRACTOR_PAYMENT_APPROVE,
             Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID,
+            Permissions::SUBCONTRACTOR_PAYMENT_REVERT,
 
             // Document
             Permissions::DOCUMENT_VIEW,
@@ -253,31 +262,38 @@ class RolePermissionSeeder extends Seeder
             // Acceptance - View and final approval
             Permissions::ACCEPTANCE_VIEW,
             Permissions::ACCEPTANCE_APPROVE_LEVEL_3, // Final approval
+            Permissions::ACCEPTANCE_REVERT,
 
             // Cost - View and approve
             Permissions::COST_VIEW,
             Permissions::COST_APPROVE_MANAGEMENT,
+            Permissions::COST_REVERT,
 
             // Additional Cost
             Permissions::ADDITIONAL_COST_VIEW,
             Permissions::ADDITIONAL_COST_APPROVE,
+            Permissions::ADDITIONAL_COST_REVERT,
             Permissions::ADDITIONAL_COST_CONFIRM,
 
             // Material
             Permissions::MATERIAL_VIEW,
             Permissions::MATERIAL_APPROVE,
+            Permissions::MATERIAL_REVERT,
 
             // Equipment
             Permissions::EQUIPMENT_VIEW,
             Permissions::EQUIPMENT_APPROVE,
+            Permissions::EQUIPMENT_REVERT,
 
             // Contract
             Permissions::CONTRACT_VIEW,
             Permissions::CONTRACT_APPROVE_LEVEL_2, // Final approval for Project Owner
+            Permissions::CONTRACT_REVERT,
 
             // Payment
             Permissions::PAYMENT_VIEW,
             Permissions::PAYMENT_CONFIRM,
+            Permissions::PAYMENT_REVERT,
 
             // Invoice
             Permissions::INVOICE_VIEW,
@@ -348,6 +364,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::ACCEPTANCE_DELETE,
             Permissions::ACCEPTANCE_ATTACH_FILES,
             Permissions::ACCEPTANCE_APPROVE_LEVEL_2,
+            Permissions::ACCEPTANCE_REVERT,
 
             // Cost - Full access
             Permissions::COST_VIEW,
@@ -357,6 +374,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::COST_SUBMIT,
             Permissions::COST_APPROVE_MANAGEMENT,
             Permissions::COST_REJECT,
+            Permissions::COST_REVERT,
 
             // Additional Cost
             Permissions::ADDITIONAL_COST_VIEW,
@@ -364,6 +382,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::ADDITIONAL_COST_UPDATE,
             Permissions::ADDITIONAL_COST_DELETE,
             Permissions::ADDITIONAL_COST_APPROVE,
+            Permissions::ADDITIONAL_COST_REVERT,
             Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
             Permissions::ADDITIONAL_COST_CONFIRM,
 
@@ -373,6 +392,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::MATERIAL_UPDATE,
             Permissions::MATERIAL_DELETE,
             Permissions::MATERIAL_APPROVE,
+            Permissions::MATERIAL_REVERT,
 
             // Equipment
             Permissions::EQUIPMENT_VIEW,
@@ -380,12 +400,14 @@ class RolePermissionSeeder extends Seeder
             Permissions::EQUIPMENT_UPDATE,
             Permissions::EQUIPMENT_DELETE,
             Permissions::EQUIPMENT_APPROVE,
+            Permissions::EQUIPMENT_REVERT,
 
             // Contract
             Permissions::CONTRACT_VIEW,
             Permissions::CONTRACT_CREATE,
             Permissions::CONTRACT_UPDATE,
             Permissions::CONTRACT_APPROVE_LEVEL_1, // First level approval for Project Manager
+            Permissions::CONTRACT_REVERT,
 
             // Payment
             Permissions::PAYMENT_VIEW,
@@ -403,6 +425,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::SUBCONTRACTOR_PAYMENT_CREATE,
             Permissions::SUBCONTRACTOR_PAYMENT_UPDATE,
             Permissions::SUBCONTRACTOR_PAYMENT_APPROVE,
+            Permissions::SUBCONTRACTOR_PAYMENT_REVERT,
 
             // Document
             Permissions::DOCUMENT_VIEW,
@@ -570,6 +593,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::COST_VIEW,
             Permissions::COST_APPROVE_ACCOUNTANT,
             Permissions::COST_REJECT,
+            Permissions::COST_REVERT,
 
             // Additional Cost
             Permissions::ADDITIONAL_COST_VIEW,
@@ -585,6 +609,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::PAYMENT_UPDATE,
             Permissions::PAYMENT_CONFIRM,
             Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
+            Permissions::PAYMENT_REVERT,
 
             // Invoice
             Permissions::INVOICE_VIEW,
@@ -603,6 +628,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::SUBCONTRACTOR_PAYMENT_VIEW,
             Permissions::SUBCONTRACTOR_PAYMENT_APPROVE,
             Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID,
+            Permissions::SUBCONTRACTOR_PAYMENT_REVERT,
 
             // HR permissions removed - HR module deleted
 

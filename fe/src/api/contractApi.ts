@@ -57,4 +57,10 @@ export const contractApi = {
     });
     return response.data;
   },
+
+  // Hoàn duyệt hợp đồng về trạng thái nháp
+  revertToDraft: async (projectId: string | number) => {
+    const response = await api.post(`/projects/${projectId}/contract/revert`);
+    return response.data;
+  },
 };

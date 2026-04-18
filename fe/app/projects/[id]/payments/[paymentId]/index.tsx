@@ -443,6 +443,41 @@ export default function PaymentDetailScreen() {
                             </View>
                         </PermissionGuard>
                     )}
+
+                    {(payment.status === "confirmed" || payment.status === "paid") && (
+                        <PermissionGuard permission={Permissions.PAYMENT_REVERT} projectId={id}>
+                            <TouchableOpacity
+                                style={[styles.actionButton, { backgroundColor: '#F59E0B', shadowColor: '#F59E0B' }]}
+                                onPress={() => {
+                                    Alert.alert(
+                                        "X\u00e1c nh\u1eadn ho\u00e0n duy\u1ec7t",
+                                        "B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n \u0111\u01b0a thanh to\u00e1n n\u00e0y v\u1ec1 tr\u1ea1ng th\u00e1i ch\u1edd?",
+                                        [
+                                            { text: "H\u1ee7y", style: "cancel" },
+                                            {
+                                                text: "Ho\u00e0n duy\u1ec7t",
+                                                style: "destructive",
+                                                onPress: async () => {
+                                                    try {
+                                                        const response = await paymentApi.revertPaymentToPending(id!, paymentId);
+                                                        if (response.success) {
+                                                            Alert.alert("Th\u00e0nh c\u00f4ng", "\u0110\u00e3 \u0111\u01b0a thanh to\u00e1n v\u1ec1 tr\u1ea1ng th\u00e1i ch\u1edd");
+                                                            loadPaymentDetail();
+                                                        }
+                                                    } catch (error: any) {
+                                                        Alert.alert("L\u1ed7i", error.response?.data?.message || "Kh\u00f4ng th\u1ec3 ho\u00e0n duy\u1ec7t");
+                                                    }
+                                                },
+                                            },
+                                        ]
+                                    );
+                                }}
+                            >
+                                <Ionicons name="arrow-undo-outline" size={20} color="#FFFFFF" />
+                                <Text style={styles.actionButtonText}>Ho\u00e0n duy\u1ec7t</Text>
+                            </TouchableOpacity>
+                        </PermissionGuard>
+                    )}
                 </ScrollView>
 
                 {/* Reject Modal */}

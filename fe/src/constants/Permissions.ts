@@ -65,6 +65,7 @@ export const Permissions = {
     COST_APPROVE_MANAGEMENT: 'cost.approve.management',
     COST_APPROVE_ACCOUNTANT: 'cost.approve.accountant',
     COST_REJECT: 'cost.reject',
+    COST_REVERT: 'cost.revert',
 
     // ===================================================================
     // ADDITIONAL COST MODULE
@@ -77,6 +78,7 @@ export const Permissions = {
     ADDITIONAL_COST_REJECT: 'additional_cost.reject',
     ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER: 'additional_cost.mark_paid_by_customer',
     ADDITIONAL_COST_CONFIRM: 'additional_cost.confirm',
+    ADDITIONAL_COST_REVERT: 'additional_cost.revert',
 
     // ===================================================================
     // MATERIAL MODULE
@@ -86,6 +88,7 @@ export const Permissions = {
     MATERIAL_UPDATE: 'material.update',
     MATERIAL_DELETE: 'material.delete',
     MATERIAL_APPROVE: 'material.approve',
+    MATERIAL_REVERT: 'material.revert',
 
     // ===================================================================
     // EQUIPMENT MODULE
@@ -95,6 +98,7 @@ export const Permissions = {
     EQUIPMENT_UPDATE: 'equipment.update',
     EQUIPMENT_DELETE: 'equipment.delete',
     EQUIPMENT_APPROVE: 'equipment.approve',
+    EQUIPMENT_REVERT: 'equipment.revert',
 
     // ===================================================================
     // HR MODULE - TIME TRACKING
@@ -170,6 +174,7 @@ export const Permissions = {
     CONTRACT_DELETE: 'contract.delete',
     CONTRACT_APPROVE_LEVEL_1: 'contract.approve.level_1',
     CONTRACT_APPROVE_LEVEL_2: 'contract.approve.level_2',
+    CONTRACT_REVERT: 'contract.revert',
 
     // ===================================================================
     // PAYMENT MODULE
@@ -181,6 +186,7 @@ export const Permissions = {
     PAYMENT_CONFIRM: 'payment.confirm',
     PAYMENT_APPROVE: 'payment.approve',
     PAYMENT_MARK_AS_PAID_BY_CUSTOMER: 'payment.mark_paid_by_customer',
+    PAYMENT_REVERT: 'payment.revert',
 
     // ===================================================================
     // SUBCONTRACTOR MODULE
@@ -199,6 +205,7 @@ export const Permissions = {
     SUBCONTRACTOR_PAYMENT_DELETE: 'subcontractor_payment.delete',
     SUBCONTRACTOR_PAYMENT_APPROVE: 'subcontractor_payment.approve',
     SUBCONTRACTOR_PAYMENT_MARK_PAID: 'subcontractor_payment.mark_paid',
+    SUBCONTRACTOR_PAYMENT_REVERT: 'subcontractor_payment.revert',
 
     // ===================================================================
     // DOCUMENT MODULE
@@ -255,6 +262,7 @@ export const Permissions = {
     BUDGET_UPDATE: 'budgets.update',
     BUDGET_DELETE: 'budgets.delete',
     BUDGET_APPROVE: 'budgets.approve',
+    BUDGET_REVERT: 'budgets.revert',
 
     // ===================================================================
     // PROJECT PHASE MODULE

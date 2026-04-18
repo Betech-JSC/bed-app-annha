@@ -469,6 +469,54 @@ export default function AdditionalCostDetailScreen() {
         </View>
       )}
 
+      {/* Revert Button for approved costs */}
+      {cost && (cost.status === "approved" || cost.status === "confirmed") && (
+        <View style={styles.actionBar}>
+          <PermissionGuard permission={Permissions.ADDITIONAL_COST_REVERT} projectId={id} style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#F59E0B' }]}
+              onPress={() => {
+                Alert.alert(
+                  "Xác nhận hoàn duyệt",
+                  "Bạn có chắc chắn muốn đưa chi phí phát sinh này về trạng thái nháp?",
+                  [
+                    { text: "Hủy", style: "cancel" },
+                    {
+                      text: "Hoàn duyệt",
+                      style: "destructive",
+                      onPress: async () => {
+                        try {
+                          setProcessingAction('revert');
+                          const response = await additionalCostApi.revertToDraft(id!, costId!);
+                          if (response.success) {
+                            Alert.alert("Thành công", "Đã đưa chi phí phát sinh về trạng thái nháp");
+                            loadCostDetail();
+                          }
+                        } catch (error: any) {
+                          Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
+                        } finally {
+                          setProcessingAction(null);
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}
+              disabled={!!processingAction}
+            >
+              {processingAction === 'revert' ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="arrow-undo-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.actionBtnText}>Hoàn duyệt</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </PermissionGuard>
+        </View>
+      )}
+
       {/* Image Preview Modal */}
       {/* Image Viewer */}
       {cost && (

@@ -313,6 +313,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/contract', [CrmProjectsController::class, 'storeContract'])->name('contract.store');
         Route::put('/{project}/contract', [CrmProjectsController::class, 'updateContract'])->name('contract.update');
         Route::post('/{project}/contracts/{contract}/attach-files', [CrmProjectsController::class, 'attachFilesToContract'])->name('contracts.attach-files');
+        Route::post('/{project}/contract/revert', [CrmProjectsController::class, 'revertContractToDraft'])->name('contract.revert');
 
         // Subcontractors
         Route::post('/{project}/subcontractors', [CrmProjectsController::class, 'storeSubcontractor'])->name('subcontractors.store');

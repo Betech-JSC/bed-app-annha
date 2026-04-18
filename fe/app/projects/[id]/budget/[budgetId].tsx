@@ -623,6 +623,49 @@ export default function BudgetDetailScreen() {
                                 <Text style={styles.workflowButtonTextLight}>Lưu Trữ</Text>
                             </TouchableOpacity>
                         )}
+
+                        {(budget.status === "approved" || budget.status === "active") && hasPermission(Permissions.BUDGET_REVERT) && (
+                            <TouchableOpacity
+                                style={[styles.workflowButton, { backgroundColor: '#F59E0B' }]}
+                                onPress={() => {
+                                    Alert.alert(
+                                        "Xác nhận hoàn duyệt",
+                                        "Bạn có chắc chắn muốn đưa ngân sách này về trạng thái nháp?",
+                                        [
+                                            { text: "Hủy", style: "cancel" },
+                                            {
+                                                text: "Hoàn duyệt",
+                                                style: "destructive",
+                                                onPress: async () => {
+                                                    try {
+                                                        setActionLoading(true);
+                                                        const response = await budgetApi.revertToDraft(Number(id), Number(budgetId));
+                                                        if (response.success) {
+                                                            Alert.alert("Thành công", "Đã đưa ngân sách về trạng thái nháp");
+                                                            setBudget(response.data);
+                                                        }
+                                                    } catch (error: any) {
+                                                        Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
+                                                    } finally {
+                                                        setActionLoading(false);
+                                                    }
+                                                },
+                                            },
+                                        ]
+                                    );
+                                }}
+                                disabled={actionLoading}
+                            >
+                                {actionLoading ? (
+                                    <ActivityIndicator color="#FFFFFF" size="small" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="arrow-undo" size={18} color="#FFFFFF" />
+                                        <Text style={styles.workflowButtonTextLight}>Hoàn duyệt</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
 

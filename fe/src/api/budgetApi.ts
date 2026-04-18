@@ -113,5 +113,11 @@ export const budgetApi = {
     const response = await api.post(`/projects/${projectId}/budgets/${id}/archive`);
     return response.data;
   },
+
+  // Hoàn duyệt ngân sách về trạng thái nháp
+  revertToDraft: async (projectId: string | number, id: string | number) => {
+    const response = await api.post(`/projects/${projectId}/budgets/${id}/revert`);
+    return response.data;
+  },
 };
 

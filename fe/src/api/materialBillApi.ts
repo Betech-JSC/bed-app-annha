@@ -98,4 +98,10 @@ export const materialBillApi = {
         const response = await api.post(`/projects/${projectId}/material-bills/${id}/reject`, { reason });
         return response.data;
     },
+
+    // Hoàn duyệt phiếu vật liệu về trạng thái nháp
+    revertToDraft: async (projectId: string, id: string) => {
+        const response = await api.post(`/projects/${projectId}/material-bills/${id}/revert`);
+        return response.data;
+    },
 };

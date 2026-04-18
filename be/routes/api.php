@@ -230,6 +230,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/contract/approve', [ContractController::class, 'approve']);
         Route::post('/{projectId}/contract/reject', [ContractController::class, 'reject']);
         Route::post('/{projectId}/contract/attach-files', [ContractController::class, 'attachFiles']);
+        Route::post('/{projectId}/contract/revert', [ContractController::class, 'revertToDraft']);
 
         // Payments
         Route::get('/{projectId}/payments', [ProjectPaymentController::class, 'index']);
@@ -243,6 +244,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/payments/{id}/reject-by-customer', [ProjectPaymentController::class, 'rejectByCustomer']);
         Route::post('/{projectId}/payments/{id}/confirm', [ProjectPaymentController::class, 'confirm']);
         Route::post('/{projectId}/payments/{id}/reject', [ProjectPaymentController::class, 'reject']);
+        Route::post('/{projectId}/payments/{id}/revert', [ProjectPaymentController::class, 'revertToPending']);
 
         // Additional Costs
         Route::get('/{projectId}/additional-costs', [AdditionalCostController::class, 'index']);
@@ -253,6 +255,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/additional-costs/{id}/confirm', [AdditionalCostController::class, 'confirm']);
         Route::post('/{projectId}/additional-costs/{id}/approve', [AdditionalCostController::class, 'approve']);
         Route::post('/{projectId}/additional-costs/{id}/reject', [AdditionalCostController::class, 'reject']);
+        Route::post('/{projectId}/additional-costs/{id}/revert', [AdditionalCostController::class, 'revertToDraft']);
         Route::delete('/{projectId}/additional-costs/{id}', [AdditionalCostController::class, 'destroy']);
 
         // Revenue Management
@@ -328,6 +331,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{projectId}/budgets/{id}/reject', [BudgetController::class, 'reject'])->middleware('permission:budgets.approve,projectId');
         Route::post('/{projectId}/budgets/{id}/activate', [BudgetController::class, 'activate'])->middleware('permission:budgets.approve,projectId');
         Route::post('/{projectId}/budgets/{id}/archive', [BudgetController::class, 'archive'])->middleware('permission:budgets.approve,projectId');
+        Route::post('/{projectId}/budgets/{id}/revert', [BudgetController::class, 'revertToDraft']);
         Route::post('/{projectId}/budgets/sync', [BudgetController::class, 'sync'])->middleware('permission:budgets.update,projectId');
         Route::post('/{projectId}/budgets/{id}/sync', [BudgetController::class, 'sync'])->middleware('permission:budgets.update,projectId');
 
@@ -347,6 +351,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/approve-management', [\App\Http\Controllers\Api\MaterialBillController::class, 'approveManagement']);
             Route::post('/{id}/approve-accountant', [\App\Http\Controllers\Api\MaterialBillController::class, 'approveAccountant']);
             Route::post('/{id}/reject', [\App\Http\Controllers\Api\MaterialBillController::class, 'reject']);
+            Route::post('/{id}/revert', [\App\Http\Controllers\Api\MaterialBillController::class, 'revertToDraft']);
         });
 
         // Equipment (legacy)
@@ -366,6 +371,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/reject-management', [EquipmentRentalController::class, 'rejectManagement']);
             Route::post('/{id}/confirm-accountant', [EquipmentRentalController::class, 'confirmAccountant']);
             // Return lifecycle
+            Route::post('/{id}/revert', [EquipmentRentalController::class, 'revertToDraft']);
             Route::post('/{id}/request-return', [EquipmentRentalController::class, 'requestReturn']);
             Route::post('/{id}/confirm-return', [EquipmentRentalController::class, 'confirmReturn']);
         });

@@ -96,4 +96,10 @@ export const equipmentRentalApi = {
     const response = await api.post(`/projects/${projectId}/equipment-rentals/${id}/confirm-return`);
     return response.data;
   },
+
+  // Hoàn duyệt phiếu thuê thiết bị về trạng thái nháp
+  revertToDraft: async (projectId: string | number, id: number) => {
+    const response = await api.post(`/projects/${projectId}/equipment-rentals/${id}/revert`);
+    return response.data;
+  },
 };
