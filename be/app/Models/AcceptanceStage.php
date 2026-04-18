@@ -62,6 +62,8 @@ class AcceptanceStage extends Model
         'acceptability_status', // BUSINESS RULE: Calculated from defects
         'next_action',
         'approval_status_info',
+        'rejection_count',
+        'is_resubmitted',
     ];
 
     // ==================================================================
@@ -261,6 +263,19 @@ class AcceptanceStage extends Model
         }
     }
 
+    public function getRejectionCountAttribute(): int
+    {
+        if ($this->relationLoaded('approvals')) {
+            return $this->approvals->where('status', 'rejected')->count();
+        }
+        return $this->approvals()->where('status', 'rejected')->count();
+    }
+
+    public function getIsResubmittedAttribute(): bool
+    {
+         return $this->status === 'pending' && $this->rejection_count > 0;
+    }
+
     public function getApprovalStatusInfoAttribute(): array
     {
         $info = [];
@@ -399,6 +414,9 @@ class AcceptanceStage extends Model
             'type_label' => 'Nghiệm thu dự án',
             'task_name' => $this->task?->name,
             'current_step' => $this->next_action['label'] ?? 'Đang xử lý',
+            'open_defects_count' => $this->defects()->whereIn('status', ['open', 'in_progress', 'fixed', 'rejected'])->count(),
+            'rejection_count' => $this->approvals()->where('status', 'rejected')->count(),
+            'is_resubmitted' => $this->approvals()->where('status', 'rejected')->exists() && $this->status === 'pending',
         ];
     }
 
@@ -499,7 +517,20 @@ class AcceptanceStage extends Model
 
             // Nếu có item bị rejected hoặc đang chờ submit → stage phải quay về pending
             if ($hasRejected || $hasPendingOrDraft) {
-                if (!in_array($this->status, ['pending', 'rejected'])) {
+                // BUG FIX: Nếu đang rejected hoặc đã hoàn thành mà có item mới/sửa lại -> đưa về pending để GS duyệt lại từ đầu
+                if ($this->status !== 'pending') {
+                    // Reset tất cả các trường duyệt cũ để bắt đầu luồng mới sạch sẽ
+                    if (in_array($this->status, ['rejected', 'customer_approved', 'owner_approved', 'project_manager_approved', 'supervisor_approved'])) {
+                         $this->supervisor_approved_by = null;
+                         $this->supervisor_approved_at = null;
+                         $this->project_manager_approved_by = null;
+                         $this->project_manager_approved_at = null;
+                         $this->customer_approved_by = null;
+                         $this->customer_approved_at = null;
+                         $this->rejected_by = null;
+                         $this->rejected_at = null;
+                         $this->rejection_reason = null;
+                    }
                     $this->status = 'pending';
                     $this->save();
                 }
@@ -509,17 +540,22 @@ class AcceptanceStage extends Model
                 $allPmApproved = $items->every(fn($i) => in_array($i->workflow_status, ['project_manager_approved', 'customer_approved']));
                 $allSupervisorApproved = $items->every(fn($i) => in_array($i->workflow_status, ['supervisor_approved', 'project_manager_approved', 'customer_approved']));
 
+                $userId = auth()->id() ?? $this->created_by;
+
                 if ($allCustomerApproved && $this->status !== 'customer_approved') {
                     $this->status = 'customer_approved';
                     $this->customer_approved_at = now();
+                    $this->customer_approved_by = $userId;
                     $this->save();
                 } elseif ($allPmApproved && !$allCustomerApproved && !in_array($this->status, ['project_manager_approved', 'customer_approved'])) {
                     $this->status = 'project_manager_approved';
                     $this->project_manager_approved_at = now();
+                    $this->project_manager_approved_by = $userId;
                     $this->save();
                 } elseif ($allSupervisorApproved && !$allPmApproved && !in_array($this->status, ['supervisor_approved', 'project_manager_approved', 'customer_approved'])) {
                     $this->status = 'supervisor_approved';
                     $this->supervisor_approved_at = now();
+                    $this->supervisor_approved_by = $userId;
                     $this->save();
                 }
             }
@@ -673,6 +709,25 @@ class AcceptanceStage extends Model
         static::creating(function ($stage) {
             if (empty($stage->uuid)) {
                 $stage->uuid = Str::uuid();
+            }
+        });
+
+        static::saving(function ($stage) {
+            // Khi chuyển về pending từ một trạng thái đã từng bị từ chối hoặc đã duyệt
+            // Reset toàn bộ thông tin duyệt để bắt đầu lại luồng từ Level 1 (GS)
+            if ($stage->isDirty('status') && $stage->status === 'pending') {
+                $oldStatus = $stage->getOriginal('status');
+                if (in_array($oldStatus, ['rejected', 'customer_approved', 'owner_approved', 'project_manager_approved', 'supervisor_approved'])) {
+                    $stage->supervisor_approved_by = null;
+                    $stage->supervisor_approved_at = null;
+                    $stage->project_manager_approved_by = null;
+                    $stage->project_manager_approved_at = null;
+                    $stage->customer_approved_by = null;
+                    $stage->customer_approved_at = null;
+                    $stage->rejected_by = null;
+                    $stage->rejected_at = null;
+                    $stage->rejection_reason = null;
+                }
             }
         });
 

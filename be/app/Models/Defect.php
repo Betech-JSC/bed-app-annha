@@ -149,16 +149,11 @@ class Defect extends Model
     {
         switch ($this->status) {
             case 'open':
+            case 'rejected': // Legacy records support
                 return [
-                    'label' => 'Mới (Chờ GS ấn khắc phục)',
-                    'role' => 'supervisor',
-                    'action' => 'Khắc phục lỗi',
-                ];
-            case 'rejected':
-                return [
-                    'label' => 'Chưa đạt (GS ấn khắc phục)',
-                    'role' => 'supervisor',
-                    'action' => 'Khắc phục lỗi',
+                    'label' => 'Mới (Chờ Đội thi công nhận xử lý)',
+                    'role' => 'team',
+                    'action' => 'Nhận xử lý',
                 ];
             case 'in_progress':
                 return [
@@ -267,8 +262,10 @@ class Defect extends Model
 
     public function markAsRejected(?User $user = null, ?string $reason = null): bool
     {
-        $this->status = 'rejected';
+        // BUSINESS RULE: When rejected, return to 'open' status so someone can 'Receive' it again
+        $this->status = 'open';
         $this->rejection_reason = $reason;
+        
         // Reset fixed info since it's rejected
         $this->fixed_by = null;
         $this->fixed_at = null;

@@ -145,6 +145,15 @@
                 Tiếp theo: {{ record.next_action.role }}
               </span>
             </div>
+            <!-- Resubmission Badges -->
+            <div v-if="record.type === 'acceptance' && record.metadata?.is_resubmitted" class="flex gap-1 mt-1">
+              <a-tag color="blue" class="rounded-md text-[9px] uppercase font-bold m-0 border-0">
+                Duyệt lại (Lần {{ record.metadata.rejection_count + 1 }})
+              </a-tag>
+              <a-tag v-if="record.metadata.open_defects_count === 0" color="success" class="rounded-md text-[9px] uppercase font-bold m-0 border-0">
+                 Đã khắc phục lỗi
+              </a-tag>
+            </div>
           </div>
         </template>
         <!-- Loại -->
@@ -157,7 +166,15 @@
         <!-- Nội dung -->
         <template v-if="column.key === 'title'">
           <div class="ac-item-title" @click="openDetailDrawer(record)">
-            <div class="ac-item-title__main">{{ record.title }}</div>
+            <div class="ac-item-title__main">
+              {{ record.title }}
+              <!-- Defect Warning Badge -->
+              <a-tooltip v-if="record.type === 'acceptance' && record.metadata?.open_defects_count > 0" title="Giai đoạn này đang tồn tại lỗi thi công chưa được xác nhận hoàn thành. Cần xử lý hết lỗi trước khi duyệt.">
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-50 text-amber-600 border border-amber-200 ml-1">
+                  <WarningOutlined class="mr-0.5" /> {{ record.metadata.open_defects_count }} LỖI
+                </span>
+              </a-tooltip>
+            </div>
             <div class="ac-item-title__sub">{{ record.subtitle }}</div>
           </div>
         </template>
@@ -198,15 +215,18 @@
                 <template #icon><EyeOutlined /></template>
               </a-button>
             </a-tooltip>
-            <a-button
-              type="primary"
-              size="small"
-              class="ac-btn-approve"
-              @click="handleApproveByType(record)"
-            >
-              <template #icon><CheckOutlined /></template>
-              Duyệt
-            </a-button>
+            <a-tooltip :title="record.type === 'acceptance' && record.metadata?.open_defects_count > 0 ? 'Không thể duyệt vì còn lỗi chưa xác nhận' : ''">
+              <a-button
+                type="primary"
+                size="small"
+                class="ac-btn-approve"
+                :disabled="record.type === 'acceptance' && record.metadata?.open_defects_count > 0"
+                @click="handleApproveByType(record)"
+              >
+                <template #icon><CheckOutlined /></template>
+                Duyệt
+              </a-button>
+            </a-tooltip>
             <a-button
               danger
               size="small"
@@ -546,10 +566,13 @@
            <a-button danger block size="large" class="rounded-xl h-12 font-bold shadow-sm" @click="openRejectModal(detailItem); detailItem = null;">
              <CloseOutlined /> Từ chối
            </a-button>
-           <a-button type="primary" block size="large" class="rounded-xl h-12 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 border-0" 
-                     @click="handleApproveByType(detailItem); detailItem = null;">
-             <CheckOutlined /> Duyệt yêu cầu
-           </a-button>
+           <a-tooltip :title="detailItem.type === 'acceptance' && detailItem.metadata?.open_defects_count > 0 ? 'Vui lòng xác nhận hoàn thành tất cả các lỗi (Defects) liên quan trước khi phê duyệt giai đoạn này' : ''" class="w-full">
+             <a-button type="primary" block size="large" class="rounded-xl h-12 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 border-0" 
+                       :disabled="detailItem.type === 'acceptance' && detailItem.metadata?.open_defects_count > 0"
+                       @click="handleApproveByType(detailItem); detailItem = null;">
+               <CheckOutlined /> Duyệt yêu cầu
+             </a-button>
+           </a-tooltip>
         </div>
       </div>
     </template>

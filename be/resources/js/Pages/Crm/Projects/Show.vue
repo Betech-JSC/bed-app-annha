@@ -814,6 +814,13 @@
                 <div class="flex-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-bold text-gray-800">{{ stage.name }}</span>
+                    <!-- Re-approval Badges -->
+                    <a-tag v-if="stage.is_resubmitted" color="blue" class="rounded-md text-[9px] uppercase font-bold m-0 border-0">
+                      Duyệt lại (Lần {{ stage.rejection_count + 1 }})
+                    </a-tag>
+                    <a-tag v-if="stage.is_resubmitted && !stage.has_open_defects" color="success" class="rounded-md text-[9px] uppercase font-bold m-0 border-0">
+                      Đã khắc phục lỗi
+                    </a-tag>
                     <!-- Acceptability Status Badge (Giống APP) -->
                     <span :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold',
                       getAcceptability(stage) === 'acceptable' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
@@ -891,51 +898,51 @@
             <div v-if="stage.description" class="px-4 pt-2 text-sm text-gray-500">{{ stage.description }}</div>
 
             <!-- Attachments Gallery Categorized -->
-            <div v-if="stage.attachments?.length" class="px-4 pt-3">
-               <!-- BEFORE IMAGES -->
-               <div v-if="stage.attachments.filter(a => a.type === 'before').length" class="mb-3">
-                <div class="flex items-center gap-1 text-[10px] font-bold text-orange-600 uppercase mb-1.5 tracking-wider letter-spacing-1">
-                  <CameraOutlined class="text-[10px]" /> Hình ảnh TRƯỚC nghiệm thu
+            <div v-if="stage.attachments?.length" class="px-4 pt-3 space-y-3">
+              <!-- BEFORE IMAGES (Horizontal Strip) -->
+              <div v-if="stage.attachments.filter(a => a.type === 'before').length">
+                <div class="flex items-center gap-1.5 text-[9px] font-bold text-orange-500 uppercase mb-2 tracking-widest">
+                  <CameraOutlined /> Trước nghiệm thu
                 </div>
-                <div class="flex gap-2 flex-wrap">
-                  <a v-for="att in stage.attachments.filter(a => a.type === 'before')" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
-                     class="group relative inline-flex items-center justify-center w-12 h-12 rounded-lg border border-orange-100 overflow-hidden bg-orange-50 hover:border-orange-300 transition shadow-sm">
-                    <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" />
+                <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
+                  <div v-for="att in stage.attachments.filter(a => a.type === 'before')" :key="att.id" @click.prevent="openFilePreview(att)"
+                     class="relative min-w-[56px] max-w-[56px] aspect-square rounded-xl border border-orange-100 overflow-hidden bg-orange-50 hover:border-orange-300 transition shadow-sm snap-start group pointer-events-auto">
+                    <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" />
                     <FileImageOutlined v-else class="text-orange-300 text-lg" />
                     <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
                       <EyeOutlined class="text-[10px] text-white" />
                     </div>
-                  </a>
+                  </div>
                 </div>
               </div>
 
-               <!-- AFTER IMAGES -->
-               <div v-if="stage.attachments.filter(a => a.type === 'after').length" class="mb-3">
-                <div class="flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase mb-1.5 tracking-wider letter-spacing-1">
-                  <CameraOutlined class="text-[10px]" /> Hình ảnh SAU nghiệm thu
+              <!-- AFTER IMAGES (Horizontal Strip) -->
+              <div v-if="stage.attachments.filter(a => a.type === 'after').length">
+                <div class="flex items-center gap-1.5 text-[9px] font-bold text-emerald-500 uppercase mb-2 tracking-widest">
+                  <CheckCircleOutlined /> Sau nghiệm thu
                 </div>
-                <div class="flex gap-2 flex-wrap">
-                  <a v-for="att in stage.attachments.filter(a => a.type === 'after')" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
-                     class="group relative inline-flex items-center justify-center w-12 h-12 rounded-lg border border-emerald-100 overflow-hidden bg-emerald-50 hover:border-emerald-300 transition shadow-sm">
-                    <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover group-hover:scale-110 transition duration-300" />
+                <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
+                  <div v-for="att in stage.attachments.filter(a => a.type === 'after')" :key="att.id" @click.prevent="openFilePreview(att)"
+                     class="relative min-w-[56px] max-w-[56px] aspect-square rounded-xl border border-emerald-100 overflow-hidden bg-emerald-50 hover:border-emerald-300 transition shadow-sm snap-start group pointer-events-auto">
+                    <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" />
                     <FileImageOutlined v-else class="text-emerald-300 text-lg" />
                     <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
                       <EyeOutlined class="text-[10px] text-white" />
                     </div>
-                  </a>
+                  </div>
                 </div>
               </div>
 
-              <!-- OTHER ATTACHMENTS (DOCS) -->
-              <div v-if="stage.attachments.filter(a => a.type !== 'before' && a.type !== 'after').length" class="mb-1">
-                <div class="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-wider">
-                  <FileTextOutlined class="text-[10px]" /> Tài liệu khác
+              <!-- OTHER ATTACHMENTS (Compact List) -->
+              <div v-if="stage.attachments.filter(a => a.type !== 'before' && a.type !== 'after').length">
+                <div class="flex items-center gap-1.5 text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                  <FileTextOutlined /> Tài liệu bổ sung
                 </div>
-                <div class="flex gap-2 flex-wrap">
-                  <a v-for="att in stage.attachments.filter(a => a.type !== 'before' && a.type !== 'after')" :key="att.id" href="#" @click.prevent="openFilePreview(att)"
-                     class="inline-flex items-center gap-1.5 text-[11px] bg-white text-gray-600 px-2.5 py-1.5 rounded-lg border shadow-sm hover:border-blue-400 hover:text-blue-500 transition cursor-pointer">
-                    <PaperClipOutlined class="text-[10px]" /> {{ att.original_name || att.file_name }}
-                  </a>
+                <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  <div v-for="att in stage.attachments.filter(a => a.type !== 'before' && a.type !== 'after')" :key="att.id" @click.prevent="openFilePreview(att)"
+                     class="inline-flex items-center gap-2 text-[10px] bg-white text-gray-600 px-3 py-1.5 rounded-full border border-gray-100 shadow-sm hover:border-blue-400 hover:text-blue-500 transition cursor-pointer whitespace-nowrap">
+                    <PaperClipOutlined class="text-[9px]" /> {{ att.original_name || att.file_name }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2833,7 +2840,7 @@
             </div>
           </div>
         </div>
-        <input type="file" multiple accept="image/*,.pdf,.doc,.docx" @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-orange-200 rounded-lg hover:border-orange-400 transition bg-orange-50/30" />
+        <input type="file" multiple accept="image/*,.pdf,.doc,.docx" @change="onDefectFilesChange" class="block w-full text-xs py-1.5 px-2 border border-dashed border-orange-200 rounded-lg hover:border-orange-400 transition bg-orange-50/30" />
         <div v-if="modalFiles.length" class="text-[10px] text-orange-600 mt-1">{{ modalFiles.length }} ảnh đã chọn — sẽ upload khi lưu</div>
       </div>
     </a-form>
@@ -4157,80 +4164,98 @@
         </div>
       </div>
 
-      <!-- Đối chiếu ảnh Trước / Sau khi sửa -->
-      <div v-if="defectDetail.before_images?.length || defectDetail.after_images?.length" class="rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+      <!-- Enhanced Evidence Gallery Area -->
+      <div class="space-y-4">
+        <!-- Comparison Header -->
+        <div class="px-5 py-3 bg-gray-50/50 border-y border-gray-100 flex items-center gap-2">
           <PictureOutlined class="text-gray-400" />
-          <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Đối chiếu hình ảnh Trước / Sau khi sửa</span>
+          <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Bằng chứng hiện trường & Khắc phục</span>
         </div>
-        <div class="grid grid-cols-2 divide-x divide-gray-100">
-          <!-- BEFORE column -->
-          <div class="p-4">
-            <div class="flex items-center gap-1.5 mb-3">
-              <span class="w-2 h-2 rounded-full bg-orange-400 shrink-0"></span>
-              <span class="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Trước khi sửa</span>
-              <span class="text-[10px] text-gray-400 ml-auto">({{ defectDetail.before_images?.length || 0 }})</span>
+
+        <div class="px-5 space-y-4">
+          <!-- BEFORE Column (Orange Theme) -->
+          <div class="bg-orange-50/20 border border-orange-100 rounded-2xl p-4 transition-all hover:shadow-md hover:shadow-orange-100/30">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <div class="w-1.5 h-4 bg-orange-400 rounded-full shadow-[0_0_8px_rgba(251,146,60,0.4)]"></div>
+                <span class="text-[11px] font-bold text-orange-600 uppercase tracking-widest">Trước khi sửa</span>
+              </div>
+              <a-tag v-if="defectDetail.before_images?.length" color="orange" class="rounded-full text-[9px] m-0 border-none px-2">{{ defectDetail.before_images?.length }} tệp</a-tag>
             </div>
-            <div v-if="defectDetail.before_images?.length" class="grid grid-cols-2 gap-2">
+            
+            <div v-if="defectDetail.before_images?.length" class="grid grid-cols-4 gap-2">
               <div
-                v-for="att in defectDetail.before_images"
+                v-for="(att, idx) in defectDetail.before_images.slice(0, 4)"
                 :key="att.id"
-                class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-orange-100 hover:border-orange-300 transition-all"
+                class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-orange-100 shadow-sm"
                 @click="openFilePreview(att)"
               >
                 <img
                   v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
                   :src="att.file_url"
-                  :alt="att.original_name || 'Ảnh lỗi'"
-                  class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />
-                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-orange-50 text-orange-300">
-                  <FileOutlined class="text-xl mb-1" />
-                  <span class="text-[9px] px-1 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
+                <div v-else class="w-full h-full flex items-center justify-center bg-white text-orange-300">
+                  <FileOutlined class="text-lg opacity-40" />
                 </div>
-                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                  <EyeOutlined class="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+                
+                <!-- Overlay for more items -->
+                <div v-if="idx === 3 && defectDetail.before_images.length > 4" class="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-xs">
+                  +{{ defectDetail.before_images.length - 4 }}
                 </div>
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
               </div>
             </div>
-            <div v-else class="flex flex-col items-center justify-center py-6 text-orange-200">
-              <PictureOutlined class="text-2xl mb-1" />
-              <span class="text-[10px] text-orange-300">Chưa có ảnh lỗi</span>
+            <div v-else class="flex flex-col items-center justify-center py-4 bg-white/60 rounded-xl border border-dashed border-orange-100">
+              <PictureOutlined class="text-lg text-orange-200 mb-1" />
+              <span class="text-[9px] text-orange-300 italic">Chưa có ảnh báo lỗi</span>
             </div>
           </div>
 
-          <!-- AFTER column -->
-          <div class="p-4">
-            <div class="flex items-center gap-1.5 mb-3">
-              <span class="w-2 h-2 rounded-full bg-green-500 shrink-0"></span>
-              <span class="text-[10px] font-bold text-green-600 uppercase tracking-wider">Sau khi sửa</span>
-              <span class="text-[10px] text-gray-400 ml-auto">({{ defectDetail.after_images?.length || 0 }})</span>
+          <!-- AFTER Column (Green Theme) -->
+          <div class="bg-green-50/20 border border-green-100 rounded-2xl p-4 transition-all hover:shadow-md hover:shadow-green-100/30">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <div class="w-1.5 h-4 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
+                <span class="text-[11px] font-bold text-green-700 uppercase tracking-widest">Sau khi sửa</span>
+              </div>
+              <a-tag v-if="defectDetail.after_images?.length" color="success" class="rounded-full text-[9px] m-0 border-none px-2">{{ defectDetail.after_images?.length }} tệp</a-tag>
             </div>
-            <div v-if="defectDetail.after_images?.length" class="grid grid-cols-2 gap-2">
+
+            <div v-if="defectDetail.after_images?.length" class="grid grid-cols-4 gap-2">
               <div
-                v-for="att in defectDetail.after_images"
+                v-for="(att, idx) in defectDetail.after_images.slice(0, 4)"
                 :key="att.id"
-                class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-green-200 hover:border-green-400 transition-all"
+                class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-green-100 shadow-sm bg-black"
                 @click="openFilePreview(att)"
               >
+                <template v-if="/\.(mp4|mov|avi|wmv|webm)$/i.test(att.original_name || att.file_name || '')">
+                  <video :src="att.file_url" class="w-full h-full object-cover opacity-80" />
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <PlayCircleOutlined class="text-white text-base drop-shadow-md" />
+                  </div>
+                </template>
                 <img
-                  v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
+                  v-else-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
                   :src="att.file_url"
-                  :alt="att.original_name || 'Ảnh đã sửa'"
-                  class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />
-                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-green-50 text-green-300">
-                  <FileOutlined class="text-xl mb-1" />
-                  <span class="text-[9px] px-1 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
+                
+                <!-- Expanded Info Overlay on Hover -->
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-end">
+                   <div class="text-[7px] text-white font-bold truncate"><UserOutlined class="mr-0.5" /> {{ defectDetail.fixer?.name || 'NS' }}</div>
+                   <div class="text-[6px] text-gray-300"><ClockCircleOutlined class="mr-0.5" /> {{ fmtDate(defectDetail.fixed_at) }}</div>
                 </div>
-                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                  <EyeOutlined class="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+
+                <!-- Overlay for more items -->
+                <div v-if="idx === 3 && defectDetail.after_images.length > 4" class="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-xs pointer-events-none">
+                  +{{ defectDetail.after_images.length - 4 }}
                 </div>
               </div>
             </div>
-            <div v-else class="flex flex-col items-center justify-center py-6 text-green-200">
-              <CheckCircleOutlined class="text-2xl mb-1" />
-              <span class="text-[10px] text-green-300">Chờ ảnh khắc phục</span>
+            <div v-else class="flex flex-col items-center justify-center py-4 bg-white/60 rounded-xl border border-dashed border-green-100">
+              <CheckCircleOutlined class="text-lg text-green-200 mb-1" />
+              <span class="text-[9px] text-green-400 italic">Vui lòng tải ảnh minh chứng xử lý...</span>
             </div>
           </div>
         </div>
@@ -4245,7 +4270,7 @@
            <a-button v-if="can('defect.update') && ['open','rejected'].includes(defectDetail.status)" type="text" @click="openDefectModal(defectDetail)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
-           <a-popconfirm v-if="defectDetail.status === 'open' && can('defect.update')" title="Nhận xử lý lỗi này?" @confirm="defectAction(defectDetail, 'mark-in-progress')" ok-text="Nhận" cancel-text="Hủy">
+           <a-popconfirm v-if="['open','rejected'].includes(defectDetail.status) && can('defect.update')" title="Nhận xử lý lỗi này?" @confirm="defectAction(defectDetail, 'mark-in-progress')" ok-text="Nhận" cancel-text="Hủy">
              <a-button type="primary" ghost>🔧 Nhận xử lý</a-button>
            </a-popconfirm>
            <a-button v-if="defectDetail.status === 'in_progress' && can('defect.update')" class="text-green-600 border-green-600 hover:bg-green-50" @click="defectAction(defectDetail, 'mark-fixed')">✅ Báo cáo đã sửa</a-button>
@@ -4270,74 +4295,73 @@
         </div>
       </div>
 
-      <!-- Side-by-side comparison -->
+      <!-- Side-by-side comparison with scroll control -->
       <div class="grid grid-cols-2 gap-4">
-        <!-- LEFT: Before images (read-only) -->
-        <div class="rounded-xl border border-orange-200 bg-orange-50/30 overflow-hidden">
-          <div class="px-3 py-2 bg-orange-50 border-b border-orange-200 flex items-center gap-1.5">
-            <PictureOutlined class="text-orange-500 text-sm" />
-            <span class="text-[11px] font-bold text-orange-600 uppercase tracking-wide">Ảnh lỗi (Trước khi sửa)</span>
-            <span class="ml-auto text-[10px] text-orange-400">({{ editingDefect?.before_images?.length || 0 }} ảnh)</span>
+        <!-- LEFT: Before images (Reference) -->
+        <div class="rounded-2xl border border-orange-100 bg-orange-50/10 flex flex-col overflow-hidden">
+          <div class="px-3 py-2 bg-orange-100/50 border-b border-orange-100 flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <PictureOutlined class="text-orange-500 text-xs" />
+              <span class="text-[10px] font-extrabold text-orange-600 uppercase tracking-widest">Hiện trạng lỗi</span>
+            </div>
+            <span class="text-[9px] text-orange-400 font-medium">{{ editingDefect?.before_images?.length || 0 }} ảnh</span>
           </div>
-          <div class="p-3">
-            <div v-if="editingDefect?.before_images?.length" class="grid grid-cols-3 gap-2">
-              <div
-                v-for="att in editingDefect.before_images"
-                :key="att.id"
-                class="relative aspect-square rounded-lg overflow-hidden cursor-pointer group border border-orange-100 hover:border-orange-300 transition-all"
-                @click="openFilePreview(att)"
-              >
-                <img
-                  v-if="/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(att.original_name || att.file_name || '')"
-                  :src="att.file_url"
-                  :alt="att.original_name || 'Ảnh lỗi'"
-                  class="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                />
-                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-orange-50 text-orange-300">
-                  <FileOutlined class="text-xl mb-1" />
-                  <span class="text-[9px] px-1 text-center truncate w-full">{{ att.original_name || att.file_name }}</span>
-                </div>
-                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                  <EyeOutlined class="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-                </div>
+          <div class="p-3 max-h-[160px] overflow-y-auto scrollbar-hide">
+            <div v-if="editingDefect?.before_images?.length" class="grid grid-cols-3 gap-1.5">
+              <div v-for="att in editingDefect.before_images" :key="att.id" class="aspect-square rounded-lg overflow-hidden border border-orange-100/50 bg-white shadow-sm" @click="openFilePreview(att)">
+                <img :src="att.file_url" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity" />
               </div>
             </div>
-            <div v-else class="flex flex-col items-center justify-center py-6 text-orange-200">
-              <PictureOutlined class="text-3xl mb-2" />
-              <span class="text-[11px] text-orange-300">Chưa có ảnh lỗi</span>
+            <div v-else class="flex flex-col items-center justify-center py-8 opacity-40">
+              <PictureOutlined class="text-xl text-orange-300" />
             </div>
           </div>
         </div>
 
-        <!-- RIGHT: After images (upload) -->
-        <div class="rounded-xl border border-green-200 bg-green-50/30 overflow-hidden">
-          <div class="px-3 py-2 bg-green-50 border-b border-green-200 flex items-center gap-1.5">
-            <CheckCircleOutlined class="text-green-500 text-sm" />
-            <span class="text-[11px] font-bold text-green-600 uppercase tracking-wide">Ảnh đã sửa (Sau khi sửa)</span>
-            <span class="ml-auto text-[10px] text-green-400">({{ defectFixForm.files.length }} ảnh)</span>
+        <!-- RIGHT: After images (Upload focus) -->
+        <div class="rounded-2xl border border-green-200 bg-green-50/10 flex flex-col overflow-hidden shadow-sm shadow-green-100/20">
+          <div class="px-3 py-2 bg-green-500/10 border-b border-green-200 flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <CheckCircleOutlined class="text-green-600 text-xs" />
+              <span class="text-[10px] font-extrabold text-green-700 uppercase tracking-widest">Bằng chứng khắc phục</span>
+            </div>
+            <span class="text-[9px] text-green-500 font-medium">{{ defectFixForm.files.length }} đã chọn</span>
           </div>
-          <div class="p-3">
+          <div class="p-3 max-h-[160px] overflow-y-auto scrollbar-hide bg-white/40">
             <div class="grid grid-cols-3 gap-2">
-              <div v-for="(file, idx) in defectFixForm.files" :key="idx" class="relative aspect-square rounded-lg overflow-hidden border border-green-100 shadow-sm">
-                <img :src="file.preview" class="w-full h-full object-cover" />
-                <div class="absolute top-1 right-1 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center cursor-pointer hover:bg-black/70" @click="defectFixForm.files.splice(idx, 1)">
-                  <CloseOutlined class="text-[10px]" />
+              <div v-for="(file, idx) in defectFixForm.files" :key="idx" class="relative aspect-square rounded-xl overflow-hidden border border-green-200 shadow-sm bg-black group">
+                <video v-if="file.file.type.startsWith('video/')" :src="file.preview" class="w-full h-full object-cover opacity-70" />
+                <img v-else :src="file.preview" class="w-full h-full object-cover" />
+                <div v-if="file.file.type.startsWith('video/')" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <PlayCircleOutlined class="text-white text-xl drop-shadow-md" />
+                </div>
+                <div class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center cursor-pointer hover:bg-red-600 transition-colors z-10 shadow-sm" @click="defectFixForm.files.splice(idx, 1)">
+                  <CloseOutlined class="text-[7px] font-bold" />
                 </div>
               </div>
-              <label v-if="defectFixForm.files.length < 9" class="aspect-square rounded-lg border-2 border-dashed border-green-200 hover:border-green-400 flex flex-col items-center justify-center cursor-pointer transition-colors bg-white hover:bg-green-50 group">
-                <input type="file" multiple accept="image/*" class="hidden" @change="onFixFilesChange" />
-                <CameraOutlined class="text-green-300 group-hover:text-green-500 text-xl mb-1" />
-                <span class="text-[10px] text-green-400 group-hover:text-green-600 font-medium">Tải ảnh</span>
+              <label v-if="defectFixForm.files.length < 12" class="aspect-square rounded-xl border-2 border-dashed border-green-200 hover:border-green-400 flex flex-col items-center justify-center cursor-pointer transition-all bg-white hover:bg-green-50 group">
+                <input type="file" multiple accept="image/*,video/*" class="hidden" @change="onFixFilesChange" />
+                <CameraOutlined class="text-green-300 group-hover:text-green-500 text-base mb-1" />
+                <span class="text-[8px] text-green-400 group-hover:text-green-600 font-bold uppercase tracking-widest px-1">Tải lên</span>
               </label>
             </div>
-            <p class="text-[10px] text-green-500 mt-2 text-center">Bắt buộc tải ít nhất 1 ảnh minh chứng</p>
           </div>
         </div>
       </div>
 
-      <div>
-        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Ghi chú khắc phục (Nếu có)</div>
-        <a-textarea v-model:value="defectFixForm.rectification_details" placeholder="Mô tả ngắn gọn kết quả xử lý..." :rows="3" class="rounded-xl border-gray-200" />
+      <div class="space-y-3">
+        <div>
+          <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Ghi chú khắc phục (Nếu có)</div>
+          <a-textarea v-model:value="defectFixForm.rectification_details" placeholder="Mô tả cụ thể những gì đã được xử lý (Vật liệu đã dùng, phương thức sửa...)" :rows="3" class="rounded-xl border-gray-200" />
+        </div>
+
+        <div class="p-4 bg-amber-50 rounded-2xl border border-amber-100/50">
+          <a-checkbox v-model:checked="defectFixForm.confirmed" class="defect-commitment-checkbox">
+            <span class="text-xs text-amber-800 font-medium leading-relaxed">
+              Tôi xác nhận đã hoàn thành việc khắc phục lỗi này theo đúng tiêu chuẩn kỹ thuật và cam kết hình ảnh tải lên là trung thực, phản ánh đúng kết quả thực tế tại công trình.
+            </span>
+          </a-checkbox>
+        </div>
       </div>
     </div>
   </a-modal>
@@ -5516,21 +5540,26 @@
           </div>
           
           <div v-if="acceptDetailSelectedTemplate" class="space-y-4">
-            <!-- Documents List -->
-            <div v-if="acceptDetailSelectedTemplate.documents?.length" class="space-y-2">
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">📄 Văn bản ({{ acceptDetailSelectedTemplate.documents.length }})</div>
-              <div class="grid grid-cols-1 gap-2">
+            <!-- Documents List (Professional Card Style) -->
+            <div v-if="acceptDetailSelectedTemplate.documents?.length" class="space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">📄 Hồ sơ văn bản</div>
+                <span class="text-[9px] text-blue-500 font-bold bg-blue-50 px-1.5 py-0.5 rounded">{{ acceptDetailSelectedTemplate.documents.length }} file</span>
+              </div>
+              <div class="max-h-[240px] overflow-y-auto pr-1 space-y-2 scrollbar-thin">
                 <a v-for="doc in acceptDetailSelectedTemplate.documents" :key="doc.id" href="#" @click.prevent="openFilePreview(doc)"
-                   class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-transparent hover:border-blue-300 hover:bg-white transition-all group">
-                  <div class="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center group-hover:bg-blue-50 transition-colors">
+                   class="flex items-center gap-3 p-2.5 bg-gray-50/50 rounded-xl border border-gray-100 hover:border-blue-300 hover:bg-white transition-all group relative overflow-hidden">
+                  <div class="w-9 h-9 rounded-lg bg-white shadow-sm flex items-center justify-center group-hover:bg-blue-50 transition-colors">
                     <FilePdfOutlined v-if="fileExt(doc) === 'pdf'" class="text-red-500 text-lg" />
-                    <FileOutlined v-else class="text-blue-500 text-lg" />
+                    <FileExcelOutlined v-else-if="['xls','xlsx'].includes(fileExt(doc))" class="text-green-600 text-lg" />
+                    <FileWordOutlined v-else-if="['doc','docx'].includes(fileExt(doc))" class="text-blue-600 text-lg" />
+                    <FileOutlined v-else class="text-blue-400 text-lg" />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <div class="text-xs font-bold text-gray-700 truncate group-hover:text-blue-600">{{ doc.original_name || doc.file_name }}</div>
-                    <div class="text-[10px] text-gray-400">{{ formatFileSize(doc.file_size) }}</div>
+                    <div class="text-[11px] font-bold text-gray-700 truncate group-hover:text-blue-600">{{ doc.original_name || doc.file_name }}</div>
+                    <div class="text-[9px] text-gray-400 uppercase">{{ formatFileSize(doc.file_size) }} • {{ fileExt(doc) }}</div>
                   </div>
-                  <EyeOutlined class="text-gray-300 group-hover:text-blue-500" />
+                  <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors mr-2" />
                 </a>
               </div>
             </div>
@@ -5544,13 +5573,17 @@
               <div v-if="acceptDetailSelectedTemplate.description" class="text-[11px] text-gray-600 leading-relaxed whitespace-pre-wrap">{{ acceptDetailSelectedTemplate.description }}</div>
             </div>
 
-            <!-- Reference/Illustrative Images -->
-            <div v-if="acceptDetailSelectedTemplate.images?.length" class="space-y-2">
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">🖼️ Hình ảnh minh họa ({{ acceptDetailSelectedTemplate.images.length }})</div>
-              <div class="flex flex-wrap gap-2">
-                <div v-for="img in acceptDetailSelectedTemplate.images" :key="img.id" @click="openFilePreview(img)"
-                     class="w-20 h-20 rounded-xl overflow-hidden border border-gray-100 cursor-pointer hover:border-blue-500 transition-all group">
-                  <img :src="img.file_url" class="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+            <!-- Reference/Illustrative Images (Smart Gallery) -->
+            <div v-if="acceptDetailSelectedTemplate.images?.length" class="space-y-3">
+              <div class="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">🖼️ Hình ảnh minh họa tiêu chuẩn</div>
+              <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
+                <div v-for="(img, idx) in acceptDetailSelectedTemplate.images.slice(0, 6)" :key="img.id" @click="openFilePreview(img)"
+                     class="relative min-w-[70px] max-w-[70px] aspect-square rounded-xl overflow-hidden border border-gray-100 cursor-pointer hover:border-blue-500 transition-all group snap-start shadow-sm">
+                  <img :src="img.file_url" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <div v-if="idx === 5 && acceptDetailSelectedTemplate.images.length > 6" class="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-[10px]">
+                    +{{ acceptDetailSelectedTemplate.images.length - 6 }}
+                  </div>
+                  <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
                 </div>
               </div>
             </div>
@@ -5599,13 +5632,20 @@
               </div>
               <div v-if="item.description" class="text-[10px] text-gray-500 leading-relaxed mb-2">{{ item.description }}</div>
               
-              <!-- Item Attachments -->
-              <div v-if="item.attachments?.length" class="flex flex-wrap gap-1.5 mt-2">
-                 <div v-for="aiAtt in item.attachments" :key="aiAtt.id" 
-                      class="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 bg-white cursor-pointer hover:border-blue-300 transition-all shadow-sm group/att" 
-                      @click.stop="openFilePreview(aiAtt)">
-                    <img v-if="['jpg','jpeg','png','webp'].includes(aiAtt.ext?.toLowerCase())" :src="aiAtt.file_url" class="w-full h-full object-cover group-hover/att:scale-110 transition-transform" />
-                    <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-blue-500 font-bold uppercase">{{ aiAtt.ext }}</div>
+              <!-- Item Attachments (Evidence Strip) -->
+              <div v-if="item.attachments?.length" class="mt-3">
+                 <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
+                    <div v-for="(aiAtt, aIdx) in item.attachments.slice(0, 5)" :key="aiAtt.id" 
+                         class="relative min-w-[56px] max-w-[56px] aspect-square rounded-lg overflow-hidden border border-gray-200 bg-white cursor-pointer hover:border-blue-400 transition-all shadow-sm group/att snap-start" 
+                         @click.stop="openFilePreview(aiAtt)">
+                       <img v-if="['jpg','jpeg','png','webp'].includes(aiAtt.ext?.toLowerCase())" :src="aiAtt.file_url" class="w-full h-full object-cover group-hover/att:scale-110 transition-transform duration-500" />
+                       <div v-else class="w-full h-full flex items-center justify-center bg-gray-50">
+                         <span class="text-[8px] font-bold text-gray-400 uppercase">{{ aiAtt.ext }}</span>
+                       </div>
+                       <div v-if="aIdx === 4 && item.attachments.length > 5" class="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-[9px]">
+                         +{{ item.attachments.length - 5 }}
+                       </div>
+                    </div>
                  </div>
               </div>
             </div>
@@ -5648,64 +5688,78 @@
           </div>
         </div>
 
-        <!-- 4. Real Photos (Before/After) -->
+        <!-- 4. Real Photos (Evidence Comparison Strips) -->
         <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-indigo-500">
-            <CameraOutlined /> Hình ảnh thực tế
+          <div class="flex items-center justify-between mb-4">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-indigo-500">
+              <CameraOutlined /> Bằng chứng thực tế tại hiện trường
+            </div>
+            <span class="text-[9px] text-gray-400 font-bold bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">
+              {{ acceptDetailStage.attachments?.length || 0 }} tệp
+            </span>
           </div>
-          <div class="grid grid-cols-2 gap-4">
-            <!-- Before -->
+          
+          <div class="space-y-5">
+            <!-- Section: Before Evidence -->
             <div class="space-y-2">
-              <div class="text-[9px] font-bold text-orange-400 uppercase tracking-widest text-center">Hình ảnh TRƯỚC</div>
-              <div class="grid grid-cols-1 gap-2">
+              <div class="flex items-center gap-2 px-1">
+                <div class="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_5px_rgba(251,146,60,0.5)]"></div>
+                <span class="text-[10px] font-extrabold text-orange-500 uppercase tracking-widest">Hiện trạng TRƯỚC</span>
+              </div>
+              <div class="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide snap-x">
                 <div v-for="att in acceptDetailStage.attachments?.filter(a => a.type === 'before')" :key="att.id" 
-                     class="relative group aspect-square rounded-xl overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer shadow-sm" @click="openFilePreview(att)">
-                  <img :src="att.file_url" class="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                  <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                    <EyeOutlined class="text-white text-xl" />
+                     class="relative min-w-[100px] max-w-[100px] aspect-square rounded-2xl overflow-hidden border border-orange-50 bg-gray-50 cursor-pointer shadow-sm group snap-start" @click="openFilePreview(att)">
+                  <img :src="att.file_url" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <EyeOutlined class="text-white text-lg drop-shadow" />
                   </div>
                 </div>
+                <!-- Upload Slot (Styled like a card) -->
                 <label v-if="can('acceptance.approve.level_1')" :for="'up-before-'+acceptDetailStage.id" 
-                       class="aspect-square border-2 border-dashed border-orange-100 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all group">
-                  <PlusOutlined class="text-orange-300 text-xl group-hover:scale-110 transition-transform" />
-                  <span class="text-[9px] text-orange-400 font-bold uppercase mt-2">Thêm ảnh</span>
+                       class="min-w-[100px] aspect-square border-2 border-dashed border-orange-100 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all group shrink-0">
+                  <PlusOutlined class="text-orange-300 text-lg group-hover:scale-110 transition-transform" />
+                  <span class="text-[8px] text-orange-400 font-extrabold uppercase mt-2">Thêm tệp</span>
                 </label>
                 <input :id="'up-before-'+acceptDetailStage.id" type="file" multiple accept="image/*" class="hidden" @change="e => uploadAcceptStageFiles(e, 'before')" />
               </div>
             </div>
-            <!-- After -->
+
+            <!-- Section: After Evidence -->
             <div class="space-y-2">
-              <div class="text-[9px] font-bold text-emerald-400 uppercase tracking-widest text-center">Hình ảnh SAU</div>
-              <div class="grid grid-cols-1 gap-2">
+              <div class="flex items-center gap-2 px-1">
+                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
+                <span class="text-[10px] font-extrabold text-emerald-600 uppercase tracking-widest">Tiến độ SAU</span>
+              </div>
+              <div class="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide snap-x">
                 <div v-for="att in acceptDetailStage.attachments?.filter(a => a.type === 'after')" :key="att.id" 
-                     class="relative group aspect-square rounded-xl overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer shadow-sm" @click="openFilePreview(att)">
-                  <img :src="att.file_url" class="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                  <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                    <EyeOutlined class="text-white text-xl" />
+                     class="relative min-w-[100px] max-w-[100px] aspect-square rounded-2xl overflow-hidden border border-emerald-50 bg-gray-50 cursor-pointer shadow-sm group snap-start" @click="openFilePreview(att)">
+                  <img :src="att.file_url" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <EyeOutlined class="text-white text-lg drop-shadow" />
                   </div>
                 </div>
+                <!-- Upload Slot -->
                 <label v-if="can('acceptance.approve.level_1')" :for="'up-after-'+acceptDetailStage.id"
-                       class="aspect-square border-2 border-dashed border-emerald-100 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 transition-all group">
-                  <PlusOutlined class="text-emerald-300 text-xl group-hover:scale-110 transition-transform" />
-                  <span class="text-[9px] text-emerald-400 font-bold uppercase mt-2">Thêm ảnh</span>
+                       class="min-w-[100px] aspect-square border-2 border-dashed border-emerald-100 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 transition-all group shrink-0">
+                  <PlusOutlined class="text-emerald-300 text-lg group-hover:scale-110 transition-transform" />
+                  <span class="text-[8px] text-emerald-400 font-extrabold uppercase mt-2">Thêm tệp</span>
                 </label>
                 <input :id="'up-after-'+acceptDetailStage.id" type="file" multiple accept="image/*" class="hidden" @change="e => uploadAcceptStageFiles(e, 'after')" />
               </div>
             </div>
 
-            <!-- Other Attachments (Tài liệu đính kèm khác của stage) -->
-            <div v-if="acceptDetailStage.attachments?.filter(a => a.type !== 'before' && a.type !== 'after').length" class="col-span-2 mt-4 pt-4 border-t border-gray-100">
-              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">📎 Tài liệu bổ sung</div>
-              <div class="grid grid-cols-1 gap-2">
+            <!-- Additional Documentation (Horizontal Strip for files) -->
+            <div v-if="acceptDetailStage.attachments?.filter(a => a.type !== 'before' && a.type !== 'after').length" class="mt-4 pt-4 border-t border-gray-100">
+              <div class="text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-3">📎 Tài liệu bổ sung (Files)</div>
+              <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                  <a v-for="att in acceptDetailStage.attachments?.filter(a => a.type !== 'before' && a.type !== 'after')" :key="att.id" 
                     href="#" @click.prevent="openFilePreview(att)"
-                    class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-transparent hover:border-blue-200 hover:bg-white shadow-sm transition-all group">
+                    class="inline-flex items-center gap-3 p-2.5 bg-gray-50 rounded-xl border border-transparent hover:border-blue-200 hover:bg-white shadow-sm transition-all group whitespace-nowrap min-w-[160px]">
                     <PaperClipOutlined class="text-blue-500" />
                     <div class="flex-1 min-w-0">
-                      <div class="text-[11px] font-bold text-gray-700 truncate group-hover:text-blue-600">{{ att.original_name || att.file_name }}</div>
-                      <div class="text-[9px] text-gray-400 uppercase">{{ att.ext || 'FILE' }} • {{ formatFileSize(att.file_size) }}</div>
+                      <div class="text-[10px] font-bold text-gray-700 truncate group-hover:text-blue-600">{{ att.original_name || att.file_name }}</div>
+                      <div class="text-[8px] text-gray-400 uppercase font-medium">{{ att.ext || 'FILE' }}</div>
                     </div>
-                    <EyeOutlined class="text-gray-300 group-hover:text-blue-500" />
                  </a>
               </div>
             </div>
@@ -5821,6 +5875,12 @@
                   </a-button>
                </div>
                
+               <!-- Rejection Alert -->
+               <div v-if="d.rejection_reason && d.status === 'open'" class="mb-3 p-2.5 bg-red-50 rounded-xl border border-red-100 text-[10px] text-red-500 italic flex gap-2">
+                 <CloseCircleOutlined class="mt-0.5 shrink-0" />
+                 <span><b>Lý do bị từ chối:</b> {{ d.rejection_reason }}</span>
+               </div>
+
                <!-- Next Action Guide -->
                <div v-if="d.next_action?.label && d.status !== 'verified'" class="mb-3 px-3 py-2 bg-white/70 rounded-xl border border-gray-100 flex items-center gap-2">
                  <div class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></div>
@@ -5882,7 +5942,7 @@
         <div class="flex gap-2">
            <template v-if="acceptDetailStage.status !== 'owner_approved'">
              <!-- Approval Buttons -->
-             <a-button v-if="acceptDetailStage.status === 'pending' && can('acceptance.approve.level_1')" 
+             <a-button v-if="['pending', 'rejected'].includes(acceptDetailStage.status) && can('acceptance.approve.level_1')" 
                        type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-blue-600 hover:bg-blue-700" @click="approveAccept(acceptDetailStage, 1)">
                Duyệt (GS)
              </a-button>
@@ -8390,9 +8450,18 @@ const addComment = (parentId = null) => {
 const deleteComment = (c) => router.delete(`/projects/${props.project.id}/comments/${c.id}`, loadingOptions(`delete-comment-${c.id}`, { preserveScroll: true }))
 
 // ============ DEFECT CRUD ============
+const onDefectFilesChange = (e) => {
+  const files = Array.from(e.target.files)
+  files.forEach(file => {
+    // Check if duplicate in modalFiles (which stores raw File objects)
+    const isDuplicate = modalFiles.value.some(f => f.name === file.name && f.size === file.size)
+    if (!isDuplicate) modalFiles.value.push(file)
+  })
+  e.target.value = ''
+}
 const showDefectModal = ref(false)
 const showDefectFixModal = ref(false)
-const defectFixForm = ref({ files: [], rectification_details: '' })
+const defectFixForm = ref({ files: [], rectification_details: '', confirmed: false })
 const editingDefect = ref(null)
 const defectForm = ref({ description: '', severity: 'medium', status: 'open', task_id: null, acceptance_stage_id: null, defect_type: null, deleted_attachment_ids: [] })
 const openDefectModal = (d) => {
@@ -8424,7 +8493,7 @@ const deleteDefect = (d) => router.delete(`/projects/${props.project.id}/defects
 const defectAction = (record, action) => {
   if (action === 'mark-fixed') {
     editingDefect.value = record
-    defectFixForm.value = { files: [], rectification_details: '' }
+    defectFixForm.value = { files: [], rectification_details: '', confirmed: false }
     showDefectFixModal.value = true
     return
   }
@@ -8434,6 +8503,10 @@ const defectAction = (record, action) => {
 const onFixFilesChange = (e) => {
   const files = Array.from(e.target.files)
   files.forEach(file => {
+    // Duplicate check: Same name and same size
+    const isDuplicate = defectFixForm.value.files.some(f => f.file.name === file.name && f.file.size === file.size)
+    if (isDuplicate) return
+
     const reader = new FileReader()
     reader.onload = (ev) => {
       defectFixForm.value.files.push({
@@ -8443,11 +8516,16 @@ const onFixFilesChange = (e) => {
     }
     reader.readAsDataURL(file)
   })
+  // Reset input value to allow re-selecting same file if deleted
+  e.target.value = ''
 }
 
 const submitDefectFix = () => {
   if (!defectFixForm.value.files.length) {
     return message.warning('Vui lòng tải lên ít nhất một hình ảnh minh chứng đã khắc phục lỗi.')
+  }
+  if (!defectFixForm.value.confirmed) {
+    return message.warning('Vui lòng tích vào cam kết xác nhận đã khắc phục lỗi.')
   }
 
   const fd = new FormData()
@@ -8460,7 +8538,7 @@ const submitDefectFix = () => {
     ...loadingOptions('submit-defect-fix', {
       onSuccess: () => {
         showDefectFixModal.value = false
-        defectFixForm.value = { files: [], rectification_details: '' }
+        defectFixForm.value = { files: [], rectification_details: '', confirmed: false }
         showDefectDetailDrawer.value = false
         message.success('Đã gửi báo cáo khắc phục lỗi.')
       }

@@ -96,10 +96,17 @@ class AcceptanceService
                 $item->rejected_at = null;
             }
 
+            $item->rejected_by = null;
+            $item->rejected_at = null;
+            $item->rejection_reason = null;
+            
             $item->save();
             
             // Notify supervisor
             $item->acceptanceStage->notifyEvent('submitted', $user);
+            
+            // Re-sync stage status
+            $item->acceptanceStage->checkCompletion();
         });
 
         return true;
@@ -240,22 +247,38 @@ class AcceptanceService
     {
         $level = $level ?? $this->determineLevelForStage($stage, $user);
 
+        // CHỐT CHẶN TỐI QUAN TRỌNG: Mọi cấp độ đều không được duyệt nếu còn lỗi chưa Verify
+        if ($stage->has_open_defects) {
+             throw new \Exception('Không thể duyệt giai đoạn này vì có lỗi thi công chưa được xử lý xong hoặc chưa được Giám sát xác nhận đạt (Verified).');
+        }
+
         switch ($level) {
             case 1: // Supervisor
-                if ($stage->status !== 'pending') throw new \Exception('Giai đoạn không ở trạng thái chờ duyệt.');
+                if (!in_array($stage->status, ['pending', 'rejected'])) throw new \Exception('Giai đoạn không ở trạng thái chờ duyệt hoặc đã bị từ chối.');
                 break;
             case 2: // PM
                 if ($stage->status !== 'supervisor_approved') throw new \Exception('Chỉ có thể duyệt sau khi giám sát đã duyệt.');
                 break;
             case 3: // Customer
                 if ($stage->status !== 'project_manager_approved') throw new \Exception('Chỉ có thể duyệt sau khi QLDA đã duyệt.');
-                if ($stage->has_open_defects) throw new \Exception('Không thể duyệt vì còn lỗi chưa được khắc phục.');
                 break;
             default:
                 throw new \Exception('Bạn không có quyền duyệt giai đoạn này.');
         }
 
         return DB::transaction(function () use ($stage, $user, $level) {
+            // Tự động duyệt tất cả các hạng mục con có trạng thái phù hợp
+            foreach ($stage->items as $item) {
+                // Kiểm tra thủ công trạng thái để tránh gọi approveItem và bị lỗi Exception vô ích
+                $isCorrectStatus = ($level === 1 && $item->workflow_status === 'submitted') ||
+                                  ($level === 2 && $item->workflow_status === 'supervisor_approved') ||
+                                  ($level === 3 && $item->workflow_status === 'project_manager_approved');
+                
+                if ($isCorrectStatus) {
+                    $this->approveItem($item, $user, $level);
+                }
+            }
+
             switch ($level) {
                 case 1:
                     $stage->status = 'supervisor_approved';
@@ -299,6 +322,15 @@ class AcceptanceService
         }
 
         return DB::transaction(function () use ($stage, $user, $reason) {
+            // TRẢI NGHIỆM TỐI ƯU: Tự động từ chối tất cả các hạng mục con
+            foreach ($stage->items as $item) {
+                try {
+                    $this->rejectItem($item, $user, $reason);
+                } catch (\Exception $e) {
+                    // Bỏ qua nếu hạng mục không ở trạng thái có thể từ chối
+                }
+            }
+
             $stage->status = 'rejected';
             $stage->rejected_by = $user->id;
             $stage->rejected_at = now();
@@ -385,9 +417,9 @@ class AcceptanceService
              throw new \Exception('Hạng mục chỉ được nghiệm thu sau khi hoàn thành (ngày kết thúc đã qua).');
         }
 
-        // 2. Open Defects Check (Defects linked to task OR stage)
+        // 2. Open Defects Check (Phải VERIFIED hết lỗi mới cho duyệt)
         $openDefects = Defect::where('project_id', $item->acceptanceStage->project_id)
-            ->whereIn('status', ['open', 'in_progress'])
+            ->whereIn('status', ['open', 'in_progress', 'fixed', 'rejected'])
             ->where(function ($q) use ($item) {
                 if ($item->task_id) {
                     $q->where('task_id', $item->task_id);
