@@ -237,8 +237,7 @@ class AdditionalCost extends Model
 
         $costStatus = match($this->status) {
             'pending', 'pending_approval' => 'pending_management_approval',
-            'customer_paid'               => 'pending_accountant_approval',
-            'approved', 'confirmed'       => 'approved',
+            'approved', 'confirmed', 'customer_paid' => 'approved',
             'rejected'                    => 'rejected',
             default                       => 'draft'
         };

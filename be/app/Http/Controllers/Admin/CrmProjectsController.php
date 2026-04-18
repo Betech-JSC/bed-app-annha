@@ -2265,11 +2265,28 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::ADDITIONAL_COST_DELETE, $project);
 
         $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
-        if (!in_array($cost->status, ['draft', 'pending_approval', 'rejected'])) {
+        if (!in_array($cost->status, ['draft', 'pending_approval', 'rejected', 'approved'])) {
             return back()->with('error', 'Chỉ xóa được CP phát sinh ở trạng thái Nháp, Chờ duyệt hoặc Bị từ chối.');
         }
-        $cost->delete();
-        return back()->with('success', 'Đã xóa chi phí phát sinh.');
+
+        DB::beginTransaction();
+        try {
+            // Subtract from contract value if it was approved
+            if ($cost->status === 'approved' || $cost->status === 'confirmed') {
+                $contract = $project->contract;
+                if ($contract) {
+                    $contract->contract_value -= $cost->amount;
+                    $contract->save();
+                }
+            }
+
+            $cost->delete();
+            DB::commit();
+            return back()->with('success', 'Đã xóa chi phí phát sinh.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Lỗi khi xóa chi phí phát sinh: ' . $e->getMessage());
+        }
     }
 
     public function revertAdditionalCostToDraft(string $projectId, string $id)
@@ -2285,6 +2302,14 @@ class CrmProjectsController extends Controller
 
         DB::beginTransaction();
         try {
+            // Subtract from contract value before reverting status
+            if ($cost->status === 'approved' || $cost->status === 'confirmed') {
+                $contract = $project->contract;
+                if ($contract) {
+                    $contract->contract_value -= $cost->amount;
+                    $contract->save();
+                }
+            }
 
             $cost->status = 'draft';
             $cost->approved_at = null;

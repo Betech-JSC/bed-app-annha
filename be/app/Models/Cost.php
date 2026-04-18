@@ -442,7 +442,8 @@ class Cost extends Model
         if ($this->material_bill_id || 
             $this->subcontractor_payment_id || 
             $this->equipment_id || 
-            $this->equipment_rental_id) {
+            $this->equipment_rental_id ||
+            $this->additional_cost_id) {
             return false;
         }
 
@@ -549,6 +550,11 @@ class Cost extends Model
             if ($cost->subcontractor_payment_id) {
                 $cost->syncToSubcontractorPayment();
             }
+
+            // Đồng bộ trạng thái về Chi phí phát sinh nếu có liên kết
+            if ($cost->additional_cost_id) {
+                $cost->syncToAdditionalCost();
+            }
         });
     }
 
@@ -628,6 +634,38 @@ class Cost extends Model
             }
             
             $payment->save(['timestamps' => false]);
+        }
+    }
+
+    /**
+     * Đồng bộ trạng thái về Chi phí phát sinh nếu có liên kết
+     */
+    public function syncToAdditionalCost(): void
+    {
+        $additionalCost = AdditionalCost::find($this->additional_cost_id);
+        if (!$additionalCost) return;
+
+        $newStatus = match ($this->status) {
+            'approved' => 'approved',
+            'pending_management_approval' => 'pending',
+            'pending_accountant_approval' => 'approved',
+            'rejected' => 'rejected',
+            default => 'draft',
+        };
+
+        if ($additionalCost->status !== $newStatus) {
+            $additionalCost->status = $newStatus;
+            
+            if ($this->status === 'approved') {
+                $additionalCost->approved_by = $additionalCost->approved_by ?: $this->management_approved_by;
+                $additionalCost->approved_at = $additionalCost->approved_at ?: $this->management_approved_at;
+                $additionalCost->confirmed_by = $this->accountant_approved_by;
+                $additionalCost->confirmed_at = $this->accountant_approved_at;
+            } elseif ($this->status === 'rejected') {
+                $additionalCost->rejected_reason = $this->rejected_reason;
+            }
+            
+            $additionalCost->save(['timestamps' => false]);
         }
     }
 
