@@ -2122,7 +2122,9 @@ class CrmProjectsController extends Controller
         $validated = $request->validate([
             'amount' => 'required|numeric|min:0',
             'description' => 'required|string|max:1000',
-            'status' => 'nullable|in:draft,pending_approval'
+            'status' => 'nullable|in:draft,pending_approval',
+            'defect_id' => 'nullable|exists:defects,id',
+            'task_id' => 'nullable|exists:project_tasks,id',
         ]);
 
         DB::beginTransaction();
@@ -2133,6 +2135,8 @@ class CrmProjectsController extends Controller
                 'status' => $validated['status'] ?? 'draft',
                 'amount' => $validated['amount'],
                 'description' => $validated['description'],
+                'defect_id' => $validated['defect_id'] ?? null,
+                'task_id' => $validated['task_id'] ?? null,
             ]);
 
             // Handle file uploads if any
@@ -2161,6 +2165,8 @@ class CrmProjectsController extends Controller
             'amount' => 'required|numeric|min:0',
             'description' => 'required|string|max:1000',
             'status' => 'nullable|in:draft,pending_approval',
+            'defect_id' => 'nullable|exists:defects,id',
+            'task_id' => 'nullable|exists:project_tasks,id',
         ]);
 
         DB::beginTransaction();
@@ -2169,6 +2175,8 @@ class CrmProjectsController extends Controller
                 'amount' => $validated['amount'],
                 'description' => $validated['description'],
                 'status' => $validated['status'] ?? $cost->status,
+                'defect_id' => $validated['defect_id'] ?? $cost->defect_id,
+                'task_id' => $validated['task_id'] ?? $cost->task_id,
             ]);
 
             // Clean up old status metadata if sending for approval again

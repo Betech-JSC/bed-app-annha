@@ -2375,152 +2375,251 @@
     </a-form>
   </a-modal>
 
-  <!-- Contract Modal -->
-  <a-modal v-model:open="showContractModal" :title="editingContract ? 'Sửa hợp đồng' : 'Tạo hợp đồng'" :width="640" @ok="saveContract" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
-    <a-form layout="vertical" class="mt-4">
-      <a-row :gutter="16">
-        <a-col :span="12">
-          <a-form-item label="Giá trị HĐ" required v-bind="fieldStatus('contract_value')"><a-input-number v-model:value="contractForm.contract_value" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="Ngày ký" v-bind="fieldStatus('signed_date')"><a-date-picker v-model:value="contractForm.signed_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
-        </a-col>
-      </a-row>
-      <a-form-item v-if="editingContract?.rejected_reason" label="Lý do từ chối">
-        <a-alert :message="editingContract.rejected_reason" type="error" show-icon class="!text-xs" />
-      </a-form-item>
-      <!-- Inline Attachments -->
-      <div class="border-t pt-3 mt-2">
-        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp hợp đồng đính kèm</div>
-        <div v-if="editingContract?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <div v-for="a in editingContract.attachments" :key="a.id" class="relative group">
-            <a href="#" @click.prevent="openFilePreview(a)" 
-               class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
-               :class="isAttachmentDeleted(contractForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
-              <span v-if="isAttachmentDeleted(contractForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
-              <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
-            </a>
-            <div v-if="!isAttachmentDeleted(contractForm, a.id)" 
-                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
-                 @click.stop="toggleDeleteAttachment(contractForm, a.id)">
-              <CloseOutlined class="text-[10px] font-bold" />
+  <!-- Optimized Contract Modal (UX Research Driven) -->
+  <a-modal v-model:open="showContractModal" :width="720" @ok="saveContract" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal custom-footer">
+    <template #title>
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-200">
+          <FileProtectOutlined class="text-lg" />
+        </div>
+        <div>
+          <div class="text-base font-bold text-gray-800">{{ editingContract ? 'Cập nhật Hợp đồng Dự án' : 'Ký mới Hợp đồng' }}</div>
+          <div class="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Hợp đồng pháp lý & Giá trị thanh toán</div>
+        </div>
+      </div>
+    </template>
+    
+    <div class="mt-4 space-y-6">
+      <!-- 1. Quick Info & Status -->
+      <div v-if="editingContract" class="p-4 bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-100 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-4">
+          <div class="space-y-1">
+            <div class="text-[10px] text-gray-400 font-bold uppercase">Trạng thái hiện tại</div>
+            <a-tag :color="contractStatusColors[editingContract.status]" class="rounded-full px-3 py-0.5 border-none font-bold text-[11px]">
+              {{ contractStatusLabels[editingContract.status] }}
+            </a-tag>
+          </div>
+          <a-divider type="vertical" class="h-8 bg-gray-200" />
+          <div class="space-y-1">
+            <div class="text-[10px] text-gray-400 font-bold uppercase">Ngày khởi tạo</div>
+            <div class="text-[11px] font-bold text-gray-700">{{ fmtDate(editingContract.created_at) }}</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-[10px] text-gray-400 font-bold uppercase mb-1">Tổng giá trị dự án</div>
+          <div class="text-lg font-black text-blue-600 tracking-tight">{{ fmtMoney(project.total_value) }}</div>
+        </div>
+      </div>
+
+      <!-- 2. Main Form Fields -->
+      <a-form layout="vertical">
+        <div class="grid grid-cols-2 gap-6 p-4 rounded-2xl bg-white border border-gray-100 shadow-sm">
+          <a-form-item required v-bind="fieldStatus('contract_value')" class="mb-0">
+            <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><DollarOutlined class="text-blue-500" /> Giá trị Hợp đồng (Gốc)</span></template>
+            <a-input-number v-model:value="contractForm.contract_value" :min="0" size="large" class="w-full !rounded-xl" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" placeholder="Nhập số tiền..." />
+            <template #help><span class="text-[10px] text-gray-400 italic">Giá trị ký kết chưa bao gồm các khoản phát sinh sau này.</span></template>
+          </a-form-item>
+          
+          <a-form-item v-bind="fieldStatus('signed_date')" class="mb-0">
+            <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><CalendarOutlined class="text-indigo-500" /> Ngày ký kết Hợp đồng</span></template>
+            <a-date-picker v-model:value="contractForm.signed_date" size="large" class="w-full !rounded-xl" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Chọn ngày ký..." />
+          </a-form-item>
+        </div>
+
+        <a-form-item v-if="editingContract?.rejected_reason" label="Lý do từ chối" class="mt-4">
+          <div class="p-3 bg-red-50 rounded-xl border border-red-100 flex items-start gap-3">
+            <div class="w-2 h-2 rounded-full bg-red-500 mt-1.5 shadow-lg shadow-red-200"></div>
+            <div>
+              <div class="text-[11px] font-bold text-red-700">Yêu cầu hiệu chỉnh từ phê duyệt:</div>
+              <div class="text-[11px] text-red-600 italic line-clamp-2">{{ editingContract.rejected_reason }}</div>
             </div>
-            <div v-else 
-                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
-                 @click.stop="toggleDeleteAttachment(contractForm, a.id)">
-              <ReloadOutlined class="text-[10px] font-bold" />
+          </div>
+        </a-form-item>
+
+        <!-- 3. Advanced Attachment Management -->
+        <div class="mt-6">
+          <div class="flex items-center justify-between mb-3 px-1">
+             <div class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><PaperClipOutlined class="text-blue-500" /> Hồ sơ năng lực & File Hợp đồng gốc</div>
+             <span v-if="modalFiles.length" class="bg-blue-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black">+{{ modalFiles.length }} TỆP MỚI</span>
+          </div>
+
+          <div class="p-4 bg-blue-50/20 rounded-2xl border border-dashed border-blue-200">
+            <div v-if="editingContract?.attachments?.length" class="grid grid-cols-2 gap-2 mb-4">
+              <div v-for="a in editingContract.attachments" :key="a.id" class="relative group">
+                <div @click="openFilePreview(a)" 
+                    class="flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer"
+                    :class="isAttachmentDeleted(contractForm, a.id) ? 'bg-gray-100/50 text-gray-400 border-gray-100 grayscale' : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:shadow-md hover:-translate-y-0.5'">
+                  
+                  <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50">
+                    <FilePdfOutlined v-if="a.ext === 'pdf'" class="text-red-500 text-base" />
+                    <FileWordOutlined v-else-if="['doc','docx'].includes(a.ext)" class="text-blue-500 text-base" />
+                    <PictureOutlined v-else-if="['jpg','jpeg','png'].includes(a.ext)" class="text-orange-500 text-base" />
+                    <FileOutlined v-else class="text-gray-400 text-base" />
+                  </div>
+                  
+                  <div class="min-w-0 flex-1">
+                    <div class="text-[10px] font-bold truncate">{{ a.original_name || a.file_name }}</div>
+                    <div class="text-[9px] text-gray-400 uppercase font-medium">{{ a.ext }} • {{ (a.file_size / 1024 / 1024).toFixed(2) }} MB</div>
+                  </div>
+
+                  <div v-if="isAttachmentDeleted(contractForm, a.id)" class="text-[8px] font-black text-red-500 px-1.5 py-0.5 bg-red-50 rounded">ĐÃ XÓA</div>
+                </div>
+
+                <!-- Delete/Restore Actions -->
+                <div v-if="!isAttachmentDeleted(contractForm, a.id)" 
+                    class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg border-2 border-white hover:bg-red-600 z-10"
+                    @click.stop="toggleDeleteAttachment(contractForm, a.id)">
+                  <CloseOutlined class="text-[9px] font-bold" />
+                </div>
+                <div v-else 
+                    class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg border-2 border-white hover:bg-blue-600 z-10"
+                    @click.stop="toggleDeleteAttachment(contractForm, a.id)">
+                  <ReloadOutlined class="text-[9px] font-bold" />
+                </div>
+              </div>
+            </div>
+
+            <div class="relative">
+              <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" 
+                     class="block w-full text-[10px] text-gray-400 file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer p-1 border border-dashed border-blue-300 rounded-2xl bg-white/50 transition-colors" />
+              <div class="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-gray-300 font-bold pointer-events-none">DRAG & DROP SUPPORTED</div>
             </div>
           </div>
         </div>
-        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
-      </div>
-    </a-form>
+      </a-form>
+    </div>
   </a-modal>
 
-  <!-- Payment Modal -->
-  <a-modal v-model:open="showPaymentModal" :title="editingPayment ? 'Cập nhật thanh toán' : 'Thêm đợt thanh toán'" :width="560" @ok="savePayment" ok-text="Lưu lại" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
-    <a-form layout="vertical" class="mt-4 px-1">
-      <a-row :gutter="20">
-        <a-col :span="12">
-          <a-form-item label="Đợt thanh toán số">
-            <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Đợt thanh toán số</span></template>
-            <a-input v-model:value="paymentForm.payment_number" size="large" placeholder="Tự động" disabled class="w-full rounded-xl border-gray-200">
-              <template #prefix><FileTextOutlined class="text-gray-400" /></template>
-            </a-input>
-          </a-form-item>
-        </a-col>
-        <a-col :span="12" v-if="project.contract">
-          <a-form-item label="Hợp đồng liên kết">
-            <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Hợp đồng liên kết</span></template>
-            <a-select v-model:value="paymentForm.contract_id" size="large" class="w-full" allow-clear dropdown-class-name="rounded-xl overflow-hidden">
-              <template #prefix><AuditOutlined class="text-gray-400" /></template>
-              <a-select-option :value="project.contract.id" class="py-2 px-3">HĐ #{{ project.contract.id }} — {{ fmt(project.contract.contract_value) }}</a-select-option>
-            </a-select>
-          </a-form-item>
-        </a-col>
-      </a-row>
-
-      <a-row :gutter="20" class="mt-2">
-        <a-col :span="12">
-          <a-form-item label="Số tiền" required v-bind="fieldStatus('amount')">
-            <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Số tiền đợt này</span></template>
-            <a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full rounded-xl border-gray-200" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')">
-              <template #prefix><span class="text-blue-500 mr-1">₫</span></template>
-            </a-input-number>
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="Ngày đến hạn" v-bind="fieldStatus('due_date')">
-            <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Ngày đến hạn</span></template>
-            <a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full rounded-xl border-gray-200" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Chọn ngày hạn" />
-          </a-form-item>
-        </a-col>
-      </a-row>
-
-      <a-form-item label="Ghi chú đợt TT" class="mt-2">
-        <template #label><span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Nội dung ghi chú</span></template>
-        <a-textarea v-model:value="paymentForm.notes" :rows="2" placeholder="Nhập ghi chú chi tiết cho đợt thanh toán này..." class="rounded-xl border-gray-200 py-3" />
-      </a-form-item>
-
-      <!-- Premium Upload Section -->
-      <div class="mt-2 pt-4 border-t border-dashed border-gray-200">
-        <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center justify-between">
-          <span>Chứng từ đính kèm (Ảnh/PDF)</span>
-          <span v-if="modalFiles.length" class="text-green-500">{{ modalFiles.length }} file mới</span>
+  <!-- Optimized Payment Stage Modal (UX Research Driven) -->
+  <a-modal v-model:open="showPaymentModal" :width="680" @ok="savePayment" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal custom-footer">
+    <template #title>
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center text-white shadow-lg shadow-green-200">
+          <DollarCircleOutlined class="text-lg" />
         </div>
-        
-        <div v-if="editingPayment?.attachments?.length" class="flex flex-wrap gap-2 mb-3">
-          <div v-for="a in editingPayment.attachments" :key="a.id" class="relative group">
-            <div @click="openFilePreview(a)" 
-               class="flex items-center gap-2 text-xs px-3 py-2 rounded-xl transition-all cursor-pointer border"
-               :class="isAttachmentDeleted(paymentForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-gray-50 border-gray-100 hover:bg-white hover:border-blue-300 hover:shadow-sm'">
-              <span v-if="isAttachmentDeleted(paymentForm, a.id)" class="text-[10px] line-through italic flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
-              <template v-else>
-                <FileTextOutlined class="text-blue-500" /> 
-                <span class="max-w-[120px] truncate text-gray-600 font-medium">{{ a.original_name || a.file_name }}</span>
-                <EyeOutlined class="text-gray-300 group-hover:text-blue-400 ml-1" />
-              </template>
-            </div>
-            <div v-if="!isAttachmentDeleted(paymentForm, a.id)" 
-                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
-                 @click.stop="toggleDeleteAttachment(paymentForm, a.id)">
-              <CloseOutlined class="text-[10px] font-bold" />
-            </div>
-            <div v-else 
-                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
-                 @click.stop="toggleDeleteAttachment(paymentForm, a.id)">
-              <ReloadOutlined class="text-[10px] font-bold" />
-            </div>
-          </div>
-        </div>
-
-        <!-- NEW FILE PREVIEWS -->
-        <div v-if="modalFiles.length" class="flex flex-wrap gap-2 mb-3 mt-3">
-          <div v-for="(file, index) in modalFiles" :key="index" class="relative group">
-            <div @click="previewLocalFile(file)" class="flex items-center gap-2 text-xs px-3 py-2 rounded-xl transition-all cursor-pointer border bg-green-50/50 border-green-200 text-green-700 hover:bg-white hover:border-green-300 hover:shadow-sm">
-              <EyeOutlined />
-              <span class="max-w-[120px] truncate font-medium">{{ file.name }}</span>
-            </div>
-            <div class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
-                 @click.prevent="modalFiles.splice(index, 1)">
-              <CloseOutlined class="text-[10px] font-bold" />
-            </div>
-          </div>
-        </div>
-
-        <div class="relative group">
-          <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-          <div class="border-2 border-dashed border-gray-100 group-hover:border-blue-200 group-hover:bg-blue-50/30 rounded-2xl p-4 transition-all flex flex-col items-center justify-center text-center">
-            <div class="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mb-2 group-hover:bg-blue-100 transition-colors">
-              <UploadOutlined class="text-gray-400 group-hover:text-blue-500" />
-            </div>
-            <div class="text-xs font-medium text-gray-500">Tải lên chứng từ hoặc hình ảnh</div>
-            <div class="text-[10px] text-gray-300 mt-1">Dung lượng tối đa 10MB mỗi file</div>
-          </div>
+        <div>
+          <div class="text-base font-bold text-gray-800">{{ editingPayment ? 'Cập nhật Đợt thanh toán' : 'Thiết lập Đợt thanh toán mới' }}</div>
+          <div class="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Luồng thu hồi công nợ & Kế hoạch dòng tiền</div>
         </div>
       </div>
-    </a-form>
+    </template>
+
+    <div class="mt-4 space-y-6">
+      <!-- 1. Financial Context Summary -->
+      <div v-if="project.contract" class="p-4 bg-gradient-to-br from-green-50 to-white rounded-2xl border border-green-100 shadow-sm relative overflow-hidden">
+        <div class="absolute -right-4 -bottom-4 opacity-10"><DollarOutlined class="text-6xl text-green-600" /></div>
+        <div class="flex items-center justify-between mb-3">
+           <div class="text-[10px] font-black text-green-700 uppercase tracking-widest">Tiến độ thanh toán hợp đồng</div>
+           <div class="text-[10px] font-bold text-gray-400">{{ (project.total_paid_receivable / project.contract.contract_value * 100).toFixed(1) }}% Đã thu</div>
+        </div>
+        <div class="flex items-center gap-4">
+           <div class="flex-1 space-y-1.5">
+              <a-progress :percent="Number((project.total_paid_receivable / project.contract.contract_value * 100).toFixed(1))" size="small" :stroke-color="{ '0%': '#10B981', '100%': '#3B82F6' }" />
+              <div class="flex justify-between text-[11px] font-medium text-gray-500">
+                 <span>Đã thu: {{ fmt(project.total_paid_receivable) }}</span>
+                 <span>Hợp đồng: {{ fmt(project.contract.contract_value) }}</span>
+              </div>
+           </div>
+           <a-divider type="vertical" class="h-10 bg-green-200 mx-2" />
+           <div class="text-right">
+              <div class="text-[10px] text-gray-400 font-bold uppercase">Còn lại</div>
+              <div class="text-sm font-black text-orange-600">{{ fmt(Math.max(0, project.contract.contract_value - project.total_paid_receivable)) }}</div>
+           </div>
+        </div>
+      </div>
+
+      <!-- 2. Main Form Fields -->
+      <a-form layout="vertical">
+        <div class="grid grid-cols-2 gap-6 p-4 rounded-2xl bg-white border border-gray-100 shadow-sm">
+          <a-form-item class="mb-0">
+            <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><NumbersOutlined class="text-blue-500" /> Đợt thanh toán số</span></template>
+            <a-input v-model:value="paymentForm.payment_number" size="large" placeholder="Tự động" disabled class="w-full !rounded-xl !bg-gray-50 !text-gray-500 font-bold border-gray-100" />
+          </a-form-item>
+          
+          <a-form-item v-if="project.contract" class="mb-0">
+            <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><FileProtectOutlined class="text-indigo-500" /> Hợp đồng căn cứ</span></template>
+            <a-select v-model:value="paymentForm.contract_id" size="large" class="w-full !rounded-xl" disabled>
+              <a-select-option :value="project.contract.id">HĐ #{{ project.contract.id }} — {{ fmt(project.contract.contract_value) }}</a-select-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item required v-bind="fieldStatus('amount')" class="mb-0 mt-2">
+            <template #label>
+              <div class="flex justify-between items-center w-full">
+                <span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><DollarCircleOutlined class="text-green-500" /> Số tiền thanh toán</span>
+                <span v-if="paymentForm.amount && project.contract" class="text-[9px] font-black text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">~{{ (paymentForm.amount / project.contract.contract_value * 100).toFixed(1) }}% GTHĐ</span>
+              </div>
+            </template>
+            <a-input-number v-model:value="paymentForm.amount" :min="0" size="large" class="w-full !rounded-xl" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" placeholder="0 ₫" />
+          </a-form-item>
+
+          <a-form-item v-bind="fieldStatus('due_date')" class="mb-0 mt-2">
+            <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><CalendarOutlined class="text-orange-500" /> Hạn thanh toán (Dự kiến)</span></template>
+            <a-date-picker v-model:value="paymentForm.due_date" size="large" class="w-full !rounded-xl" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Chọn ngày hạn..." />
+          </a-form-item>
+        </div>
+
+        <a-form-item class="mt-4">
+           <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><EditOutlined class="text-gray-400" /> Ghi chú & Diễn giải</span></template>
+           <a-textarea v-model:value="paymentForm.notes" :rows="2" placeholder="VD: Thanh toán đợt 2 sau khi ký biên bản nghiệm thu hạng mục sơn..." class="!rounded-xl border-gray-100 py-3" />
+        </a-form-item>
+
+        <!-- 3. Evidence & Attachments -->
+        <div class="mt-6">
+          <div class="text-[11px] font-bold text-gray-500 uppercase mb-3 px-1 flex items-center justify-between">
+            <span class="flex items-center gap-1.5"><PaperClipOutlined class="text-green-500" /> Tài liệu giải trình & Chứng từ đính kèm</span>
+            <span v-if="modalFiles.length" class="bg-green-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black">+{{ modalFiles.length }} FILE MỚI</span>
+          </div>
+
+          <div class="p-4 bg-green-50/20 rounded-2xl border border-dashed border-green-200">
+             <!-- Existing Files -->
+             <div v-if="editingPayment?.attachments?.length" class="flex flex-wrap gap-2 mb-4">
+               <div v-for="a in editingPayment.attachments" :key="a.id" class="relative group">
+                 <div @click="openFilePreview(a)" 
+                     class="flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer shadow-sm"
+                     :class="isAttachmentDeleted(paymentForm, a.id) ? 'bg-gray-100/50 text-gray-400 border-gray-100 grayscale' : 'bg-white text-gray-700 border-gray-100 hover:border-green-300 hover:shadow-md'">
+                   
+                   <div class="w-7 h-7 rounded-lg flex items-center justify-center bg-gray-50 text-xs">
+                     <FilePdfOutlined v-if="a.ext === 'pdf'" class="text-red-500" />
+                     <PictureOutlined v-else-if="['jpg','jpeg','png'].includes(a.ext)" class="text-orange-500" />
+                     <FileTextOutlined v-else class="text-blue-500" />
+                   </div>
+                   
+                   <div class="min-w-0 pr-2">
+                     <div class="text-[10px] font-bold truncate max-w-[140px]">{{ a.original_name || a.file_name }}</div>
+                     <span v-if="isAttachmentDeleted(paymentForm, a.id)" class="text-[8px] font-black text-red-500 italic">ĐÃ XÓA</span>
+                   </div>
+                 </div>
+
+                 <!-- Actions -->
+                 <div v-if="!isAttachmentDeleted(paymentForm, a.id)" 
+                     class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                     @click.stop="toggleDeleteAttachment(paymentForm, a.id)">
+                   <CloseOutlined class="text-[8px] font-bold" />
+                 </div>
+                 <div v-else 
+                     class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-green-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-green-700 z-10"
+                     @click.stop="toggleDeleteAttachment(paymentForm, a.id)">
+                   <ReloadOutlined class="text-[8px] font-bold" />
+                 </div>
+               </div>
+             </div>
+
+             <!-- Upload Input -->
+             <div class="relative group mt-2">
+               <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+               <div class="border-2 border-dashed border-green-100 group-hover:border-green-300 group-hover:bg-green-50/30 rounded-2xl p-6 transition-all flex flex-col items-center justify-center text-center bg-white/50">
+                 <div class="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mb-3 group-hover:bg-green-100 transition-colors shadow-sm">
+                   <UploadOutlined class="text-green-500 text-lg" />
+                 </div>
+                 <div class="text-xs font-bold text-gray-600">Tải lên chứng từ hoặc hồ sơ đợt này</div>
+                 <div class="text-[10px] text-gray-400 mt-1 uppercase tracking-tighter">Hệ thống chấp nhận PDF, JPEG, PNG, DOCX</div>
+               </div>
+             </div>
+          </div>
+        </div>
+      </a-form>
+    </div>
   </a-modal>
 
   <!-- Reject Payment Modal -->
@@ -4763,77 +4862,24 @@
                 <a-button type="text" size="small" class="text-green-600"><CheckOutlined /></a-button>
               </a-popconfirm>
 
-              <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'paid'].includes(p.status) && can('subcontractor_payment.revert')"
-                        type="text" size="small" class="text-orange-500 hover:text-orange-600" @click="revertSubPaymentAction(subDetail, p)">
-                <ReloadOutlined />
+              <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'paid'].includes(p.status) && can('subcontractor_payment.revert')" type="text" size="small" danger @click="revertSubPayment(subDetail, p)">
+                <template #icon><ReloadOutlined /></template>
               </a-button>
-
-              <a-popconfirm v-if="['pending_management_approval','pending_accountant_confirmation'].includes(p.status) && (can('subcontractor_payment.approve') || can('subcontractor_payment.mark_paid'))" title="Từ chối phiếu này?" @confirm="rejectSubPayment(subDetail, p)" ok-text="Từ chối" :ok-button-props="{ danger: true }">
-                <a-button type="text" size="small" danger><CloseCircleOutlined /></a-button>
-              </a-popconfirm>
-              <a-popconfirm v-if="p.status !== 'paid' && can('subcontractor_payment.delete')" title="Xóa phiếu TT này?" @confirm="deleteSubPayment(subDetail, p)">
-                <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-              </a-popconfirm>
             </div>
           </div>
         </div>
-        <a-empty v-else description="Chưa có phiếu thanh toán" :image="null" class="py-4" />
+        <div v-else class="text-center py-8 text-gray-400 italic">Chưa có lịch sử thanh toán</div>
      </div>
   </a-drawer>
 
-  <!-- ==================== NTP PAYMENT CREATE DRAWER ==================== -->
-  <a-drawer v-model:open="showSubPayCreateDrawer" :title="`Tạo phiếu TT: ${subPayTarget?.name || ''}`" :width="500" placement="right" destroy-on-close>
-    <a-form layout="vertical" class="mt-2">
-      <a-form-item label="Đợt thanh toán"><a-input v-model:value="subPayForm.payment_stage" size="large" placeholder="VD: Đợt 1, Nghiệm thu lần 1..." /></a-form-item>
-      <a-form-item label="Số tiền" required><a-input-number v-model:value="subPayForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item>
-      <a-form-item label="Ngày thanh toán"><a-date-picker v-model:value="subPayForm.payment_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
-      <a-form-item label="Phương thức">
-        <a-radio-group v-model:value="subPayForm.payment_method" button-style="solid" size="small">
-          <a-radio-button value="bank_transfer">Chuyển khoản</a-radio-button>
-          <a-radio-button value="cash">Tiền mặt</a-radio-button>
-          <a-radio-button value="other">Khác</a-radio-button>
-        </a-radio-group>
-      </a-form-item>
-      <a-form-item label="Ghi chú"><a-textarea v-model:value="subPayForm.description" :rows="3" placeholder="Nhập ghi chú..." /></a-form-item>
-      <a-form-item label="Chứng từ đính kèm" required>
-        <div class="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-blue-300 rounded-xl bg-blue-50 hover:bg-blue-100/50 transition-colors p-4">
-          <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" @change="e => subPayFiles = [...(subPayFiles || []), ...(e.target.files || [])]" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-          <svg class="w-8 h-8 text-blue-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-          <p class="text-sm font-semibold text-blue-700 m-0">Click hoặc Kéo thả tệp vào đây</p>
-          <p class="text-xs text-blue-400 mt-1 mb-0">(Chấp nhận: Ảnh, PDF, Word, Excel...)</p>
-          <div v-if="subPayFiles?.length" class="w-full mt-3 space-y-1 relative z-20">
-            <div v-for="(f, i) in subPayFiles" :key="i" class="flex justify-between items-center bg-white border border-blue-200 rounded px-2 py-1.5 text-xs text-slate-700 shadow-sm">
-              <span class="truncate pr-2 font-medium">{{ f.name }}</span>
-              <button @click.prevent="subPayFiles.splice(i, 1)" class="text-red-500 hover:text-red-700 shrink-0 p-1 rounded hover:bg-red-50 transition-colors">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </a-form-item>
-    </a-form>
-    <template #footer>
-      <div class="flex justify-end gap-2">
-        <a-button @click="showSubPayCreateDrawer = false">Hủy</a-button>
-        <a-button type="primary" @click="saveSubPayment">Tạo phiếu</a-button>
-      </div>
-    </template>
-  </a-drawer>
-
-  <a-modal v-model:open="showSubModal" :title="editingSub ? 'Sửa NTP' : 'Thêm nhà thầu phụ'" :width="680" @ok="saveSub" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showSubModal" :title="editingSub ? 'Chỉnh sửa Nhà thầu phụ' : 'Thêm Nhà thầu phụ'" :width="640" @ok="saveSub" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item v-if="globalSubcontractors.length > 0" label="Tên NTP (Chọn từ danh sách)" required v-bind="fieldStatus('global_subcontractor_id')">
-        <a-select v-model:value="subForm.global_subcontractor_id" 
-                  show-search 
-                  :filter-option="(input, option) => option.label.toLowerCase().indexOf(input.toLowerCase()) >= 0"
-                  size="large" class="w-full" allow-clear placeholder="Tìm kiếm nhà thầu phụ từ hệ thống..." @change="onGlobalSubSelect">
-          <a-select-option v-for="gs in globalSubcontractors" :key="gs.id" :value="gs.id" :label="gs.name">{{ gs.name }} ({{ gs.category || '—' }})</a-select-option>
+      <a-form-item label="Chọn từ danh sách hệ thống (không bắt buộc)">
+        <a-select v-model:value="subForm.global_subcontractor_id" size="large" class="w-full" allow-clear placeholder="Tìm nhà thầu đã có..." @change="onGlobalSubChange" show-search option-filter-prop="label">
+          <a-select-option v-for="gs in globalSubcontractors" :key="gs.id" :value="gs.id" :label="gs.name">{{ gs.name }}</a-select-option>
         </a-select>
-        <div class="mt-1.5">
-          <a class="text-xs text-blue-500 cursor-pointer" @click="subForm.global_subcontractor_id = null">Hoặc nhập tên NTP mới ↓</a>
-        </div>
       </a-form-item>
-      
+
       <a-form-item v-if="!subForm.global_subcontractor_id" :label="globalSubcontractors.length > 0 ? 'Nhập tên mới' : 'Tên nhà thầu phụ'" required v-bind="fieldStatus('name')">
         <a-input v-model:value="subForm.name" size="large" placeholder="Nhập tên nhà thầu phụ..." />
       </a-form-item>
@@ -4872,12 +4918,12 @@
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="Ngày bắt đầu">
-            <a-date-picker v-model:value="subForm.progress_start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Select date" />
+            <a-date-picker v-model:value="subForm.progress_start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Chọn ngày" />
           </a-form-item>
         </a-col>
         <a-col :span="12">
           <a-form-item label="Ngày kết thúc">
-            <a-date-picker v-model:value="subForm.progress_end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Select date" />
+            <a-date-picker v-model:value="subForm.progress_end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Chọn ngày" />
           </a-form-item>
         </a-col>
       </a-row>
@@ -4891,7 +4937,6 @@
         </a-select>
       </a-form-item>
 
-      <!-- Auto-create Cost (matching APP) -->
       <div v-if="!editingSub" class="border-t pt-4 mt-4">
         <a-checkbox v-model:checked="subForm.create_cost" class="mb-2 text-sm font-medium">Tự động tạo chi phí dự án cho NTP này</a-checkbox>
         <a-form-item v-if="subForm.create_cost" label="Nhóm chi phí">
@@ -4901,188 +4946,234 @@
         </a-form-item>
       </div>
 
-      <!-- File Upload area updated to match screenshot style -->
       <div class="border-t pt-4 mt-4">
         <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
           <FileOutlined /> Báo giá / Hồ sơ đính kèm
         </div>
-        
         <div class="border-2 border-dashed border-gray-200 rounded-xl p-4 transition-colors hover:border-blue-400 bg-gray-50/30">
           <div v-if="editingSub?.attachments?.length" class="flex flex-wrap gap-2 mb-3">
             <div v-for="a in editingSub.attachments" :key="a.id" class="relative group">
               <a href="#" @click.prevent="openFilePreview(a)" 
-                 class="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition cursor-pointer border"
-                 :class="isAttachmentDeleted(subForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
-                <span v-if="isAttachmentDeleted(subForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
-                <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
+                 class="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition cursor-pointer border bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm">
+                <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
               </a>
-              <div v-if="!isAttachmentDeleted(subForm, a.id)" 
-                   class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+              <div class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white z-10"
                    @click.stop="toggleDeleteAttachment(subForm, a.id)">
                 <CloseOutlined class="text-[10px] font-bold" />
               </div>
-              <div v-else 
-                   class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
-                   @click.stop="toggleDeleteAttachment(subForm, a.id)">
-                <ReloadOutlined class="text-[10px] font-bold" />
-              </div>
             </div>
           </div>
-          
           <input type="file" multiple @change="e => subFiles = [...(e.target.files || [])]" class="block w-full text-sm cursor-pointer file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border file:border-gray-300 file:text-xs file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-50" />
-          
-          <div v-if="subFiles.length" class="mt-3 space-y-1">
-            <div v-for="(f, i) in subFiles" :key="i" class="text-[11px] text-green-600 flex items-center gap-2">
-              <CheckCircleOutlined /> {{ f.name }} <span class="text-gray-400">({{ (f.size / 1024).toFixed(1) }} KB)</span>
-            </div>
-          </div>
         </div>
       </div>
     </a-form>
   </a-modal>
 
-  <!-- Additional Cost Modal -->
-  <a-modal v-model:open="showACModal" title="Đề xuất chi phí phát sinh" :width="500" @ok="saveAC('draft')" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
-    <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Số tiền" required v-bind="fieldStatus('amount')"><a-input-number v-model:value="acForm.amount" :min="0" size="large" class="w-full" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" /></a-form-item>
-      <a-form-item label="Mô tả" required v-bind="fieldStatus('description')"><a-textarea v-model:value="acForm.description" :rows="3" /></a-form-item>
-      <!-- Inline Attachments -->
-      <div class="border-t pt-3 mt-2">
-        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Tệp minh chứng</div>
-        <div v-if="editingAC?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
-          <div v-for="a in editingAC.attachments" :key="a.id" class="relative group">
-            <a href="#" @click.prevent="openFilePreview(a)" 
-               class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
-               :class="isAttachmentDeleted(acForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
-              <span v-if="isAttachmentDeleted(acForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
-              <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
-            </a>
-            <div v-if="!isAttachmentDeleted(acForm, a.id)" 
-                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
-                 @click.stop="toggleDeleteAttachment(acForm, a.id)">
-              <CloseOutlined class="text-[10px] font-bold" />
-            </div>
-            <div v-else 
-                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
-                 @click.stop="toggleDeleteAttachment(acForm, a.id)">
-              <ReloadOutlined class="text-[10px] font-bold" />
-            </div>
-          </div>
+  <!-- 1. Optimized Additional Cost Request Modal -->
+  <a-modal v-model:open="showACModal" :width="640" @ok="saveAC('draft')" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal custom-footer">
+    <template #title>
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-200">
+          <AlertOutlined class="text-lg" />
         </div>
-        <!-- NEW FILE PREVIEWS -->
-        <div v-if="modalFiles.length" class="flex flex-wrap gap-2 mb-3 mt-3">
-          <div v-for="(file, index) in modalFiles" :key="index" class="relative group">
-            <div @click="previewLocalFile(file)" class="flex items-center gap-2 text-xs px-3 py-2 rounded-xl transition-all cursor-pointer border bg-green-50/50 border-green-200 text-green-700 hover:bg-white hover:border-green-300 hover:shadow-sm">
-              <EyeOutlined />
-              <span class="max-w-[120px] truncate font-medium">{{ file.name }}</span>
-            </div>
-            <div class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
-                 @click.prevent="modalFiles.splice(index, 1)">
-              <CloseOutlined class="text-[10px] font-bold" />
-            </div>
-          </div>
+        <div>
+          <div class="text-base font-bold text-gray-800">Đề xuất Chi phí Phát sinh</div>
+          <div class="text-[10px] text-gray-400 font-medium uppercase tracking-wider text-orange-500">Yêu cầu bổ sung ngân sách ngoài kế hoạch</div>
+        </div>
+      </div>
+    </template>
+
+    <div class="mt-4 space-y-5">
+      <div class="p-4 bg-gradient-to-br from-orange-50 to-white rounded-2xl border border-orange-100 shadow-sm relative overflow-hidden">
+        <div class="absolute -right-4 -bottom-4 opacity-10 rotate-12"><CalculatorOutlined class="text-6xl text-orange-600" /></div>
+        <div class="flex items-center justify-between mb-2">
+           <div class="text-[10px] font-black text-orange-700 uppercase tracking-widest">Tổng chi phát sinh hiện tại</div>
+           <div class="text-xs font-bold text-gray-500">{{ fmt(totalAdditionalCosts) }}</div>
+        </div>
+        <div class="flex items-center gap-3">
+           <div class="flex-1">
+              <div class="h-1.5 w-full bg-orange-100 rounded-full overflow-hidden">
+                <div class="h-full bg-orange-500 rounded-full" :style="`width: ${Math.min(100, (totalAdditionalCosts / (project.contract?.contract_value || 1) * 100))}%`"></div>
+              </div>
+           </div>
+           <span class="text-[10px] font-bold text-gray-400">~{{ (totalAdditionalCosts / (project.contract?.contract_value || 1) * 100).toFixed(1) }}% GTHĐ</span>
+        </div>
+      </div>
+
+      <a-form layout="vertical">
+        <div class="p-4 rounded-2xl bg-white border border-gray-100 shadow-sm space-y-4">
+           <a-form-item required v-bind="fieldStatus('amount')" class="mb-0">
+             <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><DollarCircleOutlined class="text-green-500" /> Số tiền đề xuất</span></template>
+             <a-input-number v-model:value="acForm.amount" :min="0" size="large" class="w-full !rounded-xl" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" placeholder="0 ₫" />
+           </a-form-item>
+           <a-form-item required v-bind="fieldStatus('description')" class="mb-0">
+             <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><EditOutlined class="text-blue-500" /> Lý do & Diễn giải chi tiết</span></template>
+             <a-textarea v-model:value="acForm.description" :rows="3" placeholder="Mô tả cụ thể lý do phát sinh..." class="!rounded-xl border-gray-100 py-3" />
+           </a-form-item>
         </div>
 
-        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-      </div>
-    </a-form>
+        <div class="mt-4 pt-4 border-t border-dashed border-gray-100">
+          <div class="text-[11px] font-bold text-gray-500 uppercase mb-3 flex items-center justify-between">
+            <span class="flex items-center gap-1.5"><PaperClipOutlined class="text-orange-500" /> Tài liệu & Hình ảnh minh chứng</span>
+            <span v-if="modalFiles.length" class="bg-orange-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black">+{{ modalFiles.length }} FILE</span>
+          </div>
+          <div class="p-4 bg-orange-50/20 rounded-2xl border border-dashed border-orange-200">
+             <div v-if="editingAC?.attachments?.length" class="flex flex-wrap gap-2 mb-3">
+               <div v-for="a in editingAC.attachments" :key="a.id" class="relative group">
+                 <div @click="openFilePreview(a)" class="flex items-center gap-2 p-2 rounded-xl border transition-all cursor-pointer shadow-sm text-xs bg-white text-gray-700 border-gray-100 hover:border-orange-300">
+                   <FileTextOutlined class="text-orange-500" />
+                   <span class="truncate max-w-[120px] font-medium">{{ a.original_name || a.file_name }}</span>
+                 </div>
+                 <div class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white z-10"
+                     @click.stop="toggleDeleteAttachment(acForm, a.id)">
+                   <CloseOutlined class="text-[8px] font-bold" />
+                 </div>
+               </div>
+             </div>
+             <div class="relative group mt-2">
+               <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+               <div class="border-2 border-dashed border-orange-100 group-hover:border-orange-300 rounded-2xl p-6 transition-all flex flex-col items-center justify-center text-center bg-white/50">
+                 <UploadOutlined class="text-orange-500 text-lg mb-2" />
+                 <div class="text-xs font-bold text-gray-600">Kéo thả hoặc Click để tải minh chứng</div>
+               </div>
+             </div>
+          </div>
+        </div>
+      </a-form>
+    </div>
   </a-modal>
 
-  <!-- Reject Additional Cost Modal -->
+  <!-- 2. Reject Additional Cost Modal -->
   <a-modal v-model:open="showRejectACModal" title="Từ chối CP phát sinh" :width="400" @ok="rejectAC" ok-text="Từ chối" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal" :ok-button-props="{ danger: true }">
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Lý do từ chối" required><a-textarea v-model:value="rejectACReason" :rows="3" placeholder="Nhập lý do..." /></a-form-item>
     </a-form>
   </a-modal>
 
-  <!-- Budget Modal -->
-  <!-- Budget Modal -->
-  <a-modal v-model:open="showBudgetModal" :title="editingBudget ? 'Chỉnh sửa ngân sách' : 'Tạo ngân sách'" :width="850" @ok="saveBudget" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
-    <a-form layout="vertical" class="mt-4">
-      <div class="p-4 bg-gray-50 rounded-xl mb-4 border border-gray-100">
-        <a-row :gutter="16">
-          <a-col :span="10"><a-form-item label="Tên ngân sách" required v-bind="fieldStatus('name')"><a-input v-model:value="budgetForm.name" size="large" placeholder="Ví dụ: Ngân sách xây thô v1" /></a-form-item></a-col>
-          <a-col :span="6"><a-form-item label="Ngày" required v-bind="fieldStatus('budget_date')"><a-date-picker v-model:value="budgetForm.budget_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-          <a-col :span="4"><a-form-item label="Phiên bản"><a-input v-model:value="budgetForm.version" size="large" placeholder="v1" /></a-form-item></a-col>
-          <a-col :span="4">
-            <a-form-item label="Trạng thái">
-              <a-select v-model:value="budgetForm.status" size="large" class="w-full">
-                <a-select-option value="draft">Nháp</a-select-option>
-                <a-select-option value="approved" v-if="can('budgets.approve')">Đã duyệt</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        
-        <a-row :gutter="16" class="mt-2">
-          <a-col :span="8">
-            <a-form-item label="Giá trị hợp đồng">
-              <a-input-number v-model:value="budgetForm.contract_value" :min="0" class="w-full" size="large" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateProfitByTotal" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="Tổng ngân sách (Dự toán)">
-              <div class="h-10 px-3 bg-white border border-gray-300 rounded-lg flex items-center font-bold text-gray-800 text-lg">
-                {{ fmt(budgetForm.total_budget || totalBudgetSum) }}
+  <!-- 3. Optimized Budget Management Modal (ArchitectUX) -->
+  <a-modal v-model:open="showBudgetModal" :width="960" @ok="saveBudget" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal custom-footer">
+    <template #title>
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+          <CalculatorOutlined class="text-lg" />
+        </div>
+        <div>
+          <div class="text-base font-bold text-gray-800">{{ editingBudget ? 'Hiệu chỉnh Ngân sách Dự án' : 'Thiết lập Ngân sách mới' }}</div>
+          <div class="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Hoạch định chi phí & Biên lợi nhuận</div>
+        </div>
+      </div>
+    </template>
+
+    <div class="mt-4 space-y-6">
+      <!-- 1. Strategic Financial Context Banner -->
+      <div v-if="project.contract" class="p-5 bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 shadow-sm relative overflow-hidden">
+        <div class="absolute -right-6 -bottom-6 opacity-10 rotate-12"><CalculatorOutlined class="text-7xl text-indigo-600" /></div>
+        <div class="flex items-center justify-between mb-3">
+           <div class="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Hiệu năng tài chính dự án</div>
+           <div class="flex items-center gap-2">
+             <span class="text-[10px] font-bold text-gray-400">Dự toán / Doanh thu:</span>
+             <span class="text-xs font-black" :class="(budgetForm.total_budget || totalBudgetSum) > project.contract.contract_value ? 'text-red-500' : 'text-indigo-600'">
+                {{ ((budgetForm.total_budget || totalBudgetSum) / project.contract.contract_value * 100).toFixed(1) }}%
+             </span>
+           </div>
+        </div>
+        <div class="flex items-center gap-5">
+           <div class="flex-1 space-y-2">
+              <div class="h-2 w-full bg-indigo-100 rounded-full overflow-hidden flex">
+                <div class="h-full bg-indigo-500 rounded-full transition-all duration-500" :style="`width: ${Math.min(100, ((budgetForm.total_budget || totalBudgetSum) / project.contract.contract_value * 100))}%`"></div>
               </div>
-            </a-form-item>
-          </a-col>
-          <a-col :span="4">
-            <a-form-item label="Lợi nhuận (%)">
-              <a-input-number v-model:value="budgetForm.profit_percentage" :min="0" :max="100" class="w-full" size="large" @change="recalculateProfitByPercent" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="4">
-            <a-form-item label="Lợi nhuận (đ)">
-              <a-input-number v-model:value="budgetForm.profit_amount" :min="0" class="w-full" size="large" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateProfitByAmount" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+              <div class="flex justify-between text-[11px] font-medium">
+                 <div class="text-gray-500">Tổng chi dự toán: <span class="font-bold text-gray-800">{{ fmt(budgetForm.total_budget || totalBudgetSum) }}</span></div>
+                 <div class="text-gray-400">Hợp đồng: <span class="font-bold">{{ fmt(project.contract.contract_value) }}</span></div>
+              </div>
+           </div>
+           <a-divider type="vertical" class="h-10 bg-indigo-200 mx-1" />
+           <div class="text-right min-w-[120px]">
+              <div class="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Lợi nhuận gộp</div>
+              <div class="text-base font-black" :class="budgetForm.profit_amount >= 0 ? 'text-emerald-600' : 'text-red-600'">
+                {{ fmt(budgetForm.profit_amount) }}
+              </div>
+              <div class="text-[9px] font-bold" :class="budgetForm.profit_percentage >= 0 ? 'text-emerald-500' : 'text-red-400'">
+                Biên: {{ budgetForm.profit_percentage?.toFixed(2) }}%
+              </div>
+           </div>
+        </div>
       </div>
 
-      <div class="flex justify-between items-center mb-3">
-        <div class="font-bold text-base text-gray-700 flex items-center gap-2"><CalculatorOutlined class="text-blue-500" /> Phân bổ hạng mục</div>
-        <div class="text-xs text-gray-500 italic">Tổng cộng: {{ (itemsPercentageSum || 0).toFixed(1) }}%</div>
-      </div>
+      <!-- 2. Basic Information Grid -->
+      <a-form layout="vertical">
+        <div class="grid grid-cols-2 gap-x-6 gap-y-4 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm relative z-10 transition-all hover:shadow-md">
+          <a-form-item required v-bind="fieldStatus('name')" class="mb-0">
+            <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><TagsOutlined class="text-indigo-500" /> Tên ngân sách</span></template>
+            <a-input v-model:value="budgetForm.name" size="large" placeholder="VD: Ngân sách xây thô v1" class="!rounded-xl" />
+          </a-form-item>
 
-      <div class="max-h-[350px] overflow-y-auto pr-2">
-        <div v-for="(item, idx) in budgetForm.items" :key="idx" class="p-3 bg-white border border-gray-200 rounded-xl mb-3 shadow-sm hover:border-blue-300 transition-all relative group">
-          <a-row :gutter="12">
-            <a-col :span="10">
-              <div class="text-[10px] text-gray-400 mb-1 uppercase font-bold">Nhóm chi phí / Tên hạng mục</div>
-              <div class="flex gap-1">
-                <a-select v-model:value="item.cost_group_id" placeholder="Chọn Nhóm chi phí..." size="small" class="w-full" @change="val => onBudgetCostGroupChange(idx, val)" show-search option-filter-prop="label">
+          <a-form-item required v-bind="fieldStatus('budget_date')" class="mb-0">
+            <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><CalendarOutlined class="text-orange-400" /> Ngày hiệu lực</span></template>
+            <a-date-picker v-model:value="budgetForm.budget_date" size="large" class="w-full !rounded-xl" format="DD/MM/YYYY" value-format="YYYY-MM-DD" placeholder="Chọn ngày..." />
+          </a-form-item>
+
+          <a-form-item class="mb-0">
+            <template #label><span class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><NodeIndexOutlined class="text-blue-500" /> Phiên bản ngân sách</span></template>
+            <a-input v-model:value="budgetForm.version" size="large" placeholder="v1.0" class="!rounded-xl text-center font-bold text-blue-600 bg-blue-50/30 border-blue-100" />
+          </a-form-item>
+
+          <div class="p-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 flex items-center gap-4">
+             <div class="flex-1">
+               <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Căn cứ doanh thu</div>
+               <a-input-number v-model:value="budgetForm.contract_value" :min="0" class="w-full !rounded-xl font-bold" size="large" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateProfitByTotal" />
+             </div>
+             <div class="text-center px-4">
+                <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Mục tiêu lợi nhuận</div>
+                <div class="flex items-center gap-2">
+                   <a-input-number v-model:value="budgetForm.profit_percentage" :min="-100" :max="100" class="w-20 !rounded-lg !text-center font-bold text-emerald-600" size="small" @change="recalculateProfitByPercent" />
+                   <span class="text-xs font-bold text-gray-400">%</span>
+                </div>
+             </div>
+          </div>
+        </div>
+      </a-form>
+
+      <!-- 3. Allocation Line Items -->
+      <div class="space-y-4">
+        <div class="flex justify-between items-center px-2">
+          <div class="text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5"><ToolOutlined class="text-indigo-500" /> Phân bổ hạng mục chi phí</div>
+          <a-button type="primary" ghost size="small" class="rounded-lg text-[10px] font-bold h-7" @click="addBudgetItem">+ Thêm hạng mục</a-button>
+        </div>
+
+        <div class="max-h-[350px] overflow-y-auto custom-scrollbar space-y-3 pr-2 pb-2">
+          <div v-for="(item, idx) in budgetForm.items" :key="idx" class="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-indigo-200 transition-all group relative">
+            <div class="grid grid-cols-12 gap-5 items-end">
+              <div class="col-span-6">
+                <div class="text-[10px] text-gray-400 font-black uppercase mb-1">Nhóm chi phí</div>
+                <a-select v-model:value="item.cost_group_id" placeholder="Chọn nhóm..." size="large" class="w-full !rounded-xl" @change="val => onBudgetCostGroupChange(idx, val)" show-search option-filter-prop="label">
                   <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id" :label="g.name">{{ g.name }}</a-select-option>
                 </a-select>
               </div>
-            </a-col>
-            <a-col :span="4">
-              <div class="text-[10px] text-gray-400 mb-1 uppercase font-bold">Tỷ lệ (%)</div>
-              <a-input-number v-model:value="item.percentage" :min="0" :max="100" size="small" class="w-full" @change="recalculateItemByPercent(idx)" />
-            </a-col>
-            <a-col :span="10">
-              <div class="text-[10px] text-gray-400 mb-1 uppercase font-bold">Số tiền dự toán</div>
-              <div class="flex gap-1 items-center">
-                <a-input-number v-model:value="item.estimated_amount" :min="0" placeholder="Số tiền" size="small" class="flex-1" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateItemByAmount(idx)" />
-                <a-button type="text" size="small" danger @click="budgetForm.items.splice(idx, 1)" :disabled="budgetForm.items.length <= 1"><DeleteOutlined /></a-button>
+              <div class="col-span-2">
+                <div class="text-[10px] text-gray-400 font-black uppercase mb-1 text-center">Tỷ lệ (%)</div>
+                <a-input-number v-model:value="item.percentage" :min="0" :max="100" size="large" class="w-full !rounded-xl !text-center font-bold text-indigo-600 bg-indigo-50/30 border-indigo-100" @change="recalculateItemByPercent(idx)" />
               </div>
-            </a-col>
-          </a-row>
+              <div class="col-span-3">
+                <div class="text-[10px] text-gray-400 font-black uppercase mb-1">Dự toán phân bổ</div>
+                <a-input-number v-model:value="item.estimated_amount" :min="0" placeholder="0 ₫" size="large" class="w-full !rounded-xl font-black text-gray-700" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateItemByAmount(idx)" />
+              </div>
+              <div class="col-span-1 flex justify-center pb-2">
+                <a-button type="text" danger @click="budgetForm.items.splice(idx, 1)" :disabled="budgetForm.items.length <= 1" class="rounded-xl hover:bg-red-50 flex items-center justify-center">
+                  <template #icon><CloseOutlined class="text-xs" /></template>
+                </a-button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-      
-      <div class="mt-4 flex justify-between items-center">
-        <a-button type="dashed" @click="budgetForm.items.push({ cost_group_id: null, name: '', estimated_amount: 0, percentage: 0 })">
-          <template #icon><PlusOutlined /></template> Thêm hạng mục
-        </a-button>
-        <div class="text-right">
-          <div class="text-xs text-gray-400">Ghi chú chung</div>
-          <a-textarea v-model:value="budgetForm.notes" :rows="1" placeholder="Ghi chú cho bản ngân sách này..." class="mt-1" />
-        </div>
-      </div>
-    </a-form>
-  </a-modal>
 
+        <div class="pt-4 border-t border-dashed border-gray-100">
+           <div class="text-[11px] font-bold text-gray-500 uppercase mb-2 px-1 flex items-center gap-1.5"><EditOutlined class="text-gray-400" /> Ghi chú tổng quát ngân sách</div>
+           <a-textarea v-model:value="budgetForm.notes" :rows="2" placeholder="Ghi chú các giả định hoặc lưu ý quan trọng khi thực hiện ngân sách này..." class="!rounded-2xl border-gray-100 py-3 text-sm" />
+        </div>
+      </div>
+    </div>
+  </a-modal>
   <!-- Reject Cost Modal -->
   <a-modal v-model:open="showRejectCostModal" title="Từ chối phiếu chi" :width="480" @ok="rejectCost" ok-text="Từ chối" cancel-text="Hủy" :confirm-loading="savingForm" :ok-button-props="{ danger: true }" centered destroy-on-close class="crm-modal">
     <div class="mt-4">
@@ -6729,7 +6820,8 @@ import {
   FilePdfOutlined, FileWordOutlined, FileExcelOutlined, ClockCircleOutlined,
   LineChartOutlined, FileProtectOutlined, BankOutlined, HistoryOutlined,
   FileAddOutlined, SafetyCertificateOutlined, PaperClipOutlined,
-  CalculatorOutlined
+  CalculatorOutlined, NodeIndexOutlined, ToolOutlined, TagsOutlined,
+  AlertOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -6882,6 +6974,7 @@ const isTabPermitted = (tabKey) => {
 
 // ============ HELPERS ============
 const fmt = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v) : '0 ₫'
+const fmtMoney = fmt
 const fmtDate = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY') : '—'
 const fmtDateTime = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY HH:mm') : '—'
 const isAccepted = (task) => {
@@ -8726,7 +8819,15 @@ const acForm = ref({ amount: null, description: '', deleted_attachment_ids: [] }
 const openAdditionalCostModal = (ac = null) => {
   editingAC.value = ac
   modalFiles.value = []
-  acForm.value = ac ? { amount: ac.amount, description: ac.description || '', deleted_attachment_ids: [] } : { amount: null, description: '', deleted_attachment_ids: [] }
+  acForm.value = ac ? { 
+    amount: ac.amount, 
+    description: ac.description || '', 
+    deleted_attachment_ids: [] 
+  } : { 
+    amount: null, 
+    description: '', 
+    deleted_attachment_ids: [] 
+  }
   showACModal.value = true
 }
 const saveAC = (status = 'draft') => {
