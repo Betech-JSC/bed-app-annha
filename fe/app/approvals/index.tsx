@@ -80,6 +80,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }
     budget: { icon: 'pie-chart-outline', color: '#3B82F6', label: 'Ngân sách' },
     material_bill: { icon: 'cube-outline', color: '#8B5CF6', label: 'Phiếu vật tư' },
     defect: { icon: 'alert-circle-outline', color: '#F43F5E', label: 'Lỗi' },
+    defect_verify: { icon: 'alert-circle-outline', color: '#F43F5E', label: 'Chờ xác nhận lỗi' },
     equipment_rental: { icon: 'construct-outline', color: '#06B6D4', label: 'Thuê TB' },
     asset_usage: { icon: 'trail-sign-outline', color: '#3B82F6', label: 'Sử dụng kho' },
     attendance: { icon: 'finger-print-outline', color: '#06B6D4', label: 'Chấm công' },
@@ -250,7 +251,7 @@ export default function ApprovalCenterScreen() {
             items = items.filter(i => {
                 if (selectedCategory === 'finance') return ['project_cost', 'company_cost', 'sub_payment', 'payment', 'material_bill', 'budget', 'equipment_rental'].includes(i.type);
                 if (selectedCategory === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'acceptance_item'].includes(i.type);
-                if (selectedCategory === 'technical') return ['change_request', 'additional_cost', 'construction_log', 'schedule_adjustment', 'defect', 'asset_usage'].includes(i.type);
+                if (selectedCategory === 'technical') return ['change_request', 'additional_cost', 'construction_log', 'schedule_adjustment', 'defect', 'defect_verify', 'asset_usage'].includes(i.type);
                 if (selectedCategory === 'hr') return i.type === 'attendance';
                 return true;
             });

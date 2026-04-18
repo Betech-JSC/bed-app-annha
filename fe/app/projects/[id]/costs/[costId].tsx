@@ -757,6 +757,25 @@ export default function CostDetailScreen() {
             </PermissionGuard>
           )}
 
+          {cost.status === "approved" && (
+            <PermissionGuard permission={Permissions.COST_REVERT} projectId={id} style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#F59E0B' }]}
+                onPress={handleRevertToDraft}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="arrow-undo-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.actionButtonText}>Hoàn duyệt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </PermissionGuard>
+          )}
+
 
 
         </View>

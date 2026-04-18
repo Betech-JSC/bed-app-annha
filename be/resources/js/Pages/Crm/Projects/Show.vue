@@ -3939,7 +3939,7 @@
           <a-button v-if="can('additional_cost.update') && ['draft','rejected'].includes(additionalCostDetail.status)" size="small" @click="openAdditionalCostModal(additionalCostDetail); showAdditionalCostDetailDrawer = false"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
-          <template v-if="additionalCostDetail.status === 'pending_approval' && can('additional_cost.approve')">
+          <template v-if="['pending', 'pending_approval'].includes(additionalCostDetail.status) && can('additional_cost.approve')">
             <template v-if="additionalCostDetail.attachments?.length > 0">
               <a-button type="primary" class="bg-green-600 border-green-600" @click="approveAC(additionalCostDetail)">Duyệt chi phí</a-button>
             </template>
@@ -5409,6 +5409,29 @@
                <a-form-item label="Nội dung lỗi" required class="mb-3">
                  <a-textarea v-model:value="newAcceptDefect.description" :rows="2" placeholder="Ví dụ: Nứt tường, sơn loang..." class="rounded-lg" />
                </a-form-item>
+
+               <!-- File Upload Area -->  
+               <div class="mb-4">
+                 <div class="text-[10px] text-gray-400 font-bold uppercase mb-2 flex justify-between items-center">
+                   <span>Ảnh minh chứng lỗi</span>
+                   <span v-if="newAcceptDefectFiles.length" class="text-red-500">{{ newAcceptDefectFiles.length }} ảnh đã chọn</span>
+                 </div>
+                 
+                 <div v-if="newAcceptDefectFiles.length" class="flex flex-wrap gap-2 mb-3">
+                   <div v-for="(f, idx) in newAcceptDefectFiles" :key="idx" class="relative group w-16 h-16 rounded-xl border border-red-100 overflow-hidden shadow-sm">
+                     <img :src="f.preview" class="w-full h-full object-cover" />
+                     <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center cursor-pointer" @click="newAcceptDefectFiles.splice(idx, 1)">
+                       <CloseCircleOutlined class="text-white text-lg" />
+                     </div>
+                   </div>
+                 </div>
+
+                 <label class="block w-full border-2 border-dashed border-red-100 bg-white hover:bg-red-50/50 hover:border-red-300 rounded-2xl p-4 transition-all cursor-pointer text-center group">
+                   <input type="file" multiple accept="image/*" class="hidden" @change="onDefectFileSelect" />
+                   <PictureOutlined class="text-red-300 group-hover:text-red-500 text-xl mb-1" />
+                   <div class="text-[11px] font-bold text-red-400 group-hover:text-red-600">Chọn ảnh từ thiết bị</div>
+                 </label>
+               </div>
                <div class="flex justify-between items-center mb-4">
                  <div class="text-[10px] text-gray-400 font-bold uppercase">Mức độ:</div>
                  <a-radio-group v-model:value="newAcceptDefect.severity" size="small" button-style="solid">

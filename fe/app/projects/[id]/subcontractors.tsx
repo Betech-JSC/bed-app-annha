@@ -1561,6 +1561,36 @@ export default function SubcontractorsScreen() {
                               </TouchableOpacity>
                             </>
                           )}
+                          {(item.status === "pending_management_approval" || item.status === "pending_accountant_confirmation") && (
+                            <TouchableOpacity
+                              style={[styles.actionButton, { backgroundColor: '#F59E0B' }]}
+                              onPress={() => {
+                                Alert.alert(
+                                  "Hoàn duyệt phiếu chi",
+                                  "Bạn có chắc chắn muốn đưa phiếu chi này về trạng thái nháp?",
+                                  [
+                                    { text: "Hủy", style: "cancel" },
+                                    {
+                                      text: "Hoàn duyệt",
+                                      style: "destructive",
+                                      onPress: async () => {
+                                        try {
+                                          await subcontractorApi.revertPaymentToDraft(id!, item.id);
+                                          Alert.alert("Thành công", "Đã đưa phiếu chi về trạng thái nháp");
+                                          loadPayments(selectedSubcontractor!.id);
+                                          loadSubcontractors();
+                                        } catch (error: any) {
+                                          Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
+                                        }
+                                      }
+                                    }
+                                  ]
+                                );
+                              }}
+                            >
+                              <Text style={styles.actionButtonText}>Hoàn duyệt</Text>
+                            </TouchableOpacity>
+                          )}
                           {item.status === "pending_accountant_confirmation" && (
                             <TouchableOpacity
                               style={[styles.actionButton, styles.paidButton]}

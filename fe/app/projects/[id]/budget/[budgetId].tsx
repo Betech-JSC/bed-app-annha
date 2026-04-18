@@ -624,9 +624,9 @@ export default function BudgetDetailScreen() {
                             </TouchableOpacity>
                         )}
 
-                        {(budget.status === "pending_approval") && hasPermission(Permissions.BUDGET_REVERT) && (
+                        {(budget.status === "pending_approval" || budget.status === "approved") && hasPermission(Permissions.BUDGET_REVERT) && (
                             <TouchableOpacity
-                                style={[styles.workflowButton, { backgroundColor: '#F59E0B' }]}
+                                style={[styles.workflowButton, { backgroundColor: '#F59E0B', marginTop: 12 }]}
                                 onPress={() => {
                                     Alert.alert(
                                         "Xác nhận hoàn duyệt",

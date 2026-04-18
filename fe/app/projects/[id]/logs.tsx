@@ -78,6 +78,25 @@ export default function ConstructionLogsScreen() {
   const { hasPermission, refresh: refreshPermissions } = useProjectPermissions(id || null);
   const [logs, setLogs] = useState<ConstructionLog[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const getLogStatusColor = (status?: string) => {
+    switch (status) {
+      case "approved": return "#10B981"; // Green
+      case "rejected": return "#EF4444"; // Red
+      case "pending": return "#F59E0B"; // Orange
+      case "draft": default: return "#6B7280"; // Gray
+    }
+  };
+
+  const getLogStatusText = (status?: string) => {
+    switch (status) {
+      case "approved": return "Đã duyệt";
+      case "rejected": return "Bị từ chối";
+      case "pending": return "Chờ duyệt";
+      case "draft": default: return "Bản nháp";
+    }
+  };
+
   const [modalVisible, setModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedDateLogs, setSelectedDateLogs] = useState<ConstructionLog[]>([]);
@@ -398,6 +417,11 @@ export default function ConstructionLogsScreen() {
   };
 
   const handleDelete = async (log: ConstructionLog) => {
+    // Only allow deleting draft or pending logs, maybe rejected. Or let backend handle it.
+    if (log.approval_status === "approved") {
+      Alert.alert("Lỗi", "Không thể xóa nhật ký đã được duyệt.");
+      return;
+    }
     Alert.alert(
       "Xác nhận xóa",
       "Bạn có chắc chắn muốn xóa nhật ký này?",
@@ -422,6 +446,39 @@ export default function ConstructionLogsScreen() {
               }
             } catch (error: any) {
               Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa nhật ký");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleApprove = async (log: ConstructionLog, status: 'approved' | 'rejected') => {
+    Alert.alert(
+      "Xác nhận",
+      status === 'approved' ? "Bạn có chắc chắn muốn duyệt nhật ký này?" : "Bạn có chắc chắn muốn từ chối nhật ký này?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Đồng ý",
+          style: status === 'approved' ? "default" : "destructive",
+          onPress: async () => {
+            try {
+              const response = await constructionLogApi.approveLog(id!, log.id, { status });
+              if (response.success) {
+                Alert.alert("Thành công", status === 'approved' ? "Đã duyệt nhật ký" : "Đã từ chối nhật ký");
+                setDetailModalVisible(false);
+                if (currentMonth && currentYear) {
+                  const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
+                  const lastDay = new Date(currentYear, currentMonth, 0);
+                  const endDate = formatDateLocal(lastDay);
+                  loadLogs(startDate, endDate, true);
+                } else {
+                  loadLogs(undefined, undefined, true);
+                }
+              }
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể thao tác");
             }
           },
         },
@@ -986,6 +1043,15 @@ export default function ConstructionLogsScreen() {
                       </Text>
                     </View>
                   )}
+                  {/* Status Badge */}
+                  <View style={{ alignSelf: 'flex-start', marginTop: 8 }}>
+                    <View style={[styles.statusBadge, { backgroundColor: getLogStatusColor(item.approval_status) + '20' }]}>
+                      <View style={[styles.statusDot, { backgroundColor: getLogStatusColor(item.approval_status) }]} />
+                      <Text style={[styles.statusText, { color: getLogStatusColor(item.approval_status) }]}>
+                        {getLogStatusText(item.approval_status)}
+                      </Text>
+                    </View>
+                  </View>
                   {item.attachments && item.attachments.length > 0 && (
                     <View style={styles.attachmentsCountRow}>
                       <Ionicons name="images-outline" size={12} color="#6B7280" />
@@ -1445,28 +1511,42 @@ export default function ConstructionLogsScreen() {
                       )}
                     </View>
                     <View style={styles.detailCardActions}>
-                      <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
-                        <TouchableOpacity
-                          style={styles.iconActionButton}
-                          onPress={() => {
-                            setDetailModalVisible(false);
-                            openEditModal(log);
-                          }}
-                        >
-                          <Ionicons name="create-outline" size={20} color="#6B7280" />
-                        </TouchableOpacity>
-                      </PermissionGuard>
-                      <PermissionGuard permission={Permissions.LOG_DELETE} projectId={id}>
-                        <TouchableOpacity
-                          style={styles.iconActionButton}
-                          onPress={() => {
-                            setDetailModalVisible(false);
-                            handleDelete(log);
-                          }}
-                        >
-                          <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                        </TouchableOpacity>
-                      </PermissionGuard>
+                      {(log.approval_status === "draft" || log.approval_status === "pending" || log.approval_status === "rejected") && (
+                        <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
+                          <TouchableOpacity
+                            style={styles.iconActionButton}
+                            onPress={() => {
+                              setDetailModalVisible(false);
+                              openEditModal(log);
+                            }}
+                          >
+                            <Ionicons name="create-outline" size={20} color="#6B7280" />
+                          </TouchableOpacity>
+                        </PermissionGuard>
+                      )}
+                      {log.approval_status !== "approved" && (
+                        <PermissionGuard permission={Permissions.LOG_DELETE} projectId={id}>
+                          <TouchableOpacity
+                            style={styles.iconActionButton}
+                            onPress={() => {
+                              setDetailModalVisible(false);
+                              handleDelete(log);
+                            }}
+                          >
+                            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                          </TouchableOpacity>
+                        </PermissionGuard>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Status Badge */}
+                  <View style={{ alignSelf: 'flex-start', marginBottom: 12 }}>
+                    <View style={[styles.statusBadge, { backgroundColor: getLogStatusColor(log.approval_status) + '20' }]}>
+                      <View style={[styles.statusDot, { backgroundColor: getLogStatusColor(log.approval_status) }]} />
+                      <Text style={[styles.statusText, { color: getLogStatusColor(log.approval_status) }]}>
+                        {getLogStatusText(log.approval_status)}
+                      </Text>
                     </View>
                   </View>
 
@@ -1558,6 +1638,29 @@ export default function ConstructionLogsScreen() {
                         ))}
                       </View>
                     </View>
+                  )}
+
+                  {/* Actions (Approve/Reject) */}
+                  {log.approval_status === "pending" && (
+                    <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
+                      <View style={styles.approvalActions}>
+                        <TouchableOpacity
+                          style={[styles.approvalButton, styles.rejectButton]}
+                          onPress={() => handleApprove(log, 'rejected')}
+                        >
+                          <Ionicons name="close-circle-outline" size={20} color="#EF4444" />
+                          <Text style={styles.rejectButtonText}>Từ chối</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity
+                          style={[styles.approvalButton, styles.approveButton]}
+                          onPress={() => handleApprove(log, 'approved')}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+                          <Text style={styles.approveButtonText}>Duyệt</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </PermissionGuard>
                   )}
                 </View>
               ))
@@ -2198,7 +2301,59 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 14,
     color: "#6B7280",
-    marginTop: 4,
+    marginBottom: 4,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  approvalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 16,
+  },
+  approvalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  rejectButton: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  rejectButtonText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  approveButton: {
+    backgroundColor: '#10B981',
+  },
+  approveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   imagesGrid: {
     flexDirection: "row",

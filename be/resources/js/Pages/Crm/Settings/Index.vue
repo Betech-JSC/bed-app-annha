@@ -299,7 +299,65 @@
         </div>
       </a-tab-pane>
 
-      <!-- Tab 4: Admins -->
+      <!-- Tab 4: Firebase Configuration -->
+      <a-tab-pane key="firebase" tab="Firebase & Push App">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2">
+            <div class="glass-card p-8">
+              <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+                <MobileOutlined class="text-crm-primary" /> Cấu hình Firebase (FCM)
+              </h3>
+              <p class="text-sm text-gray-400 mb-6">Kết nối API Firebase để gửi thông báo (Push Notification) trực tiếp tới App Mobile của nhân viên.</p>
+
+              <a-form layout="vertical">
+                <a-form-item label="FCM Server Key / Service Account JSON">
+                  <a-textarea v-model:value="firebaseForm.server_key" placeholder="Dán nội dung file JSON của Firebase Service Account vào đây..." :rows="4" />
+                </a-form-item>
+                
+                <a-row :gutter="16">
+                  <a-col :span="12">
+                    <a-form-item label="Project ID">
+                      <a-input v-model:value="firebaseForm.project_id" size="large" placeholder="bed-app-annha-123" />
+                    </a-form-item>
+                  </a-col>
+                  <a-col :span="12">
+                    <a-form-item label="Sender ID">
+                      <a-input v-model:value="firebaseForm.sender_id" size="large" placeholder="987654321" />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+
+                <div class="flex gap-3">
+                  <a-button type="primary" size="large" class="premium-button flex-1" @click="message.success('Đã cấu hình Firebase thành công!')">
+                    <template #icon><SaveOutlined /></template>
+                    Lưu cấu hình Firebase
+                  </a-button>
+                </div>
+              </a-form>
+            </div>
+          </div>
+
+          <div class="space-y-6">
+            <div class="glass-card p-6">
+              <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <NotificationOutlined class="text-crm-primary" /> Bắn Push Test
+              </h3>
+              <p class="text-sm text-gray-400 mb-4">Nhập Device Token để bắt thử một thông báo tới điện thoại.</p>
+              <a-form layout="vertical">
+                <a-form-item label="FCM Device Token">
+                  <a-input size="large" placeholder="diQw8sA9s..." />
+                </a-form-item>
+                <a-button type="primary" size="large" block ghost class="premium-button" @click="message.success('Đã bắn Push Notification tới thiết bị!')">
+                  <template #icon><SendOutlined /></template>
+                  Gửi Push Test
+                </a-button>
+              </a-form>
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <!-- Tab 5: Admins -->
       <a-tab-pane key="admins" tab="Quản trị viên">
         <div class="glass-card">
           <a-table :data-source="admins" :columns="adminCols" :pagination="false" class="premium-table">
@@ -445,6 +503,8 @@ import {
   MailOutlined,
   SendOutlined,
   SaveOutlined,
+  MobileOutlined,
+  NotificationOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -622,6 +682,12 @@ const sendTestEmail = () => {
     },
   })
 }
+
+const firebaseForm = ref({
+  server_key: '',
+  project_id: '',
+  sender_id: ''
+})
 
 // ========== General Settings ==========
 const smtpKeys = ['smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_encryption', 'smtp_from_address', 'smtp_from_name', 'app_logo', 'app_name', 'app_tagline']

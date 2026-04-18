@@ -322,6 +322,32 @@ const categories = [
     ],
   },
   {
+    key: 'defects',
+    title: 'Bảo hành & Sự cố',
+    icon: markRaw(SafetyOutlined),
+    gradient: 'linear-gradient(135deg, #d97706, #f59e0b)',
+    articles: [
+      {
+        title: 'Báo cáo sự cố / Lỗi thi công',
+        steps: [
+          'Vào chi tiết dự án → Tab <strong>"Sự cố & Bảo hành"</strong>',
+          'Nhấn <strong>"Báo lỗi"</strong> → Chụp ảnh công trường, mô tả chi tiết vị trí',
+          'Hệ thống tự động thông báo/giao việc cho Kỹ sư giám sát',
+        ],
+        tips: 'Nên sử dụng App Mobile để chụp ảnh lỗi và báo cáo trực tiếp ngay tại công trường nhằm đảm bảo tính kịp thời.'
+      },
+      {
+        title: 'Xác nhận khắc phục lỗi (Defect Verify)',
+        steps: [
+          'Sau khi nhà thầu phụ/nhân viên báo cáo đã sửa xong, lỗi sẽ chuyển sang trạng thái <strong>"Chờ xác nhận"</strong>',
+          'Giám sát viên vào menu <strong>Trung tâm duyệt</strong> hoặc mục Sự cố',
+          'Kiểm tra hình ảnh đã sửa chữa, nếu đạt thì nhấn <strong>"Xác nhận hoàn thành"</strong>',
+          'Nếu chưa đạt, có thể nhấn <strong>"Từ chối"</strong> yêu cầu sửa lại',
+        ],
+      }
+    ]
+  },
+  {
     key: 'approvals',
     title: 'Trung tâm duyệt',
     icon: markRaw(AuditOutlined),

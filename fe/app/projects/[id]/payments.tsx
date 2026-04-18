@@ -172,6 +172,56 @@ export default function PaymentsScreen() {
     });
   };
 
+  const handleSubmitPayment = (payment: ProjectPayment) => {
+    Alert.alert(
+      "Gửi yêu cầu",
+      "Bạn có chắc chắn muốn gửi yêu cầu thanh toán này?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Gửi",
+          style: "default",
+          onPress: async () => {
+            try {
+              const response = await paymentApi.submitPayment(id!, payment.id);
+              if (response.success) {
+                Alert.alert("Thành công", "Đã gửi yêu cầu thanh toán");
+                loadPayments();
+              }
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể gửi yêu cầu");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeletePayment = (payment: ProjectPayment) => {
+    Alert.alert(
+      "Xóa thanh toán",
+      "Bạn có chắc chắn muốn xóa đợt thanh toán này?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await paymentApi.deletePayment(id!, payment.id);
+              if (response.success) {
+                Alert.alert("Thành công", "Đã xóa đợt thanh toán");
+                loadPayments();
+              }
+            } catch (error: any) {
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa đợt thanh toán");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
@@ -185,16 +235,21 @@ export default function PaymentsScreen() {
 
   const getStatusColor = (status: string, dueDate: string) => {
     switch (status) {
-      case "confirmed":
+      case "draft":
+        return "#6B7280";
       case "paid":
+      case "confirmed":
         return "#10B981";
       case "customer_paid":
-        return "#3B82F6";
+        return "#06B6D4";
       case "overdue":
+      case "rejected":
+      case "customer_rejected":
         return "#EF4444";
       case "customer_pending_approval":
-      case "customer_approved":
         return "#8B5CF6";
+      case "customer_approved":
+        return "#3B82F6";
       case "pending":
         const due = new Date(dueDate);
         const today = new Date();
@@ -207,18 +262,23 @@ export default function PaymentsScreen() {
 
   const getStatusText = (status: string) => {
     switch (status) {
+      case "draft":
+        return "Nháp";
       case "pending":
-        return "Chờ thanh toán";
-      case "customer_paid":
-        return "Khách đã thanh toán";
-      case "confirmed":
-        return "Đã nhận tiền";
+        return "Chờ gửi y/c";
       case "customer_pending_approval":
-        return "Chờ khách hàng duyệt";
+        return "Chờ KH duyệt";
       case "customer_approved":
-        return "Khách hàng đã duyệt";
+        return "KH đã duyệt";
+      case "customer_paid":
+        return "KH báo TT";
       case "paid":
+      case "confirmed":
         return "Đã thanh toán";
+      case "customer_rejected":
+        return "Khách hàng từ chối";
+      case "rejected":
+        return "Bị từ chối";
       case "overdue":
         return "Quá hạn";
       default:
@@ -289,14 +349,37 @@ export default function PaymentsScreen() {
         )}
       </View>
 
-      {item.status === "pending" && (
+      {/* Trạng thái nháp: Gửi yêu cầu / Xóa */}
+      {item.status === "draft" && (
+        <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.submitButton, { flex: 1.5, backgroundColor: "#3B82F6" }]}
+              onPress={() => handleSubmitPayment(item)}
+            >
+              <Ionicons name="paper-plane-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.confirmButtonText}>Gửi yêu cầu</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.rejectButton, { flex: 1, backgroundColor: "#EF4444" }]}
+              onPress={() => handleDeletePayment(item)}
+            >
+              <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.rejectButtonText}>Xóa</Text>
+            </TouchableOpacity>
+          </View>
+        </PermissionGuard>
+      )}
+
+      {/* Staff báo đã nhận tiền (nếu khách k dùng app) */}
+      {(item.status === "customer_pending_approval" || item.status === "customer_approved") && (
         <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
           <TouchableOpacity
             style={styles.markPaidButton}
             onPress={() => handleMarkAsPaid(item)}
           >
             <Ionicons name="card-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.markPaidButtonText}>Thanh toán</Text>
+            <Text style={styles.markPaidButtonText}>KH đã thanh toán</Text>
           </TouchableOpacity>
         </PermissionGuard>
       )}

@@ -106,9 +106,9 @@ export default function AdditionalCostDetailScreen() {
       case "pending":
         return "Chờ thanh toán";
       case "customer_paid":
-        return "Khách đã thanh toán";
+        return "KH báo TT";
       case "confirmed":
-        return "Đã nhận tiền";
+        return "Đã thanh toán";
       case "pending_approval":
         return "Chờ duyệt";
       case "approved":

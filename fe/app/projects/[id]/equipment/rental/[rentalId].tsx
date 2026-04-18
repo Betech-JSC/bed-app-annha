@@ -72,6 +72,7 @@ export default function RentalDetailScreen() {
                             case "requestReturn": res = await equipmentRentalApi.requestReturn(id!, Number(rentalId)); break;
                             case "confirmReturn": res = await equipmentRentalApi.confirmReturn(id!, Number(rentalId)); break;
                             case "delete": res = await equipmentRentalApi.destroy(id!, Number(rentalId)); break;
+                            case "revert": res = await equipmentRentalApi.revertToDraft(id!, Number(rentalId)); break;
                         }
                         if (res?.success) {
                             Alert.alert("Thành công", res.message);
@@ -259,6 +260,17 @@ export default function RentalDetailScreen() {
                         >
                             <Ionicons name="trash" size={18} color="#EF4444" />
                             <Text style={[styles.actionBtnText, { color: "#EF4444" }]}>Xóa Phiếu</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {rental.status !== "draft" && hasPermission(Permissions.EQUIPMENT_REVERT) && (
+                        <TouchableOpacity
+                            style={[styles.actionBtn, { backgroundColor: "#F59E0B", marginTop: 12 }]}
+                            onPress={() => handleAction("revert", "Bạn có chắc chắn muốn hoàn duyệt phiếu thuê này về trạng thái nháp?")}
+                            disabled={actionLoading}
+                        >
+                            <Ionicons name="refresh-circle" size={18} color="#FFF" />
+                            <Text style={styles.actionBtnText}>Hoàn Duyệt</Text>
                         </TouchableOpacity>
                     )}
 

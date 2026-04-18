@@ -92,17 +92,23 @@ export default function PaymentDetailScreen() {
 
     const getStatusColor = (status: string) => {
         switch (status) {
+            case "draft":
+                return "#6B7280";
             case "confirmed":
             case "paid":
                 return "#10B981";
             case "customer_paid":
-                return "#8B5CF6";
+                return "#06B6D4";
             case "customer_pending_approval":
-                return "#F59E0B";
+                return "#8B5CF6";
             case "customer_approved":
                 return "#3B82F6";
             case "overdue":
+            case "rejected":
+            case "customer_rejected":
                 return "#EF4444";
+            case "pending":
+                return "#F59E0B";
             default:
                 return "#6B7280";
         }
@@ -110,17 +116,23 @@ export default function PaymentDetailScreen() {
 
     const getStatusText = (status: string) => {
         switch (status) {
+            case "draft":
+                return "Nháp";
             case "pending":
-                return "Chờ thanh toán";
+                return "Chờ gửi y/c";
             case "customer_pending_approval":
-                return "Chờ khách hàng duyệt";
+                return "Chờ KH duyệt";
             case "customer_approved":
-                return "Khách hàng đã duyệt";
+                return "KH đã duyệt";
             case "customer_paid":
-                return "Khách hàng đã thanh toán";
+                return "KH báo TT";
             case "confirmed":
             case "paid":
-                return "Đã xác nhận";
+                return "Đã thanh toán";
+            case "customer_rejected":
+                return "Khách hàng từ chối";
+            case "rejected":
+                return "Bị từ chối";
             case "overdue":
                 return "Quá hạn";
             default:

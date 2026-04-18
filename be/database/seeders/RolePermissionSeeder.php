@@ -682,6 +682,12 @@ class RolePermissionSeeder extends Seeder
             Permissions::PAYMENT_APPROVE,
             Permissions::PAYMENT_MARK_AS_PAID_BY_CUSTOMER,
 
+            // Additional Cost
+            Permissions::ADDITIONAL_COST_VIEW,
+            Permissions::ADDITIONAL_COST_APPROVE,
+            Permissions::ADDITIONAL_COST_REJECT,
+            Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
+
             // Invoice
             Permissions::INVOICE_VIEW,
 

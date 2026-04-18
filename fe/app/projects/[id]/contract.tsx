@@ -289,9 +289,17 @@ export default function ContractScreen() {
   const getContractStatusColor = (status: string) => {
     switch (status) {
       case "draft": return "#6B7280";
-      case "pending_customer_approval": return "#F59E0B";
+      case "pending_customer_approval":
+      case "pending_management_approval":
+      case "pending_accountant_approval": return "#F59E0B";
       case "approved": return "#10B981";
       case "rejected": return "#EF4444";
+      case "confirmed": return "#3B82F6";
+      case "signed": return "#8B5CF6";
+      case "completed": return "#059669";
+      case "expired":
+      case "terminated":
+      case "cancelled": return "#9CA3AF";
       default: return "#6B7280";
     }
   };
@@ -299,9 +307,17 @@ export default function ContractScreen() {
   const getContractStatusText = (status: string) => {
     switch (status) {
       case "draft": return "Nháp";
-      case "pending_customer_approval": return "Chờ duyệt";
+      case "pending_customer_approval": return "Chờ duyệt (KH)";
+      case "pending_management_approval": return "Chờ BĐH duyệt";
+      case "pending_accountant_approval": return "Chờ KT xác nhận";
       case "approved": return "Đã duyệt";
       case "rejected": return "Từ chối";
+      case "confirmed": return "Đã xác nhận";
+      case "signed": return "Đã ký";
+      case "completed": return "Hoàn thành";
+      case "expired": return "Hết hạn";
+      case "terminated": return "Chấm dứt";
+      case "cancelled": return "Đã hủy";
       default: return "Chưa xác định";
     }
   };
@@ -644,19 +660,120 @@ export default function ContractScreen() {
                 </TouchableOpacity>
               </PermissionGuard>
             )}
+
+            {contract && contract.status === "draft" && (
+              <PermissionGuard permission={Permissions.CONTRACT_CREATE} projectId={id}>
+                <TouchableOpacity
+                  style={[styles.button, styles.saveButton, { backgroundColor: '#3B82F6' }]}
+                  onPress={() => {
+                    Alert.alert(
+                      "Gửi duyệt hợp đồng",
+                      "Bạn có chắc chắn muốn gửi duyệt hợp đồng này?",
+                      [
+                        { text: "Hủy", style: "cancel" },
+                        {
+                          text: "Gửi duyệt",
+                          onPress: async () => {
+                            try {
+                              const response = await contractApi.saveContract(id!, {
+                                contract_value: parseFloat(contract.contract_value.toString()),
+                                signed_date: contract.signed_date,
+                                status: "pending_customer_approval",
+                              });
+                              if (response.success) {
+                                Alert.alert("Thành công", "Đã gửi duyệt hợp đồng");
+                                loadContract();
+                              } else {
+                                Alert.alert("Lỗi", "Không thể gửi duyệt");
+                              }
+                            } catch (error: any) {
+                              Alert.alert("Lỗi", error.response?.data?.message || "Lỗi khi gửi duyệt");
+                            }
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={styles.saveButtonText}>Gửi duyệt</Text>
+                </TouchableOpacity>
+              </PermissionGuard>
+            )}
+
             {contract &&
               contract.status === "pending_customer_approval" && (
                 <PermissionGuard permission={Permissions.CONTRACT_APPROVE_LEVEL_1} projectId={id}>
-                  <TouchableOpacity
-                    style={[styles.button, styles.approveButton]}
-                    onPress={handleApprove}
-                  >
-                    <Text style={styles.approveButtonText}>Duyệt hợp đồng</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <TouchableOpacity
+                      style={[styles.button, styles.approveButton, { flex: 1 }]}
+                      onPress={handleApprove}
+                    >
+                      <Text style={styles.approveButtonText}>Duyệt</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.button, styles.rejectButton, { flex: 1 }]}
+                      onPress={() => {
+                        Alert.prompt(
+                          "Từ chối hợp đồng",
+                          "Nhập lý do từ chối (tùy chọn):",
+                          async (reason) => {
+                            try {
+                              const response = await contractApi.rejectContract(id!, reason || "");
+                              if (response.success) {
+                                Alert.alert("Thành công", "Đã từ chối hợp đồng");
+                                loadContract();
+                              } else {
+                                Alert.alert("Lỗi", "Không thể từ chối");
+                              }
+                            } catch (error: any) {
+                              Alert.alert("Lỗi", error.response?.data?.message || "Lỗi khi từ chối");
+                            }
+                          }
+                        );
+                      }}
+                    >
+                      <Text style={[styles.approveButtonText, { color: '#EF4444' }]}>Từ chối</Text>
+                    </TouchableOpacity>
+                  </View>
                 </PermissionGuard>
               )}
 
-
+            {contract &&
+              ["pending_customer_approval", "approved", "rejected", "confirmed", "signed"].includes(contract.status) && (
+                <PermissionGuard permission={Permissions.CONTRACT_REVERT} projectId={id}>
+                  <TouchableOpacity
+                    style={[styles.button, { backgroundColor: '#F59E0B', marginTop: 12 }]}
+                    onPress={() => {
+                      Alert.alert(
+                        "Hoàn duyệt hợp đồng",
+                        "Bạn có chắc chắn muốn hoàn duyệt hợp đồng về trạng thái nháp?",
+                        [
+                          { text: "Hủy", style: "cancel" },
+                          {
+                            text: "Hoàn duyệt",
+                            style: "destructive",
+                            onPress: async () => {
+                              try {
+                                const response = await contractApi.revertToDraft(id!);
+                                if (response.success) {
+                                  Alert.alert("Thành công", "Đã hoàn duyệt hợp đồng");
+                                  loadContract();
+                                } else {
+                                  Alert.alert("Lỗi", "Không thể hoàn duyệt");
+                                }
+                              } catch (error: any) {
+                                Alert.alert("Lỗi", error.response?.data?.message || "Lỗi khi hoàn duyệt");
+                              }
+                            }
+                          }
+                        ]
+                      );
+                    }}
+                  >
+                    <Text style={styles.saveButtonText}>Hoàn duyệt</Text>
+                  </TouchableOpacity>
+                </PermissionGuard>
+              )}
           </>
         )}
       </View>

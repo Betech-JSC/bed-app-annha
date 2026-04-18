@@ -10,7 +10,7 @@ export interface ProjectPayment {
   notes?: string;
   due_date: string;
   paid_date?: string;
-  status: "pending" | "customer_pending_approval" | "customer_approved" | "customer_paid" | "confirmed" | "paid" | "overdue";
+  status: "draft" | "pending" | "customer_pending_approval" | "customer_approved" | "customer_paid" | "confirmed" | "paid" | "overdue" | "rejected" | "customer_rejected";
   confirmed_by?: number;
   confirmed_at?: string;
   customer_approved_by?: number;
@@ -57,7 +57,7 @@ export const paymentApi = {
     return response.data;
   },
 
-  // Create payment
+  // Create payment (tạo mới ở trạng thái draft)
   createPayment: async (projectId: string | number, data: CreatePaymentData) => {
     const response = await api.post(`/projects/${projectId}/payments`, data);
     return response.data;
@@ -70,6 +70,18 @@ export const paymentApi = {
     data: Partial<CreatePaymentData>
   ) => {
     const response = await api.put(`/projects/${projectId}/payments/${paymentId}`, data);
+    return response.data;
+  },
+
+  // Submit payment (draft → customer_pending_approval)
+  submitPayment: async (projectId: string | number, paymentId: string | number) => {
+    const response = await api.post(`/projects/${projectId}/payments/${paymentId}/submit`);
+    return response.data;
+  },
+
+  // Delete payment (chỉ khi draft)
+  deletePayment: async (projectId: string | number, paymentId: string | number) => {
+    const response = await api.delete(`/projects/${projectId}/payments/${paymentId}`);
     return response.data;
   },
 
@@ -125,8 +137,8 @@ export const paymentApi = {
     return response.data;
   },
 
-  // Hoàn duyệt thanh toán về trạng thái chờ
-  revertPaymentToPending: async (projectId: string | number, paymentId: string | number) => {
+  // Hoàn duyệt thanh toán về trạng thái nháp
+  revertPaymentToDraft: async (projectId: string | number, paymentId: string | number) => {
     const response = await api.post(`/projects/${projectId}/payments/${paymentId}/revert`);
     return response.data;
   },
