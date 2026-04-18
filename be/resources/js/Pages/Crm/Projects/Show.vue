@@ -301,9 +301,14 @@
             <div class="text-sm text-gray-500">
               <a-progress :percent="overallTaskProgress" :stroke-color="{ '0%': '#1B4F72', '100%': '#27AE60' }" :format="p => `${p.toFixed(1)}%`" style="width: 280px" />
             </div>
-            <a-button v-if="can('project.task.create')" type="primary" size="small" @click="openTaskModal()">
-              <template #icon><PlusOutlined /></template>Thêm công việc
-            </a-button>
+            <div class="flex gap-2">
+              <a-button v-if="can('project.task.update')" size="small" :loading="recalculating" @click="recalculateTasks">
+                <template #icon><SyncOutlined /></template>Tính lại tiến độ
+              </a-button>
+              <a-button v-if="can('project.task.create')" type="primary" size="small" @click="openTaskModal()">
+                <template #icon><PlusOutlined /></template>Thêm công việc
+              </a-button>
+            </div>
           </div>
 
           <!-- Task Tree Table -->
@@ -8111,6 +8116,22 @@ const saveTask = () => {
 }
 
 const deleteTask = (t) => router.delete(`/projects/${props.project.id}/tasks/${t.id}`, loadingOptions(`delete-task-${t.id}`, { preserveScroll: true }))
+ 
+const recalculating = ref(false)
+const recalculateTasks = async () => {
+  recalculating.value = true
+  try {
+    await axios.post(`/projects/${props.project.id}/tasks/recalculate-all`)
+    message.success('Đã tính toán lại toàn bộ tiến độ công việc')
+    router.reload({ only: ['project', 'taskStats', 'rootTasks'] })
+  } catch (e) {
+    console.error('Recalculate tasks error:', e)
+    const msg = e.response?.data?.message || 'Lỗi khi tính toán lại tiến độ'
+    message.error(msg)
+  } finally {
+    recalculating.value = false
+  }
+}
 
 // ============ SUBCONTRACTOR CRUD ============
 const showSubModal = ref(false)
@@ -10095,23 +10116,6 @@ const revertContractAction = (contract) => {
         preserveScroll: true,
         onSuccess: () => {
           if (showContractDetail.value) showContractDetail.value = false
-        },
-      })
-    }
-  })
-}
-
-const revertMaterialBillAction = (bill) => {
-  Modal.confirm({
-    title: 'Xác nhận hoàn duyệt',
-    content: 'Phiếu nhập vật liệu sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa. Bạn có chắc chắn muốn thực hiện?',
-    okText: 'Đồng ý',
-    cancelText: 'Hủy',
-    onOk: () => {
-      router.post(`/projects/${props.project.id}/material-bills/${bill.id}/revert`, {}, {
-        preserveScroll: true,
-        onSuccess: () => {
-          if (showMaterialDetailDrawer.value) showMaterialDetailDrawer.value = false
         },
       })
     }

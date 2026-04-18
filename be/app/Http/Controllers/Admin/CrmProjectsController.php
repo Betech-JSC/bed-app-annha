@@ -1705,13 +1705,29 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::PROJECT_TASK_DELETE, $project);
 
-        $task = ProjectTask::where('project_id', $project->id)->findOrFail($taskId);
+        $task = \App\Models\ProjectTask::where('project_id', $project->id)->findOrFail($taskId);
 
         try {
             $this->taskService->delete($task);
             return back()->with('success', 'Đã xóa công việc.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi khi xóa công việc: ' . $e->getMessage());
+        }
+    }
+
+    public function recalculateAllTasks(string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::PROJECT_TASK_UPDATE, $project);
+
+        try {
+            $this->taskService->recalculateProject($project->id);
+            return response()->json(['message' => 'Đã tính toán lại toàn bộ tiến độ công việc']);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Lỗi khi tính toán lại tiến độ: ' . $e->getMessage()
+            ], 500);
         }
     }
 

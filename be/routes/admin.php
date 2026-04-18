@@ -308,6 +308,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/tasks', [CrmProjectsController::class, 'storeTask'])->name('tasks.store');
         Route::put('/{project}/tasks/{task}', [CrmProjectsController::class, 'updateTask'])->name('tasks.update');
         Route::delete('/{project}/tasks/{task}', [CrmProjectsController::class, 'destroyTask'])->name('tasks.destroy');
+        Route::post('/{project}/tasks/recalculate-all', [CrmProjectsController::class, 'recalculateAllTasks'])->name('tasks.recalculate-all');
 
         // Contract
         Route::post('/{project}/contract', [CrmProjectsController::class, 'storeContract'])->name('contract.store');

@@ -64,8 +64,9 @@ class TaskProgressService
     {
         $today = Carbon::today();
         
-        // If progress is 100%, status is potentially completed
-        if ($progressPercentage >= 100) {
+        // If progress is effectively 100%, status is potentially completed
+        // Use 99.9 epsilon to match canParentBeCompleted
+        if ($progressPercentage >= 99.9) {
             // NEW RULE: Parent items completed only when all sub-items are fully accepted
             if ($this->canParentBeCompleted($task)) {
                 return 'completed';
@@ -182,7 +183,9 @@ class TaskProgressService
             ? $this->calculateProgressFromLogs($task)
             : $this->calculateParentProgress($task);
 
-        return $progress >= 100;
+        // Use a small epsilon (99.9) to handle floating point rounding differences
+        // that might occur when averaging multiple sub-tasks.
+        return (float)$progress >= 99.9;
     }
 
     /**
@@ -195,26 +198,24 @@ class TaskProgressService
     {
         // A. Root Task (Category A) check
         if (!$task->parent_id) {
-            $stage = AcceptanceStage::where('task_id', $task->id)->first();
+            $stage = \App\Models\AcceptanceStage::where('task_id', $task->id)->orderByDesc('id')->first();
             if ($stage) {
                 return $stage->status === 'customer_approved';
             }
-            // If a root task has no acceptance stage yet, and it's 100%, 
-            // the service will eventually auto-create one. 
-            // Until then, it's NOT accepted.
-            return false;
+            // MATCH FRONTEND: Default to true if no stages defined for root task
+            // This allows the task to become 'completed' so an AcceptanceStage can be auto-created.
+            return true;
         }
 
         // B. Sub-task (Category B) check
-        // Check if there's an AcceptanceItem linked to this task
-        $item = \App\Models\AcceptanceItem::where('task_id', $task->id)->first();
+        // Check if there's an AcceptanceItem linked to this task (Get latest)
+        $item = \App\Models\AcceptanceItem::where('task_id', $task->id)->orderByDesc('id')->first();
         if ($item) {
             return $item->workflow_status === 'customer_approved';
         }
 
         // If no direct link found, it's considered "accepted" by default 
         // IF it has no acceptance requirements defined for it.
-        // However, standard logic suggests sub-tasks at 100% should be in an AcceptanceItem.
         return true; 
     }
 
@@ -275,9 +276,9 @@ class TaskProgressService
                 }
             }
 
-            // Auto-create acceptance stage when parent task reaches 100%
+            // Auto-create acceptance stage when parent task reaches 99.9%
             // BUSINESS RULE: Only parent tasks (Category A) can have acceptance stages
-            if ($progress >= 100 && $status === 'completed' && !$task->parent_id) {
+            if ($progress >= 99.9 && $status === 'completed' && !$task->parent_id) {
                 $this->autoCreateAcceptanceStage($task);
             }
 
