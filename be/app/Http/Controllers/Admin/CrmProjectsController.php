@@ -228,7 +228,7 @@ class CrmProjectsController extends Controller
         $personnelRoles = class_exists(\App\Models\PersonnelRole::class) ? \App\Models\PersonnelRole::orderBy('name')->get(['id', 'name']) : [];
         $materials = class_exists(\App\Models\Material::class) ? \App\Models\Material::select('id', 'name', 'code', 'unit', 'unit_price')->orderBy('name')->get() : [];
         $suppliers = \App\Models\Supplier::select('id', 'name', 'phone', 'email')->orderBy('name')->get();
-        $acceptanceTemplates = \App\Models\AcceptanceTemplate::select('id', 'name')->orderBy('name')->get();
+        $acceptanceTemplates = \App\Models\AcceptanceTemplate::with(['documents', 'images', 'criteria'])->select('id', 'name', 'standard', 'description')->orderBy('name')->get();
         $globalSubcontractors = class_exists(\App\Models\GlobalSubcontractor::class) ? \App\Models\GlobalSubcontractor::select('id', 'name', 'category')->orderBy('name')->get() : [];
 
         return Inertia::render('Crm/Projects/Show', [
@@ -277,7 +277,7 @@ class CrmProjectsController extends Controller
 
             'monitorData' => [
                 'logs' => $project->constructionLogs()->with(['creator', 'task', 'attachments'])->orderByDesc('log_date')->get(),
-                'acceptanceStages' => $project->acceptanceStages()->with(['items.task', 'task', 'acceptanceTemplate', 'defects.attachments', 'attachments'])->get(),
+                'acceptanceStages' => $project->acceptanceStages()->with(['items.task', 'items.attachments', 'task', 'acceptanceTemplate.documents', 'acceptanceTemplate.images', 'acceptanceTemplate.criteria', 'defects.attachments', 'attachments', 'costs', 'invoices'])->get(),
                 'defects' => $project->defects()->with('attachments')->get(),
                 'additional_costs' => $project->additionalCosts()->with(['proposer', 'attachments'])->latest()->get(),
                 'change_requests' => $project->changeRequests()->with(['requester', 'attachments'])->latest()->get(),
@@ -2627,6 +2627,7 @@ class CrmProjectsController extends Controller
             'task_id' => 'nullable|exists:project_tasks,id',
             'acceptance_template_id' => 'nullable|exists:acceptance_templates,id',
             'order' => 'nullable|integer|min:0',
+            'is_custom' => 'nullable|boolean',
         ]);
 
         DB::beginTransaction();
@@ -2667,6 +2668,8 @@ class CrmProjectsController extends Controller
             'task_id' => 'nullable|exists:project_tasks,id',
             'acceptance_template_id' => 'nullable|exists:acceptance_templates,id',
             'order' => 'nullable|integer|min:0',
+            'status' => 'nullable|in:pending,internal_approved,customer_approved,design_approved,owner_approved,rejected',
+            'is_custom' => 'nullable|boolean',
         ]);
 
         DB::beginTransaction();
@@ -2675,8 +2678,21 @@ class CrmProjectsController extends Controller
 
             $this->attachmentService->handleDeletedRequest($request, $stage);
 
-            // Handle file uploads during update
+            // Handle categorized file uploads during update
+            // 1. General files (no specific type)
             $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stage->id}", false);
+            
+            // 2. Before photos
+            if ($request->hasFile('files_before')) {
+                $request->merge(['type' => 'before']);
+                $this->attachmentService->handleCrmUpload($request, $stage, "acceptance/{$project->id}/{$stage->id}", false, 'files_before');
+            }
+
+            // 3. After photos
+            if ($request->hasFile('files_after')) {
+                $request->merge(['type' => 'after']);
+                $this->attachmentService->handleCrmUpload($request, $stage, "acceptance/{$project->id}/{$stage->id}", false, 'files_after');
+            }
 
             DB::commit();
             return back()->with('success', 'Đã cập nhật giai đoạn nghiệm thu.');

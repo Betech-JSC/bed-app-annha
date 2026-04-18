@@ -823,7 +823,9 @@
                   </div>
                   <!-- Task info (linked parent task) -->
                   <div v-if="stage.task" class="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-                    <span>📐</span> {{ stage.task?.name }}
+                    <span class="cursor-pointer hover:text-blue-500 hover:underline transition-colors" @click="activeTab = 'progress'; activeTabGroup = 'schedule';">
+                      <span>📐</span> {{ stage.task?.name }}
+                    </span>
                   </div>
                   <!-- Template info -->
                   <div v-if="stage.acceptance_template" class="flex items-center gap-1 text-xs text-blue-400 mt-0.5">
@@ -5207,19 +5209,136 @@
   </a-modal>
 
   <!-- Acceptance Edit Modal -->
-  <a-modal v-model:open="showEditAcceptModal" title="Chỉnh sửa giai đoạn nghiệm thu" :width="600" @ok="updateAccept" ok-text="Cập nhật" cancel-text="Hủy" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showEditAcceptModal" title="Chỉnh sửa giai đoạn nghiệm thu" :width="650" @ok="updateAccept" ok-text="Cập nhật" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tên giai đoạn" required><a-input v-model:value="editAcceptForm.name" size="large" /></a-form-item>
+      <div class="flex items-center justify-between gap-4 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+         <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Thông tin chung</div>
+         <a-form-item class="mb-0" label="Tùy chỉnh" label-align="right" :label-col="{ span: 16 }">
+           <a-switch v-model:checked="editAcceptForm.is_custom" checked-children="Bật" un-checked-children="Tắt" />
+         </a-form-item>
+      </div>
+
+      <a-form-item label="Tên giai đoạn" required><a-input v-model:value="editAcceptForm.name" size="large" placeholder="VD: Nghiệm thu phần thô..." /></a-form-item>
+      
       <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Công việc cha (hạng mục A)"><a-select v-model:value="editAcceptForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục">
-          <a-select-option v-for="t in parentTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
-        </a-select></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Mẫu nghiệm thu"><a-select v-model:value="editAcceptForm.acceptance_template_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn mẫu">
-          <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
-        </a-select></a-form-item></a-col>
+        <a-col :span="12">
+          <a-form-item label="Công việc cha (hạng mục A)">
+            <a-select v-model:value="editAcceptForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục">
+              <a-select-option v-for="t in parentTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Mẫu nghiệm thu">
+            <a-select v-model:value="editAcceptForm.acceptance_template_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn mẫu" :disabled="editAcceptForm.is_custom">
+              <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
       </a-row>
-      <a-form-item label="Mô tả"><a-textarea v-model:value="editAcceptForm.description" :rows="3" /></a-form-item>
-      <a-form-item label="Thứ tự"><a-input-number v-model:value="editAcceptForm.order" :min="0" size="large" class="w-full" placeholder="Tự động" /></a-form-item>
+
+      <a-row :gutter="16" class="mt-2">
+        <a-col :span="12">
+          <a-form-item label="Trạng thái">
+            <a-select v-model:value="editAcceptForm.status" size="large" class="w-full">
+              <a-select-option v-for="(label, val) in acceptStatusLabels" :key="val" :value="val">{{ label }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Thứ tự hiển thị">
+            <a-input-number v-model:value="editAcceptForm.order" :min="0" size="large" class="w-full" placeholder="Số nguyên (0, 1, 2...)" />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-form-item label="Mô tả chi tiết"><a-textarea v-model:value="editAcceptForm.description" :rows="3" placeholder="Ghi chú thêm về giai đoạn này..." /></a-form-item>
+
+      <!-- Categorized Attachment Management -->
+      <div class="border-t pt-4 mt-4 space-y-6">
+        <!-- 1. General Files -->
+        <div class="p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+          <div class="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest mb-3 flex items-center justify-between">
+            <span class="flex items-center gap-1.5"><FileProtectOutlined /> Biên bản / Hồ sơ pháp lý</span>
+            <span v-if="modalFilesGeneral.length" class="bg-blue-500 text-white px-1.5 py-0.5 rounded text-[9px]">+{{ modalFilesGeneral.length }}</span>
+          </div>
+          
+          <div v-if="editingAcceptStage?.attachments?.filter(a => !a.type || (a.type !== 'before' && a.type !== 'after')).length" class="flex flex-wrap gap-2 mb-3">
+            <div v-for="a in editingAcceptStage.attachments.filter(a => !a.type || (a.type !== 'before' && a.type !== 'after'))" :key="a.id" class="relative group">
+              <div @click="openFilePreview(a)" 
+                  class="inline-flex items-center gap-2 text-[10px] px-2.5 py-1.5 rounded-lg border transition cursor-pointer"
+                  :class="isAttachmentDeleted(editAcceptForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 shadow-sm'">
+                <span v-if="isAttachmentDeleted(editAcceptForm, a.id)" class="line-through flex items-center gap-1"><CloseCircleOutlined /> Xóa</span>
+                <template v-else>
+                  <FilePdfOutlined v-if="a.ext === 'pdf'" class="text-red-500" />
+                  <FileWordOutlined v-else-if="['doc','docx'].includes(a.ext)" class="text-blue-500" />
+                  <FileExcelOutlined v-else-if="['xls','xlsx'].includes(a.ext)" class="text-green-500" />
+                  <PaperClipOutlined v-else />
+                  <span class="max-w-[100px] truncate">{{ a.original_name || a.file_name }}</span>
+                </template>
+              </div>
+              <div v-if="!isAttachmentDeleted(editAcceptForm, a.id)" 
+                  class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                  @click.stop="toggleDeleteAttachment(editAcceptForm, a.id)">
+                <CloseOutlined class="text-[9px]" />
+              </div>
+              <div v-else 
+                  class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                  @click.stop="toggleDeleteAttachment(editAcceptForm, a.id)">
+                <ReloadOutlined class="text-[9px]" />
+              </div>
+            </div>
+          </div>
+          <input type="file" multiple @change="e => modalFilesGeneral = [...(e.target.files || [])]" 
+                 class="block w-full text-[10px] text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
+        </div>
+
+        <!-- 2. Before Photos -->
+        <div class="p-4 bg-orange-50/30 rounded-2xl border border-orange-100">
+          <div class="text-[10px] font-extrabold text-orange-500 uppercase tracking-widest mb-3 flex items-center justify-between">
+            <span class="flex items-center gap-1.5"><CameraOutlined /> Ảnh TRƯỚC nghiệm thu</span>
+            <span v-if="modalFilesBefore.length" class="bg-orange-500 text-white px-1.5 py-0.5 rounded text-[9px]">+{{ modalFilesBefore.length }}</span>
+          </div>
+
+          <div v-if="editingAcceptStage?.attachments?.filter(a => a.type === 'before').length" class="flex flex-wrap gap-2 mb-3">
+             <div v-for="a in editingAcceptStage.attachments.filter(a => a.type === 'before')" :key="a.id" class="relative group w-16 h-16 shadow-sm border border-orange-100 rounded-lg overflow-hidden">
+                <img :src="a.file_url" class="w-full h-full object-cover" :class="{'opacity-30 grayscale': isAttachmentDeleted(editAcceptForm, a.id)}" />
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1">
+                   <EyeOutlined class="text-white text-xs cursor-pointer" @click="openFilePreview(a)" />
+                   <div class="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white cursor-pointer" @click="toggleDeleteAttachment(editAcceptForm, a.id)">
+                      <CloseOutlined class="text-[10px]" />
+                   </div>
+                </div>
+                <div v-if="isAttachmentDeleted(editAcceptForm, a.id)" class="absolute inset-x-0 bottom-0 bg-red-500 text-white text-[8px] text-center font-bold">XÓA</div>
+             </div>
+          </div>
+          <input type="file" multiple accept="image/*" @change="e => modalFilesBefore = [...(e.target.files || [])]" 
+                 class="block w-full text-[10px] text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200 cursor-pointer" />
+        </div>
+
+        <!-- 3. After Photos -->
+        <div class="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100">
+          <div class="text-[10px] font-extrabold text-emerald-600 uppercase tracking-widest mb-3 flex items-center justify-between">
+            <span class="flex items-center gap-1.5"><CheckCircleOutlined /> Ảnh SAU nghiệm thu</span>
+            <span v-if="modalFilesAfter.length" class="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[9px]">+{{ modalFilesAfter.length }}</span>
+          </div>
+
+          <div v-if="editingAcceptStage?.attachments?.filter(a => a.type === 'after').length" class="flex flex-wrap gap-2 mb-3">
+             <div v-for="a in editingAcceptStage.attachments.filter(a => a.type === 'after')" :key="a.id" class="relative group w-16 h-16 shadow-sm border border-emerald-100 rounded-lg overflow-hidden">
+                <img :src="a.file_url" class="w-full h-full object-cover" :class="{'opacity-30 grayscale': isAttachmentDeleted(editAcceptForm, a.id)}" />
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1">
+                   <EyeOutlined class="text-white text-xs cursor-pointer" @click="openFilePreview(a)" />
+                   <div class="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white cursor-pointer" @click="toggleDeleteAttachment(editAcceptForm, a.id)">
+                      <CloseOutlined class="text-[10px]" />
+                   </div>
+                </div>
+                <div v-if="isAttachmentDeleted(editAcceptForm, a.id)" class="absolute inset-x-0 bottom-0 bg-red-500 text-white text-[8px] text-center font-bold">XÓA</div>
+             </div>
+          </div>
+          <input type="file" multiple accept="image/*" @change="e => modalFilesAfter = [...(e.target.files || [])]" 
+                 class="block w-full text-[10px] text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer" />
+        </div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -5288,13 +5407,25 @@
             <FileOutlined /> Hồ sơ nghiệm thu 
           </div>
           
-          <a-select v-if="can('acceptance.update')" v-model:value="acceptDetailTemplateId" size="large" class="w-full mb-4" allow-clear show-search option-filter-prop="label" placeholder="Chọn bộ hồ sơ mẫu" @change="onAcceptDetailTemplateChange">
-            <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">
-              {{ t.name }}
-            </a-select-option>
-          </a-select>
-
+          <div v-if="can('acceptance.update') && ['draft', 'rejected'].includes(acceptDetailStage.status)">
+            <a-select v-model:value="acceptDetailTemplateId" size="large" class="w-full mb-4" allow-clear show-search option-filter-prop="label" placeholder="Chọn bộ hồ sơ mẫu" @change="onAcceptDetailTemplateChange">
+              <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">
+                {{ t.name }}
+              </a-select-option>
+            </a-select>
+          </div>
+          <div v-else-if="acceptDetailSelectedTemplate" class="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+             <div class="flex items-center gap-3">
+               <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                 <FileTextOutlined />
+               </div>
+               <div class="text-sm font-bold text-gray-700 truncate max-w-[400px]">{{ acceptDetailSelectedTemplate.name }}</div>
+             </div>
+             <a-tag color="blue">Đang áp dụng</a-tag>
+          </div>
+          
           <div v-if="acceptDetailSelectedTemplate" class="space-y-4">
+            <!-- Documents List -->
             <div v-if="acceptDetailSelectedTemplate.documents?.length" class="space-y-2">
               <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">📄 Văn bản ({{ acceptDetailSelectedTemplate.documents.length }})</div>
               <div class="grid grid-cols-1 gap-2">
@@ -5312,9 +5443,117 @@
                 </a>
               </div>
             </div>
+
+            <!-- Standard & Description from Template -->
+            <div v-if="acceptDetailSelectedTemplate.standard || acceptDetailSelectedTemplate.description" class="bg-blue-50/30 p-4 rounded-xl border border-blue-100/50">
+              <div class="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                <InfoCircleOutlined /> Tiêu chuẩn kỹ thuật & Mô tả
+              </div>
+              <div v-if="acceptDetailSelectedTemplate.standard" class="text-[11px] font-bold text-gray-800 mb-2 leading-relaxed whitespace-pre-wrap">{{ acceptDetailSelectedTemplate.standard }}</div>
+              <div v-if="acceptDetailSelectedTemplate.description" class="text-[11px] text-gray-600 leading-relaxed whitespace-pre-wrap">{{ acceptDetailSelectedTemplate.description }}</div>
+            </div>
+
+            <!-- Reference/Illustrative Images -->
+            <div v-if="acceptDetailSelectedTemplate.images?.length" class="space-y-2">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">🖼️ Hình ảnh minh họa ({{ acceptDetailSelectedTemplate.images.length }})</div>
+              <div class="flex flex-wrap gap-2">
+                <div v-for="img in acceptDetailSelectedTemplate.images" :key="img.id" @click="openFilePreview(img)"
+                     class="w-20 h-20 rounded-xl overflow-hidden border border-gray-100 cursor-pointer hover:border-blue-500 transition-all group">
+                  <img :src="img.file_url" class="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                </div>
+              </div>
+            </div>
+            
+            <!-- Criteria List (Nội dung kiểm tra từ mẫu) -->
+            <div v-if="acceptDetailSelectedTemplate.criteria?.length" class="bg-blue-50/20 rounded-2xl p-4 border border-blue-100/30">
+              <div class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <FileProtectOutlined /> Tiêu chí đánh giá ({{ acceptDetailSelectedTemplate.criteria.length }})
+              </div>
+              <div class="space-y-3">
+                <div v-for="(crit, cIdx) in acceptDetailSelectedTemplate.criteria" :key="crit.id" class="flex items-start gap-3">
+                  <div class="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold shrink-0">{{ cIdx + 1 }}</div>
+                  <div class="flex-1">
+                    <div class="text-[11px] font-bold text-gray-700 leading-relaxed">{{ crit.name }}</div>
+                    <div v-if="crit.description" class="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{{ crit.description }}</div>
+                    <div v-if="crit.is_critical" class="mt-1"><a-tag color="red" class="text-[9px] px-1 py-0 border-none uppercase font-bold">Quan trọng</a-tag></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div v-else class="text-center py-4 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
-            <div class="text-xs text-gray-400 italic">Chưa chọn bộ hồ sơ mẫu</div>
+          <div v-else class="text-center py-6 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+            <div class="mb-2 text-gray-300"><FileSearchOutlined class="text-3xl" /></div>
+            <div class="text-xs text-gray-400 italic">Chưa chọn bộ hồ sơ mẫu cho giai đoạn này</div>
+          </div>
+        </div>
+
+        <!-- 3.5. Detailed Items (Hạng mục chi tiết của dự án) -->
+        <div v-if="acceptDetailStage.items?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-emerald-500">
+            <UnorderedListOutlined /> Hạng mục chi tiết ({{ acceptDetailStage.items.length }})
+          </div>
+          <div class="space-y-3">
+            <div v-for="item in acceptDetailStage.items" :key="item.id" class="p-3 bg-gray-50 rounded-xl border border-gray-100 group hover:border-emerald-200 transition-all">
+              <div class="flex items-start justify-between gap-3 mb-2">
+                <div class="flex-1 min-w-0">
+                  <div class="text-xs font-bold text-gray-700 truncate group-hover:text-emerald-600">{{ item.name }}</div>
+                  <div v-if="item.task" class="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
+                    <HistoryOutlined /> {{ item.task.name }} 
+                  </div>
+                </div>
+                <div class="shrink-0 flex flex-col items-end gap-1">
+                   <a-tag :color="getStatusColor(item.workflow_status)" class="m-0 text-[10px] font-bold uppercase py-0.5">{{ getStatusLabel(item.workflow_status) }}</a-tag>
+                   <div class="text-[9px] text-gray-400 font-medium">NT: {{ item.acceptance_status === 'approved' ? 'Đạt' : (item.acceptance_status === 'rejected' ? 'Không đạt' : 'Chờ') }}</div>
+                </div>
+              </div>
+              <div v-if="item.description" class="text-[10px] text-gray-500 leading-relaxed mb-2">{{ item.description }}</div>
+              
+              <!-- Item Attachments -->
+              <div v-if="item.attachments?.length" class="flex flex-wrap gap-1.5 mt-2">
+                 <div v-for="aiAtt in item.attachments" :key="aiAtt.id" 
+                      class="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 bg-white cursor-pointer hover:border-blue-300 transition-all shadow-sm group/att" 
+                      @click.stop="openFilePreview(aiAtt)">
+                    <img v-if="['jpg','jpeg','png','webp'].includes(aiAtt.ext?.toLowerCase())" :src="aiAtt.file_url" class="w-full h-full object-cover group-hover/att:scale-110 transition-transform" />
+                    <div v-else class="w-full h-full flex items-center justify-center text-[10px] text-blue-500 font-bold uppercase">{{ aiAtt.ext }}</div>
+                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3.7. Financial Summary (Thanh toán & Chi phí) -->
+        <div v-if="acceptDetailStage.costs?.length || acceptDetailStage.invoices?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-amber-500">
+            <DollarOutlined /> Tài chính liên quan
+          </div>
+          <div class="space-y-3">
+            <!-- Invoices (Milestone billing) -->
+            <div v-for="inv in acceptDetailStage.invoices" :key="'inv-'+inv.id" class="p-3 bg-amber-50 rounded-xl border border-amber-100 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-amber-600 shadow-sm">
+                  <FileTextOutlined />
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-amber-800">Đợt thanh toán: {{ inv.invoice_number || 'Mặc định' }}</div>
+                  <div class="text-[10px] text-amber-600">Số tiền: {{ formatCurrency(inv.total_amount) }}</div>
+                </div>
+              </div>
+              <a-tag color="orange" class="m-0 text-[9px] font-bold uppercase">{{ inv.status_label || inv.status }}</a-tag>
+            </div>
+
+            <!-- Additional Costs -->
+            <div v-for="c in acceptDetailStage.costs" :key="'cost-'+c.id" class="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-blue-600 shadow-sm">
+                  <AuditOutlined />
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-gray-700">{{ c.name }}</div>
+                  <div class="text-[10px] text-gray-400">Chi phí: {{ formatCurrency(c.amount) }}</div>
+                </div>
+              </div>
+              <a-tag :color="getStatusColor(c.status)" class="m-0 text-[9px] font-bold uppercase">{{ getStatusLabel(c.status) }}</a-tag>
+            </div>
           </div>
         </div>
 
@@ -5360,6 +5599,23 @@
                   <span class="text-[9px] text-emerald-400 font-bold uppercase mt-2">Thêm ảnh</span>
                 </label>
                 <input :id="'up-after-'+acceptDetailStage.id" type="file" multiple accept="image/*" class="hidden" @change="e => uploadAcceptStageFiles(e, 'after')" />
+              </div>
+            </div>
+
+            <!-- Other Attachments (Tài liệu đính kèm khác của stage) -->
+            <div v-if="acceptDetailStage.attachments?.filter(a => a.type !== 'before' && a.type !== 'after').length" class="col-span-2 mt-4 pt-4 border-t border-gray-100">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">📎 Tài liệu bổ sung</div>
+              <div class="grid grid-cols-1 gap-2">
+                 <a v-for="att in acceptDetailStage.attachments?.filter(a => a.type !== 'before' && a.type !== 'after')" :key="att.id" 
+                    href="#" @click.prevent="openFilePreview(att)"
+                    class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-transparent hover:border-blue-200 hover:bg-white shadow-sm transition-all group">
+                    <PaperClipOutlined class="text-blue-500" />
+                    <div class="flex-1 min-w-0">
+                      <div class="text-[11px] font-bold text-gray-700 truncate group-hover:text-blue-600">{{ att.original_name || att.file_name }}</div>
+                      <div class="text-[9px] text-gray-400 uppercase">{{ att.ext || 'FILE' }} • {{ formatFileSize(att.file_size) }}</div>
+                    </div>
+                    <EyeOutlined class="text-gray-300 group-hover:text-blue-500" />
+                 </a>
               </div>
             </div>
           </div>
@@ -5526,7 +5782,7 @@
       <!-- Action Footer (Standard Sticky) -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 transition-all rounded-br-2xl">
         <div class="flex gap-2">
-           <a-button v-if="can('acceptance.update') && acceptDetailStage.status !== 'owner_approved'" 
+           <a-button v-if="can('acceptance.update') && ['draft', 'rejected'].includes(acceptDetailStage.status)" 
                      class="rounded-xl h-12 px-6 font-bold text-blue-600 bg-blue-50 border-blue-100" @click="saveAcceptDetail" :loading="savingAcceptDetail">
              <SaveOutlined /> Cập nhật
            </a-button>
@@ -6867,6 +7123,15 @@ onMounted(() => {
       end_date: t.end_date || props.project?.end_date,
       is_critical: false // fallback
     }))
+  }
+  // Auto-load drawer if ID provided in query param
+  const urlParams = new URLSearchParams(window.location.search)
+  const openId = urlParams.get('id')
+  if (openId) {
+    if (activeTab.value === 'acceptance') {
+      const stage = acceptanceStages.value.find(s => s.id == openId)
+      if (stage) openAcceptDetailModal(stage)
+    }
   }
 })
 onBeforeUnmount(() => {
@@ -8795,22 +9060,55 @@ const rejectAcceptDrawer = () => {
 
 // Edit acceptance
 const showEditAcceptModal = ref(false)
-const editAcceptForm = ref({ name: '', description: '', task_id: null, acceptance_template_id: null, order: null })
+const editingAcceptStage = ref(null)
+const editAcceptForm = ref({ name: '', description: '', task_id: null, acceptance_template_id: null, order: null, status: 'pending', is_custom: false, deleted_attachment_ids: [] })
 const editingAcceptId = ref(null)
+const modalFilesGeneral = ref([])
+const modalFilesBefore = ref([])
+const modalFilesAfter = ref([])
+
 const openEditAcceptModal = (stage) => {
   editingAcceptId.value = stage.id
+  editingAcceptStage.value = stage
   editAcceptForm.value = {
     name: stage.name || '',
     description: stage.description || '',
     task_id: stage.task_id || null,
     acceptance_template_id: stage.acceptance_template_id || null,
     order: stage.order || null,
+    status: stage.status || 'pending',
+    is_custom: stage.is_custom || false,
+    deleted_attachment_ids: [],
   }
+  modalFilesGeneral.value = []
+  modalFilesBefore.value = []
+  modalFilesAfter.value = []
   showEditAcceptModal.value = true
 }
 const updateAccept = () => {
-  router.put(`/projects/${props.project.id}/acceptance/${editingAcceptId.value}`, editAcceptForm.value, savingOptions({
-    onSuccess: () => { showEditAcceptModal.value = false }
+  const formData = new FormData()
+  formData.append('_method', 'PUT')
+  
+  Object.entries(editAcceptForm.value).forEach(([k, v]) => {
+    if (k === 'deleted_attachment_ids' && Array.isArray(v)) {
+      v.forEach(id => formData.append('deleted_attachment_ids[]', id))
+    } else if (v !== null && v !== undefined) {
+      formData.append(k, typeof v === 'boolean' ? (v ? 1 : 0) : v)
+    }
+  })
+  
+  modalFilesGeneral.value.forEach(f => formData.append('files[]', f))
+  modalFilesBefore.value.forEach(f => formData.append('files_before[]', f))
+  modalFilesAfter.value.forEach(f => formData.append('files_after[]', f))
+
+  router.post(`/projects/${props.project.id}/acceptance/${editingAcceptId.value}`, formData, savingOptions({
+    forceFormData: true,
+    onSuccess: () => {
+      showEditAcceptModal.value = false
+      modalFilesGeneral.value = []
+      modalFilesBefore.value = []
+      modalFilesAfter.value = []
+    }
   }))
 }
 

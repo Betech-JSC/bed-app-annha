@@ -59,168 +59,7 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $data = $this->approvalQueryService->getApprovalData($user);
 
-        // Map data using existing formatters
-        $managementItemsFormatted = $data['costs_management']->map(fn(Cost $cost) => $this->formatItem($cost));
-        $accountantItemsFormatted = $data['costs_accountant']->map(fn(Cost $cost) => $this->formatItem($cost));
-
-        $acceptanceSupervisorItemsFormatted = $data['acceptance_supervisor']->map(
-            fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ GS duyệt', 'supervisor')
-        );
-        $acceptancePMItemsFormatted = $data['acceptance_pm']->map(
-            fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ QLDA duyệt', 'project_manager')
-        );
-        $customerAcceptanceItemsFormatted = $data['acceptance_customer']->map(
-            fn(AcceptanceStage $stage) => $this->formatAcceptanceItem($stage, 'Chờ KH duyệt', 'customer')
-        );
-
-        $changeRequestItemsFormatted = $data['change_requests']->map(fn(ChangeRequest $cr) => $this->formatChangeRequestItem($cr));
-        $additionalCostItemsFormatted = $data['additional_costs']->map(fn(AdditionalCost $ac) => $this->formatAdditionalCostItem($ac));
-
-        $subPaymentManagementFormatted = $data['sub_payments_management']->map(fn(SubcontractorPayment $p) => $this->formatSubPaymentItem($p));
-        $subPaymentAccountantFormatted = $data['sub_payments_accountant']->map(fn(SubcontractorPayment $p) => $this->formatSubPaymentItem($p));
-
-        $contractItemsFormatted = $data['contracts']->map(fn(Contract $c) => $this->formatContractItem($c));
-        $pendingPaymentItemsFormatted = $data['payments_pending']->map(fn(ProjectPayment $p) => $this->formatPaymentItem($p));
-        $paidPaymentItemsFormatted = $data['payments_paid']->map(fn(ProjectPayment $p) => $this->formatPaymentItem($p));
-
-        $materialBillManagementItemsFormatted = $data['material_bills_management']->map(fn($b) => $this->formatMaterialBillItem($b));
-        $materialBillAccountantItemsFormatted = $data['material_bills_accountant']->map(fn($b) => $this->formatMaterialBillItem($b));
-
-        $subAcceptanceItemsFormatted = $data['sub_acceptances']->map(fn(SubcontractorAcceptance $sa) => $this->formatSubAcceptanceItem($sa));
-        $supplierAcceptanceItemsFormatted = $data['supplier_acceptances']->map(fn(SupplierAcceptance $sa) => $this->formatSupplierAcceptanceItem($sa));
-
-        $constructionLogItemsFormatted = $data['construction_logs']->map(fn(ConstructionLog $log) => $this->formatConstructionLogItem($log));
-        $scheduleAdjustmentItemsFormatted = $data['schedule_adjustments']->map(fn(ScheduleAdjustment $adj) => $this->formatScheduleAdjustmentItem($adj));
-        $defectItemsFormatted = $data['defects']->map(fn(Defect $d) => $this->formatDefectItem($d));
-        $budgetItemsFormatted = $data['budgets']->map(fn(ProjectBudget $b) => $this->formatBudget($b));
-
-        $equipmentRentalManagementFormatted = $data['equipment_rentals_management']->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
-        $equipmentRentalAccountantFormatted = $data['equipment_rentals_accountant']->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
-        $equipmentRentalReturnFormatted = $data['equipment_rentals_return']->map(fn(EquipmentRental $r) => $this->formatEquipmentRentalItem($r));
-
-        $assetUsageManagementFormatted = $data['asset_usages_management']->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
-        $assetUsageAccountantFormatted = $data['asset_usages_accountant']->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
-        $assetUsageReturnFormatted = $data['asset_usages_return']->map(fn(AssetUsage $u) => $this->formatAssetUsageItem($u));
-
-        $attendanceItemsFormatted = ($data['attendances_pending'] ?? collect([]))->map(fn(Attendance $a) => $this->formatAttendanceItem($a));
-
-        // Format recent activity items
-        $recent = $data['recent'];
-        $recentItems = collect([])
-            ->concat($recent['costs']->map(fn(Cost $item) => $this->formatItem($item)))
-            ->concat($recent['change_requests']->map(fn(ChangeRequest $item) => $this->formatChangeRequestItem($item)))
-            ->concat($recent['additional_costs']->map(fn(AdditionalCost $item) => $this->formatAdditionalCostItem($item)))
-            ->concat($recent['sub_payments']->map(fn(SubcontractorPayment $item) => $this->formatSubPaymentItem($item)))
-            ->concat($recent['acceptances']->map(fn(AcceptanceStage $item) => $this->formatAcceptanceItem($item, 'Nghiệm thu', 'customer')))
-            ->concat($recent['budgets']->map(fn(ProjectBudget $item) => $this->formatBudget($item)))
-            ->concat($recent['equipment_rentals']->map(fn(EquipmentRental $item) => $this->formatEquipmentRentalItem($item)))
-            ->concat($recent['asset_usages']->map(fn(AssetUsage $item) => $this->formatAssetUsageItem($item)))
-            ->concat($recent['contracts']->map(fn(Contract $item) => $this->formatContractItem($item)))
-            ->concat($recent['project_payments']->map(fn(ProjectPayment $item) => $this->formatPaymentItem($item)))
-            ->concat($recent['material_bills']->map(fn(MaterialBill $item) => $this->formatMaterialBillItem($item)))
-            ->concat($recent['sub_acceptances']->map(fn(SubcontractorAcceptance $item) => $this->formatSubAcceptanceItem($item)))
-            ->concat($recent['supplier_acceptances']->map(fn(SupplierAcceptance $item) => $this->formatSupplierAcceptanceItem($item)))
-            ->concat($recent['construction_logs']->map(fn(ConstructionLog $item) => $this->formatConstructionLogItem($item)))
-            ->concat($recent['schedule_adjustments']->map(fn(ScheduleAdjustment $item) => $this->formatScheduleAdjustmentItem($item)))
-            ->concat($recent['defects']->map(fn(Defect $item) => $this->formatDefectItem($item)))
-            ->concat($recent['attendances']->map(fn(Attendance $item) => $this->formatAttendanceItem($item)))
-            ->unique('id')
-            ->sortByDesc(fn($item) => $item['created_at']) // Use simple sort since they are formatted
-            ->take(30)
-            ->values();
-
-        // ─────────────────────────────────────────────────────────────────────
-        // GROUP ITEMS BY ROLE BUCKET (Web CRM) — WITH STRICT RBAC FILTERING
-        // ─────────────────────────────────────────────────────────────────────
-        
-        // Better: use the already loaded data if possible or map it beforehand
-        $defectsByRole = [
-            'supervisor' => collect([]),
-            'project_manager' => collect([]),
-            'customer' => collect([]),
-        ];
-        
-        foreach ($data['defects'] as $defect) {
-            $formatted = $this->formatDefectItem($defect);
-            $formatted['_approveType'] = 'defect_verify';
-            
-            $targetRole = 'supervisor'; // Default
-            if ($defect->acceptanceStage) {
-                if ($defect->acceptanceStage->status === 'supervisor_approved') {
-                    $targetRole = 'project_manager';
-                } elseif ($defect->acceptanceStage->status === 'project_manager_approved') {
-                    $targetRole = 'customer';
-                }
-            }
-            
-            $defectsByRole[$targetRole]->push($formatted);
-        }
-
-        $roleGroups = [
-            'management' => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT)
-                ? collect([])
-                    ->concat($managementItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'management'])))
-                    ->concat($additionalCostItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'additional_cost'])))
-                    ->concat($subPaymentManagementFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'sub_payment'])))
-                    ->concat($materialBillManagementItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'material_bill'])))
-                    ->concat($budgetItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'budget'])))
-                    ->concat($equipmentRentalManagementFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_management'])))
-                    ->concat($assetUsageManagementFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_management'])))
-                    ->unique('id')
-                    ->values()
-                : collect([]),
-
-            'accountant' => ($this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT) || $this->crmCan($user, Permissions::PAYMENT_CONFIRM))
-                ? collect([])
-                    ->concat($accountantItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'accountant'])))
-                    ->concat($subPaymentAccountantFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'sub_payment_confirm'])))
-                    ->concat($paidPaymentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'project_payment_confirm'])))
-                    ->concat($materialBillAccountantItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'material_bill'])))
-                    ->concat($equipmentRentalAccountantFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_accountant'])))
-                    ->concat($assetUsageAccountantFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_accountant'])))
-                    ->unique('id')
-                    ->values()
-                : collect([]),
-
-            'project_manager' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2)
-                ? collect([])
-                    ->concat($acceptancePMItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'acceptance_pm'])))
-                    ->concat($changeRequestItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'change_request'])))
-                    ->concat($constructionLogItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'construction_log'])))
-                    ->concat($scheduleAdjustmentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'schedule_adjustment'])))
-                    ->concat($equipmentRentalReturnFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_return'])))
-                    ->concat($assetUsageReturnFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_return'])))
-                    ->concat($defectsByRole['project_manager'])
-                    ->unique('id')
-                    ->values()
-                : collect([]),
-
-            'supervisor' => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1)
-                ? collect([])
-                    ->concat($acceptanceSupervisorItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'acceptance_supervisor'])))
-                    ->concat($subAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'sub_acceptance'])))
-                    ->concat($supplierAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'supplier_acceptance'])))
-                    ->concat($defectsByRole['supervisor'])
-                    ->unique('id')
-                    ->values()
-                : collect([]),
-
-            'customer' => ($this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $this->crmCan($user, Permissions::PAYMENT_APPROVE))
-                ? collect([])
-                    ->concat($customerAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'acceptance'])))
-                    ->concat($contractItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'contract'])))
-                    ->concat($pendingPaymentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'project_payment'])))
-                    ->concat($defectsByRole['customer'])
-                    ->unique('id')
-                    ->values()
-                : collect([]),
-
-            'hr' => $this->crmCan($user, Permissions::ATTENDANCE_APPROVE)
-                ? $attendanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'attendance']))->values()
-                : collect([]),
-        ];
-
-        // Add a "permissions" map to help UI decide initial tab
+        // 1. Determine user permissions once
         $userPermissions = [
             'can_management' => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT),
             'can_accountant' => ($this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT) || $this->crmCan($user, Permissions::PAYMENT_CONFIRM)),
@@ -230,36 +69,87 @@ class CrmApprovalController extends Controller
             'can_hr' => $this->crmCan($user, Permissions::ATTENDANCE_APPROVE),
         ];
 
-        // Collect budget items for projects that have costs pending accountant approval
+        // 2. Pre-process defects by role
+        $defectsByRole = ['supervisor' => collect([]), 'project_manager' => collect([]), 'customer' => collect([])];
+        foreach ($data['defects'] as $defect) {
+            $formatted = array_merge($this->formatDefectItem($defect), ['_approveType' => 'defect_verify']);
+            $targetRole = 'supervisor';
+            if ($defect->acceptanceStage) {
+                if ($defect->acceptanceStage->status === 'supervisor_approved') $targetRole = 'project_manager';
+                elseif ($defect->acceptanceStage->status === 'project_manager_approved') $targetRole = 'customer';
+            }
+            $defectsByRole[$targetRole]->push($formatted);
+        }
+
+        // 3. Populate role groups dynamically
+        $roleGroups = [
+            'management' => $userPermissions['can_management'] ? collect([])
+                ->concat($data['costs_management']->map(fn($i) => array_merge($this->formatItem($i), ['_approveType' => 'management'])))
+                ->concat($data['additional_costs']->map(fn($i) => array_merge($this->formatAdditionalCostItem($i), ['_approveType' => 'additional_cost'])))
+                ->concat($data['sub_payments_management']->map(fn($i) => array_merge($this->formatSubPaymentItem($i), ['_approveType' => 'sub_payment'])))
+                ->concat($data['material_bills_management']->map(fn($i) => array_merge($this->formatMaterialBillItem($i), ['_approveType' => 'material_bill'])))
+                ->concat($data['budgets']->map(fn($i) => array_merge($this->formatBudget($i), ['_approveType' => 'budget'])))
+                ->concat($data['equipment_rentals_management']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_management'])))
+                ->concat($data['asset_usages_management']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_management'])))
+                ->unique('id')->values() : collect([]),
+
+            'accountant' => $userPermissions['can_accountant'] ? collect([])
+                ->concat($data['costs_accountant']->map(fn($i) => array_merge($this->formatItem($i), ['_approveType' => 'accountant'])))
+                ->concat($data['sub_payments_accountant']->map(fn($i) => array_merge($this->formatSubPaymentItem($i), ['_approveType' => 'sub_payment_confirm'])))
+                ->concat($data['payments_paid']->map(fn($i) => array_merge($this->formatPaymentItem($i), ['_approveType' => 'project_payment_confirm'])))
+                ->concat($data['material_bills_accountant']->map(fn($i) => array_merge($this->formatMaterialBillItem($i), ['_approveType' => 'material_bill'])))
+                ->concat($data['equipment_rentals_accountant']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_accountant'])))
+                ->concat($data['asset_usages_accountant']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_accountant'])))
+                ->unique('id')->values() : collect([]),
+
+            'project_manager' => $userPermissions['can_pm'] ? collect([])
+                ->concat($data['acceptance_pm']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ QLDA duyệt', 'project_manager'), ['_approveType' => 'acceptance_pm'])))
+                ->concat($data['change_requests']->map(fn($i) => array_merge($this->formatChangeRequestItem($i), ['_approveType' => 'change_request'])))
+                ->concat($data['construction_logs']->map(fn($i) => array_merge($this->formatConstructionLogItem($i), ['_approveType' => 'construction_log'])))
+                ->concat($data['schedule_adjustments']->map(fn($i) => array_merge($this->formatScheduleAdjustmentItem($i), ['_approveType' => 'schedule_adjustment'])))
+                ->concat($data['equipment_rentals_return']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_return'])))
+                ->concat($data['asset_usages_return']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_return'])))
+                ->concat($defectsByRole['project_manager'])
+                ->unique('id')->values() : collect([]),
+
+            'supervisor' => $userPermissions['can_supervisor'] ? collect([])
+                ->concat($data['acceptance_supervisor']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ GS duyệt', 'supervisor'), ['_approveType' => 'acceptance_supervisor'])))
+                ->concat($data['sub_acceptances']->map(fn($i) => array_merge($this->formatSubAcceptanceItem($i), ['_approveType' => 'sub_acceptance'])))
+                ->concat($data['supplier_acceptances']->map(fn($i) => array_merge($this->formatSupplierAcceptanceItem($i), ['_approveType' => 'supplier_acceptance'])))
+                ->concat($defectsByRole['supervisor'])
+                ->unique('id')->values() : collect([]),
+
+            'customer' => $userPermissions['can_customer'] ? collect([])
+                ->concat($data['acceptance_customer']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ KH duyệt', 'customer'), ['_approveType' => 'acceptance'])))
+                ->concat($data['contracts']->map(fn($i) => array_merge($this->formatContractItem($i), ['_approveType' => 'contract'])))
+                ->concat($data['payments_pending']->map(fn($i) => array_merge($this->formatPaymentItem($i), ['_approveType' => 'project_payment'])))
+                ->concat($defectsByRole['customer'])
+                ->unique('id')->values() : collect([]),
+
+            'hr' => $userPermissions['can_hr'] ? ($data['attendances_pending'] ?? collect([]))->map(fn($i) => array_merge($this->formatAttendanceItem($i), ['_approveType' => 'attendance']))->values() : collect([]),
+        ];
+
+        // 4. Budget Mapping for Accountant
         $budgetItemsByProject = [];
-        $accountantProjectIds = $accountantItemsFormatted->pluck('project_id')->filter()->unique()->values();
-        if ($accountantProjectIds->isNotEmpty()) {
-            $budgets = ProjectBudget::whereIn('project_id', $accountantProjectIds)
-                ->whereIn('status', ['approved', 'active'])
-                ->with(['items.costGroup'])
-                ->get();
-            foreach ($budgets as $budget) {
-                $projectId = $budget->project_id;
-                if (!isset($budgetItemsByProject[$projectId])) {
-                    $budgetItemsByProject[$projectId] = [];
-                }
-                foreach ($budget->items as $item) {
-                    $budgetItemsByProject[$projectId][] = [
-                        'id' => $item->id,
-                        'name' => $item->name,
-                        'budget_name' => $budget->name,
-                        'cost_group' => $item->costGroup?->name,
-                        'estimated_amount' => (float) $item->estimated_amount,
-                        'actual_amount' => (float) $item->actual_amount,
-                        'remaining_amount' => (float) ($item->estimated_amount - $item->actual_amount),
-                    ];
+        if ($userPermissions['can_accountant']) {
+            $accountantProjectIds = $data['costs_accountant']->pluck('project_id')->filter()->unique()->values();
+            if ($accountantProjectIds->isNotEmpty()) {
+                $budgets = ProjectBudget::whereIn('project_id', $accountantProjectIds)->whereIn('status', ['approved', 'active'])->with(['items.costGroup'])->get();
+                foreach ($budgets as $budget) {
+                    foreach ($budget->items as $item) {
+                        $budgetItemsByProject[$budget->project_id][] = [
+                            'id' => $item->id, 'name' => $item->name, 'budget_name' => $budget->name, 'cost_group' => $item->costGroup?->name,
+                            'estimated_amount' => (float)$item->estimated_amount, 'actual_amount' => (float)$item->actual_amount,
+                            'remaining_amount' => (float)($item->estimated_amount - $item->actual_amount),
+                        ];
+                    }
                 }
             }
         }
 
         return Inertia::render('Crm/Approvals/Index', [
             'roleGroups' => $roleGroups,
-            'recentItems' => $recentItems,
+            'recentItems' => $this->formatRecentActivity($data['recent']),
             'stats' => $data['stats'],
             'userPermissions' => $userPermissions,
             'budgetItemsByProject' => $budgetItemsByProject,
@@ -741,14 +631,7 @@ class CrmApprovalController extends Controller
             'project_id' => $cost->project_id,
             'category' => $cost->category,
             'attendance_id' => $cost->attendance_id,
-            'attachments' => $cost->attachments->map(fn($a) => [
-                'id' => $a->id,
-                'name' => $a->file_name,
-                'url' => $a->file_url,
-                'size' => $a->file_size_formatted,
-                'mime_type' => $a->mime_type,
-                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
-            ]),
+            'attachments' => $this->formatAttachments($cost->attachments),
             'attachments_count' => $cost->attachments->count(),
         ];
     }
@@ -839,14 +722,7 @@ class CrmApprovalController extends Controller
             'created_at' => optional($cr->created_at)->format('d/m/Y H:i') ?? '',
             'description' => $cr->description,
             'project_id' => $cr->project_id,
-            'attachments' => $cr->attachments->map(fn($a) => [
-                'id' => $a->id,
-                'name' => $a->file_name,
-                'url' => $a->file_url,
-                'size' => $a->file_size_formatted,
-                'mime_type' => $a->mime_type,
-                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
-            ]),
+            'attachments' => $this->formatAttachments($cr->attachments),
             'attachments_count' => $cr->attachments->count(),
         ];
     }
@@ -865,14 +741,7 @@ class CrmApprovalController extends Controller
             'created_by' => $ac->proposer->name ?? 'N/A',
             'created_at' => optional($ac->created_at)->format('d/m/Y H:i') ?? '',
             'project_id' => $ac->project_id,
-            'attachments' => $ac->attachments->map(fn($a) => [
-                'id' => $a->id,
-                'name' => $a->file_name,
-                'url' => $a->file_url,
-                'size' => $a->file_size_formatted,
-                'mime_type' => $a->mime_type,
-                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
-            ]),
+            'attachments' => $this->formatAttachments($ac->attachments),
             'attachments_count' => $ac->attachments->count(),
         ];
     }
@@ -896,14 +765,7 @@ class CrmApprovalController extends Controller
             'created_by' => $payment->creator->name ?? 'N/A',
             'created_at' => optional($payment->created_at)->format('d/m/Y H:i') ?? '',
             'project_id' => $payment->project_id,
-            'attachments' => $payment->attachments->map(fn($a) => [
-                'id' => $a->id,
-                'name' => $a->file_name,
-                'url' => $a->file_url,
-                'size' => $a->file_size_formatted,
-                'mime_type' => $a->mime_type,
-                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
-            ]),
+            'attachments' => $this->formatAttachments($payment->attachments),
             'attachments_count' => $payment->attachments->count(),
         ];
     }
@@ -954,14 +816,7 @@ class CrmApprovalController extends Controller
             'created_by' => 'Hệ thống',
             'created_at' => optional($payment->updated_at)->format('d/m/Y H:i') ?? '',
             'project_id' => $payment->project_id,
-            'attachments' => $payment->attachments->map(fn($a) => [
-                'id' => $a->id,
-                'name' => $a->file_name,
-                'url' => $a->file_url,
-                'size' => $a->file_size_formatted,
-                'mime_type' => $a->mime_type,
-                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
-            ]),
+            'attachments' => $this->formatAttachments($payment->attachments),
             'attachments_count' => $payment->attachments->count(),
         ];
     }
@@ -1280,32 +1135,48 @@ class CrmApprovalController extends Controller
         return back()->with('success', 'Đã từ chối phiếu chấm công.');
     }
 
+    private function formatRecentActivity(array $recent): \Illuminate\Support\Collection
+    {
+        return collect([])
+            ->concat($recent['costs']->map(fn($i) => $this->formatItem($i)))
+            ->concat($recent['change_requests']->map(fn($i) => $this->formatChangeRequestItem($i)))
+            ->concat($recent['additional_costs']->map(fn($i) => $this->formatAdditionalCostItem($i)))
+            ->concat($recent['sub_payments']->map(fn($i) => $this->formatSubPaymentItem($i)))
+            ->concat($recent['acceptances']->map(fn($i) => $this->formatAcceptanceItem($i, 'Nghiệm thu', 'customer')))
+            ->concat($recent['budgets']->map(fn($i) => $this->formatBudget($i)))
+            ->concat($recent['equipment_rentals']->map(fn($i) => $this->formatEquipmentRentalItem($i)))
+            ->concat($recent['asset_usages']->map(fn($i) => $this->formatAssetUsageItem($i)))
+            ->concat($recent['contracts']->map(fn($i) => $this->formatContractItem($i)))
+            ->concat($recent['project_payments']->map(fn($i) => $this->formatPaymentItem($i)))
+            ->concat($recent['material_bills']->map(fn($i) => $this->formatMaterialBillItem($i)))
+            ->concat($recent['sub_acceptances']->map(fn($i) => $this->formatSubAcceptanceItem($i)))
+            ->concat($recent['supplier_acceptances']->map(fn($i) => $this->formatSupplierAcceptanceItem($i)))
+            ->concat($recent['construction_logs']->map(fn($i) => $this->formatConstructionLogItem($i)))
+            ->concat($recent['schedule_adjustments']->map(fn($i) => $this->formatScheduleAdjustmentItem($i)))
+            ->concat($recent['defects']->map(fn($i) => $this->formatDefectItem($i)))
+            ->concat($recent['attendances']->map(fn($i) => $this->formatAttendanceItem($i)))
+            ->unique('id')->sortByDesc(fn($i) => $i['created_at'])->take(30)->values();
+    }
+
     private function getStatusLabel(string $status): string
     {
-        return match ($status) {
-            'draft' => 'Nháp',
-            'pending' => 'Chờ duyệt',
-            'supervisor_approved' => 'GS đã duyệt',
-            'project_manager_approved' => 'QLDA đã duyệt',
-            'customer_approved' => 'KH đã duyệt',
-            'owner_approved' => 'CĐT đã duyệt',
-            'design_approved' => 'TK đã duyệt',
-            'internal_approved' => 'Nôi bộ đã duyệt',
-            'pending_management_approval' => 'Chờ BĐH duyệt',
-            'pending_accountant_approval' => 'Chờ KT xác nhận',
-            'pending_accountant_confirmation' => 'Chờ KT xác nhận',
-            'pending_customer_approval' => 'Chờ KH duyệt',
-            'pending_approval' => 'Chờ duyệt',
-            'approved' => 'Đã duyệt',
-            'active' => 'Đang áp dụng',
-            'archived' => 'Đã lưu trữ',
-            'paid' => 'Đã thanh toán',
-            'rejected' => 'Chưa đạt',
-            'open' => 'Mới',
-            'in_progress' => 'Đang sửa lỗi',
-            'fixed' => 'Đã sửa — Chờ xác nhận',
-            'verified' => 'Đã xác nhận',
-            default => $status,
-        };
+        $labels = [
+            'pending' => 'Chờ duyệt', 'supervisor_approved' => 'GS đã duyệt', 'project_manager_approved' => 'QLDA đã duyệt',
+            'customer_approved' => 'KH đã duyệt', 'owner_approved' => 'CĐT đã duyệt', 'design_approved' => 'TK đã duyệt',
+            'internal_approved' => 'Nội bộ đã duyệt', 'pending_management_approval' => 'Chờ BĐH duyệt',
+            'pending_accountant_approval' => 'Chờ KT xác nhận', 'pending_accountant_confirmation' => 'Chờ KT xác nhận',
+            'pending_approval' => 'Chờ duyệt', 'approved' => 'Đã duyệt', 'active' => 'Đang áp dụng',
+            'archived' => 'Đã lưu trữ', 'paid' => 'Đã thanh toán', 'rejected' => 'Chưa đạt',
+            'open' => 'Mới', 'in_progress' => 'Đang sửa lỗi', 'fixed' => 'Đã sửa — Chờ xác nhận', 'verified' => 'Đã xác nhận',
+        ];
+        return $labels[$status] ?? $status;
+    }
+
+    private function formatAttachments($attachments): \Illuminate\Support\Collection
+    {
+        return $attachments->map(fn($a) => [
+            'id' => $a->id, 'name' => $a->file_name, 'url' => $a->file_url, 'size' => $a->file_size_formatted,
+            'mime_type' => $a->mime_type, 'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
+        ]);
     }
 }

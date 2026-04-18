@@ -1012,7 +1012,7 @@ const getDetailUrl = (record) => {
   const typeUrlMap = {
     project_cost: pid ? `/projects/${pid}?tab=costs` : null,
     company_cost: null, // company costs have no project tab
-    acceptance: pid ? `/projects/${pid}?tab=acceptance` : null,
+    acceptance: pid ? `/projects/${pid}?tab=acceptance&id=${record.id}` : null,
     change_request: pid ? `/projects/${pid}?tab=change_requests` : null,
     additional_cost: pid ? `/projects/${pid}?tab=additional_costs` : null,
     sub_payment: pid ? `/projects/${pid}?tab=subcontractors` : null,
