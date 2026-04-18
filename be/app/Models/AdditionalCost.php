@@ -226,6 +226,44 @@ class AdditionalCost extends Model
         return $query->whereIn('status', ['approved', 'confirmed']); // Backward compatible
     }
 
+    /**
+     * Đồng bộ hóa dữ liệu sang bản ghi Chi phí liên kết
+     */
+    public function syncToCostTable(): void
+    {
+        $costGroupId = \App\Models\CostGroup::where('code', 'additional')
+            ->orWhere('name', 'LIKE', '%Phát sinh%')
+            ->value('id') ?: 6;
+
+        $costStatus = match($this->status) {
+            'pending', 'pending_approval' => 'pending_management_approval',
+            'customer_paid'               => 'pending_accountant_approval',
+            'approved', 'confirmed'       => 'approved',
+            'rejected'                    => 'rejected',
+            default                       => 'draft'
+        };
+
+        Cost::updateOrCreate(
+            ['additional_cost_id' => $this->id],
+            [
+                'project_id'               => $this->project_id,
+                'name'                     => "CP Phát sinh: " . ($this->description ?: "Không tên") . " (#" . $this->id . ")",
+                'amount'                   => $this->amount,
+                'cost_date'                => $this->created_at ?: now(),
+                'category'                 => 'other',
+                'cost_group_id'            => $costGroupId,
+                'description'              => $this->description ?: "Đồng bộ từ phiếu chi phí phát sinh #" . ($this->uuid),
+                'status'                   => $costStatus,
+                'created_by'               => $this->proposed_by,
+                'management_approved_by'   => $this->approved_by,
+                'management_approved_at'   => $this->approved_at,
+                'accountant_approved_by'   => $this->confirmed_by,
+                'accountant_approved_at'   => $this->confirmed_at,
+                'rejected_reason'          => $this->rejected_reason,
+            ]
+        );
+    }
+
     // ==================================================================
     // BOOT
     // ==================================================================
@@ -238,6 +276,14 @@ class AdditionalCost extends Model
             if (empty($cost->uuid)) {
                 $cost->uuid = Str::uuid();
             }
+        });
+
+        static::saved(function ($model) {
+            $model->syncToCostTable();
+        });
+
+        static::deleted(function ($model) {
+            Cost::where('additional_cost_id', $model->id)->delete();
         });
     }
 }

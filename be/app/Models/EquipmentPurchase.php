@@ -55,11 +55,58 @@ class EquipmentPurchase extends Model
         return in_array($this->status, ['pending_management', 'pending_accountant']);
     }
 
+    /**
+     * Đồng bộ hóa dữ liệu sang bản ghi Chi phí liên kết
+     */
+    public function syncToCostTable(): void
+    {
+        $costGroupId = \App\Models\CostGroup::where('code', 'equipment')
+            ->orWhere('name', 'LIKE', '%Thiết bị%')
+            ->value('id') ?: 4;
+
+        $costStatus = match($this->status) {
+            'draft'              => 'draft',
+            'pending_management' => 'pending_management_approval',
+            'pending_accountant' => 'pending_accountant_approval',
+            'completed'          => 'approved',
+            'rejected'           => 'rejected',
+            default              => 'draft'
+        };
+
+        Cost::updateOrCreate(
+            ['equipment_purchase_id' => $this->id],
+            [
+                'project_id'               => $this->project_id,
+                'name'                     => "Mua thiết bị mới #" . ($this->id),
+                'amount'                   => $this->total_amount,
+                'cost_date'                => $this->created_at ?: now(),
+                'category'                 => 'other',
+                'cost_group_id'            => $costGroupId,
+                'description'              => $this->notes ?: "Đồng bộ từ phiếu mua thiết bị #" . ($this->uuid),
+                'status'                   => $costStatus,
+                'created_by'               => $this->created_by,
+                'management_approved_by'   => $this->approved_by,
+                'management_approved_at'   => $this->approved_at,
+                'accountant_approved_by'   => $this->confirmed_by,
+                'accountant_approved_at'   => $this->confirmed_at,
+                'rejected_reason'          => $this->rejection_reason,
+            ]
+        );
+    }
+
     protected static function boot()
     {
         parent::boot();
         static::creating(function ($model) {
             $model->uuid = $model->uuid ?: Str::uuid();
+        });
+
+        static::saved(function ($model) {
+            $model->syncToCostTable();
+        });
+
+        static::deleted(function ($model) {
+            Cost::where('equipment_purchase_id', $model->id)->delete();
         });
     }
 

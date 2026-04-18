@@ -31,8 +31,10 @@ class Cost extends Model
         'receipt_id',
         'material_id',
         'material_bill_id',
+        'equipment_purchase_id',
         'equipment_id', // Liên kết mua thiết bị
         'equipment_rental_id',
+        'additional_cost_id',
         'equipment_allocation_id',
         'attendance_id',
         'quantity',

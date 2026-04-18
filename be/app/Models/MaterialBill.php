@@ -211,69 +211,41 @@ class MaterialBill extends Model
      */
     public function syncToCost(): void
     {
-        // Sử dụng relationship if possible, but let's just query to be sure
-        $cost = Cost::where('material_bill_id', $this->id)->first();
-        if (!$cost) return;
+        if ($this->status === 'cancelled') {
+            Cost::where('material_bill_id', $this->id)->delete();
+            return;
+        }
 
         $newCostStatus = match ($this->status) {
-            'approved' => 'approved',
+            'approved'           => 'approved',
             'pending_management' => 'pending_management_approval',
             'pending_accountant' => 'pending_accountant_approval',
-            'rejected' => 'rejected',
-            'draft' => 'draft',
-            default => 'draft',
+            'rejected'           => 'rejected',
+            default              => 'draft',
         };
 
-        $updates = [];
-        
-        // 1. Đồng bộ trạng thái
-        if ($cost->status !== $newCostStatus) {
-            $updates['status'] = $newCostStatus;
-            
-            // Sync approval info if approved
-            if ($newCostStatus === 'approved') {
-                $updates['accountant_approved_by'] = $this->accountant_approved_by;
-                $updates['accountant_approved_at'] = $this->accountant_approved_at;
-                $updates['management_approved_by'] = $this->management_approved_by;
-                $updates['management_approved_at'] = $this->management_approved_at;
-            } elseif ($newCostStatus === 'rejected') {
-                $updates['rejected_reason'] = $this->rejected_reason;
-            }
-        }
-
-        // 2. Đồng bộ số tiền (QUAN TRỌNG: Fixed the bug where amount wasn't updated)
-        if (abs((float)$cost->amount - (float)$this->total_amount) > 0.01) {
-            $updates['amount'] = $this->total_amount;
-        }
-
-        // 3. Đồng bộ thông tin cơ bản
         $supplierName = $this->supplier ? $this->supplier->name : '';
-        $expectedName = "Phiếu vật liệu #" . ($this->bill_number ?? $this->id) . ($supplierName ? " - {$supplierName}" : '');
-        if ($cost->name !== $expectedName) {
-            $updates['name'] = $expectedName;
-        }
+        $name = "Phiếu vật liệu #" . ($this->bill_number ?? $this->id) . ($supplierName ? " - {$supplierName}" : '');
 
-        if ($cost->cost_group_id !== $this->cost_group_id) {
-            $updates['cost_group_id'] = $this->cost_group_id;
-        }
-
-        if ($this->bill_date && (!$cost->cost_date || \Illuminate\Support\Carbon::parse($cost->cost_date)->toDateString() !== \Illuminate\Support\Carbon::parse($this->bill_date)->toDateString())) {
-            $updates['cost_date'] = $this->bill_date;
-        }
-
-        if ($cost->budget_item_id !== $this->budget_item_id) {
-            $updates['budget_item_id'] = $this->budget_item_id;
-        }
-        
-        if ($cost->supplier_id !== $this->supplier_id) {
-            $updates['supplier_id'] = $this->supplier_id;
-        }
-
-        if (!empty($updates)) {
-            // Sử dụng update() trực tiếp trên query builder để tránh trigger hooks nếu không cần thiết
-            // hoặc update trên model instance. Ở đây dùng instance để clear appends/casts nếu có.
-            $cost->update($updates);
-        }
+        Cost::updateOrCreate(
+            ['material_bill_id' => $this->id],
+            [
+                'project_id'               => $this->project_id,
+                'name'                     => $name,
+                'amount'                   => $this->total_amount,
+                'cost_date'                => $this->bill_date ?: now(),
+                'cost_group_id'            => $this->cost_group_id,
+                'budget_item_id'           => $this->budget_item_id,
+                'supplier_id'              => $this->supplier_id,
+                'status'                   => $newCostStatus,
+                'created_by'               => $this->created_by,
+                'management_approved_by'   => $this->management_approved_by,
+                'management_approved_at'   => $this->management_approved_at,
+                'accountant_approved_by'   => $this->accountant_approved_by,
+                'accountant_approved_at'   => $this->accountant_approved_at,
+                'rejected_reason'          => $this->rejected_reason,
+            ]
+        );
     }
 
     protected static function boot()
@@ -289,6 +261,10 @@ class MaterialBill extends Model
         static::saved(function ($model) {
             // Tự động đồng bộ sang Cost khi Bill thay đổi
             $model->syncToCost();
+        });
+
+        static::deleted(function ($model) {
+            Cost::where('material_bill_id', $model->id)->delete();
         });
     }
 
