@@ -71,171 +71,29 @@ class HandleInertiaRequests extends Middleware
                 ];
             },
             'pending_approvals_count' => function () use ($request) {
-                // Return total count of all pending operations across CRM modules
                 $user = $request->user('admin') ?? $request->user();
                 if (!$user) return 0;
                 
                 try {
-                    $isSuperAdmin = $user->isSuperAdmin();
-                    $isGlobalApprover = $user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) 
-                        || $user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)
-                        || $user->hasPermission(Permissions::FINANCE_MANAGE);
-
-                    $canSeeAllProjects = $isSuperAdmin || $isGlobalApprover;
-                    $projectIds = [];
-
-                    if (!$canSeeAllProjects) {
-                        $assignedViaPersonnel = $user->projects()->pluck('projects.id')->toArray();
-                        $assignedViaModel = \App\Models\Project::where('customer_id', $user->id)
-                            ->orWhere('project_manager_id', $user->id)
-                            ->orWhere('supervisor_id', $user->id)
-                            ->pluck('id')
-                            ->toArray();
-                        $projectIds = array_unique(array_merge($assignedViaPersonnel, $assignedViaModel));
-                        
-                        // If not superadmin/global and no projects assigned, count is 0
-                        if (empty($projectIds)) return 0;
-                    }
-
-                    $count = 0;
+                    // Use the same service as Approval Center and Mobile API for consistency
+                    $queryService = new \App\Services\ApprovalQueryService();
                     
-                    // Only count what the user can actually see/approve
-                    if ($user->hasAnyPermission([Permissions::COST_APPROVE_MANAGEMENT, Permissions::COST_APPROVE_ACCOUNTANT])) {
-                        if (class_exists('App\Models\Cost')) {
-                            $costStatuses = [];
-                            if ($user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) || $user->isSuperAdmin()) $costStatuses[] = 'pending_management_approval';
-                            if ($user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT) || $user->isSuperAdmin()) $costStatuses[] = 'pending_accountant_approval';
-
-                            $count += \App\Models\Cost::whereIn('status', array_unique($costStatuses))
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->whereNull('material_bill_id')
-                                ->whereNull('subcontractor_payment_id')
-                                ->count();
-                        }
-                    }
+                    // Fetch all raw data (filtered by projects the user can see)
+                    $data = $queryService->getApprovalData($user);
                     
-                    if ($user->hasAnyPermission([Permissions::ACCEPTANCE_APPROVE_LEVEL_1, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, Permissions::ACCEPTANCE_APPROVE_LEVEL_3])) {
-                        if (class_exists('App\Models\AcceptanceStage')) {
-                            $acceptanceStatuses = [];
-                            if ($user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_1) || $user->isSuperAdmin()) $acceptanceStatuses[] = 'pending';
-                            if ($user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_2) || $user->isSuperAdmin()) $acceptanceStatuses[] = 'supervisor_approved';
-                            if ($user->hasPermission(Permissions::ACCEPTANCE_APPROVE_LEVEL_3) || $user->isSuperAdmin()) $acceptanceStatuses[] = 'project_manager_approved';
-
-                            $count += \App\Models\AcceptanceStage::whereIn('status', array_unique($acceptanceStatuses))
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
-
-                    if ($user->hasPermission(Permissions::PROJECT_UPDATE)) {
-                        if (class_exists('App\Models\ChangeRequest')) {
-                            $count += \App\Models\ChangeRequest::where('status', 'pending')
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                        if (class_exists('App\Models\ScheduleAdjustment')) {
-                            $count += \App\Models\ScheduleAdjustment::where('status', 'pending')
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
-
-                    if ($user->hasPermission(Permissions::ADDITIONAL_COST_APPROVE)) {
-                        if (class_exists('App\Models\AdditionalCost')) {
-                            $count += \App\Models\AdditionalCost::where('status', 'pending')
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
-
-                    if ($user->hasPermission(Permissions::SUBCONTRACTOR_PAYMENT_APPROVE)) {
-                        if (class_exists('App\Models\SubcontractorPayment')) {
-                            $count += \App\Models\SubcontractorPayment::whereIn('status', ['pending_management_approval', 'pending_accountant_confirmation'])
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
-
-                    if ($user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_1) || $user->hasPermission(Permissions::CONTRACT_APPROVE_LEVEL_2)) {
-                        if (class_exists('App\Models\Contract')) {
-                            $count += \App\Models\Contract::where('status', 'pending')
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
-
-                    if ($user->hasPermission(Permissions::PAYMENT_CONFIRM) || $user->isCustomer()) {
-                        if (class_exists('App\Models\ProjectPayment')) {
-                            // If customer, count reminders (pending/overdue)
-                            if ($user->isCustomer()) {
-                                $count += \App\Models\ProjectPayment::whereIn('status', ['pending', 'overdue'])
-                                    ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                    ->count();
-                            } else {
-                                $count += \App\Models\ProjectPayment::whereIn('status', ['customer_pending_approval', 'customer_paid'])
-                                    ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                    ->count();
-                            }
-                        }
-                    }
-
-                    if ($user->hasAnyPermission([Permissions::MATERIAL_APPROVE, Permissions::COST_APPROVE_ACCOUNTANT])) {
-                        if (class_exists('App\Models\MaterialBill')) {
-                            $count += \App\Models\MaterialBill::whereIn('status', ['pending_management', 'pending_accountant'])
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
-
-                    if ($user->hasPermission(Permissions::LOG_APPROVE)) {
-                        if (class_exists('App\Models\ConstructionLog')) {
-                            $count += \App\Models\ConstructionLog::where('approval_status', 'pending')
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
-
-                    if ($user->hasPermission(Permissions::DEFECT_VERIFY)) {
-                        if (class_exists('App\Models\Defect')) {
-                            $count += \App\Models\Defect::where('status', 'fixed')
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
-
-                    if ($user->hasPermission(Permissions::PROJECT_MANAGE)) {
-                        if (class_exists('App\Models\ProjectBudget')) {
-                            $count += \App\Models\ProjectBudget::where('status', 'pending')
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
-
-                    if ($user->hasPermission(Permissions::ATTENDANCE_APPROVE)) {
-                        if (class_exists('App\Models\Attendance')) {
-                            $count += \App\Models\Attendance::where('workflow_status', 'submitted')
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
+                    // Categorize items by role/permission (reusing mobile logic as it's the most consistent)
+                    $canApproveManagement = $user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) || $user->isSuperAdmin();
+                    $canApproveAccountant = $user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT) || $user->isSuperAdmin();
                     
-                    // Equipment modules
-                    if ($user->hasPermission(Permissions::EQUIPMENT_APPROVE)) {
-                        if (class_exists('App\Models\EquipmentRental')) {
-                            $count += \App\Models\EquipmentRental::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                        if (class_exists('App\Models\AssetUsage')) {
-                            $count += \App\Models\AssetUsage::whereIn('status', ['pending_management', 'pending_accountant', 'pending_return'])
-                                ->when(!$canSeeAllProjects, fn($q) => $q->whereIn('project_id', $projectIds))
-                                ->count();
-                        }
-                    }
+                    $items = $queryService->buildMobileItems($user, $data, 'all', $canApproveManagement, $canApproveAccountant);
                     
-                    return $count;
+                    // Filter out non-actionable items (e.g. items the user can see but can't approve yet)
+                    $actionableItems = array_filter($items, fn($i) => ($i['can_approve'] ?? false) === true);
+                    
+                    return count($actionableItems);
                 } catch (\Exception $e) {
-                    return 0; // Return 0 gracefully if any DB error
+                    \Log::error("Error calculating pending approvals count: " . $e->getMessage());
+                    return 0;
                 }
             },
             'system_cost_categories' => function () {

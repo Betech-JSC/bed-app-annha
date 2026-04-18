@@ -599,7 +599,7 @@ class ApprovalQueryService
     /**
      * Build mobile-specific items array
      */
-    private function buildMobileItems($user, $data, $type = 'all', $canApproveManagement = false, $canApproveAccountant = false)
+    public function buildMobileItems($user, $data, $type = 'all', $canApproveManagement = false, $canApproveAccountant = false)
     {
         $items = [];
         
