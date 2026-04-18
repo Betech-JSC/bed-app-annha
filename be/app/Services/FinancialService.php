@@ -486,7 +486,7 @@ class FinancialService
      */
     public function rejectProjectPayment(ProjectPayment $payment, string $reason, ?User $user = null): bool
     {
-        $payment->status = 'pending';
+        $payment->status = 'draft';
         $payment->notes = ($payment->notes ? $payment->notes . "\n\n" : '') . 
             ($user ? "Kế toán từ chối - Lý do: " : "KH từ chối — Lý do: ") . $reason;
         
@@ -494,17 +494,17 @@ class FinancialService
     }
 
     /**
-     * Revert project payment to pending (Hoàn duyệt)
+     * Revert project payment to draft (Hoàn duyệt)
      */
-    public function revertProjectPaymentToPending(ProjectPayment $payment, ?User $user = null): bool
+    public function revertProjectPaymentToDraft(ProjectPayment $payment, ?User $user = null): bool
     {
         // Revertible if approved, customer_paid or confirmed
-        $revertibleStatuses = ['customer_approved', 'customer_paid', 'confirmed'];
+        $revertibleStatuses = ['customer_approved', 'customer_paid', 'confirmed', 'paid'];
         if (!in_array($payment->status, $revertibleStatuses)) {
             throw new \Exception('Chỉ có thể hoàn duyệt thanh toán đã được KH duyệt, đã trả hoặc đã xác nhận.');
         }
 
-        $payment->status = 'pending';
+        $payment->status = 'draft';
         // Clear approval/paid metadata
         $payment->paid_date = null;
         $payment->actual_amount = null;

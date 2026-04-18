@@ -195,7 +195,10 @@ class AcceptanceService
 
             // Auto-create defect
             $item->autoCreateDefectOnReject($user instanceof User ? $user : null, $reason);
-            
+
+            // Hạ status stage về pending khi có item bị reject
+            $item->acceptanceStage->checkCompletion();
+
             // Notify stakeholders
             $item->acceptanceStage->notifyEvent('rejected', $user, ['reason' => $reason]);
 
@@ -222,6 +225,8 @@ class AcceptanceService
         $saved = $item->save();
 
         if ($saved) {
+            // Hạ status stage khi item quay về draft
+            $item->acceptanceStage->checkCompletion();
             $item->acceptanceStage->notifyEvent('reverted_to_draft', $user);
         }
 

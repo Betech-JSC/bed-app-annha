@@ -124,6 +124,7 @@ class CrmApprovalController extends Controller
             ->concat($recent['schedule_adjustments']->map(fn(ScheduleAdjustment $item) => $this->formatScheduleAdjustmentItem($item)))
             ->concat($recent['defects']->map(fn(Defect $item) => $this->formatDefectItem($item)))
             ->concat($recent['attendances']->map(fn(Attendance $item) => $this->formatAttendanceItem($item)))
+            ->unique('id')
             ->sortByDesc(fn($item) => $item['created_at']) // Use simple sort since they are formatted
             ->take(30)
             ->values();
@@ -165,6 +166,7 @@ class CrmApprovalController extends Controller
                     ->concat($budgetItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'budget'])))
                     ->concat($equipmentRentalManagementFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_management'])))
                     ->concat($assetUsageManagementFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_management'])))
+                    ->unique('id')
                     ->values()
                 : collect([]),
 
@@ -176,6 +178,7 @@ class CrmApprovalController extends Controller
                     ->concat($materialBillAccountantItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'material_bill'])))
                     ->concat($equipmentRentalAccountantFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_accountant'])))
                     ->concat($assetUsageAccountantFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_accountant'])))
+                    ->unique('id')
                     ->values()
                 : collect([]),
 
@@ -188,6 +191,7 @@ class CrmApprovalController extends Controller
                     ->concat($equipmentRentalReturnFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'equipment_rental_return'])))
                     ->concat($assetUsageReturnFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'asset_usage_return'])))
                     ->concat($defectsByRole['project_manager'])
+                    ->unique('id')
                     ->values()
                 : collect([]),
 
@@ -197,6 +201,7 @@ class CrmApprovalController extends Controller
                     ->concat($subAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'sub_acceptance'])))
                     ->concat($supplierAcceptanceItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'supplier_acceptance'])))
                     ->concat($defectsByRole['supervisor'])
+                    ->unique('id')
                     ->values()
                 : collect([]),
 
@@ -206,6 +211,7 @@ class CrmApprovalController extends Controller
                     ->concat($contractItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'contract'])))
                     ->concat($pendingPaymentItemsFormatted->map(fn($i) => array_merge($i, ['_approveType' => 'project_payment'])))
                     ->concat($defectsByRole['customer'])
+                    ->unique('id')
                     ->values()
                 : collect([]),
 
@@ -333,25 +339,40 @@ class CrmApprovalController extends Controller
 
     public function approveSupervisorAcceptance(Request $request, $id)
     {
+        $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        // Permission check done in Service, but we can do a high-level one here too
-        $result = $this->approvalActionService->approve($user, 'acceptance_supervisor', $id);
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $stage->project);
 
-        if ($result['success']) {
-            return back()->with('success', $result['message']);
-        }
-        return back()->with('error', $result['message']);
+        return $this->delegateApprove($user, 'acceptance_supervisor', $id);
+    }
+
+    public function rejectSupervisorAcceptance(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $stage = AcceptanceStage::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $stage->project);
+
+        return $this->delegateReject($user, 'acceptance_supervisor', $id, $request->reason);
     }
 
     public function approvePMAcceptance(Request $request, $id)
     {
+        $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $result = $this->approvalActionService->approve($user, 'acceptance_pm', $id);
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $stage->project);
 
-        if ($result['success']) {
-            return back()->with('success', $result['message']);
-        }
-        return back()->with('error', $result['message']);
+        return $this->delegateApprove($user, 'acceptance_pm', $id);
+    }
+
+    public function rejectPMAcceptance(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $stage = AcceptanceStage::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $stage->project);
+
+        return $this->delegateReject($user, 'acceptance_pm', $id, $request->reason);
     }
 
     public function approveCustomerAcceptance(Request $request, $id)
@@ -360,7 +381,7 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $stage->project);
 
-        return $this->delegateApprove($user, 'acceptance', $id);
+        return $this->delegateApprove($user, 'acceptance_customer', $id);
     }
 
     public function rejectAcceptance(Request $request, $id)
@@ -368,9 +389,47 @@ class CrmApprovalController extends Controller
         $request->validate(['reason' => 'required|string|max:500']);
         $stage = AcceptanceStage::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $stage->project);
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $stage->project);
 
-        return $this->delegateReject($user, 'acceptance', $id, $request->reason);
+        return $this->delegateReject($user, 'acceptance_customer', $id, $request->reason);
+    }
+
+    public function approveSubAcceptance(Request $request, $id)
+    {
+        $item = SubcontractorAcceptance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_APPROVE, $item->project);
+
+        return $this->delegateApprove($user, 'sub_acceptance', $id, ['notes' => $request->input('notes')]);
+    }
+
+    public function rejectSubAcceptance(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $item = SubcontractorAcceptance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_APPROVE, $item->project);
+
+        return $this->delegateReject($user, 'sub_acceptance', $id, $request->reason);
+    }
+
+    public function approveSupplierAcceptance(Request $request, $id)
+    {
+        $item = SupplierAcceptance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $item->project);
+
+        return $this->delegateApprove($user, 'supplier_acceptance', $id, ['notes' => $request->input('notes')]);
+    }
+
+    public function rejectSupplierAcceptance(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $item = SupplierAcceptance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $item->project);
+
+        return $this->delegateReject($user, 'supplier_acceptance', $id, $request->reason);
     }
 
     // =========================================================================
@@ -687,6 +746,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $cost->attachments->count(),
         ];
@@ -694,6 +755,51 @@ class CrmApprovalController extends Controller
 
     private function formatAcceptanceItem(AcceptanceStage $stage, ?string $statusLabel = null, ?string $approvalLevel = null): array
     {
+        // Eager-load defects with attachments for before/after image display
+        if (!$stage->relationLoaded('defects')) {
+            $stage->load(['defects.attachments', 'defects.reporter', 'defects.fixer']);
+        }
+
+        // Categorize attachments into before/after/other
+        $attachments = $stage->attachments->map(fn($a) => [
+            'id' => $a->id,
+            'name' => $a->file_name,
+            'url' => $a->file_url,
+            'size' => $a->file_size_formatted,
+            'type' => $a->type,
+            'description' => $a->description, // 'before' | 'after' | null
+            'mime_type' => $a->mime_type,
+            'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
+        ]);
+
+        // Format defects with their images
+        $defects = $stage->defects->map(fn($d) => [
+            'id' => $d->id,
+            'description' => $d->description,
+            'severity' => $d->severity,
+            'status' => $d->status,
+            'reporter' => $d->reporter?->name,
+            'fixer' => $d->fixer?->name,
+            'before_images' => $d->attachments
+                ->filter(fn($a) => in_array($a->type, ['before']) || in_array($a->description, ['before']) || (empty($a->type) && empty($a->description)))
+                ->filter(fn($a) => $a->mime_type && str_starts_with($a->mime_type, 'image/'))
+                ->map(fn($a) => [
+                    'id' => $a->id,
+                    'name' => $a->file_name,
+                    'url' => $a->file_url,
+                    'mime_type' => $a->mime_type,
+                ])->values(),
+            'after_images' => $d->attachments
+                ->filter(fn($a) => $a->type === 'after' || $a->description === 'after')
+                ->filter(fn($a) => $a->mime_type && str_starts_with($a->mime_type, 'image/'))
+                ->map(fn($a) => [
+                    'id' => $a->id,
+                    'name' => $a->file_name,
+                    'url' => $a->file_url,
+                    'mime_type' => $a->mime_type,
+                ])->values(),
+        ]);
+
         return [
             'id' => $stage->id,
             'type' => 'acceptance',
@@ -708,13 +814,12 @@ class CrmApprovalController extends Controller
             'description' => $stage->description,
             'project_id' => $stage->project_id,
             'approval_level' => $approvalLevel ?? 'customer',
-            'attachments' => $stage->attachments->map(fn($a) => [
-                'id' => $a->id,
-                'name' => $a->file_name,
-                'url' => $a->file_url,
-                'size' => $a->file_size_formatted,
-                'type' => $a->type,
-            ]),
+            'has_open_defects' => $stage->has_open_defects,
+            'acceptability_status' => $stage->acceptability_status,
+            'defects' => $defects,
+            'before_images' => $attachments->filter(fn($a) => (in_array($a['type'], ['before']) || in_array($a['description'], ['before']) || (empty($a['type']) && empty($a['description']))) && $a['is_image'])->values(),
+            'after_images' => $attachments->filter(fn($a) => ($a['type'] === 'after' || $a['description'] === 'after') && $a['is_image'])->values(),
+            'attachments' => $attachments,
             'attachments_count' => $stage->attachments->count(),
         ];
     }
@@ -739,6 +844,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $cr->attachments->count(),
         ];
@@ -763,6 +870,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $ac->attachments->count(),
         ];
@@ -792,6 +901,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $payment->attachments->count(),
         ];
@@ -816,6 +927,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $contract->attachments->count(),
         ];
@@ -846,6 +959,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $payment->attachments->count(),
         ];
@@ -874,6 +989,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $bill->attachments->count(),
         ];
@@ -898,6 +1015,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $sa->attachments->count(),
         ];
@@ -922,6 +1041,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $sa->attachments->count(),
         ];
@@ -945,6 +1066,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $log->attachments->count(),
         ];
@@ -968,6 +1091,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $adj->attachments->count(),
         ];
@@ -975,6 +1100,13 @@ class CrmApprovalController extends Controller
 
     private function formatDefectItem(Defect $defect): array
     {
+        $beforeImages = $defect->attachments
+            ->filter(fn($a) => (in_array($a->type, ['before']) || in_array($a->description, ['before']) || (empty($a->type) && empty($a->description))) && $a->mime_type && str_starts_with($a->mime_type, 'image/'))
+            ->values();
+        $afterImages = $defect->attachments
+            ->filter(fn($a) => ($a->type === 'after' || $a->description === 'after') && $a->mime_type && str_starts_with($a->mime_type, 'image/'))
+            ->values();
+
         return [
             'id' => $defect->id,
             'type' => 'defect',
@@ -985,12 +1117,30 @@ class CrmApprovalController extends Controller
             'status_label' => 'Chờ xác nhận fix',
             'created_by' => $defect->fixer->name ?? 'N/A',
             'created_at' => optional($defect->fixed_at ?? $defect->created_at)->format('d/m/Y H:i') ?? '',
+            'description' => $defect->description,
+            'severity' => $defect->severity,
             'project_id' => $defect->project_id,
+            'before_images' => $beforeImages->map(fn($a) => [
+                'id' => $a->id,
+                'name' => $a->file_name,
+                'url' => $a->file_url,
+                'mime_type' => $a->mime_type,
+            ]),
+            'after_images' => $afterImages->map(fn($a) => [
+                'id' => $a->id,
+                'name' => $a->file_name,
+                'url' => $a->file_url,
+                'mime_type' => $a->mime_type,
+            ]),
             'attachments' => $defect->attachments->map(fn($a) => [
                 'id' => $a->id,
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'type' => $a->type,
+                'description' => $a->description,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $defect->attachments->count(),
         ];
@@ -1017,6 +1167,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $budget->attachments->count(),
         ];
@@ -1042,6 +1194,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $rental->attachments->count(),
         ];
@@ -1067,6 +1221,8 @@ class CrmApprovalController extends Controller
                 'name' => $a->file_name,
                 'url' => $a->file_url,
                 'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
             ]),
             'attachments_count' => $usage->attachments->count(),
         ];

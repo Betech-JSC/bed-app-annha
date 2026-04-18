@@ -233,7 +233,7 @@ class ApprovalQueryService
             })
             ->with(['approvable', 'project:id,name,code', 'user:id,name']);
 
-        $allApprovals = $query->get();
+        $allApprovals = $query->get()->unique(fn($a) => $a->approvable_type . $a->approvable_id);
 
         $data = [];
         $data['projectIds'] = $projectIds; // For stats

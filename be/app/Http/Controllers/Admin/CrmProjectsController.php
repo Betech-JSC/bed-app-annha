@@ -617,11 +617,11 @@ class CrmProjectsController extends Controller
 
         try {
             DB::beginTransaction();
-            // CRM: Default to pending so payment goes through proper approval workflow
-            // Force status to 'pending' for all new payments regardless of input
+            // CRM: Default to draft so payment goes through proper workflow
+            // Force status to 'draft' for all new payments regardless of input
             $paymentData = array_merge($validated, [
                 'project_id' => $project->id,
-                'status' => 'pending',
+                'status' => 'draft',
             ]);
 
             $payment = $this->financialService->upsertProjectPayment($paymentData, null, $user);
@@ -648,8 +648,8 @@ class CrmProjectsController extends Controller
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
-        if (!in_array($payment->status, ['pending', 'overdue'])) {
-            return back()->with('error', 'Chỉ có thể gửi yêu cầu thanh toán ở trạng thái chờ xử lý.');
+        if (!in_array($payment->status, ['draft', 'pending', 'overdue'])) {
+            return back()->with('error', 'Chỉ có thể gửi yêu cầu thanh toán ở trạng thái nháp hoặc chờ xử lý.');
         }
 
         try {
@@ -689,9 +689,9 @@ class CrmProjectsController extends Controller
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
-        // Status guard: only edit when pending/overdue (before KH marks as paid)
-        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && !in_array($payment->status, ['pending', 'overdue'])) {
-            return back()->with('error', 'Chỉ có thể chỉnh sửa thanh toán ở trạng thái chờ thanh toán.');
+        // Status guard: only edit when draft/pending/overdue (before KH marks as paid)
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && !in_array($payment->status, ['draft', 'pending', 'overdue'])) {
+            return back()->with('error', 'Chỉ có thể chỉnh sửa thanh toán ở trạng thái nháp hoặc chờ thanh toán.');
         }
 
         $validated = $request->validate([
@@ -784,7 +784,7 @@ class CrmProjectsController extends Controller
     }
 
     /**
-     * CRM: Kế toán xác nhận thanh toán (customer_paid → confirmed)
+     * CRM: Kế toán xác nhận thanh toán (customer_paid → paid)
      */
     public function confirmPayment(Request $request, string $projectId, string $paymentId)
     {
@@ -841,7 +841,7 @@ class CrmProjectsController extends Controller
     }
 
     /**
-     * CRM: Hoàn duyệt thanh toán (customer_approved/customer_paid/confirmed → pending)
+     * CRM: Hoàn duyệt thanh toán (customer_approved/customer_paid/paid → draft)
      */
     public function revertPaymentToPending(string $projectId, string $paymentId)
     {
@@ -852,7 +852,7 @@ class CrmProjectsController extends Controller
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
         try {
-            $this->financialService->revertProjectPaymentToPending($payment, $user);
+            $this->financialService->revertProjectPaymentToDraft($payment, $user);
             return back()->with('success', 'Đã hoàn duyệt thanh toán.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());

@@ -494,23 +494,34 @@ class AcceptanceStage extends Model
         $items = $this->items()->get();
 
         if ($items->isNotEmpty()) {
-            // Tự động chuyển status stage dựa trên trạng thái tối thiểu của tất cả items
-            $allCustomerApproved = $items->every(fn($i) => $i->workflow_status === 'customer_approved');
-            $allPmApproved = $items->every(fn($i) => in_array($i->workflow_status, ['project_manager_approved', 'customer_approved']));
-            $allSupervisorApproved = $items->every(fn($i) => in_array($i->workflow_status, ['supervisor_approved', 'project_manager_approved', 'customer_approved']));
+            $hasRejected = $items->contains(fn($i) => $i->workflow_status === 'rejected');
+            $hasPendingOrDraft = $items->contains(fn($i) => in_array($i->workflow_status, ['draft', 'submitted']));
 
-            if ($allCustomerApproved && $this->status !== 'customer_approved') {
-                $this->status = 'customer_approved';
-                $this->customer_approved_at = now();
-                $this->save();
-            } elseif ($allPmApproved && !$allCustomerApproved && !in_array($this->status, ['project_manager_approved', 'customer_approved'])) {
-                $this->status = 'project_manager_approved';
-                $this->project_manager_approved_at = now();
-                $this->save();
-            } elseif ($allSupervisorApproved && !$allPmApproved && !in_array($this->status, ['supervisor_approved', 'project_manager_approved', 'customer_approved'])) {
-                $this->status = 'supervisor_approved';
-                $this->supervisor_approved_at = now();
-                $this->save();
+            // Nếu có item bị rejected hoặc đang chờ submit → stage phải quay về pending
+            if ($hasRejected || $hasPendingOrDraft) {
+                if (!in_array($this->status, ['pending', 'rejected'])) {
+                    $this->status = 'pending';
+                    $this->save();
+                }
+            } else {
+                // Tự động nâng status stage dựa trên trạng thái tối thiểu của tất cả items
+                $allCustomerApproved = $items->every(fn($i) => $i->workflow_status === 'customer_approved');
+                $allPmApproved = $items->every(fn($i) => in_array($i->workflow_status, ['project_manager_approved', 'customer_approved']));
+                $allSupervisorApproved = $items->every(fn($i) => in_array($i->workflow_status, ['supervisor_approved', 'project_manager_approved', 'customer_approved']));
+
+                if ($allCustomerApproved && $this->status !== 'customer_approved') {
+                    $this->status = 'customer_approved';
+                    $this->customer_approved_at = now();
+                    $this->save();
+                } elseif ($allPmApproved && !$allCustomerApproved && !in_array($this->status, ['project_manager_approved', 'customer_approved'])) {
+                    $this->status = 'project_manager_approved';
+                    $this->project_manager_approved_at = now();
+                    $this->save();
+                } elseif ($allSupervisorApproved && !$allPmApproved && !in_array($this->status, ['supervisor_approved', 'project_manager_approved', 'customer_approved'])) {
+                    $this->status = 'supervisor_approved';
+                    $this->supervisor_approved_at = now();
+                    $this->save();
+                }
             }
         }
 
@@ -606,7 +617,7 @@ class AcceptanceStage extends Model
                 'acceptance_stage_id' => $this->id,
                 'description' => $description,
                 'severity' => 'high', // Mặc định là high vì nghiệm thu không đạt
-                'status' => 'rejected',
+                'status' => 'open', // IMPORTANT: Must be 'open' so staff can click "Nhận xử lý"
                 'reported_by' => $user?->id ?? $this->rejected_by ?? $this->customer_approved_by ?? $this->project_manager_approved_by ?? null,
                 'reported_at' => now(),
             ]);
@@ -615,7 +626,7 @@ class AcceptanceStage extends Model
             \App\Models\DefectHistory::create([
                 'defect_id' => $defect->id,
                 'action' => 'created',
-                'new_status' => 'rejected',
+                'new_status' => 'open',
                 'user_id' => $defect->reported_by,
                 'comment' => 'Tự động tạo khi nghiệm thu không đạt',
             ]);

@@ -119,6 +119,30 @@ class SyncApprovals extends Command
 
         $this->info("--- Synchronization Complete: {$totalRestored} total records synced ---");
         
+        // Final cleanup: Deduplicate again in case of race conditions
+        $this->info('Checking for duplicate approval entries in the database...');
+        $duplicates = Approval::select('approvable_type', 'approvable_id', DB::raw('COUNT(*) as count'))
+            ->groupBy('approvable_type', 'approvable_id')
+            ->having('count', '>', 1)
+            ->get();
+
+        if ($duplicates->isNotEmpty()) {
+            $deletedCount = 0;
+            foreach ($duplicates as $duplicate) {
+                // Keep the most recent one, delete the rest
+                $idsToDelete = Approval::where('approvable_type', $duplicate->approvable_type)
+                    ->where('approvable_id', $duplicate->approvable_id)
+                    ->orderBy('updated_at', 'desc')
+                    ->skip(1)
+                    ->pluck('id');
+                
+                $deletedCount += Approval::whereIn('id', $idsToDelete)->delete();
+            }
+            $this->warn("Cleaned up {$deletedCount} duplicate approval records.");
+        } else {
+            $this->info('No duplicate records found.');
+        }
+        
         return Command::SUCCESS;
     }
 }

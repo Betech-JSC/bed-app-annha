@@ -381,7 +381,7 @@ class AcceptanceItem extends Model
                 'action' => 'created',
                 'new_status' => 'open',
                 'user_id' => $defect->reported_by,
-                'notes' => 'Tự động tạo khi nghiệm thu bị từ chối',
+                'comment' => 'Tự động tạo khi nghiệm thu bị từ chối',
             ]);
 
             \Illuminate\Support\Facades\Log::info('Auto-created defect for rejected acceptance item', [

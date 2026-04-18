@@ -110,7 +110,7 @@ const statusLabels = {
   cancelled: 'Đã hủy',
   completed: 'Hoàn thành',
   paid: 'Đã thanh toán',
-  customer_paid: 'KH đã thanh toán',
+  customer_paid: 'KH báo TT',
   customer_approved: 'KH đã duyệt',
   pending_accountant_confirmation: 'Chờ KT xác nhận',
 }

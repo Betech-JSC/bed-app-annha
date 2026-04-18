@@ -613,7 +613,7 @@
               <template v-else-if="column.key === 'amount'"><span class="font-semibold text-green-600">{{ fmt(record.amount) }}</span></template>
               <template v-else-if="column.key === 'actual_amount'">
                 <span v-if="record.actual_amount" class="font-semibold" :class="record.actual_amount >= record.amount ? 'text-green-600' : 'text-orange-500'">{{ fmt(record.actual_amount) }}</span>
-                <span v-else-if="record.status === 'confirmed'" class="font-semibold text-green-600">{{ fmt(record.amount) }}</span>
+                <span v-else-if="record.status === 'confirmed' || record.status === 'paid'" class="font-semibold text-green-600">{{ fmt(record.amount) }}</span>
                 <span v-else class="text-gray-300">—</span>
               </template>
               <template v-else-if="column.key === 'status'">
@@ -3118,17 +3118,18 @@
         <a-empty v-else :image="null" description="Chưa có chứng từ" class="text-gray-300 my-0 py-2" />
       </div>
 
-      <!-- Action Footer -->
-      <div class="pt-6 mt-6 border-t border-gray-100 flex flex-wrap justify-between items-center bg-white sticky bottom-0 z-10 py-4">
+    </div>
+    <template #footer>
+      <div v-if="costDetailRecord" class="flex justify-between items-center w-full">
         <div class="flex gap-2">
            <a-popconfirm v-if="can('cost.delete') && costDetailRecord.status === 'draft'" title="Xóa phiếu chi này?" @confirm="deleteCost(costDetailRecord)">
              <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
            </a-popconfirm>
-           <a-button v-if="can('cost.update') && costDetailRecord.status === 'draft'" size="small" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="can('cost.update') && costDetailRecord.status === 'draft'" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="costDetailRecord.status === 'draft' && can('cost.submit')">
-            <a-button type="primary" :loading="actionLoading[`submit-cost-${costDetailRecord.id}`]" @click="handleSubmitCost(costDetailRecord)">Gửi duyệt</a-button>
+            <a-button type="primary" :loading="actionLoading[`submit-cost-${costDetailRecord.id}`]" @click="handleSubmitCost(costDetailRecord)"><SendOutlined /> Gửi duyệt</a-button>
           </template>
           <template v-if="costDetailRecord.status === 'pending_management_approval' && can('cost.approve.management')">
             <a-button type="primary" class="bg-green-600 border-green-600" @click="approveCostMgmt(costDetailRecord)">BĐH Duyệt</a-button>
@@ -3141,12 +3142,12 @@
 
           <!-- Hoàn duyệt action -->
           <a-button v-if="['pending_management_approval', 'pending_accountant_approval', 'approved_management', 'approved_accountant'].includes(costDetailRecord.status) && can('cost.revert')"
-                    class="border-orange-500 text-orange-500 hover:bg-orange-50 transition-colors" @click="revertCostAction(costDetailRecord)">
+                    danger ghost @click="revertCostAction(costDetailRecord)">
             <ReloadOutlined /> Hoàn duyệt
           </a-button>
         </div>
       </div>
-    </div>
+    </template>
   </a-drawer>
 
   <!-- CONTRACT DETAIL DRAWER -->
@@ -3227,24 +3228,25 @@
         <a-empty v-else :image="null" description="Chưa có tệp đính kèm" class="text-gray-300 my-0 py-2" />
       </div>
 
-      <!-- Action Footer -->
-      <div class="pt-6 mt-6 border-t border-gray-100 flex flex-wrap justify-between items-center bg-white sticky bottom-0 z-10 py-4">
+    </div>
+    <template #footer>
+      <div v-if="contractDetailRecord" class="flex justify-between items-center w-full">
         <div class="flex gap-2">
-           <a-button v-if="['draft', 'rejected'].includes(contractDetailRecord.status) && can('contract.update')" size="small" @click="openContractModal(contractDetailRecord); showContractDetail = false"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="['draft', 'rejected'].includes(contractDetailRecord.status) && can('contract.update')" @click="openContractModal(contractDetailRecord); showContractDetail = false"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="contractDetailRecord.status === 'draft' && can('contract.update')">
-            <a-button type="primary" :loading="actionLoading['submit-contract']" @click="submitContractForApproval(contractDetailRecord)">Gửi duyệt</a-button>
+            <a-button type="primary" :loading="actionLoading['submit-contract']" @click="submitContractForApproval(contractDetailRecord)"><SendOutlined /> Gửi duyệt</a-button>
           </template>
           <template v-if="contractDetailRecord.status === 'pending_customer_approval' && can('contract.approve.level_1')">
             <a-button type="primary" class="bg-green-600 border-green-600" :loading="actionLoading['approve-contract']" @click="approveContract(contractDetailRecord)">Phê duyệt</a-button>
             <a-button danger ghost @click="openRejectContractModal(contractDetailRecord)">Từ chối</a-button>
           </template>
           <!-- Hoàn duyệt hợp đồng -->
-          <a-button v-if="['pending_customer_approval', 'rejected'].includes(contractDetailRecord.status) && can('contract.revert')" danger ghost @click="revertContractAction(contractDetailRecord)">Hoàn duyệt</a-button>
+          <a-button v-if="['pending_customer_approval', 'rejected'].includes(contractDetailRecord.status) && can('contract.revert')" danger ghost @click="revertContractAction(contractDetailRecord)"><ReloadOutlined /> Hoàn duyệt</a-button>
         </div>
       </div>
-    </div>
+    </template>
   </a-drawer>
 
   <!-- Reject Contract Modal -->
@@ -4581,8 +4583,9 @@
         <a-empty v-else :image="null" description="Chưa có hình ảnh" class="text-gray-300 my-0 py-2" />
       </div>
 
-      <!-- Action Footer -->
-      <div class="pt-4 mt-4 border-t border-gray-100 flex justify-between items-center bg-white sticky bottom-0 z-10 py-4">
+    </div>
+    <template #footer>
+      <div v-if="logDetailRecord" class="flex justify-between items-center w-full">
         <div class="flex gap-2">
           <a-popconfirm v-if="can('log.delete')" title="Xóa nhật ký này?" @confirm="deleteLog(logDetailRecord); showLogDetailDrawer = false">
             <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
@@ -4593,7 +4596,7 @@
           <a-button type="primary" @click="openAttachModal('logs', logDetailRecord)"><UploadOutlined /> Upload ảnh</a-button>
         </div>
       </div>
-    </div>
+    </template>
   </a-drawer>
 
   <!-- PAYMENT DETAIL DRAWER -->
@@ -4684,23 +4687,24 @@
         <a-empty v-else :image="null" description="Chưa có ảnh chứng từ / UNC" class="text-gray-300 my-0 py-2" />
       </div>
 
-      <!-- Action Footer -->
-      <div class="pt-6 mt-6 border-t border-gray-100 flex flex-wrap justify-between items-center bg-white sticky bottom-0 z-10 py-4">
+    </div>
+    <template #footer>
+      <div v-if="paymentDetailRecord" class="flex justify-between items-center w-full">
         <div class="flex gap-2">
            <a-popconfirm v-if="can('payment.delete') && !['confirmed','paid'].includes(paymentDetailRecord.status)" title="Xóa đợt thanh toán này?" @confirm="deletePayment(paymentDetailRecord)">
              <a-button danger type="text"><DeleteOutlined /> Xóa đợt</a-button>
            </a-popconfirm>
-           <a-button v-if="can('payment.update') && ['pending','overdue'].includes(paymentDetailRecord.status)" size="small" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Thay đổi NS</a-button>
+           <a-button v-if="can('payment.update') && ['draft','pending','overdue'].includes(paymentDetailRecord.status)" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <!-- Staff: Submit request to customer -->
           <template v-if="['draft', 'pending','overdue'].includes(paymentDetailRecord.status) && can('payment.update')">
-            <a-button type="primary" @click="submitPaymentAction(paymentDetailRecord)">Gửi yêu cầu thanh toán</a-button>
+            <a-button type="primary" @click="submitPaymentAction(paymentDetailRecord)"><SendOutlined /> Gửi yêu cầu thanh toán</a-button>
           </template>
 
           <!-- Customer: Approve & Pay -->
           <template v-if="paymentDetailRecord.status === 'customer_pending_approval' && can('payment.approve')">
-            <a-button type="primary" class="bg-blue-600 border-blue-600" @click="openPaymentProofModal(paymentDetailRecord)">Duyệt & Báo cáo thanh toán</a-button>
+            <a-button type="primary" class="bg-blue-600 border-blue-600" @click="openPaymentProofModal(paymentDetailRecord)">Duyệt & Báo cáo TT</a-button>
             <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
           </template>
 
@@ -4715,13 +4719,13 @@
              <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
           </template>
 
-          <!-- Hoàn duyệt: Khi đã Duyệt hoặc Chờ duyệt -->
-          <template v-if="['pending', 'customer_pending_approval'].includes(paymentDetailRecord.status) && can('payment.revert')">
-             <a-button danger ghost @click="revertPaymentAction(paymentDetailRecord)">Hoàn duyệt</a-button>
+          <!-- Hoàn duyệt: Khi đã Duyệt, Đã TT hoặc Xác nhận -->
+          <template v-if="['customer_approved', 'customer_paid', 'confirmed', 'paid'].includes(paymentDetailRecord.status) && can('payment.revert')">
+             <a-button danger ghost @click="revertPaymentAction(paymentDetailRecord)"><ReloadOutlined /> Hoàn duyệt</a-button>
           </template>
         </div>
       </div>
-    </div>
+    </template>
   </a-drawer>
 
   <a-drawer v-model:open="showSubPayDrawer" title="Ghi nhận thanh toán NTP" :width="520" @close="showSubPayDrawer = false" destroy-on-close class="crm-drawer">
@@ -5221,216 +5225,317 @@
 
   <!-- ==================== ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ==================== -->
   <a-drawer v-model:open="showAcceptDetailDrawer" :title="acceptDetailStage ? `Nghiệm thu: ${acceptDetailStage.name}` : 'Chi tiết nghiệm thu'"
-    :width="640" placement="right" destroy-on-close class="accept-detail-drawer">
+    :width="560" placement="right" destroy-on-close class="crm-drawer">
     <template v-if="acceptDetailStage">
-      <!-- Stage Info Card -->
-      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-4 border border-blue-100">
-        <div class="flex items-center justify-between mb-2">
-          <span class="font-bold text-gray-800 text-base">{{ acceptDetailStage.name }}</span>
-          <span :class="['inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold',
-            getAcceptability(acceptDetailStage) === 'acceptable' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
-            {{ getAcceptability(acceptDetailStage) === 'acceptable' ? '✅ Đạt' : '❌ Chưa đạt' }}
-          </span>
-        </div>
-        <div class="text-xs text-gray-500 space-y-1">
-          <div v-if="acceptDetailStage.task">📐 Hạng mục: <span class="font-semibold">{{ acceptDetailStage.task.name }}</span></div>
-          <div v-if="acceptDetailStage.created_at">📅 Ngày tạo: {{ fmtDateTime(acceptDetailStage.created_at) }}</div>
-          <div class="flex items-center gap-2">
-            <a-tag :color="acceptStatusColors[acceptDetailStage.status] || 'default'" class="rounded-full text-xs">{{ acceptStatusLabels[acceptDetailStage.status] || acceptDetailStage.status }}</a-tag>
-            
-            <span v-if="acceptDetailStage.next_action?.label" class="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1">
-              TIẾP THEO: {{ acceptDetailStage.next_action.label }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Approvers History in Detail -->
-        <div v-if="acceptDetailStage.approval_status_info?.length" class="mt-3 flex flex-wrap gap-1.5">
-          <div v-for="(info, idx) in acceptDetailStage.approval_status_info" :key="idx" 
-               class="px-2 py-1 bg-white/60 border border-white/80 rounded-lg text-[10px] shadow-sm">
-            <span class="font-bold text-gray-400 uppercase tracking-tighter">{{ info.role }}:</span>
-            <span class="font-semibold text-gray-700 ml-1">{{ info.user }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 1. Bộ tài liệu nghiệm thu (Template) -->
-      <div class="mb-5">
-        <div class="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1"><FileOutlined /> Bộ tài liệu nghiệm thu</div>
-        <a-select v-if="can('acceptance.update')" v-model:value="acceptDetailTemplateId" size="large" class="w-full mb-2" allow-clear show-search option-filter-prop="label" placeholder="Chọn bộ tài liệu nghiệm thu từ cài đặt" @change="onAcceptDetailTemplateChange">
-          <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">
-            {{ t.name }} <span v-if="t.description" class="text-gray-400 text-xs ml-1">— {{ t.description }}</span>
-          </a-select-option>
-        </a-select>
-        <div v-else-if="acceptDetailStage.acceptance_template" class="p-3 bg-gray-50 rounded-lg">
-          <div class="font-semibold text-sm">{{ acceptDetailStage.acceptance_template.name }}</div>
-          <div v-if="acceptDetailStage.acceptance_template.description" class="text-xs text-gray-500 mt-1">{{ acceptDetailStage.acceptance_template.description }}</div>
-        </div>
-        <div v-else class="text-xs text-gray-400 italic">Chưa chọn bộ tài liệu</div>
-
-        <!-- Template documents/images preview -->
-        <div v-if="acceptDetailSelectedTemplate" class="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
-          <div class="text-xs font-semibold text-blue-700 mb-1">{{ acceptDetailSelectedTemplate.name }}</div>
-          <div v-if="acceptDetailSelectedTemplate.description" class="text-xs text-blue-500">{{ acceptDetailSelectedTemplate.description }}</div>
-          <div v-if="acceptDetailSelectedTemplate.documents?.length" class="text-xs text-gray-500 mt-1">📄 {{ acceptDetailSelectedTemplate.documents.length }} tài liệu</div>
-          <div v-if="acceptDetailSelectedTemplate.images?.length" class="text-xs text-gray-500">🖼 {{ acceptDetailSelectedTemplate.images.length }} hình ảnh</div>
-        </div>
-      </div>
-
-      <!-- BEFORE / AFTER IMAGES (Giống Mobile) -->
-      <div class="mb-5">
-        <div class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1"><CameraOutlined /> Hình ảnh nghiệm thu thực tế</div>
-        <div class="grid grid-cols-2 gap-4">
-          <!-- Before column -->
-          <div class="p-3 rounded-xl bg-orange-50 border border-orange-100">
-            <div class="text-[10px] font-bold text-orange-600 uppercase mb-2">📸 Hình ảnh TRƯỚC</div>
-            <div class="space-y-2">
-              <div v-for="att in acceptDetailStage.attachments?.filter(a => a.type === 'before')" :key="att.id" class="relative group aspect-square rounded-lg overflow-hidden border border-orange-200 bg-white">
-                <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full flex items-center justify-center"><FileOutlined class="text-orange-200 text-xl" /></div>
-                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center" @click="openFilePreview(att)">
-                  <EyeOutlined class="text-white text-lg" />
-                </div>
-              </div>
-              <label :for="'upload-before-'+acceptDetailStage.id" class="block w-full py-2 border-2 border-dashed border-orange-200 rounded-lg text-center cursor-pointer hover:bg-orange-100 hover:border-orange-300 transition">
-                <PlusOutlined class="text-orange-400" />
-                <div class="text-[10px] text-orange-400 mt-1 font-semibold">Tải ảnh Trước</div>
-              </label>
-              <input :id="'upload-before-'+acceptDetailStage.id" type="file" multiple accept="image/*" class="hidden" @change="e => uploadAcceptStageFiles(e, 'before')" />
+      <div class="space-y-6 pb-32">
+        <!-- 1. Header & Status -->
+        <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div :class="['w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg', 
+              getAcceptability(acceptDetailStage) === 'acceptable' ? 'bg-emerald-500 shadow-emerald-100' : 'bg-amber-500 shadow-amber-100']">
+              <SafetyCertificateOutlined v-if="getAcceptability(acceptDetailStage) === 'acceptable'" class="text-xl" />
+              <WarningOutlined v-else class="text-xl" />
+            </div>
+            <div>
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Nghiệm thu giai đoạn</div>
+              <div class="text-lg font-bold text-gray-800 truncate max-w-[280px]">{{ acceptDetailStage.name }}</div>
             </div>
           </div>
-          <!-- After column -->
-          <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-            <div class="text-[10px] font-bold text-emerald-600 uppercase mb-2">📸 Hình ảnh SAU</div>
-            <div class="space-y-2">
-              <div v-for="att in acceptDetailStage.attachments?.filter(a => a.type === 'after')" :key="att.id" class="relative group aspect-square rounded-lg overflow-hidden border border-emerald-200 bg-white">
-                <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full flex items-center justify-center"><FileOutlined class="text-emerald-200 text-xl" /></div>
-                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center" @click="openFilePreview(att)">
-                  <EyeOutlined class="text-white text-lg" />
-                </div>
+          <a-tag :color="acceptStatusColors[acceptDetailStage.status] || 'default'" class="rounded-full px-3 py-0.5 text-[11px] font-bold">
+            {{ acceptStatusLabels[acceptDetailStage.status] || acceptDetailStage.status }}
+          </a-tag>
+        </div>
+
+        <!-- 2. Summary & Next Action -->
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">📅 Ngày tạo</div>
+              <div class="text-sm font-medium text-gray-700">{{ fmtDateTime(acceptDetailStage.created_at) }}</div>
+            </div>
+            <div v-if="acceptDetailStage.task">
+              <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">📐 Hạng mục</div>
+              <div class="text-sm font-medium text-gray-700 truncate">{{ acceptDetailStage.task.name }}</div>
+            </div>
+          </div>
+
+          <div v-if="acceptDetailStage.next_action?.label" class="p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs shadow-sm shadow-blue-200">
+              <ArrowRightOutlined />
+            </div>
+            <div>
+              <div class="text-[10px] text-blue-400 uppercase font-bold tracking-tighter">Bước tiếp theo</div>
+              <div class="text-xs font-bold text-blue-700 uppercase">{{ acceptDetailStage.next_action.label }}</div>
+            </div>
+          </div>
+
+          <!-- Approver History List (Clean) -->
+          <div v-if="acceptDetailStage.approval_status_info?.length" class="pt-2">
+            <div class="text-[10px] text-gray-300 uppercase font-bold mb-2">Nhân sự tham gia</div>
+            <div class="flex flex-wrap gap-2">
+              <div v-for="(info, idx) in acceptDetailStage.approval_status_info" :key="idx" 
+                   class="px-2 py-1 bg-gray-50 border border-gray-100 rounded-lg text-[10px] flex items-center gap-1.5">
+                <span class="font-bold text-gray-400 uppercase">{{ info.role }}:</span>
+                <span class="font-semibold text-gray-600">{{ info.user }}</span>
               </div>
-              <label :for="'upload-after-'+acceptDetailStage.id" class="block w-full py-2 border-2 border-dashed border-emerald-200 rounded-lg text-center cursor-pointer hover:bg-emerald-100 hover:border-emerald-300 transition">
-                <PlusOutlined class="text-emerald-400" />
-                <div class="text-[10px] text-emerald-400 mt-1 font-semibold">Tải ảnh Sau</div>
-              </label>
-              <input :id="'upload-after-'+acceptDetailStage.id" type="file" multiple accept="image/*" class="hidden" @change="e => uploadAcceptStageFiles(e, 'after')" />
             </div>
           </div>
         </div>
-      </div>
 
-      <div class="mb-5">
-        <div class="flex items-center justify-between mb-2">
-          <div>
-            <div class="text-sm font-bold text-gray-700 flex items-center gap-1">⚠️ Lỗi ghi nhận</div>
-            <div v-if="acceptDetailDefects?.length" class="text-xs text-gray-400 mt-0.5">
-              <span v-if="acceptDetailDefects.filter(d => d.status === 'verified').length" class="text-emerald-600">✓ {{ acceptDetailDefects.filter(d => d.status === 'verified').length }} đã xử lý</span>
-              <span v-if="acceptDetailDefects.filter(d => d.status !== 'verified').length" class="text-red-500 ml-1">⚠ {{ acceptDetailDefects.filter(d => d.status !== 'verified').length }} chưa xử lý</span>
-            </div>
+        <!-- 3. Documents & Template -->
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500">
+            <FileOutlined /> Hồ sơ nghiệm thu 
           </div>
-          <a-button v-if="can('defect.create')" type="dashed" size="small" @click="showCreateDefectInDrawer = true">
-            <PlusOutlined /> Tạo lỗi
-          </a-button>
-        </div>
+          
+          <a-select v-if="can('acceptance.update')" v-model:value="acceptDetailTemplateId" size="large" class="w-full mb-4" allow-clear show-search option-filter-prop="label" placeholder="Chọn bộ hồ sơ mẫu" @change="onAcceptDetailTemplateChange">
+            <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">
+              {{ t.name }}
+            </a-select-option>
+          </a-select>
 
-        <!-- Defects list -->
-        <div v-for="d in acceptDetailDefects" :key="d.id" class="p-3 mb-2 rounded-lg border cursor-pointer hover:shadow-sm transition" :class="d.status === 'verified' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'"
-          @click="goToDefect(d)">
-          <div class="flex items-start justify-between">
-            <div class="flex-1">
-              <div class="text-sm font-semibold" :class="d.status === 'verified' ? 'text-green-700 line-through' : 'text-red-700'">{{ d.description }}</div>
-              <div class="flex items-center gap-2 mt-1">
-                <a-tag :color="d.severity === 'high' ? 'red' : d.severity === 'low' ? 'green' : 'orange'" class="rounded-full text-[10px]">{{ { low: 'Nhẹ', medium: 'TB', high: 'Nặng' }[d.severity] || d.severity }}</a-tag>
-                <a-tag :color="{ open: 'default', in_progress: 'processing', resolved: 'blue', verified: 'success' }[d.status] || 'default'" class="rounded-full text-[10px]">{{ { open: 'Mở', in_progress: 'Đang xử lý', resolved: 'Đã sửa', verified: 'Đã xác nhận' }[d.status] || d.status }}</a-tag>
-              </div>
-              <!-- Defect attachments thumbnails -->
-              <div v-if="d.attachments?.length" class="flex gap-1 mt-2 flex-wrap">
-                <a v-for="att in d.attachments.slice(0, 4)" :key="att.id" href="#" @click.stop.prevent="openFilePreview(att)"
-                  class="w-10 h-10 rounded-md overflow-hidden border border-gray-200 hover:border-blue-400 transition">
-                  <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover" />
-                  <div v-else class="w-full h-full flex items-center justify-center bg-gray-50"><FileOutlined class="text-gray-400 text-xs" /></div>
+          <div v-if="acceptDetailSelectedTemplate" class="space-y-4">
+            <div v-if="acceptDetailSelectedTemplate.documents?.length" class="space-y-2">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">📄 Văn bản ({{ acceptDetailSelectedTemplate.documents.length }})</div>
+              <div class="grid grid-cols-1 gap-2">
+                <a v-for="doc in acceptDetailSelectedTemplate.documents" :key="doc.id" href="#" @click.prevent="openFilePreview(doc)"
+                   class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-transparent hover:border-blue-300 hover:bg-white transition-all group">
+                  <div class="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center group-hover:bg-blue-50 transition-colors">
+                    <FilePdfOutlined v-if="fileExt(doc) === 'pdf'" class="text-red-500 text-lg" />
+                    <FileOutlined v-else class="text-blue-500 text-lg" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-xs font-bold text-gray-700 truncate group-hover:text-blue-600">{{ doc.original_name || doc.file_name }}</div>
+                    <div class="text-[10px] text-gray-400">{{ formatFileSize(doc.file_size) }}</div>
+                  </div>
+                  <EyeOutlined class="text-gray-300 group-hover:text-blue-500" />
                 </a>
-                <span v-if="d.attachments.length > 4" class="w-10 h-10 rounded-md bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 border border-gray-200">+{{ d.attachments.length - 4 }}</span>
               </div>
             </div>
-            <a-tooltip title="Xem tại Module Lỗi">
-              <LinkOutlined class="text-gray-400 hover:text-blue-500 text-sm ml-2 mt-1" />
-            </a-tooltip>
+          </div>
+          <div v-else class="text-center py-4 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+            <div class="text-xs text-gray-400 italic">Chưa chọn bộ hồ sơ mẫu</div>
           </div>
         </div>
-        <a-empty v-if="!acceptDetailDefects.length" :image="null" description="Không có lỗi nào — tuyệt vời!" class="py-2" />
 
-        <!-- Inline Create Defect Form -->
-        <div v-if="showCreateDefectInDrawer" class="mt-3 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-bold text-gray-700">Tạo lỗi mới</span>
-            <a-button type="text" size="small" @click="showCreateDefectInDrawer = false"><CloseOutlined /></a-button>
+        <!-- 4. Real Photos (Before/After) -->
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-indigo-500">
+            <CameraOutlined /> Hình ảnh thực tế
           </div>
-          <a-form layout="vertical">
-            <a-form-item label="Mô tả lỗi" required><a-textarea v-model:value="newAcceptDefect.description" :rows="2" placeholder="Mô tả lỗi phát hiện..." /></a-form-item>
-            <a-row :gutter="12">
-              <a-col :span="12"><a-form-item label="Mức độ">
-                <a-radio-group v-model:value="newAcceptDefect.severity" size="small" button-style="solid">
-                  <a-radio-button value="low">Nhẹ</a-radio-button>
-                  <a-radio-button value="medium">TB</a-radio-button>
-                  <a-radio-button value="high">Nặng</a-radio-button>
-                </a-radio-group>
-              </a-form-item></a-col>
-            </a-row>
-            <!-- File upload for defect -->
-            <a-form-item label="Ảnh / Chứng từ lỗi">
-              <div class="flex items-center gap-2 flex-wrap">
-                <div v-for="(f, idx) in newAcceptDefectFiles" :key="idx" class="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-200 group">
-                  <img v-if="f.preview" :src="f.preview" class="w-full h-full object-cover" />
-                  <div v-else class="w-full h-full flex items-center justify-center bg-gray-50"><FileOutlined class="text-gray-400" /></div>
-                  <div class="absolute top-0 right-0 p-0.5 cursor-pointer opacity-0 group-hover:opacity-100 transition" @click="newAcceptDefectFiles.splice(idx, 1)">
-                    <CloseCircleOutlined class="text-red-500 text-sm bg-white rounded-full" />
+          <div class="grid grid-cols-2 gap-4">
+            <!-- Before -->
+            <div class="space-y-2">
+              <div class="text-[9px] font-bold text-orange-400 uppercase tracking-widest text-center">Hình ảnh TRƯỚC</div>
+              <div class="grid grid-cols-1 gap-2">
+                <div v-for="att in acceptDetailStage.attachments?.filter(a => a.type === 'before')" :key="att.id" 
+                     class="relative group aspect-square rounded-xl overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer shadow-sm" @click="openFilePreview(att)">
+                  <img :src="att.file_url" class="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                  <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                    <EyeOutlined class="text-white text-xl" />
                   </div>
                 </div>
-                <label for="defect-file-upload" class="w-14 h-14 rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-400 flex flex-col items-center justify-center cursor-pointer transition hover:bg-blue-50">
-                  <CameraOutlined class="text-gray-400 text-lg" />
-                  <span class="text-[8px] text-gray-400 mt-0.5">Thêm</span>
+                <label v-if="can('acceptance.approve.level_1')" :for="'up-before-'+acceptDetailStage.id" 
+                       class="aspect-square border-2 border-dashed border-orange-100 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all group">
+                  <PlusOutlined class="text-orange-300 text-xl group-hover:scale-110 transition-transform" />
+                  <span class="text-[9px] text-orange-400 font-bold uppercase mt-2">Thêm ảnh</span>
                 </label>
-                <input id="defect-file-upload" type="file" multiple accept="image/*,.pdf,.doc,.docx" class="hidden" @change="onDefectFileSelect" />
+                <input :id="'up-before-'+acceptDetailStage.id" type="file" multiple accept="image/*" class="hidden" @change="e => uploadAcceptStageFiles(e, 'before')" />
               </div>
-            </a-form-item>
-            <a-button type="primary" block @click="createDefectFromDrawer" :loading="creatingDefect">
-              <CheckOutlined /> Tạo lỗi ghi nhận
-            </a-button>
-          </a-form>
+            </div>
+            <!-- After -->
+            <div class="space-y-2">
+              <div class="text-[9px] font-bold text-emerald-400 uppercase tracking-widest text-center">Hình ảnh SAU</div>
+              <div class="grid grid-cols-1 gap-2">
+                <div v-for="att in acceptDetailStage.attachments?.filter(a => a.type === 'after')" :key="att.id" 
+                     class="relative group aspect-square rounded-xl overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer shadow-sm" @click="openFilePreview(att)">
+                  <img :src="att.file_url" class="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                  <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                    <EyeOutlined class="text-white text-xl" />
+                  </div>
+                </div>
+                <label v-if="can('acceptance.approve.level_1')" :for="'up-after-'+acceptDetailStage.id"
+                       class="aspect-square border-2 border-dashed border-emerald-100 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 transition-all group">
+                  <PlusOutlined class="text-emerald-300 text-xl group-hover:scale-110 transition-transform" />
+                  <span class="text-[9px] text-emerald-400 font-bold uppercase mt-2">Thêm ảnh</span>
+                </label>
+                <input :id="'up-after-'+acceptDetailStage.id" type="file" multiple accept="image/*" class="hidden" @change="e => uploadAcceptStageFiles(e, 'after')" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Defects with inline actions -->
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <!-- Rejected Guidance Banner -->
+          <div v-if="acceptDetailStage.status === 'rejected'" class="mb-4 p-4 bg-amber-50 rounded-2xl border border-amber-200">
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                <ExclamationCircleOutlined class="text-amber-600" />
+              </div>
+              <div>
+                <div class="text-xs font-bold text-amber-800 mb-1">Nghiệm thu bị từ chối</div>
+                <div class="text-[11px] text-amber-600 leading-relaxed">
+                  Vui lòng xử lý tất cả lỗi bên dưới. Khi hoàn tất 100%, hệ thống sẽ <strong>tự động gửi duyệt lại</strong>.
+                </div>
+                <div v-if="acceptDetailStage.rejection_reason" class="mt-2 p-2 bg-white rounded-lg border border-amber-100 text-[11px] text-amber-700 italic">
+                  💬 {{ acceptDetailStage.rejection_reason }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between mb-4">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-red-500">
+              <WarningOutlined /> Lỗi ghi nhận
+            </div>
+            <div class="flex items-center gap-3">
+              <!-- Progress indicator -->
+              <div v-if="acceptDetailDefects?.length" class="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold"
+                   :class="acceptDefectProgress.allDone ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-gray-50 text-gray-500 border border-gray-200'">
+                <CheckCircleOutlined v-if="acceptDefectProgress.allDone" />
+                {{ acceptDefectProgress.verified }}/{{ acceptDefectProgress.total }} đã xong
+              </div>
+              <a-button v-if="can('defect.create')" type="link" size="small" @click="showCreateDefectInDrawer = true" class="p-0 font-bold">+ Tạo lỗi</a-button>
+            </div>
+          </div>
+
+          <div v-if="showCreateDefectInDrawer" class="mb-4 p-4 bg-red-50 rounded-2xl border border-red-100 animate-in fade-in slide-in-from-top-2 duration-300">
+             <div class="flex justify-between items-center mb-3">
+               <span class="text-xs font-bold text-red-700">Ghi nhận lỗi mới</span>
+               <CloseOutlined class="text-xs cursor-pointer text-red-400" @click="showCreateDefectInDrawer = false" />
+             </div>
+             <a-form layout="vertical">
+               <a-form-item label="Nội dung lỗi" required class="mb-3">
+                 <a-textarea v-model:value="newAcceptDefect.description" :rows="2" placeholder="Ví dụ: Nứt tường, sơn loang..." class="rounded-lg" />
+               </a-form-item>
+               <div class="flex justify-between items-center mb-4">
+                 <div class="text-[10px] text-gray-400 font-bold uppercase">Mức độ:</div>
+                 <a-radio-group v-model:value="newAcceptDefect.severity" size="small" button-style="solid">
+                   <a-radio-button value="low">Nhẹ</a-radio-button>
+                   <a-radio-button value="medium">TB</a-radio-button>
+                   <a-radio-button value="high">Nặng</a-radio-button>
+                 </a-radio-group>
+               </div>
+               <a-button type="primary" block danger class="rounded-xl h-10 font-bold" @click="createDefectFromDrawer" :loading="creatingDefect">Tạo lỗi & Gửi yêu cầu sửa</a-button>
+             </a-form>
+          </div>
+
+          <div class="space-y-3">
+            <div v-for="d in acceptDetailDefects" :key="d.id" 
+                 :class="['p-4 rounded-2xl border transition-all', 
+                   d.status === 'verified' ? 'bg-emerald-50/50 border-emerald-100' : 
+                   d.status === 'fixed' ? 'bg-blue-50/50 border-blue-100' :
+                   d.status === 'in_progress' ? 'bg-amber-50/50 border-amber-100' : 
+                   'bg-red-50/50 border-red-100']">
+               
+               <!-- Defect Header -->
+               <div class="flex justify-between items-start mb-3">
+                  <div class="flex-1 min-w-0">
+                    <div :class="['text-sm font-bold mb-1', d.status === 'verified' ? 'text-gray-400 line-through' : 'text-gray-800']">
+                      {{ d.description }}
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                       <a-tag :color="d.severity === 'high' ? 'red' : d.severity === 'medium' ? 'orange' : 'default'" class="text-[9px] rounded-full border-0 m-0">
+                         {{ { low: 'Nhẹ', medium: 'TB', high: 'Nặng' }[d.severity] }}
+                       </a-tag>
+                       <a-tag :color="{ open: 'error', in_progress: 'warning', fixed: 'processing', verified: 'success', rejected: 'error' }[d.status]" 
+                              class="text-[9px] rounded-full border-0 m-0">
+                         {{ { open: '🔴 Mới', in_progress: '🔧 Đang sửa', fixed: '📋 Chờ xác nhận', verified: '✅ Đã xong', rejected: '❌ Chưa đạt' }[d.status] || d.status }}
+                       </a-tag>
+                    </div>
+                  </div>
+                  <!-- View detail -->
+                  <a-button type="text" size="small" class="text-gray-300 hover:text-blue-500" @click="goToDefect(d)">
+                    <EyeOutlined />
+                  </a-button>
+               </div>
+               
+               <!-- Next Action Guide -->
+               <div v-if="d.next_action?.label && d.status !== 'verified'" class="mb-3 px-3 py-2 bg-white/70 rounded-xl border border-gray-100 flex items-center gap-2">
+                 <div class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></div>
+                 <div class="text-[10px] text-gray-500">
+                   <span class="font-bold text-blue-600">{{ d.next_action.label }}</span>
+                   <span v-if="d.next_action.role"> · Vai trò: {{ d.next_action.role }}</span>
+                 </div>
+               </div>
+
+               <!-- Inline Action Buttons -->
+               <div class="flex gap-2 flex-wrap" v-if="d.status !== 'verified'">
+                  <!-- Open/Rejected → Nhận xử lý -->
+                  <a-popconfirm v-if="['open','rejected'].includes(d.status) && can('defect.update')" 
+                                title="Nhận xử lý lỗi này?" @confirm="defectAction(d, 'mark-in-progress')" ok-text="Nhận" cancel-text="Hủy">
+                    <a-button size="small" type="primary" ghost class="rounded-lg text-[11px] font-bold h-8 px-3">
+                      🔧 Nhận xử lý
+                    </a-button>
+                  </a-popconfirm>
+                  
+                  <!-- In Progress → Báo cáo đã sửa -->
+                  <a-button v-if="d.status === 'in_progress' && can('defect.update')" size="small" 
+                            class="rounded-lg text-[11px] font-bold h-8 px-3 text-green-600 border-green-300 hover:bg-green-50"
+                            @click="defectAction(d, 'mark-fixed')">
+                    ✅ Báo cáo đã sửa
+                  </a-button>
+                  
+                  <!-- Fixed → Verify / Reject -->
+                  <template v-if="d.status === 'fixed' && can('defect.update')">
+                    <a-popconfirm title="Xác nhận lỗi đã sửa xong?" @confirm="defectAction(d, 'verify')" ok-text="Xác nhận" cancel-text="Hủy">
+                      <a-button size="small" class="rounded-lg text-[11px] font-bold h-8 px-3 text-cyan-600 border-cyan-300 hover:bg-cyan-50">
+                        ✔ Xác nhận đạt
+                      </a-button>
+                    </a-popconfirm>
+                    <a-button size="small" danger ghost class="rounded-lg text-[11px] font-bold h-8 px-3" @click="openRejectDefectModal(d)">
+                      ✗ Từ chối
+                    </a-button>
+                  </template>
+               </div>
+               
+               <!-- Verified checkmark -->
+               <div v-if="d.status === 'verified'" class="flex items-center gap-2 mt-1 text-[10px] text-emerald-500 font-bold">
+                 <CheckCircleOutlined /> Đã khắc phục và xác nhận
+               </div>
+            </div>
+            <a-empty v-if="!acceptDetailDefects?.length" :image="null" description="Không có lỗi nào ghi nhận" class="py-2 text-gray-300" />
+          </div>
         </div>
       </div>
 
-      <!-- Stage Actions (Sync with List) -->
-      <div v-if="acceptDetailStage.status !== 'owner_approved'" class="p-4 bg-gray-50 rounded-2xl mb-4 border border-gray-100">
-        <div class="text-[10px] font-bold text-gray-400 uppercase mb-3 text-center tracking-widest">THAO TÁC GIAI ĐOẠN</div>
-        <div class="grid grid-cols-2 gap-3">
-          <!-- Approval Buttons based on roles -->
-          <a-button v-if="acceptDetailStage.status === 'pending' && can('acceptance.approve.level_1')" type="primary" size="large" class="rounded-xl flex-1 ac-bg-blue" @click="approveAccept(acceptDetailStage, 1)">
-            <CheckCircleOutlined /> Duyệt (GS)
-          </a-button>
-          <a-button v-if="acceptDetailStage.status === 'supervisor_approved' && can('acceptance.approve.level_2')" type="primary" size="large" class="rounded-xl flex-1 ac-bg-blue" @click="approveAccept(acceptDetailStage, 2)">
-            <CheckCircleOutlined /> Duyệt (QLDA)
-          </a-button>
-          <a-button v-if="acceptDetailStage.status === 'project_manager_approved' && can('acceptance.approve.level_3')" type="primary" size="large" class="rounded-xl flex-1 ac-bg-emerald" @click="approveAccept(acceptDetailStage, 3)">
-            <CheckCircleOutlined /> Duyệt (KH)
-          </a-button>
-          
-          <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved'].includes(acceptDetailStage.status) && (can('acceptance.approve.level_1') || can('acceptance.approve.level_2'))" danger ghost size="large" class="rounded-xl flex-1" @click="rejectAcceptDrawer">
-            <CloseCircleOutlined /> Từ chối
-          </a-button>
+      <!-- Action Footer (Standard Sticky) -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 transition-all rounded-br-2xl">
+        <div class="flex gap-2">
+           <a-button v-if="can('acceptance.update') && acceptDetailStage.status !== 'owner_approved'" 
+                     class="rounded-xl h-12 px-6 font-bold text-blue-600 bg-blue-50 border-blue-100" @click="saveAcceptDetail" :loading="savingAcceptDetail">
+             <SaveOutlined /> Cập nhật
+           </a-button>
         </div>
-      </div>
-
-      <!-- Save Button -->
-      <div v-if="can('acceptance.update') && acceptDetailStage.status !== 'owner_approved'" class="pt-4 border-t">
-        <a-button type="primary" block size="large" @click="saveAcceptDetail" :loading="savingAcceptDetail" class="rounded-xl h-12 font-bold shadow-lg shadow-blue-100">
-          <SaveOutlined /> Cập nhật thông tin
-        </a-button>
+        
+        <div class="flex gap-2">
+           <template v-if="acceptDetailStage.status !== 'owner_approved'">
+             <!-- Approval Buttons -->
+             <a-button v-if="acceptDetailStage.status === 'pending' && can('acceptance.approve.level_1')" 
+                       type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-blue-600 hover:bg-blue-700" @click="approveAccept(acceptDetailStage, 1)">
+               Duyệt (GS)
+             </a-button>
+             <a-button v-if="acceptDetailStage.status === 'supervisor_approved' && can('acceptance.approve.level_2')" 
+                       type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-blue-600 hover:bg-blue-700" @click="approveAccept(acceptDetailStage, 2)">
+               Duyệt (QLDA)
+             </a-button>
+             <a-button v-if="acceptDetailStage.status === 'project_manager_approved' && can('acceptance.approve.level_3')" 
+                       type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-emerald-600 hover:bg-emerald-700 border-emerald-600" @click="approveAccept(acceptDetailStage, 3)">
+               Duyệt (KH)
+             </a-button>
+             
+             <!-- Reject Button -->
+             <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved'].includes(acceptDetailStage.status)" 
+                       danger ghost size="large" class="rounded-xl h-12 px-6 font-bold" @click="rejectAcceptDrawer">
+               Từ chối
+             </a-button>
+           </template>
+        </div>
       </div>
     </template>
   </a-drawer>
+
 
   <!-- ==================== ACCEPT ITEM REJECT MODAL ==================== -->
   <a-modal v-model:open="showRejectAcceptItemModal" title="Từ chối hạng mục nghiệm thu" :width="480" @ok="confirmRejectAcceptItem" ok-text="Từ chối" cancel-text="Hủy"
@@ -6439,7 +6544,7 @@ const project = computed(() => {
         return contractVal + additionalVal
       }
       if (prop === 'total_paid_receivable') {
-        return payments.value.filter(p => p.status === 'confirmed').reduce((s, p) => s + Number((p.actual_amount ?? p.amount) || 0), 0)
+        return payments.value.filter(p => ['confirmed', 'paid'].includes(p.status)).reduce((s, p) => s + Number((p.actual_amount ?? p.amount) || 0), 0)
       }
 
       return target[prop]
@@ -6703,6 +6808,15 @@ watch(() => props, (newProps) => {
   if (showContractDetail.value && contractDetailRecord.value) {
     const updated = newProps.project?.contract
     if (updated) contractDetailRecord.value = updated; else showContractDetail.value = false;
+  }
+  // Sync acceptance detail drawer & its defects when props update
+  if (showAcceptDetailDrawer.value && acceptDetailStage.value) {
+    const stages = newProps.project?.acceptance_stages || newProps.project?.acceptanceStages || []
+    const updated = stages.find(x => x.id === acceptDetailStage.value.id)
+    if (updated) {
+      acceptDetailStage.value = updated
+      acceptDetailDefects.value = updated.defects || []
+    }
   }
 }, { deep: true })
 
@@ -8731,6 +8845,19 @@ const acceptDetailSelectedTemplate = computed(() => {
   return (props.acceptanceTemplates || []).find(t => t.id === acceptDetailTemplateId.value)
 })
 
+// Progress tracker for defects in acceptance drawer
+const acceptDefectProgress = computed(() => {
+  const defects = acceptDetailDefects.value || []
+  const total = defects.length
+  const verified = defects.filter(d => d.status === 'verified').length
+  return {
+    total,
+    verified,
+    allDone: total > 0 && verified === total,
+    percent: total > 0 ? Math.round((verified / total) * 100) : 0
+  }
+})
+
 const openAcceptDetailModal = (stage) => {
   acceptDetailStage.value = stage
   acceptDetailTemplateId.value = stage.acceptance_template_id || null
@@ -8784,10 +8911,13 @@ const onDefectFileSelect = (event) => {
   event.target.value = ''
 }
 
-// Navigate to defect in Defects tab
+// Navigate to defect → open defect detail drawer directly
 const goToDefect = (defect) => {
-  showAcceptDetailDrawer.value = false
-  activeTab.value = 'defects'
+  // Find the full defect record from project.defects (may have more data like attachments)
+  const fullDefect = props.project?.defects?.find(x => x.id === defect.id) || defect
+  defectDetail.value = fullDefect
+  showDefectDetailDrawer.value = true
+  // Keep acceptance drawer open so user can return
 }
 
 const saveAcceptDetail = () => {

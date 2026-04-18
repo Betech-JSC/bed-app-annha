@@ -298,152 +298,263 @@
   <!-- ─── Detail Drawer ─── -->
   <a-drawer
     :open="!!detailItem"
-    :title="detailItem?.title"
+    :title="null"
     placement="right"
-    :width="440"
+    :width="560"
     @close="detailItem = null"
+    class="crm-drawer"
+    :closable="false"
   >
     <template v-if="detailItem">
-      <div class="detail-section">
-        <div class="detail-label">Loại</div>
-        <a-tag :color="typeColors[detailItem.type] || 'default'" class="rounded-lg">{{ detailItem.type_label }}</a-tag>
-      </div>
-      <div class="detail-section">
-        <div class="detail-label">Dự án / Phân nhóm</div>
-        <div class="text-sm text-gray-700">{{ detailItem.subtitle }}</div>
+      <!-- 1. Custom Header -->
+      <div class="px-6 py-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-md z-30">
+        <div class="flex items-center gap-4">
+          <div :class="['w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg', 
+            typeColors[detailItem.type] ? `bg-${typeColors[detailItem.type]}-500 shadow-${typeColors[detailItem.type]}-100` : 'bg-blue-500 shadow-blue-100']"
+            :style="{ backgroundColor: typeColors[detailItem.type] ? null : '#1B4F72' }">
+            <SafetyCertificateOutlined v-if="detailItem.type === 'acceptance'" class="text-xl" />
+            <AuditOutlined v-else-if="detailItem.type === 'cost'" class="text-xl" />
+            <FileTextOutlined v-else class="text-xl" />
+          </div>
+          <div class="min-w-0">
+            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Yêu cầu duyệt: {{ detailItem.type_label }}</div>
+            <div class="text-lg font-bold text-gray-800 truncate max-w-[340px]">{{ detailItem.title }}</div>
+          </div>
+        </div>
+        <a-button type="text" class="flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg" @click="detailItem = null">
+          <CloseOutlined class="text-lg" />
+        </a-button>
       </div>
 
-      <!-- Approval Workflow Visualization -->
-      <div v-if="detailItem.approval_status_info" class="detail-section p-4 bg-gray-50 rounded-2xl border border-gray-100 mb-6 mt-4">
-        <div class="detail-label uppercase tracking-widest !text-[10px] text-gray-400 mb-4">Luồng phê duyệt</div>
-        <div class="space-y-4">
-          <div v-for="(step, idx) in detailItem.approval_status_info.history" :key="idx" class="flex gap-3 relative">
-            <div v-if="idx < detailItem.approval_status_info.history.length - 1 || detailItem.approval_status_info.next" 
-                 class="absolute left-[11px] top-6 bottom-[-16px] w-[2px] bg-emerald-100"></div>
-            <div class="z-10 w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm"
-                 :class="step.status === 'rejected' ? 'bg-red-500' : 'bg-emerald-500'">
-              <CheckOutlined v-if="step.status !== 'rejected'" class="text-[10px] text-white" />
-              <CloseOutlined v-else class="text-[10px] text-white" />
+      <div class="p-6 space-y-6 pb-32">
+        <!-- 2. Main Context Information -->
+        <div class="p-5 bg-gray-50/50 rounded-2xl border border-gray-100 space-y-4">
+          <div class="grid grid-cols-2 gap-x-8 gap-y-4">
+            <div>
+              <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Dự án</div>
+              <div class="text-sm font-semibold text-gray-700 truncate" :title="detailItem.subtitle">{{ detailItem.subtitle }}</div>
             </div>
-            <div class="flex-1 pb-2">
-              <div class="text-xs font-bold" :class="step.status === 'rejected' ? 'text-red-600' : 'text-emerald-700'">{{ step.label }}</div>
-              <div class="text-[11px] text-gray-600 mt-0.5">{{ step.user }} • {{ step.time }}</div>
-              <div v-if="step.note" class="mt-2 p-2 bg-white rounded-lg border border-red-50 text-[11px] text-red-500 italic">
-                Lý do: {{ step.note }}
+            <div v-if="detailItem.amount">
+              <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Số tiền</div>
+              <div class="text-base font-bold text-emerald-600">{{ formatCurrency(detailItem.amount) }}</div>
+            </div>
+            <div>
+              <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Mức ưu tiên</div>
+              <a-tag :color="{ low: 'default', medium: 'processing', high: 'warning', urgent: 'error' }[detailItem.priority]" class="rounded-full px-3 py-0 border-0 font-bold text-[10px]">
+                {{ { low: 'Thấp', medium: 'Trung bình', high: 'Cao', urgent: 'Khẩn cấp' }[detailItem.priority] || detailItem.priority }}
+              </a-tag>
+            </div>
+            <div>
+              <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Ngày tạo</div>
+              <div class="text-[11px] font-medium text-gray-500">{{ detailItem.created_at }}</div>
+            </div>
+          </div>
+
+          <div v-if="detailItem.description" class="pt-4 border-t border-gray-100">
+            <div class="text-[10px] text-gray-400 uppercase font-bold mb-2">Mô tả chi tiết</div>
+            <div class="text-xs text-gray-600 leading-relaxed bg-white/80 p-3 rounded-xl border border-gray-50">{{ detailItem.description }}</div>
+          </div>
+        </div>
+
+        <!-- 3. Approval Workflow Visualization -->
+        <div v-if="detailItem.approval_status_info" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+            <NodeIndexOutlined class="text-blue-500" /> Tiến trình phê duyệt
+          </div>
+          <div class="space-y-6 ml-2">
+            <div v-for="(step, idx) in detailItem.approval_status_info.history" :key="idx" class="flex gap-4 relative">
+              <!-- Connector line -->
+              <div v-if="idx < detailItem.approval_status_info.history.length - 1 || detailItem.approval_status_info.next" 
+                   class="absolute left-[11px] top-6 bottom-[-24px] w-[2px] bg-emerald-100"></div>
+              
+              <div class="z-10 w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm border-2 border-white"
+                   :class="step.status === 'rejected' ? 'bg-red-500' : 'bg-emerald-500'">
+                <CheckOutlined v-if="step.status !== 'rejected'" class="text-[10px] text-white" />
+                <CloseOutlined v-else class="text-[10px] text-white" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between mb-0.5">
+                  <div class="text-xs font-bold" :class="step.status === 'rejected' ? 'text-red-600' : 'text-emerald-700'">{{ step.label }}</div>
+                  <div class="text-[9px] text-gray-400 font-medium">{{ step.time }}</div>
+                </div>
+                <div class="text-[11px] text-gray-600">{{ step.user }}</div>
+                <div v-if="step.note" class="mt-2 p-2.5 bg-red-50 rounded-xl border border-red-100 text-[11px] text-red-500 italic flex gap-2">
+                  <CommentOutlined class="mt-0.5" /> <span>{{ step.note }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Next Step Indicator -->
+            <div v-if="detailItem.approval_status_info.next" class="flex gap-4 relative">
+              <div class="z-10 w-6 h-6 rounded-full bg-white border-2 border-dashed border-blue-400 flex items-center justify-center shrink-0">
+                <div class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></div>
+              </div>
+              <div class="flex-1">
+                <div class="text-xs font-bold text-blue-600 uppercase tracking-tight">{{ detailItem.approval_status_info.next.label }}</div>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-[10px] text-gray-400">Vai trò:</span>
+                  <span class="bg-blue-50 px-2 py-0.5 rounded-lg text-[10px] text-blue-600 font-bold border border-blue-100">{{ detailItem.approval_status_info.next.role }}</span>
+                </div>
               </div>
             </div>
           </div>
-          <!-- Next Step -->
-          <div v-if="detailItem.approval_status_info.next" class="flex gap-3 relative">
-            <div class="z-10 w-6 h-6 rounded-full bg-white border-2 border-dashed border-blue-400 flex items-center justify-center shrink-0">
-              <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
+        </div>
+
+        <!-- 4. Created By Profile -->
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+           <div class="flex items-center gap-4">
+             <div class="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-lg border border-orange-200">
+               {{ detailItem.created_by?.charAt(0)?.toUpperCase() }}
+             </div>
+             <div>
+               <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Người đề xuất</div>
+               <div class="text-sm font-bold text-gray-800">{{ detailItem.created_by }}</div>
+               <div class="text-[10px] text-gray-400">{{ detailItem.created_by_email }}</div>
+             </div>
+           </div>
+           <div v-if="detailItem.rejected_reason" class="max-w-[200px]">
+             <a-alert type="error" :message="`Từ chối: ${detailItem.rejected_reason}`" banner class="text-[10px] py-1 px-3 rounded-xl border-red-100" />
+           </div>
+        </div>
+
+        <!-- 5. Evidence & Comparison (FOR ACCEPTANCE & DEFECTS) -->
+        <div v-if="detailItem.type === 'acceptance' || detailItem.type === 'defect'" class="space-y-4">
+          <!-- BEFORE/AFTER Gallery -->
+          <div v-if="(detailItem.before_images?.length || detailItem.after_images?.length)" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <CameraOutlined class="text-blue-500" /> Minh chứng hình ảnh (Trước & Sau)
             </div>
-            <div class="flex-1">
-              <div class="text-xs font-bold text-blue-600">{{ detailItem.approval_status_info.next.label }}</div>
-              <div class="text-[11px] text-gray-500 mt-0.5">Vai trò: <span class="bg-blue-50 px-1.5 py-0.5 rounded text-blue-600 font-medium">{{ detailItem.approval_status_info.next.role }}</span></div>
+            
+            <div class="grid grid-cols-2 gap-4">
+              <!-- Before Column -->
+              <div class="space-y-2">
+                <div class="text-[10px] font-bold text-gray-400 uppercase text-center bg-gray-50 py-1 rounded-md">Trước khi sửa / Hiện trạng</div>
+                <div v-if="detailItem.before_images?.length" class="grid grid-cols-1 gap-2">
+                  <a-image-preview-group>
+                    <div v-for="img in detailItem.before_images" :key="img.id" class="relative group rounded-xl overflow-hidden border border-gray-100 bg-gray-50 aspect-video flex items-center justify-center">
+                      <a-image :src="img.url" class="object-cover w-full h-full" />
+                    </div>
+                  </a-image-preview-group>
+                </div>
+                <div v-else class="h-20 flex items-center justify-center border border-dashed border-gray-200 rounded-xl bg-gray-50/30">
+                  <span class="text-[10px] text-gray-300 italic">Không có ảnh</span>
+                </div>
+              </div>
+
+              <!-- After Column -->
+              <div class="space-y-2">
+                <div class="text-[10px] font-bold text-blue-500 uppercase text-center bg-blue-50 py-1 rounded-md">Sau khi sửa / Hoàn thiện</div>
+                <div v-if="detailItem.after_images?.length" class="grid grid-cols-1 gap-2">
+                  <a-image-preview-group>
+                    <div v-for="img in detailItem.after_images" :key="img.id" class="relative group rounded-xl overflow-hidden border border-blue-100 bg-blue-50 aspect-video flex items-center justify-center">
+                      <a-image :src="img.url" class="object-cover w-full h-full" />
+                    </div>
+                  </a-image-preview-group>
+                </div>
+                <div v-else class="h-20 flex items-center justify-center border border-dashed border-gray-200 rounded-xl bg-gray-50/30">
+                  <span class="text-[10px] text-gray-300 italic">Chưa có ảnh báo cáo</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Acceptance Defects List -->
+          <div v-if="detailItem.type === 'acceptance' && detailItem.defects?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <WarningOutlined class="text-orange-500" /> Danh sách lỗi & Khắc phục
+            </div>
+            <div class="space-y-3">
+              <div v-for="defect in detailItem.defects" :key="defect.id" class="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <div class="flex items-start justify-between mb-2">
+                  <div class="text-[11px] font-bold text-gray-700 flex-1">{{ defect.description }}</div>
+                  <a-tag :color="defect.status === 'verified' ? 'success' : 'warning'" class="text-[9px] rounded-full border-0 font-bold m-0">
+                    {{ defect.status === 'verified' ? 'Đã xác nhận' : 'Đang xử lý' }}
+                  </a-tag>
+                </div>
+                <!-- Mini inline images for this specific defect -->
+                <div v-if="defect.before_images?.length || defect.after_images?.length" class="flex gap-2">
+                  <div v-if="defect.before_images?.[0]" class="w-12 h-12 rounded-lg overflow-hidden border border-gray-200">
+                    <a-image :src="defect.before_images[0].url" class="object-cover h-full w-full" />
+                  </div>
+                  <div v-if="defect.after_images?.[0]" class="w-12 h-12 rounded-lg overflow-hidden border border-blue-200">
+                    <a-image :src="defect.after_images[0].url" class="object-cover h-full w-full" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        <!-- 6. Generic Attachments (Files/Documents) -->
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+              <PaperClipOutlined class="text-gray-400" /> Tài liệu & Đính kèm 
+              <span v-if="detailItem.attachments_count" class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[10px]">{{ detailItem.attachments_count }}</span>
+            </div>
+          </div>
+          
+          <div v-if="detailItem.attachments?.length" class="grid grid-cols-1 gap-2">
+            <div v-for="file in detailItem.attachments" :key="file.id" 
+               class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-transparent hover:border-blue-300 hover:bg-white transition-all group overflow-hidden">
+               
+               <!-- Preview Thumbnail for Images, Icon for others -->
+               <div class="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center shrink-0 border border-gray-100 group-hover:bg-blue-50 transition-colors overflow-hidden">
+                  <a-image v-if="file.is_image" :src="file.url" class="object-cover w-full h-full" />
+                  <template v-else>
+                    <FilePdfOutlined v-if="file.name.toLowerCase().endsWith('.pdf')" class="text-red-500 text-lg" />
+                    <FileExcelOutlined v-else-if="file.name.toLowerCase().match(/\.(xlsx|xls|csv)$/)" class="text-emerald-600 text-lg" />
+                    <FileOutlined v-else class="text-gray-400 text-lg" />
+                  </template>
+               </div>
+
+               <div class="min-w-0 flex-1">
+                  <div class="text-xs font-bold text-gray-700 truncate group-hover:text-blue-600">{{ file.name }}</div>
+                  <div class="flex items-center gap-2">
+                    <div class="text-[10px] text-gray-400 uppercase font-medium">{{ file.size || 'N/A' }}</div>
+                    <div v-if="file.description" class="text-[9px] px-1.5 py-0.5 bg-gray-200 text-gray-500 rounded font-bold uppercase">{{ file.description }}</div>
+                  </div>
+               </div>
+               
+               <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <a :href="file.url" target="_blank" class="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500">
+                    <EyeOutlined />
+                 </a>
+                 <a :href="file.url" :download="file.name" class="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-500">
+                    <DownloadOutlined />
+                 </a>
+               </div>
+            </div>
+          </div>
+          <div v-else class="p-8 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+             <div class="text-gray-300 italic text-xs">Không có tệp đính kèm</div>
+          </div>
+        </div>
+
       </div>
 
-      <div class="detail-section" v-if="detailItem.amount">
-        <div class="detail-label">Số tiền</div>
-        <div class="text-xl font-bold text-emerald-600">{{ formatCurrency(detailItem.amount) }}</div>
-      </div>
-      <div class="detail-section">
-        <div class="detail-label">Người tạo</div>
-        <div class="flex items-center gap-3">
-          <a-avatar :size="32" style="background: #1B4F72;">{{ detailItem.created_by?.charAt(0)?.toUpperCase() }}</a-avatar>
-          <div>
-            <div class="text-sm font-medium">{{ detailItem.created_by }}</div>
-            <div class="text-xs text-gray-400">{{ detailItem.created_by_email }}</div>
-          </div>
-        </div>
-      </div>
-      <div class="detail-section">
-        <div class="detail-label">Ngày tạo</div>
-        <div class="text-sm text-gray-600">{{ detailItem.created_at }}</div>
-      </div>
-      <div class="detail-section" v-if="detailItem.description">
-        <div class="detail-label">Mô tả</div>
-        <div class="text-sm text-gray-600 whitespace-pre-wrap">{{ detailItem.description }}</div>
-      </div>
-      <div class="detail-section" v-if="detailItem.priority">
-        <div class="detail-label">Mức ưu tiên</div>
-        <a-tag :color="{ low: 'default', medium: 'processing', high: 'warning', urgent: 'error' }[detailItem.priority]" class="rounded-lg">
-          {{ { low: 'Thấp', medium: 'Trung bình', high: 'Cao', urgent: 'Khẩn cấp' }[detailItem.priority] || detailItem.priority }}
-        </a-tag>
-      </div>
-      <div class="detail-section" v-if="detailItem.rejected_reason">
-        <div class="detail-label">Lý do từ chối</div>
-        <a-alert type="error" :message="detailItem.rejected_reason" show-icon class="rounded-xl" />
-      </div>
-
-      <!-- Attachments Section -->
-      <a-divider />
-      <div class="detail-section">
-        <div class="flex items-center justify-between mb-2">
-          <div class="detail-label !mb-0">Tệp chứng từ đính kèm</div>
-          <a-tag v-if="detailItem.attachments_count" color="blue" class="rounded-full">{{ detailItem.attachments_count }}</a-tag>
+      <!-- Action Footer (Sticky) -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 transition-all rounded-br-2xl">
+        <div class="flex gap-2">
+           <a-button v-if="getDetailUrl(detailItem)" 
+                     class="rounded-xl h-12 px-6 font-bold text-blue-600 bg-blue-50 border-blue-100" @click="navigateToDetail(detailItem)">
+             <EyeOutlined /> Chi tiết module
+           </a-button>
         </div>
         
-        <div v-if="detailItem.attachments && detailItem.attachments.length > 0" class="flex flex-col gap-2">
-          <a 
-            v-for="file in detailItem.attachments" 
-            :key="file.id" 
-            :href="file.url" 
-            target="_blank"
-            class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-emerald-50 border border-transparent hover:border-emerald-200 rounded-xl transition-all group"
-          >
-            <div class="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-white rounded-lg shadow-sm border border-gray-100 group-hover:border-emerald-100">
-              <FilePdfOutlined v-if="file.name.toLowerCase().endsWith('.pdf')" class="text-red-500 text-lg" />
-              <FileExcelOutlined v-else-if="file.name.toLowerCase().match(/\.(xlsx|xls|csv)$/)" class="text-emerald-600 text-lg" />
-              <FileImageOutlined v-else-if="file.name.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif)$/)" class="text-blue-500 text-lg" />
-              <PaperClipOutlined v-else class="text-gray-400 text-lg" />
-            </div>
-            <div class="flex-grow min-w-0">
-              <div class="text-sm font-medium text-gray-700 truncate group-hover:text-emerald-700">{{ file.name }}</div>
-              <div class="text-xs text-gray-400 uppercase tracking-wider">{{ file.size || 'N/A' }}</div>
-            </div>
-            <DownloadOutlined class="text-gray-300 group-hover:text-emerald-500 transition-colors" />
-          </a>
+        <div class="flex gap-3 min-w-[300px]">
+           <a-button danger block size="large" class="rounded-xl h-12 font-bold shadow-sm" @click="openRejectModal(detailItem); detailItem = null;">
+             <CloseOutlined /> Từ chối
+           </a-button>
+           <a-button type="primary" block size="large" class="rounded-xl h-12 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 border-0" 
+                     @click="handleApproveByType(detailItem); detailItem = null;">
+             <CheckOutlined /> Duyệt yêu cầu
+           </a-button>
         </div>
-        
-        <div v-else class="p-4 border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center text-center">
-          <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-2">
-            <PaperClipOutlined class="text-gray-300 text-xl" />
-          </div>
-          <div class="text-sm text-gray-400">Không có tệp đính kèm</div>
-          <div v-if="['project_cost', 'sub_payment'].includes(detailItem.type)" class="mt-2">
-            <a-alert type="warning" message="Yêu cầu tài chính bắt buộc có chứng từ" banner class="text-[10px] py-1 px-2 rounded-lg" />
-          </div>
-        </div>
-      </div>
-      <a-divider />
-      <!-- View Detail Button -->
-      <a-button
-        v-if="getDetailUrl(detailItem)"
-        block
-        size="large"
-        class="rounded-xl mb-3"
-        style="background: #F0F5FF; border-color: #ADC6FF; color: #1B4F72; font-weight: 600;"
-        @click="navigateToDetail(detailItem)"
-      >
-        <template #icon><EyeOutlined /></template>
-        Vào xem chi tiết
-      </a-button>
-      <div class="flex gap-3">
-        <a-button type="primary" block size="large" class="rounded-xl ac-btn-approve" @click="handleApproveByType(detailItem); detailItem = null;">
-          <template #icon><CheckOutlined /></template>
-          Duyệt
-        </a-button>
-        <a-button danger block size="large" class="rounded-xl" @click="openRejectModal(detailItem); detailItem = null;">
-          <template #icon><CloseOutlined /></template>
-          Từ chối
-        </a-button>
       </div>
     </template>
   </a-drawer>
+
 
   <!-- ─── Reject Modal ─── -->
   <a-modal
@@ -648,6 +759,13 @@ import {
   EyeOutlined,
   WalletOutlined,
   UserOutlined,
+  CameraOutlined,
+  WarningOutlined,
+  NodeIndexOutlined,
+  CommentOutlined,
+  AuditOutlined,
+  FileTextOutlined,
+  CreditCardOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -764,7 +882,7 @@ const statusViMap = {
   customer_approved: 'KH đã duyệt', 
   rejected: 'Từ chối',
   paid: 'Đã thanh toán', 
-  customer_paid: 'KH đã thanh toán',
+  customer_paid: 'KH báo TT',
   confirmed: 'Đã xác nhận', 
   implemented: 'Đã triển khai', 
   cancelled: 'Đã hủy',

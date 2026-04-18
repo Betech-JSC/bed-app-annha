@@ -91,7 +91,7 @@ class ProjectPayment extends Model
 
     public function getIsOverdueAttribute(): bool
     {
-        return $this->status === 'overdue' || ($this->status === 'pending' && $this->due_date < now()->toDateString());
+        return $this->status === 'overdue' || (in_array($this->status, ['draft', 'pending']) && $this->due_date < now()->toDateString());
     }
 
     public function getIsPaidAttribute(): bool
@@ -143,7 +143,7 @@ class ProjectPayment extends Model
             return false;
         }
 
-        $this->status = 'confirmed';
+        $this->status = 'paid';
         if ($user) {
             $this->confirmed_by = $user->id;
             $this->confirmed_at = now();
@@ -191,7 +191,7 @@ class ProjectPayment extends Model
      */
     public function markPaymentProofUploaded(): bool
     {
-        if ($this->status === 'pending') {
+        if (in_array($this->status, ['draft', 'pending'])) {
             $this->status = 'customer_pending_approval';
             $this->payment_proof_uploaded_at = now();
             return $this->save();
@@ -201,7 +201,7 @@ class ProjectPayment extends Model
 
     public function markAsOverdue(): bool
     {
-        if ($this->status === 'pending' && $this->due_date < now()->toDateString()) {
+        if (in_array($this->status, ['draft', 'pending']) && $this->due_date < now()->toDateString()) {
             $this->status = 'overdue';
             return $this->save();
         }
@@ -260,21 +260,21 @@ class ProjectPayment extends Model
 
     public function scopePending($query)
     {
-        return $query->where('status', 'pending');
+        return $query->whereIn('status', ['draft', 'pending']);
     }
 
     public function scopeOverdue($query)
     {
         return $query->where('status', 'overdue')
             ->orWhere(function ($q) {
-                $q->where('status', 'pending')
+                $q->whereIn('status', ['draft', 'pending'])
                     ->where('due_date', '<', now()->toDateString());
             });
     }
 
     public function scopeDueSoon($query, $days = 7)
     {
-        return $query->where('status', 'pending')
+        return $query->whereIn('status', ['draft', 'pending'])
             ->whereBetween('due_date', [now()->toDateString(), now()->addDays($days)->toDateString()]);
     }
 
@@ -334,7 +334,7 @@ class ProjectPayment extends Model
                 'priority' => 'high',
                 'category' => 'workflow_approval',
             ],
-            'confirmed' => [
+            'paid' => [
                 'title'    => 'Kế toán xác nhận thanh toán',
                 'body'     => 'Thanh toán {name} đã được kế toán xác nhận.',
                 'target'   => ['pm', 'customer'],
