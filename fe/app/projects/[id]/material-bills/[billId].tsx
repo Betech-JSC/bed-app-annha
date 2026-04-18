@@ -386,45 +386,8 @@ export default function MaterialBillDetailScreen() {
                     </PermissionGuard>
                 )}
 
-                {bill.status === 'approved' && (
-                    <PermissionGuard permission={Permissions.MATERIAL_REVERT} projectId={id}>
-                        <View style={styles.actionButtonGroup}>
-                            <TouchableOpacity
-                                style={[styles.btn, { backgroundColor: '#F59E0B' }]}
-                                onPress={() => {
-                                    Alert.alert(
-                                        "Xác nhận hoàn duyệt",
-                                        "Bạn có chắc chắn muốn đưa phiếu vật liệu này về trạng thái nháp?",
-                                        [
-                                            { text: "Hủy", style: "cancel" },
-                                            {
-                                                text: "Hoàn duyệt",
-                                                style: "destructive",
-                                                onPress: async () => {
-                                                    try {
-                                                        setSubmitting(true);
-                                                        const response = await materialBillApi.revertToDraft(id!, billId!);
-                                                        if (response.success) {
-                                                            Alert.alert("Thành công", "Đã đưa phiếu vật liệu về trạng thái nháp");
-                                                            loadBill();
-                                                        }
-                                                    } catch (error: any) {
-                                                        Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
-                                                    } finally {
-                                                        setSubmitting(false);
-                                                    }
-                                                },
-                                            },
-                                        ]
-                                    );
-                                }}
-                                disabled={submitting}
-                            >
-                                {submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>Hoàn duyệt</Text>}
-                            </TouchableOpacity>
-                        </View>
-                    </PermissionGuard>
-                )}
+
+
             </View>
 
             {/* Reject Modal */}

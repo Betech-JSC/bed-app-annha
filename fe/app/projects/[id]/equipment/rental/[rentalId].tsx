@@ -261,42 +261,8 @@ export default function RentalDetailScreen() {
                             <Text style={[styles.actionBtnText, { color: "#EF4444" }]}>Xóa Phiếu</Text>
                         </TouchableOpacity>
                     )}
-                    {(rental.status === "completed" || rental.status === "in_use") && hasPermission(Permissions.EQUIPMENT_REVERT) && (
-                        <TouchableOpacity
-                            style={[styles.actionBtn, { backgroundColor: "#F59E0B" }]}
-                            onPress={() => {
-                                Alert.alert(
-                                    "Xác nhận hoàn duyệt",
-                                    "Bạn có chắc chắn muốn đưa phiếu thuê này về trạng thái nháp?",
-                                    [
-                                        { text: "Hủy", style: "cancel" },
-                                        {
-                                            text: "Hoàn duyệt",
-                                            style: "destructive",
-                                            onPress: async () => {
-                                                try {
-                                                    setActionLoading(true);
-                                                    const response = await equipmentRentalApi.revertToDraft(id!, Number(rentalId));
-                                                    if (response.success) {
-                                                        Alert.alert("Thành công", "Đã đưa phiếu thuê về trạng thái nháp");
-                                                        loadData();
-                                                    }
-                                                } catch (e: any) {
-                                                    Alert.alert("Lỗi", e.response?.data?.message || "Không thể hoàn duyệt");
-                                                } finally {
-                                                    setActionLoading(false);
-                                                }
-                                            },
-                                        },
-                                    ]
-                                );
-                            }}
-                            disabled={actionLoading}
-                        >
-                            <Ionicons name="arrow-undo" size={18} color="#FFF" />
-                            <Text style={styles.actionBtnText}>Hoàn duyệt</Text>
-                        </TouchableOpacity>
-                    )}
+
+
                 </View>
 
                 <View style={{ height: 100 }} />

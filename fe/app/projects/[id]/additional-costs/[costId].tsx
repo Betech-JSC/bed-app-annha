@@ -470,7 +470,7 @@ export default function AdditionalCostDetailScreen() {
       )}
 
       {/* Revert Button for approved costs */}
-      {cost && (cost.status === "approved" || cost.status === "confirmed") && (
+      {cost && (cost.status === "pending_approval") && (
         <View style={styles.actionBar}>
           <PermissionGuard permission={Permissions.ADDITIONAL_COST_REVERT} projectId={id} style={{ flex: 1 }}>
             <TouchableOpacity

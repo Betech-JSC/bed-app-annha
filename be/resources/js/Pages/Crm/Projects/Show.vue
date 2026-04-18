@@ -3008,7 +3008,7 @@
           <a-button type="primary" size="small" ghost @click="openSubPaymentHistory(subDetail)"><HistoryOutlined /> TT Nhà thầu</a-button>
           <a-button type="link" @click="openSubModal(subDetail)" class="p-0 border-0 shadow-none"><EditOutlined /> Sửa thông tin</a-button>
           <a-button v-if="subDetail.progress_status === 'not_started'" type="primary" size="small" @click="approveSub(subDetail)">Bắt đầu</a-button>
-          <a-button v-if="subDetail.status === 'approved' && can('subcontractor.revert')" type="primary" size="small" ghost danger @click="revertSubcontractorAction(subDetail)">Hoàn duyệt</a-button>
+          <a-button v-if="subDetail.status === 'pending_customer_approval' && can('subcontractor.revert')" type="primary" size="small" ghost danger @click="revertSubcontractorAction(subDetail)">Hoàn duyệt</a-button>
         </div>
       </div>
 
@@ -3121,7 +3121,7 @@
           </template>
 
           <!-- Hoàn duyệt action -->
-          <a-button v-if="['pending_management_approval', 'pending_accountant_approval', 'approved_management', 'approved_accountant', 'approved'].includes(costDetailRecord.status) && can('cost.revert')"
+          <a-button v-if="['pending_management_approval', 'pending_accountant_approval', 'approved_management', 'approved_accountant'].includes(costDetailRecord.status) && can('cost.revert')"
                     class="border-orange-500 text-orange-500 hover:bg-orange-50 transition-colors" @click="revertCostAction(costDetailRecord)">
             <ReloadOutlined /> Hoàn duyệt
           </a-button>
@@ -3222,7 +3222,7 @@
             <a-button danger ghost @click="openRejectContractModal(contractDetailRecord)">Từ chối</a-button>
           </template>
           <!-- Hoàn duyệt hợp đồng -->
-          <a-button v-if="['pending_customer_approval', 'approved', 'rejected', 'confirmed', 'signed'].includes(contractDetailRecord.status) && can('contract.revert')" danger ghost @click="revertContractAction(contractDetailRecord)">Hoàn duyệt</a-button>
+          <a-button v-if="['pending_customer_approval', 'rejected'].includes(contractDetailRecord.status) && can('contract.revert')" danger ghost @click="revertContractAction(contractDetailRecord)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -3357,7 +3357,7 @@
             <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
           </template>
           <!-- Hoàn duyệt phiếu vật liệu -->
-          <a-button v-if="['pending_management', 'pending_accountant', 'approved', 'rejected'].includes(materialDetail.status) && can('material.revert')" danger ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt</a-button>
+          <a-button v-if="['pending_management', 'pending_accountant', 'rejected'].includes(materialDetail.status) && can('material.revert')" danger ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -3547,7 +3547,7 @@
             </a-tooltip>
           </template>
 
-          <template v-if="['approved', 'pending_approval'].includes(budgetDetail.status) && can('budgets.revert')">
+          <template v-if="['pending_approval'].includes(budgetDetail.status) && can('budgets.revert')">
              <a-button danger ghost @click="revertBudgetAction(budgetDetail)">Hoàn duyệt</a-button>
           </template>
 
@@ -3650,7 +3650,7 @@
             <a-button v-if="selectedRental.status === 'pending_accountant' && can('equipment.approve')" type="primary" @click="confirmRentalKT(selectedRental)"><CheckSquareOutlined /> KT Xác nhận</a-button>
             <a-button v-if="selectedRental.status === 'in_use' && can('equipment.update')" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturnRental(selectedRental)">Đánh dấu đã trả</a-button>
             <a-button v-if="selectedRental.status === 'pending_return' && can('equipment.approve')" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckSquareOutlined /> KT Xác nhận trả</a-button>
-            <a-button v-if="['pending_management', 'pending_accountant', 'in_use', 'approved'].includes(selectedRental.status) && can('equipment.revert')" danger ghost @click="revertRentalAction && revertRentalAction(selectedRental)">Hoàn duyệt</a-button>
+            <a-button v-if="['pending_management', 'pending_accountant'].includes(selectedRental.status) && can('equipment.revert')" danger ghost @click="revertRentalAction && revertRentalAction(selectedRental)">Hoàn duyệt</a-button>
             <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status) && can('equipment.approve')" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
              <template #description>
                <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
@@ -3930,7 +3930,7 @@
             <a-button danger ghost @click="openRejectACModal(additionalCostDetail)">Từ chối</a-button>
           </template>
           <!-- Hoàn duyệt -->
-          <a-button v-if="['pending_approval', 'approved'].includes(additionalCostDetail.status) && can('additional_cost.revert')"
+          <a-button v-if="['pending_approval'].includes(additionalCostDetail.status) && can('additional_cost.revert')"
                     class="border-orange-500 text-orange-500 hover:bg-orange-50 transition-colors" @click="revertACAction && revertACAction(additionalCostDetail)">
             <ReloadOutlined /> Hoàn duyệt
           </a-button>
@@ -4454,7 +4454,7 @@
         </a-tooltip>
 
         <a-button 
-          v-if="['approved', 'rejected'].includes(selectedAttendance.workflow_status) && can('attendance.revert')" 
+          v-if="['rejected'].includes(selectedAttendance.workflow_status) && can('attendance.revert')" 
           danger 
           ghost
           size="large" 
@@ -4695,7 +4695,7 @@
           </template>
 
           <!-- Hoàn duyệt: Khi đã Duyệt hoặc Chờ duyệt -->
-          <template v-if="['customer_approved', 'customer_paid', 'confirmed'].includes(paymentDetailRecord.status) && can('payment.revert')">
+          <template v-if="['pending'].includes(paymentDetailRecord.status) && can('payment.revert')">
              <a-button danger ghost @click="revertPaymentAction(paymentDetailRecord)">Hoàn duyệt</a-button>
           </template>
         </div>

@@ -100,7 +100,7 @@
               </a-popconfirm>
             </a-tooltip>
             <!-- Revert -->
-            <a-tooltip v-if="['pending_management_approval', 'pending_accountant_approval', 'approved', 'rejected'].includes(record.status)" title="Hoàn duyệt">
+            <a-tooltip v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(record.status)" title="Hoàn duyệt">
               <a-popconfirm title="Đưa chi phí này về trạng thái Nháp để chỉnh sửa?" ok-text="Đồng ý" cancel-text="Hủy" @confirm="revertCost(record.id)">
                 <a-button type="text" size="small"><UndoOutlined /></a-button>
               </a-popconfirm>

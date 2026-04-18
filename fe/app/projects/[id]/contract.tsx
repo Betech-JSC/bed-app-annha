@@ -655,47 +655,8 @@ export default function ContractScreen() {
                   </TouchableOpacity>
                 </PermissionGuard>
               )}
-            {contract && contract.status === "approved" && (
-              <PermissionGuard permission={Permissions.CONTRACT_REVERT} projectId={id}>
-                <TouchableOpacity
-                  style={[styles.button, { backgroundColor: '#F59E0B', marginTop: 8 }]}
-                  onPress={() => {
-                    Alert.alert(
-                      "Xác nhận hoàn duyệt",
-                      "Bạn có chắc chắn muốn đưa hợp đồng về trạng thái nháp?",
-                      [
-                        { text: "Hủy", style: "cancel" },
-                        {
-                          text: "Hoàn duyệt",
-                          style: "destructive",
-                          onPress: async () => {
-                            try {
-                              setActionLoading("revert");
-                              const response = await contractApi.revertToDraft(id!);
-                              if (response.success) {
-                                Alert.alert("Thành công", "Đã đưa hợp đồng về trạng thái nháp");
-                                loadContract();
-                              }
-                            } catch (error: any) {
-                              Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
-                            } finally {
-                              setActionLoading(null);
-                            }
-                          },
-                        },
-                      ]
-                    );
-                  }}
-                  disabled={actionLoading === "revert"}
-                >
-                  {actionLoading === "revert" ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Text style={styles.saveButtonText}>Hoàn duyệt</Text>
-                  )}
-                </TouchableOpacity>
-              </PermissionGuard>
-            )}
+
+
           </>
         )}
       </View>
@@ -872,50 +833,8 @@ export default function ContractScreen() {
               </PermissionGuard>
             )}
 
-            {contract && contract.status === "approved" && (
-              <PermissionGuard permission={Permissions.CONTRACT_REVERT} projectId={id}>
-                <View style={drawerStyles.sheetActions}>
-                  <TouchableOpacity
-                    style={[drawerStyles.actionBtnApprove, { backgroundColor: '#F59E0B', flex: 1 }]}
-                    onPress={() => {
-                      Alert.alert(
-                        "Xác nhận hoàn duyệt",
-                        "Bạn có chắc chắn muốn đưa hợp đồng về trạng thái nháp?",
-                        [
-                          { text: "Hủy", style: "cancel" },
-                          {
-                            text: "Hoàn duyệt",
-                            style: "destructive",
-                            onPress: async () => {
-                              try {
-                                setActionLoading("revert");
-                                const response = await contractApi.revertToDraft(id!);
-                                if (response.success) {
-                                  Alert.alert("Thành công", "Đã đưa hợp đồng về trạng thái nháp");
-                                  setShowDetailDrawer(false);
-                                  loadContract();
-                                }
-                              } catch (error: any) {
-                                Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
-                              } finally {
-                                setActionLoading(null);
-                              }
-                            },
-                          },
-                        ]
-                      );
-                    }}
-                    disabled={actionLoading === "revert"}
-                  >
-                    {actionLoading === "revert" ? (
-                      <ActivityIndicator color="#FFF" />
-                    ) : (
-                      <Text style={drawerStyles.actionBtnTextApprove}>Hoàn duyệt</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </PermissionGuard>
-            )}
+
+
 
             <TouchableOpacity style={drawerStyles.closeSheet} onPress={() => setShowDetailDrawer(false)}>
               <Text style={drawerStyles.closeSheetText}>Đóng</Text>

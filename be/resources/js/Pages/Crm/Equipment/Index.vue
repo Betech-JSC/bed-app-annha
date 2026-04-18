@@ -194,7 +194,7 @@
             </template>
             <a-button danger>Từ chối</a-button>
           </a-popconfirm>
-          <a-button v-if="['pending_management', 'pending_accountant', 'available', 'rejected'].includes(selectedItem.status)" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
+          <a-button v-if="['pending_management', 'pending_accountant', 'rejected'].includes(selectedItem.status)" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>

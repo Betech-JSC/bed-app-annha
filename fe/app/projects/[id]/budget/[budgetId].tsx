@@ -624,7 +624,7 @@ export default function BudgetDetailScreen() {
                             </TouchableOpacity>
                         )}
 
-                        {(budget.status === "approved" || budget.status === "active") && hasPermission(Permissions.BUDGET_REVERT) && (
+                        {(budget.status === "pending_approval") && hasPermission(Permissions.BUDGET_REVERT) && (
                             <TouchableOpacity
                                 style={[styles.workflowButton, { backgroundColor: '#F59E0B' }]}
                                 onPress={() => {
