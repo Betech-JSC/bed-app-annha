@@ -12,11 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('costs', function (Blueprint $table) {
-            $table->unsignedBigInteger('equipment_purchase_id')->nullable()->after('equipment_rental_id');
-            $table->unsignedBigInteger('additional_cost_id')->nullable()->after('material_bill_id');
-            
-            $table->index('equipment_purchase_id');
-            $table->index('additional_cost_id');
+            if (!Schema::hasColumn('costs', 'equipment_purchase_id')) {
+                $table->unsignedBigInteger('equipment_purchase_id')->nullable()->after('equipment_rental_id');
+                $table->index('equipment_purchase_id');
+            }
+            if (!Schema::hasColumn('costs', 'additional_cost_id')) {
+                $table->unsignedBigInteger('additional_cost_id')->nullable()->after('material_bill_id');
+                $table->index('additional_cost_id');
+            }
         });
     }
 
