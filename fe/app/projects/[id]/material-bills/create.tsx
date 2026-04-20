@@ -24,8 +24,10 @@ import UniversalFileUploader, { UploadedFile } from "@/components/UniversalFileU
 
 export default function CreateMaterialBillScreen() {
     const router = useRouter();
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, editId } = useLocalSearchParams<{ id: string; editId?: string }>();
+    const isEdit = !!editId;
     const [loading, setLoading] = useState(false);
+    const [loadingDetail, setLoadingDetail] = useState(isEdit);
 
     // Form State
     const [supplier, setSupplier] = useState<Supplier | null>(null);
@@ -119,6 +121,39 @@ export default function CreateMaterialBillScreen() {
         loadMaterials();
     }, []);
 
+    useEffect(() => {
+        if (!isEdit) return;
+        (async () => {
+            try {
+                const res = await materialBillApi.getBill(id!, editId!);
+                if (res.success && res.data) {
+                    const bill = res.data;
+                    if (bill.supplier) setSupplier(bill.supplier);
+                    if (bill.cost_group) setCostGroup(bill.cost_group);
+                    setBillNumber(bill.bill_number || "");
+                    if (bill.bill_date) setBillDate(new Date(bill.bill_date));
+                    setNotes(bill.notes || "");
+                    if (Array.isArray(bill.items)) {
+                        setItems(bill.items.map((it: any) => ({
+                            material_id: it.material_id,
+                            material: it.material,
+                            quantity: Number(it.quantity) || 0,
+                            unit_price: Number(it.unit_price) || 0,
+                            total_price: (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
+                        })));
+                    }
+                    if (Array.isArray(bill.attachments)) {
+                        setUploadedFiles(bill.attachments.map((a: any) => ({ id: a.id, attachment_id: a.id, file_url: a.file_url, file_name: a.original_name || a.file_name, original_name: a.original_name, mime_type: a.mime_type })));
+                    }
+                }
+            } catch (error: any) {
+                Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải dữ liệu.");
+            } finally {
+                setLoadingDetail(false);
+            }
+        })();
+    }, [id, editId, isEdit]);
+
     const handleSelectMaterial = (material: Material) => {
         setCurrentItem({
             ...currentItem,
@@ -207,14 +242,16 @@ export default function CreateMaterialBillScreen() {
                 attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
             };
 
-            const response = await materialBillApi.createBill(id!, payload);
+            const response = isEdit
+                ? await materialBillApi.updateBill(id!, editId!, payload)
+                : await materialBillApi.createBill(id!, payload);
             if (response.success) {
-                Alert.alert("Thành công", "Đã tạo hóa đơn vật liệu.");
+                Alert.alert("Thành công", isEdit ? "Đã cập nhật hóa đơn vật liệu." : "Đã tạo hóa đơn vật liệu.");
                 router.back();
             }
         } catch (error: any) {
-            console.error("Error creating bill:", error);
-            Alert.alert("Lỗi", error.response?.data?.message || "Không thể tạo hóa đơn.");
+            console.error("Error saving bill:", error);
+            Alert.alert("Lỗi", error.response?.data?.message || "Không thể lưu hóa đơn.");
         } finally {
             setLoading(false);
         }
@@ -222,16 +259,16 @@ export default function CreateMaterialBillScreen() {
 
     return (
         <View style={styles.container}>
-            <ScreenHeader 
-                title="Tạo Phiếu Nhập Vật Liệu" 
-                showBackButton 
+            <ScreenHeader
+                title={isEdit ? "Sửa Phiếu Nhập Vật Liệu" : "Tạo Phiếu Nhập Vật Liệu"}
+                showBackButton
                 rightComponent={
                     <TouchableOpacity
                         onPress={handleSubmit}
-                        style={[styles.headerSubmitBtn, (loading || items.length === 0) && { opacity: 0.5 }]}
-                        disabled={loading || items.length === 0}
+                        style={[styles.headerSubmitBtn, (loading || loadingDetail || items.length === 0) && { opacity: 0.5 }]}
+                        disabled={loading || loadingDetail || items.length === 0}
                     >
-                        {loading ? <ActivityIndicator size="small" color="#3B82F6" /> : <Text style={styles.headerSubmitText}>Tạo</Text>}
+                        {loading ? <ActivityIndicator size="small" color="#3B82F6" /> : <Text style={styles.headerSubmitText}>{isEdit ? "Lưu" : "Tạo"}</Text>}
                     </TouchableOpacity>
                 }
             />
@@ -419,11 +456,11 @@ export default function CreateMaterialBillScreen() {
                         <Text style={styles.totalValue}>{formatCurrency(calculateTotal())}</Text>
                     </View>
                     <TouchableOpacity
-                        style={[styles.submitBtn, (loading || items.length === 0) && styles.disabledBtn]}
+                        style={[styles.submitBtn, (loading || loadingDetail || items.length === 0) && styles.disabledBtn]}
                         onPress={handleSubmit}
-                        disabled={loading || items.length === 0}
+                        disabled={loading || loadingDetail || items.length === 0}
                     >
-                        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitBtnText}>TẠO PHIẾU NHẬP</Text>}
+                        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitBtnText}>{isEdit ? "LƯU THAY ĐỔI" : "TẠO PHIẾU NHẬP"}</Text>}
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>

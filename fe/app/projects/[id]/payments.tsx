@@ -29,7 +29,8 @@ import { Permissions } from "@/constants/Permissions";
 
 export default function PaymentsScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, editId } = useLocalSearchParams<{ id: string; editId?: string }>();
+  const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null);
   const tabBarHeight = useTabBarHeight();
   const insets = useSafeAreaInsets();
   const { hasPermission } = useProjectPermissions(id);
@@ -144,20 +145,46 @@ export default function PaymentsScreen() {
     }
 
     try {
-      const response = await paymentApi.createPayment(id!, formData);
+      const response = editingPaymentId
+        ? await paymentApi.updatePayment(id!, editingPaymentId, formData)
+        : await paymentApi.createPayment(id!, formData);
       if (response.success) {
-        Alert.alert("Thành công", "Đã tạo đợt thanh toán mới");
+        Alert.alert("Thành công", editingPaymentId ? "Đã cập nhật đợt thanh toán" : "Đã tạo đợt thanh toán mới");
         setShowCreateModal(false);
+        setEditingPaymentId(null);
         resetForm();
         loadPayments();
       }
     } catch (error: any) {
       Alert.alert(
         "Lỗi",
-        error.response?.data?.message || "Không thể tạo đợt thanh toán"
+        error.response?.data?.message || "Không thể lưu đợt thanh toán"
       );
     }
   };
+
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      try {
+        const res = await paymentApi.getPaymentById(id!, editId);
+        if (res.success && res.data) {
+          const p = res.data;
+          setEditingPaymentId(Number(p.id));
+          setFormData({
+            payment_number: Number(p.payment_number) || 1,
+            amount: Number(p.amount) || 0,
+            notes: p.notes || "",
+            due_date: p.due_date || new Date().toISOString().split("T")[0],
+            contract_id: p.contract_id,
+          });
+          setShowCreateModal(true);
+        }
+      } catch (error: any) {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải thanh toán.");
+      }
+    })();
+  }, [editId, id]);
 
   const resetForm = () => {
     const maxPaymentNumber = payments.length > 0
@@ -988,15 +1015,17 @@ export default function PaymentsScreen() {
         presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowCreateModal(false);
+          setEditingPaymentId(null);
           resetForm();
         }}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Thêm Đợt Thanh Toán</Text>
+            <Text style={styles.modalTitle}>{editingPaymentId ? "Sửa Đợt Thanh Toán" : "Thêm Đợt Thanh Toán"}</Text>
             <TouchableOpacity
               onPress={() => {
                 setShowCreateModal(false);
+                setEditingPaymentId(null);
                 resetForm();
               }}
             >
@@ -1103,6 +1132,7 @@ export default function PaymentsScreen() {
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
                   setShowCreateModal(false);
+                  setEditingPaymentId(null);
                   resetForm();
                 }}
               >
@@ -1112,7 +1142,7 @@ export default function PaymentsScreen() {
                 style={[styles.modalButton, styles.saveButton]}
                 onPress={handleCreatePayment}
               >
-                <Text style={styles.saveButtonText}>Tạo Đợt Thanh Toán</Text>
+                <Text style={styles.saveButtonText}>{editingPaymentId ? "Lưu Thay Đổi" : "Tạo Đợt Thanh Toán"}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>

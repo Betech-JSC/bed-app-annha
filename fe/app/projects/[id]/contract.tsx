@@ -739,7 +739,7 @@ export default function ContractScreen() {
               )}
 
             {contract &&
-              ["pending_customer_approval", "approved", "rejected", "confirmed", "signed"].includes(contract.status) && (
+              ["pending_customer_approval", "rejected"].includes(contract.status) && (
                 <PermissionGuard permission={Permissions.CONTRACT_REVERT} projectId={id}>
                   <TouchableOpacity
                     style={[styles.button, { backgroundColor: '#F59E0B', marginTop: 12 }]}

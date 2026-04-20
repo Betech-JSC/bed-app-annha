@@ -28,10 +28,11 @@ import { Permissions } from "@/constants/Permissions";
 
 export default function CostsScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, editId } = useLocalSearchParams<{ id: string; editId?: string }>();
   const tabBarHeight = useTabBarHeight();
   const { hasPermission, loading: permissionLoading } = useProjectPermissions(id);
   const [costs, setCosts] = useState<Cost[]>([]);
+  const [editingCostId, setEditingCostId] = useState<number | null>(null);
   const [summary, setSummary] = useState<{
     grouped?: Array<{
       category: string;
@@ -76,6 +77,31 @@ export default function CostsScreen() {
     loadCosts();
     loadSummary();
   }, [id, filterStatus, filterCategory, searchQuery]);
+
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      try {
+        const res = await costApi.getCost(id!, editId);
+        if (res.success && res.data) {
+          const c = res.data;
+          setEditingCostId(Number(c.id));
+          setFormData({
+            name: c.name || "",
+            amount: Number(c.amount) || 0,
+            description: c.description || "",
+            cost_date: c.cost_date ? new Date(c.cost_date) : new Date(),
+          });
+          if (Array.isArray(c.attachments)) {
+            setUploadedFiles(c.attachments.map((a: any) => ({ id: a.id, attachment_id: a.id, file_url: a.file_url, file_name: a.original_name || a.file_name, original_name: a.original_name, mime_type: a.mime_type })));
+          }
+          setShowCreateModal(true);
+        }
+      } catch (error: any) {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải chi phí.");
+      }
+    })();
+  }, [editId, id]);
 
   // Reload data when screen comes into focus
   useFocusEffect(
@@ -164,19 +190,22 @@ export default function CostsScreen() {
         .filter(f => f.attachment_id || f.id)
         .map(f => f.attachment_id || f.id!);
 
-      // Chi phí khác không cần cost_group_id - để null, backend sẽ tự động set category = 'other'
-      const response = await costApi.createCost(id!, {
+      const payload = {
         cost_group_id: undefined, // Không cần chọn nhóm chi phí
         name: formData.name,
         amount: formData.amount,
         description: formData.description || undefined,
         cost_date: formData.cost_date.toISOString().split("T")[0],
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
-      });
+      };
+      const response = editingCostId
+        ? await costApi.updateCost(id!, editingCostId, payload)
+        : await costApi.createCost(id!, payload);
 
       if (response.success) {
-        Alert.alert("Thành công", "Đã tạo chi phí");
+        Alert.alert("Thành công", editingCostId ? "Đã cập nhật chi phí" : "Đã tạo chi phí");
         setShowCreateModal(false);
+        setEditingCostId(null);
         resetForm();
         loadCosts();
         loadSummary();
@@ -184,7 +213,7 @@ export default function CostsScreen() {
     } catch (error: any) {
       Alert.alert(
         "Lỗi",
-        error.response?.data?.message || "Không thể tạo chi phí"
+        error.response?.data?.message || "Không thể lưu chi phí"
       );
     }
   };
@@ -721,15 +750,17 @@ export default function CostsScreen() {
         presentationStyle="fullScreen"
         onRequestClose={() => {
           setShowCreateModal(false);
+          setEditingCostId(null);
           resetForm();
         }}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Thêm Chi Phí</Text>
+            <Text style={styles.modalTitle}>{editingCostId ? "Sửa Chi Phí" : "Thêm Chi Phí"}</Text>
             <TouchableOpacity
               onPress={() => {
                 setShowCreateModal(false);
+                setEditingCostId(null);
                 resetForm();
               }}
             >

@@ -415,6 +415,18 @@ export default function PaymentDetailScreen() {
                         </View>
                     )}
 
+                    {payment.status === "draft" && (
+                        <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
+                            <TouchableOpacity
+                                style={[styles.actionButton, { backgroundColor: '#3B82F6' }]}
+                                onPress={() => router.push(`/projects/${id}/payments?editId=${paymentId}` as any)}
+                            >
+                                <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+                                <Text style={styles.actionButtonText}>Sửa</Text>
+                            </TouchableOpacity>
+                        </PermissionGuard>
+                    )}
+
                     {(payment.status === "pending" || payment.status === "overdue") && (
                         <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
                             <TouchableOpacity
@@ -456,28 +468,28 @@ export default function PaymentDetailScreen() {
                         </PermissionGuard>
                     )}
 
-                    {(payment.status === "confirmed" || payment.status === "paid") && (
+                    {["customer_approved", "customer_paid", "confirmed", "paid"].includes(payment.status) && (
                         <PermissionGuard permission={Permissions.PAYMENT_REVERT} projectId={id}>
                             <TouchableOpacity
                                 style={[styles.actionButton, { backgroundColor: '#F59E0B', shadowColor: '#F59E0B' }]}
                                 onPress={() => {
                                     Alert.alert(
-                                        "X\u00e1c nh\u1eadn ho\u00e0n duy\u1ec7t",
-                                        "B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n \u0111\u01b0a thanh to\u00e1n n\u00e0y v\u1ec1 tr\u1ea1ng th\u00e1i ch\u1edd?",
+                                        "Xác nhận hoàn duyệt",
+                                        "Bạn có chắc chắn muốn đưa thanh toán này về trạng thái nháp?",
                                         [
-                                            { text: "H\u1ee7y", style: "cancel" },
+                                            { text: "Hủy", style: "cancel" },
                                             {
-                                                text: "Ho\u00e0n duy\u1ec7t",
+                                                text: "Hoàn duyệt",
                                                 style: "destructive",
                                                 onPress: async () => {
                                                     try {
-                                                        const response = await paymentApi.revertPaymentToPending(id!, paymentId);
+                                                        const response = await paymentApi.revertPaymentToDraft(id!, paymentId);
                                                         if (response.success) {
-                                                            Alert.alert("Th\u00e0nh c\u00f4ng", "\u0110\u00e3 \u0111\u01b0a thanh to\u00e1n v\u1ec1 tr\u1ea1ng th\u00e1i ch\u1edd");
+                                                            Alert.alert("Thành công", "Đã đưa thanh toán về trạng thái nháp");
                                                             loadPaymentDetail();
                                                         }
                                                     } catch (error: any) {
-                                                        Alert.alert("L\u1ed7i", error.response?.data?.message || "Kh\u00f4ng th\u1ec3 ho\u00e0n duy\u1ec7t");
+                                                        Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
                                                     }
                                                 },
                                             },
@@ -486,7 +498,7 @@ export default function PaymentDetailScreen() {
                                 }}
                             >
                                 <Ionicons name="arrow-undo-outline" size={20} color="#FFFFFF" />
-                                <Text style={styles.actionButtonText}>Ho\u00e0n duy\u1ec7t</Text>
+                                <Text style={styles.actionButtonText}>Hoàn duyệt</Text>
                             </TouchableOpacity>
                         </PermissionGuard>
                     )}

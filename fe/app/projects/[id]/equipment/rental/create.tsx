@@ -15,8 +15,10 @@ interface SupplierOption { id: number; name: string; }
 
 export default function CreateEquipmentRentalScreen() {
     const router = useRouter();
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, editId } = useLocalSearchParams<{ id: string; editId?: string }>();
+    const isEdit = !!editId;
     const [loading, setLoading] = useState(false);
+    const [loadingDetail, setLoadingDetail] = useState(isEdit);
 
     // Form
     const [equipmentName, setEquipmentName] = useState("");
@@ -28,6 +30,32 @@ export default function CreateEquipmentRentalScreen() {
     const [unitPrice, setUnitPrice] = useState(0);
     const [notes, setNotes] = useState("");
     const [attachments, setAttachments] = useState<UploadedFile[]>([]);
+
+    useEffect(() => {
+        if (!isEdit) return;
+        (async () => {
+            try {
+                const res = await equipmentRentalApi.show(id!, Number(editId));
+                if (res.success && res.data) {
+                    const r = res.data;
+                    setEquipmentName(r.equipment_name || "");
+                    if (r.supplier) setSelectedSupplier({ id: r.supplier.id, name: r.supplier.name });
+                    if (r.rental_start_date) setStartDate(new Date(r.rental_start_date));
+                    if (r.rental_end_date) setEndDate(new Date(r.rental_end_date));
+                    setQuantity(Number(r.quantity) || 1);
+                    setUnitPrice(Number(r.unit_price) || 0);
+                    setNotes(r.notes || "");
+                    if (Array.isArray(r.attachments)) {
+                        setAttachments(r.attachments.map((a: any) => ({ id: a.id, attachment_id: a.id, file_url: a.file_url, file_name: a.original_name || a.file_name, original_name: a.original_name, mime_type: a.mime_type })));
+                    }
+                }
+            } catch (error: any) {
+                Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải dữ liệu.");
+            } finally {
+                setLoadingDetail(false);
+            }
+        })();
+    }, [id, editId, isEdit]);
 
     useEffect(() => {
         setTotalCost(quantity * unitPrice);
@@ -77,14 +105,16 @@ export default function CreateEquipmentRentalScreen() {
                     .filter((aid): aid is number => !!aid);
             }
 
-            const res = await equipmentRentalApi.create(id!, payload);
+            const res = isEdit
+                ? await equipmentRentalApi.update(id!, Number(editId), payload)
+                : await equipmentRentalApi.create(id!, payload);
             if (res.success) {
-                Alert.alert("Thành công", "Đã tạo phiếu thuê thiết bị.", [
+                Alert.alert("Thành công", isEdit ? "Đã cập nhật phiếu thuê thiết bị." : "Đã tạo phiếu thuê thiết bị.", [
                     { text: "OK", onPress: () => router.back() }
                 ]);
             }
         } catch (error: any) {
-            Alert.alert("Lỗi", error.response?.data?.message || "Không thể tạo phiếu thuê.");
+            Alert.alert("Lỗi", error.response?.data?.message || "Không thể lưu phiếu thuê.");
         } finally {
             setLoading(false);
         }
@@ -148,13 +178,13 @@ export default function CreateEquipmentRentalScreen() {
     return (
         <View style={styles.container}>
             <ScreenHeader
-                title="Tạo Phiếu Thuê Thiết Bị"
+                title={isEdit ? "Sửa Phiếu Thuê Thiết Bị" : "Tạo Phiếu Thuê Thiết Bị"}
                 showBackButton
                 rightComponent={
                     <TouchableOpacity
                         onPress={handleSubmit}
-                        style={[styles.headerBtn, (loading || !equipmentName.trim()) && { opacity: 0.5 }]}
-                        disabled={loading || !equipmentName.trim()}
+                        style={[styles.headerBtn, (loading || loadingDetail || !equipmentName.trim()) && { opacity: 0.5 }]}
+                        disabled={loading || loadingDetail || !equipmentName.trim()}
                     >
                         {loading ? <ActivityIndicator size="small" color="#3B82F6" /> : <Text style={styles.headerBtnText}>Lưu</Text>}
                     </TouchableOpacity>

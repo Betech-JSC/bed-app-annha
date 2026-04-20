@@ -249,6 +249,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Additional Costs
         Route::get('/{projectId}/additional-costs', [AdditionalCostController::class, 'index']);
         Route::post('/{projectId}/additional-costs', [AdditionalCostController::class, 'store']);
+        Route::put('/{projectId}/additional-costs/{id}', [AdditionalCostController::class, 'update']);
         Route::get('/{projectId}/additional-costs/{id}', [AdditionalCostController::class, 'show']);
         Route::post('/{projectId}/additional-costs/{id}/attach-files', [AdditionalCostController::class, 'attachFiles']);
         Route::post('/{projectId}/additional-costs/{id}/mark-paid-by-customer', [AdditionalCostController::class, 'markAsPaidByCustomer']);

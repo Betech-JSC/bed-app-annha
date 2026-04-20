@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -22,13 +22,36 @@ import { Permissions } from "@/constants/Permissions";
 
 export default function CreateAdditionalCostScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, editId } = useLocalSearchParams<{ id: string; editId?: string }>();
+  const isEdit = !!editId;
   const tabBarHeight = useTabBarHeight();
   const insets = useSafeAreaInsets();
   const [formData, setFormData] = useState({ amount: 0, description: "" });
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [attachmentIds, setAttachmentIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(isEdit);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    (async () => {
+      try {
+        const res = await additionalCostApi.getAdditionalCost(id!, editId!);
+        if (res.success && res.data) {
+          setFormData({ amount: Number(res.data.amount) || 0, description: res.data.description || "" });
+          if (Array.isArray(res.data.attachments)) {
+            const files = res.data.attachments.map((a: any) => ({ id: a.id, attachment_id: a.id, file_url: a.file_url, file_name: a.original_name || a.file_name, original_name: a.original_name, mime_type: a.mime_type }));
+            setUploadedFiles(files);
+            setAttachmentIds(res.data.attachments.map((a: any) => a.id));
+          }
+        }
+      } catch (error: any) {
+        Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải dữ liệu.");
+      } finally {
+        setLoadingDetail(false);
+      }
+    })();
+  }, [id, editId, isEdit]);
 
   const handleFilesUpload = (files: UploadedFile[]) => {
     setUploadedFiles(files);
@@ -46,14 +69,17 @@ export default function CreateAdditionalCostScreen() {
 
     try {
       setSubmitting(true);
-      const response = await additionalCostApi.createAdditionalCost(id!, {
+      const payload = {
         amount: formData.amount,
         description: formData.description,
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
-      });
+      };
+      const response = isEdit
+        ? await additionalCostApi.updateAdditionalCost(id!, editId!, payload)
+        : await additionalCostApi.createAdditionalCost(id!, payload);
 
       if (response.success) {
-        Alert.alert("Thành công", "Chi phí phát sinh đã được đề xuất.", [
+        Alert.alert("Thành công", isEdit ? "Đã cập nhật chi phí phát sinh." : "Chi phí phát sinh đã được đề xuất.", [
           { text: "OK", onPress: () => router.back() }
         ]);
       }
@@ -67,19 +93,19 @@ export default function CreateAdditionalCostScreen() {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Thêm Chi Phí Phát Sinh"
+        title={isEdit ? "Sửa Chi Phí Phát Sinh" : "Thêm Chi Phí Phát Sinh"}
         showBackButton
         rightComponent={
-          <PermissionGuard permission={Permissions.ADDITIONAL_COST_CREATE} projectId={id}>
+          <PermissionGuard permission={isEdit ? Permissions.ADDITIONAL_COST_UPDATE : Permissions.ADDITIONAL_COST_CREATE} projectId={id}>
             <TouchableOpacity
               style={styles.saveButton}
               onPress={handleSubmit}
-              disabled={submitting}
+              disabled={submitting || loadingDetail}
             >
               {submitting ? (
                 <ActivityIndicator color="#3B82F6" size="small" />
               ) : (
-                <Text style={styles.saveButtonText}>Gửi</Text>
+                <Text style={styles.saveButtonText}>{isEdit ? "Lưu" : "Gửi"}</Text>
               )}
             </TouchableOpacity>
           </PermissionGuard>

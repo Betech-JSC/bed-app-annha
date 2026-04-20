@@ -68,6 +68,12 @@ export const additionalCostApi = {
     return response.data;
   },
 
+  // Update additional cost (khi ở trạng thái nháp/pending/rejected)
+  updateAdditionalCost: async (projectId: string | number, costId: string | number, data: CreateAdditionalCostData) => {
+    const response = await api.put(`/projects/${projectId}/additional-costs/${costId}`, data);
+    return response.data;
+  },
+
   // Approve additional cost
   approveAdditionalCost: async (projectId: string | number, costId: string | number) => {
     const response = await api.post(`/projects/${projectId}/additional-costs/${costId}/approve`);

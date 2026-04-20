@@ -75,6 +75,7 @@ export default function SubcontractorsScreen() {
     reference_number: "",
     description: "",
   });
+  const [editingSubPaymentId, setEditingSubPaymentId] = useState<number | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState("");
 
@@ -1266,6 +1267,7 @@ export default function SubcontractorsScreen() {
                       style={[styles.modalButton, styles.cancelButton]}
                       onPress={() => {
                         setShowPaymentForm(false);
+                        setEditingSubPaymentId(null);
                         setPaymentFormData({
                           payment_stage: "",
                           amount: 0,
@@ -1312,9 +1314,15 @@ export default function SubcontractorsScreen() {
                             }),
                           };
 
-                          await subcontractorApi.createPayment(id!, paymentData);
-                          Alert.alert("Thành công", "Đã tạo phiếu chi");
+                          if (editingSubPaymentId) {
+                            await subcontractorApi.updatePayment(id!, editingSubPaymentId, paymentData);
+                            Alert.alert("Thành công", "Đã cập nhật phiếu chi");
+                          } else {
+                            await subcontractorApi.createPayment(id!, paymentData);
+                            Alert.alert("Thành công", "Đã tạo phiếu chi");
+                          }
                           setShowPaymentForm(false);
+                          setEditingSubPaymentId(null);
                           setPaymentFormData({
                             payment_stage: "",
                             amount: 0,
@@ -1328,12 +1336,12 @@ export default function SubcontractorsScreen() {
                         } catch (error: any) {
                           Alert.alert(
                             "Lỗi",
-                            error.response?.data?.message || "Không thể tạo phiếu chi"
+                            error.response?.data?.message || "Không thể lưu phiếu chi"
                           );
                         }
                       }}
                     >
-                      <Text style={styles.submitButtonText}>Tạo phiếu chi</Text>
+                      <Text style={styles.submitButtonText}>{editingSubPaymentId ? "Lưu thay đổi" : "Tạo phiếu chi"}</Text>
                     </TouchableOpacity>
                   </View>
                 </ScrollView>
@@ -1489,6 +1497,27 @@ export default function SubcontractorsScreen() {
                         </View>
                         <View style={styles.paymentActions}>
                           {item.status === "draft" && (
+                            <PermissionGuard permission={Permissions.SUBCONTRACTOR_PAYMENT_UPDATE} projectId={id}>
+                              <TouchableOpacity
+                                style={[styles.actionButton, { backgroundColor: '#3B82F6' }]}
+                                onPress={() => {
+                                  setEditingSubPaymentId(item.id);
+                                  setPaymentFormData({
+                                    payment_stage: item.payment_stage || "",
+                                    amount: Number(item.amount) || 0,
+                                    payment_date: item.payment_date || new Date().toISOString().split("T")[0],
+                                    payment_method: (item.payment_method as any) || "bank_transfer",
+                                    reference_number: item.reference_number || "",
+                                    description: item.description || "",
+                                  });
+                                  setShowPaymentForm(true);
+                                }}
+                              >
+                                <Text style={styles.actionButtonText}>Sửa</Text>
+                              </TouchableOpacity>
+                            </PermissionGuard>
+                          )}
+                          {item.status === "draft" && (
                             <TouchableOpacity
                               style={[styles.actionButton, styles.submitButton]}
                               onPress={async () => {
@@ -1561,35 +1590,38 @@ export default function SubcontractorsScreen() {
                               </TouchableOpacity>
                             </>
                           )}
-                          {(item.status === "pending_management_approval" || item.status === "pending_accountant_confirmation") && (
-                            <TouchableOpacity
-                              style={[styles.actionButton, { backgroundColor: '#F59E0B' }]}
-                              onPress={() => {
-                                Alert.alert(
-                                  "Hoàn duyệt phiếu chi",
-                                  "Bạn có chắc chắn muốn đưa phiếu chi này về trạng thái nháp?",
-                                  [
-                                    { text: "Hủy", style: "cancel" },
-                                    {
-                                      text: "Hoàn duyệt",
-                                      style: "destructive",
-                                      onPress: async () => {
-                                        try {
-                                          await subcontractorApi.revertPaymentToDraft(id!, item.id);
-                                          Alert.alert("Thành công", "Đã đưa phiếu chi về trạng thái nháp");
-                                          loadPayments(selectedSubcontractor!.id);
-                                          loadSubcontractors();
-                                        } catch (error: any) {
-                                          Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
+                          {["pending_management_approval", "pending_accountant_confirmation", "paid"].includes(item.status) && (
+                            <PermissionGuard permission={Permissions.SUBCONTRACTOR_PAYMENT_REVERT} projectId={id}>
+                              <TouchableOpacity
+                                style={[styles.actionButton, { backgroundColor: '#F59E0B', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+                                onPress={() => {
+                                  Alert.alert(
+                                    "Hoàn duyệt phiếu chi",
+                                    "Bạn có chắc chắn muốn đưa phiếu chi này về trạng thái nháp?",
+                                    [
+                                      { text: "Hủy", style: "cancel" },
+                                      {
+                                        text: "Hoàn duyệt",
+                                        style: "destructive",
+                                        onPress: async () => {
+                                          try {
+                                            await subcontractorApi.revertPaymentToDraft(id!, item.id);
+                                            Alert.alert("Thành công", "Đã đưa phiếu chi về trạng thái nháp");
+                                            loadPayments(selectedSubcontractor!.id);
+                                            loadSubcontractors();
+                                          } catch (error: any) {
+                                            Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt");
+                                          }
                                         }
                                       }
-                                    }
-                                  ]
-                                );
-                              }}
-                            >
-                              <Text style={styles.actionButtonText}>Hoàn duyệt</Text>
-                            </TouchableOpacity>
+                                    ]
+                                  );
+                                }}
+                              >
+                                <Ionicons name="arrow-undo-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.actionButtonText}>Hoàn duyệt</Text>
+                              </TouchableOpacity>
+                            </PermissionGuard>
                           )}
                           {item.status === "pending_accountant_confirmation" && (
                             <TouchableOpacity

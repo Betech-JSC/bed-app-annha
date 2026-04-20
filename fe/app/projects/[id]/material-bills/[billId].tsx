@@ -73,6 +73,33 @@ export default function MaterialBillDetailScreen() {
                 case 'approve_accountant':
                     response = await materialBillApi.approveAccountant(id!, billId!);
                     break;
+                case 'revert':
+                    Alert.alert(
+                        "Xác nhận hoàn duyệt",
+                        "Bạn có chắc chắn muốn đưa hóa đơn này về trạng thái nháp?",
+                        [
+                            { text: "Hủy", style: "cancel" },
+                            {
+                                text: "Hoàn duyệt",
+                                style: "destructive",
+                                onPress: async () => {
+                                    try {
+                                        setSubmitting(true);
+                                        const res = await materialBillApi.revertToDraft(id!, billId!);
+                                        if (res.success) {
+                                            Alert.alert("Thành công", res.message || "Đã đưa hóa đơn về trạng thái nháp.");
+                                            loadBill();
+                                        }
+                                    } catch (error: any) {
+                                        Alert.alert("Lỗi", error.response?.data?.message || "Không thể hoàn duyệt.");
+                                    } finally {
+                                        setSubmitting(false);
+                                    }
+                                }
+                            }
+                        ]
+                    );
+                    return;
                 case 'delete':
                     Alert.alert(
                         "Xác nhận",
@@ -329,21 +356,32 @@ export default function MaterialBillDetailScreen() {
             {/* Action Buttons */}
             <View style={[styles.actionBar, { paddingBottom: Math.max(tabBarHeight, 20) }]}>
                 {bill.status === 'draft' && (
-                    <View style={styles.actionButtonGroup}>
-                        <TouchableOpacity
-                            style={[styles.btn, styles.deleteBtn]}
-                            onPress={() => handleAction('delete')}
-                        >
-                            <Text style={styles.deleteBtnText}>Xóa</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.btn, styles.submitBtn]}
-                            onPress={() => handleAction('submit')}
-                            disabled={submitting}
-                        >
-                            {submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>Gửi duyệt</Text>}
-                        </TouchableOpacity>
-                    </View>
+                    <>
+                        <PermissionGuard permission={Permissions.MATERIAL_UPDATE} projectId={id}>
+                            <TouchableOpacity
+                                style={[styles.btn, styles.editBtn, { marginBottom: 12 }]}
+                                onPress={() => router.push(`/projects/${id}/material-bills/create?editId=${billId}` as any)}
+                            >
+                                <Ionicons name="create-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.btnText}>Sửa</Text>
+                            </TouchableOpacity>
+                        </PermissionGuard>
+                        <View style={styles.actionButtonGroup}>
+                            <TouchableOpacity
+                                style={[styles.btn, styles.deleteBtn]}
+                                onPress={() => handleAction('delete')}
+                            >
+                                <Text style={styles.deleteBtnText}>Xóa</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.btn, styles.submitBtn]}
+                                onPress={() => handleAction('submit')}
+                                disabled={submitting}
+                            >
+                                {submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>Gửi duyệt</Text>}
+                            </TouchableOpacity>
+                        </View>
+                    </>
                 )}
 
                 {bill.status === 'pending_management' && (
@@ -386,7 +424,24 @@ export default function MaterialBillDetailScreen() {
                     </PermissionGuard>
                 )}
 
-
+                {['pending_management', 'pending_accountant', 'rejected'].includes(bill.status) && (
+                    <PermissionGuard permission={Permissions.MATERIAL_REVERT} projectId={id}>
+                        <TouchableOpacity
+                            style={[styles.btn, styles.revertBtn, { marginTop: 12 }]}
+                            onPress={() => handleAction('revert')}
+                            disabled={submitting}
+                        >
+                            {submitting ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <>
+                                    <Ionicons name="arrow-undo-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                                    <Text style={styles.btnText}>Hoàn duyệt</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </PermissionGuard>
+                )}
 
             </View>
 
@@ -606,6 +661,14 @@ const styles = StyleSheet.create({
         backgroundColor: "#FFFFFF",
         borderWidth: 1,
         borderColor: "#EF4444",
+    },
+    revertBtn: {
+        backgroundColor: "#F59E0B",
+        flexDirection: "row",
+    },
+    editBtn: {
+        backgroundColor: "#3B82F6",
+        flexDirection: "row",
     },
     rejectBtnText: {
         color: "#EF4444",

@@ -469,8 +469,24 @@ export default function AdditionalCostDetailScreen() {
         </View>
       )}
 
+      {/* Edit Button for draft/pending/rejected */}
+      {cost && ["pending", "pending_approval", "rejected"].includes(cost.status) && (
+        <View style={styles.actionBar}>
+          <PermissionGuard permission={Permissions.ADDITIONAL_COST_UPDATE} projectId={id} style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#3B82F6' }]}
+              onPress={() => router.push(`/projects/${id}/additional-costs/create?editId=${costId}` as any)}
+              disabled={!!processingAction}
+            >
+              <Ionicons name="create-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.actionBtnText}>Sửa</Text>
+            </TouchableOpacity>
+          </PermissionGuard>
+        </View>
+      )}
+
       {/* Revert Button for approved costs */}
-      {cost && (cost.status === "pending_approval") && (
+      {cost && ["pending_approval", "rejected"].includes(cost.status) && (
         <View style={styles.actionBar}>
           <PermissionGuard permission={Permissions.ADDITIONAL_COST_REVERT} projectId={id} style={{ flex: 1 }}>
             <TouchableOpacity

@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AcceptanceItem, AcceptanceStage, acceptanceApi } from "@/api/acceptanceApi";
 import AcceptanceItemForm from "./AcceptanceItemForm";
 import { PermissionGuard } from "./PermissionGuard";
+import { Permissions } from "@/constants/Permissions";
 import { UniversalFileUploader } from "@/components";
 import { defectApi } from "@/api/defectApi";
 import { attachmentApi } from "@/api/attachmentApi";
@@ -1071,8 +1072,8 @@ export default function AcceptanceItemList({
                   )}
 
                   {/* Hoàn duyệt - Revert to draft */}
-                  {['submitted', 'supervisor_approved', 'project_manager_approved', 'rejected'].includes(item.workflow_status) && (
-                    <PermissionGuard permission="acceptance.revert">
+                  {['pending', 'supervisor_approved', 'project_manager_approved', 'rejected'].includes(item.workflow_status) && (
+                    <PermissionGuard permission={Permissions.ACCEPTANCE_REVERT}>
                       <TouchableOpacity
                         style={[styles.actionButton, styles.revertButton]}
                         onPress={() => handleRevertToDraft(item)}

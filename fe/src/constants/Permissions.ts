@@ -53,6 +53,7 @@ export const Permissions = {
     ACCEPTANCE_APPROVE_LEVEL_1: 'acceptance.approve.level_1',
     ACCEPTANCE_APPROVE_LEVEL_2: 'acceptance.approve.level_2',
     ACCEPTANCE_APPROVE_LEVEL_3: 'acceptance.approve.level_3',
+    ACCEPTANCE_REVERT: 'acceptance.revert',
 
     // ===================================================================
     // COST MODULE

@@ -675,6 +675,19 @@ export default function CostDetailScreen() {
       {(cost.status === "draft" || cost.status === "pending_management_approval" || cost.status === "pending_accountant_approval" || cost.status === "approved") && (
         <View style={styles.actionBar}>
           {cost.status === "draft" && (
+            <PermissionGuard permission={Permissions.COST_UPDATE} projectId={id} style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#3B82F6' }]}
+                onPress={() => router.push(`/projects/${id}/costs?editId=${costId}` as any)}
+                disabled={actionLoading}
+              >
+                <Ionicons name="create-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.actionButtonText}>Sửa</Text>
+              </TouchableOpacity>
+            </PermissionGuard>
+          )}
+
+          {cost.status === "draft" && (
             <PermissionGuard permission={Permissions.COST_SUBMIT} projectId={id} style={{ flex: 1 }}>
               <TouchableOpacity
                 style={[styles.actionButton, styles.submitButton]}
@@ -757,7 +770,7 @@ export default function CostDetailScreen() {
             </PermissionGuard>
           )}
 
-          {cost.status === "approved" && (
+          {["pending_management_approval", "pending_accountant_approval"].includes(cost.status) && (
             <PermissionGuard permission={Permissions.COST_REVERT} projectId={id} style={{ flex: 1 }}>
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: '#F59E0B' }]}

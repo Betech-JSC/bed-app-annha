@@ -192,6 +192,16 @@ export default function RentalDetailScreen() {
 
                 {/* Action Buttons */}
                 <View style={styles.actionSection}>
+                    {(rental.status === "draft" || rental.status === "rejected") && hasPermission(Permissions.EQUIPMENT_UPDATE) && (
+                        <TouchableOpacity
+                            style={[styles.actionBtn, { backgroundColor: "#3B82F6", marginBottom: 8 }]}
+                            onPress={() => router.push(`/projects/${id}/equipment/rental/create?editId=${rentalId}` as any)}
+                            disabled={actionLoading}
+                        >
+                            <Ionicons name="create-outline" size={18} color="#FFF" />
+                            <Text style={styles.actionBtnText}>Sửa</Text>
+                        </TouchableOpacity>
+                    )}
                     {(rental.status === "draft" || rental.status === "rejected") && (
                         <TouchableOpacity
                             style={[styles.actionBtn, { backgroundColor: "#3B82F6" }]}
@@ -263,14 +273,14 @@ export default function RentalDetailScreen() {
                         </TouchableOpacity>
                     )}
 
-                    {rental.status !== "draft" && hasPermission(Permissions.EQUIPMENT_REVERT) && (
+                    {["pending_management", "pending_accountant"].includes(rental.status) && hasPermission(Permissions.EQUIPMENT_REVERT) && (
                         <TouchableOpacity
                             style={[styles.actionBtn, { backgroundColor: "#F59E0B", marginTop: 12 }]}
                             onPress={() => handleAction("revert", "Bạn có chắc chắn muốn hoàn duyệt phiếu thuê này về trạng thái nháp?")}
                             disabled={actionLoading}
                         >
-                            <Ionicons name="refresh-circle" size={18} color="#FFF" />
-                            <Text style={styles.actionBtnText}>Hoàn Duyệt</Text>
+                            <Ionicons name="arrow-undo-outline" size={18} color="#FFF" />
+                            <Text style={styles.actionBtnText}>Hoàn duyệt</Text>
                         </TouchableOpacity>
                     )}
 

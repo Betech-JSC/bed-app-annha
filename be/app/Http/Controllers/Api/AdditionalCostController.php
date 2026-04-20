@@ -101,6 +101,69 @@ class AdditionalCostController extends Controller
     }
 
     /**
+     * Cập nhật chi phí phát sinh (chỉ khi đang ở trạng thái draft/pending/rejected)
+     */
+    public function update(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
+        $user = auth()->user();
+
+        if (!$this->authService->can($user, Permissions::ADDITIONAL_COST_UPDATE, $project)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền cập nhật chi phí phát sinh này.'
+            ], 403);
+        }
+
+        if (!in_array($cost->status, ['pending', 'pending_approval', 'rejected'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Chỉ có thể cập nhật khi đang chờ duyệt hoặc bị từ chối.'
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0',
+            'description' => 'required|string|max:1000',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'required|integer|exists:attachments,id',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $cost->amount = $validated['amount'];
+            $cost->description = $validated['description'];
+            if ($cost->status === 'rejected') {
+                $cost->status = 'pending_approval';
+                $cost->rejected_at = null;
+                $cost->rejected_reason = null;
+            }
+            $cost->save();
+
+            if (!empty($validated['attachment_ids'])) {
+                \App\Models\Attachment::whereIn('id', $validated['attachment_ids'])->update([
+                    'attachable_id' => $cost->id,
+                    'attachable_type' => AdditionalCost::class,
+                ]);
+            }
+
+            DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã cập nhật chi phí phát sinh.',
+                'data' => $cost->fresh(['proposer', 'approver', 'attachments'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Khách hàng đánh dấu đã thanh toán (upload chứng từ + nhập thông tin)
      */
     public function markAsPaidByCustomer(Request $request, string $projectId, string $id)
