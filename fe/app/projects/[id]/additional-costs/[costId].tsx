@@ -485,12 +485,15 @@ export default function AdditionalCostDetailScreen() {
         </View>
       )}
 
-      {/* Revert Button for approved costs */}
       {cost && ["pending_approval", "rejected"].includes(cost.status) && (
         <View style={styles.actionBar}>
           <PermissionGuard permission={Permissions.ADDITIONAL_COST_REVERT} projectId={id} style={{ flex: 1 }}>
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#F59E0B' }]}
+              style={[styles.actionButton, { 
+                backgroundColor: '#FFF7ED', 
+                borderWidth: 1, 
+                borderColor: '#F59E0B' 
+              }]}
               onPress={() => {
                 Alert.alert(
                   "Xác nhận hoàn duyệt",
@@ -521,11 +524,11 @@ export default function AdditionalCostDetailScreen() {
               disabled={!!processingAction}
             >
               {processingAction === 'revert' ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color="#F59E0B" size="small" />
               ) : (
                 <>
-                  <Ionicons name="arrow-undo-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.actionBtnText}>Hoàn duyệt</Text>
+                  <Ionicons name="reload-outline" size={18} color="#F59E0B" style={{ marginRight: 6 }} />
+                  <Text style={[styles.actionBtnText, { color: '#F59E0B' }]}>Hoàn duyệt</Text>
                 </>
               )}
             </TouchableOpacity>

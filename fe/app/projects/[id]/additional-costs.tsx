@@ -324,6 +324,22 @@ export default function AdditionalCostsScreen() {
         </View>
       )}
 
+      {/* Edit button for editable statuses */}
+      {["pending", "pending_approval", "rejected"].includes(item.status) && hasPermission(Permissions.ADDITIONAL_COST_UPDATE) && (
+        <View style={styles.actionButtonsRow}>
+          <TouchableOpacity
+            style={[styles.approveButton, { backgroundColor: '#3B82F6', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              router.push(`/projects/${id}/additional-costs/create?editId=${item.id}` as any);
+            }}
+          >
+            <Ionicons name="create-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.approveButtonText}>Sửa</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Action Buttons Row */}
       {(item.status === "pending_approval" || item.status === "pending") && hasPermission(Permissions.ADDITIONAL_COST_APPROVE) && (
         <View style={styles.actionButtonsRow}>

@@ -133,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [ApprovalCenterController::class, 'index']);
         Route::post('/quick-approve', [ApprovalCenterController::class, 'quickApprove']);
         Route::post('/quick-reject', [ApprovalCenterController::class, 'quickReject']);
+        Route::post('/quick-revert', [ApprovalCenterController::class, 'quickRevert']);
     });
 
 

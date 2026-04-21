@@ -122,6 +122,34 @@ class ApprovalCenterController extends Controller
     }
 
     /**
+     * Quick revert to draft action.
+     */
+    public function quickRevert(Request $request)
+    {
+        $request->validate([
+            'type' => 'required|string',
+            'id' => 'required|integer',
+        ]);
+
+        $user = Auth::user();
+        $type = $request->type;
+        $id = $request->id;
+
+        // Permission check
+        $permCheck = $this->checkApprovalPermission($user, $type, $id);
+        if ($permCheck !== true) return $permCheck;
+
+        $serviceType = $this->mapToServiceType($type, $id);
+
+        $result = $this->approvalActionService->revert($user, $serviceType, $id);
+
+        if ($result['success']) {
+            return response()->json(['success' => true, 'message' => $result['message']]);
+        }
+        return response()->json(['success' => false, 'message' => $result['message']], 400);
+    }
+
+    /**
      * Helper to map request type to service type.
      */
     private function mapToServiceType(string $type, int $id, bool $isReject = false): string

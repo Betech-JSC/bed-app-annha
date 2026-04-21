@@ -471,7 +471,12 @@ export default function PaymentDetailScreen() {
                     {["customer_approved", "customer_paid", "confirmed", "paid"].includes(payment.status) && (
                         <PermissionGuard permission={Permissions.PAYMENT_REVERT} projectId={id}>
                             <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: '#F59E0B', shadowColor: '#F59E0B' }]}
+                                style={[styles.actionButton, { 
+                                    backgroundColor: '#FEF2F2', 
+                                    borderWidth: 1, 
+                                    borderColor: '#EF4444',
+                                    shadowColor: 'transparent',
+                                }]}
                                 onPress={() => {
                                     Alert.alert(
                                         "Xác nhận hoàn duyệt",
@@ -497,8 +502,8 @@ export default function PaymentDetailScreen() {
                                     );
                                 }}
                             >
-                                <Ionicons name="arrow-undo-outline" size={20} color="#FFFFFF" />
-                                <Text style={styles.actionButtonText}>Hoàn duyệt</Text>
+                                <Ionicons name="reload-outline" size={20} color="#EF4444" />
+                                <Text style={[styles.actionButtonText, { color: '#EF4444' }]}>Hoàn duyệt</Text>
                             </TouchableOpacity>
                         </PermissionGuard>
                     )}

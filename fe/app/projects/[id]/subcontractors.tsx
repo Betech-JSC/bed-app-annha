@@ -1593,7 +1593,14 @@ export default function SubcontractorsScreen() {
                           {["pending_management_approval", "pending_accountant_confirmation", "paid"].includes(item.status) && (
                             <PermissionGuard permission={Permissions.SUBCONTRACTOR_PAYMENT_REVERT} projectId={id}>
                               <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: '#F59E0B', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+                                style={[styles.actionButton, { 
+                                  backgroundColor: '#FEF2F2', 
+                                  borderWidth: 1, 
+                                  borderColor: '#EF4444',
+                                  flexDirection: 'row', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center' 
+                                }]}
                                 onPress={() => {
                                   Alert.alert(
                                     "Hoàn duyệt phiếu chi",
@@ -1618,8 +1625,8 @@ export default function SubcontractorsScreen() {
                                   );
                                 }}
                               >
-                                <Ionicons name="arrow-undo-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                                <Text style={styles.actionButtonText}>Hoàn duyệt</Text>
+                                <Ionicons name="reload-outline" size={16} color="#EF4444" style={{ marginRight: 6 }} />
+                                <Text style={[styles.actionButtonText, { color: '#EF4444' }]}>Hoàn duyệt</Text>
                               </TouchableOpacity>
                             </PermissionGuard>
                           )}

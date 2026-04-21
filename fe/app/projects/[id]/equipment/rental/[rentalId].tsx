@@ -275,12 +275,17 @@ export default function RentalDetailScreen() {
 
                     {["pending_management", "pending_accountant"].includes(rental.status) && hasPermission(Permissions.EQUIPMENT_REVERT) && (
                         <TouchableOpacity
-                            style={[styles.actionBtn, { backgroundColor: "#F59E0B", marginTop: 12 }]}
+                            style={[styles.actionBtn, { 
+                                backgroundColor: '#FEF2F2', 
+                                borderWidth: 1, 
+                                borderColor: '#EF4444',
+                                marginTop: 12 
+                            }]}
                             onPress={() => handleAction("revert", "Bạn có chắc chắn muốn hoàn duyệt phiếu thuê này về trạng thái nháp?")}
                             disabled={actionLoading}
                         >
-                            <Ionicons name="arrow-undo-outline" size={18} color="#FFF" />
-                            <Text style={styles.actionBtnText}>Hoàn duyệt</Text>
+                            <Ionicons name="reload-outline" size={18} color="#EF4444" />
+                            <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Hoàn duyệt</Text>
                         </TouchableOpacity>
                     )}
 

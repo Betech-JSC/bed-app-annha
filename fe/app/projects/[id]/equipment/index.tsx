@@ -132,6 +132,20 @@ export default function EquipmentModuleScreen() {
                     <Text style={styles.footerText}>{item.creator.name}</Text>
                 </View>
             )}
+            {(item.status === "draft" || item.status === "rejected") && hasPermission(Permissions.EQUIPMENT_UPDATE) && (
+                <View style={styles.cardActionRow}>
+                    <TouchableOpacity
+                        style={styles.cardEditBtn}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${id}/equipment/rental/create?editId=${item.id}` as any);
+                        }}
+                    >
+                        <Ionicons name="create-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.cardEditBtnText}>Sửa</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
         </TouchableOpacity>
     );
 
@@ -330,6 +344,23 @@ const styles = StyleSheet.create({
         borderTopColor: "#F3F4F6",
     },
     footerText: { fontSize: 12, color: "#9CA3AF", flex: 1 },
+    cardActionRow: {
+        flexDirection: "row",
+        justifyContent: "flex-end",
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: "#F3F4F6",
+    },
+    cardEditBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#3B82F6",
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    cardEditBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
     addButton: { padding: 4 },
     emptyContainer: { alignItems: "center", justifyContent: "center", paddingVertical: 60 },
     emptyText: { fontSize: 16, color: "#9CA3AF", marginTop: 12 },

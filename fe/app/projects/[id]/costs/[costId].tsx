@@ -773,16 +773,20 @@ export default function CostDetailScreen() {
           {["pending_management_approval", "pending_accountant_approval"].includes(cost.status) && (
             <PermissionGuard permission={Permissions.COST_REVERT} projectId={id} style={{ flex: 1 }}>
               <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: '#F59E0B' }]}
+                style={[styles.actionButton, { 
+                  backgroundColor: '#FEF2F2', 
+                  borderWidth: 1, 
+                  borderColor: '#EF4444' 
+                }]}
                 onPress={handleRevertToDraft}
                 disabled={actionLoading}
               >
                 {actionLoading ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <ActivityIndicator color="#EF4444" size="small" />
                 ) : (
                   <>
-                    <Ionicons name="arrow-undo-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                    <Text style={styles.actionButtonText}>Hoàn duyệt</Text>
+                    <Ionicons name="reload-outline" size={18} color="#EF4444" style={{ marginRight: 6 }} />
+                    <Text style={[styles.actionButtonText, { color: '#EF4444' }]}>Hoàn duyệt</Text>
                   </>
                 )}
               </TouchableOpacity>

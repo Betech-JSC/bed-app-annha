@@ -427,16 +427,21 @@ export default function MaterialBillDetailScreen() {
                 {['pending_management', 'pending_accountant', 'rejected'].includes(bill.status) && (
                     <PermissionGuard permission={Permissions.MATERIAL_REVERT} projectId={id}>
                         <TouchableOpacity
-                            style={[styles.btn, styles.revertBtn, { marginTop: 12 }]}
+                            style={[styles.btn, styles.revertBtn, { 
+                                marginTop: 12,
+                                backgroundColor: '#FEF2F2',
+                                borderWidth: 1,
+                                borderColor: '#EF4444'
+                            }]}
                             onPress={() => handleAction('revert')}
                             disabled={submitting}
                         >
                             {submitting ? (
-                                <ActivityIndicator color="#FFF" />
+                                <ActivityIndicator color="#EF4444" />
                             ) : (
                                 <>
-                                    <Ionicons name="arrow-undo-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                                    <Text style={styles.btnText}>Hoàn duyệt</Text>
+                                    <Ionicons name="reload-outline" size={18} color="#EF4444" style={{ marginRight: 6 }} />
+                                    <Text style={[styles.btnText, { color: '#EF4444' }]}>Hoàn duyệt</Text>
                                 </>
                             )}
                         </TouchableOpacity>

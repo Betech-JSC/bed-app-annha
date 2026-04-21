@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Project;
 use App\Models\ProjectRisk;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;

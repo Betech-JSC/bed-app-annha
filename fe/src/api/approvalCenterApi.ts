@@ -99,4 +99,10 @@ export const approvalCenterApi = {
         const response = await api.post('/approval-center/quick-reject', { type, id, reason });
         return response.data;
     },
+
+    // Quick revert to draft
+    quickRevert: async (type: string, id: number): Promise<{ success: boolean; message: string }> => {
+        const response = await api.post('/approval-center/quick-revert', { type, id });
+        return response.data;
+    },
 };

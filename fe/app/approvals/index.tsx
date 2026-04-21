@@ -228,6 +228,36 @@ export default function ApprovalCenterScreen() {
         }
     };
 
+    const handleRevert = async (item: ApprovalItem) => {
+        Alert.alert(
+            'Hoàn duyệt',
+            `Bạn có chắc chắn muốn hoàn duyệt yêu cầu "${item.title}" về trạng thái Nháp?`,
+            [
+                { text: 'Hủy', style: 'cancel' },
+                { 
+                    text: 'Hoàn duyệt', 
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setActionLoading(item.id);
+                            const res = await approvalCenterApi.quickRevert(item.type, item.id);
+                            if (res.success) {
+                                setDetailItem(null);
+                                loadApprovals();
+                            } else {
+                                Alert.alert('Thông báo', res.message || 'Không thể hoàn duyệt yêu cầu này');
+                            }
+                        } catch (error) {
+                            Alert.alert('Lỗi', 'Đã xảy ra lỗi khi hoàn duyệt');
+                        } finally {
+                            setActionLoading(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const onRefresh = () => {
         setRefreshing(true);
         loadApprovals();
@@ -644,24 +674,41 @@ export default function ApprovalCenterScreen() {
                             )}
                         </ScrollView>
 
-                        {detailItem && statusFilter === 'pending' && (
+                        {detailItem && (
                             <View style={styles.sheetActions}>
-                                <TouchableOpacity 
-                                    style={styles.actionBtnReject}
-                                    onPress={() => setRejectModalVisible(true)}
-                                >
-                                    <Text style={styles.actionBtnTextReject}>Từ chối</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity 
-                                    style={styles.actionBtnApprove}
-                                    onPress={() => handleApprove(detailItem)}
-                                >
-                                    {actionLoading === detailItem.id ? (
-                                        <ActivityIndicator color="#FFF" />
-                                    ) : (
-                                        <Text style={styles.actionBtnTextApprove}>Phê duyệt</Text>
-                                    )}
-                                </TouchableOpacity>
+                                {detailItem.status !== 'draft' && (
+                                    <TouchableOpacity 
+                                        style={styles.actionBtnRevert}
+                                        onPress={() => handleRevert(detailItem)}
+                                        disabled={actionLoading !== null}
+                                    >
+                                        <Ionicons name="reload-outline" size={20} color="#EF4444" />
+                                        <Text style={styles.actionBtnTextRevert}>Hoàn duyệt</Text>
+                                    </TouchableOpacity>
+                                )}
+                                
+                                {statusFilter === 'pending' && (
+                                    <>
+                                        <TouchableOpacity 
+                                            style={styles.actionBtnReject}
+                                            onPress={() => setRejectModalVisible(true)}
+                                            disabled={actionLoading !== null}
+                                        >
+                                            <Text style={styles.actionBtnTextReject}>Từ chối</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity 
+                                            style={styles.actionBtnApprove}
+                                            onPress={() => handleApprove(detailItem)}
+                                            disabled={actionLoading !== null}
+                                        >
+                                            {actionLoading === detailItem.id ? (
+                                                <ActivityIndicator color="#FFF" />
+                                            ) : (
+                                                <Text style={styles.actionBtnTextApprove}>Phê duyệt</Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    </>
+                                )}
                             </View>
                         )}
                         
@@ -809,10 +856,16 @@ const styles = StyleSheet.create({
     noAttachText: { fontSize: 12, color: '#94A3B8' },
     
     sheetActions: { flexDirection: 'row', padding: 24, gap: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-    actionBtnReject: { flex: 1, paddingVertical: 16, borderRadius: 16, backgroundColor: '#FEF2F2', alignItems: 'center' },
+    actionBtnReject: { flex: 1.2, paddingVertical: 16, borderRadius: 16, backgroundColor: '#FEF2F2', alignItems: 'center' },
     actionBtnApprove: { flex: 2, paddingVertical: 16, borderRadius: 16, backgroundColor: '#10B981', alignItems: 'center' },
-    actionBtnTextReject: { color: '#EF4444', fontWeight: '800', fontSize: 15 },
+    actionBtnRevert: { 
+        flex: 1.5, paddingVertical: 16, borderRadius: 16, backgroundColor: '#FEF2F2', 
+        alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6,
+        borderWidth: 1, borderColor: '#EF4444', borderStyle: 'dashed'
+    },
+    actionBtnTextReject: { color: '#EF4444', fontWeight: '800', fontSize: 13 },
     actionBtnTextApprove: { color: '#FFF', fontWeight: '800', fontSize: 15 },
+    actionBtnTextRevert: { color: '#EF4444', fontWeight: '800', fontSize: 13 },
     
     closeSheet: { alignSelf: 'center', padding: 12 },
     closeSheetText: { color: '#94A3B8', fontWeight: '700' },

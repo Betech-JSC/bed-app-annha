@@ -106,6 +106,21 @@ export default function MaterialBillsScreen() {
                     </View>
                     <Text style={styles.totalAmount}>{formatCurrency(item.total_amount)}</Text>
                 </View>
+
+                {item.status === "draft" && hasPermission(Permissions.MATERIAL_UPDATE) && (
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity
+                            style={styles.editBtn}
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                router.push(`/projects/${id}/material-bills/create?editId=${item.id}` as any);
+                            }}
+                        >
+                            <Ionicons name="create-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                            <Text style={styles.editBtnText}>Sửa</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
             </TouchableOpacity>
         );
     };
@@ -234,6 +249,27 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "700",
         color: "#1F2937",
+    },
+    actionRow: {
+        flexDirection: "row",
+        justifyContent: "flex-end",
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: "#F3F4F6",
+    },
+    editBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#3B82F6",
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    editBtnText: {
+        color: "#FFFFFF",
+        fontSize: 13,
+        fontWeight: "600",
     },
     emptyContainer: {
         paddingTop: 100,

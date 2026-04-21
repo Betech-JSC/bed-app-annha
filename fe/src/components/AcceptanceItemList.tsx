@@ -1078,7 +1078,7 @@ export default function AcceptanceItemList({
                         style={[styles.actionButton, styles.revertButton]}
                         onPress={() => handleRevertToDraft(item)}
                       >
-                        <Ionicons name="arrow-undo-outline" size={16} color="#F59E0B" />
+                        <Ionicons name="reload-outline" size={16} color="#F59E0B" />
                         <Text style={styles.revertButtonText}>Hoàn duyệt</Text>
                       </TouchableOpacity>
                     </PermissionGuard>

@@ -477,16 +477,25 @@ export default function CostsScreen() {
 
       {/* Actions based on status */}
       {item.status === "draft" && (
-        <PermissionGuard permission={Permissions.COST_SUBMIT} projectId={id}>
-          <View style={styles.actions}>
+        <View style={styles.actions}>
+          <PermissionGuard permission={Permissions.COST_UPDATE} projectId={id}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#3B82F6', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+              onPress={() => router.push(`/projects/${id}/costs?editId=${item.id}` as any)}
+            >
+              <Ionicons name="create-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.actionButtonText}>Sửa</Text>
+            </TouchableOpacity>
+          </PermissionGuard>
+          <PermissionGuard permission={Permissions.COST_SUBMIT} projectId={id}>
             <TouchableOpacity
               style={[styles.actionButton, styles.submitButton]}
               onPress={() => handleSubmit(item.id)}
             >
               <Text style={styles.actionButtonText}>Gửi duyệt</Text>
             </TouchableOpacity>
-          </View>
-        </PermissionGuard>
+          </PermissionGuard>
+        </View>
       )}
 
       {item.status === "pending_management_approval" && (

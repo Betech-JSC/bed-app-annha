@@ -456,6 +456,117 @@ class ApprovalActionService
     }
 
     /**
+     * Unified Revert to Draft Method
+     */
+    public function revert(User $user, string $type, $id): array
+    {
+        try {
+            DB::beginTransaction();
+
+            $result = false;
+            $message = "Đã hoàn duyệt về nháp";
+
+            switch ($type) {
+                case 'management':
+                case 'accountant':
+                case 'project_cost':
+                case 'company_cost':
+                    $cost = Cost::findOrFail($id);
+                    $result = $this->financialService->revertCostToDraft($cost, $user);
+                    $message = "Đã hoàn duyệt chi phí \"{$cost->name}\"";
+                    break;
+
+                case 'additional_cost':
+                    $ac = AdditionalCost::findOrFail($id);
+                    $result = $ac->revertToDraft($user);
+                    $message = "Đã hoàn duyệt chi phí phát sinh";
+                    break;
+
+                case 'sub_payment':
+                case 'sub_payment_confirm':
+                    $p = SubcontractorPayment::findOrFail($id);
+                    $result = $this->financialService->revertSubPaymentToDraft($p, $user);
+                    $message = "Đã hoàn duyệt thanh toán NTP";
+                    break;
+
+                case 'contract':
+                    $c = Contract::findOrFail($id);
+                    $result = $c->revertToDraft($user);
+                    $message = "Đã hoàn duyệt hợp đồng";
+                    break;
+
+                case 'project_payment':
+                case 'project_payment_confirm':
+                    $p = ProjectPayment::findOrFail($id);
+                    $result = $this->financialService->revertProjectPaymentToDraft($p, $user);
+                    $message = "Đã hoàn duyệt thanh toán đợt";
+                    break;
+
+                case 'material_bill':
+                    $b = MaterialBill::findOrFail($id);
+                    $this->materialBillService->revertToDraft($b, $user);
+                    $result = true;
+                    $message = "Đã hoàn duyệt phiếu vật tư \"{$b->bill_number}\"";
+                    break;
+
+                case 'budget':
+                    $b = ProjectBudget::findOrFail($id);
+                    $this->budgetService->revertToDraft($b, $user);
+                    $result = true;
+                    $message = "Đã hoàn duyệt ngân sách";
+                    break;
+
+                case 'equipment_rental_management':
+                case 'equipment_rental_accountant':
+                case 'equipment_rental_return':
+                    $r = EquipmentRental::findOrFail($id);
+                    $result = $this->equipmentService->revertRentalToDraft($r, $user);
+                    $message = "Đã hoàn duyệt thuê thiết bị";
+                    break;
+
+                case 'asset_usage_management':
+                case 'asset_usage_accountant':
+                case 'asset_usage_return':
+                    $u = AssetUsage::findOrFail($id);
+                    $result = $this->equipmentService->revertUsageToDraft($u, $user);
+                    $message = "Đã hoàn duyệt sử dụng thiết bị";
+                    break;
+                
+                case 'acceptance_customer':
+                case 'acceptance_pm':
+                case 'acceptance_supervisor':
+                case 'acceptance':
+                    $stage = AcceptanceStage::findOrFail($id);
+                    $stage->update(['status' => 'draft']);
+                    $result = true;
+                    $message = "Đã hoàn duyệt nghiệm thu \"{$stage->name}\"";
+                    break;
+
+                default:
+                    throw new Exception("Loại cần hoàn duyệt không hợp lệ: {$type}");
+            }
+
+            if (!$result) {
+                DB::rollBack();
+                return ['success' => false, 'message' => 'Không thể hoàn duyệt yêu cầu này.'];
+            }
+
+            DB::commit();
+            Log::info("ApprovalActionService: Reverted to draft type {$type}", ['id' => $id, 'user' => $user->id]);
+
+            // Track in centralized approval if exists
+            $this->completeCentralizedApproval($type, $id, 'reverted', $user);
+
+            return ['success' => true, 'message' => $message];
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error("ApprovalActionService Revert Error: " . $e->getMessage(), ['type' => $type, 'id' => $id]);
+            return ['success' => false, 'message' => 'Lỗi hệ thống: ' . $e->getMessage()];
+        }
+    }
+
+    /**
      * Gửi thông báo kết quả duyệt (approved/rejected) cho người tạo request.
      * Áp dụng cho các loại chưa có Observer riêng.
      */

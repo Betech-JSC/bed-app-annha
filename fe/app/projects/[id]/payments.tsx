@@ -376,19 +376,26 @@ export default function PaymentsScreen() {
         )}
       </View>
 
-      {/* Trạng thái nháp: Gửi yêu cầu / Xóa */}
+      {/* Trạng thái nháp: Sửa / Gửi yêu cầu / Xóa */}
       {item.status === "draft" && (
         <PermissionGuard permission={Permissions.PAYMENT_UPDATE} projectId={id}>
           <View style={styles.actionButtonsContainer}>
             <TouchableOpacity
-              style={[styles.actionButton, styles.submitButton, { flex: 1.5, backgroundColor: "#3B82F6" }]}
+              style={[styles.actionButton, { flex: 1, backgroundColor: "#3B82F6" }]}
+              onPress={() => router.push(`/projects/${id}/payments?editId=${item.id}` as any)}
+            >
+              <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.confirmButtonText}>Sửa</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, { flex: 1.5, backgroundColor: "#10B981" }]}
               onPress={() => handleSubmitPayment(item)}
             >
               <Ionicons name="paper-plane-outline" size={20} color="#FFFFFF" />
               <Text style={styles.confirmButtonText}>Gửi yêu cầu</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionButton, styles.rejectButton, { flex: 1, backgroundColor: "#EF4444" }]}
+              style={[styles.actionButton, { flex: 1, backgroundColor: "#EF4444" }]}
               onPress={() => handleDeletePayment(item)}
             >
               <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
