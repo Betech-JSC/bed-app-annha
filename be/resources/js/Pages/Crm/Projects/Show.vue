@@ -3480,7 +3480,7 @@
       <!-- Action Footer -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
         <div class="flex gap-2">
-          <a-popconfirm v-if="['draft', 'rejected'].includes(materialDetail.status) && can('material.delete')" title="Xóa phiếu nhập này?" @confirm="deleteBill(materialDetail)">
+          <a-popconfirm v-if="['draft'].includes(materialDetail.status) && can('material.delete')" title="Xóa phiếu nhập này?" @confirm="deleteBill(materialDetail)">
             <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
           </a-popconfirm>
           <a-button v-if="(can('material.update') && ['draft', 'rejected'].includes(materialDetail.status)) || (can('material.approve.management') && materialDetail.status === 'pending_management_approval') || (can('material.approve.accountant') && materialDetail.status === 'pending_accountant_approval')" size="small" @click="openBillModal(materialDetail)"><EditOutlined /> Sửa</a-button>

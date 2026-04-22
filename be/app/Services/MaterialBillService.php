@@ -180,8 +180,8 @@ class MaterialBillService
      */
     public function delete(MaterialBill $bill): void
     {
-        if (!in_array($bill->status, ['draft', 'rejected'])) {
-            throw new \Exception('Chỉ có thể xóa phiếu ở trạng thái Nháp hoặc Từ chối.');
+        if (!in_array($bill->status, ['draft'])) {
+            throw new \Exception('Chỉ có thể xóa phiếu ở trạng thái Nháp.');
         }
 
         DB::transaction(function () use ($bill) {
