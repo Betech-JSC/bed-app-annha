@@ -130,15 +130,18 @@ class TaskProgressService
         $count = 0;
 
         foreach ($children as $child) {
-            // Recursively calculate child progress (handles nested hierarchy)
-            $childProgress = $this->calculateProgressFromLogs($child);
-            
-            // If child has children, use its calculated progress (recursive)
+            // If child has children, use recursive parent calculation
             $childChildren = ProjectTask::where('parent_id', $child->id)
                 ->whereNull('deleted_at')
                 ->count();
             if ($childChildren > 0) {
                 $childProgress = $this->calculateParentProgress($child);
+            } else {
+                // Leaf child: use MAX of log-based progress and stored progress_percentage
+                // This ensures manually-set progress (e.g., completed=100%) is respected
+                $logProgress = $this->calculateProgressFromLogs($child);
+                $storedProgress = (float) ($child->progress_percentage ?? 0);
+                $childProgress = max($logProgress, $storedProgress);
             }
             
             $totalProgress += $childProgress;
@@ -237,7 +240,7 @@ class TaskProgressService
         DB::beginTransaction();
         try {
             // Calculate progress from logs
-            $progress = $this->calculateProgressFromLogs($task);
+            $logProgress = $this->calculateProgressFromLogs($task);
             
             // If task has children, use parent calculation
             $hasChildren = ProjectTask::where('parent_id', $task->id)
@@ -245,6 +248,10 @@ class TaskProgressService
                 ->exists();
             if ($hasChildren) {
                 $progress = $this->calculateParentProgress($task);
+            } else {
+                // Leaf task: use MAX of log-based and stored (manual) progress
+                $storedProgress = (float) ($task->progress_percentage ?? 0);
+                $progress = max($logProgress, $storedProgress);
             }
 
             // Calculate status automatically
@@ -311,22 +318,46 @@ class TaskProgressService
             ->whereNull('deleted_at')
             ->get();
 
-        // Process leaf tasks first (tasks without children)
+        // Sort tasks by depth (children first) to ensure bottom-up calculation
+        // Leaf tasks (no children) first, then parents based on relationship
+        // A simple way is to calculate in multiple passes or use depth
+        
+        // For simplicity with existing code, we'll repeat the children-then-parent logic
+        // but ensure we get the project record for final recalculation.
+        $project = \App\Models\Project::with('progress')->find($projectId);
+        if (!$project) return;
+
+        // Leaf tasks (no children)
         $leafTasks = $tasks->filter(function ($task) use ($tasks) {
             return !$tasks->where('parent_id', $task->id)->count();
         });
 
         foreach ($leafTasks as $task) {
-            $this->updateTaskFromLogs($task, true);
+            // Don't update parent yet, we'll do it in bulk
+            $this->updateTaskFromLogs($task, false);
         }
 
-        // Then process parent tasks (they will use children's calculated progress)
-        $parentTasks = $tasks->filter(function ($task) use ($tasks) {
-            return $tasks->where('parent_id', $task->id)->count() > 0;
-        });
+        // Parent tasks - process all remaining tasks
+        // To handle multi-level properly, we can calculate from deepest to shallowest
+        // Or just run the updateTaskFromLogs which handles its own children
+        $parentTasks = $tasks->whereNotNull('parent_id')->merge($tasks->whereNull('parent_id'))
+            ->filter(function($t) use ($leafTasks) {
+                return !$leafTasks->contains('id', $t->id);
+            });
 
         foreach ($parentTasks as $task) {
-            $this->updateTaskFromLogs($task, true);
+            $this->updateTaskFromLogs($task, false);
+        }
+
+        // Final pass: Recalculate root tasks explicitly and trigger project overview
+        $rootTasks = $tasks->whereNull('parent_id');
+        foreach ($rootTasks as $task) {
+            $this->updateTaskFromLogs($task, false);
+        }
+
+        // Trigger project level progress recalculation
+        if ($project->progress) {
+            $project->progress->calculateOverall(true);
         }
     }
 

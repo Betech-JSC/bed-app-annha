@@ -384,6 +384,17 @@ class EquipmentService
     public function upsertUsage(array $data, ?AssetUsage $usage = null, $user = null): AssetUsage
     {
         return DB::transaction(function () use ($data, $usage, $user) {
+            // Check stock availability
+            if (isset($data['equipment_id']) && isset($data['quantity'])) {
+                $equipment = Equipment::findOrFail($data['equipment_id']);
+                $currentQty = $usage ? $usage->quantity : 0;
+                $maxAvailable = $equipment->remaining_quantity + $currentQty;
+                
+                if ($data['quantity'] > $maxAvailable) {
+                    throw new \Exception("Số lượng vượt quá tồn kho khả dụng ({$maxAvailable})");
+                }
+            }
+
             if (!$usage) {
                 $data['status'] = 'draft';
                 $data['created_by'] = $user ? $user->id : null;

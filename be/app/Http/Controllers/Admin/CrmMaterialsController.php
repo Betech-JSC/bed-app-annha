@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Material;
+use App\Models\CostGroup;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -12,7 +13,7 @@ class CrmMaterialsController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Material::query();
+        $query = Material::with('costGroup');
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -21,8 +22,8 @@ class CrmMaterialsController extends Controller
             });
         }
 
-        if ($category = $request->query('category')) {
-            $query->where('category', $category);
+        if ($costGroupId = $request->query('cost_group_id')) {
+            $query->where('cost_group_id', $costGroupId);
         }
 
         $materials = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
@@ -31,13 +32,13 @@ class CrmMaterialsController extends Controller
             'total' => Material::count(),
         ];
 
-        $categories = Material::select('category')->distinct()->whereNotNull('category')->pluck('category');
+        $costGroups = CostGroup::active()->ordered()->get(['id', 'name']);
 
         return Inertia::render('Crm/Materials/Index', [
             'materials' => $materials,
             'stats' => $stats,
-            'categories' => $categories,
-            'filters' => $request->only(['search', 'category']),
+            'costGroups' => $costGroups,
+            'filters' => $request->only(['search', 'cost_group_id']),
         ]);
     }
 
@@ -47,9 +48,8 @@ class CrmMaterialsController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50|unique:materials,code',
             'unit' => 'required|string|max:50',
-            'category' => 'nullable|string|max:100',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
             'unit_price' => 'nullable|numeric|min:0',
-
             'description' => 'nullable|string',
         ]);
 
@@ -64,9 +64,8 @@ class CrmMaterialsController extends Controller
             'name' => 'sometimes|string|max:255',
             'code' => ['sometimes', 'string', 'max:50', Rule::unique('materials', 'code')->ignore($material->id)],
             'unit' => 'sometimes|string|max:50',
-            'category' => 'nullable|string|max:100',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
             'unit_price' => 'nullable|numeric|min:0',
-
             'description' => 'nullable|string',
         ]);
 

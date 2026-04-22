@@ -20,6 +20,7 @@ class Material extends Model
         'unit',
         'description',
         'category',
+        'cost_group_id',
         'unit_price',
         'status',
     ];
@@ -40,6 +41,11 @@ class Material extends Model
     public function billItems(): HasMany
     {
         return $this->hasMany(MaterialBillItem::class);
+    }
+
+    public function costGroup(): BelongsTo
+    {
+        return $this->belongsTo(CostGroup::class);
     }
 
     // ==================================================================

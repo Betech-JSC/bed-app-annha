@@ -17,8 +17,8 @@
   <div class="crm-content-card">
     <div class="p-4 border-b border-gray-100 flex items-center gap-4 flex-wrap">
       <a-input-search v-model:value="filters.search" placeholder="Tìm vật tư..." class="max-w-xs" allow-clear @search="applyFilters" @change="debounceSearch" />
-      <a-select v-model:value="filters.category" placeholder="Danh mục" allow-clear style="width: 180px" @change="applyFilters">
-        <a-select-option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</a-select-option>
+      <a-select v-model:value="filters.cost_group_id" placeholder="Nhóm chi phí" allow-clear style="width: 180px" @change="applyFilters">
+        <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
       </a-select>
     </div>
 
@@ -26,6 +26,12 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'name'">
           <div><div class="font-semibold">{{ record.name }}</div><div class="text-xs text-gray-400">{{ record.code }}</div></div>
+        </template>
+        <template v-else-if="column.key === 'category'">
+          <span v-if="record.cost_group" class="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[11px] font-medium border border-blue-100">
+            {{ record.cost_group.name }}
+          </span>
+          <span v-else class="text-gray-400 text-xs italic">{{ record.category || '—' }}</span>
         </template>
         <template v-else-if="column.key === 'price'">{{ formatCurrency(record.unit_price) }}</template>
         <template v-else-if="column.key === 'actions'">
@@ -51,7 +57,11 @@
         <a-col :span="8"><a-form-item label="Đơn vị" required><a-input v-model:value="form.unit" placeholder="thùng, kg..." size="large" /></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Đơn giá"><a-input-number v-model:value="form.unit_price" :min="0" class="w-full" size="large" :formatter="(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
       </a-row>
-      <a-form-item label="Danh mục"><a-input v-model:value="form.category" placeholder="Xi măng, sắt thép..." size="large" /></a-form-item>
+      <a-form-item label="Nhóm chi phí (Danh mục)">
+        <a-select v-model:value="form.cost_group_id" placeholder="Chọn nhóm chi phí..." size="large" show-search option-filter-prop="label">
+          <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id" :label="g.name">{{ g.name }}</a-select-option>
+        </a-select>
+      </a-form-item>
       <a-form-item label="Mô tả"><a-textarea v-model:value="form.description" :rows="2" /></a-form-item>
     </a-form>
   </a-modal>
@@ -66,29 +76,29 @@ import StatCard from '@/Components/Crm/StatCard.vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
-const props = defineProps({ materials: Object, stats: Object, categories: Array, filters: Object })
+const props = defineProps({ materials: Object, stats: Object, costGroups: Array, filters: Object })
 
 const loading = ref(false)
 const showModal = ref(false)
 const editing = ref(null)
-const filters = ref({ search: props.filters?.search || '', category: props.filters?.category || undefined })
+const filters = ref({ search: props.filters?.search || '', cost_group_id: props.filters?.cost_group_id ? Number(props.filters.cost_group_id) : undefined })
 
 const columns = [
   { title: 'Vật tư', key: 'name', width: 250 },
   { title: 'Đơn vị', dataIndex: 'unit', width: 100 },
-  { title: 'Danh mục', dataIndex: 'category', width: 140 },
+  { title: 'Danh mục', key: 'category', width: 140 },
   { title: 'Đơn giá', key: 'price', align: 'right', width: 150 },
   { title: '', key: 'actions', width: 100, align: 'center' },
 ]
 
 let searchTimeout = null
 const debounceSearch = () => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => applyFilters(), 400) }
-const applyFilters = () => { loading.value = true; router.get('/materials', { search: filters.value.search || undefined, category: filters.value.category || undefined }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
+const applyFilters = () => { loading.value = true; router.get('/materials', { search: filters.value.search || undefined, cost_group_id: filters.value.cost_group_id || undefined }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
 const handleTableChange = (p) => { loading.value = true; router.get('/materials', { page: p.current, ...filters.value }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
 
-const form = useForm({ name: '', code: '', unit: '', category: '', unit_price: null, description: '' })
+const form = useForm({ name: '', code: '', unit: '', cost_group_id: null, unit_price: null, description: '' })
 const openCreateModal = () => { editing.value = null; form.reset(); showModal.value = true }
-const openEditModal = (m) => { editing.value = m; Object.assign(form, { name: m.name, code: m.code || '', unit: m.unit, category: m.category || '', unit_price: m.unit_price, description: m.description || '' }); showModal.value = true }
+const openEditModal = (m) => { editing.value = m; Object.assign(form, { name: m.name, code: m.code || '', unit: m.unit, cost_group_id: m.cost_group_id, unit_price: m.unit_price, description: m.description || '' }); showModal.value = true }
 const handleSubmit = () => {
   if (editing.value) router.put(`/materials/${editing.value.id}`, form.data(), { onSuccess: () => { showModal.value = false; resetForm() } })
   else router.post('/materials', form.data(), { onSuccess: () => { showModal.value = false; resetForm() } })

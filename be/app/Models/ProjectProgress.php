@@ -264,30 +264,24 @@ class ProjectProgress extends Model
             return (float) $this->overall_percentage;
         }
 
-        // === ƯU TIÊN 1: Nghiệm thu ===
-        $acceptanceProgress = $this->calculateFromAcceptance();
-        if ($acceptanceProgress !== null) {
-            $finalProgress = $acceptanceProgress;
-            $this->autoCompleteProject($finalProgress);
-            return (float) $this->overall_percentage;
-        }
+        // === Tính toán các nguồn ===
+        $acceptanceProgress    = $this->calculateFromAcceptance() ?? 0.0;
+        $taskProgress          = $this->calculateFromTasks() ?? 0.0;
+        $logProgress           = $this->calculateFromLogs() ?? 0.0;
+        $subcontractorProgress = $this->calculateFromSubcontractors() ?? 0.0;
 
-        // === ƯU TIÊN 2: WBS Tasks ===
-        $taskProgress = $this->calculateFromTasks();
-        if ($taskProgress !== null) {
-            $finalProgress = $taskProgress;
-            $this->autoCompleteProject($finalProgress);
-            return (float) $this->overall_percentage;
-        }
+        // Lấy giá trị lớn nhất từ tất cả các nguồn để đảm bảo tiến độ luôn phản ánh mức độ thực hiện cao nhất
+        $finalProgress = max($acceptanceProgress, $taskProgress, $logProgress, $subcontractorProgress);
 
-        // === ƯU TIÊN 3+4: Nhật ký & Nhà thầu — lấy giá trị lớn hơn ===
-        $logProgress           = $this->calculateFromLogs();
-        $subcontractorProgress = $this->calculateFromSubcontractors();
-        $finalProgress         = max($logProgress, $subcontractorProgress);
+        $this->overall_percentage = round($finalProgress, 2);
+        
+        // Xác định nguồn cho metadata (ưu tiên theo giá trị lớn nhất)
+        if ($finalProgress == $acceptanceProgress && $acceptanceProgress > 0) $this->calculated_from = 'acceptance';
+        elseif ($finalProgress == $taskProgress && $taskProgress > 0) $this->calculated_from = 'tasks';
+        elseif ($finalProgress == $logProgress && $logProgress > 0) $this->calculated_from = 'logs';
+        elseif ($finalProgress == $subcontractorProgress && $subcontractorProgress > 0) $this->calculated_from = 'subcontractors';
+        else $this->calculated_from = 'average';
 
-        $this->overall_percentage = $finalProgress;
-        $this->calculated_from    = ($logProgress > 0 && $subcontractorProgress > 0) ? 'mixed'
-            : ($logProgress > 0 ? 'logs' : ($subcontractorProgress > 0 ? 'subcontractors' : 'manual'));
         $this->last_calculated_at = now();
         $this->save();
 

@@ -354,7 +354,7 @@
                     <td class="text-center py-2 px-3 text-xs">{{ task.assigned_user?.name || '—' }}</td>
                     <td class="text-center py-2 px-3" @click.stop>
                       <div class="flex gap-1 justify-center">
-                        <a-tooltip v-if="!task.children?.length && can('log.create')" title="Ghi nhật ký">
+                        <a-tooltip v-if="!task.children?.length && can('log.create') && parseFloat(task.progress_percentage || 0) < 100" title="Ghi nhật ký">
                           <a-button type="text" size="small" @click.stop="openLogModal(null, task.id)" class="text-blue-500 hover:bg-blue-50"><FileAddOutlined /></a-button>
                         </a-tooltip>
                         <a-tooltip title="Sửa"><a-button type="text" size="small" @click.stop="openTaskModal(task)"><EditOutlined /></a-button></a-tooltip>
@@ -389,7 +389,7 @@
                         <td class="text-center py-2 px-3 text-xs">{{ child.assigned_user?.name || '—' }}</td>
                         <td class="text-center py-2 px-3" @click.stop>
                           <div class="flex gap-1 justify-center">
-                            <a-tooltip v-if="!child.children?.length && can('log.create')" title="Ghi nhật ký">
+                            <a-tooltip v-if="!child.children?.length && can('log.create') && parseFloat(child.progress_percentage || 0) < 100" title="Ghi nhật ký">
                               <a-button type="text" size="small" @click.stop="openLogModal(null, child.id)" class="text-blue-500 hover:bg-blue-50"><FileAddOutlined /></a-button>
                             </a-tooltip>
                             <a-tooltip title="Sửa"><a-button type="text" size="small" @click="openTaskModal(child)"><EditOutlined /></a-button></a-tooltip>
@@ -955,7 +955,7 @@
                 <span :class="item.workflow_status === 'customer_approved' ? 'text-gray-400 line-through' : 'text-gray-700'">{{ item.name }}</span>
                 <div class="flex items-center gap-2 ml-auto">
                   <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px]">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
-                  <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved', 'rejected'].includes(item.workflow_status) && can('acceptance.revert')"
+                  <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved', 'rejected'].includes(item.workflow_status) && can('acceptance.revert') && stage.status !== 'customer_approved'"
                             type="text" size="small" class="text-orange-500 hover:text-orange-600 p-0 h-auto" @click.stop="revertAcceptItemAction(stage, item)">
                     <ReloadOutlined class="text-[10px]" />
                   </a-button>
@@ -2723,10 +2723,21 @@
       </a-row>
       <a-form-item label="Công việc liên quan">
         <a-select v-model:value="logForm.task_id" size="large" class="w-full" placeholder="Chọn công việc (tùy chọn)" allow-clear show-search :filter-option="(input, opt) => opt.label?.toLowerCase().includes(input.toLowerCase())" @change="onLogTaskChange">
-          <a-select-option v-for="t in allTasks" :key="t.id" :value="t.id" :label="t.name">
-            <div class="flex justify-between items-center w-full">
-              <span>{{ t.name }}</span>
-              <span v-if="t.start_date" class="text-[10px] text-gray-400 font-normal ml-2">🕒 {{ dayjs(t.start_date).format('DD/MM/YYYY') }}</span>
+          <a-select-option v-for="t in logTaskOptions" :key="t.id" :value="t.id" :label="t.name" :disabled="Number(t.progress_percentage || 0) >= 100">
+            <div class="flex flex-col py-0.5">
+              <div class="flex justify-between items-center gap-2">
+                <span class="truncate" :class="Number(t.progress_percentage || 0) >= 100 ? 'text-gray-300 line-through' : 'font-medium'">{{ t.name }}</span>
+                <span class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      :class="Number(t.progress_percentage || 0) >= 100 ? 'bg-emerald-50 text-emerald-400' : Number(t.progress_percentage || 0) > 0 ? 'bg-blue-50 text-blue-500' : 'bg-gray-50 text-gray-400'">
+                  {{ Number(t.progress_percentage || 0) }}%
+                </span>
+              </div>
+              <div v-if="t.start_date || t.end_date" class="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
+                <CalendarOutlined class="text-[9px]" />
+                <span v-if="t.start_date">{{ dayjs(t.start_date).format('DD/MM/YYYY') }}</span>
+                <span v-if="t.start_date && t.end_date"> → </span>
+                <span v-if="t.end_date">{{ dayjs(t.end_date).format('DD/MM/YYYY') }}</span>
+              </div>
             </div>
           </a-select-option>
         </a-select>
@@ -2994,12 +3005,13 @@
         <a-col :span="8">
           <a-form-item label="Trạng thái">
             <a-select v-model:value="taskForm.status" size="large" class="w-full">
-              <a-select-option value="pending">Chờ</a-select-option>
+              <a-select-option value="not_started">Chưa bắt đầu</a-select-option>
               <a-select-option value="in_progress">Đang thực hiện</a-select-option>
               <a-select-option value="completed">Hoàn thành</a-select-option>
+              <a-select-option value="delayed">Trễ tiến độ</a-select-option>
               <a-select-option value="on_hold">Tạm dừng</a-select-option>
-              <a-select-option value="cancelled">Hủy</a-select-option>
             </a-select>
+            <div class="text-xs text-gray-400 mt-1">💡 Hệ thống tự cập nhật khi ghi nhật ký</div>
           </a-form-item>
         </a-col>
         <a-col :span="8">
@@ -3021,8 +3033,8 @@
         </a-col>
       </a-row>
       <a-form-item label="Tiến độ (%)">
-        <a-slider v-model:value="taskForm.progress_percentage" :min="0" :max="100" :marks="{0:'0%', 25:'25%', 50:'50%', 75:'75%', 100:'100%'}" disabled />
-        <div class="text-xs text-gray-400 mt-1">⚡ Tiến độ được tự động tính từ nhật ký thi công</div>
+        <a-slider v-model:value="taskForm.progress_percentage" :min="0" :max="100" :marks="{0:'0%', 25:'25%', 50:'50%', 75:'75%', 100:'100%'}" />
+        <div class="text-xs text-gray-400 mt-1">💡 Tự cập nhật khi thay đổi trạng thái hoặc ghi nhật ký</div>
       </a-form-item>
       <a-form-item label="Mô tả"><a-textarea v-model:value="taskForm.description" :rows="3" placeholder="Mô tả công việc..." :maxlength="5000" show-count /></a-form-item>
     </a-form>
@@ -5516,13 +5528,24 @@
           </div>
         </div>
 
+         <!-- 🔒 LOCKED BANNER when acceptance is completed -->
+         <div v-if="isAcceptanceLocked" class="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center gap-3">
+           <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+             <LockOutlined class="text-lg" />
+           </div>
+           <div>
+             <div class="text-sm font-bold text-emerald-800">Nghiệm thu đã hoàn tất</div>
+             <div class="text-[11px] text-emerald-600">Giai đoạn này đã được khách hàng nghiệm thu. Không thể chỉnh sửa hoặc thêm mới.</div>
+           </div>
+         </div>
+
         <!-- 3. Documents & Template -->
         <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
           <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500">
             <FileOutlined /> Hồ sơ nghiệm thu 
           </div>
           
-          <div v-if="can('acceptance.update') && ['draft', 'rejected'].includes(acceptDetailStage.status)">
+          <div v-if="can('acceptance.update') && ['draft', 'rejected'].includes(acceptDetailStage.status) && !isAcceptanceLocked">
             <a-select v-model:value="acceptDetailTemplateId" size="large" class="w-full mb-4" allow-clear show-search option-filter-prop="label" placeholder="Chọn bộ hồ sơ mẫu" @change="onAcceptDetailTemplateChange">
               <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">
                 {{ t.name }}
@@ -5715,7 +5738,7 @@
                   </div>
                 </div>
                 <!-- Upload Slot (Styled like a card) -->
-                <label v-if="can('acceptance.approve.level_1')" :for="'up-before-'+acceptDetailStage.id" 
+                <label v-if="can('acceptance.approve.level_1') && !isAcceptanceLocked" :for="'up-before-'+acceptDetailStage.id" 
                        class="min-w-[100px] aspect-square border-2 border-dashed border-orange-100 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all group shrink-0">
                   <PlusOutlined class="text-orange-300 text-lg group-hover:scale-110 transition-transform" />
                   <span class="text-[8px] text-orange-400 font-extrabold uppercase mt-2">Thêm tệp</span>
@@ -5739,7 +5762,7 @@
                   </div>
                 </div>
                 <!-- Upload Slot -->
-                <label v-if="can('acceptance.approve.level_1')" :for="'up-after-'+acceptDetailStage.id"
+                <label v-if="can('acceptance.approve.level_1') && !isAcceptanceLocked" :for="'up-after-'+acceptDetailStage.id"
                        class="min-w-[100px] aspect-square border-2 border-dashed border-emerald-100 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 transition-all group shrink-0">
                   <PlusOutlined class="text-emerald-300 text-lg group-hover:scale-110 transition-transform" />
                   <span class="text-[8px] text-emerald-400 font-extrabold uppercase mt-2">Thêm tệp</span>
@@ -5797,7 +5820,7 @@
                 <CheckCircleOutlined v-if="acceptDefectProgress.allDone" />
                 {{ acceptDefectProgress.verified }}/{{ acceptDefectProgress.total }} đã xong
               </div>
-              <a-button v-if="can('defect.create')" type="link" size="small" @click="showCreateDefectInDrawer = true" class="p-0 font-bold">+ Tạo lỗi</a-button>
+              <a-button v-if="can('defect.create') && !isAcceptanceLocked" type="link" size="small" @click="showCreateDefectInDrawer = true" class="p-0 font-bold">+ Tạo lỗi</a-button>
             </div>
           </div>
 
@@ -5891,7 +5914,7 @@
                </div>
 
                <!-- Inline Action Buttons -->
-               <div class="flex gap-2 flex-wrap" v-if="d.status !== 'verified'">
+               <div class="flex gap-2 flex-wrap" v-if="d.status !== 'verified' && !isAcceptanceLocked">
                   <!-- Open/Rejected → Nhận xử lý -->
                   <a-popconfirm v-if="['open','rejected'].includes(d.status) && can('defect.update')" 
                                 title="Nhận xử lý lỗi này?" @confirm="defectAction(d, 'mark-in-progress')" ok-text="Nhận" cancel-text="Hủy">
@@ -5933,14 +5956,14 @@
       <!-- Action Footer (Standard Sticky) -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 transition-all rounded-br-2xl">
         <div class="flex gap-2">
-           <a-button v-if="can('acceptance.update') && ['draft', 'rejected'].includes(acceptDetailStage.status)" 
+           <a-button v-if="can('acceptance.update') && ['draft', 'rejected'].includes(acceptDetailStage.status) && !isAcceptanceLocked" 
                      class="rounded-xl h-12 px-6 font-bold text-blue-600 bg-blue-50 border-blue-100" @click="saveAcceptDetail" :loading="savingAcceptDetail">
              <SaveOutlined /> Cập nhật
            </a-button>
         </div>
         
         <div class="flex gap-2">
-           <template v-if="acceptDetailStage.status !== 'owner_approved'">
+           <template v-if="!isAcceptanceLocked && acceptDetailStage.status !== 'owner_approved'">
              <!-- Approval Buttons -->
              <a-button v-if="['pending', 'rejected'].includes(acceptDetailStage.status) && can('acceptance.approve.level_1')" 
                        type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-blue-600 hover:bg-blue-700" @click="approveAccept(acceptDetailStage, 1)">
@@ -6346,6 +6369,7 @@
         <a-select v-model:value="usageForm.equipment_id" show-search option-filter-prop="label" placeholder="Tìm thiết bị..." size="large" class="w-full">
           <a-select-option v-for="e in allEquipment" :key="e.id" :value="e.id" :label="e.name">
             {{ e.name }} <span class="text-gray-400 text-xs">({{ e.code || '' }} — {{ eqStatusLabel(e.status) }})</span>
+            <div v-if="e.remaining_quantity !== undefined" class="text-[10px] text-blue-500 font-medium">Tồn kho: {{ e.remaining_quantity }}</div>
           </a-select-option>
         </a-select>
       </a-form-item>
@@ -6358,7 +6382,10 @@
           </a-form-item>
         </a-col>
         <a-col :span="6">
-          <a-form-item label="Số lượng"><a-input-number v-model:value="usageForm.quantity" :min="1" size="large" class="w-full" /></a-form-item>
+          <a-form-item label="Số lượng">
+            <a-input-number v-model:value="usageForm.quantity" :min="1" :max="selectedEq?.remaining_quantity || 1" size="large" class="w-full" />
+            <div v-if="selectedEq" class="text-[10px] text-gray-400 mt-1">Khả dụng: {{ selectedEq.remaining_quantity }}</div>
+          </a-form-item>
         </a-col>
         <a-col :span="6">
           <a-form-item label="Ngày nhận" required><a-date-picker v-model:value="usageForm.received_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item>
@@ -6881,7 +6908,7 @@ import {
   LineChartOutlined, FileProtectOutlined, BankOutlined, HistoryOutlined,
   FileAddOutlined, SafetyCertificateOutlined, PaperClipOutlined,
   CalculatorOutlined, NodeIndexOutlined, ToolOutlined, TagsOutlined,
-  AlertOutlined
+  AlertOutlined, LockOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -6914,6 +6941,18 @@ const payments = computed(() => props.financeData?.payments || props.project.pay
 const invoices = computed(() => props.financeData?.invoices || [])
 const budgets = computed(() => props.financeData?.budgets || props.project.budgets || [])
 const allTasks = computed(() => props.scheduleData?.allTasks || [])
+
+// Sorted tasks for log form: by progress ascending, 100% at bottom
+const logTaskOptions = computed(() => {
+  return [...allTasks.value].sort((a, b) => {
+    const pA = Number(a.progress_percentage || 0)
+    const pB = Number(b.progress_percentage || 0)
+    // 100% tasks go to the bottom
+    if (pA >= 100 && pB < 100) return 1
+    if (pB >= 100 && pA < 100) return -1
+    return pA - pB
+  })
+})
 const counts = computed(() => props.counts || {})
 const materialBills = computed(() => {
   const bills = props.scheduleData?.materialBills || [];
@@ -7039,16 +7078,22 @@ const fmtDate = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY') : '—'
 const fmtDateTime = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY HH:mm') : '—'
 const isAccepted = (task) => {
   if (!task) return false
+  // BUSINESS RULE: Parent tasks never go through acceptance individually
+  // Only child/leaf tasks need acceptance. Parent's progress is auto-calculated from children.
   if (!task.parent_id) {
-    // Category A (Parent): Check if any linked stage is approved
-    const stages = task.acceptance_stages || []
-    if (stages.length === 0) return true // Align with backend: default true if no stages defined
-    return stages.some(s => s.status === 'customer_approved')
-  } else {
-    // Category B (Child): Check linked acceptance item workflow
-    if (!task.acceptance_item) return true // Align with backend: default true if no item defined
+    return true // Parents always "accepted" — they don't show the warning
+  }
+  // Child task: check linked acceptance stage or item
+  const stages = task.acceptance_stages || []
+  if (stages.length > 0) {
+    return stages.some(s => ['customer_approved', 'owner_approved'].includes(s.status))
+  }
+  // Check acceptance_item workflow
+  if (task.acceptance_item) {
     return task.acceptance_item.workflow_status === 'customer_approved'
   }
+  // No acceptance linked → NOT yet accepted → show "Đang chờ nghiệm thu"
+  return false
 }
 const totalCosts = computed(() => costs.value.reduce((s, c) => s + Number(c.amount || 0), 0))
 
@@ -8646,22 +8691,29 @@ const resolveRisk = (r) => router.post(`/projects/${props.project.id}/risks/${r.
 const deleteRisk = (r) => router.delete(`/projects/${props.project.id}/risks/${r.id}`, loadingOptions(`delete-risk-${r.id}`, { preserveScroll: true }))
 
 // ============ TASK / PROGRESS ============
-const taskStatusLabels = { not_started: 'Chưa bắt đầu', in_progress: 'Đang thực hiện', delayed: 'Trễ tiến độ', completed: 'Hoàn thành' }
-const taskStatusColors = { not_started: 'default', in_progress: 'processing', delayed: 'error', completed: 'success' }
+const taskStatusLabels = { pending: 'Chờ xử lý', not_started: 'Chưa bắt đầu', in_progress: 'Đang thực hiện', delayed: 'Trễ tiến độ', completed: 'Hoàn thành', on_hold: 'Tạm dừng', cancelled: 'Đã hủy' }
+const taskStatusColors = { pending: 'default', not_started: 'default', in_progress: 'processing', delayed: 'error', completed: 'success', on_hold: 'warning', cancelled: 'default' }
 
 // Build tree: root = tasks with no parent_id
 const rootTasks = computed(() => {
-  return (allTasks.value).filter(t => !t.parent_id)
+  return (allTasks.value).filter(t => !t.parent_id).sort((a, b) => {
+    const pA = Number(a.progress_percentage || 0)
+    const pB = Number(b.progress_percentage || 0)
+    return pA - pB
+  })
 })
 
 const taskStats = computed(() => {
   const all = allTasks.value
+  // BUSINESS RULE: Statistics should only count "leaf" tasks (work items), not "parent" containers
+  const leaves = all.filter(t => !all.some(child => child.parent_id === t.id))
+  
   return {
-    total: all.length,
-    not_started: all.filter(t => t.status === 'not_started').length,
-    in_progress: all.filter(t => t.status === 'in_progress').length,
-    delayed: all.filter(t => t.status === 'delayed').length,
-    completed: all.filter(t => t.status === 'completed').length,
+    total: leaves.length,
+    not_started: leaves.filter(t => t.status === 'not_started').length,
+    in_progress: leaves.filter(t => t.status === 'in_progress').length,
+    delayed: leaves.filter(t => t.status === 'delayed').length,
+    completed: leaves.filter(t => t.status === 'completed').length,
   }
 })
 
@@ -8707,7 +8759,7 @@ const parentTaskOptions = computed(() => {
 // Task CRUD
 const showTaskModal = ref(false)
 const editingTask = ref(null)
-const taskFormDefault = () => ({ name: '', description: '', parent_id: null, phase_id: null, start_date: null, end_date: null, duration: null, progress_percentage: 0, status: 'pending', priority: 'medium', assigned_to: null })
+const taskFormDefault = () => ({ name: '', description: '', parent_id: null, phase_id: null, start_date: null, end_date: null, duration: null, progress_percentage: 0, status: 'not_started', priority: 'medium', assigned_to: null })
 const taskForm = ref(taskFormDefault())
 
 const openTaskModal = (record = null, parentId = null) => {
@@ -8745,6 +8797,12 @@ const saveTask = () => {
 }
 
 const deleteTask = (t) => router.delete(`/projects/${props.project.id}/tasks/${t.id}`, loadingOptions(`delete-task-${t.id}`, { preserveScroll: true }))
+
+// Auto-sync progress slider when status changes in form
+watch(() => taskForm.value.status, (newStatus) => {
+  if (newStatus === 'completed') taskForm.value.progress_percentage = 100
+  else if (newStatus === 'not_started') taskForm.value.progress_percentage = 0
+})
  
 const recalculating = ref(false)
 const recalculateTasks = async () => {
@@ -8752,7 +8810,7 @@ const recalculateTasks = async () => {
   try {
     await axios.post(`/projects/${props.project.id}/tasks/recalculate-all`)
     message.success('Đã tính toán lại toàn bộ tiến độ công việc')
-    router.reload({ only: ['project', 'taskStats', 'rootTasks'] })
+    router.reload({ only: ['project', 'scheduleData'] })
   } catch (e) {
     console.error('Recalculate tasks error:', e)
     const msg = e.response?.data?.message || 'Lỗi khi tính toán lại tiến độ'
@@ -9358,6 +9416,11 @@ const acceptDefectProgress = computed(() => {
   }
 })
 
+// BUSINESS RULE: Lock all mutations when acceptance stage is fully approved
+const isAcceptanceLocked = computed(() => {
+  return acceptDetailStage.value && ['customer_approved', 'owner_approved'].includes(acceptDetailStage.value.status)
+})
+
 const openAcceptDetailModal = (stage) => {
   acceptDetailStage.value = stage
   acceptDetailTemplateId.value = stage.acceptance_template_id || null
@@ -9943,9 +10006,13 @@ const billStatusColor = (s) => ({
 }[s] || 'default')
 
 const getMaterialGroups = (bill) => {
+  // Ưu tiên hiển thị nhóm của cả bill
+  if (bill.cost_group?.name) return bill.cost_group.name
+
+  // Nếu bill không có nhóm, tổng hợp từ các mặt hàng bên trong
   if (!bill.items?.length) return '—'
   const groups = bill.items
-    .map(item => item.material?.group?.name || item.material?.material_group?.name || '')
+    .map(item => item.material?.cost_group?.name || item.material?.group?.name || item.material?.material_group?.name || '')
     .filter((v, i, a) => v && a.indexOf(v) === i)
   return groups.length ? groups.join(', ') : '—'
 }
@@ -9966,7 +10033,7 @@ const syncMaterialBillCosts = () => {
 const showBillModal = ref(false)
 const submittingBill = ref(false)
 const billFiles = ref([])
-const billForm = ref({ bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: 2, notes: '', items: [], deleted_attachment_ids: [] })
+const billForm = ref({ bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: null, notes: '', items: [], deleted_attachment_ids: [] })
 const billItemForm = ref({ material_id: null, quantity: 1, unit_price: 0, total_price: 0 })
 
 const isEditBill = ref(false)
@@ -10003,7 +10070,16 @@ const openBillModal = (record = null) => {
       deleted_attachment_ids: []
     }
   } else {
-    billForm.value = { bill_date: dayjs().format('YYYY-MM-DD'), supplier_id: null, cost_group_id: 2, notes: '', items: [], deleted_attachment_ids: [] }
+    // Tìm nhóm chi phí Vật liệu để set mặc định
+    const defaultGroup = props.costGroups?.find(g => g.code === 'VLXD' || g.name?.toLowerCase().includes('vật liệu'))
+    billForm.value = { 
+      bill_date: dayjs().format('YYYY-MM-DD'), 
+      supplier_id: null, 
+      cost_group_id: defaultGroup ? defaultGroup.id : null, 
+      notes: '', 
+      items: [], 
+      deleted_attachment_ids: [] 
+    }
   }
   billItemForm.value = { material_id: null, quantity: 1, unit_price: 0, total_price: 0 }
   showBillModal.value = true
@@ -10383,8 +10459,15 @@ const openUsageModal = (record = null) => {
   showUsageModal.value = true
 }
 
+const selectedEq = computed(() => allEquipment.value.find(e => e.id === usageForm.value.equipment_id))
+
 const submitUsageForm = () => {
   if (!usageForm.value.equipment_id || !usageForm.value.receiver_id) return
+  
+  if (selectedEq.value && usageForm.value.quantity > selectedEq.value.remaining_quantity) {
+    message.error(`Số lượng không được vượt quá số lượng tồn kho (${selectedEq.value.remaining_quantity})`)
+    return
+  }
   const fd = new FormData()
   Object.entries(usageForm.value).forEach(([k, v]) => { if (v !== null && v !== undefined) fd.append(k, v) })
   usageFiles.value.forEach(f => fd.append('files[]', f))

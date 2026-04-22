@@ -60,6 +60,54 @@ class ProjectTaskService
             // But we can explicitly trigger it if needed to ensure immediate availability.
             $this->progressService->updateTaskFromLogs($task, true);
 
+            // MANUAL OVERRIDE: Handle user-set status and/or progress_percentage
+            $hasManualStatus = array_key_exists('status', $data) && $data['status'];
+            $hasManualProgress = array_key_exists('progress_percentage', $data) && $data['progress_percentage'] !== null;
+            
+            if ($hasManualStatus || $hasManualProgress) {
+                $updateFields = [];
+
+                if ($hasManualStatus) {
+                    $manualStatus = $data['status'];
+                    $updateFields['status'] = $manualStatus;
+
+                    // Sync progress based on status
+                    if ($manualStatus === 'completed') {
+                        $updateFields['progress_percentage'] = 100;
+                    } elseif ($manualStatus === 'not_started') {
+                        $updateFields['progress_percentage'] = 0;
+                    }
+                }
+
+                // If progress was manually set (slider), use it (overrides status-based sync)
+                if ($hasManualProgress && !$hasManualStatus) {
+                    $manualProgress = (float) $data['progress_percentage'];
+                    $updateFields['progress_percentage'] = $manualProgress;
+                    
+                    // Auto-sync status from progress
+                    if ($manualProgress >= 100) {
+                        $updateFields['status'] = 'completed';
+                    } elseif ($manualProgress <= 0) {
+                        $updateFields['status'] = 'not_started';
+                    } elseif ($manualProgress > 0) {
+                        $updateFields['status'] = 'in_progress';
+                    }
+                }
+
+                $task->forceFill($updateFields)->saveQuietly();
+
+                // CASCADE: Recalculate parent task progress + status
+                if ($task->parent_id) {
+                    $parent = ProjectTask::find($task->parent_id);
+                    if ($parent) {
+                        $this->progressService->updateTaskFromLogs($parent, true);
+                    }
+                }
+
+                // Update project overall progress
+                $task->updateProjectProgress();
+            }
+
             return $task->fresh(['assignedUser', 'parent', 'dependencies']);
         });
     }

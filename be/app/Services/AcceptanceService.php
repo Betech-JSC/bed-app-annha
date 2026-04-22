@@ -38,8 +38,20 @@ class AcceptanceService
      */
     public function upsertItem(array $data, ?AcceptanceItem $item = null, $user = null): AcceptanceItem
     {
+        // BUSINESS RULE: Lock all mutations when stage is customer_approved
+        if ($item && $item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
+            throw new \Exception('Không thể chỉnh sửa — Nghiệm thu đã hoàn tất.');
+        }
         if ($item && $item->acceptance_status === 'approved') {
             throw new \Exception('Không thể chỉnh sửa hạng mục đã được nghiệm thu.');
+        }
+
+        // Check for new items — block creation under completed stage
+        if (!$item && isset($data['acceptance_stage_id'])) {
+            $stage = AcceptanceStage::find($data['acceptance_stage_id']);
+            if ($stage && $stage->status === 'customer_approved') {
+                throw new \Exception('Không thể thêm hạng mục — Nghiệm thu đã hoàn tất.');
+            }
         }
 
         $isNew = !$item;
@@ -74,6 +86,9 @@ class AcceptanceService
      */
     public function submitItem(AcceptanceItem $item, $user): bool
     {
+        if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
+            throw new \Exception('Không thể gửi duyệt — Nghiệm thu đã hoàn tất.');
+        }
         if (!in_array($item->workflow_status, ['draft', 'rejected'])) {
             throw new \Exception('Chỉ có thể gửi duyệt khi ở trạng thái draft hoặc rejected.');
         }
@@ -189,6 +204,9 @@ class AcceptanceService
      */
     public function rejectItem(AcceptanceItem $item, $user, string $reason): bool
     {
+        if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
+            throw new \Exception('Không thể từ chối — Nghiệm thu đã hoàn tất.');
+        }
         if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved', 'project_manager_approved'])) {
             throw new \Exception('Hạng mục không ở trạng thái chờ duyệt.');
         }
@@ -218,6 +236,9 @@ class AcceptanceService
      */
     public function revertItemToDraft(AcceptanceItem $item, $user = null): bool
     {
+        if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
+            throw new \Exception('Không thể hoàn duyệt — Nghiệm thu đã hoàn tất.');
+        }
         $revertibleStatuses = ['submitted', 'supervisor_approved', 'project_manager_approved', 'rejected'];
         if (!in_array($item->workflow_status, $revertibleStatuses)) {
             throw new \Exception('Chỉ có thể hoàn duyệt hạng mục đang chờ duyệt hoặc bị từ chối.');
@@ -368,6 +389,9 @@ class AcceptanceService
      */
     public function deleteItem(AcceptanceItem $item): bool
     {
+        if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
+            throw new \Exception('Không thể xóa — Nghiệm thu đã hoàn tất.');
+        }
         if (!in_array($item->workflow_status, ['draft', 'rejected'])) {
             throw new \Exception('Chỉ xóa được hạng mục ở trạng thái nháp hoặc bị từ chối.');
         }

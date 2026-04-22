@@ -48,7 +48,7 @@ class Equipment extends Model
         'rejection_reason',
     ];
 
-    protected $appends = ['asset_code', 'monthly_depreciation', 'remaining_percent'];
+    protected $appends = ['asset_code', 'monthly_depreciation', 'remaining_percent', 'remaining_quantity'];
 
     protected $casts = [
         'quantity'                 => 'integer',

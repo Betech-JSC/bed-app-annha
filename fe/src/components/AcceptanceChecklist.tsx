@@ -268,6 +268,11 @@ export default function AcceptanceChecklist({
     }
   };
 
+  // BUSINESS RULE: Lock all mutations when stage is fully approved
+  const isLocked = (stage: AcceptanceStage) => {
+    return ['customer_approved', 'owner_approved'].includes(stage.status);
+  };
+
   // Load templates cho modal nghiệm thu
   const loadAcceptanceTemplates = async () => {
     try {
@@ -484,8 +489,8 @@ export default function AcceptanceChecklist({
                       )}
                     </View>
                   </View>
-                  {/* Action buttons */}
-                  {stage.status !== "owner_approved" && (
+                  {/* Action buttons — hidden when stage is locked (fully approved) */}
+                  {stage.status !== "owner_approved" && !isLocked(stage) && (
                     <View style={styles.stageActions}>
                       {canUpdate && (
                         <TouchableOpacity
@@ -1144,6 +1149,17 @@ export default function AcceptanceChecklist({
               </TouchableOpacity>
             </View>
 
+            {/* 🔒 LOCKED BANNER when acceptance is completed */}
+            {acceptingStage && isLocked(acceptingStage) && (
+              <View style={styles.lockedBanner}>
+                <Ionicons name="lock-closed" size={20} color="#059669" />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.lockedBannerTitle}>Nghiệm thu đã hoàn tất</Text>
+                  <Text style={styles.lockedBannerSubtitle}>Giai đoạn này đã được khách hàng nghiệm thu. Không thể chỉnh sửa hoặc thêm mới.</Text>
+                </View>
+              </View>
+            )}
+
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={true}>
               {/* Ngày tạo */}
               {(acceptingStage as any)?.created_at && (
@@ -1165,9 +1181,9 @@ export default function AcceptanceChecklist({
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Bộ tài liệu nghiệm thu</Text>
                 <TouchableOpacity
-                  style={[styles.taskSelectButton, !canUpdate && styles.disabledButton]}
-                  onPress={() => canUpdate && setShowAcceptanceTemplatePicker(true)}
-                  disabled={!canUpdate}
+                  style={[styles.taskSelectButton, (!canUpdate || (acceptingStage && isLocked(acceptingStage))) && styles.disabledButton]}
+                  onPress={() => canUpdate && acceptingStage && !isLocked(acceptingStage) && setShowAcceptanceTemplatePicker(true)}
+                  disabled={!canUpdate || (acceptingStage ? isLocked(acceptingStage) : false)}
                 >
                   <Text style={[
                     styles.taskSelectText,
@@ -1225,7 +1241,7 @@ export default function AcceptanceChecklist({
                       );
                     })()}
                   </View>
-                  {canCreateDefect && (
+                  {canCreateDefect && !isLocked(acceptingStage!) && (
                     <TouchableOpacity
                       style={styles.addDefectButton}
                       onPress={() => {
@@ -1381,8 +1397,8 @@ export default function AcceptanceChecklist({
                 </View>
               </View>
 
-              {/* Approval Actions - Use permission-based checks */}
-              {(isAdmin || canApproveLevel1 || canApproveLevel2 || canApproveLevel3) && acceptingStage && (
+              {/* Approval Actions - Use permission-based checks, hidden when locked */}
+              {(isAdmin || canApproveLevel1 || canApproveLevel2 || canApproveLevel3) && acceptingStage && !isLocked(acceptingStage) && (
                 <View style={styles.approvalActionsSection}>
                   <Text style={styles.approvalSectionTitle}>Quy trình duyệt</Text>
 
@@ -1518,7 +1534,7 @@ export default function AcceptanceChecklist({
                 >
                   <Text style={styles.cancelButtonText}>{canUpdate ? 'Hủy' : 'Đóng'}</Text>
                 </TouchableOpacity>
-                {canUpdate && (
+                {canUpdate && !isLocked(acceptingStage!) && (
                   <TouchableOpacity
                     style={[styles.modalButton, styles.saveButton]}
                     onPress={handleSaveAcceptance}
@@ -2659,5 +2675,26 @@ const styles = StyleSheet.create({
   workflowStatusText: {
     fontSize: 13,
     fontWeight: "600",
+  },
+  lockedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    borderRadius: 12,
+    padding: 14,
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  lockedBannerTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#065F46",
+  },
+  lockedBannerSubtitle: {
+    fontSize: 11,
+    color: "#059669",
+    marginTop: 2,
   },
 });

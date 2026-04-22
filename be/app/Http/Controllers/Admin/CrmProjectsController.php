@@ -272,7 +272,7 @@ class CrmProjectsController extends Controller
                         'children.acceptanceStages:id,task_id,status',
                         'children.acceptanceItem:id,task_id,workflow_status'
                     ])->get(),
-                'materialBills' => \App\Models\MaterialBill::where('project_id', $id)->with(['items.material', 'supplier', 'creator', 'attachments'])->get(),
+                'materialBills' => \App\Models\MaterialBill::where('project_id', $id)->with(['items.material.costGroup', 'supplier', 'creator', 'attachments', 'costGroup'])->get(),
             ],
 
             'monitorData' => [
@@ -292,7 +292,7 @@ class CrmProjectsController extends Controller
                 'rentals' => class_exists(\App\Models\EquipmentRental::class) ? \App\Models\EquipmentRental::where('project_id', $project->id)->with(['equipment', 'supplier', 'creator', 'attachments'])->latest()->get() : [],
                 'purchases' => class_exists(\App\Models\EquipmentPurchase::class) ? \App\Models\EquipmentPurchase::where('project_id', $project->id)->with(['items', 'creator', 'attachments'])->latest()->get() : [],
                 'usages' => class_exists(\App\Models\AssetUsage::class) ? \App\Models\AssetUsage::where('project_id', $project->id)->with(['asset', 'receiver', 'creator', 'attachments'])->latest()->get() : [],
-                'allEquipment' => class_exists(\App\Models\Equipment::class) ? \App\Models\Equipment::select('id', 'name', 'code', 'type', 'status')->orderBy('name')->get() : [],
+                'allEquipment' => class_exists(\App\Models\Equipment::class) ? \App\Models\Equipment::select('id', 'name', 'code', 'type', 'status', 'quantity')->orderBy('name')->get() : [],
                 'companyAssets' => class_exists(\App\Models\CompanyAsset::class) ? \App\Models\CompanyAsset::where('quantity', '>', 0)->select('id', 'name', 'code', 'category', 'unit')->orderBy('name')->get() : [],
             ],
 
@@ -1082,6 +1082,11 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
 
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+
+        if (in_array($stage->status, ['customer_approved', 'owner_approved'])) {
+            return back()->with('error', 'Không thể đính kèm file — Nghiệm thu đã hoàn tất.');
+        }
+
         $count = $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stageId}");
         return back()->with('success', "Đã đính kèm {$count} file vào nghiệm thu.");
     }
@@ -1656,6 +1661,8 @@ class CrmProjectsController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'duration' => 'nullable|numeric|min:0',
             'priority' => 'nullable|in:low,medium,high,urgent',
+            'status' => 'nullable|in:not_started,in_progress,completed,delayed,on_hold',
+            'progress_percentage' => 'nullable|numeric|min:0|max:100',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
 
@@ -1688,6 +1695,8 @@ class CrmProjectsController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'duration' => 'nullable|numeric|min:0',
             'priority' => 'nullable|in:low,medium,high,urgent',
+            'status' => 'nullable|in:not_started,in_progress,completed,delayed,on_hold',
+            'progress_percentage' => 'nullable|numeric|min:0|max:100',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
 
