@@ -254,16 +254,20 @@ class TaskProgressService
                 $progress = max($logProgress, $storedProgress);
             }
 
-            // Calculate status automatically
+            // Calculate status automatically (but preserve on_hold/cancelled/delayed as they are explicit manual overrides)
             $status = $this->calculateStatus($task, $progress);
-
-            // Prevent manual completion if not all children are done
-            $hasChildren = ProjectTask::where('parent_id', $task->id)
-                ->whereNull('deleted_at')
-                ->exists();
-            if ($status === 'completed' && $hasChildren) {
-                if (!$this->canParentBeCompleted($task)) {
-                    $status = 'in_progress'; // Force to in_progress if children not all done
+            
+            if (in_array($task->status, ['on_hold', 'cancelled', 'delayed'])) {
+                $status = $task->status; // Preserve manual override
+            } else {
+                // Prevent manual completion if not all children are done
+                $hasChildren = ProjectTask::where('parent_id', $task->id)
+                    ->whereNull('deleted_at')
+                    ->exists();
+                if ($status === 'completed' && $hasChildren) {
+                    if (!$this->canParentBeCompleted($task)) {
+                        $status = 'in_progress'; // Force to in_progress if children not all done
+                    }
                 }
             }
 

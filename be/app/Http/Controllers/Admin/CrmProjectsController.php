@@ -445,9 +445,13 @@ class CrmProjectsController extends Controller
 
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
 
-        // Draft-only guard (matching APP — allow Admin override)
-        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && $cost->status !== 'draft') {
-            return back()->with('error', 'Chỉ có thể cập nhật phiếu chi ở trạng thái nháp.');
+        $allowedStatuses = ['draft', 'rejected'];
+        if ($user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT)) $allowedStatuses[] = 'pending_management_approval';
+        if ($user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) $allowedStatuses[] = 'pending_accountant_approval';
+
+        // Draft-only guard (allow Admin override or specific approvers)
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && !in_array($cost->status, $allowedStatuses)) {
+            return back()->with('error', 'Chỉ có thể cập nhật phiếu chi ở trạng thái nháp hoặc khi đang chờ bạn duyệt.');
         }
 
         $validated = $request->validate([
@@ -3849,6 +3853,14 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::MATERIAL_UPDATE, $project);
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
+
+        $allowedStatuses = ['draft', 'rejected'];
+        if ($user->hasPermission(Permissions::MATERIAL_APPROVE_MANAGEMENT)) $allowedStatuses[] = 'pending_management_approval';
+        if ($user->hasPermission(Permissions::MATERIAL_APPROVE_ACCOUNTANT)) $allowedStatuses[] = 'pending_accountant_approval';
+
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && !in_array($bill->status, $allowedStatuses)) {
+            return back()->with('error', 'Chỉ có thể cập nhật phiếu ở trạng thái nháp hoặc khi đang chờ bạn duyệt.');
+        }
 
         try {
             // Handle logical file deletions before update

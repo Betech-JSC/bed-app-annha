@@ -71,26 +71,30 @@ class ProjectTaskService
                     $manualStatus = $data['status'];
                     $updateFields['status'] = $manualStatus;
 
-                    // Sync progress based on status
-                    if ($manualStatus === 'completed') {
-                        $updateFields['progress_percentage'] = 100;
-                    } elseif ($manualStatus === 'not_started') {
-                        $updateFields['progress_percentage'] = 0;
+                    // Sync progress based on status (only if progress wasn't explicitly provided)
+                    if (!$hasManualProgress) {
+                        if ($manualStatus === 'completed') {
+                            $updateFields['progress_percentage'] = 100;
+                        } elseif ($manualStatus === 'not_started') {
+                            $updateFields['progress_percentage'] = 0;
+                        }
                     }
                 }
 
-                // If progress was manually set (slider), use it (overrides status-based sync)
-                if ($hasManualProgress && !$hasManualStatus) {
+                // If progress was manually set, use it
+                if ($hasManualProgress) {
                     $manualProgress = (float) $data['progress_percentage'];
                     $updateFields['progress_percentage'] = $manualProgress;
                     
-                    // Auto-sync status from progress
-                    if ($manualProgress >= 100) {
-                        $updateFields['status'] = 'completed';
-                    } elseif ($manualProgress <= 0) {
-                        $updateFields['status'] = 'not_started';
-                    } elseif ($manualProgress > 0) {
-                        $updateFields['status'] = 'in_progress';
+                    // Auto-sync status from progress ONLY IF status wasn't explicitly overriding
+                    if (!$hasManualStatus) {
+                        if ($manualProgress >= 100) {
+                            $updateFields['status'] = 'completed';
+                        } elseif ($manualProgress <= 0) {
+                            $updateFields['status'] = 'not_started';
+                        } elseif ($manualProgress > 0) {
+                            $updateFields['status'] = 'in_progress';
+                        }
                     }
                 }
 

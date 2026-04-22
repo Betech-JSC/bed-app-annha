@@ -357,8 +357,8 @@
                         <a-tooltip v-if="!task.children?.length && can('log.create') && parseFloat(task.progress_percentage || 0) < 100" title="Ghi nhật ký">
                           <a-button type="text" size="small" @click.stop="openLogModal(null, task.id)" class="text-blue-500 hover:bg-blue-50"><FileAddOutlined /></a-button>
                         </a-tooltip>
-                        <a-tooltip title="Sửa"><a-button type="text" size="small" @click.stop="openTaskModal(task)"><EditOutlined /></a-button></a-tooltip>
-                        <a-popconfirm title="Xóa công việc?" @confirm="deleteTask(task)"><a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button></a-popconfirm>
+                        <a-tooltip v-if="can('project.task.update')" title="Sửa"><a-button type="text" size="small" @click.stop="openTaskModal(task)"><EditOutlined /></a-button></a-tooltip>
+                        <a-popconfirm v-if="can('project.task.delete')" title="Xóa công việc?" @confirm="deleteTask(task)"><a-button type="text" size="small" danger @click.stop><DeleteOutlined /></a-button></a-popconfirm>
                       </div>
                     </td>
                   </tr>
@@ -392,8 +392,8 @@
                             <a-tooltip v-if="!child.children?.length && can('log.create') && parseFloat(child.progress_percentage || 0) < 100" title="Ghi nhật ký">
                               <a-button type="text" size="small" @click.stop="openLogModal(null, child.id)" class="text-blue-500 hover:bg-blue-50"><FileAddOutlined /></a-button>
                             </a-tooltip>
-                            <a-tooltip title="Sửa"><a-button type="text" size="small" @click="openTaskModal(child)"><EditOutlined /></a-button></a-tooltip>
-                            <a-popconfirm title="Xóa?" @confirm="deleteTask(child)"><a-button type="text" size="small" danger><DeleteOutlined /></a-button></a-popconfirm>
+                            <a-tooltip v-if="can('project.task.update')" title="Sửa"><a-button type="text" size="small" @click="openTaskModal(child)"><EditOutlined /></a-button></a-tooltip>
+                            <a-popconfirm v-if="can('project.task.delete')" title="Xóa?" @confirm="deleteTask(child)"><a-button type="text" size="small" danger><DeleteOutlined /></a-button></a-popconfirm>
                           </div>
                         </td>
                       </tr>
@@ -415,8 +415,8 @@
                           <td class="text-center py-1.5 px-3 text-[11px]">{{ sub.assigned_user?.name || '—' }}</td>
                           <td class="text-center py-1.5 px-3" @click.stop>
                             <div class="flex gap-1 justify-center">
-                              <a-button type="text" size="small" @click="openTaskModal(sub)" class="scale-75"><EditOutlined /></a-button>
-                              <a-button type="text" size="small" danger @click="deleteTask(sub)" class="scale-75"><DeleteOutlined /></a-button>
+                              <a-button v-if="can('project.task.update')" type="text" size="small" @click="openTaskModal(sub)" class="scale-75"><EditOutlined /></a-button>
+                              <a-button v-if="can('project.task.delete')" type="text" size="small" danger @click="deleteTask(sub)" class="scale-75"><DeleteOutlined /></a-button>
                             </div>
                           </td>
                         </tr>
@@ -613,7 +613,7 @@
               <template v-else-if="column.key === 'amount'"><span class="font-semibold text-green-600">{{ fmt(record.amount) }}</span></template>
               <template v-else-if="column.key === 'actual_amount'">
                 <span v-if="record.actual_amount" class="font-semibold" :class="record.actual_amount >= record.amount ? 'text-green-600' : 'text-orange-500'">{{ fmt(record.actual_amount) }}</span>
-                <span v-else-if="record.status === 'confirmed' || record.status === 'paid'" class="font-semibold text-green-600">{{ fmt(record.amount) }}</span>
+                <span v-else-if="['confirmed', 'paid'].includes(record.status)" class="font-semibold text-green-600">{{ fmt(record.amount) }}</span>
                 <span v-else class="text-gray-300">—</span>
               </template>
               <template v-else-if="column.key === 'status'">
@@ -3245,7 +3245,7 @@
            <a-popconfirm v-if="can('cost.delete') && costDetailRecord.status === 'draft'" title="Xóa phiếu chi này?" @confirm="deleteCost(costDetailRecord)">
              <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
            </a-popconfirm>
-           <a-button v-if="can('cost.update') && costDetailRecord.status === 'draft'" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="(can('cost.update') && ['draft', 'rejected'].includes(costDetailRecord.status)) || (can('cost.approve.management') && costDetailRecord.status === 'pending_management_approval') || (can('cost.approve.accountant') && costDetailRecord.status === 'pending_accountant_approval')" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="costDetailRecord.status === 'draft' && can('cost.submit')">
@@ -3483,7 +3483,7 @@
           <a-popconfirm v-if="['draft', 'rejected'].includes(materialDetail.status) && can('material.delete')" title="Xóa phiếu nhập này?" @confirm="deleteBill(materialDetail)">
             <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
           </a-popconfirm>
-          <a-button v-if="['draft', 'rejected'].includes(materialDetail.status)" size="small" @click="openBillModal(materialDetail)"><EditOutlined /> Sửa</a-button>
+          <a-button v-if="(can('material.update') && ['draft', 'rejected'].includes(materialDetail.status)) || (can('material.approve.management') && materialDetail.status === 'pending_management_approval') || (can('material.approve.accountant') && materialDetail.status === 'pending_accountant_approval')" size="small" @click="openBillModal(materialDetail)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="['draft', 'rejected'].includes(materialDetail.status) && can('material.update')">
@@ -4906,6 +4906,105 @@
         </div>
         <div v-else class="text-center py-8 text-gray-400 italic">Chưa có lịch sử thanh toán</div>
      </div>
+  </a-drawer>
+
+  <a-drawer v-model:open="showSubPayCreateDrawer" title="Tạo phiếu thanh toán NTP" :width="500" @close="showSubPayCreateDrawer = false" destroy-on-close class="crm-drawer">
+    <div class="px-3 py-2">
+      <!-- Info Badge -->
+      <div v-if="subPayTarget" class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 text-blue-900 px-4 py-3 rounded-xl mb-6 flex items-center shadow-sm">
+        <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm mr-3 flex-shrink-0 text-blue-500 font-bold text-lg">
+           🏢
+        </div>
+        <div>
+          <div class="text-[10px] uppercase font-bold text-blue-500 tracking-wider">Nhà thầu phụ</div>
+          <div class="font-bold text-sm">{{ subPayTarget.name }}</div>
+        </div>
+      </div>
+
+      <a-form layout="vertical" class="space-y-4">
+        <!-- Main Amount section -->
+        <div class="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+          <a-form-item label="Số tiền thanh toán (VNĐ)" required class="mb-0">
+            <a-input-number v-model:value="subPayForm.amount" class="w-full shadow-sm text-lg !font-bold text-emerald-700 !rounded-lg" size="large" :min="0" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/(,*)/g, '')" placeholder="Nhập số tiền..." />
+          </a-form-item>
+        </div>
+        
+        <!-- Details section -->
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+          <a-row :gutter="12">
+            <a-col :span="12">
+              <a-form-item label="Giai đoạn / Đợt thanh toán" required class="mb-3">
+                <a-input v-model:value="subPayForm.payment_stage" placeholder="VD: Tạm ứng lần 1" class="rounded-lg" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="Ngày thanh toán" required class="mb-3">
+                <a-date-picker v-model:value="subPayForm.payment_date" value-format="YYYY-MM-DD" class="w-full rounded-lg" :allowClear="false" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+          
+          <a-row :gutter="12">
+            <a-col :span="12">
+              <a-form-item label="Hình thức thanh toán" required class="mb-3">
+                <a-select v-model:value="subPayForm.payment_method" class="rounded-lg">
+                   <a-select-option value="bank_transfer">Chuyển khoản</a-select-option>
+                   <a-select-option value="cash">Tiền mặt</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="Mã GD / Số UNC" class="mb-3">
+                <a-input v-model:value="subPayForm.reference_number" placeholder="Tham chiếu..." class="rounded-lg" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+
+          <a-form-item label="Ghi chú" class="mb-0">
+            <a-textarea v-model:value="subPayForm.description" :rows="2" placeholder="Nội dung diễn giải..." class="rounded-lg" />
+          </a-form-item>
+        </div>
+
+        <!-- Attachment Section -->
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div class="flex justify-between items-center mb-2">
+            <label class="font-medium text-gray-700 text-sm">Chứng từ đính kèm</label>
+            <a-tag color="error" class="text-[10px] m-0 rounded border-0" v-if="!subPayFiles.length">Bắt buộc</a-tag>
+          </div>
+          <div class="border-2 border-dashed border-gray-300 rounded-xl p-5 text-center bg-gray-50 flex flex-col items-center cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all duration-300 group" @click="$refs.subPayFilesInput.click()">
+            <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm mb-2 group-hover:scale-110 transition-transform">
+               <CloudUploadOutlined class="text-xl text-blue-500" />
+            </div>
+            <div class="font-bold text-gray-700 group-hover:text-blue-600">Click để chọn tài liệu</div>
+            <div class="text-xs text-gray-400 mt-1">UNC, Ủy nhiệm chi, Hóa đơn...</div>
+            <input type="file" ref="subPayFilesInput" style="display: none;" multiple @change="e => subPayFiles = [...subPayFiles, ...(e.target.files || [])]" accept="image/*,application/pdf" />
+          </div>
+          
+          <div v-if="subPayFiles.length > 0" class="mt-3 space-y-2">
+             <div v-for="(file, idx) in subPayFiles" :key="idx" class="flex items-center p-2.5 bg-blue-50/50 border border-blue-100 rounded-lg transition-all hover:border-blue-200">
+               <div class="flex-1 min-w-0 pr-4">
+                 <div class="truncate text-sm font-medium text-blue-900">{{ file.name }}</div>
+                 <div class="text-[10px] text-blue-400">{{ (file.size / 1024).toFixed(1) }} KB</div>
+               </div>
+               <a-button type="text" danger size="small" @click="subPayFiles.splice(idx, 1)" class="hover:bg-red-50 rounded"><DeleteOutlined /></a-button>
+             </div>
+          </div>
+        </div>
+      </a-form>
+    </div>
+
+    <template #footer>
+       <div class="flex justify-between items-center w-full">
+          <div class="text-xs text-gray-500 font-medium ml-2">
+             <span v-if="subPayFiles.length" class="text-green-600">Đã đính kèm {{subPayFiles.length}} tệp</span>
+             <span v-else class="text-red-400">Vui lòng đính kèm tệp</span>
+          </div>
+          <div class="flex gap-2">
+            <a-button @click="showSubPayCreateDrawer = false" class="rounded-lg">Hủy</a-button>
+            <a-button type="primary" @click="saveSubPayment" :disabled="!subPayFiles.length" :loading="actionLoading['save-sub-payment'] || false" class="rounded-lg bg-blue-600 border-none px-6 shadow-md shadow-blue-500/20 hover:bg-blue-500 transition-colors">Tạo phiếu chi</a-button>
+          </div>
+       </div>
+    </template>
   </a-drawer>
 
   <a-modal v-model:open="showSubModal" :title="editingSub ? 'Chỉnh sửa Nhà thầu phụ' : 'Thêm Nhà thầu phụ'" :width="640" @ok="saveSub" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
@@ -7749,8 +7848,8 @@ const acStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', pending_appro
 const acStatusColors = { draft: 'default', pending: 'orange', pending_approval: 'orange', customer_paid: 'green', approved: 'green', confirmed: 'green', rejected: 'red', cancelled: 'default' }
 const contractStatusLabels = { draft: 'Nháp', pending_customer_approval: 'Chờ KH duyệt', pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận', active: 'Đang hiệu lực', approved: 'Đã duyệt', confirmed: 'Đã xác nhận', signed: 'Đã ký', rejected: 'Từ chối', expired: 'Hết hạn', terminated: 'Đã thanh lý', cancelled: 'Đã hủy', completed: 'Hoàn thành' }
 const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', active: 'green', approved: 'green', confirmed: 'cyan', signed: 'geekblue', rejected: 'red', expired: 'orange', terminated: 'red', cancelled: 'default', completed: 'green' }
-const paymentStatusLabelsMap = { draft: 'Nháp', pending: 'Chờ gửi y/c', customer_paid: 'Đã thanh toán', customer_pending_approval: 'Chờ KH duyệt', customer_approved: 'Đã duyệt (Chờ TT)', confirmed: 'Đã xác nhận', paid: 'Đã xác nhận', partial: 'TT 1 phần', completed: 'Hoàn tất', overdue: 'Quá hạn', rejected: 'Bị từ chối', customer_rejected: 'Bị KH từ chối' }
-const paymentTagColors = { draft: 'default', pending: 'default', customer_paid: 'cyan', customer_pending_approval: 'gold', customer_approved: 'processing', confirmed: 'success', paid: 'success', partial: 'blue', completed: 'success', overdue: 'error', rejected: 'error', customer_rejected: 'error' }
+const paymentStatusLabelsMap = { draft: 'Nháp', pending: 'Chờ gửi y/c', customer_paid: 'Chờ KT xác nhận', customer_pending_approval: 'Chờ KH duyệt', customer_approved: 'Đã duyệt (Chờ TT)', confirmed: 'Đã thanh toán', paid: 'Đã thanh toán', partial: 'TT 1 phần', completed: 'Hoàn tất', overdue: 'Quá hạn', rejected: 'Bị từ chối', customer_rejected: 'Bị KH từ chối' }
+const paymentTagColors = { draft: 'default', pending: 'default', customer_paid: 'orange', customer_pending_approval: 'gold', customer_approved: 'processing', confirmed: 'success', paid: 'success', partial: 'blue', completed: 'success', overdue: 'error', rejected: 'error', customer_rejected: 'error' }
 const defectStatusLabels = { open: 'Mới', in_progress: 'Đang sửa lỗi', rejected: 'Chưa đạt', fixed: 'Đã sửa', verified: 'Đã xác nhận', closed: 'Đã đóng' }
 const defectStatusColors = { open: 'red', in_progress: 'processing', rejected: 'red', fixed: 'green', verified: 'cyan', closed: 'default' }
 const crStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', implemented: 'Đã triển khai', cancelled: 'Đã hủy' }

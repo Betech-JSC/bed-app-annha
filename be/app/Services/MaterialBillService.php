@@ -56,8 +56,8 @@ class MaterialBillService
                     'created_by'    => $user ? $user->id : null,
                 ]);
             } else {
-                if (!in_array($bill->status, ['draft', 'rejected'])) {
-                    throw new \Exception('Chỉ có thể chỉnh sửa phiếu vật tư ở trạng thái Nháp hoặc Từ chối.');
+                if (!in_array($bill->status, ['draft', 'rejected', 'pending_management', 'pending_management_approval', 'pending_accountant', 'pending_accountant_approval'])) {
+                    throw new \Exception('Chỉ có thể chỉnh sửa phiếu vật tư ở trạng thái Nháp, Từ chối, hoặc đang chờ duyệt.');
                 }
                 $bill->update([
                     'supplier_id'   => $data['supplier_id'] ?? $bill->supplier_id,

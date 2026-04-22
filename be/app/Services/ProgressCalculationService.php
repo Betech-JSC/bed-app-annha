@@ -10,53 +10,51 @@ use App\Models\Subcontractor;
 class ProgressCalculationService
 {
     /**
-     * Tính tiến độ từ nhật ký công trình
+     * Tính tiến độ từ nhật ký công trình (ép dùng nguồn 'logs', bỏ qua ưu tiên).
+     * Dùng cho artisan `projects:calculate-progress --method=logs`.
      */
     public function calculateFromLogs(Project $project): float
     {
-        $latestLog = $project->constructionLogs()
-            ->orderBy('log_date', 'desc')
-            ->first();
+        $progress = $project->progress ?? $project->progress()->create([
+            'overall_percentage' => 0,
+            'calculated_from' => 'logs',
+        ]);
 
-        if (!$latestLog) {
+        $value = $progress->calculateFromLogs();
+        if ($value === null) {
             return 0;
         }
 
-        $progress = $project->progress;
-        if (!$progress) {
-            $progress = $project->progress()->create([
-                'overall_percentage' => 0,
-                'calculated_from' => 'logs',
-            ]);
-        }
+        $progress->overall_percentage = round($value, 2);
+        $progress->calculated_from    = 'logs';
+        $progress->last_calculated_at = now();
+        $progress->save();
 
-        $progress->calculateFromLogs();
-
-        return $progress->overall_percentage;
+        return (float) $progress->overall_percentage;
     }
 
     /**
-     * Tính tiến độ từ nhà thầu phụ
+     * Tính tiến độ từ nhà thầu phụ (ép dùng nguồn 'subcontractors', bỏ qua ưu tiên).
+     * Dùng cho artisan `projects:calculate-progress --method=subcontractors`.
      */
     public function calculateFromSubcontractors(Project $project): float
     {
-        $subcontractors = $project->subcontractors;
+        $progress = $project->progress ?? $project->progress()->create([
+            'overall_percentage' => 0,
+            'calculated_from' => 'subcontractors',
+        ]);
 
-        if ($subcontractors->isEmpty()) {
+        $value = $progress->calculateFromSubcontractors();
+        if ($value === null) {
             return 0;
         }
 
-        $progress = $project->progress;
-        if (!$progress) {
-            $progress = $project->progress()->create([
-                'overall_percentage' => 0,
-                'calculated_from' => 'subcontractors',
-            ]);
-        }
+        $progress->overall_percentage = round($value, 2);
+        $progress->calculated_from    = 'subcontractors';
+        $progress->last_calculated_at = now();
+        $progress->save();
 
-        $progress->calculateFromSubcontractors();
-
-        return $progress->overall_percentage;
+        return (float) $progress->overall_percentage;
     }
 
     /**

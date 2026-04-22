@@ -64,6 +64,7 @@ export default function TaskFormScreen() {
     const [startDate, setStartDate] = useState<Date | null>(null);
     const [endDate, setEndDate] = useState<Date | null>(null);
     const [status, setStatus] = useState<TaskStatus>("not_started");
+    const [progressPercentage, setProgressPercentage] = useState<string>("0");
     const [priority, setPriority] = useState<TaskPriority>("medium");
     const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
 
@@ -91,6 +92,7 @@ export default function TaskFormScreen() {
                     setStartDate(t.start_date ? new Date(t.start_date) : null);
                     setEndDate(t.end_date ? new Date(t.end_date) : null);
                     setStatus(t.status);
+                    setProgressPercentage(t.progress_percentage ? t.progress_percentage.toString() : "0");
                     setPriority(t.priority);
                 }
             }
@@ -233,6 +235,8 @@ export default function TaskFormScreen() {
                 start_date: startDate?.toISOString().split("T")[0],
                 end_date: endDate?.toISOString().split("T")[0],
                 priority,
+                status,
+                progress_percentage: parseFloat(progressPercentage) || 0,
             };
 
             let response;
@@ -379,6 +383,76 @@ export default function TaskFormScreen() {
                         containerStyle={styles.field}
                         disabled={isReadOnly}
                     />
+
+                    {/* Status */}
+                    <View style={styles.field}>
+                        <Text style={styles.label}>Trạng thái tiến độ</Text>
+                        <View style={styles.optionsRow}>
+                            {[
+                                { value: "not_started", label: "Chưa bắt đầu" },
+                                { value: "in_progress", label: "Đang thực hiện" },
+                                { value: "completed", label: "Hoàn thành" },
+                                { value: "delayed", label: "Trễ tiến độ" },
+                                { value: "on_hold", label: "Tạm dừng" }
+                            ].map((s) => (
+                                <TouchableOpacity
+                                    key={s.value}
+                                    style={[
+                                        styles.optionButton,
+                                        status === s.value && styles.optionButtonActive,
+                                        isReadOnly && { opacity: 0.8 }
+                                    ]}
+                                    onPress={() => {
+                                        if (!isReadOnly) {
+                                            setStatus(s.value as TaskStatus);
+                                            if (s.value === "completed") {
+                                                setProgressPercentage("100");
+                                            } else if (s.value === "not_started") {
+                                                setProgressPercentage("0");
+                                            }
+                                        }
+                                    }}
+                                    activeOpacity={isReadOnly ? 1 : 0.7}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.optionText,
+                                            status === s.value && styles.optionTextActive,
+                                        ]}
+                                    >
+                                        {s.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+
+                    {/* Progress Percentage */}
+                    <View style={styles.field}>
+                        <Text style={styles.label}>% Hoàn thành</Text>
+                        <View style={styles.progressInputContainer}>
+                            <TextInput
+                                style={[styles.input, styles.progressInput, isReadOnly && styles.readOnlyInput]}
+                                value={progressPercentage}
+                                onChangeText={(val) => {
+                                    // limit to numbers and max 100
+                                    const numStr = val.replace(/[^0-9]/g, '');
+                                    let num = parseInt(numStr, 10);
+                                    if (isNaN(num)) num = 0;
+                                    if (num > 100) num = 100;
+                                    setProgressPercentage(num.toString());
+                                }}
+                                keyboardType="numeric"
+                                editable={!isReadOnly}
+                            />
+                            <Text style={styles.percentageSymbol}>%</Text>
+                        </View>
+                        {!isReadOnly && (
+                            <Text style={styles.helpText}>
+                                Từ 0 đến 100. Khi cập nhật trạng thái, % completion sẽ được tính toán tự động.
+                            </Text>
+                        )}
+                    </View>
 
                     {/* Priority */}
                     <View style={styles.field}>
@@ -640,6 +714,19 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         alignItems: "center",
         marginTop: 8,
+    },
+    progressInputContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    progressInput: {
+        flex: 1,
+    },
+    percentageSymbol: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#1F2937",
     },
     disabledButton: {
         opacity: 0.7,

@@ -883,6 +883,7 @@ const typeColors = {
   budget: 'blue',
   equipment_rental: 'cyan',
   asset_usage: 'blue',
+  equipment_purchase: 'geekblue',
   attendance: 'teal',
 }
 
@@ -1053,6 +1054,7 @@ const getDetailUrl = (record) => {
     equipment_rental_return: pid ? `/projects/${pid}?tab=equipment` : null,
     asset_usage: pid ? `/projects/${pid}?tab=equipment` : null,
     asset_usage_return: pid ? `/projects/${pid}?tab=equipment` : null,
+    equipment_purchase: null, // Global equipment purchase, or maybe handled somewhere else
     attendance: pid ? `/projects/${pid}?tab=attendance` : `/hr/attendance`,
   }
   return typeUrlMap[record.type] || typeUrlMap[record._approveType] || null
@@ -1093,6 +1095,8 @@ const approveUrlMap = {
   asset_usage_management: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/approve-management`,
   asset_usage_accountant: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/confirm-accountant`,
   asset_usage_return: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/confirm-return`,
+  equipment_purchase_management: (r) => `/approvals/equipment-purchase/${r.id}/approve-management`,
+  equipment_purchase_accountant: (r) => `/approvals/equipment-purchase/${r.id}/confirm-accountant`,
   attendance: (r) => `/approvals/attendance/${r.id}/approve`,
 }
 
@@ -1164,6 +1168,8 @@ const approveLabels = {
   asset_usage_management: 'BĐH duyệt sử dụng thiết bị',
   asset_usage_accountant: 'KT xác nhận sử dụng thiết bị',
   asset_usage_return: 'Xác nhận trả thiết bị kho',
+  equipment_purchase_management: 'BĐH duyệt mua thiết bị',
+  equipment_purchase_accountant: 'KT duyệt thanh toán mua thiết bị',
   attendance: 'Duyệt chấm công',
 }
 
@@ -1260,6 +1266,8 @@ const rejectUrlMap = {
   equipment_rental_accountant: (r) => `/projects/${r.project_id}/equipment-rentals/${r.id}/reject`,
   asset_usage_management: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/reject`,
   asset_usage_accountant: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/reject`,
+  equipment_purchase_management: (r) => `/approvals/equipment-purchase/${r.id}/reject`,
+  equipment_purchase_accountant: (r) => `/approvals/equipment-purchase/${r.id}/reject`,
   attendance: (r) => `/approvals/attendance/${r.id}/reject`,
 }
 

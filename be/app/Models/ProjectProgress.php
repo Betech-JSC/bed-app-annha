@@ -32,41 +32,36 @@ class ProjectProgress extends Model
     // METHODS
     // ==================================================================
 
-    public function calculateFromLogs(): float
+    /**
+     * Tiến độ dựa trên nhật ký thi công — lấy log mới nhất toàn dự án.
+     * PURE: chỉ return, không save, không cập nhật trạng thái dự án.
+     *
+     * @return float|null null nếu dự án chưa có log nào
+     */
+    public function calculateFromLogs(): ?float
     {
         $latestLog = $this->project->constructionLogs()
             ->orderBy('log_date', 'desc')
             ->first();
 
-        if ($latestLog) {
-            $finalProgress = $latestLog->completion_percentage;
-            $this->overall_percentage = $finalProgress;
-            $this->calculated_from = 'logs';
-            $this->last_calculated_at = now();
-            $this->save();
-
-            // Tự động cập nhật trạng thái dự án khi tiến độ đạt 100%
-            if ($finalProgress >= 100 && $this->project) {
-                $project = $this->project;
-                if ($project->status !== 'completed') {
-                    $project->update([
-                        'status' => 'completed',
-                        'updated_by' => auth()->id() ?? $project->updated_by,
-                    ]);
-                }
-            }
-
-            return $this->overall_percentage;
+        if (!$latestLog) {
+            return null;
         }
 
-        return 0;
+        return (float) $latestLog->completion_percentage;
     }
 
-    public function calculateFromSubcontractors(): float
+    /**
+     * Tiến độ dựa trên nhà thầu phụ — weighted by total_quote theo progress_status.
+     * PURE: chỉ return, không save, không cập nhật trạng thái dự án.
+     *
+     * @return float|null null nếu không có nhà thầu phụ hoặc tổng trọng số = 0
+     */
+    public function calculateFromSubcontractors(): ?float
     {
         $subcontractors = $this->project->subcontractors;
         if ($subcontractors->isEmpty()) {
-            return 0;
+            return null;
         }
 
         $totalWeight = 0;
@@ -86,30 +81,11 @@ class ProjectProgress extends Model
             $weightedProgress += $weight * $progress;
         }
 
-        if ($totalWeight > 0) {
-            $finalProgress = $weightedProgress / $totalWeight;
-            $this->overall_percentage = $finalProgress;
-        } else {
-            $this->overall_percentage = 0;
-            $finalProgress = 0;
+        if ($totalWeight <= 0) {
+            return null;
         }
 
-        $this->calculated_from = 'subcontractors';
-        $this->last_calculated_at = now();
-        $this->save();
-
-        // Tự động cập nhật trạng thái dự án khi tiến độ đạt 100%
-        if ($finalProgress >= 100 && $this->project) {
-            $project = $this->project;
-            if ($project->status !== 'completed') {
-                $project->update([
-                    'status' => 'completed',
-                    'updated_by' => auth()->id() ?? $project->updated_by,
-                ]);
-            }
-        }
-
-        return $this->overall_percentage;
+        return (float) ($weightedProgress / $totalWeight);
     }
 
     public function updateManual(float $percentage): bool
@@ -135,45 +111,34 @@ class ProjectProgress extends Model
     }
 
     /**
-     * Tính tiến độ dựa trên nghiệm thu
-     * Tiến độ được tính dựa trên tỷ lệ hạng mục nghiệm thu đã được approved
-     * Mỗi giai đoạn (stage) có trọng số bằng nhau, và trong mỗi giai đoạn, tiến độ được tính theo tỷ lệ items đã approved
-     * 
-     * @return float|null Trả về null nếu không có nghiệm thu để tính
+     * Tiến độ dựa trên nghiệm thu: trung bình tỷ lệ approved items của mỗi stage có items.
+     * Cap tại 99.99% đến khi TẤT CẢ items của TẤT CẢ stages được approved → khi đó = 100%.
+     * PURE: chỉ return, không save.
+     *
+     * @return float|null null nếu dự án không có stage hoặc không có stage nào có items
      */
     public function calculateFromAcceptance(): ?float
     {
-        $project = $this->project;
-        $stages = $project->acceptanceStages()->with('items')->get();
+        $stages = $this->project->acceptanceStages()->with('items')->get();
 
         if ($stages->isEmpty()) {
-            // Nếu không có nghiệm thu, trả về null để dùng nguồn khác
             return null;
         }
 
-        // Lọc các stage có items (bỏ qua stage không có items)
-        $stagesWithItems = $stages->filter(function ($stage) {
-            return $stage->items->isNotEmpty();
-        });
+        $stagesWithItems = $stages->filter(fn($stage) => $stage->items->isNotEmpty());
 
         if ($stagesWithItems->isEmpty()) {
-            // Nếu không có stage nào có items, trả về null
             return null;
         }
 
-        $totalStages = $stagesWithItems->count();
         $stageProgresses = [];
-
-        // Tính tiến độ cho từng stage dựa trên tỷ lệ items đã approved
         foreach ($stagesWithItems as $stage) {
             $items = $stage->items;
             $totalItems = $items->count();
             $approvedItems = $items->where('acceptance_status', 'approved')->count();
-            
+
             if ($totalItems > 0) {
-                // Tiến độ của stage = tỷ lệ items đã approved
-                $stageProgress = ($approvedItems / $totalItems) * 100;
-                $stageProgresses[] = $stageProgress;
+                $stageProgresses[] = ($approvedItems / $totalItems) * 100;
             }
         }
 
@@ -181,38 +146,27 @@ class ProjectProgress extends Model
             return null;
         }
 
-        // Tiến độ tổng hợp = trung bình tiến độ của tất cả các stage
-        // Mỗi stage có trọng số bằng nhau
         $finalProgress = array_sum($stageProgresses) / count($stageProgresses);
 
-        // Đảm bảo chỉ đạt 100% khi TẤT CẢ items trong TẤT CẢ stages đã được approved
-        $allItemsApproved = $stagesWithItems->every(function ($stage) {
-            return $stage->items->every(function ($item) {
-                return $item->acceptance_status === 'approved';
-            });
-        });
+        $allItemsApproved = $stagesWithItems->every(
+            fn($stage) => $stage->items->every(fn($item) => $item->acceptance_status === 'approved')
+        );
 
-        if (!$allItemsApproved) {
-            // Nếu chưa tất cả items được approved, đảm bảo không vượt quá 99.99%
-            $finalProgress = min($finalProgress, 99.99);
-        } else {
-            // Nếu tất cả items đã được approved, đảm bảo đạt 100%
-            $finalProgress = 100;
+        if ($allItemsApproved) {
+            return 100.0;
         }
 
-        $this->overall_percentage = round($finalProgress, 2);
-        $this->calculated_from = 'acceptance';
-        $this->last_calculated_at = now();
-        $this->save();
-
-        return $this->overall_percentage;
+        // Chưa duyệt hết → cap 99.99 để không bao giờ hiển thị 100% trước khi thực sự xong
+        return (float) min($finalProgress, 99.99);
     }
 
     /**
-     * Tính tiến độ từ WBS Tasks (root tasks, weighted bằng trung bình đơn giản)
-     * Đây là nguồn ưu tiên 2 — sau Nghiệm thu, trước Nhật ký/Nhà thầu
+     * Tiến độ từ WBS Tasks — trung bình có trọng số theo duration của root tasks.
+     * Root tasks' progress_percentage được TaskProgressService cập nhật tự động
+     * từ leaf → root khi có log mới, nên đọc thẳng ở đây là an toàn.
+     * PURE: chỉ return, không save.
      *
-     * @return float|null null nếu không có task nào
+     * @return float|null null nếu dự án không có root task nào
      */
     public function calculateFromTasks(): ?float
     {
@@ -225,69 +179,74 @@ class ProjectProgress extends Model
             return null;
         }
 
-        $totalWeight  = 0;
-        $weightedSum  = 0;
+        $totalWeight = 0;
+        $weightedSum = 0;
 
         foreach ($rootTasks as $task) {
             // Trọng số = thời lượng (ngày). Nếu không có → dùng 1 (đồng đều)
-            $weight       = max(1, (int) ($task->duration ?? 0));
-            $progress     = (float) ($task->progress_percentage ?? 0);
+            $weight   = max(1, (int) ($task->duration ?? 0));
+            $progress = (float) ($task->progress_percentage ?? 0);
 
-            $weightedSum  += $progress * $weight;
-            $totalWeight  += $weight;
+            $weightedSum += $progress * $weight;
+            $totalWeight += $weight;
         }
 
-        $finalProgress = $totalWeight > 0 ? round($weightedSum / $totalWeight, 2) : 0.0;
+        if ($totalWeight <= 0) {
+            return null;
+        }
 
-        $this->overall_percentage = $finalProgress;
-        $this->calculated_from    = 'tasks';
-        $this->last_calculated_at = now();
-        $this->save();
-
-        return $finalProgress;
+        return (float) ($weightedSum / $totalWeight);
     }
 
     /**
-     * Tính tiến độ tổng hợp — ưu tiên lần lượt:
-     *   1. Nghiệm thu (acceptance stages với items)
-     *   2. WBS Tasks (root tasks progress_percentage)
-     *   3. Nhật ký thi công (construction logs — giá trị mới nhất)
-     *   4. Nhà thầu (weighted by total_quote)
-     *   → Nếu có nhiều nguồn 3+4 thì lấy MAX
+     * Tính tiến độ tổng hợp — ƯU TIÊN theo thứ tự, early return nguồn đầu tiên có dữ liệu:
+     *   1. Nghiệm thu (acceptance stages có items)      — đáng tin nhất: khách đã duyệt
+     *   2. WBS Tasks (root tasks progress_percentage)   — cấu trúc công việc
+     *   3. Nhật ký thi công (log mới nhất toàn dự án)  — fallback khi chưa có WBS
+     *   4. Nhà thầu phụ (weighted by total_quote)       — fallback cuối cùng
+     *
+     * Là NƠI DUY NHẤT ghi DB và trigger autoCompleteProject.
      *
      * @param bool $force Bỏ qua cache 10 phút — bắt buộc tính lại ngay
      */
     public function calculateOverall(bool $force = false): float
     {
-        // Cache 10 phút để tránh tính toán lặp — bỏ qua nếu $force = true
         if (!$force && $this->last_calculated_at && $this->last_calculated_at->diffInMinutes(now()) < 10) {
             return (float) $this->overall_percentage;
         }
 
-        // === Tính toán các nguồn ===
-        $acceptanceProgress    = $this->calculateFromAcceptance() ?? 0.0;
-        $taskProgress          = $this->calculateFromTasks() ?? 0.0;
-        $logProgress           = $this->calculateFromLogs() ?? 0.0;
-        $subcontractorProgress = $this->calculateFromSubcontractors() ?? 0.0;
+        [$progress, $source] = $this->resolveProgress();
 
-        // Lấy giá trị lớn nhất từ tất cả các nguồn để đảm bảo tiến độ luôn phản ánh mức độ thực hiện cao nhất
-        $finalProgress = max($acceptanceProgress, $taskProgress, $logProgress, $subcontractorProgress);
-
-        $this->overall_percentage = round($finalProgress, 2);
-        
-        // Xác định nguồn cho metadata (ưu tiên theo giá trị lớn nhất)
-        if ($finalProgress == $acceptanceProgress && $acceptanceProgress > 0) $this->calculated_from = 'acceptance';
-        elseif ($finalProgress == $taskProgress && $taskProgress > 0) $this->calculated_from = 'tasks';
-        elseif ($finalProgress == $logProgress && $logProgress > 0) $this->calculated_from = 'logs';
-        elseif ($finalProgress == $subcontractorProgress && $subcontractorProgress > 0) $this->calculated_from = 'subcontractors';
-        else $this->calculated_from = 'average';
-
+        $this->overall_percentage = round($progress, 2);
+        $this->calculated_from    = $source;
         $this->last_calculated_at = now();
         $this->save();
 
-        $this->autoCompleteProject($finalProgress);
+        $this->autoCompleteProject($progress);
 
         return (float) $this->overall_percentage;
+    }
+
+    /**
+     * Chọn nguồn tiến độ theo thứ tự ưu tiên, early return nguồn đầu tiên có dữ liệu.
+     *
+     * @return array{0: float, 1: string} [progress, calculated_from]
+     */
+    private function resolveProgress(): array
+    {
+        if (($p = $this->calculateFromAcceptance()) !== null) {
+            return [$p, 'acceptance'];
+        }
+        if (($p = $this->calculateFromTasks()) !== null) {
+            return [$p, 'tasks'];
+        }
+        if (($p = $this->calculateFromLogs()) !== null) {
+            return [$p, 'logs'];
+        }
+        if (($p = $this->calculateFromSubcontractors()) !== null) {
+            return [$p, 'subcontractors'];
+        }
+        return [0.0, 'manual'];
     }
 
     /**

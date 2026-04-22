@@ -178,6 +178,11 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/budget/{id}/approve', [CrmApprovalController::class, 'approveBudget'])->name('budget.approve');
         Route::post('/budget/{id}/reject', [CrmApprovalController::class, 'rejectBudget'])->name('budget.reject');
 
+        // Equipment Purchase
+        Route::post('/equipment-purchase/{id}/approve-management', [CrmApprovalController::class, 'approveEquipmentPurchaseManagement'])->name('equipment-purchase.approve-management');
+        Route::post('/equipment-purchase/{id}/confirm-accountant', [CrmApprovalController::class, 'approveEquipmentPurchaseAccountant'])->name('equipment-purchase.confirm-accountant');
+        Route::post('/equipment-purchase/{id}/reject', [CrmApprovalController::class, 'rejectEquipmentPurchase'])->name('equipment-purchase.reject');
+
         // Attendance (Chấm công — HR)
         Route::post('/attendance/{id}/approve', [CrmApprovalController::class, 'approveAttendance'])->name('attendance.approve');
         Route::post('/attendance/{id}/reject', [CrmApprovalController::class, 'rejectAttendance'])->name('attendance.reject');

@@ -268,7 +268,7 @@ export default function PaymentsScreen() {
       case "confirmed":
         return "#10B981";
       case "customer_paid":
-        return "#06B6D4";
+        return "#F59E0B";
       case "overdue":
       case "rejected":
       case "customer_rejected":
@@ -298,7 +298,7 @@ export default function PaymentsScreen() {
       case "customer_approved":
         return "KH đã duyệt";
       case "customer_paid":
-        return "KH báo TT";
+        return "Chờ KT xác nhận";
       case "paid":
       case "confirmed":
         return "Đã thanh toán";

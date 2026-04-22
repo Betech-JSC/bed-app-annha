@@ -42,6 +42,22 @@ class ConstructionLogService
                 }
             }
 
+            // Prevent duplicate logs for the same date and task
+            if ($isNew && !empty($data['log_date'])) {
+                $duplicateQuery = ConstructionLog::where('project_id', $project->id)
+                    ->where('log_date', $data['log_date']);
+                
+                if (!empty($data['task_id'])) {
+                    $duplicateQuery->where('task_id', $data['task_id']);
+                } else {
+                    $duplicateQuery->whereNull('task_id');
+                }
+
+                if ($duplicateQuery->exists()) {
+                    throw new \Exception('Đã tồn tại nhật ký thi công cho ngày này ' . (!empty($data['task_id']) ? 'đối với công việc này.' : 'đối với dự án.'));
+                }
+            }
+
             // 2. Validation: Completion percentage must only increase
             if (!empty($data['task_id']) && isset($data['completion_percentage'])) {
                 $lastLogQuery = ConstructionLog::where('task_id', $data['task_id'])

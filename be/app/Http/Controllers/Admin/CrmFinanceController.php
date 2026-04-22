@@ -232,8 +232,12 @@ class CrmFinanceController extends Controller
         $this->crmRequire($user, Permissions::COMPANY_COST_UPDATE);
         $cost = Cost::companyCosts()->findOrFail($id);
 
-        if (!in_array($cost->status, ['draft', 'rejected'])) {
-            return redirect()->back()->with('error', 'Chỉ có thể chỉnh sửa chi phí ở trạng thái nháp hoặc bị từ chối.');
+        $allowedStatuses = ['draft', 'rejected'];
+        if ($user->hasPermission(Permissions::COMPANY_COST_APPROVE_MANAGEMENT)) $allowedStatuses[] = 'pending_management_approval';
+        if ($user->hasPermission(Permissions::COMPANY_COST_APPROVE_ACCOUNTANT)) $allowedStatuses[] = 'pending_accountant_approval';
+
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && !in_array($cost->status, $allowedStatuses)) {
+            return redirect()->back()->with('error', 'Chỉ có thể chỉnh sửa chi phí công ty ở trạng thái nháp hoặc khi đang chờ bạn duyệt.');
         }
 
         $validated = $request->validate([

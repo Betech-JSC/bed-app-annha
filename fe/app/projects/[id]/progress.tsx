@@ -364,6 +364,10 @@ export default function ProgressScreen() {
         return "Hoàn thành";
       case "delayed":
         return "Trễ tiến độ";
+      case "on_hold":
+        return "Tạm dừng";
+      case "cancelled":
+        return "Đã hủy";
       default:
         return status;
     }

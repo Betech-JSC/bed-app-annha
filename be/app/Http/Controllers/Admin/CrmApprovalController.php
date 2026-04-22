@@ -91,6 +91,7 @@ class CrmApprovalController extends Controller
                 ->concat($data['budgets']->map(fn($i) => array_merge($this->formatBudget($i), ['_approveType' => 'budget'])))
                 ->concat($data['equipment_rentals_management']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_management'])))
                 ->concat($data['asset_usages_management']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_management'])))
+                ->concat(($data['equipment_purchases_management'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_management'])))
                 ->unique('id')->values() : collect([]),
 
             'accountant' => $userPermissions['can_accountant'] ? collect([])
@@ -100,6 +101,7 @@ class CrmApprovalController extends Controller
                 ->concat($data['material_bills_accountant']->map(fn($i) => array_merge($this->formatMaterialBillItem($i), ['_approveType' => 'material_bill'])))
                 ->concat($data['equipment_rentals_accountant']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_accountant'])))
                 ->concat($data['asset_usages_accountant']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_accountant'])))
+                ->concat(($data['equipment_purchases_accountant'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_accountant'])))
                 ->unique('id')->values() : collect([]),
 
             'project_manager' => $userPermissions['can_pm'] ? collect([])
@@ -109,6 +111,7 @@ class CrmApprovalController extends Controller
                 ->concat($data['schedule_adjustments']->map(fn($i) => array_merge($this->formatScheduleAdjustmentItem($i), ['_approveType' => 'schedule_adjustment'])))
                 ->concat($data['equipment_rentals_return']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_return'])))
                 ->concat($data['asset_usages_return']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_return'])))
+                ->concat(($data['equipment_purchases_return'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_return']))) // In case there is a return flow in the future
                 ->concat($defectsByRole['project_manager'])
                 ->unique('id')->values() : collect([]),
 
@@ -164,7 +167,12 @@ class CrmApprovalController extends Controller
     {
         $cost = Cost::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $cost->project);
+        
+        if ($cost->project_id) {
+            $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $cost->project);
+        } else {
+            $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_MANAGEMENT);
+        }
 
         $result = $this->approvalActionService->approve($user, 'management', $id);
 
@@ -178,7 +186,12 @@ class CrmApprovalController extends Controller
     {
         $cost = Cost::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $cost->project);
+        
+        if ($cost->project_id) {
+            $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $cost->project);
+        } else {
+            $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT);
+        }
 
         // Kế toán phải chọn ngân sách cho chi phí dự án
         if ($cost->project_id) {
@@ -212,8 +225,23 @@ class CrmApprovalController extends Controller
         $type = $request->get('type', 'management');
         $user = Auth::guard('admin')->user();
         
-        // Basic requirement check (can be refined per type if needed)
-        $this->crmRequire($user, Permissions::COST_REJECT);
+        // Basic requirement check (refine for company costs)
+        // Note: For universal reject, we determine model by the type param but we really only have $id.
+        // It relies on Cost model typically for generic 'reject'. Let's find out if it's a Cost.
+        if (in_array($type, ['management', 'accountant', 'project_cost', 'company_cost'])) {
+            $cost = \App\Models\Cost::find($id);
+            if ($cost) {
+                if ($cost->project_id) {
+                    $this->crmRequire($user, Permissions::COST_REJECT, $cost->project);
+                } else {
+                    $this->crmRequire($user, Permissions::COMPANY_COST_REJECT);
+                }
+            } else {
+                $this->crmRequire($user, Permissions::COST_REJECT);
+            }
+        } else {
+            $this->crmRequire($user, Permissions::COST_REJECT);
+        }
 
         $result = $this->approvalActionService->reject($user, $type, $id, $request->reason);
 
@@ -587,6 +615,29 @@ class CrmApprovalController extends Controller
     }
 
     // =========================================================================
+    // EQUIPMENT PURCHASE
+    // =========================================================================
+
+    public function approveEquipmentPurchaseManagement(Request $request, $id)
+    {
+        $user = Auth::guard('admin')->user();
+        return $this->delegateApprove($user, 'equipment_purchase_management', $id);
+    }
+
+    public function approveEquipmentPurchaseAccountant(Request $request, $id)
+    {
+        $user = Auth::guard('admin')->user();
+        return $this->delegateApprove($user, 'equipment_purchase_accountant', $id);
+    }
+
+    public function rejectEquipmentPurchase(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string']);
+        $user = Auth::guard('admin')->user();
+        return $this->delegateReject($user, 'equipment_purchase_management', $id, $request->reason); // "type" dictates which block model maps to in ApprovalActionService, equipment_purchase_management works for rejection
+    }
+
+    // =========================================================================
     // SHARED DELEGATE HELPERS — Single source of truth via ApprovalActionService
     // =========================================================================
 
@@ -618,10 +669,10 @@ class CrmApprovalController extends Controller
     {
         return [
             'id' => $cost->id,
-            'type' => 'project_cost',
-            'type_label' => 'Chi phí',
+            'type' => $cost->project_id ? 'project_cost' : 'company_cost',
+            'type_label' => $cost->project_id ? 'Chi phí DA' : 'Chi phí C.Ty',
             'title' => $cost->name,
-            'subtitle' => ($cost->project->code ?? '') . ' - ' . ($cost->project->name ?? 'Dự án'),
+            'subtitle' => $cost->project_id ? (($cost->project->code ?? '') . ' - ' . ($cost->project->name ?? 'Dự án')) : 'Chi phí công ty',
             'amount' => (float) $cost->amount,
             'status' => $cost->status,
             'status_label' => $this->getStatusLabel($cost->status),
@@ -1056,6 +1107,33 @@ class CrmApprovalController extends Controller
         ];
     }
 
+    private function formatEquipmentPurchaseItem(\App\Models\EquipmentPurchase $purchase): array
+    {
+        return [
+            'id' => $purchase->id,
+            'type' => 'equipment_purchase',
+            'type_label' => 'Mua thiết bị',
+            'title' => 'Mua TB mới: ' . ($purchase->project->name ?? 'Dự án'),
+            'subtitle' => 'Tổng: ' . number_format($purchase->total_amount, 0) . 'đ',
+            'amount' => (float) $purchase->total_amount,
+            'status' => $purchase->status,
+            'status_label' => $purchase::STATUS_LABELS[$purchase->status] ?? $purchase->status,
+            'created_by' => $purchase->creator->name ?? 'N/A',
+            'created_at' => optional($purchase->created_at)->format('d/m/Y H:i') ?? '',
+            'description' => $purchase->notes,
+            'project_id' => $purchase->project_id,
+            'attachments' => $purchase->attachments->map(fn($a) => [
+                'id' => $a->id,
+                'name' => $a->file_name,
+                'url' => $a->file_url,
+                'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
+            ]),
+            'attachments_count' => $purchase->attachments->count(),
+        ];
+    }
+
     private function formatAssetUsageItem(AssetUsage $usage): array
     {
         return [
@@ -1164,8 +1242,11 @@ class CrmApprovalController extends Controller
             'pending' => 'Chờ duyệt', 'supervisor_approved' => 'GS đã duyệt', 'project_manager_approved' => 'QLDA đã duyệt',
             'customer_approved' => 'KH đã duyệt', 'owner_approved' => 'CĐT đã duyệt', 'design_approved' => 'TK đã duyệt',
             'internal_approved' => 'Nội bộ đã duyệt', 'pending_management_approval' => 'Chờ BĐH duyệt',
-            'pending_accountant_approval' => 'Chờ KT xác nhận', 'pending_accountant_confirmation' => 'Chờ KT xác nhận',
-            'pending_approval' => 'Chờ duyệt', 'approved' => 'Đã duyệt', 'active' => 'Đang áp dụng',
+            'pending_accountant_approval' => 'Chờ KT xác nhận', 'pending_accountant' => 'Chờ KT xác nhận',
+            'pending_accountant_confirmation' => 'Chờ KT xác nhận',
+            'pending_customer_approval' => 'Chờ duyệt', 'customer_pending_approval' => 'Chờ duyệt',
+            'available' => 'Đã hoàn thành', 'completed' => 'Đã hoàn thành',
+            'approved' => 'Đã duyệt', 'active' => 'Đang áp dụng',
             'archived' => 'Đã lưu trữ', 'paid' => 'Đã thanh toán', 'rejected' => 'Chưa đạt',
             'open' => 'Mới', 'in_progress' => 'Đang sửa lỗi', 'fixed' => 'Đã sửa — Chờ xác nhận', 'verified' => 'Đã xác nhận',
         ];
