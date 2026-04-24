@@ -337,6 +337,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
 
         // Subcontractor Payments
         Route::post('/{project}/subcontractors/{sub}/payments', [CrmProjectsController::class, 'storeSubPayment'])->name('subcontractors.payments.store');
+        Route::put('/{project}/subcontractors/{sub}/payments/{payment}', [CrmProjectsController::class, 'updateSubPayment'])->name('subcontractors.payments.update');
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/submit', [CrmProjectsController::class, 'submitSubPayment'])->name('subcontractors.payments.submit');
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/approve', [CrmProjectsController::class, 'approveSubPayment'])->name('subcontractors.payments.approve');
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/reject', [CrmProjectsController::class, 'rejectSubPayment'])->name('subcontractors.payments.reject');

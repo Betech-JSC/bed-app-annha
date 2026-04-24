@@ -2019,6 +2019,49 @@ class CrmProjectsController extends Controller
         }
     }
 
+    public function updateSubPayment(Request $request, string $projectId, string $subId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_UPDATE, $project);
+
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($subId);
+        $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        if ($payment->status !== 'draft') {
+            return back()->with('error', 'Chỉ có thể cập nhật phiếu thanh toán ở trạng thái nháp.');
+        }
+
+        $validated = $request->validate([
+            'payment_stage' => 'nullable|string|max:255',
+            'amount' => 'required|numeric|min:0',
+            'payment_date' => 'nullable|date',
+            'payment_method' => 'required|in:cash,bank_transfer,check,other',
+            'reference_number' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+        ]);
+
+        try {
+            $this->financialService->upsertSubPayment(
+                array_merge($validated, [
+                    'project_id' => $project->id,
+                    'subcontractor_id' => $sub->id,
+                ]),
+                $payment,
+                $user
+            );
+
+            // Web specific: handle file uploads from request if any
+            if ($request->hasFile('files')) {
+                $this->attachFilesToEntity($request, $payment, "sub-payments/{$project->id}/{$payment->id}");
+            }
+
+            return back()->with('success', 'Đã cập nhật phiếu thanh toán NTP.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
     public function submitSubPayment(string $projectId, string $subId, string $paymentId)
     {
         $project = Project::findOrFail($projectId);
