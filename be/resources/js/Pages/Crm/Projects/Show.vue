@@ -850,10 +850,10 @@
               <!-- Status & Actions -->
               <div class="flex gap-1 items-center flex-shrink-0">
                 <a-tag :color="acceptStatusColors[stage.status] || 'default'" class="rounded-full text-xs">{{ acceptStatusLabels[stage.status] || stage.status }}</a-tag>
-                <a-tooltip title="Sửa" v-if="can('acceptance.update') && stage.status !== 'owner_approved'">
+                <a-tooltip title="Sửa" v-if="can('acceptance.update') && !['customer_approved', 'owner_approved'].includes(stage.status)">
                   <a-button type="text" size="small" @click="openEditAcceptModal(stage)"><EditOutlined /></a-button>
                 </a-tooltip>
-                <a-popconfirm v-if="can('acceptance.delete') && stage.status !== 'owner_approved'" title="Xóa?" @confirm="deleteAccept(stage)">
+                <a-popconfirm v-if="can('acceptance.delete') && !['customer_approved', 'owner_approved'].includes(stage.status)" title="Xóa?" @confirm="deleteAccept(stage)">
                   <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
                 </a-popconfirm>
               </div>
