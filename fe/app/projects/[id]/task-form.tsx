@@ -226,6 +226,16 @@ export default function TaskFormScreen() {
             return;
         }
 
+        if (!startDate) {
+            Alert.alert("Lỗi", "Vui lòng chọn ngày bắt đầu");
+            return;
+        }
+
+        if (!endDate) {
+            Alert.alert("Lỗi", "Vui lòng chọn ngày kết thúc");
+            return;
+        }
+
         try {
             setSubmitting(true);
             const data: CreateTaskData | UpdateTaskData = {

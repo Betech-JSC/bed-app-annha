@@ -79,24 +79,6 @@ export default function ConstructionLogsScreen() {
   const [logs, setLogs] = useState<ConstructionLog[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const getLogStatusColor = (status?: string) => {
-    switch (status) {
-      case "approved": return "#10B981"; // Green
-      case "rejected": return "#EF4444"; // Red
-      case "pending": return "#F59E0B"; // Orange
-      case "draft": default: return "#6B7280"; // Gray
-    }
-  };
-
-  const getLogStatusText = (status?: string) => {
-    switch (status) {
-      case "approved": return "Đã duyệt";
-      case "rejected": return "Bị từ chối";
-      case "pending": return "Chờ duyệt";
-      case "draft": default: return "Bản nháp";
-    }
-  };
-
   const [modalVisible, setModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedDateLogs, setSelectedDateLogs] = useState<ConstructionLog[]>([]);
@@ -417,11 +399,6 @@ export default function ConstructionLogsScreen() {
   };
 
   const handleDelete = async (log: ConstructionLog) => {
-    // Only allow deleting draft or pending logs, maybe rejected. Or let backend handle it.
-    if (log.approval_status === "approved") {
-      Alert.alert("Lỗi", "Không thể xóa nhật ký đã được duyệt.");
-      return;
-    }
     Alert.alert(
       "Xác nhận xóa",
       "Bạn có chắc chắn muốn xóa nhật ký này?",
@@ -446,39 +423,6 @@ export default function ConstructionLogsScreen() {
               }
             } catch (error: any) {
               Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa nhật ký");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleApprove = async (log: ConstructionLog, status: 'approved' | 'rejected') => {
-    Alert.alert(
-      "Xác nhận",
-      status === 'approved' ? "Bạn có chắc chắn muốn duyệt nhật ký này?" : "Bạn có chắc chắn muốn từ chối nhật ký này?",
-      [
-        { text: "Hủy", style: "cancel" },
-        {
-          text: "Đồng ý",
-          style: status === 'approved' ? "default" : "destructive",
-          onPress: async () => {
-            try {
-              const response = await constructionLogApi.approveLog(id!, log.id, { status });
-              if (response.success) {
-                Alert.alert("Thành công", status === 'approved' ? "Đã duyệt nhật ký" : "Đã từ chối nhật ký");
-                setDetailModalVisible(false);
-                if (currentMonth && currentYear) {
-                  const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
-                  const lastDay = new Date(currentYear, currentMonth, 0);
-                  const endDate = formatDateLocal(lastDay);
-                  loadLogs(startDate, endDate, true);
-                } else {
-                  loadLogs(undefined, undefined, true);
-                }
-              }
-            } catch (error: any) {
-              Alert.alert("Lỗi", error.response?.data?.message || "Không thể thao tác");
             }
           },
         },
@@ -1640,28 +1584,7 @@ export default function ConstructionLogsScreen() {
                     </View>
                   )}
 
-                  {/* Actions (Approve/Reject) */}
-                  {log.approval_status === "pending" && (
-                    <PermissionGuard permission={Permissions.LOG_UPDATE} projectId={id}>
-                      <View style={styles.approvalActions}>
-                        <TouchableOpacity
-                          style={[styles.approvalButton, styles.rejectButton]}
-                          onPress={() => handleApprove(log, 'rejected')}
-                        >
-                          <Ionicons name="close-circle-outline" size={20} color="#EF4444" />
-                          <Text style={styles.rejectButtonText}>Từ chối</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity
-                          style={[styles.approvalButton, styles.approveButton]}
-                          onPress={() => handleApprove(log, 'approved')}
-                        >
-                          <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
-                          <Text style={styles.approveButtonText}>Duyệt</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </PermissionGuard>
-                  )}
+
                 </View>
               ))
             ) : (

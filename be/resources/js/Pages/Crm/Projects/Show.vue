@@ -7039,16 +7039,22 @@ const invoices = computed(() => props.financeData?.invoices || [])
 const budgets = computed(() => props.financeData?.budgets || props.project.budgets || [])
 const allTasks = computed(() => props.scheduleData?.allTasks || [])
 
-// Sorted tasks for log form: by progress ascending, 100% at bottom
+// Sorted tasks for log form: only leaf tasks, by progress ascending, 100% at bottom
 const logTaskOptions = computed(() => {
-  return [...allTasks.value].sort((a, b) => {
-    const pA = Number(a.progress_percentage || 0)
-    const pB = Number(b.progress_percentage || 0)
-    // 100% tasks go to the bottom
-    if (pA >= 100 && pB < 100) return 1
-    if (pB >= 100 && pA < 100) return -1
-    return pA - pB
-  })
+  const tasks = allTasks.value;
+  // Find IDs of tasks that have children
+  const parentIds = new Set(tasks.map(t => t.parent_id).filter(id => id !== null));
+  
+  return tasks
+    .filter(t => !parentIds.has(t.id)) // Only leaf tasks
+    .sort((a, b) => {
+      const pA = Number(a.progress_percentage || 0)
+      const pB = Number(b.progress_percentage || 0)
+      // 100% tasks go to the bottom
+      if (pA >= 100 && pB < 100) return 1
+      if (pB >= 100 && pA < 100) return -1
+      return pA - pB
+    })
 })
 const counts = computed(() => props.counts || {})
 const materialBills = computed(() => {

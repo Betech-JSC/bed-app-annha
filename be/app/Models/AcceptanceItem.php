@@ -160,13 +160,16 @@ class AcceptanceItem extends Model
 
     public function getIsCompletedAttribute(): bool
     {
+        if (!$this->end_date) {
+            return true; // Nếu không có ngày kết thúc, coi như luôn có thể nghiệm thu
+        }
         return now()->toDateString() >= $this->end_date->toDateString();
     }
 
     public function getCanAcceptAttribute(): bool
     {
-        // Chỉ được nghiệm thu sau khi hoàn thành (end_date đã qua)
-        return $this->is_completed && $this->acceptance_status === 'pending';
+        // Chỉ được nghiệm thu sau khi hoàn thành (nếu có end_date)
+        return $this->is_completed && ($this->acceptance_status === 'pending' || $this->acceptance_status === 'not_started');
     }
 
     // ==================================================================

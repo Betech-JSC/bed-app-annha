@@ -344,6 +344,8 @@ export default function ProgressScreen() {
         return "#6B7280";
       case "in_progress":
         return "#3B82F6";
+      case "pending_acceptance":
+        return "#F59E0B"; // Amber for waiting
       case "completed":
         return "#10B981";
       case "delayed":
@@ -360,6 +362,8 @@ export default function ProgressScreen() {
         return "Chưa bắt đầu";
       case "in_progress":
         return "Đang thực hiện";
+      case "pending_acceptance":
+        return "Đang nghiệm thu";
       case "completed":
         return "Hoàn thành";
       case "delayed":
