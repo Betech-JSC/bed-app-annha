@@ -77,6 +77,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Files Management
         Route::prefix('files')->name('files.')->group(function () {
             Route::get('/', [FileController::class, 'index'])->name('index');
+            Route::post('/upload', [FileController::class, 'upload'])->name('upload');
             Route::get('/{id}/download', [FileController::class, 'download'])->name('download');
             Route::delete('/{id}', [FileController::class, 'destroy'])->name('destroy');
         });
@@ -577,6 +578,8 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::delete('/company-costs/{id}', [CrmFinanceController::class, 'destroyCompanyCost'])->name('company-costs.destroy');
         Route::post('/company-costs/{id}/submit', [CrmFinanceController::class, 'submitCompanyCost'])->name('company-costs.submit');
         Route::post('/company-costs/{id}/revert', [CrmFinanceController::class, 'revertCompanyCostToDraft'])->name('company-costs.revert');
+        Route::post('/company-costs/{id}/approve', [CrmFinanceController::class, 'approveCompanyCost'])->name('company-costs.approve');
+        Route::post('/company-costs/{id}/reject', [CrmFinanceController::class, 'rejectCompanyCost'])->name('company-costs.reject');
     });
 
     // Materials

@@ -38,38 +38,52 @@ class AcceptanceService
      */
     public function upsertItem(array $data, ?AcceptanceItem $item = null, $user = null): AcceptanceItem
     {
-        // BUSINESS RULE: Lock all mutations when stage is customer_approved
-        if ($item && $item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
-            throw new \Exception('Không thể chỉnh sửa — Nghiệm thu đã hoàn tất.');
-        }
-        if ($item && $item->acceptance_status === 'approved') {
-            throw new \Exception('Không thể chỉnh sửa hạng mục đã được nghiệm thu.');
+        $isNew = !$item;
+        $stageId = $data['acceptance_stage_id'] ?? ($item ? $item->acceptance_stage_id : null);
+        
+        if (!$stageId) {
+            throw new \Exception('Hạng mục phải thuộc về một Giai đoạn nghiệm thu.');
         }
 
-        // Check for new items — block creation under completed stage
-        if (!$item && isset($data['acceptance_stage_id'])) {
-            $stage = AcceptanceStage::find($data['acceptance_stage_id']);
-            if ($stage && $stage->status === 'customer_approved') {
-                throw new \Exception('Không thể thêm hạng mục — Nghiệm thu đã hoàn tất.');
+        $stage = AcceptanceStage::findOrFail($stageId);
+
+        // 1. Stage Status Check: Lock mutations when customer_approved
+        if ($stage->status === 'customer_approved') {
+            throw new \Exception('Không thể chỉnh sửa — Giai đoạn nghiệm thu này đã hoàn tất.');
+        }
+
+        // 2. Item Status Check (for updates)
+        if ($item && $item->workflow_status === 'customer_approved') {
+            throw new \Exception('Không thể chỉnh sửa hạng mục đã được khách hàng nghiệm thu.');
+        }
+
+        // 3. Task Hierarchy Integrity Check
+        if (isset($data['task_id'])) {
+            $task = \App\Models\ProjectTask::findOrFail($data['task_id']);
+            
+            // Task của Item phải là con của Task của Stage
+            if ($stage->task_id && $task->parent_id !== $stage->task_id) {
+                throw new \Exception('Công việc gán cho hạng mục này phải là công việc con thuộc giai đoạn: ' . $stage->name);
+            }
+
+            // Task phải thuộc cùng dự án
+            if ($task->project_id !== $stage->project_id) {
+                throw new \Exception('Công việc gán không thuộc dự án của giai đoạn nghiệm thu này.');
             }
         }
-
-        $isNew = !$item;
         
         if ($isNew) {
             $item = new AcceptanceItem();
             $item->workflow_status = 'draft';
             $item->acceptance_status = 'not_started';
             $item->created_by = $user->id ?? null;
-        }
-
-        $item->fill($data);
-        
-        if (!$isNew) {
+        } else {
             $item->updated_by = $user->id ?? null;
         }
 
-        // Auto update status based on end_date
+        $item->fill($data);
+
+        // 4. Auto update status based on end_date
         if ($item->end_date && now()->toDateString() >= $item->end_date->toDateString()) {
             if ($item->acceptance_status === 'not_started') {
                 $item->acceptance_status = 'pending';

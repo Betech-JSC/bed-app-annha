@@ -884,6 +884,7 @@ const typeColors = {
   equipment_rental: 'cyan',
   asset_usage: 'blue',
   equipment_purchase: 'geekblue',
+  equipment_inventory: 'green',
   attendance: 'teal',
 }
 
@@ -938,7 +939,7 @@ const activeItems = computed(() => {
   // Filter by category
   if (activeCategory.value !== 'all') {
     items = items.filter(i => {
-      if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget', 'equipment_rental'].includes(i.type)
+      if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory'].includes(i.type)
       if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance'].includes(i.type)
       if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'asset_usage'].includes(i.type)
       if (activeCategory.value === 'hr') return ['attendance'].includes(i.type)
@@ -1054,7 +1055,8 @@ const getDetailUrl = (record) => {
     equipment_rental_return: pid ? `/projects/${pid}?tab=equipment` : null,
     asset_usage: pid ? `/projects/${pid}?tab=equipment` : null,
     asset_usage_return: pid ? `/projects/${pid}?tab=equipment` : null,
-    equipment_purchase: null, // Global equipment purchase, or maybe handled somewhere else
+    equipment_purchase: null, // Global equipment purchase
+    equipment_inventory: '/equipment', // Kho thiết bị
     attendance: pid ? `/projects/${pid}?tab=attendance` : `/hr/attendance`,
   }
   return typeUrlMap[record.type] || typeUrlMap[record._approveType] || null
@@ -1097,6 +1099,8 @@ const approveUrlMap = {
   asset_usage_return: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/confirm-return`,
   equipment_purchase_management: (r) => `/approvals/equipment-purchase/${r.id}/approve-management`,
   equipment_purchase_accountant: (r) => `/approvals/equipment-purchase/${r.id}/confirm-accountant`,
+  equipment_inventory_management: (r) => `/equipment/${r.id}/approve-management`,
+  equipment_inventory_accountant: (r) => `/equipment/${r.id}/confirm-accountant`,
   attendance: (r) => `/approvals/attendance/${r.id}/approve`,
 }
 
@@ -1170,6 +1174,8 @@ const approveLabels = {
   asset_usage_return: 'Xác nhận trả thiết bị kho',
   equipment_purchase_management: 'BĐH duyệt mua thiết bị',
   equipment_purchase_accountant: 'KT duyệt thanh toán mua thiết bị',
+  equipment_inventory_management: 'BĐH duyệt nhập kho thiết bị',
+  equipment_inventory_accountant: 'KT xác nhận chi & nhập kho',
   attendance: 'Duyệt chấm công',
 }
 
@@ -1268,6 +1274,8 @@ const rejectUrlMap = {
   asset_usage_accountant: (r) => `/projects/${r.project_id}/asset-usages/${r.id}/reject`,
   equipment_purchase_management: (r) => `/approvals/equipment-purchase/${r.id}/reject`,
   equipment_purchase_accountant: (r) => `/approvals/equipment-purchase/${r.id}/reject`,
+  equipment_inventory_management: (r) => `/equipment/${r.id}/reject`,
+  equipment_inventory_accountant: (r) => `/equipment/${r.id}/reject`,
   attendance: (r) => `/approvals/attendance/${r.id}/reject`,
 }
 

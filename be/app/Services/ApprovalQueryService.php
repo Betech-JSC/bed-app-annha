@@ -399,6 +399,17 @@ class ApprovalQueryService
             str_contains($a->approvable->status ?? '', 'accountant')
         )->pluck('approvable')->filter();
 
+        // Equipment Inventory (Kho thiết bị - mua trực tiếp)
+        $data['equipment_inventory_management'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === \App\Models\Equipment::class &&
+            str_contains($a->approvable->status ?? '', 'management')
+        )->pluck('approvable')->filter();
+
+        $data['equipment_inventory_accountant'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === \App\Models\Equipment::class &&
+            str_contains($a->approvable->status ?? '', 'accountant')
+        )->pluck('approvable')->filter();
+
         // ═══════════════════════════════════════════════════════════════
         // RECENT ACTIVITY (Hoạt động gần đây)
         // ═══════════════════════════════════════════════════════════════
@@ -721,6 +732,20 @@ class ApprovalQueryService
                     ];
                 }
             }
+            if ($type === 'all' || $type === 'management' || $type === 'equipment_inventory') {
+                foreach ($data['equipment_inventory_management'] ?? [] as $e) {
+                    $items[] = [
+                        'id' => $e->id, 'type' => 'equipment_inventory', 'title' => 'Kho TB: ' . $e->name,
+                        'subtitle' => ($e->code ? "#{$e->code}" : '') . ' SL: ' . ($e->quantity ?: 1), 'amount' => (float)(($e->purchase_price ?: 0) * ($e->quantity ?: 1)),
+                        'status' => $e->status, 'status_label' => $this->getStatusLabel($e->status),
+                        'created_by' => $e->creator->name ?? 'N/A', 'created_at' => $e->created_at->toISOString(),
+                        'project_id' => $e->project_id, 'can_approve' => $canApproveManagement,
+                        'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($e),
+                        'attachments_count' => $e->attachments->count(),
+                    ];
+                }
+            }
         }
 
         // 2. ACCOUNTANT BUCKET
@@ -785,6 +810,20 @@ class ApprovalQueryService
                         'approval_level' => 'accountant', 'role_group' => 'accountant',
                         'attachments' => $this->formatAttachments($p),
                         'attachments_count' => $p->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'accountant' || $type === 'equipment_inventory') {
+                foreach ($data['equipment_inventory_accountant'] ?? [] as $e) {
+                    $items[] = [
+                        'id' => $e->id, 'type' => 'equipment_inventory', 'title' => 'Kho TB: ' . $e->name,
+                        'subtitle' => ($e->code ? "#{$e->code}" : '') . ' SL: ' . ($e->quantity ?: 1), 'amount' => (float)(($e->purchase_price ?: 0) * ($e->quantity ?: 1)),
+                        'status' => $e->status, 'status_label' => $this->getStatusLabel($e->status),
+                        'created_by' => $e->creator->name ?? 'N/A', 'created_at' => $e->created_at->toISOString(),
+                        'project_id' => $e->project_id, 'can_approve' => $canApproveAccountant,
+                        'approval_level' => 'accountant', 'role_group' => 'accountant',
+                        'attachments' => $this->formatAttachments($e),
+                        'attachments_count' => $e->attachments->count(),
                     ];
                 }
             }

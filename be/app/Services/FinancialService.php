@@ -26,6 +26,8 @@ class FinancialService
             $attachmentIds = $data['attachment_ids'] ?? [];
             unset($data['attachment_ids']);
 
+            Log::info("Upserting Cost. IDs: " . (is_array($attachmentIds) ? implode(',', $attachmentIds) : $attachmentIds));
+
             if ($isNew) {
                 $cost = new Cost();
                 $cost->status = $data['status'] ?? 'draft';
@@ -44,10 +46,24 @@ class FinancialService
             $cost->fill($data);
             $cost->save();
 
+            $morphType = $cost->getMorphClass();
+            Log::info("Upserting Cost ID: {$cost->id}, Morph Type: {$morphType}, Attachment IDs: " . (is_array($attachmentIds) ? implode(',', $attachmentIds) : $attachmentIds));
+
             // Link attachments if provided
             if (!empty($attachmentIds)) {
-                Attachment::whereIn('id', $attachmentIds)->update([
-                    'attachable_type' => Cost::class,
+                $ids = is_array($attachmentIds) ? $attachmentIds : [$attachmentIds];
+                
+                // Detach existing if any (for updates)
+                Attachment::where('attachable_id', $cost->id)
+                    ->where(function($q) use ($morphType) {
+                        $q->where('attachable_type', $morphType)
+                          ->orWhere('attachable_type', 'App\Models\Cost');
+                    })
+                    ->update(['attachable_type' => null, 'attachable_id' => null]);
+
+                // Attach new ones
+                Attachment::whereIn('id', $ids)->update([
+                    'attachable_type' => $morphType,
                     'attachable_id' => $cost->id,
                 ]);
             }

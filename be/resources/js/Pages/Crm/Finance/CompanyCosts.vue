@@ -68,8 +68,8 @@
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'name'">
-          <div>
-            <div class="font-semibold text-gray-800 text-sm">{{ record.name }}</div>
+          <div class="cursor-pointer group" @click="showDetail(record)">
+            <div class="font-semibold text-gray-800 text-sm group-hover:text-blue-600 transition-colors">{{ record.name }}</div>
             <div class="text-xs text-gray-400 mt-0.5 truncate" style="max-width: 220px;">{{ record.description || '—' }}</div>
           </div>
         </template>
@@ -92,24 +92,7 @@
           <span class="text-sm text-gray-600">{{ record.creator?.name || '—' }}</span>
         </template>
         <template v-if="column.dataIndex === 'actions'">
-          <div class="flex gap-1">
-            <!-- Submit for approval -->
-            <a-tooltip v-if="record.status === 'draft'" title="Gửi duyệt">
-              <a-popconfirm title="Gửi chi phí này để Ban điều hành duyệt?" ok-text="Gửi" cancel-text="Hủy" @confirm="submitCost(record.id)">
-                <a-button type="text" size="small"><SendOutlined style="color: #1B4F72;" /></a-button>
-              </a-popconfirm>
-            </a-tooltip>
-            <!-- Revert -->
-            <a-tooltip v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(record.status)" title="Hoàn duyệt">
-              <a-popconfirm title="Đưa chi phí này về trạng thái Nháp để chỉnh sửa?" ok-text="Đồng ý" cancel-text="Hủy" @confirm="revertCost(record.id)">
-                <a-button type="text" size="small"><UndoOutlined /></a-button>
-              </a-popconfirm>
-            </a-tooltip>
-            <!-- Delete -->
-            <a-popconfirm v-if="['draft', 'rejected'].includes(record.status)" title="Xóa chi phí này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteCost(record.id)">
-              <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-            </a-popconfirm>
-          </div>
+          <a-button type="link" size="small" @click="showDetail(record)">Xem</a-button>
         </template>
       </template>
     </a-table>
@@ -132,6 +115,154 @@
     <p class="mt-4 text-gray-400 text-base">Chưa có chi phí công ty nào</p>
     <a-button type="primary" class="mt-3 rounded-xl" @click="showCreateModal">Tạo chi phí đầu tiên</a-button>
   </div>
+
+  <!-- ═══ Detail Drawer ═══ -->
+  <a-drawer
+    v-model:open="drawerVisible"
+    title="Chi tiết chi phí"
+    width="560"
+    :body-style="{ paddingBottom: '80px' }"
+  >
+    <template v-if="selectedCost">
+      <div class="space-y-6">
+        <!-- Header Info -->
+        <div class="bg-gray-50 p-4 rounded-xl">
+          <div class="flex justify-between items-start mb-2">
+            <h3 class="text-lg font-bold text-gray-800 m-0">{{ selectedCost.name }}</h3>
+            <span class="crm-tag" :class="statusClass(selectedCost.status)">
+              {{ statusLabel(selectedCost.status) }}
+            </span>
+          </div>
+          <div class="text-2xl font-bold" style="color: var(--crm-primary);">
+            {{ fmtCurrency(selectedCost.amount) }}
+          </div>
+          <div class="text-xs text-gray-500 mt-1">Ngày chi: {{ formatDate(selectedCost.cost_date) }}</div>
+        </div>
+
+        <!-- Meta Info -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="p-3 border border-gray-100 rounded-xl">
+            <div class="text-xs text-gray-400 mb-1">Người tạo</div>
+            <div class="text-sm font-medium">{{ selectedCost.creator?.name || '—' }}</div>
+          </div>
+          <div class="p-3 border border-gray-100 rounded-xl">
+            <div class="text-xs text-gray-400 mb-1">Phân loại</div>
+            <div class="text-sm font-medium">
+              <span v-if="selectedCost.expense_category === 'capex'">CAPEX — Tài sản</span>
+              <span v-else-if="selectedCost.expense_category === 'opex'">OPEX — Vận hành</span>
+              <span v-else-if="selectedCost.expense_category === 'payroll'">Lương, thưởng</span>
+              <span v-else>Khác</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="selectedCost.description" class="space-y-2">
+          <div class="text-sm font-semibold text-gray-700">Mô tả / Ghi chú</div>
+          <div class="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl border-l-4 border-gray-200">
+            {{ selectedCost.description }}
+          </div>
+        </div>
+
+        <!-- Attachments -->
+        <div class="space-y-3">
+          <div class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <PaperClipOutlined /> Chứng từ đính kèm ({{ selectedCost.attachments?.length || 0 }})
+          </div>
+          <div v-if="selectedCost.attachments?.length" class="grid grid-cols-2 gap-3">
+            <div v-for="file in selectedCost.attachments" :key="file.id" class="relative group border border-gray-100 rounded-xl overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all cursor-pointer">
+              <!-- Image files: clickable preview -->
+              <template v-if="file.type === 'image' || file.mime_type?.startsWith('image/')">
+                <a-image
+                  :src="file.file_url"
+                  :preview-mask="false"
+                  class="w-full"
+                  style="aspect-ratio: 16/10; object-fit: cover;"
+                />
+              </template>
+              <!-- Non-image files: open in new tab -->
+              <template v-else>
+                <a :href="file.file_url" target="_blank" class="block">
+                  <div class="aspect-video flex items-center justify-center bg-gray-50">
+                    <FileTextOutlined style="font-size: 32px; color: #9CA3AF;" />
+                  </div>
+                </a>
+              </template>
+              <div class="p-2 text-xs truncate bg-white border-t border-gray-50 font-medium text-gray-600">
+                <a :href="file.file_url" target="_blank" class="hover:text-blue-600 transition-colors">
+                  {{ file.original_name || file.file_name || 'File' }}
+                </a>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-xs text-gray-400 italic">Chưa có chứng từ đính kèm.</div>
+        </div>
+
+        <!-- Approval Logs -->
+        <div v-if="selectedCost.status !== 'draft'" class="space-y-3">
+          <div class="text-sm font-semibold text-gray-700">Thông tin phê duyệt</div>
+          <div class="space-y-2">
+            <div v-if="selectedCost.management_approved_at" class="flex items-start gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+              <CheckCircleOutlined style="color: #3B82F6; margin-top: 2px;" />
+              <div>
+                <div class="text-sm font-medium text-blue-800">Ban điều hành đã duyệt</div>
+                <div class="text-xs text-blue-600">Duyệt bởi: {{ selectedCost.management_approver?.name }} lúc {{ formatDate(selectedCost.management_approved_at, 'HH:mm DD/MM/YYYY') }}</div>
+              </div>
+            </div>
+            <div v-if="selectedCost.accountant_approved_at" class="flex items-start gap-3 p-3 bg-green-50/50 rounded-xl border border-green-100">
+              <CheckCircleOutlined style="color: #10B981; margin-top: 2px;" />
+              <div>
+                <div class="text-sm font-medium text-green-800">Kế toán đã xác nhận</div>
+                <div class="text-xs text-green-600">Xác nhận bởi: {{ selectedCost.accountant_approver?.name }} lúc {{ formatDate(selectedCost.accountant_approved_at, 'HH:mm DD/MM/YYYY') }}</div>
+              </div>
+            </div>
+            <div v-if="selectedCost.status === 'rejected'" class="flex items-start gap-3 p-3 bg-red-50/50 rounded-xl border border-red-100">
+              <InfoCircleOutlined style="color: #EF4444; margin-top: 2px;" />
+              <div>
+                <div class="text-sm font-medium text-red-800">Bị từ chối</div>
+                <div class="text-xs text-red-600">Lý do: {{ selectedCost.rejected_reason || 'Không rõ lý do' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Bar in Drawer -->
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between z-20">
+        <!-- Left side: Destructive actions -->
+        <div class="flex gap-2">
+          <a-popconfirm v-if="['draft', 'rejected'].includes(selectedCost.status)" title="Xóa chi phí này vĩnh viễn?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteCost(selectedCost.id); drawerVisible = false">
+            <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
+          </a-popconfirm>
+          <a-popconfirm v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(selectedCost.status)" title="Hoàn duyệt về trạng thái Nháp?" @confirm="revertCost(selectedCost.id)">
+            <a-button danger ghost size="small"><UndoOutlined /> Hoàn duyệt</a-button>
+          </a-popconfirm>
+        </div>
+
+        <!-- Right side: Primary actions -->
+        <div class="flex gap-2">
+          <!-- Edit -->
+          <a-button v-if="['draft', 'rejected'].includes(selectedCost.status)" size="small" @click="showEditModal(selectedCost)"><EditOutlined /> Sửa</a-button>
+
+          <!-- Submit -->
+          <a-popconfirm v-if="selectedCost.status === 'draft'" title="Gửi duyệt chi phí này?" @confirm="submitCost(selectedCost.id)">
+            <a-button type="primary" size="small"><SendOutlined /> Gửi duyệt</a-button>
+          </a-popconfirm>
+
+          <!-- Approve: Management -->
+          <template v-if="selectedCost.status === 'pending_management_approval' && $page.props.auth.permissions.includes('company_cost_approve_management')">
+            <a-button type="primary" size="small" @click="approveCost(selectedCost.id)"><CheckCircleOutlined /> Duyệt</a-button>
+            <a-button danger size="small" @click="rejectCost(selectedCost.id)"><CloseCircleOutlined /> Từ chối</a-button>
+          </template>
+
+          <!-- Approve: Accountant -->
+          <template v-if="selectedCost.status === 'pending_accountant_approval' && $page.props.auth.permissions.includes('company_cost_approve_accountant')">
+            <a-button type="primary" size="small" @click="approveCost(selectedCost.id)"><CheckCircleOutlined /> Xác nhận chi</a-button>
+            <a-button danger size="small" @click="rejectCost(selectedCost.id)"><CloseCircleOutlined /> Từ chối</a-button>
+          </template>
+        </div>
+      </div>
+    </template>
+  </a-drawer>
 
   <!-- ═══ Create/Edit Modal ═══ -->
   <a-modal
@@ -156,12 +287,6 @@
             :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
             :parser="v => v.replace(/,/g, '')" />
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Nhóm chi phí <span class="text-red-500">*</span></label>
-          <a-select v-model:value="form.cost_group_id" style="width: 100%;" size="large" placeholder="Chọn nhóm">
-            <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
-          </a-select>
-        </div>
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -177,14 +302,7 @@
           <a-date-picker v-model:value="formDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
         </div>
       </div>
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Nhà cung cấp</label>
-          <a-select v-model:value="form.supplier_id" style="width: 100%;" size="large" placeholder="Chọn NCC" allow-clear show-search :filter-option="filterOption">
-            <a-select-option v-for="s in suppliers" :key="s.id" :value="s.id" :label="s.name">{{ s.name }}</a-select-option>
-          </a-select>
-        </div>
-      </div>
+
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Số lượng</label>
@@ -198,6 +316,26 @@
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
         <a-textarea v-model:value="form.description" :rows="3" placeholder="Ghi chú thêm..." />
+      </div>
+
+      <!-- File Upload Section -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Chứng từ đính kèm (Bắt buộc) <span class="text-red-500">*</span></label>
+        <a-upload-dragger
+          v-model:file-list="fileList"
+          name="file"
+          :multiple="true"
+          action="/admin/files/upload"
+          :headers="uploadHeaders"
+          @change="handleUploadChange"
+          list-type="picture"
+        >
+          <p class="ant-upload-drag-icon">
+            <InboxOutlined />
+          </p>
+          <p class="ant-upload-text">Nhấn hoặc kéo thả file vào đây để upload</p>
+          <p class="ant-upload-hint">Hỗ trợ ảnh hóa đơn, file PDF, biên lai...</p>
+        </a-upload-dragger>
       </div>
     </div>
   </a-modal>
@@ -219,6 +357,8 @@ import { useChart, CHART_COLORS } from '@/Composables/useChart'
 import {
   PlusOutlined, DollarOutlined, CheckCircleOutlined, ClockCircleOutlined,
   FileTextOutlined, EditOutlined, DeleteOutlined, SendOutlined, UndoOutlined,
+  UploadOutlined, InboxOutlined, PaperClipOutlined, EyeOutlined, InfoCircleOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons-vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
@@ -317,7 +457,7 @@ const columns = [
   { title: 'Ngày', dataIndex: 'cost_date', key: 'cost_date', width: 110 },
   { title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 120 },
   { title: 'Người tạo', dataIndex: 'creator', key: 'creator', width: 130 },
-  { title: '', dataIndex: 'actions', key: 'actions', width: 120, fixed: 'right' },
+  { title: '', dataIndex: 'actions', key: 'actions', width: 70, fixed: 'right' },
 ]
 
 const statusLabel = (s) => ({
@@ -340,24 +480,72 @@ const statusClass = (s) => ({
 // MODAL / FORM
 // ============================================================
 const modalVisible = ref(false)
+const drawerVisible = ref(false)
+const selectedCost = ref(null)
 const editingCost = ref(null)
 const formDate = ref(null)
+
+const showDetail = (record) => {
+  selectedCost.value = record
+  drawerVisible.value = true
+}
+
+const approveCost = (id) => {
+  router.post(`/finance/company-costs/${id}/approve`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      message.success('Đã duyệt chi phí thành công')
+      refreshSelectedCost(id)
+    }
+  })
+}
+
+const rejectCost = (id) => {
+  const reason = prompt('Vui lòng nhập lý do từ chối:')
+  if (reason === null) return // Cancelled
+  
+  router.post(`/finance/company-costs/${id}/reject`, { reason }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      message.success('Đã từ chối chi phí')
+      refreshSelectedCost(id)
+    }
+  })
+}
 
 const form = useForm({
   name: '',
   amount: 0,
-  cost_group_id: null,
   cost_date: '',
   description: '',
   quantity: null,
   unit: '',
-  supplier_id: null,
   expense_category: null,
+  attachment_ids: [],
 })
+
+const fileList = ref([])
+
+const uploadHeaders = computed(() => ({
+  'X-Requested-With': 'XMLHttpRequest',
+  'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+  'Accept': 'application/json',
+}))
+
+const handleUploadChange = (info) => {
+  fileList.value = [...info.fileList]
+  
+  // Always update form.attachment_ids from the current fileList
+  form.attachment_ids = info.fileList
+    .filter(f => f.status === 'done' || f.status === 'success')
+    .map(f => f.response?.id || f.id || f.uid)
+    .filter(id => id && !isNaN(id))
+}
 
 const showCreateModal = () => {
   editingCost.value = null
   form.reset()
+  fileList.value = []
   formDate.value = dayjs()
   modalVisible.value = true
 }
@@ -366,12 +554,23 @@ const showEditModal = (record) => {
   editingCost.value = record
   form.name = record.name
   form.amount = parseFloat(record.amount)
-  form.cost_group_id = record.cost_group_id
   form.description = record.description || ''
   form.quantity = record.quantity ? parseFloat(record.quantity) : null
-  form.unit = record.unit || ''
-  form.supplier_id = record.supplier_id
-  form.expense_category = record.expense_category || null
+  // Map existing attachments to fileList and form
+  if (record.attachments && record.attachments.length > 0) {
+    fileList.value = record.attachments.map(a => ({
+      uid: a.id,
+      name: a.original_name || a.file_name || 'File',
+      status: 'done',
+      url: a.file_url,
+      id: a.id
+    }))
+    form.attachment_ids = record.attachments.map(a => a.id)
+  } else {
+    fileList.value = []
+    form.attachment_ids = []
+  }
+
   formDate.value = record.cost_date ? dayjs(record.cost_date) : null
   modalVisible.value = true
 }
@@ -382,7 +581,10 @@ const saveForm = () => {
   if (editingCost.value) {
     form.put(`/finance/company-costs/${editingCost.value.id}`, {
       preserveScroll: true,
-      onSuccess: () => { modalVisible.value = false },
+      onSuccess: () => { 
+        modalVisible.value = false
+        refreshSelectedCost(editingCost.value.id)
+      },
     })
   } else {
     form.post('/finance/company-costs', {
@@ -392,11 +594,22 @@ const saveForm = () => {
   }
 }
 
+const refreshSelectedCost = (id) => {
+  if (selectedCost.value && selectedCost.value.id === id) {
+    // Wait a bit for props to update if needed, though Inertia onSuccess should be fine
+    const fresh = props.costs.data.find(c => c.id === id)
+    if (fresh) selectedCost.value = fresh
+  }
+}
+
 // ============================================================
 // ACTIONS
 // ============================================================
 const submitCost = (id) => {
-  router.post(`/finance/company-costs/${id}/submit`, {}, { preserveScroll: true })
+  router.post(`/finance/company-costs/${id}/submit`, {}, { 
+    preserveScroll: true,
+    onSuccess: () => refreshSelectedCost(id)
+  })
 }
 
 const deleteCost = (id) => {
@@ -404,6 +617,9 @@ const deleteCost = (id) => {
 }
 
 const revertCost = (id) => {
-  router.post(`/finance/company-costs/${id}/revert`, {}, { preserveScroll: true })
+  router.post(`/finance/company-costs/${id}/revert`, {}, { 
+    preserveScroll: true,
+    onSuccess: () => refreshSelectedCost(id)
+  })
 }
 </script>

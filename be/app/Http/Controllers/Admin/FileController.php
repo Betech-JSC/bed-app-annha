@@ -98,6 +98,51 @@ class FileController extends Controller
     }
 
     /**
+     * Upload file (for CRM web - session-based auth)
+     * Returns JSON for Ant Design Upload component
+     */
+    public function upload(\Illuminate\Http\Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|max:51200', // 50MB max
+        ]);
+
+        $file = $request->file('file');
+        $mime = $file->getMimeType();
+        $isImage = str_starts_with($mime, 'image/');
+        $isVideo = str_starts_with($mime, 'video/');
+
+        $folder = 'uploads/' . now()->format('Y/m/d');
+        $extension = $file->getClientOriginalExtension() ?: 'jpg';
+        $fileName = \Illuminate\Support\Str::random(20) . '_' . time() . '.' . $extension;
+
+        $path = $file->storeAs($folder, $fileName, 'public');
+        $url = asset("storage/" . $path);
+
+        $user = \Illuminate\Support\Facades\Auth::guard('admin')->user();
+
+        $attachment = Attachment::create([
+            'original_name' => $file->getClientOriginalName(),
+            'type'         => $isImage ? 'image' : ($isVideo ? 'video' : 'document'),
+            'file_name'    => $fileName,
+            'file_path'    => $path,
+            'file_url'     => $url,
+            'file_size'    => $file->getSize(),
+            'mime_type'    => $mime,
+            'uploaded_by'  => $user?->id,
+            'sort_order'   => 0,
+        ]);
+
+        // Return flat JSON with 'id' at root — Ant Design Upload expects this in response
+        return response()->json([
+            'id'            => $attachment->id,
+            'file_url'      => $url,
+            'original_name' => $file->getClientOriginalName(),
+            'type'          => $attachment->type,
+        ]);
+    }
+
+    /**
      * Xóa file
      */
     public function destroy($id): RedirectResponse

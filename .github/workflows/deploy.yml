@@ -1,0 +1,71 @@
+name: Deploy Laravel Backend to VPS
+
+on:
+  push:
+    branches: [ main ] # Chạy khi push vào branch main. Bạn có thể đổi thành 'master' nếu cần.
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2' # Đổi version phù hợp với server của bạn
+        extensions: mbstring, bcmath, xml, curl, zip, intl
+        coverage: none
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'yarn'
+        cache-dependency-path: be/yarn.lock
+
+    - name: Install Composer Dependencies
+      run: |
+        cd be
+        composer install --no-dev --optimize-autoloader --no-interaction
+
+    - name: Install JS Dependencies & Build
+      run: |
+        cd be
+        yarn install
+        yarn build
+
+    - name: Deploy to VPS via SSH/RSYNC
+      uses: easingthemes/ssh-deploy@main
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        ARGS: "-rlgoDzvc -i --delete"
+        SOURCE: "be/"
+        REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+        REMOTE_USER: ${{ secrets.REMOTE_USER }}
+        TARGET: ${{ secrets.REMOTE_PATH }}
+        EXCLUDE: "/node_modules/, /vendor/, /storage/, /tests/, .env"
+
+    - name: Post Deployment Commands
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.REMOTE_HOST }}
+        username: ${{ secrets.REMOTE_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          cd ${{ secrets.REMOTE_PATH }}
+          # Cài đặt lại vendor trên server để đảm bảo symlinks đúng
+          composer install --no-dev --optimize-autoloader --no-interaction
+          
+          # Database & Cache
+          php artisan migrate --force
+          php artisan optimize:clear
+          php artisan optimize
+          
+          # Permissions (Optional - tùy thuộc vào setup của bạn)
+          # chown -R www-data:www-data storage bootstrap/cache
+          # chmod -R 775 storage bootstrap/cache
+          
+          echo "Deployment successful!"

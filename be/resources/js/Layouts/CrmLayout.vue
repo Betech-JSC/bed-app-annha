@@ -315,6 +315,7 @@ const menuItems = computed(() => {
       label: 'Tài nguyên & Kho',
       children: [
         { key: 'materials', label: 'Vật tư xây dựng', perm: 'material.view' },
+        { key: 'equipment', label: 'Kho tài sản & Thiết bị', perm: 'company_asset.view' },
         { key: 'suppliers', label: 'Nhà cung cấp', icon: () => h(ShopOutlined), perm: 'suppliers.view' },
       ],
     },
@@ -325,9 +326,7 @@ const menuItems = computed(() => {
       children: [
         { key: 'operations-dashboard', label: 'Tổng quan dòng tiền', perm: 'operations.dashboard.view' },
         { key: 'shareholders', label: 'Nguồn vốn / Cổ đông', perm: 'shareholder.view' },
-        { key: 'equipment', label: 'Kho tài sản & Thiết bị', perm: 'company_asset.view' },
         { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_cost.view' },
-        { key: 'cost-groups', label: 'Nhóm chi phí', perm: 'company_cost.view' },
       ],
     },
     {
@@ -356,6 +355,7 @@ const menuItems = computed(() => {
         { key: 'roles', label: 'Phân quyền', icon: () => h(SafetyOutlined), perm: 'settings.manage' },
         { key: 'system-logs', label: 'Nhật ký hệ thống', icon: () => h(CodeOutlined), perm: 'settings.manage' },
         { key: 'settings', label: 'Cấu hình chung', icon: () => h(SettingOutlined), perm: 'settings.manage' },
+        { key: 'cost-groups', label: 'Nhóm chi phí', icon: () => h(FolderOpenOutlined), perm: 'company_cost.view' },
         { key: 'user-guide', label: 'Hướng dẫn sử dụng', icon: () => h(BookOutlined) }, // Always visible
       ],
     },

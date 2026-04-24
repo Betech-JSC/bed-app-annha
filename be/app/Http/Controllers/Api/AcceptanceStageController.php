@@ -261,7 +261,7 @@ class AcceptanceStageController extends Controller
         $project = Project::findOrFail($projectId);
         $user = $request->user();
 
-        // Check permission
+        // 1. Permission check
         if (!$user->hasPermission(\App\Constants\Permissions::ACCEPTANCE_CREATE)) {
             return response()->json([
                 'success' => false,
@@ -269,33 +269,36 @@ class AcceptanceStageController extends Controller
             ], 403);
         }
 
+        // 2. Validate request
         $validated = $request->validate([
-            'task_id' => 'required|exists:project_tasks,id', // BUSINESS RULE: REQUIRED - must be parent task (A)
-            'acceptance_template_id' => 'nullable|exists:acceptance_templates,id', // Link to template from Settings
+            'task_id' => 'required|exists:project_tasks,id',
+            'acceptance_template_id' => 'nullable|exists:acceptance_templates,id',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'order' => 'nullable|integer|min:0',
         ]);
 
-        // BUSINESS RULE: Verify task_id is a parent task (no parent_id)
-        $task = $project->tasks()->find($validated['task_id']);
-        if (!$task) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Công việc không tồn tại trong dự án này.'
-            ], 404);
+        // 3. Business Rules Check
+        if ($project->status === 'closed' || $project->status === 'cancelled') {
+            return response()->json(['success' => false, 'message' => 'Dự án đã đóng hoặc bị hủy, không thể tạo nghiệm thu.'], 422);
         }
 
-        // Check if task is a parent task (no parent_id)
+        $task = $project->tasks()->find($validated['task_id']);
+        if (!$task) {
+            return response()->json(['success' => false, 'message' => 'Công việc không thuộc dự án này.'], 422);
+        }
+
         if ($task->parent_id !== null) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Chỉ có thể chọn công việc cha (Category A). Không thể chọn công việc con (A\', A\'\').'
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'Chỉ có thể chọn công việc cha (Category A) cho Giai đoạn nghiệm thu.'], 422);
+        }
+
+        // 4. Uniqueness Check: One stage per Task A
+        $existing = AcceptanceStage::where('task_id', $task->id)->exists();
+        if ($existing) {
+            return response()->json(['success' => false, 'message' => 'Công việc này đã có Giai đoạn nghiệm thu rồi.'], 422);
         }
 
         try {
-            // Auto-calculate order if not provided
             if (!isset($validated['order'])) {
                 $maxOrder = $project->acceptanceStages()->max('order') ?? 0;
                 $validated['order'] = $maxOrder + 1;
@@ -314,8 +317,7 @@ class AcceptanceStageController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi xảy ra khi tạo giai đoạn nghiệm thu.',
-                'error' => $e->getMessage()
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage(),
             ], 500);
         }
     }

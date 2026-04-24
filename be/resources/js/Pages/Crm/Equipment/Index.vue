@@ -162,18 +162,37 @@
 
       <!-- Attachments -->
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-gray-400"><FileOutlined /> Chứng từ ({{ selectedItem.attachments?.length || 0 }})</div>
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-gray-400"><FileOutlined /> Chứng từ đính kèm ({{ selectedItem.attachments?.length || 0 }})</div>
         <div v-if="selectedItem.attachments?.length" class="space-y-2">
-          <a href="#" v-for="file in selectedItem.attachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click.prevent="window.open(`/storage/${file.file_path}`, '_blank')">
+          <!-- Image previews -->
+          <div v-if="imageAttachments.length" class="grid grid-cols-3 gap-2 mb-3">
+            <div v-for="file in imageAttachments" :key="file.id" class="relative group cursor-pointer rounded-xl overflow-hidden border border-gray-100 aspect-square" @click="previewImage(file)">
+              <img :src="`/storage/${file.file_path}`" :alt="file.original_name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </div>
+          <!-- Non-image files -->
+          <a v-for="file in nonImageAttachments" :key="file.id" :href="`/storage/${file.file_path}`" target="_blank" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer">
             <div class="flex items-center gap-3">
-              <FileOutlined class="text-gray-400" />
-              <span class="text-xs font-medium text-gray-700">{{ file.original_name }}</span>
+              <div class="w-9 h-9 rounded-lg flex items-center justify-center text-lg bg-blue-50 text-blue-500">
+                <FileOutlined />
+              </div>
+              <div>
+                <div class="text-xs font-medium text-gray-700 truncate max-w-[260px]">{{ file.original_name }}</div>
+              </div>
             </div>
             <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
           </a>
         </div>
         <a-empty v-else :image="null" description="Không có chứng từ" class="my-0" />
       </div>
+
+      <!-- Image Preview Modal -->
+      <a-modal v-model:open="imagePreviewVisible" :footer="null" :width="720" centered destroy-on-close>
+        <img v-if="imagePreviewUrl" :src="imagePreviewUrl" style="width: 100%; border-radius: 12px;" />
+      </a-modal>
 
       <!-- Fixed action bar -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
@@ -194,7 +213,7 @@
             </template>
             <a-button danger>Từ chối</a-button>
           </a-popconfirm>
-          <a-button v-if="['pending_management', 'pending_accountant', 'available', 'rejected'].includes(selectedItem.status) && can('equipment.revert')" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
+          <a-button v-if="['pending_management', 'pending_accountant', 'rejected'].includes(selectedItem.status) && can('equipment.revert')" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -226,6 +245,8 @@ const editing = ref(null)
 const selectedItem = ref(null)
 const rejectReason = ref('')
 const fileList = ref([])
+const imagePreviewVisible = ref(false)
+const imagePreviewUrl = ref('')
 const filters = ref({ search: props.filters?.search || '', status: props.filters?.status || undefined })
 
 const columns = [
@@ -310,6 +331,26 @@ const deleteItem = (e) => router.delete(`/equipment/${e.id}`)
 
 const formatCurrency = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v) : '—'
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : ''
+
+// Attachment helpers
+const imageAttachments = computed(() => {
+  if (!selectedItem.value?.attachments) return []
+  return selectedItem.value.attachments.filter(f => f.mime_type && f.mime_type.startsWith('image/'))
+})
+const nonImageAttachments = computed(() => {
+  if (!selectedItem.value?.attachments) return []
+  return selectedItem.value.attachments.filter(f => !f.mime_type || !f.mime_type.startsWith('image/'))
+})
+const previewImage = (file) => {
+  imagePreviewUrl.value = `/storage/${file.file_path}`
+  imagePreviewVisible.value = true
+}
+const formatFileSize = (bytes) => {
+  if (!bytes) return ''
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
 </script>
 
 <style scoped>

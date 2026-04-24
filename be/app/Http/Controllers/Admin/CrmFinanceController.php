@@ -204,18 +204,20 @@ class CrmFinanceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
-            'cost_group_id' => 'required|exists:cost_groups,id',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
             'cost_date' => 'required|date',
             'description' => 'nullable|string',
             'quantity' => 'nullable|numeric|min:0',
             'unit' => 'nullable|string|max:50',
             'supplier_id' => 'nullable|exists:suppliers,id',
             'expense_category' => 'nullable|in:capex,opex,payroll',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
         try {
             $validated['project_id'] = null; // Explicitly company cost
-            $this->financialService->upsertCost($validated, null, $user);
+            $cost = $this->financialService->upsertCost($validated, null, $user);
 
             return redirect()->back()->with('success', 'Đã tạo chi phí công ty thành công.');
         } catch (\Exception $e) {
@@ -243,18 +245,25 @@ class CrmFinanceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
-            'cost_group_id' => 'required|exists:cost_groups,id',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
             'cost_date' => 'required|date',
             'description' => 'nullable|string',
             'quantity' => 'nullable|numeric|min:0',
             'unit' => 'nullable|string|max:50',
             'supplier_id' => 'nullable|exists:suppliers,id',
             'expense_category' => 'nullable|in:capex,opex,payroll',
+            'attachment_ids' => 'nullable|array',
+            'attachment_ids.*' => 'exists:attachments,id',
         ]);
 
-        $cost->update($validated);
+        try {
+            $validated['project_id'] = null; // Explicitly company cost
+            $this->financialService->upsertCost($validated, $cost, $user);
 
-        return redirect()->back()->with('success', 'Đã cập nhật chi phí công ty.');
+            return redirect()->back()->with('success', 'Đã cập nhật chi phí công ty.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -304,6 +313,56 @@ class CrmFinanceController extends Controller
         try {
             $this->financialService->revertCostToDraft($cost, $user);
             return redirect()->back()->with('success', 'Đã hoàn duyệt chi phí công ty.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Approve company cost (Management or Accountant)
+     */
+    public function approveCompanyCost(Request $request, $id)
+    {
+        $user = Auth::guard('admin')->user();
+        $cost = Cost::companyCosts()->findOrFail($id);
+
+        try {
+            if ($cost->status === 'pending_management_approval') {
+                $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_MANAGEMENT);
+                $this->financialService->approveCostByManagement($cost, $user);
+            } elseif ($cost->status === 'pending_accountant_approval') {
+                $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT);
+                $this->financialService->approveCostByAccountant($cost, [], $user);
+            } else {
+                throw new \Exception('Trạng thái không hợp lệ để duyệt.');
+            }
+
+            return redirect()->back()->with('success', 'Đã duyệt chi phí thành công.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Reject company cost
+     */
+    public function rejectCompanyCost(Request $request, $id)
+    {
+        $user = Auth::guard('admin')->user();
+        $cost = Cost::companyCosts()->findOrFail($id);
+        $reason = $request->get('reason', 'Không có lý do');
+
+        try {
+            if ($cost->status === 'pending_management_approval') {
+                $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_MANAGEMENT);
+            } elseif ($cost->status === 'pending_accountant_approval') {
+                $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT);
+            } else {
+                throw new \Exception('Trạng thái không hợp lệ để từ chối.');
+            }
+
+            $this->financialService->rejectCost($cost, $reason, $user);
+            return redirect()->back()->with('success', 'Đã từ chối chi phí.');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Lỗi: ' . $e->getMessage());
         }

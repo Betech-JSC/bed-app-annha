@@ -92,9 +92,27 @@ class CrmEquipmentController extends Controller
     public function update(Request $request, $id)
     {
         $eq = Equipment::findOrFail($id);
+        $user = auth('admin')->user();
 
         try {
-            $this->equipmentService->upsert($request->all(), $eq, auth('admin')->user());
+            $this->equipmentService->upsert($request->all(), $eq, $user);
+
+            // Handle file uploads (same pattern as store)
+            if ($request->hasFile('attachments')) {
+                foreach ($request->file('attachments') as $file) {
+                    $path = $file->store('equipment-attachments', 'public');
+                    $eq->attachments()->create([
+                        'file_path'     => $path,
+                        'file_name'     => $file->getClientOriginalName(),
+                        'original_name' => $file->getClientOriginalName(),
+                        'file_url'      => '/storage/' . $path,
+                        'mime_type'     => $file->getClientMimeType(),
+                        'file_size'     => $file->getSize(),
+                        'type'          => $file->getClientOriginalExtension(),
+                        'uploaded_by'   => $user->id ?? null,
+                    ]);
+                }
+            }
 
             if ($request->wantsJson() || $request->is('api/*')) {
                 return response()->json([

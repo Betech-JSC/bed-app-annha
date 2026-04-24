@@ -92,7 +92,8 @@ class CrmApprovalController extends Controller
                 ->concat($data['equipment_rentals_management']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_management'])))
                 ->concat($data['asset_usages_management']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_management'])))
                 ->concat(($data['equipment_purchases_management'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_management'])))
-                ->unique('id')->values() : collect([]),
+                ->concat(($data['equipment_inventory_management'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_management'])))
+                ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'accountant' => $userPermissions['can_accountant'] ? collect([])
                 ->concat($data['costs_accountant']->map(fn($i) => array_merge($this->formatItem($i), ['_approveType' => 'accountant'])))
@@ -102,7 +103,8 @@ class CrmApprovalController extends Controller
                 ->concat($data['equipment_rentals_accountant']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_accountant'])))
                 ->concat($data['asset_usages_accountant']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_accountant'])))
                 ->concat(($data['equipment_purchases_accountant'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_accountant'])))
-                ->unique('id')->values() : collect([]),
+                ->concat(($data['equipment_inventory_accountant'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_accountant'])))
+                ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'project_manager' => $userPermissions['can_pm'] ? collect([])
                 ->concat($data['acceptance_pm']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ QLDA duyệt', 'project_manager'), ['_approveType' => 'acceptance_pm'])))
@@ -113,21 +115,21 @@ class CrmApprovalController extends Controller
                 ->concat($data['asset_usages_return']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_return'])))
                 ->concat(($data['equipment_purchases_return'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_return']))) // In case there is a return flow in the future
                 ->concat($defectsByRole['project_manager'])
-                ->unique('id')->values() : collect([]),
+                ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'supervisor' => $userPermissions['can_supervisor'] ? collect([])
                 ->concat($data['acceptance_supervisor']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ GS duyệt', 'supervisor'), ['_approveType' => 'acceptance_supervisor'])))
                 ->concat($data['sub_acceptances']->map(fn($i) => array_merge($this->formatSubAcceptanceItem($i), ['_approveType' => 'sub_acceptance'])))
                 ->concat($data['supplier_acceptances']->map(fn($i) => array_merge($this->formatSupplierAcceptanceItem($i), ['_approveType' => 'supplier_acceptance'])))
                 ->concat($defectsByRole['supervisor'])
-                ->unique('id')->values() : collect([]),
+                ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'customer' => $userPermissions['can_customer'] ? collect([])
                 ->concat($data['acceptance_customer']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ KH duyệt', 'customer'), ['_approveType' => 'acceptance'])))
                 ->concat($data['contracts']->map(fn($i) => array_merge($this->formatContractItem($i), ['_approveType' => 'contract'])))
                 ->concat($data['payments_pending']->map(fn($i) => array_merge($this->formatPaymentItem($i), ['_approveType' => 'project_payment'])))
                 ->concat($defectsByRole['customer'])
-                ->unique('id')->values() : collect([]),
+                ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'hr' => $userPermissions['can_hr'] ? ($data['attendances_pending'] ?? collect([]))->map(fn($i) => array_merge($this->formatAttendanceItem($i), ['_approveType' => 'attendance']))->values() : collect([]),
         ];
@@ -1134,6 +1136,34 @@ class CrmApprovalController extends Controller
         ];
     }
 
+    private function formatEquipmentInventoryItem(\App\Models\Equipment $equipment): array
+    {
+        $totalAmount = ($equipment->purchase_price ?: 0) * ($equipment->quantity ?: 1);
+        return [
+            'id' => $equipment->id,
+            'type' => 'equipment_inventory',
+            'type_label' => 'Kho thiết bị',
+            'title' => $equipment->name,
+            'subtitle' => ($equipment->code ? "#{$equipment->code} — " : '') . 'SL: ' . ($equipment->quantity ?: 1),
+            'amount' => (float) $totalAmount,
+            'status' => $equipment->status,
+            'status_label' => $this->getStatusLabel($equipment->status),
+            'created_by' => $equipment->creator->name ?? 'N/A',
+            'created_at' => optional($equipment->created_at)->format('d/m/Y H:i') ?? '',
+            'description' => $equipment->notes,
+            'project_id' => $equipment->project_id,
+            'attachments' => $equipment->attachments->map(fn($a) => [
+                'id' => $a->id,
+                'name' => $a->file_name,
+                'url' => $a->file_url,
+                'size' => $a->file_size_formatted,
+                'mime_type' => $a->mime_type,
+                'is_image' => $a->mime_type && str_starts_with($a->mime_type, 'image/'),
+            ]),
+            'attachments_count' => $equipment->attachments->count(),
+        ];
+    }
+
     private function formatAssetUsageItem(AssetUsage $usage): array
     {
         return [
@@ -1233,7 +1263,7 @@ class CrmApprovalController extends Controller
             ->concat($recent['schedule_adjustments']->map(fn($i) => $this->formatScheduleAdjustmentItem($i)))
             ->concat($recent['defects']->map(fn($i) => $this->formatDefectItem($i)))
             ->concat($recent['attendances']->map(fn($i) => $this->formatAttendanceItem($i)))
-            ->unique('id')->sortByDesc(fn($i) => $i['created_at'])->take(30)->values();
+            ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->sortByDesc(fn($i) => $i['created_at'])->take(30)->values();
     }
 
     private function getStatusLabel(string $status): string

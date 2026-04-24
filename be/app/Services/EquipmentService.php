@@ -47,16 +47,24 @@ class EquipmentService
         }
 
         return DB::transaction(function () use ($data, $equipment, $id, $user) {
+            // Only keep fields that are actual DB columns
+            $fillable = collect($data)->only([
+                'name', 'code', 'category', 'type', 'brand', 'model',
+                'serial_number', 'quantity', 'purchase_price', 'unit', 'notes',
+                'project_id', 'purchase_date', 'useful_life_months',
+                'depreciation_method', 'residual_value', 'rental_rate_per_day',
+            ])->toArray();
+
             if (!$equipment) {
-                $data['status'] = 'draft';
-                $data['created_by'] = $user ? $user->id : null;
-                $equipment = Equipment::create($data);
+                $fillable['status'] = 'draft';
+                $fillable['created_by'] = $user ? $user->id : null;
+                $equipment = Equipment::create($fillable);
             } else {
                 // Block update if not in draft/rejected
                 if (!in_array($equipment->status, ['draft', 'rejected'])) {
                     throw new \Exception('Chỉ có thể chỉnh sửa thiết bị ở trạng thái Nháp hoặc Từ chối.');
                 }
-                $equipment->update($data);
+                $equipment->update($fillable);
             }
 
             // Handle attachment_ids linkage
@@ -659,7 +667,7 @@ class EquipmentService
      */
     public function revertToDraft(\App\Models\Equipment $equipment, $user = null): bool
     {
-        $revertibleStatuses = ['pending_management', 'pending_accountant', 'available', 'rejected'];
+        $revertibleStatuses = ['pending_management', 'pending_accountant', 'rejected'];
         if (!in_array($equipment->status, $revertibleStatuses)) {
             throw new \Exception('Trạng thái hiện tại không thể hoàn duyệt thiết bị.');
         }
