@@ -6992,11 +6992,15 @@ axios.defaults.withCredentials = true
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import 'dayjs/locale/vi'
 dayjs.extend(utc)
+dayjs.extend(relativeTime)
+dayjs.locale('vi')
 import {
   ArrowLeftOutlined, EditOutlined, PlusOutlined, DeleteOutlined,
   SendOutlined, CheckCircleOutlined, CloseCircleOutlined, PlayCircleOutlined, CheckOutlined, CloseOutlined, DollarOutlined, ReloadOutlined,
-  UploadOutlined, DownloadOutlined, FileOutlined,
+  UploadOutlined, DownloadOutlined, FileOutlined, FileTextOutlined,
   UserOutlined, CalendarOutlined, EyeOutlined,
   LinkOutlined, CameraOutlined, CheckCircleFilled, MoreOutlined,
   SyncOutlined, DownOutlined, ExclamationCircleOutlined, WarningOutlined,
@@ -7005,7 +7009,8 @@ import {
   LineChartOutlined, FileProtectOutlined, BankOutlined, HistoryOutlined,
   FileAddOutlined, SafetyCertificateOutlined, PaperClipOutlined,
   CalculatorOutlined, NodeIndexOutlined, ToolOutlined, TagsOutlined,
-  AlertOutlined, LockOutlined
+  AlertOutlined, LockOutlined, CloudUploadOutlined, FormOutlined, FileImageOutlined, 
+  UnorderedListOutlined, AuditOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -7194,6 +7199,14 @@ const isAccepted = (task) => {
   const progress = parseFloat(task.progress_percentage || 0)
   if (progress < 100) return true // Don't show acceptance warning for tasks in progress
   return false
+}
+const getStatusColor = (s) => {
+  const colors = { draft: 'default', pending: 'orange', processing: 'blue', approved: 'green', rejected: 'red', completed: 'green', cancelled: 'red', paid: 'cyan', confirmed: 'purple' }
+  return colors[s] || 'default'
+}
+const getStatusLabel = (s) => {
+  const labels = { draft: 'Bản nháp', pending: 'Chờ duyệt', processing: 'Đang xử lý', approved: 'Đã duyệt', rejected: 'Từ chối', completed: 'Hoàn thành', cancelled: 'Hủy bỏ', paid: 'Đã thanh toán', confirmed: 'Đã xác nhận' }
+  return labels[s] || s
 }
 const totalCosts = computed(() => costs.value.filter(c => c.status === 'approved').reduce((s, c) => s + Number(c.amount || 0), 0))
 

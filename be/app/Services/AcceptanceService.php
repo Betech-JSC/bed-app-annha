@@ -129,8 +129,9 @@ class AcceptanceService
 
     /**
      * Universal approval method for Acceptance Items
+     * @param bool $skipCheckCompletion - Set true when called from approveStage() to avoid redundant checks
      */
-    public function approveItem(AcceptanceItem $item, $user, ?int $level = null): bool
+    public function approveItem(AcceptanceItem $item, $user, ?int $level = null, bool $skipCheckCompletion = false): bool
     {
         $level = $level ?? $this->determineLevelForUser($item, $user);
 
@@ -158,7 +159,7 @@ class AcceptanceService
         // 2. Shared Prerequisites Check
         $this->validateApprovalPrerequisites($item);
 
-        return DB::transaction(function () use ($item, $user, $level) {
+        return DB::transaction(function () use ($item, $user, $level, $skipCheckCompletion) {
             switch ($level) {
                 case 1:
                     $item->workflow_status = 'supervisor_approved';
@@ -182,10 +183,15 @@ class AcceptanceService
 
             $saved = $item->save();
 
-            // Side effects AFTER save — checkCompletion cần DB đã cập nhật
+            // Side effects AFTER save
             if ($saved) {
                 $stage = $item->acceptanceStage;
-                $stage->checkCompletion();
+
+                // Only run checkCompletion if NOT called from approveStage()
+                // approveStage() handles stage status transitions itself
+                if (!$skipCheckCompletion) {
+                    $stage->checkCompletion();
+                }
 
                 $eventMap = [1 => 'supervisor_approved', 2 => 'pm_approved', 3 => 'customer_approved'];
                 $stage->notifyEvent($eventMap[$level], $user);
@@ -289,17 +295,18 @@ class AcceptanceService
 
         return DB::transaction(function () use ($stage, $user, $level) {
             // Tự động duyệt tất cả các hạng mục con có trạng thái phù hợp
+            // IMPORTANT: skipCheckCompletion=true to prevent premature auto-promotion
             foreach ($stage->items as $item) {
-                // Kiểm tra thủ công trạng thái để tránh gọi approveItem và bị lỗi Exception vô ích
                 $isCorrectStatus = ($level === 1 && $item->workflow_status === 'submitted') ||
                                   ($level === 2 && $item->workflow_status === 'supervisor_approved') ||
                                   ($level === 3 && $item->workflow_status === 'project_manager_approved');
                 
                 if ($isCorrectStatus) {
-                    $this->approveItem($item, $user, $level);
+                    $this->approveItem($item, $user, $level, true); // skipCheckCompletion
                 }
             }
 
+            // Set stage status ONCE after all items are approved
             switch ($level) {
                 case 1:
                     $stage->status = 'supervisor_approved';
@@ -317,18 +324,53 @@ class AcceptanceService
                     $stage->status = 'customer_approved';
                     $stage->customer_approved_by = $user->id;
                     $stage->customer_approved_at = now();
-                    
-                    // Side effects (Legacy logic from model)
-                    // Note: approveCustomer in model calls autoCreateAcceptanceItems and updateProjectProgress
-                    // We call them here to be explicit in the service.
-                    $stage->save(); // Save status first
-                    
-                    // Trigger model side effects if not already handled
-                    $stage->checkCompletion(); 
                     $stage->notifyEvent('customer_approved', $user);
                     break;
             }
-            return $stage->save();
+
+            $saved = $stage->save();
+
+            // Post-save side effects for customer_approved (Level 3) ONLY
+            if ($saved && $level === 3) {
+                // BUSINESS RULE: Force-sync ALL items to customer_approved
+                // Some items may have been at earlier statuses (draft, submitted)
+                // and were skipped by the individual approveItem loop above
+                $stage->items()->where('workflow_status', '!=', 'customer_approved')->update([
+                    'workflow_status' => 'customer_approved',
+                    'customer_approved_at' => now(),
+                    'customer_approved_by' => $user->id,
+                    'acceptance_status' => 'approved',
+                    'approved_by' => $user->id,
+                    'approved_at' => now(),
+                ]);
+
+                // Create 100% progress logs for each item linked to a task
+                foreach ($stage->items()->get() as $item) {
+                    $item->updateProjectProgress();
+                }
+
+                // Update project progress
+                if ($stage->project) {
+                    if (!$stage->project->progress) {
+                        $stage->project->progress()->create([
+                            'overall_percentage' => 0,
+                            'calculated_from' => 'acceptance',
+                        ]);
+                    }
+                    $stage->project->progress->calculateOverall();
+                }
+
+                // Recalculate linked task status: pending_acceptance → completed
+                if ($stage->task_id) {
+                    $linkedTask = \App\Models\ProjectTask::find($stage->task_id);
+                    if ($linkedTask) {
+                        $progressService = app(\App\Services\TaskProgressService::class);
+                        $progressService->updateTaskFromLogs($linkedTask, true);
+                    }
+                }
+            }
+
+            return $saved;
         });
     }
 

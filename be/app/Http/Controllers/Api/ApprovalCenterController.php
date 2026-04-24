@@ -158,6 +158,18 @@ class ApprovalCenterController extends Controller
             $cost = Cost::findOrFail($id);
             return ($cost->status === 'pending_accountant_approval') ? 'accountant' : 'management';
         }
+
+        // ACCEPTANCE: Route to the correct approval level based on current stage status
+        if ($type === 'acceptance') {
+            if ($isReject) return 'acceptance'; // reject handler uses model detection
+            $stage = AcceptanceStage::findOrFail($id);
+            return match ($stage->status) {
+                'pending', 'rejected' => 'acceptance_supervisor',
+                'supervisor_approved' => 'acceptance_pm',
+                'project_manager_approved' => 'acceptance_customer',
+                default => 'acceptance',
+            };
+        }
         
         if ($type === 'equipment_rental') {
             if ($isReject) return 'equipment_rental_management';
@@ -254,7 +266,7 @@ class ApprovalCenterController extends Controller
         $permission = match ($type) {
             'company_cost', 'project_cost' => $this->getCostPermission($id),
             'material_bill' => Permissions::MATERIAL_APPROVE,
-            'acceptance' => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
+            'acceptance' => $this->getAcceptancePermission($id),
             'change_request' => Permissions::CHANGE_REQUEST_APPROVE,
             'additional_cost' => Permissions::ADDITIONAL_COST_APPROVE,
             'budget' => Permissions::BUDGET_APPROVE,
@@ -300,5 +312,20 @@ class ApprovalCenterController extends Controller
         return ($cost->status === 'pending_accountant_approval') 
             ? Permissions::COST_APPROVE_ACCOUNTANT 
             : Permissions::COST_APPROVE_MANAGEMENT;
+    }
+
+    /**
+     * Determine acceptance permission based on current stage status.
+     */
+    private function getAcceptancePermission(int $id): ?string
+    {
+        $stage = AcceptanceStage::find($id);
+        if (!$stage) return null;
+        return match ($stage->status) {
+            'pending', 'rejected' => Permissions::ACCEPTANCE_APPROVE_LEVEL_1,
+            'supervisor_approved' => Permissions::ACCEPTANCE_APPROVE_LEVEL_2,
+            'project_manager_approved' => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
+            default => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
+        };
     }
 }

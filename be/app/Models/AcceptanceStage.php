@@ -559,6 +559,9 @@ class AcceptanceStage extends Model
                 }
             } else {
                 // Tự động nâng status stage dựa trên trạng thái tối thiểu của tất cả items
+                // IMPORTANT: Do NOT auto-promote to customer_approved here.
+                // customer_approved must ONLY be set explicitly via approveStage(level=3)
+                // to prevent infinite loops with autoCreateAcceptanceItems().
                 $allCustomerApproved = $items->every(fn($i) => $i->workflow_status === 'customer_approved');
                 $allPmApproved = $items->every(fn($i) => in_array($i->workflow_status, ['project_manager_approved', 'customer_approved']));
                 $allSupervisorApproved = $items->every(fn($i) => in_array($i->workflow_status, ['supervisor_approved', 'project_manager_approved', 'customer_approved']));
@@ -566,33 +569,18 @@ class AcceptanceStage extends Model
                 $userId = auth()->id() ?? $this->created_by;
 
                 if ($allCustomerApproved && $this->status !== 'customer_approved') {
-                    // AUTO-PROMOTION: Tất cả hạng mục con đã customer_approved
-                    // → Stage tự động chuyển sang customer_approved (KHÔNG CẦN duyệt thêm)
+                    // All items are already customer_approved, sync stage status
+                    // This path is reached when items were individually approved
                     $this->status = 'customer_approved';
                     $this->customer_approved_at = now();
                     $this->customer_approved_by = $userId;
                     $this->save();
 
-                    // BUSINESS RULE: Sync customer_approved status to ALL child items
-                    // This ensures all child tasks (Category B) also transition to 'completed'
-                    $this->items()->update([
-                        'workflow_status' => 'customer_approved',
-                        'customer_approved_at' => now(),
-                        'customer_approved_by' => $userId,
-                    ]);
-
-                    // Trigger items' updateProjectProgress to create 100% logs for each sub-task
-                    foreach ($this->items as $item) {
-                        $item->updateProjectProgress();
-                    }
-
-                    // Trigger same side-effects as manual approveCustomer()
-                    $this->autoCreateAcceptanceItems();
+                    // Update progress but do NOT call autoCreateAcceptanceItems
+                    // to avoid creating draft items that trigger another checkCompletion loop
                     $this->updateProjectProgress();
-                    $this->notifyEvent('customer_approved', auth()->user());
 
-                    // CRITICAL: Recalculate linked task status
-                    // This transitions the task from 'pending_acceptance' → 'completed'
+                    // Recalculate linked task status
                     if ($this->task_id) {
                         $linkedTask = \App\Models\ProjectTask::find($this->task_id);
                         if ($linkedTask) {
@@ -656,6 +644,8 @@ class AcceptanceStage extends Model
             }
 
             // Tạo một acceptance item mặc định cho giai đoạn nghiệm thu này
+            // CRITICAL: Status must be 'customer_approved' to match the stage status
+            // Creating with 'draft' would cause checkCompletion() to downgrade the stage
             \App\Models\AcceptanceItem::create([
                 'acceptance_stage_id' => $this->id,
                 'task_id' => $this->task_id, // Link to parent task (Category A)
@@ -663,10 +653,12 @@ class AcceptanceStage extends Model
                 'description' => $this->description ?? 'Hạng mục nghiệm thu được tự động tạo khi nghiệm thu đạt',
                 'start_date' => $this->task?->start_date ?? $this->project?->start_date ?? now(),
                 'end_date' => $this->task?->end_date ?? $this->project?->end_date ?? now(),
-                'workflow_status' => 'draft',
-                'acceptance_status' => 'pending',
+                'workflow_status' => 'customer_approved',
+                'acceptance_status' => 'approved',
                 'order' => 1,
                 'created_by' => $this->customer_approved_by ?? $this->project_manager_approved_by ?? null,
+                'customer_approved_by' => $this->customer_approved_by,
+                'customer_approved_at' => now(),
             ]);
 
             \Illuminate\Support\Facades\Log::info('Auto-created acceptance item for approved stage', [
