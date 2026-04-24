@@ -197,14 +197,14 @@
       <!-- Fixed action bar -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
         <div>
-          <a-popconfirm v-if="['draft','rejected'].includes(selectedItem.status)" title="Xóa tài sản này?" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
+          <a-popconfirm v-if="selectedItem.status === 'draft'" title="Xóa tài sản này?" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
         </div>
         <div class="flex gap-2">
           <a-button @click="showDetailDrawer = false">Đóng</a-button>
-          <a-button v-if="['draft','rejected'].includes(selectedItem.status)" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
-          <a-button v-if="['draft','rejected'].includes(selectedItem.status)" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
+          <a-button v-if="selectedItem.status === 'draft'" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
+          <a-button v-if="selectedItem.status === 'draft'" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
           <a-button v-if="selectedItem.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
           <a-button v-if="selectedItem.status === 'pending_accountant' && can('equipment.approve')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận & Nhập kho</a-button>
           <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedItem.status)" title="Từ chối tài sản này?" @confirm="rejectItem(selectedItem)">

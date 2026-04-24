@@ -16,10 +16,18 @@
     <div class="p-4 border-b border-gray-100">
       <h3 class="font-bold text-gray-800">Hợp đồng dự án</h3>
     </div>
-    <a-table :columns="contractColumns" :data-source="contracts" :pagination="false" row-key="id" size="small" class="crm-table">
+    <a-table
+      :columns="contractColumns"
+      :data-source="contracts"
+      :pagination="false"
+      row-key="id"
+      size="small"
+      class="crm-table crm-table--clickable"
+      :custom-row="(record) => ({ onClick: () => navigateToContract(record), style: 'cursor: pointer;' })"
+    >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'project'">
-          {{ record.project?.name || '—' }}
+          <span class="font-medium text-gray-800 hover:text-blue-600 transition-colors">{{ record.project?.name || '—' }}</span>
         </template>
         <template v-else-if="column.key === 'value'">
           <span class="font-semibold">{{ formatCurrency(record.contract_value) }}</span>
@@ -39,10 +47,21 @@
     <div class="p-4 border-b border-gray-100">
       <h3 class="font-bold text-gray-800">Chi phí gần đây</h3>
     </div>
-    <a-table :columns="costColumns" :data-source="recentCosts.data" :pagination="{ current: recentCosts.current_page, total: recentCosts.total, pageSize: recentCosts.per_page, showTotal: (t) => `${t} phiếu chi` }" row-key="id" size="small" class="crm-table">
+    <a-table
+      :columns="costColumns"
+      :data-source="recentCosts.data"
+      :pagination="{ current: recentCosts.current_page, total: recentCosts.total, pageSize: recentCosts.per_page, showTotal: (t) => `${t} phiếu chi` }"
+      row-key="id"
+      size="small"
+      class="crm-table crm-table--clickable"
+      :custom-row="(record) => ({ onClick: () => navigateToCost(record), style: 'cursor: pointer;' })"
+    >
       <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'project'">
-          {{ record.project?.name || '—' }}
+        <template v-if="column.key === 'name'">
+          <div class="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{{ record.name || record.description || '—' }}</div>
+        </template>
+        <template v-else-if="column.key === 'project'">
+          <span class="text-xs text-gray-500">{{ record.project?.name || 'Chi phí công ty' }}</span>
         </template>
         <template v-else-if="column.key === 'amount'">
           <span class="font-semibold text-red-500">{{ formatCurrency(record.amount) }}</span>
@@ -62,7 +81,7 @@
 </template>
 
 <script setup>
-import { Head } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
@@ -79,13 +98,30 @@ const contractColumns = [
 ]
 
 const costColumns = [
+  { title: 'Tên chi phí', key: 'name', width: 220 },
   { title: 'Dự án', key: 'project' },
-  { title: 'Mô tả', dataIndex: 'description', ellipsis: true },
   { title: 'Số tiền', key: 'amount', align: 'right', width: 160 },
   { title: 'Trạng thái', key: 'status', width: 130 },
   { title: 'Người tạo', key: 'creator', width: 140 },
   { title: 'Ngày', key: 'date', width: 110 },
 ]
+
+// Navigation helpers
+const navigateToCost = (record) => {
+  if (record.project_id) {
+    // Project cost → navigate to project detail, costs tab
+    router.visit(`/projects/${record.project_id}?tab=costs`)
+  } else {
+    // Company cost → navigate to company costs page
+    router.visit('/finance/company-costs')
+  }
+}
+
+const navigateToContract = (record) => {
+  if (record.project_id) {
+    router.visit(`/projects/${record.project_id}?tab=contract`)
+  }
+}
 
 const statusColors = { draft: 'default', submitted: 'processing', pending_management_approval: 'orange', pending_accountant_approval: 'cyan', approved_management: 'blue', approved_accountant: 'green', approved: 'green', rejected: 'red', paid: 'green', confirmed: 'cyan', completed: 'green' }
 const contractStatusColors = { draft: 'default', pending_customer_approval: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', active: 'green', approved: 'green', confirmed: 'cyan', signed: 'geekblue', expired: 'default', terminated: 'red', cancelled: 'default', completed: 'green' }
@@ -121,5 +157,11 @@ const formatCurrency = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'curre
 .crm-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
 .crm-content-card { background: white; border-radius: 16px; border: 1px solid #E8ECF1; overflow: hidden; }
 .crm-table :deep(.ant-table-thead > tr > th) { background: #FAFBFC; font-weight: 600; font-size: 13px; color: #5D6B82; }
+.crm-table--clickable :deep(.ant-table-tbody > tr) {
+  transition: background-color 0.15s ease;
+}
+.crm-table--clickable :deep(.ant-table-tbody > tr:hover > td) {
+  background: #EFF6FF !important;
+}
 @media (max-width: 768px) { .crm-stats-grid { grid-template-columns: repeat(2, 1fr); } }
 </style>

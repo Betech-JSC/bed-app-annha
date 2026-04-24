@@ -230,7 +230,7 @@
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between z-20">
         <!-- Left side: Destructive actions -->
         <div class="flex gap-2">
-          <a-popconfirm v-if="['draft', 'rejected'].includes(selectedCost.status)" title="Xóa chi phí này vĩnh viễn?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteCost(selectedCost.id); drawerVisible = false">
+          <a-popconfirm v-if="selectedCost.status === 'draft'" title="Xóa chi phí này vĩnh viễn?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteCost(selectedCost.id); drawerVisible = false">
             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
           <a-popconfirm v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(selectedCost.status)" title="Hoàn duyệt về trạng thái Nháp?" @confirm="revertCost(selectedCost.id)">
@@ -241,7 +241,7 @@
         <!-- Right side: Primary actions -->
         <div class="flex gap-2">
           <!-- Edit -->
-          <a-button v-if="['draft', 'rejected'].includes(selectedCost.status)" size="small" @click="showEditModal(selectedCost)"><EditOutlined /> Sửa</a-button>
+          <a-button v-if="selectedCost.status === 'draft'" size="small" @click="showEditModal(selectedCost)"><EditOutlined /> Sửa</a-button>
 
           <!-- Submit -->
           <a-popconfirm v-if="selectedCost.status === 'draft'" title="Gửi duyệt chi phí này?" @confirm="submitCost(selectedCost.id)">
@@ -287,19 +287,25 @@
             :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
             :parser="v => v.replace(/,/g, '')" />
         </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Ngày chi phí <span class="text-red-500">*</span></label>
+          <a-date-picker v-model:value="formDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
+        </div>
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Loại chi phí</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nhóm chi phí</label>
+          <a-select v-model:value="form.cost_group_id" style="width: 100%;" size="large" placeholder="Chọn nhóm" allow-clear>
+            <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
+          </a-select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Phân loại phí</label>
           <a-select v-model:value="form.expense_category" style="width: 100%;" size="large" placeholder="Phân loại" allow-clear>
             <a-select-option value="capex">CAPEX — Mua sắm tài sản</a-select-option>
             <a-select-option value="opex">OPEX — Vận hành (điện, nước, mặt bằng)</a-select-option>
             <a-select-option value="payroll">Lương, thưởng, bảo hiểm</a-select-option>
           </a-select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Ngày chi phí <span class="text-red-500">*</span></label>
-          <a-date-picker v-model:value="formDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
         </div>
       </div>
 
@@ -516,6 +522,7 @@ const rejectCost = (id) => {
 const form = useForm({
   name: '',
   amount: 0,
+  cost_group_id: null,
   cost_date: '',
   description: '',
   quantity: null,
@@ -554,8 +561,11 @@ const showEditModal = (record) => {
   editingCost.value = record
   form.name = record.name
   form.amount = parseFloat(record.amount)
+  form.cost_group_id = record.cost_group_id
+  form.expense_category = record.expense_category
   form.description = record.description || ''
   form.quantity = record.quantity ? parseFloat(record.quantity) : null
+  form.unit = record.unit || ''
   // Map existing attachments to fileList and form
   if (record.attachments && record.attachments.length > 0) {
     fileList.value = record.attachments.map(a => ({

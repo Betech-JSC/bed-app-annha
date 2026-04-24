@@ -3245,7 +3245,7 @@
            <a-popconfirm v-if="can('cost.delete') && costDetailRecord.status === 'draft'" title="Xóa phiếu chi này?" @confirm="deleteCost(costDetailRecord)">
              <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
            </a-popconfirm>
-           <a-button v-if="(can('cost.update') && ['draft', 'rejected'].includes(costDetailRecord.status)) || (can('cost.approve.management') && costDetailRecord.status === 'pending_management_approval') || (can('cost.approve.accountant') && costDetailRecord.status === 'pending_accountant_approval')" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="can('cost.update') && costDetailRecord.status === 'draft'" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="costDetailRecord.status === 'draft' && can('cost.submit')">
@@ -3352,7 +3352,7 @@
     <template #footer>
       <div v-if="contractDetailRecord" class="flex justify-between items-center w-full">
         <div class="flex gap-2">
-           <a-button v-if="['draft', 'rejected'].includes(contractDetailRecord.status) && can('contract.update')" @click="openContractModal(contractDetailRecord); showContractDetail = false"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="contractDetailRecord.status === 'draft' && can('contract.update')" @click="openContractModal(contractDetailRecord); showContractDetail = false"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="contractDetailRecord.status === 'draft' && can('contract.update')">
@@ -3483,10 +3483,10 @@
           <a-popconfirm v-if="['draft'].includes(materialDetail.status) && can('material.delete')" title="Xóa phiếu nhập này?" @confirm="deleteBill(materialDetail)">
             <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
           </a-popconfirm>
-          <a-button v-if="(can('material.update') && ['draft', 'rejected'].includes(materialDetail.status)) || (can('material.approve.management') && materialDetail.status === 'pending_management_approval') || (can('material.approve.accountant') && materialDetail.status === 'pending_accountant_approval')" size="small" @click="openBillModal(materialDetail)"><EditOutlined /> Sửa</a-button>
+          <a-button v-if="can('material.update') && materialDetail.status === 'draft'" size="small" @click="openBillModal(materialDetail)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
-          <template v-if="['draft', 'rejected'].includes(materialDetail.status) && can('material.update')">
+          <template v-if="materialDetail.status === 'draft' && can('material.update')">
             <a-button type="primary" @click="submitBill(materialDetail)">Gửi duyệt</a-button>
           </template>
           <template v-if="materialDetail.status === 'pending_management' && can('cost.approve.management')">
@@ -3656,14 +3656,14 @@
       <div class="fixed bottom-0 right-0 w-[640px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10">
         <div class="flex gap-2">
           <!-- Xóa: Chỉ khi Nháp hoặc Bị từ chối -->
-          <a-tooltip v-if="['draft', 'rejected'].includes(budgetDetail.status) && can('budgets.delete')" title="Gỡ bỏ ngân sách này khỏi hệ thống" placement="bottom">
+          <a-tooltip v-if="budgetDetail.status === 'draft' && can('budgets.delete')" title="Gỡ bỏ ngân sách này khỏi hệ thống" placement="bottom">
             <a-popconfirm title="Xóa ngân sách này?" @confirm="deleteBudget(budgetDetail)">
               <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
             </a-popconfirm>
           </a-tooltip>
 
           <!-- Sửa: Chỉ khi Nháp hoặc Từ chối -->
-          <a-tooltip v-if="['draft', 'rejected'].includes(budgetDetail.status) && can('budgets.update')" title="Thay đổi thông tin phiên bản hoặc hạng mục" placement="bottom">
+          <a-tooltip v-if="budgetDetail.status === 'draft' && can('budgets.update')" title="Thay đổi thông tin phiên bản hoặc hạng mục" placement="bottom">
             <a-button size="small" @click="openBudgetModal(budgetDetail)"><EditOutlined /> Sửa</a-button>
           </a-tooltip>
           
@@ -3672,7 +3672,7 @@
 
         <div class="flex gap-2">
           <!-- Gửi duyệt: Chỉ khi Nháp hoặc Bị từ chối -->
-          <template v-if="['draft', 'rejected'].includes(budgetDetail.status) && can('budgets.update')">
+          <template v-if="budgetDetail.status === 'draft' && can('budgets.update')">
             <a-tooltip title="Trình BĐH xem xét và phê duyệt" placement="bottom">
               <a-button type="primary" @click="submitBudgetForApproval(budgetDetail)"><SendOutlined /> Gửi duyệt</a-button>
             </a-tooltip>
@@ -3949,7 +3949,7 @@
 
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
          <div>
-           <a-popconfirm v-if="['draft','rejected'].includes(selectedUsage.status) && can('equipment.delete')" title="Xóa phiếu này?" @confirm="deleteUsage(selectedUsage); showUsageDetailDrawer = false">
+           <a-popconfirm v-if="selectedUsage.status === 'draft' && can('equipment.delete')" title="Xóa phiếu này?" @confirm="deleteUsage(selectedUsage); showUsageDetailDrawer = false">
              <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
            </a-popconfirm>
          </div>
@@ -3957,8 +3957,8 @@
            <a-button @click="showUsageDetailDrawer = false">Đóng</a-button>
 
            <!-- Draft / Rejected: Sửa + Gửi duyệt -->
-           <a-button v-if="['draft','rejected'].includes(selectedUsage.status) && can('equipment.update')" @click="openUsageModal(selectedUsage)"><EditOutlined /> Sửa</a-button>
-           <a-button v-if="['draft','rejected'].includes(selectedUsage.status) && can('equipment.update')" type="primary" @click="submitUsage(selectedUsage)"><SendOutlined /> Gửi duyệt</a-button>
+           <a-button v-if="selectedUsage.status === 'draft' && can('equipment.update')" @click="openUsageModal(selectedUsage)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="selectedUsage.status === 'draft' && can('equipment.update')" type="primary" @click="submitUsage(selectedUsage)"><SendOutlined /> Gửi duyệt</a-button>
 
            <!-- Pending Management: BĐH duyệt / Từ chối -->
            <a-button v-if="selectedUsage.status === 'pending_management' && can('cost.approve.management')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveUsageManagement(selectedUsage)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
@@ -4053,10 +4053,10 @@
       <!-- Action Footer -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
         <div class="flex gap-2">
-          <a-popconfirm v-if="can('additional_cost.delete') && ['draft','pending_approval','rejected'].includes(additionalCostDetail.status)" title="Xóa đề xuất?" @confirm="deleteAC(additionalCostDetail)">
+          <a-popconfirm v-if="can('additional_cost.delete') && additionalCostDetail.status === 'draft'" title="Xóa đề xuất?" @confirm="deleteAC(additionalCostDetail)">
             <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
-          <a-button v-if="can('additional_cost.update') && ['draft','rejected'].includes(additionalCostDetail.status)" size="small" @click="openAdditionalCostModal(additionalCostDetail); showAdditionalCostDetailDrawer = false"><EditOutlined /> Sửa</a-button>
+          <a-button v-if="can('additional_cost.update') && additionalCostDetail.status === 'draft'" size="small" @click="openAdditionalCostModal(additionalCostDetail); showAdditionalCostDetailDrawer = false"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="['pending', 'pending_approval'].includes(additionalCostDetail.status) && can('additional_cost.approve')">
@@ -6875,10 +6875,10 @@
       <!-- Action Footer -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
         <div class="flex gap-2">
-          <a-popconfirm v-if="can('warranty.delete') && ['draft','rejected'].includes(maintenanceDetail.status)" title="Xóa phiếu bảo trì?" @confirm="deleteMaintenance(maintenanceDetail)">
+          <a-popconfirm v-if="can('warranty.delete') && maintenanceDetail.status === 'draft'" title="Xóa phiếu bảo trì?" @confirm="deleteMaintenance(maintenanceDetail)">
             <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
-          <a-button v-if="can('warranty.update') && ['draft','rejected'].includes(maintenanceDetail.status)" type="text" @click="editMaintenanceFromDrawer(maintenanceDetail)">
+          <a-button v-if="can('warranty.update') && maintenanceDetail.status === 'draft'" type="text" @click="editMaintenanceFromDrawer(maintenanceDetail)">
             <template #icon><EditOutlined /></template> Sửa
           </a-button>
         </div>
