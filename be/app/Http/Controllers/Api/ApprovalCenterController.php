@@ -243,7 +243,7 @@ class ApprovalCenterController extends Controller
             'payment' => ProjectPayment::class,
             'sub_acceptance' => SubcontractorAcceptance::class,
             'supplier_acceptance' => SupplierAcceptance::class,
-            'construction_log' => ConstructionLog::class,
+            // 'construction_log' removed — BUSINESS RULE: Nhật ký không cần duyệt
             'schedule_adjustment' => ScheduleAdjustment::class,
             'defect' => Defect::class,
             'budget' => ProjectBudget::class,
@@ -260,7 +260,7 @@ class ApprovalCenterController extends Controller
             'budget' => Permissions::BUDGET_APPROVE,
             'sub_payment' => Permissions::COST_APPROVE_MANAGEMENT,
             'sub_acceptance' => Permissions::SUBCONTRACTOR_APPROVE,
-            'construction_log' => Permissions::LOG_APPROVE,
+            'construction_log' => null, // BUSINESS RULE: Nhật ký không cần duyệt
             'defect' => Permissions::DEFECT_VERIFY,
             'contract' => Permissions::CONTRACT_APPROVE_LEVEL_2,
             'payment' => match($this->mapToServiceType('payment', $id)) {

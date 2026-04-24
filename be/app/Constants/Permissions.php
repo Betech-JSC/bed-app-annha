@@ -116,6 +116,8 @@ class Permissions
     public const MATERIAL_UPDATE = 'material.update';
     public const MATERIAL_DELETE = 'material.delete';
     public const MATERIAL_APPROVE = 'material.approve';
+    public const MATERIAL_APPROVE_MANAGEMENT = 'material.approve.management';
+    public const MATERIAL_APPROVE_ACCOUNTANT = 'material.approve.accountant';
     public const MATERIAL_REVERT = 'material.revert';
 
     // ===================================================================
@@ -510,6 +512,8 @@ class Permissions
             self::MATERIAL_UPDATE,
             self::MATERIAL_DELETE,
             self::MATERIAL_APPROVE,
+            self::MATERIAL_APPROVE_MANAGEMENT,
+            self::MATERIAL_APPROVE_ACCOUNTANT,
             self::MATERIAL_REVERT,
 
             // Equipment
@@ -824,6 +828,8 @@ class Permissions
                 self::MATERIAL_UPDATE,
                 self::MATERIAL_DELETE,
                 self::MATERIAL_APPROVE,
+                self::MATERIAL_APPROVE_MANAGEMENT,
+                self::MATERIAL_APPROVE_ACCOUNTANT,
                 self::MATERIAL_REVERT,
             ],
             'equipment' => [

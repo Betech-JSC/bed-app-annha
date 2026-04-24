@@ -107,7 +107,7 @@ class CrmApprovalController extends Controller
             'project_manager' => $userPermissions['can_pm'] ? collect([])
                 ->concat($data['acceptance_pm']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ QLDA duyệt', 'project_manager'), ['_approveType' => 'acceptance_pm'])))
                 ->concat($data['change_requests']->map(fn($i) => array_merge($this->formatChangeRequestItem($i), ['_approveType' => 'change_request'])))
-                ->concat($data['construction_logs']->map(fn($i) => array_merge($this->formatConstructionLogItem($i), ['_approveType' => 'construction_log'])))
+                // construction_logs removed — BUSINESS RULE: Nhật ký không cần duyệt
                 ->concat($data['schedule_adjustments']->map(fn($i) => array_merge($this->formatScheduleAdjustmentItem($i), ['_approveType' => 'schedule_adjustment'])))
                 ->concat($data['equipment_rentals_return']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_return'])))
                 ->concat($data['asset_usages_return']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_return'])))
@@ -1229,7 +1229,7 @@ class CrmApprovalController extends Controller
             ->concat($recent['material_bills']->map(fn($i) => $this->formatMaterialBillItem($i)))
             ->concat($recent['sub_acceptances']->map(fn($i) => $this->formatSubAcceptanceItem($i)))
             ->concat($recent['supplier_acceptances']->map(fn($i) => $this->formatSupplierAcceptanceItem($i)))
-            ->concat($recent['construction_logs']->map(fn($i) => $this->formatConstructionLogItem($i)))
+            // construction_logs removed — BUSINESS RULE: Nhật ký không cần duyệt
             ->concat($recent['schedule_adjustments']->map(fn($i) => $this->formatScheduleAdjustmentItem($i)))
             ->concat($recent['defects']->map(fn($i) => $this->formatDefectItem($i)))
             ->concat($recent['attendances']->map(fn($i) => $this->formatAttendanceItem($i)))

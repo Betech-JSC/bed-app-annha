@@ -127,6 +127,8 @@ class RolePermissionSeeder extends Seeder
             Permissions::MATERIAL_UPDATE,
             Permissions::MATERIAL_DELETE,
             Permissions::MATERIAL_APPROVE,
+            Permissions::MATERIAL_APPROVE_MANAGEMENT,
+            Permissions::MATERIAL_APPROVE_ACCOUNTANT,
             Permissions::MATERIAL_REVERT,
 
             // Equipment
@@ -278,6 +280,7 @@ class RolePermissionSeeder extends Seeder
             // Material
             Permissions::MATERIAL_VIEW,
             Permissions::MATERIAL_APPROVE,
+            Permissions::MATERIAL_APPROVE_MANAGEMENT,
             Permissions::MATERIAL_REVERT,
 
             // Equipment
@@ -392,6 +395,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::MATERIAL_UPDATE,
             Permissions::MATERIAL_DELETE,
             Permissions::MATERIAL_APPROVE,
+            Permissions::MATERIAL_APPROVE_MANAGEMENT,
             Permissions::MATERIAL_REVERT,
 
             // Equipment
@@ -599,6 +603,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::ADDITIONAL_COST_VIEW,
             Permissions::ADDITIONAL_COST_APPROVE,
             Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
+            Permissions::MATERIAL_APPROVE_ACCOUNTANT,
 
             // Contract
             Permissions::CONTRACT_VIEW,

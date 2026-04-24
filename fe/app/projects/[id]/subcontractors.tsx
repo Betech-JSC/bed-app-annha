@@ -1590,7 +1590,7 @@ export default function SubcontractorsScreen() {
                               </TouchableOpacity>
                             </>
                           )}
-                          {["pending_management_approval", "pending_accountant_confirmation", "paid"].includes(item.status) && (
+                          {["pending_management_approval", "pending_accountant_confirmation"].includes(item.status) && (
                             <PermissionGuard permission={Permissions.SUBCONTRACTOR_PAYMENT_REVERT} projectId={id}>
                               <TouchableOpacity
                                 style={[styles.actionButton, { 

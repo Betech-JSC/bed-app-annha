@@ -292,7 +292,7 @@ export default function AdditionalCostsScreen() {
             </Text>
           </View>
 
-          {hasPermission(Permissions.ADDITIONAL_COST_DELETE) && (
+          {hasPermission(Permissions.ADDITIONAL_COST_DELETE) && !["approved", "confirmed", "customer_paid"].includes(item.status) && (
             <TouchableOpacity
               style={styles.deleteButton}
               onPress={(e) => {

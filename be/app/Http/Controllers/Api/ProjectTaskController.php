@@ -67,16 +67,15 @@ class ProjectTaskController extends Controller
 
         $validated = $request->validate([
             'phase_id' => 'nullable|exists:project_phases,id',
-            'parent_id' => 'nullable|exists:project_tasks,id', // For hierarchical structure
+            'parent_id' => 'nullable|exists:project_tasks,id',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            // BUSINESS RULE: For work items (tasks with parents or specified as leaf), 
+            // dates are strongly recommended. We keep them nullable at DB level 
+            // but can enforce at UI/Controller level if needed.
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'duration' => 'nullable|integer|min:1',
-            // BUSINESS RULE: progress_percentage and status are NOT editable
-            // They are calculated from Daily Logs and dates automatically
-            // 'progress_percentage' => REMOVED - calculated from logs only
-            // 'status' => REMOVED - auto-calculated based on dates and progress
             'priority' => ['nullable', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'assigned_to' => 'nullable|exists:users,id',
             'order' => 'nullable|integer|min:0',
@@ -174,16 +173,14 @@ class ProjectTaskController extends Controller
 
         $validated = $request->validate([
             'phase_id' => 'nullable|exists:project_phases,id',
-            'parent_id' => 'nullable|exists:project_tasks,id', // For hierarchical structure
+            'parent_id' => 'nullable|exists:project_tasks,id',
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
+            // BUSINESS RULE: For work items (tasks with parents or specified as leaf), 
+            // dates are strongly recommended for progress and acceptance tracking.
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'duration' => 'nullable|integer|min:1',
-            // BUSINESS RULE: progress_percentage and status are NOT editable
-            // They are calculated from Daily Logs and dates automatically
-            // 'progress_percentage' => REMOVED - calculated from logs only
-            // 'status' => REMOVED - auto-calculated based on dates and progress
             'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'assigned_to' => 'nullable|exists:users,id',
             'order' => 'sometimes|integer|min:0',

@@ -474,7 +474,7 @@ export default function WarrantyScreen() {
                   <Ionicons name="create-outline" size={20} color="#3B82F6" />
                 </TouchableOpacity>
               )}
-              {hasPermission(Permissions.WARRANTY_DELETE) && (
+              {hasPermission(Permissions.WARRANTY_DELETE) && !["approved", "customer_approved", "confirmed", "customer_paid", "accountant_confirmed"].includes(item.status) && (
                 <TouchableOpacity onPress={() => handleDeleteWarranty(item.uuid)} style={styles.headerIconBtn}>
                   <Ionicons name="trash-outline" size={20} color="#EF4444" />
                 </TouchableOpacity>
@@ -576,7 +576,7 @@ export default function WarrantyScreen() {
                   <Ionicons name="create-outline" size={20} color="#3B82F6" />
                 </TouchableOpacity>
               )}
-              {hasPermission(Permissions.WARRANTY_DELETE) && (
+              {hasPermission(Permissions.WARRANTY_DELETE) && !["approved", "customer_approved", "confirmed", "customer_paid", "accountant_confirmed"].includes(item.status) && (
                 <TouchableOpacity onPress={() => handleDeleteMaintenance(item.uuid)} style={styles.headerIconBtn}>
                   <Ionicons name="trash-outline" size={20} color="#EF4444" />
                 </TouchableOpacity>

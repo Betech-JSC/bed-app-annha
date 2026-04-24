@@ -268,7 +268,11 @@ class AcceptanceItem extends Model
             // This ensures progress is calculated from logs (single source of truth)
             // BUSINESS RULE: Unique constraint is ['project_id', 'log_date'], not including task_id
             // So we use updateOrCreate to handle existing logs for the same project and date
-            if ($this->acceptance_status === 'approved' && $this->task_id) {
+            // Nếu nghiệm thu được approve và có task_id, tạo/update ConstructionLog với 100%
+            // This ensures progress is calculated from logs (single source of truth)
+            // BUSINESS RULE: Unique constraint is ['project_id', 'log_date'], not including task_id
+            // So we use updateOrCreate to handle existing logs for the same project and date
+            if ($this->workflow_status === 'customer_approved' && $this->task_id) {
                 $task = $this->task;
                 if ($task) {
                     // Use acceptance end_date or today as log date

@@ -333,10 +333,8 @@ class ApprovalQueryService
             $a->approvable_type === Contract::class
         )->pluck('approvable')->filter();
 
-        // Construction Logs (Nhật ký công trường)
-        $data['construction_logs'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === ConstructionLog::class
-        )->pluck('approvable')->filter();
+        // Construction Logs — REMOVED from approval center (BUSINESS RULE: Nhật ký không cần duyệt)
+        $data['construction_logs'] = collect([]);
 
         // Schedule Adjustments (Điều chỉnh tiến độ)
         $data['schedule_adjustments'] = $allApprovals->filter(fn($a) =>
@@ -478,7 +476,7 @@ class ApprovalQueryService
             'material_bills' => $recentApprovals->filter(fn($a) => $a->approvable_type === MaterialBill::class)->pluck('approvable')->filter(),
             'sub_acceptances' => $recentApprovals->filter(fn($a) => $a->approvable_type === SubcontractorAcceptance::class)->pluck('approvable')->filter(),
             'supplier_acceptances' => $recentApprovals->filter(fn($a) => $a->approvable_type === SupplierAcceptance::class)->pluck('approvable')->filter(),
-            'construction_logs' => $recentApprovals->filter(fn($a) => $a->approvable_type === ConstructionLog::class)->pluck('approvable')->filter(),
+            'construction_logs' => collect([]), // BUSINESS RULE: Nhật ký không cần duyệt
             'schedule_adjustments' => $recentApprovals->filter(fn($a) => $a->approvable_type === ScheduleAdjustment::class)->pluck('approvable')->filter(),
             'defects' => $recentApprovals->filter(fn($a) => $a->approvable_type === Defect::class)->pluck('approvable')->filter(),
             'equipment_purchases' => $recentApprovals->filter(fn($a) => $a->approvable_type === \App\Models\EquipmentPurchase::class)->pluck('approvable')->filter(),

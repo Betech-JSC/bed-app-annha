@@ -84,7 +84,10 @@ class ConstructionLogService
             if ($isNew) {
                 $log = new ConstructionLog();
                 $log->created_by = $user ? $user->id : null;
-                $log->approval_status = $data['approval_status'] ?? 'pending';
+                // BUSINESS RULE: Nhật ký không cần phê duyệt — auto-approved khi tạo
+                $log->approval_status = 'approved';
+                $log->approved_at = now();
+                $log->approved_by = $user ? $user->id : null;
             }
 
             $log->fill($data);

@@ -736,13 +736,15 @@ export default function IssueRecordsScreen() {
                         </TouchableOpacity>
                       </>
                     )}
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.deleteButton]}
-                      onPress={() => handleDelete(selectedIssue.id)}
-                    >
-                      <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.actionButtonText}>Xóa</Text>
-                    </TouchableOpacity>
+                    {selectedIssue.status === "open" && (
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.deleteButton]}
+                        onPress={() => handleDelete(selectedIssue.id)}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                        <Text style={styles.actionButtonText}>Xóa</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </>
               )}

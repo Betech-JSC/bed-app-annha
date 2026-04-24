@@ -940,7 +940,7 @@ const activeItems = computed(() => {
     items = items.filter(i => {
       if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget', 'equipment_rental'].includes(i.type)
       if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance'].includes(i.type)
-      if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'construction_log', 'schedule_adjustment', 'defect', 'asset_usage'].includes(i.type)
+      if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'asset_usage'].includes(i.type)
       if (activeCategory.value === 'hr') return ['attendance'].includes(i.type)
       return true
     })

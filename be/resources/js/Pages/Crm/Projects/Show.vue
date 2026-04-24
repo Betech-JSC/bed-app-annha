@@ -1111,7 +1111,7 @@
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
               <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Tổng phát sinh</div>
-              <div class="text-xl font-bold text-red-500">{{ fmt(project.additional_costs?.reduce((a, b) => a + Number(b.amount || 0), 0) || 0) }}</div>
+              <div class="text-xl font-bold text-red-500">{{ fmt(project.additional_costs?.filter(ac => ['approved', 'confirmed'].includes(ac.status)).reduce((a, b) => a + Number(b.amount || 0), 0) || 0) }}</div>
             </div>
             <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
               <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Phiếu đã duyệt</div>
@@ -1900,7 +1900,7 @@
               </div>
               <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
                 <div class="text-[11px] text-gray-400">Tổng chi phí</div>
-                <div class="text-lg font-bold text-emerald-600">{{ fmt((equipmentRentals || []).reduce((s,r) => s + (r.total_cost || 0), 0)) }}</div>
+                <div class="text-lg font-bold text-emerald-600">{{ fmt((equipmentRentals || []).filter(r => ['in_use', 'returned', 'completed'].includes(r.status)).reduce((s,r) => s + (r.total_cost || 0), 0)) }}</div>
               </div>
               <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
                 <div class="text-[11px] text-gray-400">Hoàn tất</div>
@@ -2997,8 +2997,8 @@
         </a-col>
       </a-row>
       <a-row :gutter="16">
-        <a-col :span="8"><a-form-item label="Ngày bắt đầu"><a-date-picker v-model:value="taskForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Ngày kết thúc"><a-date-picker v-model:value="taskForm.end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Ngày bắt đầu" required v-bind="fieldStatus('start_date')"><a-date-picker v-model:value="taskForm.start_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
+        <a-col :span="8"><a-form-item label="Ngày kết thúc" required v-bind="fieldStatus('end_date')"><a-date-picker v-model:value="taskForm.end_date" size="large" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
         <a-col :span="8"><a-form-item label="Thời lượng (ngày)"><a-input-number v-model:value="taskForm.duration" :min="0" size="large" class="w-full" /></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
@@ -3261,7 +3261,7 @@
           </template>
 
           <!-- Hoàn duyệt action -->
-          <a-button v-if="['pending_management_approval', 'pending_accountant_approval', 'approved_management', 'approved_accountant'].includes(costDetailRecord.status) && can('cost.revert')"
+          <a-button v-if="['pending_management_approval', 'pending_accountant_approval', 'approved', 'rejected'].includes(costDetailRecord.status) && can('cost.revert')"
                     danger ghost @click="revertCostAction(costDetailRecord)">
             <ReloadOutlined /> Hoàn duyệt
           </a-button>
@@ -3498,7 +3498,7 @@
             <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
           </template>
           <!-- Hoàn duyệt phiếu vật liệu -->
-          <a-button v-if="['pending_management', 'pending_accountant', 'rejected'].includes(materialDetail.status) && can('material.revert')" danger ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt</a-button>
+          <a-button v-if="['pending_management', 'pending_accountant', 'approved', 'rejected'].includes(materialDetail.status) && can('material.revert')" danger ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -3791,7 +3791,7 @@
             <a-button v-if="selectedRental.status === 'pending_accountant' && can('equipment.approve')" type="primary" @click="confirmRentalKT(selectedRental)"><CheckOutlined /> KT Xác nhận</a-button>
             <a-button v-if="selectedRental.status === 'in_use' && can('equipment.update')" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturnRental(selectedRental)">Đánh dấu đã trả</a-button>
             <a-button v-if="selectedRental.status === 'pending_return' && can('equipment.approve')" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckOutlined /> KT Xác nhận trả</a-button>
-            <a-button v-if="['pending_management', 'pending_accountant'].includes(selectedRental.status) && can('equipment.revert')" danger ghost @click="revertRentalAction && revertRentalAction(selectedRental)">Hoàn duyệt</a-button>
+            <a-button v-if="['pending_management', 'pending_accountant', 'available', 'rejected'].includes(selectedRental.status) && can('equipment.revert')" danger ghost @click="revertRentalAction && revertRentalAction(selectedRental)">Hoàn duyệt</a-button>
             <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status) && can('equipment.approve')" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
              <template #description>
                <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
@@ -4073,8 +4073,8 @@
           <!-- Cập nhật trạng thái -->
           <a-button v-if="additionalCostDetail.status === 'draft'" type="primary" class="shadow-md shadow-blue-200" @click="submitAC(additionalCostDetail); showAdditionalCostDetailDrawer = false"><SendOutlined /> Gửi duyệt</a-button>
           <!-- Hoàn duyệt -->
-          <a-button v-if="['pending_approval', 'rejected'].includes(additionalCostDetail.status) && can('additional_cost.revert')"
-                    class="border-orange-500 text-orange-500 hover:bg-orange-50 transition-colors" @click="revertACAction && revertACAction(additionalCostDetail)">
+          <a-button v-if="['pending_approval', 'pending', 'approved', 'rejected'].includes(additionalCostDetail.status) && can('additional_cost.revert')"
+                    danger ghost @click="revertACAction && revertACAction(additionalCostDetail)">
             <ReloadOutlined /> Hoàn duyệt
           </a-button>
         </div>
@@ -4694,7 +4694,6 @@
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
         <div class="flex justify-between items-center mb-4">
           <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider flex items-center gap-1.5"><PictureOutlined class="text-blue-500" /> Hình ảnh / Tài liệu ({{ logDetailRecord.attachments?.length || 0 }})</div>
-          <a-button type="link" size="small" @click="openAttachModal('logs', logDetailRecord)" class="p-0 text-xs"><UploadOutlined /> Thêm</a-button>
         </div>
         <div v-if="logDetailRecord.attachments?.length" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
           <a-image-preview-group>
@@ -4730,7 +4729,6 @@
         </div>
         <div class="flex gap-2">
           <a-button v-if="can('log.update')" @click="openLogModal(logDetailRecord); showLogDetailDrawer = false"><EditOutlined /> Sửa nhật ký</a-button>
-          <a-button type="primary" @click="openAttachModal('logs', logDetailRecord)"><UploadOutlined /> Upload ảnh</a-button>
         </div>
       </div>
     </template>
@@ -4857,7 +4855,7 @@
           </template>
 
           <!-- Hoàn duyệt: Khi đã Duyệt, Đã TT hoặc Xác nhận -->
-          <template v-if="['customer_approved', 'customer_paid', 'confirmed', 'paid'].includes(paymentDetailRecord.status) && can('payment.revert')">
+          <template v-if="['pending', 'customer_approved', 'customer_paid', 'confirmed', 'paid', 'rejected'].includes(paymentDetailRecord.status) && can('payment.revert')">
              <a-button danger ghost @click="revertPaymentAction(paymentDetailRecord)"><ReloadOutlined /> Hoàn duyệt</a-button>
           </template>
         </div>
@@ -4898,7 +4896,7 @@
                 <a-button type="text" size="small" class="text-green-600"><CheckOutlined /></a-button>
               </a-popconfirm>
 
-              <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'paid'].includes(p.status) && can('subcontractor_payment.revert')" type="text" size="small" danger @click="revertSubPayment(subDetail, p)">
+              <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'paid', 'rejected'].includes(p.status) && can('subcontractor_payment.revert')" type="text" size="small" danger @click="revertSubPayment(subDetail, p)">
                 <template #icon><ReloadOutlined /></template>
               </a-button>
             </div>
@@ -7109,7 +7107,7 @@ const project = computed(() => {
       // Dynamic financial properties for summary cards
       if (prop === 'total_value') {
         const contractVal = Number(contract.value?.contract_value || 0)
-        const additionalVal = additionalCosts.value.reduce((s, c) => s + Number(c.amount || 0), 0)
+        const additionalVal = additionalCosts.value.filter(ac => ['approved', 'confirmed'].includes(ac.status)).reduce((s, c) => s + Number(c.amount || 0), 0)
         return contractVal + additionalVal
       }
       if (prop === 'total_paid_receivable') {
@@ -7122,8 +7120,13 @@ const project = computed(() => {
 })
 
 const can = (perm) => {
-  if (!page.props.permissions || !Array.isArray(page.props.permissions)) return true
-  return page.props.permissions.includes(perm) || page.props.permissions.includes('*')
+  // Use project-specific permissions passed from controller as priority
+  const projectPerms = page.props.permissions || []
+  if (projectPerms.includes('*') || projectPerms.includes(perm)) return true
+
+  // Fallback to global auth user permissions (useful for global admins/accountants)
+  const authPerms = usePage().props.auth?.user?.permissions || []
+  return authPerms.includes('*') || authPerms.includes(perm)
 }
 
 // Tab group → sub-tab mapping
@@ -7177,27 +7180,19 @@ const fmtDate = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY') : '—'
 const fmtDateTime = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY HH:mm') : '—'
 const isAccepted = (task) => {
   if (!task) return false
-  // BUSINESS RULE: Parent tasks never go through acceptance individually
-  // Only child/leaf tasks need acceptance. Parent's progress is auto-calculated from children.
-  if (!task.parent_id) {
-    return true // Parents always "accepted" — they don't show the warning
-  }
-  // Child task: check linked acceptance stage or item
-  const stages = task.acceptance_stages || []
-  if (stages.length > 0) {
-    return stages.some(s => ['customer_approved', 'owner_approved'].includes(s.status))
-  }
-  // Check acceptance_item workflow
-  if (task.acceptance_item) {
-    return task.acceptance_item.workflow_status === 'customer_approved'
-  }
-  // No acceptance linked → NOT yet accepted → show "Đang chờ nghiệm thu"
+  // Backend now sets status = 'pending_acceptance' when task is at 100%
+  // but still going through acceptance workflow. 'completed' means fully accepted.
+  if (task.status === 'pending_acceptance') return false
+  if (task.status === 'completed') return true
+  // Tasks not at 100% don't need acceptance display
+  const progress = parseFloat(task.progress_percentage || 0)
+  if (progress < 100) return true // Don't show acceptance warning for tasks in progress
   return false
 }
-const totalCosts = computed(() => costs.value.reduce((s, c) => s + Number(c.amount || 0), 0))
+const totalCosts = computed(() => costs.value.filter(c => c.status === 'approved').reduce((s, c) => s + Number(c.amount || 0), 0))
 
 // ============ OVERVIEW COMPUTED ============
-const totalAdditionalCosts = computed(() => (props.project.additional_costs || []).reduce((s, c) => s + Number(c.amount || 0), 0))
+const totalAdditionalCosts = computed(() => (props.project.additional_costs || []).filter(ac => ['approved', 'confirmed'].includes(ac.status)).reduce((s, c) => s + Number(c.amount || 0), 0))
 const totalSubPayments = computed(() => {
   const subs = props.project.subcontractors || []
   return subs.reduce((sum, s) => sum + (s.payments || []).filter(p => p.status === 'paid').reduce((ps, p) => ps + Number(p.amount || 0), 0), 0)
@@ -7665,7 +7660,12 @@ const loadGanttData = async () => {
     const backendTasks = data.data?.tasks || []
     
     if (backendTasks.length > 0) {
-      ganttTasks.value = backendTasks
+      ganttTasks.value = [...backendTasks].sort((a, b) => {
+        const dateA = a.start_date ? new Date(a.start_date).getTime() : 9999999999999
+        const dateB = b.start_date ? new Date(b.start_date).getTime() : 9999999999999
+        if (dateA !== dateB) return dateA - dateB
+        return (a.id || 0) - (b.id || 0)
+      })
     } else if (allTasks.value.length > 0) {
       // Fallback to allTasks if API returns nothing but we have tasks in props
       ganttTasks.value = allTasks.value.map(t => ({
@@ -7674,7 +7674,12 @@ const loadGanttData = async () => {
         start_date: t.start_date || props.project?.start_date,
         end_date: t.end_date || props.project?.end_date,
         is_critical: false
-      }))
+      })).sort((a, b) => {
+        const dateA = a.start_date ? new Date(a.start_date).getTime() : 9999999999999
+        const dateB = b.start_date ? new Date(b.start_date).getTime() : 9999999999999
+        if (dateA !== dateB) return dateA - dateB
+        return (a.id || 0) - (b.id || 0)
+      })
     }
   } catch (e) { 
     console.error('Gantt load error', e)
@@ -7685,7 +7690,12 @@ const loadGanttData = async () => {
         progress: parseFloat(t.progress_percentage || 0),
         start_date: t.start_date || props.project?.start_date,
         end_date: t.end_date || props.project?.end_date
-      }))
+      })).sort((a, b) => {
+        const dateA = a.start_date ? new Date(a.start_date).getTime() : 9999999999999
+        const dateB = b.start_date ? new Date(b.start_date).getTime() : 9999999999999
+        if (dateA !== dateB) return dateA - dateB
+        return (a.id || 0) - (b.id || 0)
+      })
     }
   }
   ganttLoading.value = false
@@ -7939,7 +7949,11 @@ const groupedLogs = computed(() => {
   return Object.keys(groups)
     .sort((a, b) => b.localeCompare(a))
     .map(date => {
-      const dayLogs = groups[date]
+      const dayLogs = [...groups[date]].sort((a, b) => {
+        const timeA = new Date(a.created_at || 0).getTime()
+        const timeB = new Date(b.created_at || 0).getTime()
+        return timeB - timeA
+      })
       const weathers = [...new Set(dayLogs.map(l => l.weather).filter(Boolean))]
       return {
         date,
@@ -8790,16 +8804,28 @@ const resolveRisk = (r) => router.post(`/projects/${props.project.id}/risks/${r.
 const deleteRisk = (r) => router.delete(`/projects/${props.project.id}/risks/${r.id}`, loadingOptions(`delete-risk-${r.id}`, { preserveScroll: true }))
 
 // ============ TASK / PROGRESS ============
-const taskStatusLabels = { pending: 'Chờ xử lý', not_started: 'Chưa bắt đầu', in_progress: 'Đang thực hiện', delayed: 'Trễ tiến độ', completed: 'Hoàn thành', on_hold: 'Tạm dừng', cancelled: 'Đã hủy' }
-const taskStatusColors = { pending: 'default', not_started: 'default', in_progress: 'processing', delayed: 'error', completed: 'success', on_hold: 'warning', cancelled: 'default' }
+const taskStatusLabels = { pending: 'Chờ xử lý', not_started: 'Chưa bắt đầu', in_progress: 'Đang thực hiện', delayed: 'Trễ tiến độ', completed: 'Hoàn thành', pending_acceptance: 'Đang nghiệm thu', on_hold: 'Tạm dừng', cancelled: 'Đã hủy' }
+const taskStatusColors = { pending: 'default', not_started: 'default', in_progress: 'processing', delayed: 'error', completed: 'success', pending_acceptance: 'warning', on_hold: 'warning', cancelled: 'default' }
 
 // Build tree: root = tasks with no parent_id
 const rootTasks = computed(() => {
-  return (allTasks.value).filter(t => !t.parent_id).sort((a, b) => {
-    const pA = Number(a.progress_percentage || 0)
-    const pB = Number(b.progress_percentage || 0)
-    return pA - pB
-  })
+  const sortFn = (a, b) => {
+    const dateA = a.start_date ? new Date(a.start_date).getTime() : 0
+    const dateB = b.start_date ? new Date(b.start_date).getTime() : 0
+    if (dateA !== dateB) return dateB - dateA
+    return (b.id || 0) - (a.id || 0)
+  }
+
+  const sortRecursive = (tasks) => {
+    return [...tasks].sort(sortFn).map(t => {
+      if (t.children?.length) {
+        return { ...t, children: sortRecursive(t.children) }
+      }
+      return t
+    })
+  }
+
+  return sortRecursive((allTasks.value).filter(t => !t.parent_id))
 })
 
 const taskStats = computed(() => {
@@ -8812,6 +8838,7 @@ const taskStats = computed(() => {
     not_started: leaves.filter(t => t.status === 'not_started').length,
     in_progress: leaves.filter(t => t.status === 'in_progress').length,
     delayed: leaves.filter(t => t.status === 'delayed').length,
+    pending_acceptance: leaves.filter(t => t.status === 'pending_acceptance').length,
     completed: leaves.filter(t => t.status === 'completed').length,
   }
 })
@@ -9037,7 +9064,7 @@ const approveSubPayment = (sub, p) => router.post(`/projects/${props.project.id}
 const rejectSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/reject`, {}, loadingOptions(`reject-subpay-${p.id}`, { preserveScroll: true }))
 // confirmSubPayment is moved up to use unified modal logic
 const deleteSubPayment = (sub, p) => router.delete(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}`, loadingOptions(`delete-subpay-${p.id}`, { preserveScroll: true }))
-const revertSubPaymentAction = (sub, p) => {
+const revertSubPayment = (sub, p) => {
   Modal.confirm({
     title: 'Xác nhận hoàn duyệt',
     content: 'Phiếu thanh toán này sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?',
@@ -10086,7 +10113,7 @@ const submitLaborRecord = async () => {
 
 // ============ MATERIALS TAB — Bill-based tracking (Giống APP) ============
 const fmtQty = (v) => new Intl.NumberFormat('vi-VN').format(v)
-const totalBillAmount = computed(() => (materialBills.value).reduce((s, b) => s + Number(b.total_amount || 0), 0))
+const totalBillAmount = computed(() => (materialBills.value).filter(b => b.status === 'approved').reduce((s, b) => s + Number(b.total_amount || 0), 0))
 
 const billCols = [
   { title: 'Mã phiếu', key: 'bill_number', width: 130 },

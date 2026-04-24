@@ -186,15 +186,15 @@
           <a-button @click="showDetailDrawer = false">Đóng</a-button>
           <a-button v-if="['draft','rejected'].includes(selectedItem.status)" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
           <a-button v-if="['draft','rejected'].includes(selectedItem.status)" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
-          <a-button v-if="selectedItem.status === 'pending_management' && can('cost.approve.management')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
-          <a-button v-if="selectedItem.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận & Nhập kho</a-button>
+          <a-button v-if="selectedItem.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
+          <a-button v-if="selectedItem.status === 'pending_accountant' && can('equipment.approve')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận & Nhập kho</a-button>
           <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedItem.status)" title="Từ chối tài sản này?" @confirm="rejectItem(selectedItem)">
             <template #description>
               <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
             </template>
             <a-button danger>Từ chối</a-button>
           </a-popconfirm>
-          <a-button v-if="['pending_management', 'pending_accountant', 'rejected'].includes(selectedItem.status)" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
+          <a-button v-if="['pending_management', 'pending_accountant', 'available', 'rejected'].includes(selectedItem.status) && can('equipment.revert')" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -203,7 +203,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Head, useForm, router } from '@inertiajs/vue3'
+import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
@@ -211,17 +211,12 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined
 
 defineOptions({ layout: CrmLayout })
 const props = defineProps({ equipment: Object, stats: Object, filters: Object })
-const page = computed(() => props)
 
 // Permission helper
 const can = (perm) => {
-  const p = page.value?.equipment?.data?.[0]?.__permissions || window.__permissions || []
-  // Fallback: always true for super admin / check usePage
-  try {
-    const pageProps = (typeof usePage === 'function') ? usePage().props : {}
-    const perms = pageProps?.auth?.permissions || []
-    return perms.includes(perm) || perms.includes('*')
-  } catch { return true }
+  const user = usePage().props.auth?.user
+  if (user?.super_admin) return true
+  return user?.permissions?.includes(perm) || user?.permissions?.includes('*') || false
 }
 
 const loading = ref(false)

@@ -156,6 +156,8 @@ class PermissionSeeder extends Seeder
             'material.update'  => 'Sửa thông tin vật tư',
             'material.delete'  => 'Xóa vật tư khỏi kho',
             'material.approve' => 'Duyệt yêu cầu xuất vật tư',
+            'material.approve.management' => 'BĐH duyệt phiếu vật liệu',
+            'material.approve.accountant' => 'Kế toán duyệt phiếu vật liệu',
             'material.revert'  => 'Hoàn duyệt phiếu vật liệu',
 
             // ===== THIẾT BỊ =====

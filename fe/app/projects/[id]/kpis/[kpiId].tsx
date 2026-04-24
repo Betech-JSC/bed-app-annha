@@ -223,12 +223,14 @@ export default function KpiDetailScreen() {
                     </View>
                 </View>
 
-                <PermissionGuard permission={Permissions.KPI_DELETE} projectId={id}>
-                    <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                        <Text style={styles.deleteButtonText}>Xóa KPI này</Text>
-                    </TouchableOpacity>
-                </PermissionGuard>
+                {kpi.status !== 'verified_success' && kpi.status !== 'verified_fail' && (
+                    <PermissionGuard permission={Permissions.KPI_DELETE} projectId={id}>
+                        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                            <Text style={styles.deleteButtonText}>Xóa KPI này</Text>
+                        </TouchableOpacity>
+                    </PermissionGuard>
+                )}
             </ScrollView>
 
             {/* Update Progress Modal */}

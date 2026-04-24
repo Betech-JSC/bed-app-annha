@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class ConstructionLog extends Model
 {
-    use \App\Traits\NotifiesUsers, \App\Traits\Approvable;
+    use \App\Traits\NotifiesUsers;
     protected $fillable = [
         'uuid',
         'project_id',
@@ -44,23 +44,8 @@ class ConstructionLog extends Model
     // QUAN HỆ
     // ==================================================================
 
-    public function getApprovalSummary(): string
-    {
-        return "Duyệt nhật ký công trường: " . $this->log_date;
-    }
-
-    public function getApprovalMetadata(): array
-    {
-        return [
-            'log_date' => $this->log_date,
-            'creator' => $this->creator->name ?? 'N/A',
-        ];
-    }
-
-    public function isPendingApproval(): bool
-    {
-        return $this->approval_status === 'pending';
-    }
+    // BUSINESS RULE: Nhật ký không cần luồng duyệt — chỉ CRUD
+    // approval_status luôn = 'approved' khi tạo mới
 
     public function project(): BelongsTo
     {
@@ -86,26 +71,7 @@ class ConstructionLog extends Model
     // METHODS
     // ==================================================================
 
-    public function approve(?User $user = null): bool
-    {
-        $this->approval_status = 'approved';
-        if ($user) {
-            $this->approved_by = $user->id;
-        }
-        $this->approved_at = now();
-        return $this->save();
-    }
-
-    public function reject(?User $user = null, ?string $reason = null): bool
-    {
-        $this->approval_status = 'rejected';
-        if ($user) {
-            $this->approved_by = $user->id; // Using approved_by for rejector as well in this model schema
-        }
-        $this->approved_at = now();
-        $this->rejection_reason = $reason;
-        return $this->save();
-    }
+    // approve() / reject() removed — nhật ký không cần phê duyệt
 
     // ==================================================================
     // SCOPE
@@ -198,22 +164,6 @@ class ConstructionLog extends Model
                 'tab'      => 'logs',
                 'priority' => 'medium',
                 'category' => 'status_change',
-            ],
-            'approved' => [
-                'title'    => 'Nhật ký đã được duyệt',
-                'body'     => 'Nhật ký ngày {name} đã được phê duyệt.',
-                'target'   => ['creator', 'pm'],
-                'tab'      => 'logs',
-                'priority' => 'low',
-                'category' => 'status_change',
-            ],
-            'rejected' => [
-                'title'    => 'Nhật ký bị yêu cầu chỉnh sửa',
-                'body'     => 'Nhật ký ngày {name} bị từ chối/yêu cầu sửa: {reason}',
-                'target'   => ['creator', 'pm'],
-                'tab'      => 'logs',
-                'priority' => 'high',
-                'category' => 'workflow_approval',
             ],
         ];
     }

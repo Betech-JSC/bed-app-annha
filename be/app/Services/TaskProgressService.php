@@ -48,13 +48,15 @@ class TaskProgressService
     }
 
     /**
-     * Calculate automatic status based on dates and progress
+     * Calculate automatic status based on dates, progress, and acceptance state
      * 
-     * STATUS RULES (NO MANUAL OVERRIDE):
+     * STATUS RULES:
      * - If today < start_date → Not Started
      * - If start_date ≤ today ≤ end_date AND percentage < 100 → In Progress
      * - If today > end_date AND percentage < 100 → Delayed
-     * - If percentage = 100 → Completed
+     * - If percentage >= 100:
+     *     - If acceptance NOT done → Pending Acceptance ("Đang nghiệm thu")
+     *     - If acceptance done (or no acceptance required) → Completed
      * 
      * @param ProjectTask $task
      * @param float $progressPercentage
@@ -64,14 +66,43 @@ class TaskProgressService
     {
         $today = Carbon::today();
         
-        // If progress is effectively 100%, status is potentially completed
-        // Use 99.9 epsilon to match canParentBeCompleted
+        // If progress is effectively 100%, check acceptance state
         if ($progressPercentage >= 99.9) {
-            // NEW RULE: Parent items completed only when all sub-items are fully accepted
-            if ($this->canParentBeCompleted($task)) {
+            // First check if all children's progress allows completion
+            if (!$this->canParentBeCompleted($task)) {
+                return 'in_progress'; // Children not all at 100% yet
+            }
+
+            // ROOT TASK (Category A): check linked AcceptanceStage
+            if (!$task->parent_id) {
+                $stage = AcceptanceStage::where('task_id', $task->id)
+                    ->where('project_id', $task->project_id)
+                    ->orderByDesc('id')
+                    ->first();
+                
+                if ($stage) {
+                    // AcceptanceStage exists — check if fully approved
+                    // We check for customer_approved and any subsequent statuses
+                    if (in_array($stage->status, ['customer_approved', 'owner_approved', 'design_approved'])) {
+                        return 'completed'; // Fully accepted → done
+                    }
+                    return 'pending_acceptance'; // Still in acceptance workflow
+                }
+                // No AcceptanceStage yet → completed (will trigger auto-creation)
                 return 'completed';
             }
-            return 'in_progress'; // Remain in-progress until accepted
+
+            // CHILD TASK (Category B): check linked AcceptanceItem
+            $acceptanceItem = \App\Models\AcceptanceItem::where('task_id', $task->id)->first();
+            if ($acceptanceItem) {
+                if (in_array($acceptanceItem->workflow_status, ['customer_approved', 'owner_approved', 'design_approved'])) {
+                    return 'completed'; // Fully accepted
+                }
+                return 'pending_acceptance'; // Still in acceptance workflow
+            }
+
+            // No AcceptanceItem yet — task is completed (waiting for stage creation)
+            return 'completed';
         }
 
         // If no start date, cannot determine status
@@ -155,6 +186,14 @@ class TaskProgressService
      * Check if parent can be marked as completed
      * 
      * RULE: Parent can ONLY be completed when ALL children reach 100%
+     * (either from logs OR from manual progress override)
+     * 
+     * NOTE: We do NOT check acceptance status here anymore.
+     * The old check created a deadlock:
+     *   1. AcceptanceStage can't be created until parent is 'completed'
+     *   2. Parent can't be 'completed' until children are 'accepted'  
+     *   3. AcceptanceItems can't exist before AcceptanceStage is created
+     * Instead, acceptance is a SEPARATE workflow that runs AFTER task completion.
      * 
      * @param ProjectTask $parentTask
      * @return bool
@@ -172,19 +211,15 @@ class TaskProgressService
             }
         }
 
-        // Check self-acceptance ONLY IF it's a sub-task (Category B)
-        // Root tasks (Category A) turn 'completed' once children are done,
-        // which then triggers their own AcceptanceStage creation.
-        if ($task->parent_id !== null && $children->isEmpty()) {
-            if (!$this->isTaskAccepted($task)) {
-                return false;
-            }
+        // Final progress check — use MAX(logProgress, storedProgress) for leaf tasks
+        // This ensures manually-set progress (e.g. completed=100%) is respected
+        if ($children->isEmpty()) {
+            $logProgress = $this->calculateProgressFromLogs($task);
+            $storedProgress = (float) ($task->progress_percentage ?? 0);
+            $progress = max($logProgress, $storedProgress);
+        } else {
+            $progress = $this->calculateParentProgress($task);
         }
-
-        // Final progress check
-        $progress = $children->isEmpty() 
-            ? $this->calculateProgressFromLogs($task)
-            : $this->calculateParentProgress($task);
 
         // Use a small epsilon (99.9) to handle floating point rounding differences
         // that might occur when averaging multiple sub-tasks.
@@ -203,7 +238,7 @@ class TaskProgressService
         if (!$task->parent_id) {
             $stage = \App\Models\AcceptanceStage::where('task_id', $task->id)->orderByDesc('id')->first();
             if ($stage) {
-                return $stage->status === 'customer_approved';
+                return in_array($stage->status, ['customer_approved', 'owner_approved', 'design_approved']);
             }
             // MATCH FRONTEND: Default to true if no stages defined for root task
             // This allows the task to become 'completed' so an AcceptanceStage can be auto-created.
@@ -214,7 +249,7 @@ class TaskProgressService
         // Check if there's an AcceptanceItem linked to this task (Get latest)
         $item = \App\Models\AcceptanceItem::where('task_id', $task->id)->orderByDesc('id')->first();
         if ($item) {
-            return $item->workflow_status === 'customer_approved';
+            return in_array($item->workflow_status, ['customer_approved', 'owner_approved', 'design_approved']);
         }
 
         // If no direct link found, it's considered "accepted" by default 
@@ -254,26 +289,22 @@ class TaskProgressService
                 $progress = max($logProgress, $storedProgress);
             }
 
-            // Calculate status automatically (but preserve on_hold/cancelled/delayed as they are explicit manual overrides)
+            // STEP 1: Auto-create acceptance stage BEFORE status calculation
+            // This ensures calculateStatus() can see the newly created stage
+            // and return 'pending_acceptance' instead of 'completed'
+            if ($progress >= 99.9 && !$task->parent_id) {
+                $this->autoCreateAcceptanceStage($task);
+            }
+
+            // STEP 2: Calculate status (now aware of acceptance state)
             $status = $this->calculateStatus($task, $progress);
             
-            if (in_array($task->status, ['on_hold', 'cancelled', 'delayed'])) {
-                $status = $task->status; // Preserve manual override
-            } else {
-                // Prevent manual completion if not all children are done
-                $hasChildren = ProjectTask::where('parent_id', $task->id)
-                    ->whereNull('deleted_at')
-                    ->exists();
-                if ($status === 'completed' && $hasChildren) {
-                    if (!$this->canParentBeCompleted($task)) {
-                        $status = 'in_progress'; // Force to in_progress if children not all done
-                    }
-                }
+            // Preserve explicit manual overrides
+            if (in_array($task->status, ['on_hold', 'cancelled'])) {
+                $status = $task->status;
             }
 
             // Update task (bypass fillable restrictions for system updates)
-            // Use forceFill to update system-calculated fields
-            // Use saveQuietly to prevent triggering model events (avoid infinite loop)
             $task->forceFill([
                 'progress_percentage' => $progress,
                 'status' => $status,
@@ -285,12 +316,6 @@ class TaskProgressService
                 if ($parent) {
                     $this->updateTaskFromLogs($parent, true);
                 }
-            }
-
-            // Auto-create acceptance stage when parent task reaches 99.9%
-            // BUSINESS RULE: Only parent tasks (Category A) can have acceptance stages
-            if ($progress >= 99.9 && $status === 'completed' && !$task->parent_id) {
-                $this->autoCreateAcceptanceStage($task);
             }
 
             DB::commit();
@@ -411,11 +436,35 @@ class TaskProgressService
                 'status' => 'pending', // Start with pending status
             ]);
 
+            // AUTO-CREATE acceptance items for each child task (Category B)
+            $children = ProjectTask::where('parent_id', $task->id)
+                ->whereNull('deleted_at')
+                ->orderBy('order')
+                ->get();
+
+            $itemOrder = 0;
+            foreach ($children as $child) {
+                $itemOrder++;
+                \App\Models\AcceptanceItem::create([
+                    'acceptance_stage_id' => $stage->id,
+                    'task_id' => $child->id,
+                    'name' => $child->name,
+                    'description' => $child->description,
+                    'order' => $itemOrder,
+                    'workflow_status' => 'draft',
+                    'acceptance_status' => 'not_started',
+                    'start_date' => $child->start_date ?? $task->start_date ?? now(),
+                    'end_date' => $child->end_date ?? $task->end_date ?? now(),
+                    'created_by' => $child->created_by,
+                ]);
+            }
+
             Log::info('Auto-created acceptance stage for completed task', [
                 'task_id' => $task->id,
                 'task_name' => $task->name,
                 'stage_id' => $stage->id,
                 'project_id' => $task->project_id,
+                'items_created' => $itemOrder,
             ]);
 
             return $stage;
@@ -427,6 +476,15 @@ class TaskProgressService
             // Don't throw - acceptance stage creation is not critical for task progress
             return null;
         }
+    }
+
+    /**
+     * Public wrapper for autoCreateAcceptanceStage
+     * Used by ProjectTaskService for manual override path
+     */
+    public function autoCreateAcceptanceStagePublic(ProjectTask $task): ?AcceptanceStage
+    {
+        return $this->autoCreateAcceptanceStage($task);
     }
 }
 

@@ -453,11 +453,34 @@ class AcceptanceStage extends Model
         $this->customer_approved_at = now();
         $saved = $this->save();
 
+        if ($saved) {
+            // BUSINESS RULE: Sync customer_approved status to ALL child items
+            $this->items()->update([
+                'workflow_status' => 'customer_approved',
+                'customer_approved_at' => now(),
+                'customer_approved_by' => $user->id ?? null,
+            ]);
+
+            // Trigger items' updateProjectProgress to create 100% logs for each sub-task
+            foreach ($this->items as $item) {
+                $item->updateProjectProgress();
+            }
+        }
+
         // BUSINESS RULE: Khi nghiệm thu ĐẠT (customer_approved)
         // Tự động tạo hạng mục nghiệm thu hoàn thành
         if ($saved) {
             $this->autoCreateAcceptanceItems();
             $this->updateProjectProgress();
+
+            // Recalculate linked task status: pending_acceptance → completed
+            if ($this->task_id) {
+                $linkedTask = \App\Models\ProjectTask::find($this->task_id);
+                if ($linkedTask) {
+                    $progressService = app(\App\Services\TaskProgressService::class);
+                    $progressService->updateTaskFromLogs($linkedTask, true);
+                }
+            }
         }
 
         return $saved;
@@ -503,8 +526,9 @@ class AcceptanceStage extends Model
 
     /**
      * Kiểm tra và cập nhật trạng thái hoàn thành của tiến độ.
-     * BUSINESS RULE: Khi 100% hạng mục con đều customer_approved
-     * → hạng mục cha (stage) tự động chuyển status tương ứng.
+     * BUSINESS RULE: Khi TẤT CẢ hạng mục con đều customer_approved
+     * → Stage tự động chuyển sang customer_approved.
+     * Không cần duyệt thêm — hoàn toàn tự động.
      */
     public function checkCompletion(): void
     {
@@ -517,7 +541,6 @@ class AcceptanceStage extends Model
 
             // Nếu có item bị rejected hoặc đang chờ submit → stage phải quay về pending
             if ($hasRejected || $hasPendingOrDraft) {
-                // BUG FIX: Nếu đang rejected hoặc đã hoàn thành mà có item mới/sửa lại -> đưa về pending để GS duyệt lại từ đầu
                 if ($this->status !== 'pending') {
                     // Reset tất cả các trường duyệt cũ để bắt đầu luồng mới sạch sẽ
                     if (in_array($this->status, ['rejected', 'customer_approved', 'owner_approved', 'project_manager_approved', 'supervisor_approved'])) {
@@ -543,10 +566,46 @@ class AcceptanceStage extends Model
                 $userId = auth()->id() ?? $this->created_by;
 
                 if ($allCustomerApproved && $this->status !== 'customer_approved') {
+                    // AUTO-PROMOTION: Tất cả hạng mục con đã customer_approved
+                    // → Stage tự động chuyển sang customer_approved (KHÔNG CẦN duyệt thêm)
                     $this->status = 'customer_approved';
                     $this->customer_approved_at = now();
                     $this->customer_approved_by = $userId;
                     $this->save();
+
+                    // BUSINESS RULE: Sync customer_approved status to ALL child items
+                    // This ensures all child tasks (Category B) also transition to 'completed'
+                    $this->items()->update([
+                        'workflow_status' => 'customer_approved',
+                        'customer_approved_at' => now(),
+                        'customer_approved_by' => $userId,
+                    ]);
+
+                    // Trigger items' updateProjectProgress to create 100% logs for each sub-task
+                    foreach ($this->items as $item) {
+                        $item->updateProjectProgress();
+                    }
+
+                    // Trigger same side-effects as manual approveCustomer()
+                    $this->autoCreateAcceptanceItems();
+                    $this->updateProjectProgress();
+                    $this->notifyEvent('customer_approved', auth()->user());
+
+                    // CRITICAL: Recalculate linked task status
+                    // This transitions the task from 'pending_acceptance' → 'completed'
+                    if ($this->task_id) {
+                        $linkedTask = \App\Models\ProjectTask::find($this->task_id);
+                        if ($linkedTask) {
+                            $progressService = app(\App\Services\TaskProgressService::class);
+                            $progressService->updateTaskFromLogs($linkedTask, true);
+                        }
+                    }
+
+                    \Illuminate\Support\Facades\Log::info('AcceptanceStage auto-promoted to customer_approved', [
+                        'stage_id' => $this->id,
+                        'stage_name' => $this->name,
+                        'items_count' => $items->count(),
+                    ]);
                 } elseif ($allPmApproved && !$allCustomerApproved && !in_array($this->status, ['project_manager_approved', 'customer_approved'])) {
                     $this->status = 'project_manager_approved';
                     $this->project_manager_approved_at = now();
@@ -602,8 +661,8 @@ class AcceptanceStage extends Model
                 'task_id' => $this->task_id, // Link to parent task (Category A)
                 'name' => $this->name . ' - Hạng mục nghiệm thu',
                 'description' => $this->description ?? 'Hạng mục nghiệm thu được tự động tạo khi nghiệm thu đạt',
-                'start_date' => $this->task?->start_date ?? now(),
-                'end_date' => $this->task?->end_date ?? now(),
+                'start_date' => $this->task?->start_date ?? $this->project?->start_date ?? now(),
+                'end_date' => $this->task?->end_date ?? $this->project?->end_date ?? now(),
                 'workflow_status' => 'draft',
                 'acceptance_status' => 'pending',
                 'order' => 1,

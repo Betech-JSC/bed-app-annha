@@ -55,11 +55,6 @@ class ProjectTaskService
 
             $task->save();
 
-            // When dates or structure changes, we should recalculate progress and status
-            // The ProjectTask model boot method already triggers this via TaskProgressService
-            // But we can explicitly trigger it if needed to ensure immediate availability.
-            $this->progressService->updateTaskFromLogs($task, true);
-
             // MANUAL OVERRIDE: Handle user-set status and/or progress_percentage
             $hasManualStatus = array_key_exists('status', $data) && $data['status'];
             $hasManualProgress = array_key_exists('progress_percentage', $data) && $data['progress_percentage'] !== null;
@@ -108,8 +103,27 @@ class ProjectTaskService
                     }
                 }
 
+                // BUSINESS RULE: Auto-create Acceptance Stage when ROOT task reaches 100%
+                // Triggered by PROGRESS only (not status), so the stage is created
+                // before calculateStatus evaluates acceptance state
+                $finalProgress = (float) ($updateFields['progress_percentage'] ?? $task->progress_percentage ?? 0);
+                if ($finalProgress >= 99.9 && !$task->parent_id) {
+                    $this->progressService->autoCreateAcceptanceStagePublic($task);
+                }
+
+                // After creating acceptance stage, recalculate status to reflect acceptance state
+                // This ensures status shows 'pending_acceptance' instead of 'completed'
+                $task->refresh();
+                $correctedStatus = $this->progressService->calculateStatus($task, $finalProgress);
+                if (!in_array($correctedStatus, ['on_hold', 'cancelled'])) {
+                    $task->forceFill(['status' => $correctedStatus])->saveQuietly();
+                }
+
                 // Update project overall progress
                 $task->updateProjectProgress();
+            } else {
+                // No manual override — calculate from logs as normal
+                $this->progressService->updateTaskFromLogs($task, true);
             }
 
             return $task->fresh(['assignedUser', 'parent', 'dependencies']);

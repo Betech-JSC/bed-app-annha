@@ -2,7 +2,7 @@
   <Head title="Quản lý dự án" />
 
   <PageHeader title="Quản lý dự án" subtitle="Danh sách và quản lý tất cả dự án xây dựng">
-    <template #actions>
+    <template #actions v-if="!isClient">
       <a-button type="primary" size="large" @click="openCreateModal">
         <template #icon><PlusOutlined /></template>
         Thêm dự án
@@ -10,8 +10,8 @@
     </template>
   </PageHeader>
 
-  <!-- Stats -->
-  <div class="crm-stats-grid">
+  <!-- Stats (Hidden for Client) -->
+  <div v-if="!isClient" class="crm-stats-grid">
     <StatCard label="Tổng dự án" :value="stats.total" icon="FolderOutlined" variant="primary" />
     <StatCard label="Đang lên kế hoạch" :value="stats.planning" icon="ClockCircleOutlined" variant="warning" />
     <StatCard label="Đang thi công" :value="stats.in_progress" icon="ThunderboltOutlined" variant="success" />
@@ -19,7 +19,7 @@
   </div>
 
   <!-- Filters + Table -->
-  <div class="crm-content-card">
+  <div v-if="!singleProject" class="crm-content-card">
     <div class="p-4 border-b border-gray-100 flex items-center gap-4 flex-wrap">
       <a-input-search
         v-model:value="filters.search"
@@ -137,6 +137,125 @@
     </a-table>
   </div>
 
+  <!-- Single Project Dashboard View for Clients -->
+  <div v-if="singleProject" class="space-y-6">
+    <div class="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-200/40 overflow-hidden">
+      <!-- Dashboard Header -->
+      <div class="p-8 lg:p-10 bg-gradient-to-br from-slate-900 to-slate-800 text-white relative">
+        <div class="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
+          <ProjectOutlined style="font-size: 160px;" />
+        </div>
+        
+        <div class="relative z-10">
+          <div class="flex flex-wrap items-center gap-3 mb-4">
+            <a-tag :color="statusColors[singleProject.status]" class="rounded-full px-4 py-0.5 border-none font-bold uppercase text-[10px] tracking-widest">
+              {{ statusLabels[singleProject.status] }}
+            </a-tag>
+            <span class="text-slate-400 text-sm font-mono tracking-tight">{{ singleProject.code }}</span>
+          </div>
+          
+          <h2 class="text-3xl lg:text-4xl font-extrabold mb-6 tracking-tight">{{ singleProject.name }}</h2>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
+                <CalendarOutlined class="text-xl text-blue-400" />
+              </div>
+              <div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">Thời gian dự án</div>
+                <div class="text-sm font-semibold">{{ formatDate(singleProject.start_date) }} — {{ formatDate(singleProject.end_date) }}</div>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
+                <WalletOutlined class="text-xl text-emerald-400" />
+              </div>
+              <div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">Giá trị hợp đồng</div>
+                <div class="text-sm font-semibold">{{ singleProject.contract?.contract_value ? formatCurrency(singleProject.contract.contract_value) : '—' }}</div>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
+                <UserOutlined class="text-xl text-orange-400" />
+              </div>
+              <div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">Quản lý dự án</div>
+                <div class="text-sm font-semibold">{{ singleProject.project_manager?.name || '—' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Body -->
+      <div class="p-8 lg:p-10">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-bold text-slate-800">Tiến độ tổng thể</h3>
+              <span class="text-2xl font-black text-blue-600">{{ singleProject.progress?.overall_percentage || 0 }}%</span>
+            </div>
+            <a-progress
+              :percent="singleProject.progress?.overall_percentage || 0"
+              :stroke-color="{ '0%': '#3b82f6', '100%': '#2dd4bf' }"
+              :stroke-width="12"
+              :show-info="false"
+              class="mb-6"
+            />
+            <p class="text-slate-500 leading-relaxed text-sm">
+              {{ singleProject.description || 'Dự án đang được triển khai đúng tiến độ. Bạn có thể xem chi tiết các hạng mục thi công, nhật ký hàng ngày và các đợt thanh toán trong trang chi tiết dự án.' }}
+            </p>
+          </div>
+          
+          <div class="flex justify-end">
+            <a-button type="primary" size="large" @click="goToDetail(singleProject)" class="h-16 px-10 rounded-2xl text-lg font-bold shadow-xl shadow-blue-500/20 group">
+              Xem chi tiết dự án
+              <template #icon><RightOutlined class="group-hover:translate-x-1 transition-transform" /></template>
+            </a-button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Quick Access Cards for Client -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div @click="goToDetail(singleProject)" class="bg-white p-6 rounded-2xl border border-gray-100 hover:border-blue-200 hover:shadow-lg transition-all cursor-pointer group">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+          <CalendarOutlined />
+        </div>
+        <h4 class="font-bold text-slate-800 mb-1">Tiến độ thi công</h4>
+        <p class="text-xs text-slate-500">Xem lịch trình và các hạng mục đang triển khai</p>
+      </div>
+      
+      <div @click="goToDetail(singleProject)" class="bg-white p-6 rounded-2xl border border-gray-100 hover:border-emerald-200 hover:shadow-lg transition-all cursor-pointer group">
+        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+          <WalletOutlined />
+        </div>
+        <h4 class="font-bold text-slate-800 mb-1">Thanh toán</h4>
+        <p class="text-xs text-slate-500">Kiểm tra các đợt thanh toán và xác nhận chứng từ</p>
+      </div>
+      
+      <div @click="goToDetail(singleProject)" class="bg-white p-6 rounded-2xl border border-gray-100 hover:border-orange-200 hover:shadow-lg transition-all cursor-pointer group">
+        <div class="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center mb-4 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+          <FileTextOutlined />
+        </div>
+        <h4 class="font-bold text-slate-800 mb-1">Nhật ký công trình</h4>
+        <p class="text-xs text-slate-500">Ghi chép hình ảnh và công việc thực tế hàng ngày</p>
+      </div>
+      
+      <div @click="goToDetail(singleProject)" class="bg-white p-6 rounded-2xl border border-gray-100 hover:border-indigo-200 hover:shadow-lg transition-all cursor-pointer group">
+        <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+          <AuditOutlined />
+        </div>
+        <h4 class="font-bold text-slate-800 mb-1">Hồ sơ nghiệm thu</h4>
+        <p class="text-xs text-slate-500">Quản lý và duyệt các giai đoạn nghiệm thu dự án</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Create/Edit Modal -->
   <a-modal
     v-model:open="showModal"
@@ -225,13 +344,15 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-import { Head, useForm, router } from '@inertiajs/vue3'
+import { ref, watch, computed } from 'vue'
+import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
 import {
   PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined,
+  ProjectOutlined, CalendarOutlined, UserOutlined, WalletOutlined,
+  RightOutlined, FileTextOutlined, AuditOutlined,
 } from '@ant-design/icons-vue'
 import { message, notification } from 'ant-design-vue'
 import dayjs from 'dayjs'
@@ -243,6 +364,16 @@ const props = defineProps({
   stats: Object,
   filters: Object,
   users: Array,
+})
+
+const page = usePage()
+const auth = computed(() => page.props.auth)
+const isClient = computed(() => auth.value?.user?.role === 'client')
+const singleProject = computed(() => {
+  if (isClient.value && props.projects.data.length === 1) {
+    return props.projects.data[0]
+  }
+  return null
 })
 
 const loading = ref(false)
