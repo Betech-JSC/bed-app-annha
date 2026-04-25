@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 use App\Traits\NotifiesUsers;
@@ -138,7 +138,7 @@ class Cost extends Model
         return $this->belongsTo(Material::class, 'material_id');
     }
 
-    public function materialTransactions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function materialTransactions(): HasMany
     {
         return $this->hasMany(MaterialTransaction::class, 'cost_id');
     }
