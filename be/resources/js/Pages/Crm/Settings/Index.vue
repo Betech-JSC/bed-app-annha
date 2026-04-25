@@ -686,6 +686,7 @@ const aiSaving = ref(false)
 const aiTesting = ref(false)
 
 const aiModelOptions = [
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Thế hệ mới nhất)' },
   { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Nhanh, miễn phí)' },
   { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite (Siêu nhanh)' },
   { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
